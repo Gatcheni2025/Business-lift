@@ -824,25 +824,25 @@
 						</div>
 					</div>
 
-					<div class="form-group">
-						<label>3. Sales Channels & Integrations</label>
-						
-						<!-- WhatsApp Business API Block -->
-						<div class="api-connect-banner" id="waApiBlock">
-							<div><i class="ph ph-whatsapp-logo" style="font-size: 1.2rem;"></i> WhatsApp Business API</div>
-							<button type="button" class="btn-api" onclick="connectWhatsAppAPI()">Connect API</button>
-						</div>
-						
-						<div class="channel-grid" style="margin-top: 12px;">
-							<label class="channel-btn disconnected" onclick="alert('Please connect your Facebook Business Manager in Account Settings to sell here.')">
-								<input type="checkbox" disabled> <i class="ph ph-facebook-logo"></i> FB <span class="channel-badge">Connect</span>
-							</label>
-							<label class="channel-btn disconnected" onclick="alert('Please register for Google Merchant Center in Account Settings to sell here.')">
-								<input type="checkbox" disabled> <i class="ph ph-google-logo"></i> Google <span class="channel-badge">Connect</span>
-							</label>
-						</div>
-					</div>
 					
+<div class="form-group">
+    <label>3. Sales Channels & Integrations</label>
+    <div class="channel-grid" style="margin-top: 12px;">
+        <label class="channel-btn">
+            <input type="checkbox" id="chkWhatsApp" value="whatsapp" checked onchange="toggleWaPhoneInput()"> <i class="ph ph-whatsapp-logo" style="color: #25D366;"></i> WA
+        </label>
+        <label class="channel-btn">
+            <input type="checkbox" class="sell-channel" value="facebook" checked> <i class="ph ph-facebook-logo" style="color: #1877F2;"></i> FB
+        </label>
+    </div>
+    
+    <!-- WhatsApp Rules Input (Appears if WA is selected) -->
+    <div id="waRulesInput" style="margin-top:12px; padding: 12px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+        <label style="font-size:0.85rem; color:#166534;">WhatsApp Business Number (Include Country Code)</label>
+        <input type="text" id="waBusinessNumber" placeholder="e.g. 27820000000" style="margin-top:4px;">
+    </div>
+</div>
+
 					<!-- AI Market Prediction Engine -->
 					<div class="ai-prediction-box">
 						<div class="ai-prediction-header">
@@ -1114,39 +1114,86 @@
 			}, 1000);
 		};
 
-		// ─── SAVE DATA WHEN "GENERATE NOW" IS CLICKED ───
-		// We modify the runAIGeneration function to actually save the data
-		window.runAIGeneration = function() {
+		// Toggle WhatsApp phone input visibility
+		window.toggleWaPhoneInput = function() {
+			const waBox = document.getElementById('chkWhatsApp');
+			document.getElementById('waRulesInput').style.display = waBox.checked ? 'block' : 'none';
+		};
+
+		// REAL API SUBMISSION LOGIC
+		window.runAIGeneration = async function() {
 			const activeTitle = document.getElementById('modalTitle').innerText;
 			
-			// If we are in the "Build" modal, save the product!
-			if(activeTitle.includes("Add Product")) {
-				const name = document.getElementById('buildProdName').value;
-				const price = document.getElementById('buildProdPrice').value;
-				const img = document.getElementById('img1').src;
-				const desc = document.getElementById('buildProdDesc').value;
-
-				if(!name || !price) { alert("Please enter a product name and price!"); return; }
-
-				// Save to our array
-				businessData.products.push({ id: Date.now(), name, price, img, desc });
-			}
-
 			// Show loading spinner
 			document.getElementById('modalFormContainer').style.display = 'none';
 			document.getElementById('modalFooter').style.display = 'none';
 			document.getElementById('aiLoadingState').classList.add('active');
 
-			setTimeout(() => {
-				closeAIModal();
+			try {
+				// ─── LOGIC 1: UPLOAD PRODUCT (PHP) ───
 				if(activeTitle.includes("Add Product")) {
-					alert("Product saved successfully! You can now select it in the 'Sell Something' menu.");
-				} else {
-					alert("Action completed successfully!");
-				}
-			}, 1500);
-		};
+					const formData = new FormData();
+					formData.append('name', document.getElementById('buildProdName').value);
+					formData.append('price', document.getElementById('buildProdPrice').value);
+					formData.append('desc', document.getElementById('buildProdDesc').value);
+					
+					// Grab actual files from file inputs
+					const fileInputs = document.querySelectorAll('.image-upload-box input[type="file"]');
+					fileInputs.forEach(input => {
+						if(input.files[0]) formData.append('images[]', input.files[0]);
+					});
 
+					// Send to PHP Server
+					const response = await fetch('api/upload_product.php', { method: 'POST', body: formData });
+					const data = await response.json();
+
+					if(data.status === 'success') {
+						businessData.products.push(data.product); // Save to local state for dropdown
+						alert("Product uploaded and saved to server successfully!");
+					}
+				} 
+				
+				// ─── LOGIC 2: PUBLISH TO MULTICHANNEL (PHP -> META API) ───
+				else if(activeTitle.includes("Selling Setup")) {
+					const selectEl = document.getElementById('sellProductSelect');
+					if(!selectEl.value) throw new Error("Please select a product");
+
+					const product = businessData.products.find(p => p.id === selectEl.value);
+					
+					// Gather selected channels
+					const selectedChannels = [];
+					if(document.getElementById('chkWhatsApp').checked) selectedChannels.push('whatsapp');
+					document.querySelectorAll('.sell-channel:checked').forEach(cb => selectedChannels.push(cb.value));
+
+					const payload = {
+						product_id: product.id,
+						product_name: product.name,
+						product_price: product.price,
+						product_desc: product.desc,
+						product_image: product.images[0] || '', // primary image URL from server
+						channels: selectedChannels,
+						whatsapp_number: document.getElementById('waBusinessNumber').value
+					};
+
+					// Send instructions to PHP Publisher
+					const response = await fetch('api/publish_channel.php', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(payload)
+					});
+					
+					const data = await response.json();
+					console.log("API Responses:", data);
+					alert("Product sent to selected channels via APIs successfully!");
+				}
+				
+			} catch(error) {
+				console.error(error);
+				alert("An error occurred. Check the console.");
+			} finally {
+				closeAIModal();
+			}
+		};
 		// ─── POPULATE THE SELL MODAL WITH REAL DATA ───
 		// We hook into openAIModal to populate the dropdown if opening "Sell"
 		const originalOpenModal = window.openAIModal;
