@@ -406,6 +406,57 @@
 		.profile-dropdown .divider { height: 1px; background: var(--border-light); margin: 4px 0; }
 		.profile-dropdown a.logout-btn { color: #dc2626; }
 		.profile-dropdown a.logout-btn:hover { background: #fef2f2; }
+		/* ─── NEW FORM ELEMENTS & BUTTONS ─── */
+		.demographic-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+		
+		.btn-ai-generate {
+			background: linear-gradient(135deg, #eff6ff, #f8fafc);
+			border: 1px solid #bfdbfe;
+			color: var(--accent-blue);
+			padding: 8px 16px;
+			border-radius: 8px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			margin-top: 8px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			transition: 0.2s;
+			cursor: pointer;
+			width: 100%;
+			justify-content: center;
+		}
+		.btn-ai-generate:hover {
+			background: #bfdbfe;
+			color: #1e3a8a;
+		}
+
+		/* Disconnected Channel State */
+		.channel-btn.disconnected {
+			background: #f8fafc;
+			border-style: dashed;
+			color: #94a3b8;
+		}
+		.channel-btn.disconnected i { filter: grayscale(100%); }
+		.channel-btn.disconnected:hover {
+			border-color: #ef4444;
+			color: #ef4444;
+			background: #fef2f2;
+		}
+		.channel-badge {
+			font-size: 0.65rem;
+			background: #e2e8f0;
+			color: #475569;
+			padding: 2px 6px;
+			border-radius: 4px;
+			margin-left: auto;
+		}
+		.disconnected .channel-badge { background: #fee2e2; color: #dc2626; }
 		</style>
 </head>
 <body class="app-shell">
@@ -646,19 +697,18 @@
 						<input type="text" placeholder="e.g. Ayanda's Fresh Produce">
 					</div>
 					<div class="form-group">
-						<label>2. What industry are you in?</label>
-						<input type="text" placeholder="e.g. Retail, Consulting, Beauty">
+						<label>2. Add your first Product/Service</label>
+						<input type="text" id="initialProductName" placeholder="e.g. Organic Tomato Box">
 					</div>
 					<div class="form-group">
-						<label>3. Describe your main product or service in one sentence.</label>
-						<textarea placeholder="e.g. We sell organic vegetables sourced directly from KZN farmers."></textarea>
+						<label>3. Describe it simply (AI will rewrite this as a professional Advert)</label>
+						<textarea id="initialProductDesc" placeholder="e.g. Fresh tomatoes from local KZN farmers."></textarea>
+						<button type="button" class="btn-ai-generate" onclick="generateMockAdvert()">
+							<i class="ph ph-sparkle"></i> Generate Professional Advert
+						</button>
 					</div>
 					<div class="form-group">
-						<label>4. Who is your target customer?</label>
-						<input type="text" placeholder="e.g. Local restaurants and health-conscious families">
-					</div>
-					<div class="form-group">
-						<label>5. What vibe should your website have?</label>
+						<label>4. What vibe should your website have?</label>
 						<select>
 							<option>Professional & Corporate</option>
 							<option>Modern & Minimalist</option>
@@ -674,54 +724,76 @@
 				color: "#16a34a",
 				form: `
 					<div class="form-group">
-						<label>1. What product are you selling?</label>
-						<input type="text" placeholder="e.g. Men's Leather Wallet, Skincare Serum" oninput="simulateAIPrediction(this.value)">
+						<label>1. Select Product to Sell</label>
+						<select id="sellProductSelect">
+							<option value="">-- Choose a product --</option>
+							<option value="prod1">Organic Tomato Box (R 120.00)</option>
+							<option value="prod2">Premium Sneaker Cleaning (R 150.00)</option>
+							<option value="new">+ Create New Product</option>
+						</select>
 					</div>
+
 					<div class="form-group">
-						<label>2. Select Sales Channels (APIs will auto-sync inventory)</label>
+						<label>2. Target Demographics & Budget</label>
+						<div class="demographic-grid">
+							<input type="text" id="targetArea" placeholder="Location (e.g. Pietermaritzburg)" onkeyup="calculateAIPrediction()">
+							<select id="targetGender" onchange="calculateAIPrediction()">
+								<option value="All Genders">All Genders</option>
+								<option value="Male">Male Only</option>
+								<option value="Female">Female Only</option>
+							</select>
+						</div>
+						<div class="demographic-grid">
+							<input type="number" id="adBudget" placeholder="Daily Budget (ZAR)" onkeyup="calculateAIPrediction()">
+							<select id="targetAge" onchange="calculateAIPrediction()">
+								<option value="18-65+">All Ages</option>
+								<option value="18-35">Youth (18-35)</option>
+								<option value="36-55">Professionals (36-55)</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label>3. Select Sales Channels (APIs will auto-sync inventory)</label>
 						<div class="channel-grid">
 							<label class="channel-btn">
-								<input type="checkbox" checked> <i class="ph ph-whatsapp-logo" style="color: #25D366;"></i> WhatsApp
+								<input type="checkbox" checked onchange="calculateAIPrediction()"> <i class="ph ph-whatsapp-logo" style="color: #25D366;"></i> WA
 							</label>
 							<label class="channel-btn">
-								<input type="checkbox" checked> <i class="ph ph-instagram-logo" style="color: #E1306C;"></i> Instagram
+								<input type="checkbox" checked onchange="calculateAIPrediction()"> <i class="ph ph-instagram-logo" style="color: #E1306C;"></i> IG
 							</label>
-							<label class="channel-btn">
-								<input type="checkbox"> <i class="ph ph-facebook-logo" style="color: #1877F2;"></i> Facebook
+							
+							<!-- Disconnected Channel Example -->
+							<label class="channel-btn disconnected" onclick="alert('Please connect your Facebook Business Manager in Account Settings to sell here.')">
+								<input type="checkbox" disabled> <i class="ph ph-facebook-logo"></i> FB <span class="channel-badge">Connect</span>
 							</label>
-							<label class="channel-btn">
-								<input type="checkbox"> <i class="ph ph-google-logo" style="color: #DB4437;"></i> Google
-							</label>
-							<label class="channel-btn">
-								<input type="checkbox"> <i class="ph ph-twitter-logo" style="color: #000000;"></i> X (Twitter)
-							</label>
-							<label class="channel-btn">
-								<input type="checkbox"> <i class="ph ph-youtube-logo" style="color: #FF0000;"></i> YouTube
+							<label class="channel-btn disconnected" onclick="alert('Please register for Google Merchant Center in Account Settings to sell here.')">
+								<input type="checkbox" disabled> <i class="ph ph-google-logo"></i> Google <span class="channel-badge">Connect</span>
 							</label>
 						</div>
 					</div>
 					
-					<!-- AI Market Prediction Engine -->
-					<div class="ai-prediction-box" id="aiMarketPrediction">
+					<!-- Dynamic AI Market Prediction Engine -->
+					<div class="ai-prediction-box">
 						<div class="ai-prediction-header">
-							<i class="ph ph-sparkle"></i> AI Market Prediction
+							<i class="ph ph-sparkle"></i> AI Market Prediction (Real-Time)
 						</div>
 						<div class="ai-prediction-stats">
 							<div class="stat-item">
-								<span>Est. Reach</span>
-								<strong>85,000+</strong>
+								<span>Local Reach</span>
+								<strong id="predReach">0</strong>
 							</div>
 							<div class="stat-item">
 								<span>Best Target</span>
-								<strong>Male (18-35)</strong>
+								<strong id="predTarget">Any</strong>
 							</div>
 							<div class="stat-item">
-								<span>Expected Buyers</span>
-								<strong>250 - 400</strong>
+								<span>Est. Buyers</span>
+								<strong id="predBuyers">0 - 0</strong>
 							</div>
 						</div>
-						<div class="ai-prediction-note">
-							<strong>Insights:</strong> Based on historical data, this product type performs best on WhatsApp and Instagram in the South African market. We will use the Meta API & WhatsApp Business API to push this product directly to these demographics.
+						<div class="ai-prediction-note" id="predNote">
+							<strong>Insights:</strong> Enter a location (e.g., Pietermaritzburg) and a daily budget to calculate market reach based on active population data.
 						</div>
 					</div>
 				`
@@ -876,6 +948,78 @@
 		modalOverlay.addEventListener('click', (e) => {
 			if (e.target === modalOverlay) closeAIModal();
 		});
+
+		// ─── AI ADVERT GENERATOR MOCK ───
+		window.generateMockAdvert = function() {
+			const descInput = document.getElementById('initialProductDesc');
+			const prodName = document.getElementById('initialProductName').value || "Our Product";
+			
+			if(!descInput.value) {
+				alert("Please type a few words about your product first!");
+				return;
+			}
+			
+			// Show a quick loading state
+			descInput.value = "AI is writing your advert...";
+			
+			// Simulate API response time
+			setTimeout(() => {
+				descInput.value = `🌟 Upgrade your lifestyle with ${prodName}! 🌟\n\nCarefully crafted and locally sourced, this is exactly what you've been looking for. Perfect for everyday use and built to the highest quality standards.\n\n✅ Premium Quality\n✅ Affordable Price\n✅ Support Local\n\nTap the link below to get yours today while stocks last! 📦👇`;
+			}, 1500);
+		};
+
+		// ─── DYNAMIC AI MARKET PREDICTION CALCULATOR ───
+		window.calculateAIPrediction = function() {
+			const area = document.getElementById('targetArea')?.value.toLowerCase() || "";
+			const budget = parseFloat(document.getElementById('adBudget')?.value) || 0;
+			const gender = document.getElementById('targetGender')?.value || "All Genders";
+			const age = document.getElementById('targetAge')?.value || "18-65+";
+			
+			let basePopulation = 0;
+			let cityName = "your area";
+
+			// Simple AI Location Data (Mock API Data)
+			if (area.includes("pietermaritzburg") || area.includes("pmb")) {
+				basePopulation = 220000;
+				cityName = "Pietermaritzburg";
+			} else if (area.includes("durban") || area.includes("dbn")) {
+				basePopulation = 1500000;
+				cityName = "Durban";
+			} else if (area.includes("johannesburg") || area.includes("jhb")) {
+				basePopulation = 3500000;
+				cityName = "Johannesburg";
+			} else if (area.length > 2) {
+				basePopulation = 50000; // Generic small town
+				cityName = area;
+			}
+
+			// If no area is typed, reset prediction
+			if(basePopulation === 0) {
+				document.getElementById('predReach').innerText = "0";
+				document.getElementById('predBuyers').innerText = "0 - 0";
+				document.getElementById('predTarget').innerText = "Any";
+				document.getElementById('predNote').innerHTML = "<strong>Insights:</strong> Enter a location and daily budget to calculate market reach.";
+				return;
+			}
+
+			// Calculate Reach based on Population and Budget (e.g., R100 reaches ~2500 people)
+			let adReach = (budget * 25) + (basePopulation * 0.05); 
+			
+			// Reduce reach if targeting specific genders (cuts audience roughly in half)
+			if(gender !== "All Genders") { adReach = adReach * 0.55; }
+
+			// Calculate estimated buyers (Conversion rate assumption: 0.5% to 1.2%)
+			let buyersMin = Math.floor(adReach * 0.005);
+			let buyersMax = Math.floor(adReach * 0.012);
+
+			// Update UI
+			document.getElementById('predReach').innerText = Math.floor(adReach).toLocaleString();
+			document.getElementById('predTarget').innerText = gender === "All Genders" ? age : gender;
+			document.getElementById('predBuyers').innerText = `${buyersMin} - ${buyersMax}`;
+			
+			// Dynamic Insight Note
+			document.getElementById('predNote').innerHTML = `<strong>Insights:</strong> Based on the active population of ${cityName}, spending <strong>R${budget}</strong> daily targeting ${gender} (${age}) via WhatsApp/IG yields strong local engagement.`;
+		};
 	</script>
 </body>
 </html>
