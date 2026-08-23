@@ -3,14 +3,138 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Business Lift | Growth OS</title>
+	<title>Business Lift | Action Center</title>
+	
+	<!-- Fonts -->
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	
+	<!-- Phosphor Icons (For visual prompts) -->
+	<script src="https://unpkg.com/@phosphor-icons/web"></script>
+
 	<link rel="stylesheet" href="assets/styles.css">
+
+	<!-- Specific Styles for the Action Prompt Dashboard -->
+	<style>
+		/* Action Dashboard Specific Styling */
+		.greeting-section {
+			margin-bottom: 2rem;
+		}
+		.greeting-section h1 {
+			font-family: 'Space Grotesk', sans-serif;
+			font-size: 2rem;
+			color: #0f172a;
+			margin-bottom: 0.5rem;
+		}
+		.greeting-section p {
+			color: #64748b;
+			font-size: 1.1rem;
+		}
+
+		/* The Prompt Grid */
+		.action-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+			gap: 1.5rem;
+			margin-bottom: 3rem;
+		}
+
+		/* Individual Prompt Cards */
+		.prompt-card {
+			background: #ffffff;
+			border: 1px solid #e2e8f0;
+			border-radius: 16px;
+			padding: 24px;
+			text-decoration: none;
+			display: flex;
+			flex-direction: column;
+			transition: all 0.3s ease;
+			position: relative;
+			overflow: hidden;
+			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+		}
+
+		.prompt-card:hover {
+			transform: translateY(-5px);
+			box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+			border-color: #cbd5e1;
+		}
+
+		.prompt-icon {
+			width: 56px;
+			height: 56px;
+			border-radius: 12px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 1.8rem;
+			margin-bottom: 1.2rem;
+		}
+
+		.prompt-card h3 {
+			font-family: 'Space Grotesk', sans-serif;
+			font-size: 1.25rem;
+			color: #0f172a;
+			margin-bottom: 0.5rem;
+		}
+
+		.prompt-card p {
+			color: #64748b;
+			font-size: 0.95rem;
+			line-height: 1.5;
+			margin-bottom: 1.5rem;
+			flex-grow: 1;
+		}
+
+		/* The "What happens next" guide inside the card */
+		.next-step-guide {
+			background: #f8fafc;
+			border-radius: 8px;
+			padding: 12px;
+			font-size: 0.85rem;
+			color: #475569;
+			display: flex;
+			align-items: flex-start;
+			gap: 8px;
+			border-left: 3px solid transparent;
+		}
+
+		.next-step-guide i {
+			font-size: 1.2rem;
+			margin-top: 2px;
+		}
+
+		/* Colors for different actions */
+		.card-build .prompt-icon { background: #eff6ff; color: #2563eb; }
+		.card-build .next-step-guide { border-left-color: #2563eb; }
+		.card-build:hover h3 { color: #2563eb; }
+
+		.card-sell .prompt-icon { background: #f0fdf4; color: #16a34a; }
+		.card-sell .next-step-guide { border-left-color: #16a34a; }
+		.card-sell:hover h3 { color: #16a34a; }
+
+		.card-brand .prompt-icon { background: #fdf4ff; color: #c026d3; }
+		.card-brand .next-step-guide { border-left-color: #c026d3; }
+		.card-brand:hover h3 { color: #c026d3; }
+
+		.card-network .prompt-icon { background: #fffbeb; color: #d97706; }
+		.card-network .next-step-guide { border-left-color: #d97706; }
+		.card-network:hover h3 { color: #d97706; }
+
+		.card-staff .prompt-icon { background: #f1f5f9; color: #475569; }
+		.card-staff .next-step-guide { border-left-color: #475569; }
+		.card-staff:hover h3 { color: #475569; }
+
+		.card-fund .prompt-icon { background: #fef2f2; color: #dc2626; }
+		.card-fund .next-step-guide { border-left-color: #dc2626; }
+		.card-fund:hover h3 { color: #dc2626; }
+
+	</style>
 </head>
 <body class="app-shell">
 	<div class="app-layout">
+		<!-- Sidebar remains the same for navigation -->
 		<aside class="sidebar" id="sidebar">
 			<div>
 				<a class="brand" href="dashboard.html" aria-label="Business Lift home">
@@ -22,26 +146,13 @@
 				</a>
 
 				<nav class="side-nav" aria-label="Primary navigation">
-					<a class="nav-link active" href="dashboard.html">Dashboard Overview</a>
-					<a class="nav-link" href="website-builder.html">AI Website Builder</a>
-					<a class="nav-link" href="sales-hub.html">Sales Hub (POS & CRM)</a>
-					<a class="nav-link" href="marketing-hub.html">Marketing Hub</a>
-					<a class="nav-link" href="funding-hub.html">Funding Hub</a>
-					<a class="nav-link" href="partners-network.html">Partners Network</a>
+					<a class="nav-link active" href="dashboard.html"><i class="ph ph-squares-four"></i> Action Center</a>
+					<a class="nav-link" href="website-builder.html"><i class="ph ph-globe"></i> Workspace</a>
+					<a class="nav-link" href="sales-hub.html"><i class="ph ph-shopping-cart"></i> Sales Hub</a>
+					<a class="nav-link" href="marketing-hub.html"><i class="ph ph-megaphone"></i> Marketing</a>
+					<a class="nav-link" href="funding-hub.html"><i class="ph ph-bank"></i> Funding</a>
+					<a class="nav-link" href="partners-network.html"><i class="ph ph-users"></i> Network</a>
 				</nav>
-			</div>
-
-			<div class="sidebar-footer">
-				<section class="ai-panel">
-					<p class="eyebrow">AI Growth Assistant</p>
-					<h2>Ready to scale?</h2>
-					<p data-opportunity-summary>Your business health score is up! You are 80% ready to match with local KZN investors.</p>
-					<div class="button-row">
-						<a class="button button-secondary" href="marketing-hub.html">Run WhatsApp Ad</a>
-						<a class="button button-primary" href="funding-hub.html">View Funding</a>
-					</div>
-				</section>
-				<a class="settings-link" href="business-profile.html#settings">Business Settings</a>
 			</div>
 		</aside>
 
@@ -53,113 +164,108 @@
 					<span></span>
 				</button>
 				<div>
-					<p class="eyebrow">Command Center</p>
-					<h1>Good morning, <span data-business-name>ABC Trading</span></h1>
-					<p class="eyebrow">Business ID: <span data-business-id>BL_PENDING</span></p>
+					<span class="eyebrow">Dashboard</span>
 				</div>
 				<div class="topbar-actions">
-					<button class="icon-button" type="button" aria-label="Notifications">&#128276;</button>
 					<button class="profile-chip" type="button" aria-label="Account menu">
 						<span class="profile-avatar">AT</span>
-						<span data-auth-name>Admin</span>
+						<span data-auth-name>Ayanda</span>
 					</button>
-					<button class="icon-button" type="button" aria-label="Sign out" data-logout>Sign out</button>
 				</div>
 			</header>
 
-			<main class="content-grid">
-				<section class="hero-card">
-					<div>
-						<p class="eyebrow">Your Growth Engine</p>
-						<h2>Everything your business needs to grow from one dashboard.</h2>
-					</div>
-					<p>
-						<span data-hero-line>Manage your sales, run AI-powered marketing, connect with local partners, and unlock business funding without switching tools.</span>
-						<br>
-						Current plan: <strong data-plan-name>LIFT OFF (PRO)</strong>.
-					</p>
-				</section>
+			<main class="content-grid" style="padding: 2rem 3rem;">
+				
+				<div class="greeting-section">
+					<h1>What do you want to do today, Ayanda?</h1>
+					<p>Select a goal below to start growing your business. We will guide you step-by-step.</p>
+				</div>
 
-				<section class="stats-grid" aria-label="Key performance metrics">
-					<article class="stat-card accent-gold">
-						<p>Sales Hub (Revenue)</p>
-						<strong data-stat-revenue>R12,450</strong>
-						<span data-stat-revenue-note>Across POS & Online Store</span>
-					</article>
-					<article class="stat-card accent-blue">
-						<p>Marketing Hub (Leads)</p>
-						<strong data-stat-orders>48</strong>
-						<span data-stat-orders-note>From active WhatsApp campaigns</span>
-					</article>
-					<article class="stat-card accent-coral">
-						<p>Funding Health Score</p>
-						<strong data-stat-customers>78/100</strong>
-						<span data-stat-customers-note>Good standing for small grants</span>
-					</article>
-					<article class="stat-card accent-green">
-						<p>Network Connections</p>
-						<strong data-stat-conversion>12</strong>
-						<span data-stat-conversion-note>Suppliers & B2B Partners found</span>
-					</article>
-				</section>
+				<!-- THE NEW ACTION PROMPT GRID -->
+				<div class="action-grid">
+					
+					<!-- 1. Build a Business -->
+					<a href="website-builder.html" class="prompt-card card-build">
+						<div class="prompt-icon"><i class="ph ph-rocket-launch"></i></div>
+						<h3>Build a Business</h3>
+						<p>Register your company, set up compliance, and use AI to generate your first website in minutes.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> Answer 5 simple questions about your business to generate your site.</span>
+						</div>
+					</a>
 
-				<section class="panel split-panel">
+					<!-- 2. Sell Something -->
+					<a href="sales-hub.html" class="prompt-card card-sell">
+						<div class="prompt-icon"><i class="ph ph-storefront"></i></div>
+						<h3>Sell Something</h3>
+						<p>Start taking orders. Manage your POS, add inventory, and send digital invoices to clients.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> Add your first product and connect Yoco or Payfast to get paid.</span>
+						</div>
+					</a>
+
+					<!-- 3. Brand Business -->
+					<a href="marketing-hub.html" class="prompt-card card-brand">
+						<div class="prompt-icon"><i class="ph ph-paint-brush"></i></div>
+						<h3>Brand your Business</h3>
+						<p>Create a professional identity. Generate AI social media posts, WhatsApp campaigns, and logos.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> Describe your brand vibe and let AI generate your first WhatsApp promo.</span>
+						</div>
+					</a>
+
+					<!-- 4. Networking -->
+					<a href="partners-network.html" class="prompt-card card-network">
+						<div class="prompt-icon"><i class="ph ph-handshake"></i></div>
+						<h3>Networking</h3>
+						<p>Connect with local businesses in South Africa. Find reliable suppliers, distributors, or B2B partners.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> Create your public network profile so other businesses can find you.</span>
+						</div>
+					</a>
+
+					<!-- 5. Staffing Solution -->
+					<a href="staffing.html" class="prompt-card card-staff">
+						<div class="prompt-icon"><i class="ph ph-users-three"></i></div>
+						<h3>Staffing Solutions</h3>
+						<p>Manage your growing team. Post job openings, manage staff shifts, and organize payroll.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> Add your first employee to assign them a role in your workspace.</span>
+						</div>
+					</a>
+
+					<!-- 6. Fund Business -->
+					<a href="funding-hub.html" class="prompt-card card-fund">
+						<div class="prompt-icon"><i class="ph ph-chart-line-up"></i></div>
+						<h3>Fund your Business</h3>
+						<p>Check your business health score, automatically generate pitch decks, and apply for local grants.</p>
+						<div class="next-step-guide">
+							<i class="ph ph-arrow-circle-right"></i>
+							<span><strong>Up next:</strong> We will scan your sales data to calculate your funding readiness score.</span>
+						</div>
+					</a>
+
+				</div>
+
+				<!-- Secondary Section: Only shows data if they have started taking actions -->
+				<section class="panel" style="margin-top: 2rem;">
 					<div class="panel-heading">
 						<div>
-							<p class="eyebrow">Next Steps</p>
-							<h2>Business setup progress: <span data-setup-progress>40%</span></h2>
+							<p class="eyebrow">Your Progress</p>
+							<h2>Recent Activity</h2>
 						</div>
 					</div>
-					<ul class="insight-list">
-						<li>
-							<strong>Launch your AI Website</strong>
-							<span data-opportunity-carts>Answer 5 questions to go live today.</span>
-						</li>
-						<li>
-							<strong>Connect Payment Gateways</strong>
-							<span data-opportunity-stock>Link Yoco, Payfast, or Ozow to get paid.</span>
-						</li>
-						<li>
-							<strong>Complete Funding Profile</strong>
-							<span data-opportunity-customers>Generate your auto-filled pitch deck.</span>
-						</li>
-					</ul>
+					<div style="padding: 24px; color: #64748b; text-align: center; border: 1px dashed #cbd5e1; border-radius: 12px; margin: 20px;">
+						<i class="ph ph-chart-pie-slice" style="font-size: 2rem; margin-bottom: 10px; color: #94a3b8;"></i>
+						<p>Your activity data will appear here once you select a goal above and start building your business.</p>
+					</div>
 				</section>
 
-				<section class="panel">
-					<div class="panel-heading">
-						<div>
-							<p class="eyebrow">Modules</p>
-							<h2>The 5 Pillars of Business Lift</h2>
-						</div>
-					</div>
-					<div class="shortcut-grid">
-						<a class="shortcut-card" href="website-builder.html">
-							<strong>1. AI Website Builder</strong>
-							<span>Answer 5 questions to generate a fully functional site and store.</span>
-						</a>
-						<a class="shortcut-card" href="sales-hub.html">
-							<strong>2. Sales Hub</strong>
-							<span>POS, Invoicing, CRM, Inventory, and cross-channel sales tracking.</span>
-						</a>
-						<a class="shortcut-card" href="marketing-hub.html">
-							<strong>3. Marketing Hub</strong>
-							<span>AI-generated social posts, WhatsApp campaigns, and automated emails.</span>
-						</a>
-						<a class="shortcut-card" href="funding-hub.html">
-							<strong>4. Funding Hub</strong>
-							<span>Track business health, match with SA investors, and auto-generate pitch decks.</span>
-						</a>
-						<a class="shortcut-card" href="partners-network.html">
-							<strong>5. Partners Network</strong>
-							<span>Find local suppliers, distributors, and collaborate with B2B networks.</span>
-						</a>
-						<a class="shortcut-card" href="business-profile.html" style="background: var(--surface-2);">
-							<strong>Settings & Profile</strong>
-							<span>Manage your CIPC info, tax docs, and team access.</span>
-						</a>
-					</div>
-				</section>
 			</main>
 		</div>
 	</div>
@@ -167,6 +273,5 @@
 	<script src="assets/app.js"></script>
 	<script type="module" src="js/auth.js"></script>
 	<script type="module" src="js/guard.js"></script>
-	<script type="module" src="js/dashboard-data.js"></script>
 </body>
 </html>
