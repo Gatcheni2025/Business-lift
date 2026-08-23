@@ -285,8 +285,128 @@
 			border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;
 		}
 		@keyframes spin { to { transform: rotate(360deg); } }
-		
-	</style>
+		/* ─── CHANNEL SELECTOR (SELL MODAL) ─── */
+		.channel-grid {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 12px;
+			margin-top: 8px;
+		}
+		.channel-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 12px;
+			border: 1.5px solid var(--border-light);
+			border-radius: 12px;
+			cursor: pointer;
+			background: white;
+			font-weight: 600;
+			font-size: 0.85rem;
+			color: var(--text-secondary);
+			transition: all 0.2s;
+			user-select: none;
+		}
+		.channel-btn:hover {
+			background: #f8fafc;
+			border-color: #cbd5e1;
+		}
+		/* Hidden checkboxes for the buttons */
+		.channel-btn input[type="checkbox"] { display: none; }
+		.channel-btn:has(input:checked) {
+			background: #eff6ff;
+			border-color: var(--accent-blue);
+			color: var(--accent-blue);
+			box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+		}
+		.channel-btn i { font-size: 1.2rem; }
+
+		/* ─── AI PREDICTION BOX ─── */
+		.ai-prediction-box {
+			background: linear-gradient(to right, #f8fafc, #eff6ff);
+			border: 1px solid #bfdbfe;
+			border-radius: 12px;
+			padding: 16px;
+			margin-top: 16px;
+		}
+		.ai-prediction-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-weight: 700;
+			color: var(--accent-blue);
+			margin-bottom: 12px;
+			font-size: 0.95rem;
+		}
+		.ai-prediction-stats {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+		.stat-item {
+			background: white;
+			padding: 12px;
+			border-radius: 8px;
+			border: 1px solid #e2e8f0;
+			text-align: center;
+		}
+		.stat-item span {
+			display: block;
+			font-size: 0.75rem;
+			color: var(--text-secondary);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-bottom: 4px;
+		}
+		.stat-item strong {
+			display: block;
+			font-size: 1.1rem;
+			color: var(--text-primary);
+			font-family: 'Plus Jakarta Sans', sans-serif;
+		}
+		.ai-prediction-note {
+			font-size: 0.8rem;
+			color: #475569;
+			line-height: 1.5;
+		}
+	/* ─── PROFILE DROPDOWN ─── */
+		.profile-wrapper { position: relative; }
+		.profile-dropdown {
+			display: none;
+			position: absolute;
+			top: calc(100% + 10px);
+			right: 0;
+			background: white;
+			border: 1px solid var(--border-light);
+			border-radius: 12px;
+			box-shadow: var(--shadow-lg);
+			width: 220px;
+			z-index: 100;
+			overflow: hidden;
+			animation: slideDown 0.2s ease;
+		}
+		@keyframes slideDown {
+			from { opacity: 0; transform: translateY(-10px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+		.profile-dropdown.active { display: block; }
+		.profile-dropdown a {
+			display: flex; align-items: center; gap: 10px;
+			padding: 12px 16px;
+			color: var(--text-primary);
+			text-decoration: none;
+			font-size: 0.9rem;
+			font-weight: 500;
+			transition: background 0.2s;
+		}
+		.profile-dropdown a:hover { background: #f1f5f9; color: var(--accent-blue); }
+		.profile-dropdown a i { font-size: 1.2rem; }
+		.profile-dropdown .divider { height: 1px; background: var(--border-light); margin: 4px 0; }
+		.profile-dropdown a.logout-btn { color: #dc2626; }
+		.profile-dropdown a.logout-btn:hover { background: #fef2f2; }
+		</style>
 </head>
 <body class="app-shell">
 
@@ -309,10 +429,22 @@
 	<!-- ─── MAIN PANEL ─── -->
 	<main class="main-panel">
 		<header class="topbar">
-			<button class="profile-btn">
-				<div class="profile-avatar">AT</div>
-				Ayanda T.
-			</button>
+			<div class="profile-wrapper">
+				<button class="profile-btn" onclick="toggleProfileMenu()">
+					<!-- IDs added here for Firebase to target -->
+					<div class="profile-avatar" id="userInitials">--</div>
+					<span id="userName">Loading...</span>
+					<i class="ph ph-caret-down" style="color: var(--text-secondary); margin-left: 4px;"></i>
+				</button>
+				
+				<!-- Dropdown Menu -->
+				<div class="profile-dropdown" id="profileDropdown">
+					<a href="business-profile.html"><i class="ph ph-user-circle"></i> Account Settings</a>
+					<a href="billing.html"><i class="ph ph-credit-card"></i> Billing & Plans</a>
+					<div class="divider"></div>
+					<a href="#" class="logout-btn" onclick="handleSignOut()"><i class="ph ph-sign-out"></i> Sign Out</a>
+				</div>
+			</div>
 		</header>
 
 		<div class="content">
@@ -440,7 +572,67 @@
 		</div>
 	</div>
 
-	<!-- ─── JAVASCRIPT FOR MODAL LOGIC ─── -->
+	<!-- ─── FIREBASE ACCOUNT MANAGEMENT ─── -->
+	<script type="module">
+		// Import Firebase Auth based on your existing setup
+		import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+		import { auth } from "./js/firebase-config.js"; // Pulling from your local config
+
+		const userNameEl = document.getElementById('userName');
+		const userInitialsEl = document.getElementById('userInitials');
+
+		// 1. Guard the Route & Load User Data
+		onAuthStateChanged(auth, (user) => {
+			if (user) {
+				// User is signed in. Get their name.
+				const fullName = user.displayName || "Entrepreneur";
+				
+				// Extract first name for the greeting (e.g. "Ayanda")
+				const firstName = fullName.split(' ')[0];
+				
+				// Inject name into the Topbar
+				userNameEl.textContent = firstName;
+
+				// Generate Initials (e.g. "Ayanda T" -> "AT")
+				const initials = fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+				userInitialsEl.textContent = initials;
+
+				// Update the greeting on the dashboard dynamically
+				const greetingTitle = document.querySelector('.greeting h1');
+				if(greetingTitle) {
+					greetingTitle.textContent = `What do you want to achieve today, ${firstName}?`;
+				}
+			} else {
+				// User is NOT signed in. Kick them back to the landing page.
+				window.location.href = 'index.html';
+			}
+		});
+
+		// 2. Dropdown Menu Toggle Logic
+		window.toggleProfileMenu = function() {
+			const dropdown = document.getElementById('profileDropdown');
+			dropdown.classList.toggle('active');
+		}
+
+		// Close dropdown if user clicks outside of it
+		window.addEventListener('click', function(e) {
+			const wrapper = document.querySelector('.profile-wrapper');
+			if (!wrapper.contains(e.target)) {
+				document.getElementById('profileDropdown').classList.remove('active');
+			}
+		});
+
+		// 3. Secure Sign Out Function
+		window.handleSignOut = function() {
+			signOut(auth).then(() => {
+				// Sign-out successful. Firebase listener will auto-redirect them.
+				console.log("User signed out successfully");
+			}).catch((error) => {
+				console.error("Error signing out:", error);
+				alert("Error signing out. Please try again.");
+			});
+		}
+	</script><!-- ─── JAVASCRIPT FOR MODAL LOGIC ─── -->
 	<script>
 		// Data config for all 6 AI Modals
 		const modalData = {
@@ -477,30 +669,60 @@
 				`
 			},
 			sell: {
-				title: "Set up your POS & Store",
+				title: "Omnichannel Selling Setup",
 				icon: "ph-storefront",
 				color: "#16a34a",
 				form: `
 					<div class="form-group">
-						<label>Product/Service Name</label>
-						<input type="text" placeholder="e.g. Premium Sneaker Cleaning">
+						<label>1. What product are you selling?</label>
+						<input type="text" placeholder="e.g. Men's Leather Wallet, Skincare Serum" oninput="simulateAIPrediction(this.value)">
 					</div>
 					<div class="form-group">
-						<label>Price (ZAR)</label>
-						<input type="number" placeholder="R 0.00">
+						<label>2. Select Sales Channels (APIs will auto-sync inventory)</label>
+						<div class="channel-grid">
+							<label class="channel-btn">
+								<input type="checkbox" checked> <i class="ph ph-whatsapp-logo" style="color: #25D366;"></i> WhatsApp
+							</label>
+							<label class="channel-btn">
+								<input type="checkbox" checked> <i class="ph ph-instagram-logo" style="color: #E1306C;"></i> Instagram
+							</label>
+							<label class="channel-btn">
+								<input type="checkbox"> <i class="ph ph-facebook-logo" style="color: #1877F2;"></i> Facebook
+							</label>
+							<label class="channel-btn">
+								<input type="checkbox"> <i class="ph ph-google-logo" style="color: #DB4437;"></i> Google
+							</label>
+							<label class="channel-btn">
+								<input type="checkbox"> <i class="ph ph-twitter-logo" style="color: #000000;"></i> X (Twitter)
+							</label>
+							<label class="channel-btn">
+								<input type="checkbox"> <i class="ph ph-youtube-logo" style="color: #FF0000;"></i> YouTube
+							</label>
+						</div>
 					</div>
-					<div class="form-group">
-						<label>Briefly describe the product for your online store</label>
-						<textarea placeholder="Let AI write the perfect sales pitch..."></textarea>
-					</div>
-					<div class="form-group">
-						<label>Preferred Payment Provider (to receive funds)</label>
-						<select>
-							<option>Yoco</option>
-							<option>Payfast</option>
-							<option>Ozow (EFT)</option>
-							<option>Cash / Manual</option>
-						</select>
+					
+					<!-- AI Market Prediction Engine -->
+					<div class="ai-prediction-box" id="aiMarketPrediction">
+						<div class="ai-prediction-header">
+							<i class="ph ph-sparkle"></i> AI Market Prediction
+						</div>
+						<div class="ai-prediction-stats">
+							<div class="stat-item">
+								<span>Est. Reach</span>
+								<strong>85,000+</strong>
+							</div>
+							<div class="stat-item">
+								<span>Best Target</span>
+								<strong>Male (18-35)</strong>
+							</div>
+							<div class="stat-item">
+								<span>Expected Buyers</span>
+								<strong>250 - 400</strong>
+							</div>
+						</div>
+						<div class="ai-prediction-note">
+							<strong>Insights:</strong> Based on historical data, this product type performs best on WhatsApp and Instagram in the South African market. We will use the Meta API & WhatsApp Business API to push this product directly to these demographics.
+						</div>
 					</div>
 				`
 			},
