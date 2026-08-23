@@ -3,275 +3,657 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Business Lift | Action Center</title>
+	<title>Business Lift | Command Center</title>
 	
-	<!-- Fonts -->
+	<!-- Premium Fonts -->
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 	
-	<!-- Phosphor Icons (For visual prompts) -->
+	<!-- Phosphor Icons -->
 	<script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-	<link rel="stylesheet" href="assets/styles.css">
-
-	<!-- Specific Styles for the Action Prompt Dashboard -->
 	<style>
-		/* Action Dashboard Specific Styling */
-		.greeting-section {
-			margin-bottom: 2rem;
-		}
-		.greeting-section h1 {
-			font-family: 'Space Grotesk', sans-serif;
-			font-size: 2rem;
-			color: #0f172a;
-			margin-bottom: 0.5rem;
-		}
-		.greeting-section p {
-			color: #64748b;
-			font-size: 1.1rem;
-		}
-
-		/* The Prompt Grid */
-		.action-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-			gap: 1.5rem;
-			margin-bottom: 3rem;
+		/* ─── PREMIUM CSS VARIABLES ─── */
+		:root {
+			--bg-app: #f8fafc;
+			--surface: #ffffff;
+			--text-primary: #0f172a;
+			--text-secondary: #64748b;
+			--border-light: #e2e8f0;
+			--brand-primary: #0f172a;
+			--accent-blue: #2563eb;
+			--accent-purple: #8b5cf6;
+			--shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
+			--shadow-md: 0 10px 20px -5px rgba(0,0,0,0.05);
+			--shadow-lg: 0 20px 40px -10px rgba(0,0,0,0.08);
+			--radius-lg: 24px;
+			--radius-md: 16px;
 		}
 
-		/* Individual Prompt Cards */
-		.prompt-card {
-			background: #ffffff;
-			border: 1px solid #e2e8f0;
-			border-radius: 16px;
-			padding: 24px;
-			text-decoration: none;
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: 'Inter', sans-serif;
+			background: var(--bg-app);
+			color: var(--text-primary);
+			-webkit-font-smoothing: antialiased;
+		}
+		
+		h1, h2, h3, h4 { font-family: 'Plus Jakarta Sans', sans-serif; }
+		button { cursor: pointer; border: none; background: none; font-family: inherit; }
+
+		/* ─── APP LAYOUT ─── */
+		.app-shell { display: flex; height: 100vh; overflow: hidden; }
+		
+		/* ─── SIDEBAR ─── */
+		.sidebar {
+			width: 280px;
+			background: var(--surface);
+			border-right: 1px solid var(--border-light);
 			display: flex;
 			flex-direction: column;
-			transition: all 0.3s ease;
-			position: relative;
-			overflow: hidden;
-			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+			padding: 32px 24px;
+			z-index: 10;
 		}
-
-		.prompt-card:hover {
-			transform: translateY(-5px);
-			box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
-			border-color: #cbd5e1;
+		.brand {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			font-family: 'Plus Jakarta Sans', sans-serif;
+			font-weight: 800;
+			font-size: 1.2rem;
+			color: var(--brand-primary);
+			text-decoration: none;
+			margin-bottom: 48px;
 		}
-
-		.prompt-icon {
-			width: 56px;
-			height: 56px;
-			border-radius: 12px;
+		.brand-icon {
+			width: 36px;
+			height: 36px;
+			background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+			color: white;
+			border-radius: 10px;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			font-size: 1.8rem;
-			margin-bottom: 1.2rem;
-		}
-
-		.prompt-card h3 {
-			font-family: 'Space Grotesk', sans-serif;
-			font-size: 1.25rem;
-			color: #0f172a;
-			margin-bottom: 0.5rem;
-		}
-
-		.prompt-card p {
-			color: #64748b;
-			font-size: 0.95rem;
-			line-height: 1.5;
-			margin-bottom: 1.5rem;
-			flex-grow: 1;
-		}
-
-		/* The "What happens next" guide inside the card */
-		.next-step-guide {
-			background: #f8fafc;
-			border-radius: 8px;
-			padding: 12px;
-			font-size: 0.85rem;
-			color: #475569;
-			display: flex;
-			align-items: flex-start;
-			gap: 8px;
-			border-left: 3px solid transparent;
-		}
-
-		.next-step-guide i {
 			font-size: 1.2rem;
-			margin-top: 2px;
+		}
+		.nav-link {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 14px 16px;
+			color: var(--text-secondary);
+			text-decoration: none;
+			border-radius: 12px;
+			font-weight: 500;
+			margin-bottom: 8px;
+			transition: all 0.2s ease;
+		}
+		.nav-link:hover { color: var(--text-primary); background: #f1f5f9; }
+		.nav-link.active {
+			background: var(--brand-primary);
+			color: white;
+			box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+		}
+		.nav-link i { font-size: 1.3rem; }
+
+		/* ─── MAIN PANEL ─── */
+		.main-panel {
+			flex: 1;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+		}
+		.topbar {
+			padding: 24px 48px;
+			display: flex;
+			justify-content: flex-end;
+			align-items: center;
+		}
+		.profile-btn {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			background: white;
+			padding: 6px 16px 6px 6px;
+			border-radius: 30px;
+			border: 1px solid var(--border-light);
+			box-shadow: var(--shadow-sm);
+			font-weight: 600;
+			font-size: 0.9rem;
+		}
+		.profile-avatar {
+			width: 32px;
+			height: 32px;
+			background: #e2e8f0;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: var(--text-primary);
 		}
 
-		/* Colors for different actions */
-		.card-build .prompt-icon { background: #eff6ff; color: #2563eb; }
-		.card-build .next-step-guide { border-left-color: #2563eb; }
-		.card-build:hover h3 { color: #2563eb; }
+		/* ─── CONTENT AREA ─── */
+		.content { padding: 0 48px 48px; max-width: 1400px; margin: 0 auto; width: 100%; }
+		.greeting { margin-bottom: 40px; }
+		.greeting h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+		.greeting p { color: var(--text-secondary); font-size: 1.1rem; }
 
-		.card-sell .prompt-icon { background: #f0fdf4; color: #16a34a; }
-		.card-sell .next-step-guide { border-left-color: #16a34a; }
-		.card-sell:hover h3 { color: #16a34a; }
+		/* ─── PREMIUM ACTION GRID ─── */
+		.action-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+			gap: 24px;
+		}
 
-		.card-brand .prompt-icon { background: #fdf4ff; color: #c026d3; }
-		.card-brand .next-step-guide { border-left-color: #c026d3; }
-		.card-brand:hover h3 { color: #c026d3; }
+		.action-card {
+			background: var(--surface);
+			border: 1px solid rgba(226, 232, 240, 0.8);
+			border-radius: var(--radius-lg);
+			padding: 32px;
+			text-align: left;
+			transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+			position: relative;
+			overflow: hidden;
+			box-shadow: var(--shadow-md);
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+		}
 
-		.card-network .prompt-icon { background: #fffbeb; color: #d97706; }
-		.card-network .next-step-guide { border-left-color: #d97706; }
-		.card-network:hover h3 { color: #d97706; }
+		/* Hover Lift & Glow Effect */
+		.action-card:hover {
+			transform: translateY(-6px);
+			box-shadow: var(--shadow-lg);
+			border-color: transparent;
+		}
+		.action-card::before {
+			content: ''; position: absolute; inset: 0; opacity: 0;
+			background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(139, 92, 246, 0.05));
+			transition: opacity 0.3s ease; z-index: 0;
+		}
+		.action-card:hover::before { opacity: 1; }
+		
+		.card-content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+		
+		.card-icon {
+			width: 64px; height: 64px; border-radius: 16px;
+			display: flex; align-items: center; justify-content: center;
+			font-size: 2rem; margin-bottom: 24px;
+			background: var(--bg-app);
+			transition: transform 0.3s ease;
+		}
+		.action-card:hover .card-icon { transform: scale(1.05); }
 
-		.card-staff .prompt-icon { background: #f1f5f9; color: #475569; }
-		.card-staff .next-step-guide { border-left-color: #475569; }
-		.card-staff:hover h3 { color: #475569; }
+		/* Card Theme Colors */
+		.theme-build .card-icon { color: #2563eb; background: #eff6ff; }
+		.theme-sell .card-icon { color: #16a34a; background: #f0fdf4; }
+		.theme-brand .card-icon { color: #c026d3; background: #fdf4ff; }
+		.theme-network .card-icon { color: #d97706; background: #fffbeb; }
+		.theme-staff .card-icon { color: #475569; background: #f1f5f9; }
+		.theme-fund .card-icon { color: #dc2626; background: #fef2f2; }
 
-		.card-fund .prompt-icon { background: #fef2f2; color: #dc2626; }
-		.card-fund .next-step-guide { border-left-color: #dc2626; }
-		.card-fund:hover h3 { color: #dc2626; }
+		.action-card h3 { font-size: 1.4rem; margin-bottom: 12px; }
+		.action-card p { color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; flex-grow: 1; }
 
+		.ai-prompt-hint {
+			background: rgba(248, 250, 252, 0.8);
+			border: 1px solid var(--border-light);
+			padding: 16px; border-radius: 12px;
+			display: flex; align-items: flex-start; gap: 12px;
+			font-size: 0.85rem; color: #475569;
+			backdrop-filter: blur(4px);
+		}
+		.ai-prompt-hint i { font-size: 1.2rem; margin-top: 2px; }
+
+		/* ─── AI MODAL / POPUP ─── */
+		.modal-overlay {
+			position: fixed; inset: 0;
+			background: rgba(15, 23, 42, 0.4);
+			backdrop-filter: blur(8px);
+			display: none; align-items: center; justify-content: center;
+			z-index: 1000; opacity: 0; transition: opacity 0.3s ease;
+		}
+		.modal-overlay.active { display: flex; opacity: 1; }
+
+		.ai-modal {
+			background: var(--surface);
+			width: 100%; max-width: 600px;
+			border-radius: 24px;
+			box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+			transform: translateY(20px) scale(0.95);
+			transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+			display: flex; flex-direction: column;
+			max-height: 90vh;
+			overflow: hidden;
+		}
+		.modal-overlay.active .ai-modal { transform: translateY(0) scale(1); }
+
+		.modal-header {
+			padding: 24px 32px;
+			border-bottom: 1px solid var(--border-light);
+			display: flex; justify-content: space-between; align-items: center;
+			background: #f8fafc;
+		}
+		.modal-header .modal-title { display: flex; align-items: center; gap: 12px; }
+		.modal-header .modal-title i { font-size: 1.8rem; }
+		.modal-header h2 { font-size: 1.25rem; font-weight: 700; }
+		.close-btn { font-size: 1.5rem; color: var(--text-secondary); transition: 0.2s; }
+		.close-btn:hover { color: var(--text-primary); }
+
+		.modal-body { padding: 32px; overflow-y: auto; }
+		
+		/* Form Elements inside Modal */
+		.form-group { margin-bottom: 24px; }
+		.form-group label {
+			display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; color: var(--text-primary);
+		}
+		.form-group input, .form-group textarea, .form-group select {
+			width: 100%; padding: 14px 16px; border-radius: 12px;
+			border: 1px solid var(--border-light); background: #f8fafc;
+			font-family: inherit; font-size: 0.95rem; transition: 0.2s;
+		}
+		.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+			outline: none; border-color: var(--brand-primary); background: white;
+			box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.05);
+		}
+		.form-group textarea { resize: vertical; min-height: 100px; }
+
+		.modal-footer {
+			padding: 24px 32px;
+			border-top: 1px solid var(--border-light);
+			display: flex; justify-content: flex-end; gap: 16px;
+			background: white;
+		}
+		.btn {
+			padding: 14px 28px; border-radius: 12px; font-weight: 600; font-size: 1rem;
+			transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+		}
+		.btn-cancel { color: var(--text-secondary); background: transparent; }
+		.btn-cancel:hover { background: #f1f5f9; color: var(--text-primary); }
+		.btn-ai {
+			background: linear-gradient(135deg, var(--brand-primary), #1e293b);
+			color: white; box-shadow: var(--shadow-md);
+		}
+		.btn-ai:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+		/* AI Loading State */
+		.ai-loading { display: none; text-align: center; padding: 40px 0; }
+		.ai-loading.active { display: block; }
+		.ai-spinner {
+			width: 48px; height: 48px; border: 4px solid #f1f5f9; border-top-color: var(--accent-purple);
+			border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;
+		}
+		@keyframes spin { to { transform: rotate(360deg); } }
+		
 	</style>
 </head>
 <body class="app-shell">
-	<div class="app-layout">
-		<!-- Sidebar remains the same for navigation -->
-		<aside class="sidebar" id="sidebar">
-			<div>
-				<a class="brand" href="dashboard.html" aria-label="Business Lift home">
-					<span class="brand-mark">BL</span>
-					<div>
-						<strong>Business Lift</strong>
-						<span>Growth operating system</span>
-					</div>
-				</a>
 
-				<nav class="side-nav" aria-label="Primary navigation">
-					<a class="nav-link active" href="dashboard.html"><i class="ph ph-squares-four"></i> Action Center</a>
-					<a class="nav-link" href="website-builder.html"><i class="ph ph-globe"></i> Workspace</a>
-					<a class="nav-link" href="sales-hub.html"><i class="ph ph-shopping-cart"></i> Sales Hub</a>
-					<a class="nav-link" href="marketing-hub.html"><i class="ph ph-megaphone"></i> Marketing</a>
-					<a class="nav-link" href="funding-hub.html"><i class="ph ph-bank"></i> Funding</a>
-					<a class="nav-link" href="partners-network.html"><i class="ph ph-users"></i> Network</a>
-				</nav>
+	<!-- ─── SIDEBAR ─── -->
+	<aside class="sidebar">
+		<a class="brand" href="#">
+			<div class="brand-icon">B</div>
+			Business Lift
+		</a>
+		<nav>
+			<a class="nav-link active" href="#"><i class="ph ph-squares-four"></i> Command Center</a>
+			<a class="nav-link" href="#"><i class="ph ph-globe"></i> Workspace</a>
+			<a class="nav-link" href="#"><i class="ph ph-shopping-cart"></i> Sales Hub</a>
+			<a class="nav-link" href="#"><i class="ph ph-megaphone"></i> Marketing</a>
+			<a class="nav-link" href="#"><i class="ph ph-bank"></i> Funding</a>
+			<a class="nav-link" href="#"><i class="ph ph-users"></i> Network</a>
+		</nav>
+	</aside>
+
+	<!-- ─── MAIN PANEL ─── -->
+	<main class="main-panel">
+		<header class="topbar">
+			<button class="profile-btn">
+				<div class="profile-avatar">AT</div>
+				Ayanda T.
+			</button>
+		</header>
+
+		<div class="content">
+			<div class="greeting">
+				<h1>What do you want to achieve today?</h1>
+				<p>Select a goal below. Our AI will guide you step-by-step.</p>
 			</div>
-		</aside>
 
-		<div class="main-panel">
-			<header class="topbar">
-				<button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">
-					<span></span>
-					<span></span>
-					<span></span>
-				</button>
-				<div>
-					<span class="eyebrow">Dashboard</span>
-				</div>
-				<div class="topbar-actions">
-					<button class="profile-chip" type="button" aria-label="Account menu">
-						<span class="profile-avatar">AT</span>
-						<span data-auth-name>Ayanda</span>
-					</button>
-				</div>
-			</header>
-
-			<main class="content-grid" style="padding: 2rem 3rem;">
+			<!-- ─── ACTION GRID ─── -->
+			<div class="action-grid">
 				
-				<div class="greeting-section">
-					<h1>What do you want to do today, Ayanda?</h1>
-					<p>Select a goal below to start growing your business. We will guide you step-by-step.</p>
-				</div>
-
-				<!-- THE NEW ACTION PROMPT GRID -->
-				<div class="action-grid">
-					
-					<!-- 1. Build a Business -->
-					<a href="website-builder.html" class="prompt-card card-build">
-						<div class="prompt-icon"><i class="ph ph-rocket-launch"></i></div>
+				<!-- Action: Build -->
+				<button class="action-card theme-build" onclick="openAIModal('build')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-rocket-launch"></i></div>
 						<h3>Build a Business</h3>
 						<p>Register your company, set up compliance, and use AI to generate your first website in minutes.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> Answer 5 simple questions about your business to generate your site.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> Answer 5 simple questions about your business to generate your site.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
-					<!-- 2. Sell Something -->
-					<a href="sales-hub.html" class="prompt-card card-sell">
-						<div class="prompt-icon"><i class="ph ph-storefront"></i></div>
+				<!-- Action: Sell -->
+				<button class="action-card theme-sell" onclick="openAIModal('sell')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-storefront"></i></div>
 						<h3>Sell Something</h3>
 						<p>Start taking orders. Manage your POS, add inventory, and send digital invoices to clients.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> Add your first product and connect Yoco or Payfast to get paid.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> Add your first product and connect Yoco or Payfast to get paid.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
-					<!-- 3. Brand Business -->
-					<a href="marketing-hub.html" class="prompt-card card-brand">
-						<div class="prompt-icon"><i class="ph ph-paint-brush"></i></div>
+				<!-- Action: Brand -->
+				<button class="action-card theme-brand" onclick="openAIModal('brand')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-paint-brush-broad"></i></div>
 						<h3>Brand your Business</h3>
 						<p>Create a professional identity. Generate AI social media posts, WhatsApp campaigns, and logos.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> Describe your brand vibe and let AI generate your first WhatsApp promo.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> Describe your brand vibe and let AI generate your first WhatsApp promo.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
-					<!-- 4. Networking -->
-					<a href="partners-network.html" class="prompt-card card-network">
-						<div class="prompt-icon"><i class="ph ph-handshake"></i></div>
+				<!-- Action: Network -->
+				<button class="action-card theme-network" onclick="openAIModal('network')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-handshake"></i></div>
 						<h3>Networking</h3>
 						<p>Connect with local businesses in South Africa. Find reliable suppliers, distributors, or B2B partners.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> Create your public network profile so other businesses can find you.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> Create your public network profile so other businesses can find you.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
-					<!-- 5. Staffing Solution -->
-					<a href="staffing.html" class="prompt-card card-staff">
-						<div class="prompt-icon"><i class="ph ph-users-three"></i></div>
+				<!-- Action: Staffing -->
+				<button class="action-card theme-staff" onclick="openAIModal('staff')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-users-three"></i></div>
 						<h3>Staffing Solutions</h3>
 						<p>Manage your growing team. Post job openings, manage staff shifts, and organize payroll.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> Add your first employee to assign them a role in your workspace.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> Add your first employee to assign them a role in your workspace.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
-					<!-- 6. Fund Business -->
-					<a href="funding-hub.html" class="prompt-card card-fund">
-						<div class="prompt-icon"><i class="ph ph-chart-line-up"></i></div>
+				<!-- Action: Fund -->
+				<button class="action-card theme-fund" onclick="openAIModal('fund')">
+					<div class="card-content">
+						<div class="card-icon"><i class="ph ph-chart-line-up"></i></div>
 						<h3>Fund your Business</h3>
 						<p>Check your business health score, automatically generate pitch decks, and apply for local grants.</p>
-						<div class="next-step-guide">
-							<i class="ph ph-arrow-circle-right"></i>
-							<span><strong>Up next:</strong> We will scan your sales data to calculate your funding readiness score.</span>
+						<div class="ai-prompt-hint">
+							<i class="ph ph-magic-wand"></i>
+							<div><strong>Up next:</strong> We will scan your sales data to calculate your funding readiness score.</div>
 						</div>
-					</a>
+					</div>
+				</button>
 
+			</div>
+		</div>
+	</main>
+
+	<!-- ─── AI GENERATION MODAL ─── -->
+	<div class="modal-overlay" id="aiModalOverlay">
+		<div class="ai-modal">
+			
+			<div class="modal-header">
+				<div class="modal-title">
+					<i id="modalIcon" class="ph ph-magic-wand" style="color: var(--accent-purple);"></i>
+					<h2 id="modalTitle">Generate with AI</h2>
 				</div>
+				<button class="close-btn" onclick="closeAIModal()"><i class="ph ph-x"></i></button>
+			</div>
 
-				<!-- Secondary Section: Only shows data if they have started taking actions -->
-				<section class="panel" style="margin-top: 2rem;">
-					<div class="panel-heading">
-						<div>
-							<p class="eyebrow">Your Progress</p>
-							<h2>Recent Activity</h2>
-						</div>
-					</div>
-					<div style="padding: 24px; color: #64748b; text-align: center; border: 1px dashed #cbd5e1; border-radius: 12px; margin: 20px;">
-						<i class="ph ph-chart-pie-slice" style="font-size: 2rem; margin-bottom: 10px; color: #94a3b8;"></i>
-						<p>Your activity data will appear here once you select a goal above and start building your business.</p>
-					</div>
-				</section>
+			<!-- Form Container -->
+			<div class="modal-body" id="modalFormContainer">
+				<!-- Content is injected via JavaScript based on the clicked card -->
+			</div>
 
-			</main>
+			<!-- Loading State (Hidden by default) -->
+			<div class="modal-body ai-loading" id="aiLoadingState">
+				<div class="ai-spinner"></div>
+				<h3 style="margin-bottom: 8px;">AI is analyzing your inputs...</h3>
+				<p style="color: var(--text-secondary);">Creating your tailored workspace setup.</p>
+			</div>
+
+			<div class="modal-footer" id="modalFooter">
+				<button class="btn btn-cancel" onclick="closeAIModal()">Cancel</button>
+				<button class="btn btn-ai" onclick="runAIGeneration()">
+					<i class="ph ph-sparkle"></i> Generate Now
+				</button>
+			</div>
+
 		</div>
 	</div>
 
-	<script src="assets/app.js"></script>
-	<script type="module" src="js/auth.js"></script>
-	<script type="module" src="js/guard.js"></script>
+	<!-- ─── JAVASCRIPT FOR MODAL LOGIC ─── -->
+	<script>
+		// Data config for all 6 AI Modals
+		const modalData = {
+			build: {
+				title: "AI Website & Business Setup",
+				icon: "ph-rocket-launch",
+				color: "#2563eb",
+				form: `
+					<div class="form-group">
+						<label>1. What is the name of your business?</label>
+						<input type="text" placeholder="e.g. Ayanda's Fresh Produce">
+					</div>
+					<div class="form-group">
+						<label>2. What industry are you in?</label>
+						<input type="text" placeholder="e.g. Retail, Consulting, Beauty">
+					</div>
+					<div class="form-group">
+						<label>3. Describe your main product or service in one sentence.</label>
+						<textarea placeholder="e.g. We sell organic vegetables sourced directly from KZN farmers."></textarea>
+					</div>
+					<div class="form-group">
+						<label>4. Who is your target customer?</label>
+						<input type="text" placeholder="e.g. Local restaurants and health-conscious families">
+					</div>
+					<div class="form-group">
+						<label>5. What vibe should your website have?</label>
+						<select>
+							<option>Professional & Corporate</option>
+							<option>Modern & Minimalist</option>
+							<option>Warm & Friendly</option>
+							<option>Bold & Vibrant</option>
+						</select>
+					</div>
+				`
+			},
+			sell: {
+				title: "Set up your POS & Store",
+				icon: "ph-storefront",
+				color: "#16a34a",
+				form: `
+					<div class="form-group">
+						<label>Product/Service Name</label>
+						<input type="text" placeholder="e.g. Premium Sneaker Cleaning">
+					</div>
+					<div class="form-group">
+						<label>Price (ZAR)</label>
+						<input type="number" placeholder="R 0.00">
+					</div>
+					<div class="form-group">
+						<label>Briefly describe the product for your online store</label>
+						<textarea placeholder="Let AI write the perfect sales pitch..."></textarea>
+					</div>
+					<div class="form-group">
+						<label>Preferred Payment Provider (to receive funds)</label>
+						<select>
+							<option>Yoco</option>
+							<option>Payfast</option>
+							<option>Ozow (EFT)</option>
+							<option>Cash / Manual</option>
+						</select>
+					</div>
+				`
+			},
+			brand: {
+				title: "AI Brand & Marketing Campaign",
+				icon: "ph-paint-brush-broad",
+				color: "#c026d3",
+				form: `
+					<div class="form-group">
+						<label>Where do you want to run this campaign?</label>
+						<select>
+							<option>WhatsApp Broadcast</option>
+							<option>Instagram Post</option>
+							<option>Facebook Ad</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label>What is the goal of this campaign?</label>
+						<select>
+							<option>Announce a sale/discount</option>
+							<option>Introduce a new product</option>
+							<option>Build brand awareness</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label>Provide a few keywords or details</label>
+						<textarea placeholder="e.g. Summer sale, 20% off all shoes, ends Friday. Make it sound urgent!"></textarea>
+					</div>
+				`
+			},
+			network: {
+				title: "Create B2B Network Profile",
+				icon: "ph-handshake",
+				color: "#d97706",
+				form: `
+					<div class="form-group">
+						<label>Where is your business based?</label>
+						<input type="text" placeholder="e.g. Pietermaritzburg, KZN">
+					</div>
+					<div class="form-group">
+						<label>What are you looking for?</label>
+						<select>
+							<option>I am looking for Suppliers</option>
+							<option>I am looking for Distributors/Buyers</option>
+							<option>I want to collaborate/partner</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label>Describe your ideal partner</label>
+						<textarea placeholder="e.g. Looking for wholesale suppliers of plain organic cotton t-shirts in South Africa."></textarea>
+					</div>
+				`
+			},
+			staff: {
+				title: "Generate Job Listing & Role",
+				icon: "ph-users-three",
+				color: "#475569",
+				form: `
+					<div class="form-group">
+						<label>Job Title</label>
+						<input type="text" placeholder="e.g. Store Manager">
+					</div>
+					<div class="form-group">
+						<label>Employment Type</label>
+						<select>
+							<option>Full-Time</option>
+							<option>Part-Time / Shift</option>
+							<option>Contractor</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label>List 2-3 main responsibilities</label>
+						<textarea placeholder="e.g. Managing POS, closing shop, handling customer complaints. AI will expand this into a full job spec."></textarea>
+					</div>
+				`
+			},
+			fund: {
+				title: "Funding Readiness Check",
+				icon: "ph-chart-line-up",
+				color: "#dc2626",
+				form: `
+					<div class="form-group">
+						<label>How long have you been operating?</label>
+						<select>
+							<option>Not started yet / Idea phase</option>
+							<option>0 - 6 Months</option>
+							<option>1 - 3 Years</option>
+							<option>3+ Years</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label>Estimated Monthly Revenue (ZAR)</label>
+						<input type="text" placeholder="e.g. R 15,000">
+					</div>
+					<div class="form-group">
+						<label>How much funding do you need?</label>
+						<input type="text" placeholder="e.g. R 50,000">
+					</div>
+					<div class="form-group">
+						<label>What will you use the funding for?</label>
+						<textarea placeholder="e.g. To buy new baking equipment and hire one assistant."></textarea>
+					</div>
+				`
+			}
+		};
+
+		// Modal Elements
+		const modalOverlay = document.getElementById('aiModalOverlay');
+		const modalIcon = document.getElementById('modalIcon');
+		const modalTitle = document.getElementById('modalTitle');
+		const formContainer = document.getElementById('modalFormContainer');
+		const loadingState = document.getElementById('aiLoadingState');
+		const modalFooter = document.getElementById('modalFooter');
+
+		function openAIModal(actionType) {
+			const data = modalData[actionType];
+			
+			// Reset UI states
+			formContainer.style.display = 'block';
+			loadingState.classList.remove('active');
+			modalFooter.style.display = 'flex';
+
+			// Populate Data
+			modalIcon.className = 'ph ' + data.icon;
+			modalIcon.style.color = data.color;
+			modalTitle.innerText = data.title;
+			formContainer.innerHTML = data.form;
+
+			// Show Modal
+			modalOverlay.classList.add('active');
+		}
+
+		function closeAIModal() {
+			modalOverlay.classList.remove('active');
+		}
+
+		function runAIGeneration() {
+			// Hide form, show AI loading spinner
+			formContainer.style.display = 'none';
+			modalFooter.style.display = 'none';
+			loadingState.classList.add('active');
+
+			// Simulate AI Processing time (3 seconds)
+			setTimeout(() => {
+				alert("AI Generation Complete! (This will route to the next step in production)");
+				closeAIModal();
+			}, 3000);
+		}
+
+		// Close modal if user clicks on the blurry background
+		modalOverlay.addEventListener('click', (e) => {
+			if (e.target === modalOverlay) closeAIModal();
+		});
+	</script>
 </body>
 </html>
