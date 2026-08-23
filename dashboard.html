@@ -457,6 +457,65 @@
 			margin-left: auto;
 		}
 		.disconnected .channel-badge { background: #fee2e2; color: #dc2626; }
+		/* ─── REAL DATA: UPLOADS & PRODUCT PREVIEWS ─── */
+		.image-upload-grid {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 12px;
+			margin-bottom: 8px;
+		}
+		.image-upload-box {
+			position: relative;
+			width: 100%;
+			aspect-ratio: 1;
+			background: #f8fafc;
+			border: 2px dashed var(--border-light);
+			border-radius: 12px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			color: var(--text-secondary);
+			cursor: pointer;
+			overflow: hidden;
+			transition: 0.2s;
+		}
+		.image-upload-box:hover { border-color: var(--accent-blue); background: #eff6ff; color: var(--accent-blue); }
+		.image-upload-box input[type="file"] {
+			position: absolute; inset: 0; opacity: 0; cursor: pointer;
+		}
+		.image-upload-box img {
+			position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none;
+		}
+		.image-upload-box i { font-size: 1.5rem; margin-bottom: 4px; }
+		.image-upload-box span { font-size: 0.75rem; font-weight: 500; }
+
+		.product-preview-card {
+			display: flex; align-items: center; gap: 16px;
+			padding: 16px; background: white;
+			border: 1px solid var(--border-light);
+			border-radius: 12px; margin-top: 12px;
+			box-shadow: var(--shadow-sm);
+		}
+		.product-preview-card img {
+			width: 64px; height: 64px; border-radius: 8px; object-fit: cover; background: #f1f5f9;
+		}
+		.product-preview-info h4 { font-size: 1rem; color: var(--text-primary); margin-bottom: 4px; }
+		.product-preview-info p { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+		.product-preview-info strong { color: var(--accent-green); font-size: 0.95rem; }
+
+		/* API Connect Button */
+		.api-connect-banner {
+			background: #f0fdf4; border: 1px solid #bbf7d0;
+			border-radius: 12px; padding: 12px 16px;
+			display: flex; justify-content: space-between; align-items: center;
+			margin-top: 12px;
+		}
+		.api-connect-banner div { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #166534; font-weight: 500; }
+		.btn-api {
+			background: #25D366; color: white; border: none; padding: 6px 12px;
+			border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;
+		}
 		</style>
 </head>
 <body class="app-shell">
@@ -687,34 +746,45 @@
 	<script>
 		// Data config for all 6 AI Modals
 		const modalData = {
-			build: {
-				title: "AI Website & Business Setup",
+		build: {
+				title: "Add Product & AI Setup",
 				icon: "ph-rocket-launch",
 				color: "#2563eb",
 				form: `
 					<div class="form-group">
-						<label>1. What is the name of your business?</label>
-						<input type="text" placeholder="e.g. Ayanda's Fresh Produce">
+						<label>1. Product Name</label>
+						<input type="text" id="buildProdName" placeholder="e.g. Organic Tomato Box">
 					</div>
 					<div class="form-group">
-						<label>2. Add your first Product/Service</label>
-						<input type="text" id="initialProductName" placeholder="e.g. Organic Tomato Box">
+						<label>2. Pricing (ZAR)</label>
+						<input type="number" id="buildProdPrice" placeholder="e.g. 150.00">
 					</div>
 					<div class="form-group">
-						<label>3. Describe it simply (AI will rewrite this as a professional Advert)</label>
-						<textarea id="initialProductDesc" placeholder="e.g. Fresh tomatoes from local KZN farmers."></textarea>
+						<label>3. Add Product Images (Up to 3)</label>
+						<div class="image-upload-grid">
+							<div class="image-upload-box">
+								<i class="ph ph-upload-simple"></i><span>Main</span>
+								<input type="file" accept="image/*" onchange="previewImage(this, 'img1')">
+								<img id="img1">
+							</div>
+							<div class="image-upload-box">
+								<i class="ph ph-plus"></i><span>Side</span>
+								<input type="file" accept="image/*" onchange="previewImage(this, 'img2')">
+								<img id="img2">
+							</div>
+							<div class="image-upload-box">
+								<i class="ph ph-plus"></i><span>Detail</span>
+								<input type="file" accept="image/*" onchange="previewImage(this, 'img3')">
+								<img id="img3">
+							</div>
+						</div>
+					</div>
+					<div class="form-group">
+						<label>4. Raw Details (AI will generate the advert)</label>
+						<textarea id="buildProdDesc" placeholder="e.g. Fresh tomatoes from local KZN farmers. Very juicy."></textarea>
 						<button type="button" class="btn-ai-generate" onclick="generateMockAdvert()">
 							<i class="ph ph-sparkle"></i> Generate Professional Advert
 						</button>
-					</div>
-					<div class="form-group">
-						<label>4. What vibe should your website have?</label>
-						<select>
-							<option>Professional & Corporate</option>
-							<option>Modern & Minimalist</option>
-							<option>Warm & Friendly</option>
-							<option>Bold & Vibrant</option>
-						</select>
 					</div>
 				`
 			},
@@ -725,12 +795,13 @@
 				form: `
 					<div class="form-group">
 						<label>1. Select Product to Sell</label>
-						<select id="sellProductSelect">
-							<option value="">-- Choose a product --</option>
-							<option value="prod1">Organic Tomato Box (R 120.00)</option>
-							<option value="prod2">Premium Sneaker Cleaning (R 150.00)</option>
-							<option value="new">+ Create New Product</option>
+						<select id="sellProductSelect" onchange="displaySelectedProduct()">
+							<option value="">-- Choose from your catalog --</option>
+							<!-- Real products injected here via JS -->
 						</select>
+						
+						<!-- Product Display Card (Hidden until selected) -->
+						<div id="productPreviewContainer" style="display: none;"></div>
 					</div>
 
 					<div class="form-group">
@@ -754,16 +825,15 @@
 					</div>
 
 					<div class="form-group">
-						<label>3. Select Sales Channels (APIs will auto-sync inventory)</label>
-						<div class="channel-grid">
-							<label class="channel-btn">
-								<input type="checkbox" checked onchange="calculateAIPrediction()"> <i class="ph ph-whatsapp-logo" style="color: #25D366;"></i> WA
-							</label>
-							<label class="channel-btn">
-								<input type="checkbox" checked onchange="calculateAIPrediction()"> <i class="ph ph-instagram-logo" style="color: #E1306C;"></i> IG
-							</label>
-							
-							<!-- Disconnected Channel Example -->
+						<label>3. Sales Channels & Integrations</label>
+						
+						<!-- WhatsApp Business API Block -->
+						<div class="api-connect-banner" id="waApiBlock">
+							<div><i class="ph ph-whatsapp-logo" style="font-size: 1.2rem;"></i> WhatsApp Business API</div>
+							<button type="button" class="btn-api" onclick="connectWhatsAppAPI()">Connect API</button>
+						</div>
+						
+						<div class="channel-grid" style="margin-top: 12px;">
 							<label class="channel-btn disconnected" onclick="alert('Please connect your Facebook Business Manager in Account Settings to sell here.')">
 								<input type="checkbox" disabled> <i class="ph ph-facebook-logo"></i> FB <span class="channel-badge">Connect</span>
 							</label>
@@ -773,32 +843,23 @@
 						</div>
 					</div>
 					
-					<!-- Dynamic AI Market Prediction Engine -->
+					<!-- AI Market Prediction Engine -->
 					<div class="ai-prediction-box">
 						<div class="ai-prediction-header">
 							<i class="ph ph-sparkle"></i> AI Market Prediction (Real-Time)
 						</div>
 						<div class="ai-prediction-stats">
-							<div class="stat-item">
-								<span>Local Reach</span>
-								<strong id="predReach">0</strong>
-							</div>
-							<div class="stat-item">
-								<span>Best Target</span>
-								<strong id="predTarget">Any</strong>
-							</div>
-							<div class="stat-item">
-								<span>Est. Buyers</span>
-								<strong id="predBuyers">0 - 0</strong>
-							</div>
+							<div class="stat-item"><span>Local Reach</span><strong id="predReach">0</strong></div>
+							<div class="stat-item"><span>Best Target</span><strong id="predTarget">Any</strong></div>
+							<div class="stat-item"><span>Est. Buyers</span><strong id="predBuyers">0 - 0</strong></div>
 						</div>
 						<div class="ai-prediction-note" id="predNote">
-							<strong>Insights:</strong> Enter a location (e.g., Pietermaritzburg) and a daily budget to calculate market reach based on active population data.
+							<strong>Insights:</strong> Enter a location and daily budget to calculate market reach.
 						</div>
 					</div>
 				`
 			},
-			brand: {
+				brand: {
 				title: "AI Brand & Marketing Campaign",
 				icon: "ph-paint-brush-broad",
 				color: "#c026d3",
@@ -1019,6 +1080,141 @@
 			
 			// Dynamic Insight Note
 			document.getElementById('predNote').innerHTML = `<strong>Insights:</strong> Based on the active population of ${cityName}, spending <strong>R${budget}</strong> daily targeting ${gender} (${age}) via WhatsApp/IG yields strong local engagement.`;
+		};
+
+		// ─── LOCAL DATABASE STATE (Replaces Simulations) ───
+		window.businessData = {
+			products: [],
+			whatsappConnected: false
+		};
+
+		// ─── IMAGE PREVIEW HANDLER ───
+		window.previewImage = function(input, imgId) {
+			if (input.files && input.files[0]) {
+				const reader = new FileReader();
+				reader.onload = function(e) {
+					const img = document.getElementById(imgId);
+					img.src = e.target.result; // Convert image to Base64 data
+					img.style.display = 'block';
+				};
+				reader.readAsDataURL(input.files[0]);
+			}
+		};
+
+		// ─── AI ADVERT GENERATOR (Build Modal) ───
+		window.generateMockAdvert = function() {
+			const descInput = document.getElementById('buildProdDesc');
+			const prodName = document.getElementById('buildProdName').value || "Our Product";
+			
+			if(!descInput.value) { alert("Please type a few words about your product first!"); return; }
+			descInput.value = "AI is writing your advert...";
+			
+			setTimeout(() => {
+				descInput.value = `🌟 Get the best ${prodName} today! 🌟\n\nCarefully crafted and sourced locally. Perfect for your daily needs.\n\n✅ Premium Quality\n✅ Affordable Price\n✅ Support Local\n\nTap the link below to order now! 👇📦`;
+			}, 1000);
+		};
+
+		// ─── SAVE DATA WHEN "GENERATE NOW" IS CLICKED ───
+		// We modify the runAIGeneration function to actually save the data
+		window.runAIGeneration = function() {
+			const activeTitle = document.getElementById('modalTitle').innerText;
+			
+			// If we are in the "Build" modal, save the product!
+			if(activeTitle.includes("Add Product")) {
+				const name = document.getElementById('buildProdName').value;
+				const price = document.getElementById('buildProdPrice').value;
+				const img = document.getElementById('img1').src;
+				const desc = document.getElementById('buildProdDesc').value;
+
+				if(!name || !price) { alert("Please enter a product name and price!"); return; }
+
+				// Save to our array
+				businessData.products.push({ id: Date.now(), name, price, img, desc });
+			}
+
+			// Show loading spinner
+			document.getElementById('modalFormContainer').style.display = 'none';
+			document.getElementById('modalFooter').style.display = 'none';
+			document.getElementById('aiLoadingState').classList.add('active');
+
+			setTimeout(() => {
+				closeAIModal();
+				if(activeTitle.includes("Add Product")) {
+					alert("Product saved successfully! You can now select it in the 'Sell Something' menu.");
+				} else {
+					alert("Action completed successfully!");
+				}
+			}, 1500);
+		};
+
+		// ─── POPULATE THE SELL MODAL WITH REAL DATA ───
+		// We hook into openAIModal to populate the dropdown if opening "Sell"
+		const originalOpenModal = window.openAIModal;
+		window.openAIModal = function(actionType) {
+			originalOpenModal(actionType); // Call original UI code
+			
+			if(actionType === 'sell') {
+				const selectEl = document.getElementById('sellProductSelect');
+				selectEl.innerHTML = '<option value="">-- Choose from your catalog --</option>';
+				
+				if(businessData.products.length === 0) {
+					selectEl.innerHTML += '<option disabled>No products added yet. Go to "Build a Business" first.</option>';
+				} else {
+					businessData.products.forEach(p => {
+						selectEl.innerHTML += `<option value="${p.id}">${p.name} (R ${p.price})</option>`;
+					});
+				}
+
+				// Check WhatsApp State
+				if(businessData.whatsappConnected) {
+					document.getElementById('waApiBlock').innerHTML = `
+						<div><i class="ph ph-check-circle" style="color: #16a34a; font-size:1.2rem;"></i> WhatsApp API Connected</div>
+						<span style="font-size:0.8rem; color:#475569;">Syncing Active</span>
+					`;
+				}
+			}
+		};
+
+		// ─── DISPLAY SELECTED PRODUCT IN SELL MODAL ───
+		window.displaySelectedProduct = function() {
+			const selectEl = document.getElementById('sellProductSelect');
+			const container = document.getElementById('productPreviewContainer');
+			
+			if(!selectEl.value) { container.style.display = 'none'; return; }
+
+			// Find product in our database
+			const product = businessData.products.find(p => p.id.toString() === selectEl.value);
+			
+			if(product) {
+				container.innerHTML = `
+					<div class="product-preview-card">
+						<img src="${product.img || 'https://via.placeholder.com/64?text=No+Image'}" alt="Product">
+						<div class="product-preview-info">
+							<h4>${product.name}</h4>
+							<strong>R ${product.price}</strong>
+							<p>${product.desc ? product.desc.substring(0, 40) + '...' : 'No description'}</p>
+						</div>
+					</div>
+				`;
+				container.style.display = 'block';
+			}
+		};
+
+		// ─── WHATSAPP API CONNECTION MOCK ───
+		window.connectWhatsAppAPI = function() {
+			const btn = document.querySelector('.btn-api');
+			btn.innerHTML = `<i class="ph ph-spinner ph-spin"></i> Connecting...`;
+			btn.style.opacity = '0.7';
+			
+			// Simulate OAuth popup delay
+			setTimeout(() => {
+				businessData.whatsappConnected = true;
+				document.getElementById('waApiBlock').innerHTML = `
+					<div><i class="ph ph-check-circle" style="color: #16a34a; font-size:1.2rem;"></i> WhatsApp API Connected</div>
+					<span style="font-size:0.8rem; color:#475569;">Syncing Active</span>
+				`;
+				alert("Meta Graph API: WhatsApp Business connected successfully!");
+			}, 2000);
 		};
 	</script>
 </body>
