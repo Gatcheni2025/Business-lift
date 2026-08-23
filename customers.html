@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customers | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link active" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer"><section class="ai-panel"><p class="eyebrow">CRM AI</p><h2>Retention opportunity</h2><p>Returning customers are likely ready for a loyalty offer and follow-up campaign.</p></section></div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">Customer module</p><h1>Customers and CRM</h1></div>
+                <div class="topbar-actions"><a class="button button-primary" href="#crm">Open CRM view</a><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="metric-strip compact">
+                    <article class="kpi-card"><p>Total customers</p><strong>342</strong></article>
+                    <article class="kpi-card"><p>New this month</p><strong>27</strong></article>
+                    <article class="kpi-card"><p>Repeat purchase rate</p><strong>31%</strong></article>
+                    <article class="kpi-card"><p>Active leads</p><strong>18</strong></article>
+                </section>
+
+                <section class="card-grid" id="crm">
+                    <article class="section-card"><p class="eyebrow">CRM</p><h3>Lead pipeline</h3><p>Track inquiries, proposals, and deal progression for service and wholesale customers.</p></article>
+                    <article class="section-card" id="finance"><p class="eyebrow">Finance</p><h3>Customer value</h3><p>Review customer spend tiers, open balances, and quote-to-order performance.</p></article>
+                    <article class="section-card" id="marketing"><p class="eyebrow">Marketing</p><h3>Audience segments</h3><p>Build targeted campaigns for abandoned carts, repeat buyers, and VIP accounts.</p></article>
+                </section>
+
+                <section class="section-grid two-up">
+                    <article class="table-card">
+                        <p class="eyebrow">Customer list</p>
+                        <h2>Recent customers</h2>
+                        <table class="data-table">
+                            <thead><tr><th>Name</th><th>Segment</th><th>Last order</th><th>LTV</th></tr></thead>
+                            <tbody>
+                                <tr><td>Zanele D.</td><td>VIP</td><td>2 days ago</td><td>R9,840</td></tr>
+                                <tr><td>Mpho R.</td><td>Repeat buyer</td><td>5 days ago</td><td>R3,260</td></tr>
+                                <tr><td>Refilwe B.</td><td>New lead</td><td>No order yet</td><td>R0</td></tr>
+                            </tbody>
+                        </table>
+                    </article>
+
+                    <article class="timeline-card" id="growth">
+                        <p class="eyebrow">Growth</p>
+                        <h3>Recommended next steps</h3>
+                        <ul class="list-clean">
+                            <li>Send cart recovery email to 14 shoppers</li>
+                            <li>Offer bundle discount to VIP repeat buyers</li>
+                            <li>Trigger follow-up task for high-value lead within 24 hours</li>
+                        </ul>
+                    </article>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+</body>
+</html>

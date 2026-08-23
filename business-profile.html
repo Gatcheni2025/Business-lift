@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Profile | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link active" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer">
+                <section class="ai-panel"><p class="eyebrow">Admin</p><h2>Business readiness</h2><p>Complete identity, users, and documents so future invoicing and payments inherit the right business data.</p></section>
+                <a class="settings-link" href="#settings">Settings</a>
+            </div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">Business module</p><h1><span data-business-name>Business</span> profile</h1></div>
+                <div class="topbar-actions"><a class="button button-primary" href="#profile-form">Update profile</a><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="workspace-panel page-header">
+                    <div>
+                        <p class="eyebrow">Core identity</p>
+                        <h2>Manage the business record used across the platform.</h2>
+                    </div>
+                    <p>Business ID: <strong data-business-id>BL_PENDING</strong>. Complete this profile first, then continue to your dashboard.</p>
+                </section>
+
+                <section class="metric-strip compact">
+                    <article class="kpi-card"><p>Profile completion</p><strong data-profile-progress>0%</strong></article>
+                    <article class="kpi-card"><p>Storefront mode</p><strong>Multi-channel</strong></article>
+                    <article class="kpi-card"><p>Active plan</p><strong data-plan-name>START</strong></article>
+                    <article class="kpi-card"><p>Verification</p><strong data-verification-status>In progress</strong></article>
+                </section>
+
+                <section class="section-grid two-up">
+                    <article class="section-card" id="profile-form">
+                        <p class="eyebrow">Business information</p>
+                        <h3>Company details</h3>
+                        <form data-business-profile>
+                            <label class="input-label">Business name<input type="text" name="business-name" required></label>
+                            <label class="input-label">Business type<select name="business-type"><option>Retail</option><option>Services</option><option>E-commerce</option><option>Agency</option></select></label>
+                            <label class="input-label">Industry<input type="text" name="industry" required></label>
+                            <label class="input-label">Country<select name="country"><option>South Africa</option><option>Namibia</option><option>Botswana</option><option>Zimbabwe</option></select></label>
+                            <label class="input-label">Phone number<input type="tel" name="phone" placeholder="+27 11 555 0123"></label>
+                            <label class="input-label">Address<textarea name="address" placeholder="Business address"></textarea></label>
+                            <label class="input-label">About the business<textarea name="about" placeholder="Describe your business"></textarea></label>
+                            <div class="auth-actions">
+                                <button class="button button-primary" type="submit">Save profile and continue</button>
+                                <a class="link-inline" href="dashboard.html">Skip for now</a>
+                            </div>
+                            <p class="form-status" data-profile-status hidden></p>
+                        </form>
+                    </article>
+
+                    <article class="section-card">
+                        <p class="eyebrow">Operational setup</p>
+                        <h3>Users and documents</h3>
+                        <ul class="list-clean">
+                            <li>Invite staff with role-based access for store, website, CRM, and finance workflows.</li>
+                            <li>Store registration files, tax documents, certificates, and bank details.</li>
+                            <li>Prepare shared business metadata for invoices, quotes, and payment gateways.</li>
+                        </ul>
+                        <div class="pill-row">
+                            <span class="pill">Owner</span>
+                            <span class="pill">Finance manager</span>
+                            <span class="pill">Operations</span>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="table-card" id="settings">
+                    <p class="eyebrow">Access control</p>
+                    <h2>Recent staff members</h2>
+                    <table class="data-table">
+                        <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last active</th></tr></thead>
+                        <tbody>
+                            <tr><td>Ayanda M.</td><td>Administrator</td><td>Active</td><td>Today</td></tr>
+                            <tr><td>Lebo T.</td><td>Store manager</td><td>Invited</td><td>Pending</td></tr>
+                            <tr><td>Naledi P.</td><td>Marketing lead</td><td>Active</td><td>Yesterday</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/business-profile.js"></script>
+    <script type="module" src="js/guard.js"></script>
+</body>
+</html>

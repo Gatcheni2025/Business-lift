@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link active" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer"><section class="ai-panel"><p class="eyebrow">Fulfillment AI</p><h2>Order pressure</h2><p>Courier-delayed orders are clustering in one region. Flag shipping estimates early.</p></section></div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">Operations module</p><h1>Order management</h1><p class="eyebrow">Business ID: <span data-business-id>BL_PENDING</span></p></div>
+                <div class="topbar-actions"><a class="button button-primary" href="#order-board">View fulfillment board</a><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="section-card" id="new-order">
+                    <p class="eyebrow">Create order</p>
+                    <h3>New order entry</h3>
+                    <form data-order-form>
+                        <div class="form-grid">
+                            <label class="input-label">Customer ID<input type="text" name="customerId" placeholder="CUSTOMER_456" required></label>
+                            <label class="input-label">Product
+                                <select name="productId" required>
+                                    <option value="">Select product</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-grid">
+                            <label class="input-label">Quantity<input type="number" name="quantity" min="1" step="1" value="1" required></label>
+                            <label class="input-label">Shipping (ZAR)<input type="number" name="shipping" min="0" step="0.01" value="0" required></label>
+                        </div>
+                        <div class="form-grid">
+                            <label class="input-label">Tax (ZAR)<input type="number" name="tax" min="0" step="0.01" value="0" required></label>
+                            <label class="input-label">Payment status
+                                <select name="paymentStatus">
+                                    <option value="pending">Pending</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label class="input-label">Order status
+                            <select name="orderStatus">
+                                <option value="new">New</option>
+                                <option value="processing">Processing</option>
+                                <option value="shipping">Shipping</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </label>
+                        <div class="auth-actions">
+                            <button class="button button-primary" type="submit">Create order</button>
+                        </div>
+                        <p class="form-status" data-order-status hidden></p>
+                    </form>
+                </section>
+
+                <section class="table-card">
+                    <p class="eyebrow">Order queue</p>
+                    <h2>Latest orders</h2>
+                    <table class="data-table">
+                        <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead>
+                        <tbody data-orders-table-body>
+                            <tr><td colspan="5">Loading orders...</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="kanban-grid" id="order-board">
+                    <article class="kanban-column">
+                        <p class="eyebrow">New</p>
+                        <div data-order-column="new"></div>
+                    </article>
+                    <article class="kanban-column">
+                        <p class="eyebrow">Processing</p>
+                        <div data-order-column="processing"></div>
+                    </article>
+                    <article class="kanban-column">
+                        <p class="eyebrow">Shipping</p>
+                        <div data-order-column="shipping"></div>
+                    </article>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+    <script type="module" src="js/orders-data.js"></script>
+</body>
+</html>

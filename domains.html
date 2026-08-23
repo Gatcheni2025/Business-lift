@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domains | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link active" href="domains.html">Domains</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer"><section class="ai-panel"><p class="eyebrow">Domain module</p><h2>Connection status</h2><p>Connect business domains to your website and store with one publishing source.</p></section></div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">Website infrastructure</p><h1>Domains</h1></div>
+                <div class="topbar-actions"><button class="button button-primary" type="button">Connect domain</button><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="table-card">
+                    <p class="eyebrow">Your domains</p>
+                    <h2>Domain connections</h2>
+                    <table class="data-table">
+                        <thead><tr><th>Domain</th><th>Status</th><th>Website</th></tr></thead>
+                        <tbody>
+                            <tr><td>abcclothing.co.za</td><td>Connected</td><td>Main store</td></tr>
+                            <tr><td>abcclothing.com</td><td>Pending</td><td>Not linked yet</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="section-grid two-up">
+                    <article class="section-card">
+                        <p class="eyebrow">Option A</p>
+                        <h3>Use your existing domain</h3>
+                        <ul class="list-clean">
+                            <li>Add an A record for @ to the Business Lift endpoint.</li>
+                            <li>Add a CNAME record for www to the store host.</li>
+                        </ul>
+                    </article>
+                    <article class="section-card">
+                        <p class="eyebrow">Option B</p>
+                        <h3>Buy domain through Business Lift</h3>
+                        <p>Registrar API integration can be added later to support instant domain registration from this module.</p>
+                    </article>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Builder | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link active" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer"><section class="ai-panel"><p class="eyebrow">Website AI</p><h2>Publishing insight</h2><p>Your homepage banner is converting well. Service pages need clearer calls to action.</p></section></div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">Website module</p><h1>Website builder</h1></div>
+                <div class="topbar-actions"><a class="button button-primary" href="#builder">Open builder</a><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="workspace-panel page-header">
+                    <div><p class="eyebrow">Site workspace</p><h2>Structure pages, templates, and publishing controls.</h2></div>
+                    <p>This interface is ready for future drag-and-drop, theme controls, CMS fields, and domain setup.</p>
+                </section>
+
+                <section class="builder-grid">
+                    <article class="builder-card" id="builder">
+                        <p class="eyebrow">Canvas</p>
+                        <h3>Homepage editor</h3>
+                        <div class="builder-canvas stack">
+                            <span class="pill">Hero section</span>
+                            <span class="pill">Featured categories</span>
+                            <span class="pill">Testimonials</span>
+                            <span class="pill">Newsletter call to action</span>
+                        </div>
+                    </article>
+                    <article class="builder-card">
+                        <p class="eyebrow">Page structure</p>
+                        <h3>Published pages</h3>
+                        <ul class="list-clean">
+                            <li>Home</li>
+                            <li>About</li>
+                            <li>Services</li>
+                            <li>Shop</li>
+                            <li>Contact</li>
+                        </ul>
+                    </article>
+                    <article class="builder-card">
+                        <p class="eyebrow">Domain status</p>
+                        <h3>Connected domain</h3>
+                        <div class="stack">
+                            <span class="pill">abctrading.co.za</span>
+                            <span class="pill">SSL active</span>
+                            <span class="pill">Last publish 2 hours ago</span>
+                        </div>
+                    </article>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+</body>
+</html>

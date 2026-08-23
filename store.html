@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link active" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer"><section class="ai-panel"><p class="eyebrow">Store pulse</p><h2>Revenue insight</h2><p>Online sales are strongest after 18:00. Consider scheduling campaign sends for late afternoon.</p></section></div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div><p class="eyebrow">E-commerce module</p><h1>Store dashboard</h1></div>
+                <div class="topbar-actions"><a class="button button-primary" href="products.html">Manage products</a><button class="icon-button" type="button" data-logout>Sign out</button></div>
+            </header>
+
+            <main class="page-main">
+                <section class="metric-strip compact">
+                    <article class="kpi-card"><p>Revenue</p><strong>R48,250</strong></article>
+                    <article class="kpi-card"><p>Open orders</p><strong>11</strong></article>
+                    <article class="kpi-card"><p>Low stock SKUs</p><strong>8</strong></article>
+                    <article class="kpi-card"><p>Avg. basket</p><strong>R561</strong></article>
+                </section>
+
+                <section class="section-grid two-up">
+                    <article class="section-card">
+                        <p class="eyebrow">Operations</p>
+                        <h3>Store health</h3>
+                        <ul class="list-clean">
+                            <li>3 payment methods active</li>
+                            <li>2 courier integrations ready for future API connection</li>
+                            <li>11 orders require fulfillment attention</li>
+                        </ul>
+                    </article>
+                    <article class="section-card">
+                        <p class="eyebrow">Merchandising</p>
+                        <h3>Top categories</h3>
+                        <div class="pill-row">
+                            <span class="pill">Office essentials</span>
+                            <span class="pill">Branding supplies</span>
+                            <span class="pill">Retail packaging</span>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="table-card">
+                    <p class="eyebrow">Recent performance</p>
+                    <h2>Top-selling products</h2>
+                    <table class="data-table">
+                        <thead><tr><th>Product</th><th>Units sold</th><th>Revenue</th><th>Stock</th></tr></thead>
+                        <tbody>
+                            <tr><td>Canvas Tote</td><td>54</td><td>R8,100</td><td>18 left</td></tr>
+                            <tr><td>Receipt Printer</td><td>19</td><td>R11,400</td><td>4 left</td></tr>
+                            <tr><td>Thermal Labels</td><td>112</td><td>R6,720</td><td>67 left</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Business Lift Dashboard</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+	<div class="app-layout">
+		<aside class="sidebar" id="sidebar">
+			<div>
+				<a class="brand" href="dashboard.html" aria-label="Business Lift home">
+					<span class="brand-mark">BL</span>
+					<div>
+						<strong>Business Lift</strong>
+						<span>Growth operating system</span>
+					</div>
+				</a>
+
+				<nav class="side-nav" aria-label="Primary navigation">
+					<a class="nav-link active" href="dashboard.html">Dashboard</a>
+					<a class="nav-link" href="business-profile.html">My Business</a>
+					<a class="nav-link" href="website-builder.html">Website Builder</a>
+					<a class="nav-link" href="domains.html">Domains</a>
+					<a class="nav-link" href="store.html">Store</a>
+					<a class="nav-link" href="products.html">Products</a>
+					<a class="nav-link" href="orders.html">Orders</a>
+					<a class="nav-link" href="payments.html">Payments</a>
+					<a class="nav-link" href="customers.html">Customers</a>
+					<a class="nav-link" href="customers.html#crm">CRM</a>
+					<a class="nav-link" href="customers.html#finance">Finance</a>
+					<a class="nav-link" href="customers.html#marketing">Marketing</a>
+					<a class="nav-link" href="customers.html#growth">Growth</a>
+				</nav>
+			</div>
+
+			<div class="sidebar-footer">
+				<section class="ai-panel">
+					<p class="eyebrow">AI Assistant</p>
+					<h2>Business Growth Opportunities</h2>
+					<p data-opportunity-summary>Your store has 0 abandoned carts and 0 low-stock alerts right now.</p>
+					<div class="button-row">
+						<a class="button button-secondary" href="customers.html">View Customers</a>
+						<a class="button button-primary" href="customers.html#marketing">Create Campaign</a>
+					</div>
+				</section>
+				<a class="settings-link" href="business-profile.html#settings">Settings</a>
+			</div>
+		</aside>
+
+		<div class="main-panel">
+			<header class="topbar">
+				<button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">
+					<span></span>
+					<span></span>
+					<span></span>
+				</button>
+				<div>
+					<p class="eyebrow">Dashboard overview</p>
+					<h1>Good morning, <span data-business-name>ABC Trading</span></h1>
+					<p class="eyebrow">Business ID: <span data-business-id>BL_PENDING</span></p>
+				</div>
+				<div class="topbar-actions">
+					<button class="icon-button" type="button" aria-label="Notifications">&#128276;</button>
+					<button class="profile-chip" type="button" aria-label="Account menu">
+						<span class="profile-avatar">AT</span>
+						<span data-auth-name>Admin</span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Sign out" data-logout>Sign out</button>
+				</div>
+			</header>
+
+			<main class="content-grid">
+				<section class="hero-card">
+					<div>
+						<p class="eyebrow">Today at a glance</p>
+						<h2>Everything your business needs to grow from one dashboard.</h2>
+					</div>
+					<p>
+						<span data-hero-line>Track revenue, orders, customer growth, website performance, and next-step recommendations without switching tools.</span>
+						<br>
+						Current plan: <strong data-plan-name>START</strong>.
+					</p>
+				</section>
+
+				<section class="stats-grid" aria-label="Key performance metrics">
+					<article class="stat-card accent-gold">
+						<p>Revenue</p>
+						<strong data-stat-revenue>R0</strong>
+						<span data-stat-revenue-note>Captured from your live business record</span>
+					</article>
+					<article class="stat-card accent-blue">
+						<p>Orders</p>
+						<strong data-stat-orders>0</strong>
+						<span data-stat-orders-note>Ready for order engine integration</span>
+					</article>
+					<article class="stat-card accent-coral">
+						<p>Customers</p>
+						<strong data-stat-customers>0</strong>
+						<span data-stat-customers-note>Customer collection will feed this card</span>
+					</article>
+					<article class="stat-card accent-green">
+						<p>Conversion</p>
+						<strong data-stat-conversion>0%</strong>
+						<span data-stat-conversion-note>Updates when checkout analytics are connected</span>
+					</article>
+				</section>
+
+				<section class="panel chart-panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Sales</p>
+							<h2>Weekly revenue trend</h2>
+						</div>
+						<span class="panel-meta">Last 7 days</span>
+					</div>
+					<div class="chart" aria-hidden="true">
+						<div class="chart-bars">
+							<span style="--bar-height: 35%"></span>
+							<span style="--bar-height: 62%"></span>
+							<span style="--bar-height: 48%"></span>
+							<span style="--bar-height: 74%"></span>
+							<span style="--bar-height: 68%"></span>
+							<span style="--bar-height: 88%"></span>
+							<span style="--bar-height: 94%"></span>
+						</div>
+					</div>
+				</section>
+
+				<section class="panel split-panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Pipeline</p>
+							<h2>Business setup progress: <span data-setup-progress>0%</span></h2>
+						</div>
+					</div>
+					<ul class="insight-list">
+						<li>
+							<strong>Complete your setup checklist</strong>
+							<span data-opportunity-carts>Abandoned carts tracked: 0.</span>
+						</li>
+						<li>
+							<strong>Prepare inventory workflows</strong>
+							<span data-opportunity-stock>Low stock alerts tracked: 0.</span>
+						</li>
+						<li>
+							<strong>Scale customer lifecycle</strong>
+							<span data-opportunity-customers>New customers this week: 0.</span>
+						</li>
+					</ul>
+				</section>
+
+				<section class="panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Tasks</p>
+							<h2>Priority actions</h2>
+						</div>
+					</div>
+					<div class="task-list">
+						<article>
+							<strong>Approve 3 pending staff invites</strong>
+							<span>Business profile</span>
+						</article>
+						<article>
+							<strong>Publish spring website refresh</strong>
+							<span>Website builder</span>
+						</article>
+						<article>
+							<strong>Process 11 orders awaiting shipment</strong>
+							<span>Store operations</span>
+						</article>
+					</div>
+				</section>
+
+				<section class="panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Channels</p>
+							<h2>Module shortcuts</h2>
+						</div>
+					</div>
+					<div class="shortcut-grid">
+						<a class="shortcut-card" href="business-profile.html">
+							<strong>Business Profile</strong>
+							<span>Manage identity, contacts, and documents.</span>
+						</a>
+						<a class="shortcut-card" href="website-builder.html">
+							<strong>Website Builder</strong>
+							<span>Edit pages, templates, and domain settings.</span>
+						</a>
+						<a class="shortcut-card" href="store.html">
+							<strong>E-commerce</strong>
+							<span>Track orders, products, inventory, and payments.</span>
+						</a>
+						<a class="shortcut-card" href="customers.html">
+							<strong>Customers & CRM</strong>
+							<span>Review customer segments, leads, and follow-ups.</span>
+						</a>
+					</div>
+				</section>
+			</main>
+		</div>
+	</div>
+
+	<script src="assets/app.js"></script>
+	<script type="module" src="js/auth.js"></script>
+	<script type="module" src="js/guard.js"></script>
+	<script type="module" src="js/dashboard-data.js"></script>
+</body>
+</html>

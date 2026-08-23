@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Channels | Business Lift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="app-shell">
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <a class="brand" href="dashboard.html"><span class="brand-mark">BL</span><div><strong>Business Lift</strong><span>Growth operating system</span></div></a>
+                <nav class="side-nav" aria-label="Primary navigation">
+                    <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    <a class="nav-link" href="business-profile.html">My Business</a>
+                    <a class="nav-link" href="website-builder.html">Website Builder</a>
+                    <a class="nav-link" href="domains.html">Domains</a>
+                    <a class="nav-link active" href="sales-channels.html">Sales Channels</a>
+                    <a class="nav-link" href="store.html">Store</a>
+                    <a class="nav-link" href="products.html">Products</a>
+                    <a class="nav-link" href="orders.html">Orders</a>
+                    <a class="nav-link" href="payments.html">Payments</a>
+                    <a class="nav-link" href="customers.html">Customers</a>
+                    <a class="nav-link" href="customers.html#crm">CRM</a>
+                    <a class="nav-link" href="customers.html#finance">Finance</a>
+                    <a class="nav-link" href="customers.html#marketing">Marketing</a>
+                    <a class="nav-link" href="customers.html#growth">Growth</a>
+                </nav>
+            </div>
+            <div class="sidebar-footer">
+                <section class="ai-panel">
+                    <p class="eyebrow">Channel Intelligence</p>
+                    <h2>Multi-channel performance</h2>
+                    <p>Your online store is converting at 3.2%. Social channels show 40% higher engagement.</p>
+                </section>
+                <a class="settings-link" href="business-profile.html#settings">Settings</a>
+            </div>
+        </aside>
+
+        <div class="main-panel">
+            <header class="topbar">
+                <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
+                <div>
+                    <p class="eyebrow">Channel Management</p>
+                    <h1>Sales Channels</h1>
+                    <p class="eyebrow">Business ID: <span data-business-id>BL_PENDING</span></p>
+                </div>
+                <div class="topbar-actions">
+                    <button class="button button-primary" type="button" data-modal="channel-form">+ Add Channel</button>
+                    <button class="icon-button" type="button" data-logout>Sign out</button>
+                </div>
+            </header>
+
+            <main class="page-main">
+                <!-- Quick Connect Channels -->
+                <section class="quick-connect">
+                    <p class="eyebrow">Quick Connect</p>
+                    <h3>Popular sales channels</h3>
+                    <div class="quick-connect-grid">
+                        <button class="quick-connect-btn" data-channel-type="whatsapp">
+                            <span class="channel-icon-large">💬</span>
+                            <span>WhatsApp</span>
+                        </button>
+                        <button class="quick-connect-btn" data-channel-type="facebook">
+                            <span class="channel-icon-large">📘</span>
+                            <span>Facebook</span>
+                        </button>
+                        <button class="quick-connect-btn" data-channel-type="youtube">
+                            <span class="channel-icon-large">▶️</span>
+                            <span>YouTube</span>
+                        </button>
+                        <button class="quick-connect-btn" data-channel-type="instagram">
+                            <span class="channel-icon-large">📸</span>
+                            <span>Instagram</span>
+                        </button>
+                        <button class="quick-connect-btn" data-channel-type="google">
+                            <span class="channel-icon-large">🔍</span>
+                            <span>Google</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Channel Overview Stats -->
+                <section class="metric-strip compact">
+                    <article class="kpi-card accent-gold">
+                        <p>Active Channels</p>
+                        <strong data-channel-count>0</strong>
+                        <span>Connected sales touchpoints</span>
+                    </article>
+                    <article class="kpi-card accent-blue">
+                        <p>Products Published</p>
+                        <strong data-published-count>0</strong>
+                        <span>Across all channels</span>
+                    </article>
+                    <article class="kpi-card accent-coral">
+                        <p>Channel Revenue</p>
+                        <strong data-channel-revenue>R0</strong>
+                        <span>Last 30 days</span>
+                    </article>
+                    <article class="kpi-card accent-green">
+                        <p>Conversion Rate</p>
+                        <strong data-channel-conversion>0%</strong>
+                        <span>Aggregated performance</span>
+                    </article>
+                </section>
+
+                <!-- Channel Grid -->
+                <section class="channel-grid" id="channel-grid">
+                    <!-- Channels rendered by JavaScript -->
+                </section>
+
+                <!-- Channel Form Modal -->
+                <div class="modal-overlay" data-modal="channel-form" hidden>
+                    <div class="modal-card">
+                        <header class="modal-header">
+                            <h2>Connect Sales Channel</h2>
+                            <button class="icon-button" data-modal-close="channel-form" type="button">✕</button>
+                        </header>
+                        <form data-channel-form>
+                            <label class="input-label">
+                                Channel Name
+                                <input type="text" name="channelName" placeholder="e.g., WhatsApp Business" required>
+                            </label>
+                            <label class="input-label">
+                                Channel Type
+                                <select name="channelType" required>
+                                    <option value="">Select type</option>
+                                    <option value="whatsapp">💬 WhatsApp</option>
+                                    <option value="facebook">📘 Facebook</option>
+                                    <option value="youtube">▶️ YouTube</option>
+                                    <option value="instagram">📸 Instagram</option>
+                                    <option value="google">🔍 Google</option>
+                                    <option value="website">🌐 Website</option>
+                                    <option value="marketplace">🏪 Marketplace</option>
+                                    <option value="physical">🏬 Physical Store</option>
+                                    <option value="wholesale">📦 Wholesale</option>
+                                </select>
+                            </label>
+                            <label class="input-label">
+                                Channel URL / Handle
+                                <input type="text" name="channelUrl" placeholder="https://wa.me/27123456789 or @yourhandle">
+                            </label>
+                            <label class="input-label">
+                                Status
+                                <select name="status">
+                                    <option value="active">Active</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </label>
+                            <label class="input-label">
+                                Description
+                                <textarea name="description" placeholder="Describe this sales channel" rows="3"></textarea>
+                            </label>
+                            <div class="auth-actions">
+                                <button class="button button-primary" type="submit">Create Channel</button>
+                                <button class="button button-secondary" type="button" data-modal-close="channel-form">Cancel</button>
+                            </div>
+                            <p class="form-status" data-channel-status hidden></p>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Product Channel Status Table -->
+                <section class="table-card">
+                    <p class="eyebrow">Catalogue Management</p>
+                    <h2>Product Channel Visibility</h2>
+                    <div class="table-controls">
+                        <div class="filter-group">
+                            <label class="input-label inline">
+                                Filter by channel
+                                <select data-channel-filter>
+                                    <option value="all">All Channels</option>
+                                </select>
+                            </label>
+                            <label class="input-label inline">
+                                <input type="checkbox" data-filter-published> Show published only
+                            </label>
+                        </div>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Price</th>
+                                <th>Channels</th>
+                                <th>Published</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody data-products-table-body>
+                            <tr><td colspan="6">Loading products...</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="assets/app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/guard.js"></script>
+    <script type="module" src="js/sales-channels.js"></script>
+</body>
+</html>
