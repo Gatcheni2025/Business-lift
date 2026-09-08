@@ -4,89 +4,377 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Command Center | Business Expose</title>
-    <!-- Same standard CSS imports you used previously -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="assets/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-app: #f8fafc; --surface: #ffffff; --text-primary: #0f172a; --text-secondary: #64748b;
+            --border: #e2e8f0; --brand-primary: #0f172a; --brand-blue: #2563eb; 
+            --success: #10b981; --warning: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-app); color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; }
+        h1, h2, h3, .brand { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Sidebar */
+        .sidebar { width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: 0.3s; z-index: 50;}
+        .sidebar-header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+        .logo-icon { background: linear-gradient(135deg, #2563eb, #8b5cf6); color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .nav-list { padding: 20px 16px; overflow-y: auto; flex: 1; }
+        .nav-label { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin: 16px 0 8px 12px; letter-spacing: 0.5px;}
+        .nav-link { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; color: var(--text-secondary); text-decoration: none; font-weight: 500; transition: 0.2s; }
+        .nav-link i { font-size: 1.3rem; }
+        .nav-link:hover { background: var(--bg-app); color: var(--text-primary); }
+        .nav-link.active { background: var(--brand-blue); color: white; box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
+
+        /* Main Area */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative;}
+        .topbar { padding: 24px 40px; display: flex; justify-content: space-between; align-items: center; background: rgba(248,250,252,0.9); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border);}
+        .topbar h1 { font-size: 1.5rem; }
+        .user-profile { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-primary); color: white; display: flex; align-items: center; justify-content: center; }
+
+        .container { padding: 32px 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        
+        /* The Wizard Styles */
+        .wizard-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 32px;}
+        .wizard-header { padding: 24px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;}
+        .wizard-body { padding: 32px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 40px; }
+        
+        .form-section { margin-bottom: 32px; }
+        .form-section h3 { font-size: 1.1rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--brand-primary);}
+        
+        .input-group { margin-bottom: 16px; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; }
+        .input-group input, .input-group select { width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); font-size: 0.95rem; outline: none; transition: 0.2s; background: var(--bg-app);}
+        .input-group input:focus, .input-group select:focus { border-color: var(--brand-blue); background: white; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+        /* Channel Selector */
+        .channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .channel-opt { border: 1px solid var(--border); padding: 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: 0.2s; user-select: none; }
+        .channel-opt:hover { border-color: var(--brand-blue); }
+        .channel-opt input { display: none; }
+        .channel-opt:has(input:checked) { border-color: var(--brand-blue); background: #eff6ff; }
+        .channel-opt:has(input:checked) i { color: var(--brand-blue) !important; }
+
+        /* Stats Box */
+        .reach-box { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 24px; border-radius: 16px; text-align: center; margin-bottom: 24px;}
+        .reach-box p { font-size: 0.9rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 8px;}
+        .reach-box h2 { font-size: 2.5rem; font-weight: 800; }
+        
+        /* Mockup output */
+        .mockup-card { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.02);}
+        .mockup-img { width: 100%; height: 200px; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 2rem;}
+        .mockup-body { padding: 20px; }
+        .mockup-title { font-weight: 700; font-size: 1.2rem; margin-bottom: 4px; }
+        .mockup-price { font-weight: 800; color: var(--success); font-size: 1.4rem; margin-bottom: 12px; }
+        .mockup-meta { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;}
+        .btn-buy { width: 100%; padding: 12px; background: var(--brand-primary); color: white; text-align: center; border-radius: 10px; font-weight: 600; border:none; cursor: pointer; margin-top: 16px;}
+
+        .btn { padding: 14px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;}
+        .btn-primary { background: var(--brand-blue); color: white; width: 100%; box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
+        .btn-primary:hover { background: #1d4ed8; }
+
+        /* Paywall Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .modal-overlay.active { display: flex; }
+        .paywall-modal { background: white; padding: 40px; border-radius: 24px; max-width: 800px; width: 90%; text-align: center; position: relative; animation: popIn 0.3s ease;}
+        @keyframes popIn { from { transform: scale(0.95); opacity: 0;} to { transform: scale(1); opacity: 1;} }
+        .close-modal { position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
+        .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; text-align: left;}
+        .price-card { border: 2px solid var(--border); padding: 24px; border-radius: 16px; transition: 0.2s; position: relative;}
+        .price-card:hover { border-color: var(--brand-blue); }
+        .price-card.popular { border-color: var(--brand-purple); background: #faf5ff; }
+        .badge { position: absolute; top: -12px; right: 20px; background: var(--brand-purple); color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; }
+        
+        /* Mobile Menu */
+        .mobile-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
+        @media (max-width: 900px) {
+            .sidebar { position: fixed; left: -280px; height: 100vh; }
+            .sidebar.active { left: 0; }
+            .mobile-toggle { display: block; }
+            .wizard-body { grid-template-columns: 1fr; }
+            .pricing-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
-<body class="app-shell">
+<body>
 
     <!-- SIDEBAR -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <div class="logo-icon" style="background: linear-gradient(135deg, #2563eb, #8b5cf6); color: white; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">BE</div>
-            <div class="lp-brand" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight:800; font-size:1.2rem; margin-left: 10px;">Business Expose</div>
+            <div class="logo-icon">BE</div>
+            <div class="brand" style="font-size: 1.2rem;">Business Expose</div>
         </div>
-        <nav class="sidebar-nav">
-            <a href="dashboard.html" class="nav-link active"><i class="ph ph-squares-four"></i> Overview</a>
+        <div class="nav-list">
+            <a href="#" class="nav-link active" onclick="resetForm()"><i class="ph ph-rocket-launch"></i> Expose Product</a>
             
-            <div class="nav-group-title">Omnichannel</div>
-            <a href="products.html" class="nav-link"><i class="ph ph-package"></i> Products & Catalog</a>
-            <a href="sales-channels.html" class="nav-link"><i class="ph ph-broadcast"></i> Expose Network <span class="badge-pro" style="background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-size:0.6rem; margin-left:auto;">AUTO</span></a>
+            <div class="nav-label">Operations</div>
+            <a href="#" class="nav-link"><i class="ph ph-truck"></i> Delivery Tracker</a>
+            <a href="#" class="nav-link"><i class="ph ph-credit-card"></i> Transactions</a>
+            <a href="#" class="nav-link"><i class="ph ph-users"></i> Customers</a>
             
-            <div class="nav-group-title">Operations</div>
-            <a href="orders.html" class="nav-link"><i class="ph ph-truck"></i> Orders & Delivery</a>
-            <a href="customers.html" class="nav-link"><i class="ph ph-users"></i> CRM</a>
-            
-            <div class="nav-group-title">Back Office</div>
-            <a href="accounting.html" class="nav-link"><i class="ph ph-calculator"></i> Accounting & Invoicing</a>
-            <a href="staff.html" class="nav-link"><i class="ph ph-identification-card"></i> HR & Payroll</a>
-            <a href="finance.html" class="nav-link"><i class="ph ph-bank"></i> Funding & Finance</a>
-            <a href="partners.html" class="nav-link"><i class="ph ph-handshake"></i> B2B Partners</a>
-            
-            <div style="margin-top: auto; padding-top: 20px;"></div>
-            <a href="business-profile.html" class="nav-link"><i class="ph ph-gear"></i> Settings</a>
-        </nav>
+            <div class="nav-label">Back Office</div>
+            <a href="#" class="nav-link"><i class="ph ph-calculator"></i> Accounting</a>
+            <a href="#" class="nav-link"><i class="ph ph-users-three"></i> HR & Staff</a>
+            <a href="#" class="nav-link"><i class="ph ph-bank"></i> Finance</a>
+        </div>
     </aside>
 
-    <!-- MAIN PANEL -->
-    <main class="main-panel">
+    <div class="main-content">
         <header class="topbar">
-            <div>
-                <h1 class="page-title">Command Center</h1>
-                <p style="color: #64748b; font-size: 0.95rem;">Manage your operations, finances, and global reach.</p>
+            <div style="display:flex; align-items:center; gap:16px;">
+                <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="ph ph-list"></i></button>
+                <div>
+                    <h1 style="font-family: 'Plus Jakarta Sans'; font-weight:800;">Command Center</h1>
+                    <p style="color:var(--text-secondary); font-size:0.85rem;">Upload once, sell everywhere.</p>
+                </div>
             </div>
-            <div class="topbar-actions">
-                <a href="products.html" class="button button-primary"><i class="ph ph-rocket-launch"></i> Expose New Product</a>
+            <div class="user-profile">
+                <span>Gatcheni Stores</span>
+                <div class="avatar">GS</div>
             </div>
         </header>
 
-        <div class="content">
-            <!-- ACTION GRID -->
-            <div class="action-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 32px;">
-                
-                <div class="action-card">
-                    <div class="card-icon" style="background: #eff6ff; color: #2563eb; font-size: 2rem; width: 60px; height: 60px; display:flex; align-items:center; justify-content:center; border-radius:12px; margin-bottom: 16px;"><i class="ph ph-broadcast"></i></div>
-                    <h3>Expose a Product</h3>
-                    <p style="color:#64748b; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;">Upload a product and instantly push it to Google, WhatsApp, FB, X, YT, and IG simultaneously.</p>
-                    <a href="products.html" class="link-inline" style="color: #2563eb; font-weight:600; text-decoration:none;">Launch product &rarr;</a>
-                </div>
-
-                <div class="action-card">
-                    <div class="card-icon" style="background: #f0fdf4; color: #16a34a; font-size: 2rem; width: 60px; height: 60px; display:flex; align-items:center; justify-content:center; border-radius:12px; margin-bottom: 16px;"><i class="ph ph-calculator"></i></div>
-                    <h3>Accounting & Invoices</h3>
-                    <p style="color:#64748b; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;">Generate automated invoices, track expenses, and view your P&L statement in real-time.</p>
-                    <a href="accounting.html" class="link-inline" style="color: #16a34a; font-weight:600; text-decoration:none;">Open accounting &rarr;</a>
-                </div>
-
-                <div class="action-card">
-                    <div class="card-icon" style="background: #fef2f2; color: #dc2626; font-size: 2rem; width: 60px; height: 60px; display:flex; align-items:center; justify-content:center; border-radius:12px; margin-bottom: 16px;"><i class="ph ph-truck"></i></div>
-                    <h3>Delivery & Logistics</h3>
-                    <p style="color:#64748b; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;">Manage your pending orders, print waybills, and request courier pickups instantly.</p>
-                    <a href="orders.html" class="link-inline" style="color: #dc2626; font-weight:600; text-decoration:none;">Dispatch orders &rarr;</a>
+        <div class="container">
+            
+            <!-- THE WIZARD -->
+            <div class="wizard-panel" id="wizardPanel">
+                <div class="wizard-header">
+                    <h2><i class="ph ph-sparkle" style="color:var(--brand-blue);"></i> Expose a New Item</h2>
+                    <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); background: var(--bg-app); padding: 6px 12px; border-radius: 20px;">Free Tier: 1 Item Available</span>
                 </div>
                 
-                <div class="action-card">
-                    <div class="card-icon" style="background: #fffbeb; color: #d97706; font-size: 2rem; width: 60px; height: 60px; display:flex; align-items:center; justify-content:center; border-radius:12px; margin-bottom: 16px;"><i class="ph ph-users-three"></i></div>
-                    <h3>HR & Staffing</h3>
-                    <p style="color:#64748b; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;">Manage your workforce, approve leave, and run monthly payroll seamlessly.</p>
-                    <a href="staff.html" class="link-inline" style="color: #d97706; font-weight:600; text-decoration:none;">Manage team &rarr;</a>
-                </div>
+                <div class="wizard-body">
+                    <!-- Left: Form -->
+                    <div>
+                        <div class="form-section">
+                            <h3><i class="ph ph-package"></i> 1. Product Details</h3>
+                            <div class="input-group">
+                                <label>Product Name</label>
+                                <input type="text" id="pName" placeholder="e.g. Nike Air Max" oninput="updateMockup()">
+                            </div>
+                            <div class="input-group">
+                                <label>Selling Price (ZAR)</label>
+                                <input type="number" id="pPrice" placeholder="1500" oninput="updateMockup()">
+                            </div>
+                        </div>
 
+                        <div class="form-section">
+                            <h3><i class="ph ph-broadcast"></i> 2. Select Selling Areas</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Where do you want this product to instantly appear?</p>
+                            <div class="channel-grid">
+                                <label class="channel-opt">
+                                    <input type="checkbox" value="12000000" onchange="calculateReach()" checked>
+                                    <i class="ph ph-google-logo" style="font-size:1.5rem; color:#64748b;"></i> Google
+                                </label>
+                                <label class="channel-opt">
+                                    <input type="checkbox" value="24000000" onchange="calculateReach()" checked>
+                                    <i class="ph ph-whatsapp-logo" style="font-size:1.5rem; color:#64748b;"></i> WhatsApp
+                                </label>
+                                <label class="channel-opt">
+                                    <input type="checkbox" value="18000000" onchange="calculateReach()" checked>
+                                    <i class="ph ph-facebook-logo" style="font-size:1.5rem; color:#64748b;"></i> Facebook
+                                </label>
+                                <label class="channel-opt">
+                                    <input type="checkbox" value="9000000" onchange="calculateReach()">
+                                    <i class="ph ph-instagram-logo" style="font-size:1.5rem; color:#64748b;"></i> Instagram
+                                </label>
+                                <label class="channel-opt">
+                                    <input type="checkbox" value="4000000" onchange="calculateReach()">
+                                    <i class="ph ph-twitter-logo" style="font-size:1.5rem; color:#64748b;"></i> X (Twitter)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3><i class="ph ph-truck"></i> 3. Delivery Service</h3>
+                            <div class="input-group">
+                                <label>Logistics Partner</label>
+                                <select id="pCourier" onchange="updateMockup()">
+                                    <option value="The Courier Guy">The Courier Guy</option>
+                                    <option value="Aramex">Aramex</option>
+                                    <option value="Pargo">Pargo Pick-up</option>
+                                    <option value="In-house Driver">My Own Driver</option>
+                                </select>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                                <div class="input-group">
+                                    <label>Delivery Fee (R)</label>
+                                    <input type="number" id="pFee" value="99" oninput="updateMockup()">
+                                </div>
+                                <div class="input-group">
+                                    <label>Duration</label>
+                                    <select id="pDuration" onchange="updateMockup()">
+                                        <option value="2-3 Days">2-3 Days</option>
+                                        <option value="Next Day">Next Day</option>
+                                        <option value="Same Day">Same Day</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3><i class="ph ph-credit-card"></i> 4. Client Payment Method</h3>
+                            <div class="input-group">
+                                <select>
+                                    <option>Business Expose API (Card & Instant EFT)</option>
+                                    <option>Manual EFT</option>
+                                    <option>Cash on Delivery</option>
+                                </select>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Right: Live Output & Submission -->
+                    <div style="position: sticky; top: 100px; height: fit-content;">
+                        <div class="reach-box">
+                            <p>Estimated Audience Reach</p>
+                            <h2 id="reachCounter">54,000,000</h2>
+                            <p style="font-size: 0.7rem; font-weight: 400; margin-top:4px;">Shoppers across selected platforms</p>
+                        </div>
+
+                        <p style="font-size: 0.85rem; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase;">Live Client Preview</p>
+                        
+                        <div class="mockup-card">
+                            <div class="mockup-img"><i class="ph ph-image"></i></div>
+                            <div class="mockup-body">
+                                <div class="mockup-title" id="outName">Nike Air Max</div>
+                                <div class="mockup-price" id="outPrice">R 1,500</div>
+                                
+                                <div class="mockup-meta">
+                                    <i class="ph ph-storefront" style="color:var(--brand-blue);"></i> Sold by <strong>Gatcheni Stores</strong>
+                                </div>
+                                <div class="mockup-meta">
+                                    <i class="ph ph-truck" style="color:var(--brand-blue);"></i> Delivery: R<span id="outFee">99</span> via <span id="outCourier">The Courier Guy</span>
+                                </div>
+                                <div class="mockup-meta">
+                                    <i class="ph ph-clock" style="color:var(--brand-blue);"></i> Arrives in: <span id="outDuration">2-3 Days</span>
+                                </div>
+                                <div class="mockup-meta">
+                                    <i class="ph ph-shield-check" style="color:var(--success);"></i> Secure payment via Expose API
+                                </div>
+
+                                <button class="btn-buy">Buy Now</button>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary" style="margin-top: 24px; font-size:1.1rem; padding: 18px;" onclick="exposeProduct()">
+                            <i class="ph ph-globe-hemisphere-west"></i> Expose To The World
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- PAYWALL MODAL -->
+    <div class="modal-overlay" id="paywallModal">
+        <div class="paywall-modal">
+            <button class="close-modal" onclick="document.getElementById('paywallModal').classList.remove('active')"><i class="ph ph-x"></i></button>
+            <h2 style="font-size: 2rem; margin-bottom: 12px;">Ready to grow your empire?</h2>
+            <p style="color: var(--text-secondary); font-size: 1.1rem;">You've successfully exposed your 1 free item. To upload more products and utilize Accounting & HR features, please upgrade your plan.</p>
+            
+            <div class="pricing-grid">
+                <div class="price-card">
+                    <h3 style="font-size:1.5rem; margin-bottom: 8px;">Starter</h3>
+                    <div style="font-size:2rem; font-weight:800; margin-bottom:16px;">R199<span style="font-size:1rem; color:var(--text-secondary); font-weight:500;">/month</span></div>
+                    <ul style="list-style:none; line-height:2; margin-bottom:24px; font-size:0.95rem; color:var(--text-secondary);">
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> <strong>10 Items</strong> to Expose</li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Basic Accounting</li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Courier Integration</li>
+                    </ul>
+                    <button class="btn" style="width:100%; border:1px solid var(--brand-blue); color:var(--brand-blue); background:white;">Upgrade to Starter</button>
+                </div>
+                
+                <div class="price-card popular">
+                    <div class="badge">MOST POPULAR</div>
+                    <h3 style="font-size:1.5rem; margin-bottom: 8px;">Unlimited</h3>
+                    <div style="font-size:2rem; font-weight:800; margin-bottom:16px;">R299<span style="font-size:1rem; color:var(--text-secondary); font-weight:500;">/month</span></div>
+                    <ul style="list-style:none; line-height:2; margin-bottom:24px; font-size:0.95rem; color:var(--text-secondary);">
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> <strong>Unlimited Items</strong></li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Full Accounting & Tax</li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> HR & Payroll System</li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Instant Finance Access</li>
+                    </ul>
+                    <button class="btn btn-primary" style="width:100%;">Upgrade to Unlimited</button>
+                </div>
             </div>
         </div>
-    </main>
+    </div>
 
-    <script src="assets/app.js"></script>
+    <!-- SCRIPT LOGIC -->
+    <script>
+        let productsUploaded = 0; // The paywall logic
+
+        // Live update the mockup card based on user input
+        function updateMockup() {
+            const name = document.getElementById('pName').value || "Nike Air Max";
+            const price = document.getElementById('pPrice').value || "1500";
+            const courier = document.getElementById('pCourier').value;
+            const fee = document.getElementById('pFee').value || "0";
+            const duration = document.getElementById('pDuration').value;
+
+            document.getElementById('outName').textContent = name;
+            document.getElementById('outPrice').textContent = "R " + Number(price).toLocaleString();
+            document.getElementById('outCourier').textContent = courier;
+            document.getElementById('outFee').textContent = fee;
+            document.getElementById('outDuration').textContent = duration;
+        }
+
+        // Calculate Audience Reach based on checkboxes
+        function calculateReach() {
+            let total = 0;
+            const checkboxes = document.querySelectorAll('.channel-opt input:checked');
+            checkboxes.forEach(box => {
+                total += parseInt(box.value);
+            });
+            
+            // Format number neatly
+            document.getElementById('reachCounter').textContent = total > 0 ? total.toLocaleString() : "0";
+        }
+
+        // Handle Expose Button Click
+        function exposeProduct() {
+            if (productsUploaded >= 1) {
+                // Trigger Paywall Modal
+                document.getElementById('paywallModal').classList.add('active');
+            } else {
+                // Simulate success for the first item
+                const btn = document.querySelector('.btn-primary');
+                const originalText = btn.innerHTML;
+                
+                btn.innerHTML = '<i class="ph ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Distributing globally...';
+                
+                setTimeout(() => {
+                    productsUploaded++;
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Successfully Exposed!';
+                    btn.style.background = 'var(--success)';
+                    
+                    setTimeout(() => {
+                        // Reset for next attempt which will trigger paywall
+                        btn.innerHTML = '<i class="ph ph-plus"></i> Add Another Product';
+                        btn.style.background = 'var(--brand-primary)';
+                        
+                        // Show a beautiful success alert
+                        alert("Success! Your product is now live on Google, WhatsApp, and Meta. It is marked as 'Sold by Gatcheni Stores'.");
+                    }, 2000);
+                }, 1500);
+            }
+        }
+
+        // Reset form for demo purposes if clicked in sidebar
+        function resetForm() {
+            productsUploaded = 0;
+            const btn = document.querySelector('.wizard-body .btn-primary');
+            btn.innerHTML = '<i class="ph ph-globe-hemisphere-west"></i> Expose To The World';
+            btn.style.background = 'var(--brand-blue)';
+        }
+    </script>
+    <style>
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
 </body>
 </html>
