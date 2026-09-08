@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Accounting | Business Expose</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 32px;}
+        .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; }
+        .stat-card h3 { font-size: 0.9rem; color: #64748b; text-transform: uppercase; margin-bottom: 8px;}
+        .stat-card h2 { font-size: 2rem; font-family: 'Plus Jakarta Sans'; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;}
+        th, td { padding: 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+        th { background: #f8fafc; color: #64748b; text-transform: uppercase; font-size: 0.8rem; }
+    </style>
+</head>
+<body style="display:flex; height:100vh; background:#f8fafc; margin:0; font-family:'Inter',sans-serif;">
+    <!-- Use same Sidebar as above here -->
+    <aside class="sidebar" style="width: 280px; background: white; border-right: 1px solid #e2e8f0; padding: 24px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:32px;">
+            <div style="background:linear-gradient(135deg,#2563eb,#8b5cf6); color:white; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">BE</div>
+            <strong style="font-family:'Plus Jakarta Sans'; font-size:1.2rem;">Business Expose</strong>
+        </div>
+        <a href="dashboard.html" style="display:block; padding:12px; color:#64748b; text-decoration:none; border-radius:8px;"><i class="ph ph-rocket-launch"></i> Expose Product</a>
+        <a href="accounting.html" style="display:block; margin-top:20px; padding:12px; color:white; background:#2563eb; text-decoration:none; border-radius:8px; font-weight:500;"><i class="ph ph-calculator"></i> Accounting</a>
+    </aside>
+
+    <main style="flex:1; padding: 40px; overflow-y:auto;">
+        <h1 style="font-family:'Plus Jakarta Sans'; font-size:1.8rem; margin-bottom: 8px;">Automated Accounting</h1>
+        <p style="color:#64748b; margin-bottom: 32px;">Real-time Profit & Loss and Tax Estimations based on your sales.</p>
+
+        <div class="grid-3">
+            <div class="stat-card">
+                <h3>Gross Income (MTD)</h3>
+                <h2 style="color:#10b981;">R 45,200.00</h2>
+            </div>
+            <div class="stat-card">
+                <h3>Total Expenses (Logistics + Fees)</h3>
+                <h2 style="color:#ef4444;">R 12,150.00</h2>
+            </div>
+            <div class="stat-card">
+                <h3>Estimated Tax (VAT 15%)</h3>
+                <h2 style="color:#f59e0b;">R 6,780.00</h2>
+            </div>
+        </div>
+
+        <h2 style="font-family:'Plus Jakarta Sans'; font-size:1.2rem; margin-bottom:16px;">Auto-Generated Invoices</h2>
+        <table>
+            <tr><th>Invoice No</th><th>Date</th><th>Client / Source</th><th>Amount</th><th>Status</th><th>Download</th></tr>
+            <tr><td>INV-2041</td><td>08 Sep 2026</td><td>Google Shopping Sale</td><td>R 1,599.00</td><td><span style="color:#10b981; font-weight:bold;">Paid</span></td><td><a href="#" style="color:#2563eb;">PDF</a></td></tr>
+            <tr><td>INV-2040</td><td>07 Sep 2026</td><td>WhatsApp Direct Sale</td><td>R 850.00</td><td><span style="color:#10b981; font-weight:bold;">Paid</span></td><td><a href="#" style="color:#2563eb;">PDF</a></td></tr>
+        </table>
+    </main>
+</body>
+</html>

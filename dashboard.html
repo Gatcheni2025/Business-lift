@@ -487,6 +487,58 @@
             `;
         }
     </script>
+
+	<!-- Add Firebase SDKs -->
+<script type="module">
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
+    import { app } from "./js/firebase-config.js";
+
+    const functions = getFunctions(app);
+    const exposeToNetwork = httpsCallable(functions, 'exposeToNetwork');
+
+    // Make the function available globally so the HTML button can use it
+    window.exposeProduct = async function() {
+        if (productsUploaded >= 1) {
+            document.getElementById('paywallModal').classList.add('active');
+            return;
+        }
+
+        const name = document.getElementById('pName').value;
+        const price = document.getElementById('pPrice').value;
+        
+        // Find which channels they ticked
+        const selectedChannels = [];
+        document.querySelectorAll('.channel-opt input:checked').forEach(box => {
+            selectedChannels.push(box.getAttribute('data-platform')); // e.g. 'google', 'meta'
+        });
+
+        const btn = document.getElementById('exposeBtn');
+        btn.innerHTML = '<i class="ph ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Distributing globally...';
+
+        try {
+            // THIS CALLS THE REAL NODE.JS BACKEND TO PUSH TO GOOGLE/FB
+            const response = await exposeToNetwork({
+                productName: name,
+                price: price,
+                imageUrl: uploadedImageSrc || "https://placeholder.com/img.jpg",
+                channels: selectedChannels
+            });
+
+            console.log("API Response:", response.data);
+
+            productsUploaded++;
+            btn.innerHTML = '<i class="ph ph-check-circle"></i> Successfully Exposed!';
+            btn.style.background = 'var(--success)';
+            
+            addToPublishedTable(); // Add to your HTML table
+
+        } catch (error) {
+            console.error("Failed to expose:", error);
+            alert("Error exposing product: " + error.message);
+            btn.innerHTML = '<i class="ph ph-globe-hemisphere-west"></i> Expose To The World';
+        }
+    };
+</script>
     <style>
         @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
