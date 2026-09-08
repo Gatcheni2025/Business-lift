@@ -34,7 +34,7 @@
         .user-profile { display: flex; align-items: center; gap: 12px; font-weight: 600; }
         .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-primary); color: white; display: flex; align-items: center; justify-content: center; }
 
-        .container { padding: 32px 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        .container { padding: 32px 40px; max-width: 1400px; margin: 0 auto; width: 100%; }
         
         /* The Wizard Styles */
         .wizard-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 32px;}
@@ -43,6 +43,12 @@
         
         .form-section { margin-bottom: 32px; }
         .form-section h3 { font-size: 1.1rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--brand-primary);}
+        
+        /* Image Uploader Area */
+        .upload-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 32px; text-align: center; background: #f8fafc; cursor: pointer; transition: 0.2s; margin-bottom: 16px; position: relative; overflow: hidden; }
+        .upload-area:hover { border-color: var(--brand-blue); background: #eff6ff; }
+        .upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .upload-area i { font-size: 2.5rem; color: #94a3b8; margin-bottom: 8px; }
         
         .input-group { margin-bottom: 16px; }
         .input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; }
@@ -57,14 +63,16 @@
         .channel-opt:has(input:checked) { border-color: var(--brand-blue); background: #eff6ff; }
         .channel-opt:has(input:checked) i { color: var(--brand-blue) !important; }
 
-        /* Stats Box */
-        .reach-box { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 24px; border-radius: 16px; text-align: center; margin-bottom: 24px;}
+        /* Geo/Reach Box */
+        .reach-box { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 24px; border-radius: 16px; text-align: center; margin-bottom: 24px; position: relative;}
+        .reach-box .geo-badge { background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; backdrop-filter: blur(5px);}
         .reach-box p { font-size: 0.9rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 8px;}
         .reach-box h2 { font-size: 2.5rem; font-weight: 800; }
         
         /* Mockup output */
         .mockup-card { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.02);}
-        .mockup-img { width: 100%; height: 200px; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 2rem;}
+        .mockup-img { width: 100%; height: 250px; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 2rem; overflow: hidden;}
+        .mockup-img img { width: 100%; height: 100%; object-fit: cover; display: none; }
         .mockup-body { padding: 20px; }
         .mockup-title { font-weight: 700; font-size: 1.2rem; margin-bottom: 4px; }
         .mockup-price { font-weight: 800; color: var(--success); font-size: 1.4rem; margin-bottom: 12px; }
@@ -74,6 +82,18 @@
         .btn { padding: 14px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;}
         .btn-primary { background: var(--brand-blue); color: white; width: 100%; box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
         .btn-primary:hover { background: #1d4ed8; }
+
+        /* Published Products Table */
+        .table-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; margin-bottom: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);}
+        .table-panel h2 { font-size: 1.25rem; margin-bottom: 20px; color: var(--brand-primary); }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { text-align: left; padding: 16px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;}
+        .data-table td { padding: 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .data-table tr:hover { background: #f8fafc; }
+        .prod-cell { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+        .prod-cell img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #e2e8f0; }
+        .pill-status { background: #d1fae5; color: #065f46; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; }
+        .channel-tags span { display: inline-block; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; margin-right: 4px; font-weight: 500; border: 1px solid var(--border);}
 
         /* Paywall Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; }
@@ -86,16 +106,6 @@
         .price-card:hover { border-color: var(--brand-blue); }
         .price-card.popular { border-color: var(--brand-purple); background: #faf5ff; }
         .badge { position: absolute; top: -12px; right: 20px; background: var(--brand-purple); color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; }
-        
-        /* Mobile Menu */
-        .mobile-toggle { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
-        @media (max-width: 900px) {
-            .sidebar { position: fixed; left: -280px; height: 100vh; }
-            .sidebar.active { left: 0; }
-            .mobile-toggle { display: block; }
-            .wizard-body { grid-template-columns: 1fr; }
-            .pricing-grid { grid-template-columns: 1fr; }
-        }
     </style>
 </head>
 <body>
@@ -107,28 +117,26 @@
             <div class="brand" style="font-size: 1.2rem;">Business Expose</div>
         </div>
         <div class="nav-list">
-            <a href="#" class="nav-link active" onclick="resetForm()"><i class="ph ph-rocket-launch"></i> Expose Product</a>
+            <a href="#" class="nav-link active"><i class="ph ph-rocket-launch"></i> Expose Product</a>
             
             <div class="nav-label">Operations</div>
+            <!-- Added Sales Tracking & Banking Details -->
+            <a href="#" class="nav-link"><i class="ph ph-chart-line-up"></i> Track Sales</a>
+            <a href="#" class="nav-link"><i class="ph ph-bank"></i> Banking Details</a>
             <a href="#" class="nav-link"><i class="ph ph-truck"></i> Delivery Tracker</a>
-            <a href="#" class="nav-link"><i class="ph ph-credit-card"></i> Transactions</a>
-            <a href="#" class="nav-link"><i class="ph ph-users"></i> Customers</a>
             
             <div class="nav-label">Back Office</div>
             <a href="#" class="nav-link"><i class="ph ph-calculator"></i> Accounting</a>
             <a href="#" class="nav-link"><i class="ph ph-users-three"></i> HR & Staff</a>
-            <a href="#" class="nav-link"><i class="ph ph-bank"></i> Finance</a>
+            <a href="#" class="nav-link"><i class="ph ph-handshake"></i> Partner Network</a>
         </div>
     </aside>
 
     <div class="main-content">
         <header class="topbar">
-            <div style="display:flex; align-items:center; gap:16px;">
-                <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="ph ph-list"></i></button>
-                <div>
-                    <h1 style="font-family: 'Plus Jakarta Sans'; font-weight:800;">Command Center</h1>
-                    <p style="color:var(--text-secondary); font-size:0.85rem;">Upload once, sell everywhere.</p>
-                </div>
+            <div>
+                <h1 style="font-family: 'Plus Jakarta Sans'; font-weight:800;">Command Center</h1>
+                <p style="color:var(--text-secondary); font-size:0.85rem;">Upload once, sell everywhere.</p>
             </div>
             <div class="user-profile">
                 <span>Gatcheni Stores</span>
@@ -150,6 +158,15 @@
                     <div>
                         <div class="form-section">
                             <h3><i class="ph ph-package"></i> 1. Product Details</h3>
+                            
+                            <!-- New Image Upload Area -->
+                            <div class="upload-area">
+                                <i class="ph ph-cloud-arrow-up"></i>
+                                <div><strong style="color: var(--brand-blue);">Click to upload product image</strong> or drag and drop</div>
+                                <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">PNG, JPG up to 5MB</div>
+                                <input type="file" id="pImage" accept="image/*" onchange="previewImage(event)">
+                            </div>
+
                             <div class="input-group">
                                 <label>Product Name</label>
                                 <input type="text" id="pName" placeholder="e.g. Nike Air Max" oninput="updateMockup()">
@@ -222,6 +239,7 @@
                                     <option>Manual EFT</option>
                                     <option>Cash on Delivery</option>
                                 </select>
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;">Funds will clear automatically to the account listed in your <a href="#" style="color:var(--brand-blue);">Banking Details</a>.</p>
                             </div>
                         </div>
 
@@ -229,19 +247,24 @@
 
                     <!-- Right: Live Output & Submission -->
                     <div style="position: sticky; top: 100px; height: fit-content;">
+                        <!-- Geolocation & Reach Box -->
                         <div class="reach-box">
-                            <p>Estimated Audience Reach</p>
-                            <h2 id="reachCounter">54,000,000</h2>
-                            <p style="font-size: 0.7rem; font-weight: 400; margin-top:4px;">Shoppers across selected platforms</p>
+                            <div class="geo-badge" id="geoBadge"><i class="ph ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Locating Seller...</div>
+                            <p>Potential Audience Reach</p>
+                            <h2 id="reachCounter">0</h2>
+                            <p style="font-size: 0.7rem; font-weight: 400; margin-top:4px;">Shoppers across selected platforms & local area</p>
                         </div>
 
                         <p style="font-size: 0.85rem; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase;">Live Client Preview</p>
                         
                         <div class="mockup-card">
-                            <div class="mockup-img"><i class="ph ph-image"></i></div>
+                            <div class="mockup-img">
+                                <i class="ph ph-image" id="placeholderIcon"></i>
+                                <img id="mockupImg" alt="Product Preview">
+                            </div>
                             <div class="mockup-body">
-                                <div class="mockup-title" id="outName">Nike Air Max</div>
-                                <div class="mockup-price" id="outPrice">R 1,500</div>
+                                <div class="mockup-title" id="outName">Product Name</div>
+                                <div class="mockup-price" id="outPrice">R 0</div>
                                 
                                 <div class="mockup-meta">
                                     <i class="ph ph-storefront" style="color:var(--brand-blue);"></i> Sold by <strong>Gatcheni Stores</strong>
@@ -260,11 +283,32 @@
                             </div>
                         </div>
 
-                        <button class="btn btn-primary" style="margin-top: 24px; font-size:1.1rem; padding: 18px;" onclick="exposeProduct()">
+                        <button class="btn btn-primary" id="exposeBtn" style="margin-top: 24px; font-size:1.1rem; padding: 18px;" onclick="exposeProduct()">
                             <i class="ph ph-globe-hemisphere-west"></i> Expose To The World
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- EXPOSED PRODUCTS TABLE -->
+            <div class="table-panel">
+                <h2>Currently Exposed Products</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product Details</th>
+                            <th>Selling Price</th>
+                            <th>Delivery</th>
+                            <th>Active Channels</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="publishedTableBody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--text-secondary);">No products exposed yet. Upload your first product above.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
         </div>
@@ -275,7 +319,7 @@
         <div class="paywall-modal">
             <button class="close-modal" onclick="document.getElementById('paywallModal').classList.remove('active')"><i class="ph ph-x"></i></button>
             <h2 style="font-size: 2rem; margin-bottom: 12px;">Ready to grow your empire?</h2>
-            <p style="color: var(--text-secondary); font-size: 1.1rem;">You've successfully exposed your 1 free item. To upload more products and utilize Accounting & HR features, please upgrade your plan.</p>
+            <p style="color: var(--text-secondary); font-size: 1.1rem;">You've successfully exposed your 1 free item. To upload more products and utilize full Sales Tracking, upgrade your plan.</p>
             
             <div class="pricing-grid">
                 <div class="price-card">
@@ -283,7 +327,7 @@
                     <div style="font-size:2rem; font-weight:800; margin-bottom:16px;">R199<span style="font-size:1rem; color:var(--text-secondary); font-weight:500;">/month</span></div>
                     <ul style="list-style:none; line-height:2; margin-bottom:24px; font-size:0.95rem; color:var(--text-secondary);">
                         <li><i class="ph ph-check-circle" style="color:var(--success);"></i> <strong>10 Items</strong> to Expose</li>
-                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Basic Accounting</li>
+                        <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Basic Sales Tracking</li>
                         <li><i class="ph ph-check-circle" style="color:var(--success);"></i> Courier Integration</li>
                     </ul>
                     <button class="btn" style="width:100%; border:1px solid var(--brand-blue); color:var(--brand-blue); background:white;">Upgrade to Starter</button>
@@ -305,14 +349,64 @@
         </div>
     </div>
 
-    <!-- SCRIPT LOGIC -->
     <script>
-        let productsUploaded = 0; // The paywall logic
+        let productsUploaded = 0;
+        let basePopulation = 0;
+        let uploadedImageSrc = "";
 
-        // Live update the mockup card based on user input
+        // 1. Image Preview Logic
+        function previewImage(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                uploadedImageSrc = reader.result;
+                document.getElementById('mockupImg').src = uploadedImageSrc;
+                document.getElementById('mockupImg').style.display = 'block';
+                document.getElementById('placeholderIcon').style.display = 'none';
+            }
+            if(event.target.files[0]) {
+                reader.readAsDataURL(event.target.files[0]);
+            }
+        }
+
+        // 2. Geolocation & Reach Logic
+        window.onload = function() {
+            const geoBadge = document.getElementById('geoBadge');
+            
+            // Simulate Geolocation lookup (Takes 1.5 seconds for effect)
+            setTimeout(() => {
+                if(navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            // In a real app, you reverse geocode the coords. Here we simulate Durban as requested.
+                            geoBadge.innerHTML = `<i class="ph ph-map-pin"></i> Durban, KZN (Local Reach: 3.8M)`;
+                            basePopulation = 3800000;
+                            calculateReach();
+                        },
+                        (error) => {
+                            geoBadge.innerHTML = `<i class="ph ph-map-pin"></i> South Africa (National Reach: 60M)`;
+                            basePopulation = 60000000;
+                            calculateReach();
+                        }
+                    );
+                }
+            }, 1500);
+            
+            calculateReach(); // Initial calc
+        }
+
+        function calculateReach() {
+            let platformReach = 0;
+            const checkboxes = document.querySelectorAll('.channel-opt input:checked');
+            checkboxes.forEach(box => { platformReach += parseInt(box.value); });
+            
+            const total = platformReach + basePopulation;
+            document.getElementById('reachCounter').textContent = total > 0 ? total.toLocaleString() : "0";
+        }
+
+        // 3. Live Mockup Text Updater
         function updateMockup() {
-            const name = document.getElementById('pName').value || "Nike Air Max";
-            const price = document.getElementById('pPrice').value || "1500";
+            const name = document.getElementById('pName').value || "Product Name";
+            const price = document.getElementById('pPrice').value || "0";
             const courier = document.getElementById('pCourier').value;
             const fee = document.getElementById('pFee').value || "0";
             const duration = document.getElementById('pDuration').value;
@@ -324,53 +418,73 @@
             document.getElementById('outDuration').textContent = duration;
         }
 
-        // Calculate Audience Reach based on checkboxes
-        function calculateReach() {
-            let total = 0;
-            const checkboxes = document.querySelectorAll('.channel-opt input:checked');
-            checkboxes.forEach(box => {
-                total += parseInt(box.value);
-            });
-            
-            // Format number neatly
-            document.getElementById('reachCounter').textContent = total > 0 ? total.toLocaleString() : "0";
-        }
-
-        // Handle Expose Button Click
+        // 4. Submit & Table Population Logic
         function exposeProduct() {
             if (productsUploaded >= 1) {
-                // Trigger Paywall Modal
                 document.getElementById('paywallModal').classList.add('active');
-            } else {
-                // Simulate success for the first item
-                const btn = document.querySelector('.btn-primary');
-                const originalText = btn.innerHTML;
-                
-                btn.innerHTML = '<i class="ph ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Distributing globally...';
-                
-                setTimeout(() => {
-                    productsUploaded++;
-                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Successfully Exposed!';
-                    btn.style.background = 'var(--success)';
-                    
-                    setTimeout(() => {
-                        // Reset for next attempt which will trigger paywall
-                        btn.innerHTML = '<i class="ph ph-plus"></i> Add Another Product';
-                        btn.style.background = 'var(--brand-primary)';
-                        
-                        // Show a beautiful success alert
-                        alert("Success! Your product is now live on Google, WhatsApp, and Meta. It is marked as 'Sold by Gatcheni Stores'.");
-                    }, 2000);
-                }, 1500);
+                return;
             }
+
+            const name = document.getElementById('pName').value;
+            const price = document.getElementById('pPrice').value;
+            if(!name || !price) {
+                alert("Please fill in the Product Name and Price first.");
+                return;
+            }
+
+            const btn = document.getElementById('exposeBtn');
+            btn.innerHTML = '<i class="ph ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Distributing globally...';
+            
+            setTimeout(() => {
+                productsUploaded++;
+                btn.innerHTML = '<i class="ph ph-check-circle"></i> Successfully Exposed!';
+                btn.style.background = 'var(--success)';
+                
+                // Add to Published Table
+                addToPublishedTable();
+
+                setTimeout(() => {
+                    // Reset button for the next click (which will hit the paywall)
+                    btn.innerHTML = '<i class="ph ph-plus"></i> Add Another Product';
+                    btn.style.background = 'var(--brand-primary)';
+                }, 2000);
+            }, 1500);
         }
 
-        // Reset form for demo purposes if clicked in sidebar
-        function resetForm() {
-            productsUploaded = 0;
-            const btn = document.querySelector('.wizard-body .btn-primary');
-            btn.innerHTML = '<i class="ph ph-globe-hemisphere-west"></i> Expose To The World';
-            btn.style.background = 'var(--brand-blue)';
+        function addToPublishedTable() {
+            const tbody = document.getElementById('publishedTableBody');
+            const name = document.getElementById('pName').value;
+            const price = document.getElementById('pPrice').value;
+            const courier = document.getElementById('pCourier').value;
+            const fee = document.getElementById('pFee').value;
+            
+            // Gather selected channels for badges
+            let channelsHTML = '';
+            document.querySelectorAll('.channel-opt input:checked').forEach(box => {
+                const iconClass = box.nextElementSibling.className;
+                const platformName = box.parentNode.textContent.trim();
+                channelsHTML += `<span><i class="${iconClass}"></i> ${platformName}</span>`;
+            });
+
+            // Clear empty state message if it's the first product
+            if(productsUploaded === 1) tbody.innerHTML = '';
+
+            const imgHTML = uploadedImageSrc ? `<img src="${uploadedImageSrc}">` : `<div style="width:40px;height:40px;background:#e2e8f0;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-image"></i></div>`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>
+                        <div class="prod-cell">
+                            ${imgHTML}
+                            <span>${name}</span>
+                        </div>
+                    </td>
+                    <td><strong>R ${Number(price).toLocaleString()}</strong></td>
+                    <td>${courier} (R${fee})</td>
+                    <td class="channel-tags">${channelsHTML}</td>
+                    <td><span class="pill-status">Live</span></td>
+                </tr>
+            `;
         }
     </script>
     <style>
