@@ -43,7 +43,7 @@ export function initializeSellerDashboardSummary() {
             <div class="seller-money-card"><span>Total sales</span><strong>${money.format(data.balances?.lifetimeSales || 0)}</strong></div>
             <div class="seller-money-card"><span>Orders</span><strong>${Number(data.orders?.count || 0).toLocaleString()}</strong></div>
           </div>
-          <div class="seller-quick"><a class="primary" href="#wizardPanel"><i class="ph ph-plus-circle"></i> Sell more</a><a href="sales-channels.html?return=dashboard"><i class="ph ph-plugs-connected"></i> Connections</a><a href="shop-settings.html"><i class="ph ph-gear"></i> Shop settings</a><a href="network.html"><i class="ph ph-handshake"></i> Network</a></div>
+          <div class="seller-quick"><a class="primary" href="#wizardPanel"><i class="ph ph-plus-circle"></i> Sell more</a><a href="sales-channels.html?return=dashboard"><i class="ph ph-plugs-connected"></i> Connections</a><a href="delivery-settings.html"><i class="ph ph-truck"></i> Delivery</a><a href="shop-settings.html"><i class="ph ph-gear"></i> Shop settings</a><a href="network.html"><i class="ph ph-handshake"></i> Network</a></div>
         </div>`;
       container.prepend(card);
     } catch (error) {
