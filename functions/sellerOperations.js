@@ -55,95 +55,81 @@ exports.saveSellerOperations = onCall({secrets: [FIELD_ENCRYPTION_KEY]}, async (
 
   if (section === "banking") {
     const accountNumber = safeString(data.accountNumber, 40);
-    payload = {
-      banking: {
-        accountHolder: safeString(data.accountHolder, 120),
-        bankName: safeString(data.bankName, 80),
-        accountType: safeString(data.accountType, 60),
-        branchCode: safeString(data.branchCode, 20),
-        accountNumberEncrypted: encrypt(accountNumber),
-        accountNumberLast4: accountNumber.slice(-4),
-        verified: false,
-        updatedAt: now,
-      },
-    };
+    payload = {banking: {
+      accountHolder: safeString(data.accountHolder, 120),
+      bankName: safeString(data.bankName, 80),
+      accountType: safeString(data.accountType, 60),
+      branchCode: safeString(data.branchCode, 20),
+      accountNumberEncrypted: encrypt(accountNumber),
+      accountNumberLast4: accountNumber.slice(-4),
+      verified: false,
+      updatedAt: now,
+    }};
   } else if (section === "payfast") {
-    payload = {
-      payfast: {
-        merchantId: safeString(data.merchantId, 80),
-        merchantKeyEncrypted: encrypt(safeString(data.merchantKey, 200)),
-        passphraseEncrypted: encrypt(safeString(data.passphrase, 200)),
-        splitPaymentsEnabled: Boolean(data.splitPaymentsEnabled),
-        sandboxMode: Boolean(data.sandboxMode),
-        connected: Boolean(data.merchantId && data.merchantKey),
-        updatedAt: now,
-      },
-    };
+    payload = {payfast: {
+      merchantId: safeString(data.merchantId, 80),
+      merchantKeyEncrypted: encrypt(safeString(data.merchantKey, 200)),
+      passphraseEncrypted: encrypt(safeString(data.passphrase, 200)),
+      splitPaymentsEnabled: Boolean(data.splitPaymentsEnabled),
+      sandboxMode: Boolean(data.sandboxMode),
+      connected: Boolean(data.merchantId && data.merchantKey),
+      updatedAt: now,
+    }};
   } else if (section === "delivery") {
-    payload = {
-      delivery: {
-        fulfilmentMode: safeString(data.fulfilmentMode, 40),
-        courierPreference: safeString(data.courierPreference, 120),
-        pickupAddress: safeString(data.pickupAddress, 300),
-        baseDeliveryFee: Number(data.baseDeliveryFee || 0),
-        freeDeliveryThreshold: Number(data.freeDeliveryThreshold || 0),
-        deliveryRadiusKm: Number(data.deliveryRadiusKm || 0),
-        parcelTypes: Array.isArray(data.parcelTypes) ? data.parcelTypes.slice(0, 10).map((v) => safeString(v, 40)) : [],
-        allowCustomerPickup: Boolean(data.allowCustomerPickup),
-        trackingEnabled: Boolean(data.trackingEnabled),
-        updatedAt: now,
-      },
-    };
+    payload = {delivery: {
+      fulfilmentMode: safeString(data.fulfilmentMode, 40),
+      courierPreference: safeString(data.courierPreference, 120),
+      pickupAddress: safeString(data.pickupAddress, 300),
+      baseDeliveryFee: Number(data.baseDeliveryFee || 0),
+      freeDeliveryThreshold: Number(data.freeDeliveryThreshold || 0),
+      deliveryRadiusKm: Number(data.deliveryRadiusKm || 0),
+      parcelTypes: Array.isArray(data.parcelTypes) ? data.parcelTypes.slice(0, 10).map((v) => safeString(v, 40)) : [],
+      allowCustomerPickup: Boolean(data.allowCustomerPickup),
+      trackingEnabled: Boolean(data.trackingEnabled),
+      updatedAt: now,
+    }};
   } else if (section === "accounting") {
-    payload = {
-      accounting: {
-        enabled: Boolean(data.enabled),
-        vatRegistered: Boolean(data.vatRegistered),
-        vatNumber: safeString(data.vatNumber, 40),
-        invoicePrefix: safeString(data.invoicePrefix, 20),
-        financialYearEnd: safeString(data.financialYearEnd, 30),
-        autoInvoices: Boolean(data.autoInvoices),
-        trackExpenses: Boolean(data.trackExpenses),
-        updatedAt: now,
-      },
-    };
+    payload = {accounting: {
+      enabled: Boolean(data.enabled),
+      vatRegistered: Boolean(data.vatRegistered),
+      vatNumber: safeString(data.vatNumber, 40),
+      invoicePrefix: safeString(data.invoicePrefix, 20),
+      financialYearEnd: safeString(data.financialYearEnd, 30),
+      autoInvoices: Boolean(data.autoInvoices),
+      trackExpenses: Boolean(data.trackExpenses),
+      updatedAt: now,
+    }};
   } else if (section === "booking") {
-    payload = {
-      booking: {
-        enabled: Boolean(data.enabled),
-        appointmentDuration: Number(data.appointmentDuration || 30),
-        bufferMinutes: Number(data.bufferMinutes || 0),
-        leadTimeHours: Number(data.leadTimeHours || 0),
-        locationType: safeString(data.locationType, 40),
-        bookingAddress: safeString(data.bookingAddress, 300),
-        cancellationHours: Number(data.cancellationHours || 0),
-        updatedAt: now,
-      },
-    };
+    payload = {booking: {
+      enabled: Boolean(data.enabled),
+      appointmentDuration: Number(data.appointmentDuration || 30),
+      bufferMinutes: Number(data.bufferMinutes || 0),
+      leadTimeHours: Number(data.leadTimeHours || 0),
+      locationType: safeString(data.locationType, 40),
+      bookingAddress: safeString(data.bookingAddress, 300),
+      cancellationHours: Number(data.cancellationHours || 0),
+      updatedAt: now,
+    }};
   } else if (section === "hr") {
-    payload = {
-      hr: {
-        enabled: Boolean(data.enabled),
-        employeeCount: Number(data.employeeCount || 0),
-        payrollFrequency: safeString(data.payrollFrequency, 40),
-        payslipsEnabled: Boolean(data.payslipsEnabled),
-        leaveTracking: Boolean(data.leaveTracking),
-        attendanceTracking: Boolean(data.attendanceTracking),
-        updatedAt: now,
-      },
-    };
+    payload = {hr: {
+      enabled: Boolean(data.enabled),
+      employeeCount: Number(data.employeeCount || 0),
+      payrollFrequency: safeString(data.payrollFrequency, 40),
+      payslipsEnabled: Boolean(data.payslipsEnabled),
+      leaveTracking: Boolean(data.leaveTracking),
+      attendanceTracking: Boolean(data.attendanceTracking),
+      updatedAt: now,
+    }};
   } else if (section === "partner") {
-    payload = {
-      partner: {
-        discoverable: Boolean(data.discoverable),
-        category: safeString(data.category, 120),
-        serviceArea: safeString(data.serviceArea, 160),
-        offers: safeString(data.offers, 1000),
-        needs: safeString(data.needs, 1000),
-        allowContact: Boolean(data.allowContact),
-        updatedAt: now,
-      },
-    };
+    payload = {partner: {
+      discoverable: Boolean(data.discoverable),
+      category: safeString(data.category, 120),
+      serviceArea: safeString(data.serviceArea, 160),
+      offers: safeString(data.offers, 1000),
+      needs: safeString(data.needs, 1000),
+      allowContact: Boolean(data.allowContact),
+      updatedAt: now,
+    }};
   } else {
     throw new HttpsError("invalid-argument", "Unsupported seller operations section.");
   }
@@ -179,5 +165,8 @@ exports.getSellerOperations = onCall(async (request) => {
     booking: d.booking || null,
     hr: d.hr || null,
     partner: d.partner || null,
+    audience: d.audience || null,
+    paymentPreferences: d.paymentPreferences || null,
+    shop: d.shop || null,
   };
 });

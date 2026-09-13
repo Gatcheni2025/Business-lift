@@ -1,14 +1,14 @@
 # Business Expo Seller Operations
 
-Business Expo now includes a seller setup hub at `seller-setup.html` for:
+Seller operations are intentionally split into a small number of seller-facing pages:
 
-- Banking and payout destination
-- PayFast merchant settings
-- Delivery and parcel preferences
-- Accounting configuration
-- Booking-service configuration
-- HR service configuration
-- Partner Network profile
+- `seller-onboarding.html` — guided setup for selling connections, delivery, payments and target audience
+- `sales-channels.html` — external selling-platform connections and backend confirmation
+- `shop-settings.html` — shop/contact/notification settings
+- `network.html` — Business Network profile
+- `dashboard.html` — balances, orders and selling activity
+
+The old standalone `banking.html`, `accounting.html` and `seller-setup.html` pages were removed because their useful settings are now handled through the guided setup/backend instead of separate menus.
 
 ## Secure fields
 
@@ -20,19 +20,19 @@ Set a 32-byte encryption key before deploying:
 firebase functions:secrets:set FIELD_ENCRYPTION_KEY
 ```
 
-Generate a compatible key, for example:
+Generate a compatible key:
 
 ```bash
 openssl rand -hex 32
 ```
 
-The backend stores seller operations in:
+Seller operations are stored in:
 
 ```text
 sellerOperations/{businessId}
 ```
 
-Do not give the browser direct Firestore read/write access to this collection. Access should remain through authenticated callable functions.
+Do not give the browser direct Firestore read/write access to this collection. Use authenticated callable Functions.
 
 Recommended rule:
 
@@ -42,52 +42,29 @@ match /sellerOperations/{businessId} {
 }
 ```
 
+## Guided setup data
+
+The four onboarding steps are considered complete when the backend confirms:
+
+1. At least one external selling platform is connected.
+2. A fulfilment method has been saved.
+3. EFT/bank, PayFast or another payment gateway has been saved.
+4. A target audience preference has been saved.
+
 ## PayFast
 
-The current implementation securely captures the seller's Merchant ID, Merchant Key and optional passphrase, plus sandbox and Split Payments preferences.
+The implementation securely stores seller Merchant ID, Merchant Key and optional passphrase, plus sandbox and Split Payments preferences.
 
-For a live marketplace payment flow, Business Expo still needs to implement the signed PayFast checkout request and ITN validation. PayFast Split Payments must also be enabled/configured according to the merchant/platform relationship.
-
-Important: Split Payments can divide transaction proceeds between PayFast accounts when a buyer pays. Bank settlement remains subject to PayFast's payout process and the designated South African bank account.
+A live marketplace still needs signed PayFast checkout generation and ITN validation. Split Payments can divide transaction proceeds between PayFast accounts; bank settlement still follows PayFast's payout process.
 
 ## Delivery
 
-Sellers can choose:
+Guided setup captures the seller's fulfilment mode, preferred courier/driver, dispatch address, standard delivery fee and tracking preference. More detailed delivery fields remain supported by the backend for future use.
 
-- Courier service
-- Own driver/team
-- Customer pickup
-- Digital/no-delivery products
-- Mixed fulfilment
+## Business Network
 
-They can also save a dispatch address, delivery pricing, free-delivery threshold, own-delivery radius, parcel types and tracking preference.
+`network.html` allows a seller to define their category, service area, what they offer, what they need, whether they are discoverable and whether other businesses may contact them.
 
-## Accounting
+## Advanced capabilities
 
-Seller settings include:
-
-- Accounting enabled/disabled
-- VAT status and VAT number
-- Invoice prefix
-- Financial year end
-- Automatic invoices
-- Expense tracking
-
-## Booking Services
-
-Service businesses can enable booking and define:
-
-- Appointment duration
-- Buffer time
-- Minimum booking notice
-- Cancellation notice
-- Service location
-- Booking address/link
-
-## HR
-
-Seller HR preferences include employee count, payroll frequency, payslips, leave tracking and attendance tracking.
-
-## Partner Network
-
-Businesses can opt into discovery and define their category, service area, what they offer, what they need and whether other businesses may contact them.
+Accounting, booking and HR settings remain supported by the backend data model for future product modules, but they are deliberately not shown in the core seller menu until those modules are ready. This keeps the everyday seller experience simple.
