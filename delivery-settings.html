@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delivery Settings | Business Expo</title>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--green:#0b7a55;--green-dark:#075b40;--bg:#f7f9f8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,sans-serif}.wrap{max-width:980px;margin:auto;padding:28px 18px 64px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}.brand{font-family:'Plus Jakarta Sans';font-weight:800;font-size:1.1rem}.back{color:var(--green);text-decoration:none;font-weight:800}.hero{background:linear-gradient(135deg,#062f24,#0b7a55);color:#fff;border-radius:24px;padding:28px;margin-bottom:18px}.hero h1{font:800 clamp(1.8rem,4vw,2.6rem)/1.05 'Plus Jakarta Sans';margin:0 0 10px}.hero p{margin:0;color:#d9eee6;max-width:700px}.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px;margin-bottom:16px}.card h2{font:800 1.15rem 'Plus Jakarta Sans';margin:0 0 6px}.card>p{color:var(--muted);margin:0 0 18px}.mode-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mode{border:1px solid var(--line);background:#fff;border-radius:14px;padding:15px;text-align:left;cursor:pointer}.mode i{font-size:1.5rem;color:var(--green)}.mode strong{display:block;margin-top:8px}.mode span{display:block;color:var(--muted);font-size:.76rem;margin-top:4px}.mode.active{border-color:var(--green);background:#eefaf5;box-shadow:0 0 0 2px rgba(11,122,85,.08)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:.8rem;font-weight:800}.field input,.field select{padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff}.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px}.btn{border:0;border-radius:11px;background:var(--green);color:#fff;padding:12px 18px;font-weight:800;cursor:pointer}.status{margin-left:10px;color:#15803d;font-weight:800}.tip{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:14px;padding:14px 16px;font-size:.86rem;margin-bottom:16px}@media(max-width:760px){.mode-grid{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.card{padding:18px}}@media(max-width:460px){.mode-grid{grid-template-columns:1fr}.top{align-items:flex-start}.status{display:block;margin:10px 0 0}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="top"><div class="brand">Business Expo</div><a class="back" href="dashboard.html"><i class="ph ph-arrow-left"></i> Dashboard</a></div>
+<section class="hero"><h1>How do you deliver?</h1><p>Choose the simplest fulfilment option for your shop. You can change this at any time as your business grows.</p></section>
+<div class="tip"><strong>Simple rule:</strong> choose how most orders are delivered. You can still make exceptions per order later.</div>
+<section class="card"><h2>1. Delivery method</h2><p>Select your main fulfilment method.</p><div class="mode-grid">
+<button class="mode active" data-mode="courier"><i class="ph ph-package"></i><strong>Courier</strong><span>A courier collects and delivers parcels</span></button>
+<button class="mode" data-mode="own_driver"><i class="ph ph-car"></i><strong>My driver</strong><span>Your team handles local delivery</span></button>
+<button class="mode" data-mode="pickup"><i class="ph ph-storefront"></i><strong>Customer pickup</strong><span>Customers collect from you</span></button>
+<button class="mode" data-mode="digital"><i class="ph ph-cloud-arrow-down"></i><strong>Digital / service</strong><span>No physical parcel is required</span></button>
+</div></section>
+<section class="card"><h2>2. Delivery details</h2><p>Tell Business Expo where orders leave from and what customers normally pay.</p><div class="grid">
+<div class="field"><label>Preferred courier / provider</label><input id="courierPreference" placeholder="e.g. Pargo, The Courier Guy, own driver"></div>
+<div class="field"><label>Dispatch / collection address</label><input id="pickupAddress" placeholder="Where orders are collected from"></div>
+<div class="field"><label>Standard delivery fee (R)</label><input id="baseDeliveryFee" type="number" min="0" step="0.01" value="0"></div>
+<div class="field"><label>Free delivery above (R)</label><input id="freeDeliveryThreshold" type="number" min="0" step="0.01" value="0"></div>
+<div class="field"><label>Own delivery radius (km)</label><input id="deliveryRadiusKm" type="number" min="0" step="1" value="0"></div>
+</div><div class="checks"><label><input id="allowCustomerPickup" type="checkbox"> Allow customer pickup too</label><label><input id="trackingEnabled" type="checkbox" checked> Enable tracking where available</label></div></section>
+<button class="btn" id="saveDelivery"><i class="ph ph-check-circle"></i> Save delivery settings</button><span class="status" id="saveStatus"></span>
+</div><script type="module" src="js/delivery-settings.js"></script></body></html>

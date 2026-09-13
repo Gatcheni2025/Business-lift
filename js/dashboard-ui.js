@@ -25,6 +25,7 @@ export function initializeDashboardUI() {
       <a href="#wizardPanel" class="nav-link"><i class="ph ph-plus-circle"></i> Sell More</a>
       <a href="sales-channels.html?return=dashboard" class="nav-link"><i class="ph ph-plugs-connected"></i> Connections</a>
       <a href="orders.html" class="nav-link"><i class="ph ph-receipt"></i> Orders</a>
+      <a href="delivery-settings.html" class="nav-link"><i class="ph ph-truck"></i> Delivery</a>
       <a href="shop-settings.html" class="nav-link"><i class="ph ph-gear"></i> Shop Settings</a>
       <a href="network.html" class="nav-link"><i class="ph ph-handshake"></i> Network</a>
     `;
