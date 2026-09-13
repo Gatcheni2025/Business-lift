@@ -19,34 +19,23 @@ export function initializeDashboardUI() {
   const topbar = document.querySelector(".topbar");
   const navList = document.querySelector(".nav-list");
 
-  const routes = {
-    "Track Sales": "orders.html",
-    "Banking Details": "seller-setup.html#banking",
-    "Delivery Tracker": "seller-setup.html#delivery",
-    "Accounting": "seller-setup.html#accounting",
-    "HR & Staff": "seller-setup.html#hr",
-    "Partner Network": "seller-setup.html#partner"
-  };
-  document.querySelectorAll(".nav-link").forEach((link) => {
-    const text = link.textContent.trim();
-    if (routes[text]) link.href = routes[text];
-  });
-
-  if (navList && !Array.from(navList.querySelectorAll(".nav-link")).some((a) => a.textContent.includes("Booking Services"))) {
-    const booking = document.createElement("a");
-    booking.className = "nav-link";
-    booking.href = "seller-setup.html#booking";
-    booking.innerHTML = '<i class="ph ph-calendar-check"></i> Booking Services';
-    const accounting = Array.from(navList.querySelectorAll(".nav-link")).find((a) => a.textContent.trim() === "Accounting");
-    if (accounting) accounting.insertAdjacentElement("afterend", booking); else navList.appendChild(booking);
+  if (navList) {
+    navList.innerHTML = `
+      <a href="dashboard.html" class="nav-link active"><i class="ph ph-house"></i> Dashboard</a>
+      <a href="#wizardPanel" class="nav-link"><i class="ph ph-plus-circle"></i> Sell More</a>
+      <a href="seller-onboarding.html" class="nav-link"><i class="ph ph-plugs-connected"></i> Connections</a>
+      <a href="orders.html" class="nav-link"><i class="ph ph-receipt"></i> Orders</a>
+      <a href="shop-settings.html" class="nav-link"><i class="ph ph-gear"></i> Shop Settings</a>
+      <a href="seller-setup.html#partner" class="nav-link"><i class="ph ph-handshake"></i> Network</a>
+    `;
   }
 
   if (topbar && !document.getElementById("sellerSetupQuickLink")) {
     const profile = topbar.querySelector(".user-profile");
     const quick = document.createElement("a");
     quick.id = "sellerSetupQuickLink";
-    quick.href = "seller-setup.html";
-    quick.title = "Seller operations setup";
+    quick.href = "seller-onboarding.html";
+    quick.title = "Seller setup";
     quick.innerHTML = '<i class="ph ph-sliders-horizontal"></i>';
     quick.style.cssText = "width:40px;height:40px;border-radius:10px;border:1px solid #e2e8f0;background:white;color:#0f172a;display:grid;place-items:center;text-decoration:none;font-size:19px";
     if (profile) profile.before(quick); else topbar.appendChild(quick);
