@@ -25,7 +25,8 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
 
   const results = {};
 
-  // Secure keys from environment variables
+  // Legacy publishing credentials. New social account connections are handled
+  // by functions/socialConnections.js and stored per business in Firestore.
   const META_TOKEN = process.env.META_ACCESS_TOKEN;
   const WA_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
   const X_TOKEN = process.env.X_BEARER_TOKEN;
@@ -33,7 +34,6 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
   // FACEBOOK PUBLISHING
   if (channels.includes("facebook")) {
     try {
-      // Replace this with your real Facebook Page ID
       const fbPageId = "YOUR_PAGE_ID";
 
       const message =
@@ -139,7 +139,7 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
     try {
       const tweetText =
         `Check out our new product: ${name} for R ${price}!\n\n` +
-        `${desc}\n#BusinessLift`;
+        `${desc}\n#BusinessExpo`;
 
       const xRes = await axios.post(
           "https://api.twitter.com/2/tweets",
@@ -170,9 +170,11 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
     }
   }
 
-  // Return result to frontend
   return {
     status: "completed",
     results,
   };
 });
+
+// Business Expo merchant-owned channel connection backend.
+Object.assign(exports, require("./socialConnections"));
