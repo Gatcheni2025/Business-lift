@@ -89,3 +89,4 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
 
 Object.assign(exports, require("./socialConnections"));
 Object.assign(exports, require("./sellerOperations"));
+Object.assign(exports, require("./sellerFlow"));
