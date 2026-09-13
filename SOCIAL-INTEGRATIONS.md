@@ -1,16 +1,16 @@
-# Business Expo social integrations
+# Business Expo selling connections
 
-Business Expo includes Firebase Cloud Functions for merchant-owned social and commerce channel connections.
+Business Expo uses Firebase Cloud Functions to connect seller-owned commerce accounts and only shows **Connected** after the backend has a usable account.
 
-## Included
+## Seller-facing flow
 
-- Meta OAuth for Facebook Pages and Instagram professional accounts
-- Google OAuth for Merchant API access
-- WhatsApp Business Embedded Signup completion endpoint
-- Secure OAuth state signing
-- Admin-only token storage under `integrations/{businessId}/channels/{provider}`
-- Connection status and disconnect callables
-- Dashboard client module: `js/social-connections.js`
+1. Open `sales-channels.html`.
+2. Connect Meta, Google or WhatsApp Business.
+3. If the seller manages more than one Facebook Page or Google Merchant account, choose the account Business Expo should use.
+4. The page shows a green **Connected** confirmation only after the account is selected and stored server-side.
+5. Return to `seller-onboarding.html` to continue delivery, payment and audience setup.
+
+Facebook and Instagram intentionally use **one Meta connection**. Instagram is discovered from the professional Instagram account linked to the selected Facebook Page.
 
 ## Required Firebase secrets
 
@@ -22,11 +22,38 @@ firebase functions:secrets:set GOOGLE_CLIENT_SECRET
 firebase functions:secrets:set OAUTH_STATE_SECRET
 ```
 
-Set `APP_URL` and `FUNCTIONS_BASE_URL` for the deployed environment. Register the generated `socialOAuthCallback` URL in both Meta and Google developer consoles.
+## Required Functions configuration
+
+Set these values for the deployed environment:
+
+- `APP_URL`
+- `FUNCTIONS_BASE_URL`
+- `META_GRAPH_VERSION`
+- `META_WHATSAPP_CONFIG_ID`
+
+`META_WHATSAPP_CONFIG_ID` is the Configuration ID created in **Meta → Facebook Login for Business → Configurations → WhatsApp Embedded Signup**. The seller-facing WhatsApp Connect button will explain that setup is unavailable until this value is configured.
+
+## OAuth callback
+
+Register this callback in Meta and Google using the actual deployed Functions region/domain:
+
+```text
+https://us-central1-business-lift-3c19c.cloudfunctions.net/socialOAuthCallback
+```
+
+The callback safely returns the seller to either Selling Connections or Seller Setup and does not allow arbitrary redirect paths.
+
+## What the backend verifies
+
+- **Meta:** OAuth succeeds and an accessible Facebook Page is selected. If multiple Pages exist, the seller must choose one before the status becomes Connected.
+- **Google:** OAuth succeeds and an accessible Merchant Center account is found. If multiple accounts exist, the seller must choose one.
+- **WhatsApp:** Embedded Signup returns a WABA ID and phone-number ID, the backend exchanges the code, fetches the phone record, stores the connection and attempts to subscribe the app to the WABA.
+
+Google account discovery uses the Merchant API `accounts.list` endpoint with the `https://www.googleapis.com/auth/content` OAuth scope.
 
 ## Firestore security
 
-Provider credentials must never be client-readable. Add a deny rule for the integration token path:
+Provider credentials must never be client-readable:
 
 ```text
 match /integrations/{businessId} {
@@ -41,11 +68,13 @@ Cloud Functions use the Admin SDK and are not blocked by these client rules.
 
 ## Deployment sequence
 
-1. Configure Meta and Google apps.
+1. Configure Meta, Google and WhatsApp Embedded Signup.
 2. Set the Firebase secrets above.
-3. Add the OAuth callback URL to Meta and Google.
-4. Merge the Firestore deny rule into your existing rules.
-5. Deploy functions with `firebase deploy --only functions`.
-6. Deploy hosting after the dashboard changes are merged.
+3. Set `META_WHATSAPP_CONFIG_ID`, `APP_URL` and `FUNCTIONS_BASE_URL`.
+4. Add the OAuth callback URL to Meta and Google.
+5. Confirm the Firestore deny rule for `/integrations/**`.
+6. Deploy Functions: `firebase deploy --only functions`.
+7. Deploy Hosting.
+8. Test with one real seller account and confirm each green Connected state.
 
-Meta permissions can require App Review / Business Verification before production users can grant advanced permissions.
+Meta production permissions can require App Review and Business Verification.
