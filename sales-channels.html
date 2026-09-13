@@ -3,96 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expose Network | Business Expose</title>
+    <title>Connected Channels | Business Expo</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="assets/styles.css">
     <style>
-        .expose-master-card { background: var(--brand-primary); color: white; border-radius: 16px; padding: 32px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px;}
-        .expose-master-card h2 { font-size: 1.8rem; margin-bottom: 8px; }
-        .expose-master-card p { color: #cbd5e1; max-width: 500px; line-height: 1.5; }
-        .status-badge { background: #10b981; color: white; padding: 6px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
+        .channel-hero { background: linear-gradient(135deg,#063d2d,#0a6a49); color:white; border-radius:22px; padding:32px; margin-bottom:28px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+        .channel-hero h2 { font-size:2rem; margin:0 0 8px; font-family:'Plus Jakarta Sans',sans-serif; }
+        .channel-hero p { max-width:720px; color:#d7e7df; margin:0; line-height:1.6; }
+        .channel-grid-live { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; }
+        .channel-card-live { background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:22px; box-shadow:0 8px 24px rgba(15,23,42,.04); }
+        .channel-head { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+        .channel-icon { width:48px; height:48px; border-radius:14px; display:grid; place-items:center; font-size:25px; background:#f8fafc; }
+        .channel-card-live h3 { margin:0; font-size:1rem; }
+        .channel-card-live p { color:#64748b; font-size:.86rem; line-height:1.55; min-height:54px; }
+        .connect-btn { width:100%; border:0; border-radius:10px; padding:12px 14px; background:#0a6a49; color:#fff; font-weight:800; cursor:pointer; }
+        .connect-btn.connected { background:#e9f7ef; color:#146c43; border:1px solid #ccebdc; }
+        .connect-btn:disabled { opacity:.6; cursor:not-allowed; }
+        .notice { margin-top:22px; background:#fffbeb; border:1px solid #fde68a; color:#854d0e; padding:16px 18px; border-radius:14px; font-size:.86rem; line-height:1.55; }
+        .top-actions { display:flex; gap:10px; flex-wrap:wrap; }
+        .back-link { display:inline-flex; align-items:center; gap:7px; text-decoration:none; color:#475569; font-weight:700; }
+        @media(max-width:700px){.channel-hero{align-items:flex-start;flex-direction:column}.channel-hero h2{font-size:1.6rem}}
     </style>
 </head>
 <body class="app-shell">
-    
-    <!-- Assume standard Sidebar here -->
-    
-    <div class="main-panel">
+    <div class="main-panel" style="width:100%">
         <header class="topbar">
             <div>
-                <p class="eyebrow">Auto-Distribution</p>
-                <h1>Expose Network</h1>
+                <p class="eyebrow">BUSINESS EXPO</p>
+                <h1>Connected Channels</h1>
+            </div>
+            <div class="top-actions">
+                <a class="back-link" href="dashboard.html"><i class="ph ph-arrow-left"></i> Dashboard</a>
             </div>
         </header>
 
         <main class="page-main">
-            <!-- Master Control -->
-            <div class="expose-master-card">
+            <section class="channel-hero">
                 <div>
-                    <h2>The Expose Engine</h2>
-                    <p>Business Expose acts as your central merchant aggregate. You do not need to register developer accounts or configure APIs on third-party sites. We push your inventory globally via our verified partner feeds.</p>
+                    <h2>Connect once. Sell from one workspace.</h2>
+                    <p>Authorize the business accounts you already own. Business Expo keeps provider credentials on the server and only shows safe connection status in the dashboard.</p>
                 </div>
-                <div>
-                    <span class="status-badge"><i class="ph ph-check-circle"></i> ENGINE ACTIVE</span>
-                </div>
-            </div>
+                <div style="font-size:48px">🔗</div>
+            </section>
 
-            <section class="section-grid two-up">
-                <!-- Partner Networks -->
-                <article class="section-card">
-                    <p class="eyebrow">Managed Integrations</p>
-                    <h3>Active Broadcasting Channels</h3>
-                    <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 16px;">These channels are receiving automated updates whenever you add or edit a product.</p>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                        <div style="display:flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-                            <div style="display:flex; align-items:center; gap: 12px;">
-                                <i class="ph ph-google-logo" style="font-size: 2rem; color: #DB4437;"></i>
-                                <div>
-                                    <strong>Google Merchant Center</strong><br>
-                                    <span style="font-size:0.8rem; color:#64748b;">Syncs to Google Shopping & Search</span>
-                                </div>
-                            </div>
-                            <span style="color: #10b981; font-weight:600; font-size:0.85rem;">Active</span>
-                        </div>
-
-                        <div style="display:flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-                            <div style="display:flex; align-items:center; gap: 12px;">
-                                <i class="ph ph-whatsapp-logo" style="font-size: 2rem; color: #25D366;"></i>
-                                <div>
-                                    <strong>WhatsApp Commerce</strong><br>
-                                    <span style="font-size:0.8rem; color:#64748b;">Direct catalog injection</span>
-                                </div>
-                            </div>
-                            <span style="color: #10b981; font-weight:600; font-size:0.85rem;">Active</span>
-                        </div>
-
-                        <div style="display:flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-                            <div style="display:flex; align-items:center; gap: 12px;">
-                                <i class="ph ph-facebook-logo" style="font-size: 2rem; color: #1877F2;"></i>
-                                <div>
-                                    <strong>Meta Network</strong><br>
-                                    <span style="font-size:0.8rem; color:#64748b;">Facebook & Instagram Shops</span>
-                                </div>
-                            </div>
-                            <span style="color: #10b981; font-weight:600; font-size:0.85rem;">Active</span>
-                        </div>
+            <section class="channel-grid-live">
+                <article class="channel-card-live">
+                    <div class="channel-head">
+                        <div class="channel-icon" style="color:#4285f4"><i class="ph ph-google-logo"></i></div>
+                        <div><h3>Google Merchant Center</h3><small style="color:#64748b">Shopping & Merchant API</small></div>
                     </div>
+                    <p>Connect a Merchant Center account so Business Expo can sync approved product data to Google commerce surfaces.</p>
+                    <button class="connect-btn" data-social-provider="google">Connect</button>
                 </article>
 
-                <article class="section-card">
-                    <p class="eyebrow">Analytics</p>
-                    <h3>Cross-Platform Traffic</h3>
-                    <ul class="list-clean">
-                        <li><strong>Google:</strong> 1,204 Views this week</li>
-                        <li><strong>WhatsApp:</strong> 342 Catalog loads</li>
-                        <li><strong>Instagram:</strong> 854 Impressions</li>
-                    </ul>
-                    <a href="dashboard.html" class="button button-secondary" style="margin-top: 24px; width:100%;">View Full Analytics</a>
+                <article class="channel-card-live">
+                    <div class="channel-head">
+                        <div class="channel-icon" style="color:#1877f2"><i class="ph ph-facebook-logo"></i></div>
+                        <div><h3>Facebook</h3><small style="color:#64748b">Pages & commerce publishing</small></div>
+                    </div>
+                    <p>Authorize your Meta account and choose the Facebook Page Business Expo should use for publishing.</p>
+                    <button class="connect-btn" data-social-provider="facebook">Connect</button>
+                </article>
+
+                <article class="channel-card-live">
+                    <div class="channel-head">
+                        <div class="channel-icon" style="color:#e1306c"><i class="ph ph-instagram-logo"></i></div>
+                        <div><h3>Instagram</h3><small style="color:#64748b">Professional account</small></div>
+                    </div>
+                    <p>Instagram uses the same Meta authorization. A professional Instagram account linked to the selected Page can be discovered automatically.</p>
+                    <button class="connect-btn" data-social-provider="instagram">Connect</button>
+                </article>
+
+                <article class="channel-card-live">
+                    <div class="channel-head">
+                        <div class="channel-icon" style="color:#25d366"><i class="ph ph-whatsapp-logo"></i></div>
+                        <div><h3>WhatsApp Business</h3><small style="color:#64748b">Cloud API / Embedded Signup</small></div>
+                    </div>
+                    <p>Connect a WhatsApp Business Account using Meta Embedded Signup after it is enabled in your Meta developer application.</p>
+                    <button class="connect-btn" data-social-provider="whatsapp">Connect</button>
                 </article>
             </section>
+
+            <div class="notice">
+                <strong>Setup required before production:</strong> Meta permissions can require App Review and Business Verification. Google and Meta redirect URLs must point to the deployed <code>socialOAuthCallback</code> Cloud Function. See <strong>SOCIAL-INTEGRATIONS.md</strong> in this repository.
+            </div>
         </main>
     </div>
+
+    <script type="module" src="./js/social-connections.js"></script>
 </body>
 </html>
