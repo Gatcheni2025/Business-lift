@@ -5,7 +5,6 @@ const axios = require("axios");
 admin.initializeApp();
 
 exports.publishProduct = functions.https.onCall(async (data, context) => {
-  // SECURITY CHECK
   if (!context.auth) {
     throw new functions.https.HttpsError(
         "unauthenticated",
@@ -13,7 +12,6 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
     );
   }
 
-  // Extract data sent from your frontend
   const {
     name,
     price,
@@ -24,53 +22,29 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
   } = data;
 
   const results = {};
-
-  // Legacy publishing credentials. New social account connections are handled
-  // by functions/socialConnections.js and stored per business in Firestore.
   const META_TOKEN = process.env.META_ACCESS_TOKEN;
   const WA_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
   const X_TOKEN = process.env.X_BEARER_TOKEN;
 
-  // FACEBOOK PUBLISHING
   if (channels.includes("facebook")) {
     try {
       const fbPageId = "YOUR_PAGE_ID";
-
-      const message =
-        `🌟 New Product Alert: ${name} 🌟\n\n` +
+      const message = `🌟 New Product Alert: ${name} 🌟\n\n` +
         `Price: R ${price}\n\n${desc}`;
-
       const fbRes = await axios.post(
           `https://graph.facebook.com/v18.0/${fbPageId}/photos`,
-          {
-            url: imageUrl,
-            caption: message,
-            access_token: META_TOKEN,
-          },
+          {url: imageUrl, caption: message, access_token: META_TOKEN},
       );
-
-      results.facebook = {
-        status: "success",
-        id: fbRes.data.id,
-      };
+      results.facebook = {status: "success", id: fbRes.data.id};
     } catch (error) {
-      console.error(
-          "Facebook Error:",
-          (error.response && error.response.data) || error.message,
-      );
-
-      results.facebook = {
-        status: "error",
-        message: "Failed to post to Facebook",
-      };
+      console.error("Facebook Error:", (error.response && error.response.data) || error.message);
+      results.facebook = {status: "error", message: "Failed to post to Facebook"};
     }
   }
 
-  // WHATSAPP PUBLISHING
   if (channels.includes("whatsapp") && whatsappNumber) {
     try {
       const cleanNumber = whatsappNumber.replace(/\D/g, "");
-
       const waRes = await axios.post(
           `https://graph.facebook.com/v18.0/${WA_PHONE_ID}/messages`,
           {
@@ -79,102 +53,39 @@ exports.publishProduct = functions.https.onCall(async (data, context) => {
             type: "template",
             template: {
               name: "new_product_alert",
-              language: {
-                code: "en_US",
-              },
+              language: {code: "en_US"},
               components: [
-                {
-                  type: "header",
-                  parameters: [
-                    {
-                      type: "image",
-                      image: {
-                        link: imageUrl,
-                      },
-                    },
-                  ],
-                },
-                {
-                  type: "body",
-                  parameters: [
-                    {
-                      type: "text",
-                      text: name,
-                    },
-                    {
-                      type: "text",
-                      text: `R ${price}`,
-                    },
-                  ],
-                },
+                {type: "header", parameters: [{type: "image", image: {link: imageUrl}}]},
+                {type: "body", parameters: [{type: "text", text: name}, {type: "text", text: `R ${price}`}]},
               ],
             },
           },
-          {
-            headers: {
-              Authorization: `Bearer ${META_TOKEN}`,
-            },
-          },
+          {headers: {Authorization: `Bearer ${META_TOKEN}`}},
       );
-
-      results.whatsapp = {
-        status: "success",
-        id: waRes.data.messages[0].id,
-      };
+      results.whatsapp = {status: "success", id: waRes.data.messages[0].id};
     } catch (error) {
-      console.error(
-          "WhatsApp Error:",
-          (error.response && error.response.data) || error.message,
-      );
-
-      results.whatsapp = {
-        status: "error",
-        message: "Failed to send WhatsApp message",
-      };
+      console.error("WhatsApp Error:", (error.response && error.response.data) || error.message);
+      results.whatsapp = {status: "error", message: "Failed to send WhatsApp message"};
     }
   }
 
-  // X / TWITTER PUBLISHING
   if (channels.includes("x")) {
     try {
-      const tweetText =
-        `Check out our new product: ${name} for R ${price}!\n\n` +
-        `${desc}\n#BusinessExpo`;
-
+      const tweetText = `Check out our new product: ${name} for R ${price}!\n\n${desc}\n#BusinessExpo`;
       const xRes = await axios.post(
           "https://api.twitter.com/2/tweets",
-          {
-            text: tweetText,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${X_TOKEN}`,
-            },
-          },
+          {text: tweetText},
+          {headers: {Authorization: `Bearer ${X_TOKEN}`}},
       );
-
-      results.x = {
-        status: "success",
-        id: xRes.data.data.id,
-      };
+      results.x = {status: "success", id: xRes.data.data.id};
     } catch (error) {
-      console.error(
-          "X Error:",
-          (error.response && error.response.data) || error.message,
-      );
-
-      results.x = {
-        status: "error",
-        message: "Failed to post to X",
-      };
+      console.error("X Error:", (error.response && error.response.data) || error.message);
+      results.x = {status: "error", message: "Failed to post to X"};
     }
   }
 
-  return {
-    status: "completed",
-    results,
-  };
+  return {status: "completed", results};
 });
 
-// Business Expo merchant-owned channel connection backend.
 Object.assign(exports, require("./socialConnections"));
+Object.assign(exports, require("./sellerOperations"));
