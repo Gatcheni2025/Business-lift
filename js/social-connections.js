@@ -1,22 +1,37 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
-import {collection, getDocs, limit, query, where} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {collection, doc, getDoc, getDocs, limit, query, where} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {app, auth, db} from "./firebase-config.js";
 
 const functions = getFunctions(app);
 const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
 const getConnections = httpsCallable(functions, "getChannelConnections");
 const disconnectChannel = httpsCallable(functions, "disconnectChannel");
+const selectMetaPage = httpsCallable(functions, "selectMetaPage");
+const selectGoogleMerchantAccount = httpsCallable(functions, "selectGoogleMerchantAccount");
+const getWhatsAppConfig = httpsCallable(functions, "getWhatsAppEmbeddedSignupConfig");
+const completeWhatsAppSignup = httpsCallable(functions, "completeWhatsAppEmbeddedSignup");
 
-let businessId = null;
+let businessId = "";
 let connectionState = {};
+let whatsappSession = null;
+let whatsappCode = "";
 
-function notify(message) {
-  if (typeof window.toast === "function") return window.toast(message);
+function notify(message, tone = "info") {
+  const box = document.getElementById("connectionNotice");
+  if (box) {
+    box.hidden = false;
+    box.textContent = message;
+    box.dataset.tone = tone;
+    return;
+  }
   console.log(message);
 }
 
 async function resolveBusinessId(uid) {
+  const userSnap = await getDoc(doc(db, "users", uid));
+  const active = String(userSnap.data()?.activeBusinessId || "");
+  if (active) return active;
   for (const field of ["ownerId", "uid", "userId"]) {
     try {
       const snap = await getDocs(query(collection(db, "businesses"), where(field, "==", uid), limit(1)));
@@ -25,27 +40,61 @@ async function resolveBusinessId(uid) {
       console.debug(`Business lookup by ${field} skipped`, error);
     }
   }
-  return null;
+  return "";
 }
 
-function providerForKey(key) {
-  if (key === "facebook" || key === "instagram" || key === "meta") return "meta";
-  if (key === "google") return "google";
-  if (key === "whatsapp") return "whatsapp";
-  return null;
+function labelFor(provider, state) {
+  if (state?.connected) return state.displayName ? `Connected · ${state.displayName}` : "Connected";
+  if (state?.status === "needs_page") return "Choose Facebook Page";
+  if (state?.status === "needs_account") return "Choose Merchant account";
+  if (state?.status === "no_pages") return "No Facebook Page found";
+  if (state?.status === "no_accounts") return "No Merchant account found";
+  return "Not linked";
+}
+
+function renderChooser(provider, state) {
+  const target = document.querySelector(`[data-chooser="${provider}"]`);
+  if (!target) return;
+  target.innerHTML = "";
+  const items = provider === "meta" ? state.availablePages : state.availableAccounts;
+  if (!Array.isArray(items) || !items.length || state.connected) return;
+  const label = document.createElement("p");
+  label.className = "choose-label";
+  label.textContent = provider === "meta" ? "Choose the Page Business Expo should use:" : "Choose your Merchant Center account:";
+  target.appendChild(label);
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choose-account";
+    button.dataset.chooseProvider = provider;
+    button.dataset.chooseId = provider === "meta" ? item.id : item.accountId;
+    button.textContent = provider === "meta" ? item.name : (item.accountName || item.accountId);
+    target.appendChild(button);
+  });
 }
 
 function renderConnections() {
-  document.querySelectorAll("[data-social-provider], .toggle-chan-btn[data-key]").forEach((btn) => {
-    const key = btn.dataset.socialProvider || btn.dataset.key;
-    const provider = providerForKey(key);
-    if (!provider) return;
+  ["meta", "google", "whatsapp"].forEach((provider) => {
     const state = connectionState[provider] || {};
-    const connected = !!state.connected;
-    btn.disabled = false;
-    btn.textContent = connected ? `Connected ✓${state.displayName ? ` · ${state.displayName}` : ""}` : "Connect";
-    btn.classList.toggle("connected", connected);
+    const badge = document.querySelector(`[data-status="${provider}"]`);
+    const btn = document.querySelector(`[data-connect="${provider}"]`);
+    if (badge) {
+      badge.textContent = labelFor(provider, state);
+      badge.classList.toggle("connected", Boolean(state.connected));
+      badge.classList.toggle("attention", ["needs_page", "needs_account"].includes(state.status));
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = state.connected ? "Disconnect" :
+        (["needs_page", "needs_account"].includes(state.status) ? "Reconnect" : "Connect");
+      btn.classList.toggle("secondary", Boolean(state.connected));
+    }
+    renderChooser(provider, state);
   });
+
+  const complete = Object.values(connectionState).filter((v) => v?.connected).length;
+  const summary = document.getElementById("connectionSummary");
+  if (summary) summary.textContent = `${complete} external connection${complete === 1 ? "" : "s"} linked`;
 }
 
 async function refreshConnections() {
@@ -55,55 +104,144 @@ async function refreshConnections() {
   renderConnections();
 }
 
-async function startConnect(provider) {
-  if (!businessId) throw new Error("Business profile not found.");
-  if (provider === "whatsapp") {
-    notify("WhatsApp connection requires Meta Embedded Signup. Configure that in the Meta app first.");
-    return;
-  }
-  const result = await getConnectUrl({businessId, provider});
-  if (!result.data?.url) throw new Error("No OAuth URL returned.");
+function returnPath() {
+  return window.location.pathname.endsWith("seller-onboarding.html") ?
+    "/seller-onboarding.html" : "/sales-channels.html";
+}
+
+async function startOauth(provider) {
+  const result = await getConnectUrl({businessId, provider, returnTo: returnPath()});
+  if (!result.data?.url) throw new Error("No connection URL returned.");
   window.location.assign(result.data.url);
 }
 
+function loadFacebookSdk(appId, graphVersion) {
+  return new Promise((resolve, reject) => {
+    if (window.FB) return resolve(window.FB);
+    window.fbAsyncInit = () => {
+      window.FB.init({appId, cookie: true, xfbml: true, version: graphVersion});
+      resolve(window.FB);
+    };
+    const existing = document.getElementById("facebook-jssdk");
+    if (existing) return;
+    const js = document.createElement("script");
+    js.id = "facebook-jssdk";
+    js.src = "https://connect.facebook.net/en_US/sdk.js";
+    js.async = true;
+    js.defer = true;
+    js.onerror = reject;
+    document.head.appendChild(js);
+  });
+}
+
+async function finishWhatsAppIfReady() {
+  if (!whatsappCode || !whatsappSession?.waba_id || !whatsappSession?.phone_number_id) return;
+  await completeWhatsAppSignup({
+    businessId,
+    code: whatsappCode,
+    wabaId: whatsappSession.waba_id,
+    phoneNumberId: whatsappSession.phone_number_id,
+  });
+  whatsappCode = "";
+  whatsappSession = null;
+  notify("WhatsApp Business connected successfully.", "success");
+  await refreshConnections();
+}
+
+async function startWhatsApp() {
+  const config = (await getWhatsAppConfig({businessId})).data || {};
+  if (!config.configId) {
+    throw new Error("WhatsApp Embedded Signup is not configured yet. Add META_WHATSAPP_CONFIG_ID in Firebase Functions configuration.");
+  }
+  await loadFacebookSdk(config.appId, config.graphVersion || "v23.0");
+  window.addEventListener("message", async (event) => {
+    if (!event.origin.endsWith("facebook.com")) return;
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type !== "WA_EMBEDDED_SIGNUP") return;
+      if (data.event === "FINISH") {
+        whatsappSession = data.data || null;
+        await finishWhatsAppIfReady();
+      } else if (data.event === "ERROR") {
+        notify(data.data?.error_message || "WhatsApp setup failed.", "error");
+      }
+    } catch (_) {}
+  }, {once: false});
+
+  window.FB.login(async (response) => {
+    whatsappCode = response?.authResponse?.code || response?.code || "";
+    if (!whatsappCode) {
+      notify("WhatsApp setup was cancelled.", "error");
+      return;
+    }
+    try { await finishWhatsAppIfReady(); } catch (error) { notify(error.message, "error"); }
+  }, {
+    config_id: config.configId,
+    auth_type: "rerequest",
+    response_type: "code",
+    override_default_response_type: true,
+    extras: {setup: {}},
+  });
+}
+
 async function disconnect(provider) {
-  if (!businessId) return;
-  const ok = window.confirm(`Disconnect ${provider === "meta" ? "Facebook / Instagram" : provider}?`);
-  if (!ok) return;
+  if (!window.confirm(`Disconnect ${provider === "meta" ? "Facebook & Instagram" : provider}?`)) return;
   await disconnectChannel({businessId, provider});
   await refreshConnections();
-  notify("Channel disconnected.");
+  notify("Connection removed.", "success");
 }
 
 document.addEventListener("click", async (event) => {
-  const btn = event.target.closest?.("[data-social-provider], .toggle-chan-btn[data-key]");
+  const choose = event.target.closest?.("[data-choose-provider]");
+  if (choose) {
+    try {
+      choose.disabled = true;
+      if (choose.dataset.chooseProvider === "meta") {
+        await selectMetaPage({businessId, pageId: choose.dataset.chooseId});
+      } else {
+        await selectGoogleMerchantAccount({businessId, accountId: choose.dataset.chooseId});
+      }
+      await refreshConnections();
+      notify("Selling account confirmed.", "success");
+    } catch (error) {
+      notify(error.message || "Unable to select account.", "error");
+      choose.disabled = false;
+    }
+    return;
+  }
+
+  const btn = event.target.closest?.("[data-connect]");
   if (!btn) return;
-  const key = btn.dataset.socialProvider || btn.dataset.key;
-  const provider = providerForKey(key);
+  const provider = btn.dataset.connect;
   if (!provider) return;
-  event.preventDefault();
   try {
     btn.disabled = true;
     if (connectionState[provider]?.connected) await disconnect(provider);
-    else await startConnect(provider);
+    else if (provider === "whatsapp") await startWhatsApp();
+    else await startOauth(provider);
   } catch (error) {
-    console.error("Channel action failed", error);
-    notify(error.message || "Channel connection failed.");
+    console.error("Connection action failed", error);
+    notify(error.message || "Connection failed.", "error");
     btn.disabled = false;
   }
 });
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return;
+  if (!user) return window.location.href = "login.html";
   businessId = await resolveBusinessId(user.uid);
   if (!businessId) {
-    notify("Firebase business profile not found for this account.");
+    notify("Your business profile could not be found. Complete your business profile first.", "error");
     return;
   }
-  await refreshConnections();
-  const params = new URLSearchParams(location.search);
-  if (params.get("social") === "connected") {
-    notify(`${params.get("provider") || "Channel"} connected successfully.`);
-    history.replaceState({}, "", location.pathname);
+  try {
+    await refreshConnections();
+    const params = new URLSearchParams(location.search);
+    const status = params.get("social");
+    if (status === "connected") notify("Authorization received. Confirm the account shown below.", "success");
+    if (status === "error") notify("The connection could not be completed. Try again.", "error");
+    if (status === "cancelled") notify("Connection cancelled.", "error");
+  } catch (error) {
+    console.error(error);
+    notify("Unable to load selling connections.", "error");
   }
 });
