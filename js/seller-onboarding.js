@@ -5,152 +5,194 @@ import {app, auth, db} from "./firebase-config.js";
 
 const functions = getFunctions(app);
 const getConnections = httpsCallable(functions, "getChannelConnections");
-const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
 const getOps = httpsCallable(functions, "getSellerOperations");
 const saveOps = httpsCallable(functions, "saveSellerOperations");
 const saveSimple = httpsCallable(functions, "saveSellerSimplePreferences");
-const getSummary = httpsCallable(functions, "getSellerDashboardSummary");
 
 let businessId = "";
 let selectedPay = "eft";
 let selectedGender = "all";
+let currentState = {platforms: false, delivery: false, payments: false, audience: false};
 
-function markStatus(id, text, connected = true) {
+function markStatus(id, text, done = true) {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = text;
-  el.classList.toggle("connected", connected);
+  el.classList.toggle("connected", done);
 }
 
-function setPlatformStatus(provider, connected, label = "") {
-  const el = document.querySelector(`[data-status="${provider}"]`);
-  if (!el) return;
-  el.textContent = connected ? (label || "Connected") : "Not linked";
-  el.classList.toggle("connected", connected);
-  const btn = document.querySelector(`[data-connect="${provider}"]`);
-  if (btn) btn.textContent = connected ? "Reconnect" : "Connect";
+function updateFinishState() {
+  const complete = Object.values(currentState).every(Boolean);
+  const doneCount = Object.values(currentState).filter(Boolean).length;
+  const note = document.getElementById("finishNote");
+  if (note) note.textContent = complete ? "Your seller setup is complete." : `${doneCount} of 4 steps complete.`;
+  const finish = document.getElementById("finishSetup");
+  if (finish) {
+    finish.textContent = complete ? "Open dashboard →" : "Continue later →";
+    finish.classList.toggle("soft", !complete);
+  }
 }
 
-function refreshProgress(ops, connections, summary) {
-  const platformDone = Boolean(summary?.setup?.platforms || connections?.meta?.connected || connections?.google?.connected || connections?.whatsapp?.connected);
-  const deliveryDone = Boolean(summary?.setup?.delivery || ops?.delivery?.fulfilmentMode);
-  const paymentDone = Boolean(summary?.setup?.payments || ops?.banking?.bankName || ops?.payfast?.connected);
-  const audienceDone = Boolean(summary?.setup?.audience);
-  [["p1", platformDone], ["p2", deliveryDone], ["p3", paymentDone], ["p4", audienceDone]].forEach(([id, done]) => document.getElementById(id)?.classList.toggle("done", done));
-  markStatus("platformSummary", platformDone ? "Linked" : "Connect at least one", platformDone);
-  if (deliveryDone) markStatus("deliveryStatus", "Saved");
-  if (paymentDone) markStatus("paymentStatus", "Saved");
-  if (audienceDone) markStatus("audienceStatus", "Saved");
+function setStep(key, done) {
+  currentState[key] = Boolean(done);
+  const ids = {platforms: "p1", delivery: "p2", payments: "p3", audience: "p4"};
+  document.getElementById(ids[key])?.classList.toggle("done", Boolean(done));
+  updateFinishState();
+}
+
+function choosePayment(type) {
+  selectedPay = type;
+  document.querySelectorAll("[data-pay]").forEach((b) => b.classList.toggle("active", b.dataset.pay === type));
+  document.getElementById("eftFields").style.display = type === "eft" ? "grid" : "none";
+  document.getElementById("payfastFields").style.display = type === "payfast" ? "grid" : "none";
+  document.getElementById("otherFields").style.display = type === "other" ? "grid" : "none";
 }
 
 async function loadState() {
-  const [connectionsRes, opsRes, summaryRes] = await Promise.all([
+  const [connectionsRes, opsRes] = await Promise.all([
     getConnections({businessId}),
     getOps({businessId}),
-    getSummary({businessId}),
   ]);
   const connections = connectionsRes.data || {};
   const ops = opsRes.data || {};
-  const summary = summaryRes.data || {};
-  setPlatformStatus("meta", Boolean(connections.meta?.connected), connections.meta?.displayName || "Connected");
-  setPlatformStatus("google", Boolean(connections.google?.connected), connections.google?.displayName || "Connected");
-  setPlatformStatus("whatsapp", Boolean(connections.whatsapp?.connected), connections.whatsapp?.displayName || "Connected");
+  const linked = [connections.meta, connections.google, connections.whatsapp].filter((v) => v?.connected);
+  const platformDone = linked.length > 0;
+  document.getElementById("connectionCount").textContent = platformDone ?
+    `${linked.length} external selling connection${linked.length === 1 ? "" : "s"} linked` :
+    "No external selling platforms linked yet";
+  markStatus("platformSummary", platformDone ? "Connected" : "Not linked", platformDone);
+  setStep("platforms", platformDone);
 
   if (ops.delivery) {
     document.getElementById("deliveryMethod").value = ops.delivery.fulfilmentMode || "courier";
     document.getElementById("deliveryProvider").value = ops.delivery.courierPreference || "";
     document.getElementById("dispatchAddress").value = ops.delivery.pickupAddress || "";
     document.getElementById("deliveryFee").value = ops.delivery.baseDeliveryFee || 0;
+    markStatus("deliveryStatus", "Saved");
+    setStep("delivery", Boolean(ops.delivery.fulfilmentMode));
   }
+
   if (ops.banking) {
     document.getElementById("bankName").value = ops.banking.bankName || "";
     document.getElementById("accountHolder").value = ops.banking.accountHolder || "";
     document.getElementById("branchCode").value = ops.banking.branchCode || "";
-    if (ops.banking.accountNumberLast4) document.getElementById("accountNumber").placeholder = `Saved account ending ${ops.banking.accountNumberLast4}`;
-  }
-  if (ops.payfast) {
+    if (ops.banking.accountNumberLast4) {
+      document.getElementById("accountNumber").placeholder = `Saved account ending ${ops.banking.accountNumberLast4}`;
+    }
+    choosePayment("eft");
+  } else if (ops.payfast?.connected) {
     document.getElementById("payfastMerchantId").value = ops.payfast.merchantId || "";
     document.getElementById("payfastSandbox").value = String(Boolean(ops.payfast.sandboxMode));
+    choosePayment("payfast");
+  } else if (ops.paymentPreferences?.otherGateway) {
+    document.getElementById("otherGateway").value = ops.paymentPreferences.otherGateway || "";
+    document.getElementById("otherReference").value = ops.paymentPreferences.otherReference || "";
+    choosePayment("other");
   }
-  refreshProgress(ops, connections, summary);
+  const paymentDone = Boolean(ops.banking?.bankName || ops.payfast?.connected || ops.paymentPreferences?.otherGateway);
+  if (paymentDone) markStatus("paymentStatus", "Saved");
+  setStep("payments", paymentDone);
+
+  if (ops.audience) {
+    selectedGender = ops.audience.gender || "all";
+    document.querySelectorAll("[data-gender]").forEach((b) => b.classList.toggle("active", b.dataset.gender === selectedGender));
+    document.getElementById("ageRange").value = ops.audience.ageRange || "All adults";
+    document.getElementById("targetArea").value = ops.audience.targetArea || "";
+    markStatus("audienceStatus", "Saved");
+    setStep("audience", Boolean(ops.audience.gender));
+  }
 }
 
-document.querySelectorAll("[data-connect]").forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    btn.disabled = true;
-    const original = btn.textContent;
-    btn.textContent = "Opening...";
-    try {
-      const result = await getConnectUrl({businessId, provider: btn.dataset.connect});
-      if (!result.data?.url) throw new Error("No connection URL returned");
-      window.location.href = result.data.url;
-    } catch (error) {
-      alert(error.message || "Unable to start connection.");
-      btn.disabled = false;
-      btn.textContent = original;
-    }
-  });
-});
-
-document.querySelectorAll("[data-pay]").forEach((btn) => btn.addEventListener("click", () => {
-  selectedPay = btn.dataset.pay;
-  document.querySelectorAll("[data-pay]").forEach((b) => b.classList.toggle("active", b === btn));
-  document.getElementById("eftFields").style.display = selectedPay === "eft" ? "grid" : "none";
-  document.getElementById("payfastFields").style.display = selectedPay === "payfast" ? "grid" : "none";
-  document.getElementById("otherFields").style.display = selectedPay === "other" ? "grid" : "none";
-}));
+document.querySelectorAll("[data-pay]").forEach((btn) => btn.addEventListener("click", () => choosePayment(btn.dataset.pay)));
 
 document.querySelectorAll("[data-gender]").forEach((btn) => btn.addEventListener("click", () => {
   selectedGender = btn.dataset.gender;
   document.querySelectorAll("[data-gender]").forEach((b) => b.classList.toggle("active", b === btn));
 }));
 
-document.getElementById("saveDelivery")?.addEventListener("click", async () => {
-  await saveOps({businessId, section: "delivery", data: {
-    fulfilmentMode: document.getElementById("deliveryMethod").value,
-    courierPreference: document.getElementById("deliveryProvider").value,
-    pickupAddress: document.getElementById("dispatchAddress").value,
-    baseDeliveryFee: Number(document.getElementById("deliveryFee").value || 0),
-    trackingEnabled: true,
-  }});
-  markStatus("deliveryStatus", "Saved"); document.getElementById("p2")?.classList.add("done");
-});
-
-document.getElementById("savePayments")?.addEventListener("click", async () => {
-  if (selectedPay === "eft") {
-    const accountNumber = document.getElementById("accountNumber").value;
-    if (!accountNumber && !document.getElementById("accountNumber").placeholder.includes("ending")) return alert("Enter the bank account number.");
-    if (accountNumber) await saveOps({businessId, section: "banking", data: {
-      bankName: document.getElementById("bankName").value,
-      accountHolder: document.getElementById("accountHolder").value,
-      accountNumber,
-      branchCode: document.getElementById("branchCode").value,
-      accountType: "Business",
+document.getElementById("saveDelivery")?.addEventListener("click", async (event) => {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    await saveOps({businessId, section: "delivery", data: {
+      fulfilmentMode: document.getElementById("deliveryMethod").value,
+      courierPreference: document.getElementById("deliveryProvider").value,
+      pickupAddress: document.getElementById("dispatchAddress").value,
+      baseDeliveryFee: Number(document.getElementById("deliveryFee").value || 0),
+      trackingEnabled: true,
     }});
-  } else if (selectedPay === "payfast") {
-    await saveOps({businessId, section: "payfast", data: {
-      merchantId: document.getElementById("payfastMerchantId").value,
-      merchantKey: document.getElementById("payfastMerchantKey").value,
-      passphrase: document.getElementById("payfastPassphrase").value,
-      sandboxMode: document.getElementById("payfastSandbox").value === "true",
-      splitPaymentsEnabled: true,
-    }});
-  } else {
-    await saveSimple({businessId, section: "paymentPreferences", data: {
-      otherGateway: document.getElementById("otherGateway").value,
-      otherReference: document.getElementById("otherReference").value,
-    }});
+    markStatus("deliveryStatus", "Saved");
+    setStep("delivery", true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save delivery";
   }
-  markStatus("paymentStatus", "Saved"); document.getElementById("p3")?.classList.add("done");
 });
 
-document.getElementById("saveAudience")?.addEventListener("click", async () => {
-  await saveSimple({businessId, section: "audience", data: {
-    gender: selectedGender,
-    ageRange: document.getElementById("ageRange").value,
-    targetArea: document.getElementById("targetArea").value,
-  }});
-  markStatus("audienceStatus", "Saved"); document.getElementById("p4")?.classList.add("done");
+document.getElementById("savePayments")?.addEventListener("click", async (event) => {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    if (selectedPay === "eft") {
+      const accountNumber = document.getElementById("accountNumber").value;
+      const alreadySaved = document.getElementById("accountNumber").placeholder.includes("ending");
+      if (!accountNumber && !alreadySaved) throw new Error("Enter the bank account number.");
+      if (accountNumber) {
+        await saveOps({businessId, section: "banking", data: {
+          bankName: document.getElementById("bankName").value,
+          accountHolder: document.getElementById("accountHolder").value,
+          accountNumber,
+          branchCode: document.getElementById("branchCode").value,
+          accountType: "Business",
+        }});
+      }
+    } else if (selectedPay === "payfast") {
+      const merchantId = document.getElementById("payfastMerchantId").value;
+      const merchantKey = document.getElementById("payfastMerchantKey").value;
+      if (!merchantId || !merchantKey) throw new Error("Enter your PayFast Merchant ID and Merchant Key.");
+      await saveOps({businessId, section: "payfast", data: {
+        merchantId,
+        merchantKey,
+        passphrase: document.getElementById("payfastPassphrase").value,
+        sandboxMode: document.getElementById("payfastSandbox").value === "true",
+        splitPaymentsEnabled: true,
+      }});
+    } else {
+      const otherGateway = document.getElementById("otherGateway").value.trim();
+      if (!otherGateway) throw new Error("Enter the payment gateway name.");
+      await saveSimple({businessId, section: "paymentPreferences", data: {
+        otherGateway,
+        otherReference: document.getElementById("otherReference").value,
+      }});
+    }
+    markStatus("paymentStatus", "Saved");
+    setStep("payments", true);
+  } catch (error) {
+    alert(error.message || "Unable to save payment settings.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save payment option";
+  }
+});
+
+document.getElementById("saveAudience")?.addEventListener("click", async (event) => {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    await saveSimple({businessId, section: "audience", data: {
+      gender: selectedGender,
+      ageRange: document.getElementById("ageRange").value,
+      targetArea: document.getElementById("targetArea").value,
+    }});
+    markStatus("audienceStatus", "Saved");
+    setStep("audience", true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save audience";
+  }
 });
 
 onAuthStateChanged(auth, async (user) => {
@@ -158,5 +200,5 @@ onAuthStateChanged(auth, async (user) => {
   const userSnap = await getDoc(doc(db, "users", user.uid));
   businessId = String(userSnap.data()?.activeBusinessId || "");
   if (!businessId) return window.location.href = "business-profile.html";
-  try { await loadState(); } catch (error) { console.error(error); markStatus("platformSummary", "Setup unavailable", false); }
+  try { await loadState(); } catch (error) { console.error("Seller setup load failed", error); }
 });
