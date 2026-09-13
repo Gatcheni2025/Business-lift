@@ -23,10 +23,10 @@ export function initializeDashboardUI() {
     navList.innerHTML = `
       <a href="dashboard.html" class="nav-link active"><i class="ph ph-house"></i> Dashboard</a>
       <a href="#wizardPanel" class="nav-link"><i class="ph ph-plus-circle"></i> Sell More</a>
-      <a href="seller-onboarding.html" class="nav-link"><i class="ph ph-plugs-connected"></i> Connections</a>
+      <a href="sales-channels.html?return=dashboard" class="nav-link"><i class="ph ph-plugs-connected"></i> Connections</a>
       <a href="orders.html" class="nav-link"><i class="ph ph-receipt"></i> Orders</a>
       <a href="shop-settings.html" class="nav-link"><i class="ph ph-gear"></i> Shop Settings</a>
-      <a href="seller-setup.html#partner" class="nav-link"><i class="ph ph-handshake"></i> Network</a>
+      <a href="network.html" class="nav-link"><i class="ph ph-handshake"></i> Network</a>
     `;
   }
 
@@ -35,8 +35,8 @@ export function initializeDashboardUI() {
     const quick = document.createElement("a");
     quick.id = "sellerSetupQuickLink";
     quick.href = "seller-onboarding.html";
-    quick.title = "Seller setup";
-    quick.innerHTML = '<i class="ph ph-sliders-horizontal"></i>';
+    quick.title = "Seller setup guide";
+    quick.innerHTML = '<i class="ph ph-list-checks"></i>';
     quick.style.cssText = "width:40px;height:40px;border-radius:10px;border:1px solid #e2e8f0;background:white;color:#0f172a;display:grid;place-items:center;text-decoration:none;font-size:19px";
     if (profile) profile.before(quick); else topbar.appendChild(quick);
   }
