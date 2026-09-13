@@ -8,6 +8,8 @@ const getConnections = httpsCallable(functions, "getChannelConnections");
 const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
 const getOps = httpsCallable(functions, "getSellerOperations");
 const saveOps = httpsCallable(functions, "saveSellerOperations");
+const saveSimple = httpsCallable(functions, "saveSellerSimplePreferences");
+const getSummary = httpsCallable(functions, "getSellerDashboardSummary");
 
 let businessId = "";
 let selectedPay = "eft";
@@ -29,11 +31,11 @@ function setPlatformStatus(provider, connected, label = "") {
   if (btn) btn.textContent = connected ? "Reconnect" : "Connect";
 }
 
-function refreshProgress(ops, connections) {
-  const platformDone = Boolean(connections?.meta?.connected || connections?.google?.connected || connections?.whatsapp?.connected);
-  const deliveryDone = Boolean(ops?.delivery?.fulfilmentMode);
-  const paymentDone = Boolean(ops?.banking?.bankName || ops?.payfast?.connected || ops?.paymentPreferences?.otherGateway);
-  const audienceDone = Boolean(ops?.audience?.gender);
+function refreshProgress(ops, connections, summary) {
+  const platformDone = Boolean(summary?.setup?.platforms || connections?.meta?.connected || connections?.google?.connected || connections?.whatsapp?.connected);
+  const deliveryDone = Boolean(summary?.setup?.delivery || ops?.delivery?.fulfilmentMode);
+  const paymentDone = Boolean(summary?.setup?.payments || ops?.banking?.bankName || ops?.payfast?.connected);
+  const audienceDone = Boolean(summary?.setup?.audience);
   [["p1", platformDone], ["p2", deliveryDone], ["p3", paymentDone], ["p4", audienceDone]].forEach(([id, done]) => document.getElementById(id)?.classList.toggle("done", done));
   markStatus("platformSummary", platformDone ? "Linked" : "Connect at least one", platformDone);
   if (deliveryDone) markStatus("deliveryStatus", "Saved");
@@ -42,12 +44,14 @@ function refreshProgress(ops, connections) {
 }
 
 async function loadState() {
-  const [connectionsRes, opsRes] = await Promise.all([
+  const [connectionsRes, opsRes, summaryRes] = await Promise.all([
     getConnections({businessId}),
     getOps({businessId}),
+    getSummary({businessId}),
   ]);
   const connections = connectionsRes.data || {};
   const ops = opsRes.data || {};
+  const summary = summaryRes.data || {};
   setPlatformStatus("meta", Boolean(connections.meta?.connected), connections.meta?.displayName || "Connected");
   setPlatformStatus("google", Boolean(connections.google?.connected), connections.google?.displayName || "Connected");
   setPlatformStatus("whatsapp", Boolean(connections.whatsapp?.connected), connections.whatsapp?.displayName || "Connected");
@@ -68,13 +72,7 @@ async function loadState() {
     document.getElementById("payfastMerchantId").value = ops.payfast.merchantId || "";
     document.getElementById("payfastSandbox").value = String(Boolean(ops.payfast.sandboxMode));
   }
-  if (ops.audience) {
-    selectedGender = ops.audience.gender || "all";
-    document.querySelectorAll("[data-gender]").forEach((b) => b.classList.toggle("active", b.dataset.gender === selectedGender));
-    document.getElementById("ageRange").value = ops.audience.ageRange || "All adults";
-    document.getElementById("targetArea").value = ops.audience.targetArea || "";
-  }
-  refreshProgress(ops, connections);
+  refreshProgress(ops, connections, summary);
 }
 
 document.querySelectorAll("[data-connect]").forEach((btn) => {
@@ -138,7 +136,7 @@ document.getElementById("savePayments")?.addEventListener("click", async () => {
       splitPaymentsEnabled: true,
     }});
   } else {
-    await saveOps({businessId, section: "paymentPreferences", data: {
+    await saveSimple({businessId, section: "paymentPreferences", data: {
       otherGateway: document.getElementById("otherGateway").value,
       otherReference: document.getElementById("otherReference").value,
     }});
@@ -147,7 +145,7 @@ document.getElementById("savePayments")?.addEventListener("click", async () => {
 });
 
 document.getElementById("saveAudience")?.addEventListener("click", async () => {
-  await saveOps({businessId, section: "audience", data: {
+  await saveSimple({businessId, section: "audience", data: {
     gender: selectedGender,
     ageRange: document.getElementById("ageRange").value,
     targetArea: document.getElementById("targetArea").value,
