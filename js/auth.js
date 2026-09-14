@@ -7,13 +7,8 @@ import {
     updateProfile
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-import {
-    doc,
-    writeBatch,
-    serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-import { auth, db } from "./firebase-config.js";
+import { auth } from "./firebase-config.js";
+import { apiFetch } from "./api-client.js";
 
 let authSubmission = false;
 let pendingRegistrationUser = null;
@@ -25,10 +20,7 @@ const logoutButtons = document.querySelectorAll("[data-logout], [data-sign-out]"
 
 function showStatus(message, type = "error") {
     const status = document.querySelector("[data-auth-status]");
-    if (!status) {
-        return;
-    }
-
+    if (!status) return;
     status.hidden = false;
     status.textContent = message;
     status.classList.remove("success", "error");
@@ -38,13 +30,7 @@ function showStatus(message, type = "error") {
 function getRedirectTarget() {
     const target = new URLSearchParams(window.location.search).get("redirect") || "dashboard.html";
     const allowed = new Set(["dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "website-builder.html", "domains.html", "store.html", "network.html"]);
-    // Only known workspace pages are valid return destinations.
     return allowed.has(target.split(/[?#]/)[0]) && !target.includes("\\") ? target : "dashboard.html";
-}
-
-function generateBusinessId() {
-    const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-    return `BL_${random}`;
 }
 
 function mapAuthError(error, fallback) {
@@ -59,90 +45,40 @@ function mapAuthError(error, fallback) {
         "auth/user-disabled": "This account has been disabled.",
         "auth/weak-password": "Your password is too weak. Use at least 6 characters."
     };
-
-    return messages[error?.code] || fallback;
+    return messages[error?.code] || error?.message || fallback;
 }
 
 if (registerForm) {
     registerForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-
         const submitButton = registerForm.querySelector('button[type="submit"]');
-        if (!(submitButton instanceof HTMLButtonElement)) {
-            return;
-        }
+        if (!(submitButton instanceof HTMLButtonElement)) return;
 
         authSubmission = true;
         submitButton.disabled = true;
         submitButton.textContent = "Creating workspace...";
-
         const formData = new FormData(registerForm);
-
         const firstName = String(formData.get("first-name") || "").trim();
         const lastName = String(formData.get("last-name") || "").trim();
         const email = String(formData.get("email") || "").trim();
         const password = String(formData.get("password") || "");
-
         const businessName = String(formData.get("business-name") || "").trim();
         const businessType = String(formData.get("business-type") || "").trim();
         const industry = String(formData.get("industry") || "").trim();
         const country = String(formData.get("country") || "").trim();
-        const plan = String(formData.get("plan") || "start").trim();
 
         try {
             const user = pendingRegistrationUser || (await createUserWithEmailAndPassword(auth, email, password)).user;
             pendingRegistrationUser = user;
-            const batch = writeBatch(db);
-
-            await updateProfile(user, {
-                displayName: `${firstName} ${lastName}`.trim()
+            await updateProfile(user, {displayName: `${firstName} ${lastName}`.trim()});
+            await user.getIdToken(true);
+            await apiFetch("api/profile.php", {
+                method: "POST",
+                body: JSON.stringify({businessName,businessType,industry,country,phone:"",address:"",about:""})
             });
-
-            const businessId = generateBusinessId();
-
-            batch.set(doc(db, "users", user.uid), {
-                uid: user.uid,
-                firstName,
-                lastName,
-                email,
-                activeBusinessId: businessId,
-                businessIds: [businessId],
-                createdAt: serverTimestamp()
-            });
-
-            batch.set(doc(db, "businesses", businessId), {
-                businessId,
-                ownerId: user.uid,
-                ownerUid: user.uid,
-                businessName,
-                businessType,
-                industry,
-                country,
-                plan,
-                status: "active",
-                profileComplete: false,
-                setupProgress: 0,
-                stats: {
-                    revenueZar: 0,
-                    ordersCount: 0,
-                    customersCount: 0,
-                    conversionRate: 0
-                },
-                opportunities: {
-                    abandonedCarts: 0,
-                    lowStockItems: 0,
-                    newCustomersThisWeek: 0
-                },
-                createdAt: serverTimestamp()
-            });
-
-            await batch.commit();
             pendingRegistrationUser = null;
             showStatus("Your account is ready. Opening your dashboard…", "success");
-
-            setTimeout(() => {
-                window.location.replace(getRedirectTarget());
-            }, 1000);
+            setTimeout(() => window.location.replace(getRedirectTarget()), 700);
         } catch (error) {
             console.error("Registration error:", error);
             showStatus(mapAuthError(error, pendingRegistrationUser ? "Your account was created, but workspace setup failed. Retry here to finish setup." : "Unable to create your account."));
@@ -155,33 +91,19 @@ if (registerForm) {
 if (loginForm) {
     loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-
         const submitButton = loginForm.querySelector('button[type="submit"]');
-        if (!(submitButton instanceof HTMLButtonElement)) {
-            return;
-        }
-
-        authSubmission = true;
-        submitButton.disabled = true;
-        submitButton.textContent = "Signing in...";
-
+        if (!(submitButton instanceof HTMLButtonElement)) return;
+        authSubmission = true; submitButton.disabled = true; submitButton.textContent = "Signing in...";
         const formData = new FormData(loginForm);
         const email = String(formData.get("email") || "").trim();
         const password = String(formData.get("password") || "");
-
         try {
             await signInWithEmailAndPassword(auth, email, password);
-
             showStatus("Login successful. Redirecting...", "success");
-
-            setTimeout(() => {
-                window.location.replace(getRedirectTarget());
-            }, 700);
+            setTimeout(() => window.location.replace(getRedirectTarget()), 500);
         } catch (error) {
-            console.error("Login error:", error);
-            showStatus(mapAuthError(error, "Unable to sign in."));
-            submitButton.disabled = false;
-            submitButton.textContent = "Sign in";
+            console.error("Login error:", error); showStatus(mapAuthError(error, "Unable to sign in."));
+            submitButton.disabled = false; submitButton.textContent = "Sign in";
         }
     });
 }
@@ -189,52 +111,32 @@ if (loginForm) {
 if (resetForm) {
     resetForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-
         const submitButton = resetForm.querySelector('button[type="submit"]');
-        if (!(submitButton instanceof HTMLButtonElement)) {
-            return;
-        }
-
-        authSubmission = true;
-        submitButton.disabled = true;
-        submitButton.textContent = "Sending...";
-
-        const formData = new FormData(resetForm);
-        const email = String(formData.get("email") || "").trim();
-
+        if (!(submitButton instanceof HTMLButtonElement)) return;
+        authSubmission = true; submitButton.disabled = true; submitButton.textContent = "Sending...";
+        const email = String(new FormData(resetForm).get("email") || "").trim();
         try {
             await sendPasswordResetEmail(auth, email);
             showStatus("Password reset email sent. Check your inbox.", "success");
-            submitButton.disabled = false;
-            submitButton.textContent = "Send reset link";
         } catch (error) {
-            console.error("Password reset error:", error);
-            showStatus(mapAuthError(error, "Unable to send password reset email."));
-            submitButton.disabled = false;
-            submitButton.textContent = "Send reset link";
+            console.error("Password reset error:", error); showStatus(mapAuthError(error, "Unable to send password reset email."));
+        } finally {
+            submitButton.disabled = false; submitButton.textContent = "Send reset link";
         }
     });
 }
 
 onAuthStateChanged(auth, (user) => {
-    if (user) {
-        if (!authSubmission && (loginForm || registerForm)) {
-            window.location.replace(getRedirectTarget());
-        }
-    }
+    if (user && !authSubmission && (loginForm || registerForm)) window.location.replace(getRedirectTarget());
 });
 
 logoutButtons.forEach((button) => {
     button.addEventListener("click", async () => {
-        try {
-            await signOut(auth);
-            window.location.href = "login.html";
-        } catch (error) {
-            console.error("Logout error:", error);
-        }
+        try { await signOut(auth); window.location.href = "login.html"; }
+        catch (error) { console.error("Logout error:", error); }
     });
 });
-// Keep the requested destination when switching between authentication pages.
+
 if (loginForm || registerForm || resetForm) {
     document.querySelectorAll('a[href="login.html"], a[href="register.html"], a[href="forgot-password.html"]').forEach(link => {
         link.search = new URLSearchParams({redirect: getRedirectTarget()}).toString();
