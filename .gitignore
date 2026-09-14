@@ -1,0 +1,15 @@
+# Business Expo PHP runtime/private files
+api/config.local.php
+storage/*
+!storage/.htaccess
+uploads/products/*
+!uploads/.htaccess
+
+# Environment and logs
+.env
+.env.*
+*.log
+
+# Node dependencies
+node_modules/
+functions/node_modules/
