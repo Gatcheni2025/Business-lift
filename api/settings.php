@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/secret-store.php';
 
 $user = require_user();
 $workspaceId = user_workspace_id($user);
@@ -8,8 +8,12 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $allowedSections = ['delivery','shop','partner','banking','payfast','paymentPreferences','audience'];
 
 function public_settings(array $settings): array {
-    if (isset($settings['banking']) && is_array($settings['banking'])) unset($settings['banking']['accountNumber']);
-    if (isset($settings['payfast']) && is_array($settings['payfast'])) unset($settings['payfast']['merchantKey'], $settings['payfast']['passphrase']);
+    if (isset($settings['banking']) && is_array($settings['banking'])) {
+        unset($settings['banking']['accountNumber'], $settings['banking']['accountNumberEncrypted']);
+    }
+    if (isset($settings['payfast']) && is_array($settings['payfast'])) {
+        unset($settings['payfast']['merchantKey'], $settings['payfast']['merchantKeyEncrypted'], $settings['payfast']['passphrase'], $settings['payfast']['passphraseEncrypted']);
+    }
     return $settings;
 }
 function clean_bool(mixed $value, bool $default = false): bool {
@@ -24,12 +28,21 @@ function clean_number(mixed $value, float $default = 0): float {
 function digits(mixed $value): string { return preg_replace('/\D+/', '', (string)$value) ?? ''; }
 function sanitize_banking(array $data, array $existing): array {
     $incoming = digits($data['accountNumber'] ?? '');
-    $account = $incoming !== '' ? $incoming : digits($existing['accountNumber'] ?? '');
+    $legacy = digits($existing['accountNumber'] ?? '');
+    $encrypted = (string)($existing['accountNumberEncrypted'] ?? '');
+    $last4 = (string)($existing['accountNumberLast4'] ?? '');
+    if ($incoming !== '') {
+        $encrypted = encrypt_secret($incoming);
+        $last4 = substr($incoming, -4);
+    } elseif ($encrypted === '' && $legacy !== '') {
+        $encrypted = encrypt_secret($legacy);
+        $last4 = substr($legacy, -4);
+    }
     return [
         'bankName' => clean_text($data['bankName'] ?? ($existing['bankName'] ?? ''), 120),
         'accountHolder' => clean_text($data['accountHolder'] ?? ($existing['accountHolder'] ?? ''), 180),
-        'accountNumber' => $account,
-        'accountNumberLast4' => $account === '' ? '' : substr($account, -4),
+        'accountNumberEncrypted' => $encrypted,
+        'accountNumberLast4' => $last4,
         'branchCode' => digits($data['branchCode'] ?? ($existing['branchCode'] ?? '')),
         'accountType' => clean_text($data['accountType'] ?? ($existing['accountType'] ?? 'Business'), 80),
         'updatedAt' => gmdate('c'),
@@ -38,16 +51,24 @@ function sanitize_banking(array $data, array $existing): array {
 function sanitize_payfast(array $data, array $existing): array {
     $merchantId = clean_text($data['merchantId'] ?? ($existing['merchantId'] ?? ''), 160);
     $incomingKey = clean_text($data['merchantKey'] ?? '', 300);
-    $merchantKey = $incomingKey !== '' ? $incomingKey : clean_text($existing['merchantKey'] ?? '', 300);
+    $legacyKey = clean_text($existing['merchantKey'] ?? '', 300);
+    $keyEncrypted = (string)($existing['merchantKeyEncrypted'] ?? '');
+    if ($incomingKey !== '') $keyEncrypted = encrypt_secret($incomingKey);
+    elseif ($keyEncrypted === '' && $legacyKey !== '') $keyEncrypted = encrypt_secret($legacyKey);
+
     $incomingPassphrase = clean_text($data['passphrase'] ?? '', 300);
-    $passphrase = $incomingPassphrase !== '' ? $incomingPassphrase : clean_text($existing['passphrase'] ?? '', 300);
+    $legacyPassphrase = clean_text($existing['passphrase'] ?? '', 300);
+    $passphraseEncrypted = (string)($existing['passphraseEncrypted'] ?? '');
+    if ($incomingPassphrase !== '') $passphraseEncrypted = encrypt_secret($incomingPassphrase);
+    elseif ($passphraseEncrypted === '' && $legacyPassphrase !== '') $passphraseEncrypted = encrypt_secret($legacyPassphrase);
+
     return [
         'merchantId' => $merchantId,
-        'merchantKey' => $merchantKey,
-        'passphrase' => $passphrase,
+        'merchantKeyEncrypted' => $keyEncrypted,
+        'passphraseEncrypted' => $passphraseEncrypted,
         'sandboxMode' => clean_bool($data['sandboxMode'] ?? ($existing['sandboxMode'] ?? false)),
         'splitPaymentsEnabled' => clean_bool($data['splitPaymentsEnabled'] ?? ($existing['splitPaymentsEnabled'] ?? true), true),
-        'connected' => $merchantId !== '' && $merchantKey !== '',
+        'connected' => $merchantId !== '' && $keyEncrypted !== '',
         'updatedAt' => gmdate('c'),
     ];
 }
