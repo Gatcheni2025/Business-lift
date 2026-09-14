@@ -8,26 +8,49 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $allowedSections = ['delivery','shop','partner','banking','payfast','paymentPreferences','audience'];
 
 function public_settings(array $settings): array {
-    if (isset($settings['banking']) && is_array($settings['banking'])) {
-        unset($settings['banking']['accountNumber']);
-    }
-    if (isset($settings['payfast']) && is_array($settings['payfast'])) {
-        unset($settings['payfast']['merchantKey'], $settings['payfast']['passphrase']);
-    }
+    if (isset($settings['banking']) && is_array($settings['banking'])) unset($settings['banking']['accountNumber']);
+    if (isset($settings['payfast']) && is_array($settings['payfast'])) unset($settings['payfast']['merchantKey'], $settings['payfast']['passphrase']);
     return $settings;
 }
-
 function clean_bool(mixed $value, bool $default = false): bool {
     if (is_bool($value)) return $value;
     if ($value === null) return $default;
     return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
 }
-
 function clean_number(mixed $value, float $default = 0): float {
     $n = filter_var($value, FILTER_VALIDATE_FLOAT);
     return $n === false ? $default : max(0, (float)$n);
 }
-
+function digits(mixed $value): string { return preg_replace('/\D+/', '', (string)$value) ?? ''; }
+function sanitize_banking(array $data, array $existing): array {
+    $incoming = digits($data['accountNumber'] ?? '');
+    $account = $incoming !== '' ? $incoming : digits($existing['accountNumber'] ?? '');
+    return [
+        'bankName' => clean_text($data['bankName'] ?? ($existing['bankName'] ?? ''), 120),
+        'accountHolder' => clean_text($data['accountHolder'] ?? ($existing['accountHolder'] ?? ''), 180),
+        'accountNumber' => $account,
+        'accountNumberLast4' => $account === '' ? '' : substr($account, -4),
+        'branchCode' => digits($data['branchCode'] ?? ($existing['branchCode'] ?? '')),
+        'accountType' => clean_text($data['accountType'] ?? ($existing['accountType'] ?? 'Business'), 80),
+        'updatedAt' => gmdate('c'),
+    ];
+}
+function sanitize_payfast(array $data, array $existing): array {
+    $merchantId = clean_text($data['merchantId'] ?? ($existing['merchantId'] ?? ''), 160);
+    $incomingKey = clean_text($data['merchantKey'] ?? '', 300);
+    $merchantKey = $incomingKey !== '' ? $incomingKey : clean_text($existing['merchantKey'] ?? '', 300);
+    $incomingPassphrase = clean_text($data['passphrase'] ?? '', 300);
+    $passphrase = $incomingPassphrase !== '' ? $incomingPassphrase : clean_text($existing['passphrase'] ?? '', 300);
+    return [
+        'merchantId' => $merchantId,
+        'merchantKey' => $merchantKey,
+        'passphrase' => $passphrase,
+        'sandboxMode' => clean_bool($data['sandboxMode'] ?? ($existing['sandboxMode'] ?? false)),
+        'splitPaymentsEnabled' => clean_bool($data['splitPaymentsEnabled'] ?? ($existing['splitPaymentsEnabled'] ?? true), true),
+        'connected' => $merchantId !== '' && $merchantKey !== '',
+        'updatedAt' => gmdate('c'),
+    ];
+}
 function sanitize_section(string $section, array $data, array $existing = []): array {
     return match ($section) {
         'delivery' => [
@@ -59,24 +82,8 @@ function sanitize_section(string $section, array $data, array $existing = []): a
             'allowContact' => clean_bool($data['allowContact'] ?? true, true),
             'updatedAt' => gmdate('c'),
         ],
-        'banking' => [
-            'bankName' => clean_text($data['bankName'] ?? ($existing['bankName'] ?? ''), 120),
-            'accountHolder' => clean_text($data['accountHolder'] ?? ($existing['accountHolder'] ?? ''), 180),
-            'accountNumber' => preg_replace('/\D+/', '', (string)($data['accountNumber'] ?? ($existing['accountNumber'] ?? ''))),
-            'accountNumberLast4' => substr(preg_replace('/\D+/', '', (string)($data['accountNumber'] ?? ($existing['accountNumber'] ?? ''))), -4),
-            'branchCode' => preg_replace('/\D+/', '', (string)($data['branchCode'] ?? ($existing['branchCode'] ?? ''))),
-            'accountType' => clean_text($data['accountType'] ?? ($existing['accountType'] ?? 'Business'), 80),
-            'updatedAt' => gmdate('c'),
-        ],
-        'payfast' => [
-            'merchantId' => clean_text($data['merchantId'] ?? ($existing['merchantId'] ?? ''), 160),
-            'merchantKey' => clean_text($data['merchantKey'] ?? ($existing['merchantKey'] ?? ''), 300),
-            'passphrase' => clean_text($data['passphrase'] ?? ($existing['passphrase'] ?? ''), 300),
-            'sandboxMode' => clean_bool($data['sandboxMode'] ?? ($existing['sandboxMode'] ?? false)),
-            'splitPaymentsEnabled' => clean_bool($data['splitPaymentsEnabled'] ?? true, true),
-            'connected' => clean_text($data['merchantId'] ?? ($existing['merchantId'] ?? ''), 160) !== '' && clean_text($data['merchantKey'] ?? ($existing['merchantKey'] ?? ''), 300) !== '',
-            'updatedAt' => gmdate('c'),
-        ],
+        'banking' => sanitize_banking($data, $existing),
+        'payfast' => sanitize_payfast($data, $existing),
         'paymentPreferences' => [
             'otherGateway' => clean_text($data['otherGateway'] ?? '', 160),
             'otherReference' => clean_text($data['otherReference'] ?? '', 300),
@@ -94,7 +101,6 @@ function sanitize_section(string $section, array $data, array $existing = []): a
 
 $settings = read_store('settings', $workspaceId, []);
 if (!is_array($settings)) $settings = [];
-
 if ($method === 'GET') {
     $section = (string)($_GET['section'] ?? '');
     $public = public_settings($settings);
@@ -104,7 +110,6 @@ if ($method === 'GET') {
     }
     json_response(['status'=>'success','settings'=>$public]);
 }
-
 if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     $input = request_json();
     $section = (string)($input['section'] ?? '');
@@ -116,5 +121,4 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     $public = public_settings($settings);
     json_response(['status'=>'success','section'=>$section,'data'=>$public[$section] ?? []]);
 }
-
 json_response(['status'=>'error','message'=>'Method not allowed.'], 405);
