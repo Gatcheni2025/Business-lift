@@ -3,35 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Business Lift</title>
+    <title>Login | Business Expo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/workspace.css?v=2">
 </head>
 <body class="auth-body">
     <main class="auth-shell">
-        <section class="auth-panel">
+        <section class="auth-panel"><a class="brand" href="index.html"><span class="brand-mark">BE</span><strong>Business Expo</strong></a>
             <p class="eyebrow">Workspace login</p>
             <h1>Sign in to manage your business.</h1>
-            <p>Sign in with Firebase Authentication, then use the same account across dashboard, store, website, and CRM modules.</p>
+            <p>Manage your products, orders and shop from one dashboard.</p>
 
             <form data-auth="login">
                 <label class="input-label">
                     Email address
-                    <input type="email" name="email" placeholder="you@business.com" required>
+                    <input type="email" name="email" autocomplete="email" placeholder="you@business.com" required>
                 </label>
                 <label class="input-label">
                     Password
-                    <input type="password" name="password" placeholder="Enter your password" required>
+                    <input type="password" name="password" autocomplete="current-password" placeholder="Enter your password" required>
                 </label>
                 <div class="auth-actions">
-                    <button class="button button-primary" type="submit">Login</button>
+                    <button class="button button-primary" type="submit">Sign in</button>
                     <a class="link-inline" href="register.html">Create account</a>
                     <a class="link-inline" href="forgot-password.html">Forgot password</a>
                 </div>
             </form>
-            <p class="form-status" data-auth-status hidden></p>
+            <p class="form-status" data-auth-status role="status" aria-live="polite" hidden></p>
         </section>
 
         <aside class="auth-aside">

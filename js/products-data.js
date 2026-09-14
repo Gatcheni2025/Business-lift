@@ -1,3 +1,4 @@
+import {getBusinessContext, workspaceError} from "./business-context.js";
 // products-data.js - Enhanced with channel support
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -133,7 +134,6 @@ function renderRows(productsData, channelsData) {
             <td>${channelBadges}</td>
             <td><span class="status-pill">${statusLabel}</span></td>
             <td>
-                <button class="icon-button small" data-product-edit="${product.id}" title="Edit">✏️</button>
                 <button class="icon-button small" data-product-toggle="${product.id}" title="Toggle publishing">📤</button>
             </td>
         </tr>`;
@@ -158,9 +158,11 @@ function listenToChannels(businessId) {
         }));
         
         renderChannelToggles(channels);
-        renderChannelDistribution(products, channels);
+        renderChannelDistribution(window.products || [], channels);
+        renderRows(window.products || [], channels);
     }, (error) => {
         console.error("Channels query failed", error);
+        if (channelTogglesContainer) channelTogglesContainer.textContent = workspaceError(error, "load sales channels");
     });
 }
 
@@ -186,6 +188,7 @@ function listenToProducts(businessId) {
         renderChannelDistribution(productsData, channels);
     }, (error) => {
         console.error("Products query failed", error);
+        showStatus(workspaceError(error, "load products"));
         if (tableBody) {
             tableBody.innerHTML = '<tr><td colspan="8">Unable to load products.</td></tr>';
         }
@@ -194,22 +197,11 @@ function listenToProducts(businessId) {
 
 // Load business
 async function loadBusiness(user) {
-    const userSnapshot = await getDoc(doc(db, "users", user.uid));
-    if (!userSnapshot.exists()) {
-        throw new Error("User profile does not exist.");
-    }
-    
-    const userData = userSnapshot.data();
-    activeBusinessId = String(userData.activeBusinessId || "");
-    
-    if (!activeBusinessId) {
-        throw new Error("No active business is linked to this user.");
-    }
-    
-    if (businessIdNode) {
-        businessIdNode.textContent = activeBusinessId;
-    }
-    
+    const context = await getBusinessContext(user);
+    activeBusinessId = context.businessId;
+    if (!activeBusinessId) throw new Error("No business profile yet.");
+    if (businessIdNode) businessIdNode.textContent = activeBusinessId;
+
     listenToChannels(activeBusinessId);
     listenToProducts(activeBusinessId);
 }
@@ -284,7 +276,7 @@ if (form) {
             });
         } catch (error) {
             console.error("Create product failed", error);
-            showStatus("Unable to save product. Check Firestore rules and try again.");
+            showStatus(workspaceError(error,"save your product"));
         } finally {
             submitButton.disabled = false;
             submitButton.textContent = "Add Product";
@@ -331,13 +323,13 @@ document.addEventListener("click", async (event) => {
 // Auth
 onAuthStateChanged(auth, (user) => {
     if (!user) {
-        window.location.href = "login.html";
+        window.location.href = "login.html?redirect=products.html";
         return;
     }
     
     loadBusiness(user).catch((error) => {
         console.error("Products load failed", error);
-        showStatus("Unable to load business context for products.");
+        showStatus(workspaceError(error));
         if (tableBody) {
             tableBody.innerHTML = '<tr><td colspan="8">Unable to load products.</td></tr>';
         }

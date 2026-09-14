@@ -1,0 +1,10 @@
+
+<div class="grid"><section class="card"><div class="section-heading"><h3>Create an order</h3><a href="products.html#new-product">Add a product ↗</a></div><form data-order-form>
+<label class="input-label">Customer ID<input type="text" name="customerId" placeholder="CUSTOMER_456" required></label>
+<label class="input-label">Product<select name="productId" required><option value="">Select product</option></select></label>
+<div class="form-grid"><label class="input-label">Quantity<input type="number" name="quantity" min="1" step="1" value="1" required></label><label class="input-label">Shipping (R)<input type="number" name="shipping" min="0" step="0.01" value="0" required></label></div>
+<div class="form-grid"><label class="input-label">Tax (R)<input type="number" name="tax" min="0" step="0.01" value="0" required></label><label class="input-label">Payment<select name="paymentStatus"><option value="pending">Pending</option><option value="paid">Paid</option><option value="failed">Failed</option></select></label></div>
+<label class="input-label">Order status<select name="orderStatus"><option value="new">New</option><option value="processing">Processing</option><option value="shipping">Shipping</option><option value="completed">Completed</option></select></label>
+<button class="button button-primary" type="submit">Create order</button><p class="form-status" data-order-status hidden></p></form></section>
+<section class="card"><h3>Latest orders</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead><tbody data-orders-table-body><tr><td colspan="5">Loading orders...</td></tr></tbody></table></div></section></div>
+<section class="kanban-grid" id="order-board"><article class="kanban-column"><p>New</p><div data-order-column="new"></div></article><article class="kanban-column"><p>Processing</p><div data-order-column="processing"></div></article><article class="kanban-column"><p>Shipping</p><div data-order-column="shipping"></div></article></section>

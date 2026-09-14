@@ -35,7 +35,7 @@ async function verifyBusinessAccess(uid, businessId) {
   const snap = await db.collection("businesses").doc(businessId).get();
   if (!snap.exists) throw new HttpsError("not-found", "Business not found.");
   const b = snap.data() || {};
-  const allowed = b.ownerId === uid || b.uid === uid || b.userId === uid ||
+  const allowed = b.ownerId === uid || b.ownerUid === uid || b.uid === uid || b.userId === uid ||
     (Array.isArray(b.adminUids) && b.adminUids.includes(uid));
   if (!allowed) throw new HttpsError("permission-denied", "You cannot manage this business.");
   return b;

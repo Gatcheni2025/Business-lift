@@ -9,11 +9,14 @@ import {
 
 import {
     doc,
-    setDoc,
+    writeBatch,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 import { auth, db } from "./firebase-config.js";
+
+let authSubmission = false;
+let pendingRegistrationUser = null;
 
 const registerForm = document.querySelector("[data-auth='register']");
 const loginForm = document.querySelector("[data-auth='login']");
@@ -33,8 +36,10 @@ function showStatus(message, type = "error") {
 }
 
 function getRedirectTarget() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("redirect") || "dashboard.html";
+    const target = new URLSearchParams(window.location.search).get("redirect") || "dashboard.html";
+    const allowed = new Set(["dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "website-builder.html", "domains.html", "store.html", "network.html"]);
+    // Only known workspace pages are valid return destinations.
+    return allowed.has(target.split(/[?#]/)[0]) && !target.includes("\\") ? target : "dashboard.html";
 }
 
 function generateBusinessId() {
@@ -67,6 +72,7 @@ if (registerForm) {
             return;
         }
 
+        authSubmission = true;
         submitButton.disabled = true;
         submitButton.textContent = "Creating workspace...";
 
@@ -84,8 +90,9 @@ if (registerForm) {
         const plan = String(formData.get("plan") || "start").trim();
 
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
+            const user = pendingRegistrationUser || (await createUserWithEmailAndPassword(auth, email, password)).user;
+            pendingRegistrationUser = user;
+            const batch = writeBatch(db);
 
             await updateProfile(user, {
                 displayName: `${firstName} ${lastName}`.trim()
@@ -93,7 +100,7 @@ if (registerForm) {
 
             const businessId = generateBusinessId();
 
-            await setDoc(doc(db, "users", user.uid), {
+            batch.set(doc(db, "users", user.uid), {
                 uid: user.uid,
                 firstName,
                 lastName,
@@ -103,7 +110,7 @@ if (registerForm) {
                 createdAt: serverTimestamp()
             });
 
-            await setDoc(doc(db, "businesses", businessId), {
+            batch.set(doc(db, "businesses", businessId), {
                 businessId,
                 ownerId: user.uid,
                 ownerUid: user.uid,
@@ -114,7 +121,7 @@ if (registerForm) {
                 plan,
                 status: "active",
                 profileComplete: false,
-                setupProgress: 65,
+                setupProgress: 0,
                 stats: {
                     revenueZar: 0,
                     ordersCount: 0,
@@ -129,16 +136,18 @@ if (registerForm) {
                 createdAt: serverTimestamp()
             });
 
-            showStatus("Business Lift workspace created successfully. Redirecting...", "success");
+            await batch.commit();
+            pendingRegistrationUser = null;
+            showStatus("Your account is ready. Opening your dashboard…", "success");
 
             setTimeout(() => {
-                window.location.href = "dashboard.html";
+                window.location.replace(getRedirectTarget());
             }, 1000);
         } catch (error) {
             console.error("Registration error:", error);
-            showStatus(mapAuthError(error, "Unable to create your account."));
+            showStatus(mapAuthError(error, pendingRegistrationUser ? "Your account was created, but workspace setup failed. Retry here to finish setup." : "Unable to create your account."));
             submitButton.disabled = false;
-            submitButton.textContent = "Create workspace";
+            submitButton.textContent = pendingRegistrationUser ? "Retry workspace setup" : "Create account";
         }
     });
 }
@@ -152,6 +161,7 @@ if (loginForm) {
             return;
         }
 
+        authSubmission = true;
         submitButton.disabled = true;
         submitButton.textContent = "Signing in...";
 
@@ -165,13 +175,13 @@ if (loginForm) {
             showStatus("Login successful. Redirecting...", "success");
 
             setTimeout(() => {
-                window.location.href = getRedirectTarget();
+                window.location.replace(getRedirectTarget());
             }, 700);
         } catch (error) {
             console.error("Login error:", error);
             showStatus(mapAuthError(error, "Unable to sign in."));
             submitButton.disabled = false;
-            submitButton.textContent = "Login";
+            submitButton.textContent = "Sign in";
         }
     });
 }
@@ -185,6 +195,7 @@ if (resetForm) {
             return;
         }
 
+        authSubmission = true;
         submitButton.disabled = true;
         submitButton.textContent = "Sending...";
 
@@ -207,8 +218,8 @@ if (resetForm) {
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        if (loginForm || registerForm || resetForm) {
-            window.location.href = getRedirectTarget();
+        if (!authSubmission && (loginForm || registerForm)) {
+            window.location.replace(getRedirectTarget());
         }
     }
 });
@@ -223,3 +234,9 @@ logoutButtons.forEach((button) => {
         }
     });
 });
+// Keep the requested destination when switching between authentication pages.
+if (loginForm || registerForm || resetForm) {
+    document.querySelectorAll('a[href="login.html"], a[href="register.html"], a[href="forgot-password.html"]').forEach(link => {
+        link.search = new URLSearchParams({redirect: getRedirectTarget()}).toString();
+    });
+}

@@ -1,3 +1,4 @@
+import {getBusinessContext, workspaceError} from "./business-context.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
     addDoc,
@@ -77,7 +78,7 @@ function renderKanban(orders) {
         return list.slice(0, 5).map((order) => `
             <article>
                 <strong>${order.orderNumber || order.id}</strong>
-                <span>${order.paymentStatus.toUpperCase()} - ${money.format(Number(order.total || 0))}</span>
+                <span>${String(order.paymentStatus || "pending").toUpperCase()} - ${money.format(Number(order.total || 0))}</span>
             </article>
         `).join("");
     };
@@ -146,6 +147,7 @@ function listenToOrders(businessId) {
         renderKanban(orders);
     }, (error) => {
         console.error("Orders query failed", error);
+        showStatus(workspaceError(error, "load orders"));
         if (tableBody) {
             tableBody.innerHTML = '<tr><td colspan="5">Unable to load orders.</td></tr>';
         }
@@ -185,8 +187,10 @@ function listenToProducts(businessId) {
             });
 
         productSelect.innerHTML = options.join("");
+        if (!products.length) showStatus("Add a product to your catalog before creating an order.", "info");
     }, (error) => {
         console.error("Products for orders query failed", error);
+        showStatus(workspaceError(error, "load products for orders"));
     });
 }
 
@@ -196,21 +200,10 @@ function createOrderNumber() {
 }
 
 async function loadBusiness(user) {
-    const userSnapshot = await getDoc(doc(db, "users", user.uid));
-    if (!userSnapshot.exists()) {
-        throw new Error("User profile does not exist.");
-    }
-
-    const userData = userSnapshot.data();
-    activeBusinessId = String(userData.activeBusinessId || "");
-
-    if (!activeBusinessId) {
-        throw new Error("No active business is linked to this user.");
-    }
-
-    if (businessIdNode) {
-        businessIdNode.textContent = activeBusinessId;
-    }
+    const context = await getBusinessContext(user);
+    activeBusinessId = context.businessId;
+    if (!activeBusinessId) throw new Error("No business profile yet.");
+    if (businessIdNode) businessIdNode.textContent = activeBusinessId;
 
     listenToProducts(activeBusinessId);
     listenToOrders(activeBusinessId);

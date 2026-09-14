@@ -1,3 +1,4 @@
+import {getBusinessContext,workspaceError} from "./business-context.js";
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {doc, getDoc} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
@@ -197,8 +198,11 @@ document.getElementById("saveAudience")?.addEventListener("click", async (event)
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return window.location.href = "login.html";
-  const userSnap = await getDoc(doc(db, "users", user.uid));
-  businessId = String(userSnap.data()?.activeBusinessId || "");
+  try { businessId = (await getBusinessContext(user)).businessId; } catch(error) {
+    const status=document.querySelector("[data-workspace-status]");
+    if(status){status.hidden=false;status.textContent=workspaceError(error);}
+    return;
+  }
   if (!businessId) return window.location.href = "business-profile.html";
   try { await loadState(); } catch (error) { console.error("Seller setup load failed", error); }
 });

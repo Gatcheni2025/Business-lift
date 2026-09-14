@@ -23,3 +23,16 @@ if (navToggle && sidebar) {
         }
     });
 }
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sidebar && navToggle) {
+        sidebar.classList.remove('is-open');
+        navToggle.setAttribute('aria-expanded', 'false');
+        navToggle.focus();
+    }
+});
+
+document.addEventListener('keydown', event => {
+ if(event.key === 'Escape' && sidebar && navToggle) {
+ sidebar.classList.remove('is-open'); navToggle.setAttribute('aria-expanded','false'); navToggle.focus();
+ }
+});

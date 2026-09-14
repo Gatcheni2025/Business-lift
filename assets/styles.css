@@ -1388,3 +1388,12 @@ th {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+.nav-group-label { margin:20px 0 6px; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; opacity:.7; }
+.side-nav button.nav-link { width:100%; border:0; background:transparent; color:inherit; cursor:pointer; text-align:left; }
+:focus-visible { outline:3px solid #3f8cff; outline-offset:4px; }
+button:disabled { opacity:.65; cursor:wait; }
+.main-panel,.page-main,.auth-panel { min-width:0; }
+.shortcut-card span { display:block; margin-top:8px; }
+.auth-panel .brand { margin-bottom:24px; }
+@media(max-width:920px) { .sidebar.is-open { max-height:100dvh; overflow-y:auto; } }

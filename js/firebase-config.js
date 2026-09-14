@@ -1,8 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { initializeDashboardUI } from "./dashboard-ui.js";
-import { initializeSellerDashboardSummary } from "./dashboard-seller-summary.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U",
@@ -31,8 +29,6 @@ function applyBusinessExpoBranding() {
 
 function initializeSharedUi() {
     applyBusinessExpoBranding();
-    initializeDashboardUI();
-    initializeSellerDashboardSummary();
 }
 
 if (document.readyState === "loading") {

@@ -1,0 +1,18 @@
+dashboard: desktop/mobile layout, navigation and runtime PASS
+products: desktop/mobile layout, navigation and runtime PASS
+orders: desktop/mobile layout, navigation and runtime PASS
+customers: desktop/mobile layout, navigation and runtime PASS
+business-profile: desktop/mobile layout, navigation and runtime PASS
+seller-onboarding: desktop/mobile layout, navigation and runtime PASS
+sales-channels: desktop/mobile layout, navigation and runtime PASS
+shop-settings: desktop/mobile layout, navigation and runtime PASS
+delivery-settings: desktop/mobile layout, navigation and runtime PASS
+payments: desktop/mobile layout, navigation and runtime PASS
+network: desktop/mobile layout, navigation and runtime PASS
+store: desktop/mobile layout, navigation and runtime PASS
+website-builder: desktop/mobile layout, navigation and runtime PASS
+domains: desktop/mobile layout, navigation and runtime PASS
+profile: save payload, confirmation, denied save, preserved input and retry PASS
+profile: failed load disables save; retry restores form PASS
+legacy account lookup, missing workspace recovery, denied initial load and independent dashboard data PASS
+authentication pages: mobile layout PASS

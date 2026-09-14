@@ -1,0 +1,93 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "An overview of your business, all in one place.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/dashboard-data.js\"></script>"
+    ]
+  },
+  "products": {
+    "title": "Products",
+    "description": "Build your catalog and keep your inventory up to date.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/products-data.js\"></script>"
+    ]
+  },
+  "orders": {
+    "title": "Orders",
+    "description": "Track sales, payments and fulfilment from one workspace.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/orders-data.js\"></script>"
+    ]
+  },
+  "customers": {
+    "title": "Customers",
+    "description": "See the customers behind your orders.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/customers-data.js\"></script>"
+    ]
+  },
+  "business-profile": {
+    "title": "Business profile",
+    "description": "Keep your business identity and contact details up to date.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/business-profile.js\"></script>"
+    ]
+  },
+  "seller-onboarding": {
+    "title": "Seller setup",
+    "description": "A simple guide to getting your business ready to sell.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/seller-onboarding.js\"></script>"
+    ]
+  },
+  "sales-channels": {
+    "title": "Sales channels",
+    "description": "Connect your business accounts and manage where you sell.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/social-connections.js\"></script>",
+      "<script>\nconst params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard \u2192'}\n</script>"
+    ]
+  },
+  "shop-settings": {
+    "title": "Shop settings",
+    "description": "Manage customer support, returns and notifications.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/shop-settings.js\"></script>"
+    ]
+  },
+  "delivery-settings": {
+    "title": "Delivery settings",
+    "description": "Choose how your products reach your customers.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/delivery-settings.js\"></script>"
+    ]
+  },
+  "payments": {
+    "title": "Payments",
+    "description": "Manage how your business gets paid.",
+    "scripts": []
+  },
+  "network": {
+    "title": "Partner network",
+    "description": "Make your business easier for the right partners to find.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/network.js\"></script>"
+    ]
+  },
+  "store": {
+    "title": "Store",
+    "description": "Everything you need to manage your selling presence.",
+    "scripts": []
+  },
+  "website-builder": {
+    "title": "Website builder",
+    "description": "Plan your online presence and prepare your business content.",
+    "scripts": []
+  },
+  "domains": {
+    "title": "Domains",
+    "description": "Manage the address customers use to find you online.",
+    "scripts": []
+  }
+}

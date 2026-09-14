@@ -1,100 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Products | Business Expose</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="assets/styles.css">
-    <style>
-        .expose-network-box { background: linear-gradient(to right, #f8fafc, #eff6ff); border: 1px solid #bfdbfe; border-radius: 12px; padding: 24px; margin-top: 24px; }
-        .expose-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-weight: 700; font-size: 1.1rem; color: #1e3a8a; }
-        .network-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-        .network-toggle { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; transition: 0.2s; user-select: none; }
-        .network-toggle:hover { border-color: #2563eb; }
-        .network-toggle input { display: none; }
-        .network-toggle:has(input:checked) { border-color: #2563eb; background: #eff6ff; box-shadow: 0 4px 12px rgba(37,99,235,0.1); }
-        .network-toggle:has(input:checked) i { color: #2563eb !important; }
-    </style>
-</head>
-<body class="app-shell">
-    
-    <!-- Assume standard Sidebar here -->
-    
-    <div class="main-panel">
-        <header class="topbar">
-            <div>
-                <p class="eyebrow">Catalog & Distribution</p>
-                <h1>Products</h1>
-            </div>
-            <div class="topbar-actions"><button class="button button-primary" type="button" onclick="document.getElementById('new-product').scrollIntoView();">Add Product</button></div>
-        </header>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#087f5b"><title>Products | Business Expo</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=2"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
+<body class="workspace" data-page="products">
+<a href="#main-content" class="skip-link">Skip to content</a>
+<aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="brand-mark">BE<span></span></span><span>Business Expo<small>YOUR BUSINESS WORKSPACE</small></span></a>
+<div class="workspace-switch"><span class="workspace-avatar" data-business-initial>B</span><div><strong data-business-name>Your business</strong><small>Business workspace</small></div></div>
+<nav aria-label="Primary navigation"><div class="nav-group"><p class="nav-group-label">Workspace</p><a class="nav-link" href="dashboard.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a><a class="nav-link active" href="products.html" aria-current="page"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg><span>Products</span></a><a class="nav-link" href="orders.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 7h6M9 11h6M9 15h3"/></svg><span>Orders</span></a><a class="nav-link" href="customers.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5"/></svg><span>Customers</span></a><a class="nav-link" href="sales-channels.html?return=dashboard"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 1 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(1 0)"/></svg><span>Sales channels</span></a></div><div class="nav-group"><p class="nav-group-label">Online presence</p><a class="nav-link" href="store.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h18l-2-7H5l-2 7ZM4 10v11h16V10M9 21v-7h6v7M2 10a3 3 0 0 0 5 2 3 3 0 0 0 5 0 3 3 0 0 0 5 0 3 3 0 0 0 5-2"/></svg><span>Store</span></a><a class="nav-link" href="website-builder.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg><span>Website builder</span></a><a class="nav-link" href="domains.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 1 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(1 0)"/></svg><span>Domains</span></a><a class="nav-link" href="network.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="m10 8-4 8m8-8 4 8M8 19h8"/></svg><span>Partner network</span></a></div><div class="nav-group"><p class="nav-group-label">Manage business</p><a class="nav-link" href="seller-onboarding.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 12 3 3 5-6"/></svg><span>Seller setup</span></a><a class="nav-link" href="business-profile.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V3h12v18M16 9h4v12M8 7h4M8 11h4M8 15h4M2 21h20"/></svg><span>Business profile</span></a><a class="nav-link" href="shop-settings.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg><span>Shop settings</span></a><a class="nav-link" href="delivery-settings.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5h12v12H2V5Zm12 4h4l4 5v3h-8"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/></svg><span>Delivery settings</span></a><a class="nav-link" href="payments.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 9h20M6 15h4"/></svg><span>Payments</span></a></div></nav>
+<div class="sidebar-footer"><button class="nav-link" data-logout type="button"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h11"/></svg><span>Sign out</span></button><small>Business Expo · Built for your growth</small></div></aside>
+<button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
+<div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Products</strong></div><a class="account-link" href="business-profile.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
+<main class="page-main" id="main-content"><div class="page-heading"><div><h1>Products</h1><p>Build your catalog and keep your inventory up to date.</p></div><span class="page-date" data-current-date></span></div><div class="workspace-alert" data-workspace-status role="status" hidden></div>
+<section class="section-card" id="new-product"><p class="eyebrow">Catalog</p><h2>Add a product</h2><p>Save your product and choose its connected sales channels.</p><form data-product-form><div class="form-grid"><label class="input-label">Product name<input name="name" type="text" required></label><label class="input-label">SKU<input name="sku" type="text" required></label><label class="input-label">Category<input name="category" type="text" required></label><label class="input-label">Price (ZAR)<input name="price" type="number" min="0" step="0.01" required></label><label class="input-label">Cost price (ZAR)<input name="costPrice" type="number" min="0" step="0.01" required></label><label class="input-label">Stock<input name="stock" type="number" min="0" step="1" required></label></div><label class="input-label">Description<textarea name="description" required></textarea></label><label class="input-label">Image URL<input type="url" name="imageUrl"></label><label class="input-label">Status<select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label><fieldset><legend>Sales channels</legend><div data-channel-toggles>Loading connected channels…</div></fieldset><div class="auth-actions"><button class="button button-primary" type="submit">Add Product</button><a href="sales-channels.html?return=dashboard">Manage sales channels</a></div></form><p data-product-status role="status" hidden></p></section><section class="section-card"><h2>Your inventory</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>SKU</th><th>Price</th><th>Cost</th><th>Stock</th><th>Channels</th><th>Status</th><th>Actions</th></tr></thead><tbody data-products-table-body><tr><td colspan="8">Loading products…</td></tr></tbody></table></div></section>
 
-        <main class="page-main">
-            <section class="section-grid two-up">
-                <article class="section-card" id="new-product">
-                    <p class="eyebrow">Inventory</p>
-                    <h3>Upload New Item</h3>
-                    <form data-product-form>
-                        <label class="input-label">Product Name<input type="text" name="name" placeholder="Premium Running Shoe" required></label>
-                        <div class="form-grid">
-                            <label class="input-label">Price (ZAR)<input type="number" name="price" placeholder="1499" required></label>
-                            <label class="input-label">Stock<input type="number" name="stock" placeholder="24" required></label>
-                        </div>
-                        <label class="input-label">Image URL<input type="url" name="imageUrl" placeholder="https://..."></label>
-                        
-                        <!-- THE MAGIC EXPOSE FEATURE -->
-                        <div class="expose-network-box">
-                            <div class="expose-header">
-                                <i class="ph ph-broadcast"></i> Business Expose Network
-                            </div>
-                            <p style="font-size: 0.85rem; color: #475569; margin-bottom: 16px;">
-                                Instantly distribute this product across platforms. No external account registration needed—we handle the API syndication natively.
-                            </p>
-                            <div class="network-grid">
-                                <label class="network-toggle">
-                                    <input type="checkbox" name="exposeTo" value="google" checked> 
-                                    <i class="ph ph-google-logo" style="color:#64748b; font-size:1.5rem;"></i> <strong>Google</strong>
-                                </label>
-                                <label class="network-toggle">
-                                    <input type="checkbox" name="exposeTo" value="whatsapp" checked> 
-                                    <i class="ph ph-whatsapp-logo" style="color:#64748b; font-size:1.5rem;"></i> <strong>WhatsApp</strong>
-                                </label>
-                                <label class="network-toggle">
-                                    <input type="checkbox" name="exposeTo" value="meta" checked> 
-                                    <i class="ph ph-facebook-logo" style="color:#64748b; font-size:1.5rem;"></i> <strong>FB / Insta</strong>
-                                </label>
-                                <label class="network-toggle">
-                                    <input type="checkbox" name="exposeTo" value="x"> 
-                                    <i class="ph ph-twitter-logo" style="color:#64748b; font-size:1.5rem;"></i> <strong>X (Twitter)</strong>
-                                </label>
-                                <label class="network-toggle">
-                                    <input type="checkbox" name="exposeTo" value="youtube"> 
-                                    <i class="ph ph-youtube-logo" style="color:#64748b; font-size:1.5rem;"></i> <strong>YouTube</strong>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="auth-actions" style="margin-top: 24px;">
-                            <button class="button button-primary" type="submit" style="width: 100%; padding: 14px; font-size: 1rem;"><i class="ph ph-rocket-launch"></i> Expose Product Now</button>
-                        </div>
-                    </form>
-                </article>
-
-                <article class="section-card">
-                    <p class="eyebrow">Distribution Status</p>
-                    <h3>Global Reach</h3>
-                    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">Your inventory is synced and auto-optimized for partner algorithms.</p>
-                    
-                    <ul class="list-clean">
-                        <li><strong>Google Shopping:</strong> 45 active SKUs</li>
-                        <li><strong>WhatsApp Commerce:</strong> 45 active SKUs</li>
-                        <li><strong>Meta (FB/IG):</strong> 42 active SKUs</li>
-                    </ul>
-                </article>
-            </section>
-        </main>
-    </div>
-</body>
-</html>
+</main><footer class="workspace-footer"><span>Business Expo</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
+<script src="assets/workspace.js"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
+<script type="module" src="js/products-data.js"></script>
+</body></html>

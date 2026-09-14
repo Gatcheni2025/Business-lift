@@ -1,0 +1,16 @@
+
+<div class="tip"><strong>Simple rule:</strong> choose how most orders are delivered. You can still make exceptions per order later.</div>
+<section class="card"><h2>1. Delivery method</h2><p>Select your main fulfilment method.</p><div class="mode-grid">
+<button class="mode active" data-mode="courier"><i class="ph ph-package"></i><strong>Courier</strong><span>A courier collects and delivers parcels</span></button>
+<button class="mode" data-mode="own_driver"><i class="ph ph-car"></i><strong>My driver</strong><span>Your team handles local delivery</span></button>
+<button class="mode" data-mode="pickup"><i class="ph ph-storefront"></i><strong>Customer pickup</strong><span>Customers collect from you</span></button>
+<button class="mode" data-mode="digital"><i class="ph ph-cloud-arrow-down"></i><strong>Digital / service</strong><span>No physical parcel is required</span></button>
+</div></section>
+<section class="card"><h2>2. Delivery details</h2><p>Tell Business Expo where orders leave from and what customers normally pay.</p><div class="grid">
+<div class="field"><label>Preferred courier / provider</label><input id="courierPreference" placeholder="e.g. Pargo, The Courier Guy, own driver"></div>
+<div class="field"><label>Dispatch / collection address</label><input id="pickupAddress" placeholder="Where orders are collected from"></div>
+<div class="field"><label>Standard delivery fee (R)</label><input id="baseDeliveryFee" type="number" min="0" step="0.01" value="0"></div>
+<div class="field"><label>Free delivery above (R)</label><input id="freeDeliveryThreshold" type="number" min="0" step="0.01" value="0"></div>
+<div class="field"><label>Own delivery radius (km)</label><input id="deliveryRadiusKm" type="number" min="0" step="1" value="0"></div>
+</div><div class="checks"><label><input id="allowCustomerPickup" type="checkbox"> Allow customer pickup too</label><label><input id="trackingEnabled" type="checkbox" checked> Enable tracking where available</label></div></section>
+<button class="btn" id="saveDelivery"><i class="ph ph-check-circle"></i> Save delivery settings</button><span class="status" id="saveStatus"></span>
