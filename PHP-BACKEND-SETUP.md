@@ -50,6 +50,7 @@ Set these in the hosting control panel / Apache environment. Do not put secrets 
 FIREBASE_PROJECT_ID=business-lift-3c19c
 APP_URL=https://www.businessexpo.co.za
 OAUTH_STATE_SECRET=<long-random-secret>
+BUSINESS_EXPO_DATA_KEY=<64-character-random-hex-value>
 META_APP_ID=<meta-app-id>
 META_APP_SECRET=<meta-app-secret>
 META_GRAPH_VERSION=v23.0
@@ -59,7 +60,14 @@ GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
 BUSINESS_EXPO_SALES_EMAIL=<email that receives sales-chat alerts>
 ```
 
-Generate `OAUTH_STATE_SECRET` as a long random value (32+ random bytes).
+Generate the two private keys separately:
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Use one output as `OAUTH_STATE_SECRET` and the other as `BUSINESS_EXPO_DATA_KEY`. The data key encrypts bank account numbers, PayFast Merchant Keys and PayFast passphrases with AES-256-GCM before they are written to disk.
 
 ## Main API endpoints
 
@@ -102,6 +110,8 @@ Up to 5 product images are accepted per product. `upload_product.php` remains as
 
 Current PHP persistence is file-backed JSON under the protected `storage/` directory, keyed by the authenticated user's workspace ID. The folders include profiles, products, orders, settings, integration state and sales-chat messages.
 
+Sensitive payment values are encrypted before storage. Public settings responses never return the full bank account number, PayFast Merchant Key or PayFast passphrase.
+
 `storage/.htaccess` blocks direct public access. `uploads/.htaccess` blocks PHP/script execution inside uploads. The root `.htaccess` preserves the `Authorization` header for PHP/FastCGI hosting.
 
 For higher traffic, the same API contracts can later be moved from JSON files to MySQL without changing the browser pages.
@@ -127,4 +137,4 @@ After uploading the branch to the PHP host, test in this order:
 
 ## Important production note
 
-The current storage layer is suitable for the present PHP migration/MVP. Before large-scale production traffic, migrate `storage/*.json` persistence to MySQL with transactions and encrypted sensitive payment fields. The frontend does not need to change when that storage implementation changes because it already talks only to the PHP API.
+The current storage layer is suitable for the present PHP migration/MVP. Before large-scale production traffic, migrate `storage/*.json` persistence to MySQL with transactions. The frontend does not need to change when that storage implementation changes because it already talks only to the PHP API.
