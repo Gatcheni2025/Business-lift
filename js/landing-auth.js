@@ -1,87 +1,15 @@
-import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { auth } from "./firebase-config.js";
-
-const modal = document.getElementById("loginModal");
-const form = document.getElementById("premiumLogin");
-const googleButton = document.getElementById("googleLogin");
-const status = document.getElementById("authStatus");
-const password = document.getElementById("loginPassword");
-const togglePassword = document.getElementById("togglePassword");
-const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: "select_account" });
-
-function openLogin() {
-  modal.classList.add("open");
-  modal.setAttribute("aria-hidden", "false");
-  document.body.classList.add("modal-open");
-  setTimeout(() => document.getElementById("loginEmail")?.focus(), 180);
-}
-function closeLogin() {
-  modal.classList.remove("open");
-  modal.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("modal-open");
-  hideStatus();
-}
-function showStatus(message, success = false) {
-  status.hidden = false;
-  status.textContent = message;
-  status.classList.toggle("success", success);
-}
-function hideStatus(){ status.hidden = true; status.textContent = ""; status.classList.remove("success"); }
-function friendlyError(error) {
-  const messages = {
-    "auth/invalid-credential": "The email or password is incorrect.",
-    "auth/invalid-email": "Enter a valid email address.",
-    "auth/popup-closed-by-user": "Google sign-in was closed before it finished.",
-    "auth/popup-blocked": "Your browser blocked the Google sign-in window. Allow popups and try again.",
-    "auth/unauthorized-domain": "Teyza is not yet authorised for Firebase sign-in on this domain.",
-    "auth/operation-not-allowed": "This sign-in method is not enabled yet.",
-    "auth/network-request-failed": "Check your internet connection and try again.",
-    "auth/too-many-requests": "Too many attempts. Please wait a moment and try again."
-  };
-  return messages[error?.code] || "We couldn't log you in. Please try again.";
-}
-function enterWorkspace(){ window.location.assign("dashboard.html"); }
-
-document.querySelectorAll("[data-open-login]").forEach(button => button.addEventListener("click", openLogin));
-document.querySelectorAll("[data-close-login]").forEach(button => button.addEventListener("click", closeLogin));
-modal.addEventListener("click", event => { if (event.target === modal) closeLogin(); });
-document.addEventListener("keydown", event => { if (event.key === "Escape" && modal.classList.contains("open")) closeLogin(); });
-
-togglePassword.addEventListener("click", () => {
-  const showing = password.type === "text";
-  password.type = showing ? "password" : "text";
-  togglePassword.innerHTML = showing ? '<i class="ph ph-eye"></i>' : '<i class="ph ph-eye-slash"></i>';
-  togglePassword.setAttribute("aria-label", showing ? "Show password" : "Hide password");
-});
-
-form.addEventListener("submit", async event => {
-  event.preventDefault(); hideStatus();
-  const button = form.querySelector("button[type='submit']");
-  const email = document.getElementById("loginEmail").value.trim();
-  const pass = password.value;
-  button.disabled = true; button.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Logging in…';
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-    showStatus("Welcome back. Opening your workspace…", true);
-    setTimeout(enterWorkspace, 450);
-  } catch (error) {
-    console.error("Teyza email login:", error);
-    showStatus(friendlyError(error));
-    button.disabled = false; button.innerHTML = 'Log in to Teyza <i class="ph ph-arrow-right"></i>';
-  }
-});
-
-googleButton.addEventListener("click", async () => {
-  hideStatus(); googleButton.disabled = true;
-  googleButton.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Connecting to Google…';
-  try {
-    await signInWithPopup(auth, provider);
-    showStatus("Google sign-in successful. Opening your workspace…", true);
-    setTimeout(enterWorkspace, 450);
-  } catch (error) {
-    console.error("Teyza Google login:", error);
-    showStatus(friendlyError(error));
-    googleButton.disabled = false; googleButton.innerHTML = '<span class="google-g">G</span> Continue with Google';
-  }
-});
+import {GoogleAuthProvider,createUserWithEmailAndPassword,signInWithEmailAndPassword,signInWithPopup,updateProfile} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {auth} from "./firebase-config.js";
+const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
+if(!document.getElementById('teyzaAuthCss'))document.head.insertAdjacentHTML('beforeend',`<style id="teyzaAuthCss">.tz-auth{position:fixed;inset:0;z-index:9999;background:rgba(4,11,28,.68);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;padding:20px}.tz-auth.open{display:flex}.tz-card{width:min(480px,100%);max-height:94vh;overflow:auto;background:#fff;border-radius:26px;padding:30px;box-shadow:0 35px 100px rgba(7,20,47,.35);position:relative}.tz-close{position:absolute;right:18px;top:18px;border:0;background:#f3f5f9;width:38px;height:38px;border-radius:50%;font-size:20px;cursor:pointer}.tz-brand{font:800 18px Inter;color:#07142f;letter-spacing:.08em}.tz-brand b{display:inline-grid;place-items:center;width:34px;height:34px;margin-right:9px;border-radius:10px;color:#fff;background:linear-gradient(135deg,#1ed7dd,#168cff,#6739e6,#e633ae,#ff9c28)}.tz-card h2{font:800 30px Inter;margin:25px 0 8px;color:#07142f}.tz-sub{color:#69738a;margin:0 0 22px}.tz-google,.tz-submit{width:100%;height:50px;border-radius:13px;font-weight:800;cursor:pointer}.tz-google{background:#fff;border:1px solid #dfe3ec}.tz-submit{border:0;color:#fff;background:linear-gradient(110deg,#168cff,#6739e6,#e633ae)}.tz-or{display:flex;align-items:center;gap:10px;color:#9098a8;font-size:12px;margin:18px 0}.tz-or:before,.tz-or:after{content:'';height:1px;background:#e5e8ef;flex:1}.tz-field{display:block;font-size:12px;font-weight:800;color:#39445b;margin:12px 0}.tz-field input{display:block;width:100%;height:48px;border:1px solid #dfe3ec;border-radius:12px;padding:0 13px;margin-top:6px;font:500 14px Inter}.tz-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.tz-switch{text-align:center;color:#69738a;font-size:13px;margin:18px 0 0}.tz-switch button{border:0;background:none;color:#5b36d4;font-weight:800;cursor:pointer}.tz-status{padding:10px 12px;border-radius:10px;background:#fff0f0;color:#a52727;font-size:13px;margin:12px 0}.tz-status.ok{background:#ecfbf5;color:#087653}@media(max-width:520px){.tz-card{padding:25px 20px}.tz-grid{grid-template-columns:1fr}}</style>`);
+const loginMarkup=`<div class="tz-auth" id="tzLogin"><div class="tz-card"><button class="tz-close" data-close>×</button><div class="tz-brand"><b>T</b>TEYZA</div><h2>Welcome back.</h2><p class="tz-sub">Log in to continue to your selling workspace.</p><button class="tz-google" id="tzGoogleLogin">G &nbsp; Continue with Google</button><div class="tz-or">OR CONTINUE WITH EMAIL</div><form id="tzLoginForm"><label class="tz-field">Email<input type="email" name="email" required></label><label class="tz-field">Password<input type="password" name="password" required></label><div class="tz-status" data-status hidden></div><button class="tz-submit">Log in to Teyza</button></form><p class="tz-switch">New to Teyza? <button type="button" data-open-register>Create account</button></p></div></div>`;
+const registerMarkup=`<div class="tz-auth" id="tzRegister"><div class="tz-card"><button class="tz-close" data-close>×</button><div class="tz-brand"><b>T</b>TEYZA</div><h2>Start selling.</h2><p class="tz-sub">Create your free Teyza workspace in less than a minute.</p><button class="tz-google" id="tzGoogleRegister">G &nbsp; Continue with Google</button><div class="tz-or">OR CREATE WITH EMAIL</div><form id="tzRegisterForm"><div class="tz-grid"><label class="tz-field">First name<input name="firstName" required></label><label class="tz-field">Last name<input name="lastName" required></label></div><label class="tz-field">Email<input type="email" name="email" required></label><label class="tz-field">Password<input type="password" name="password" minlength="6" required></label><label class="tz-field">Store or business name <span style="font-weight:500;color:#8b93a3">(optional)</span><input name="businessName" placeholder="e.g. Gatcheni Stores"></label><div class="tz-status" data-status hidden></div><button class="tz-submit">Create my Teyza account</button></form><p class="tz-switch">Already have an account? <button type="button" data-open-login>Log in</button></p></div></div>`;
+if(!document.getElementById('loginModal')&&!document.getElementById('tzLogin'))document.body.insertAdjacentHTML('beforeend',loginMarkup);if(!document.getElementById('tzRegister'))document.body.insertAdjacentHTML('beforeend',registerMarkup);
+const login=document.getElementById('loginModal')||document.getElementById('tzLogin'),register=document.getElementById('tzRegister');
+function open(m){document.querySelectorAll('.tz-auth,.auth-modal').forEach(x=>x.classList.remove('open'));m?.classList.add('open');document.body.classList.add('modal-open')}function close(m){m?.classList.remove('open');document.body.classList.remove('modal-open')}function status(f,msg,ok=false){const n=f?.querySelector('[data-status],[data-auth-status]');if(n){n.hidden=false;n.textContent=msg;n.classList.toggle('ok',ok);n.classList.toggle('success',ok)}}
+async function bootstrap(user,details={}){const token=await user.getIdToken();const r=await fetch('api/workspace.php?action=bootstrap',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(details)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to prepare your Teyza workspace.')}const go=()=>location.assign('dashboard.html');
+document.addEventListener('click',e=>{const r=e.target.closest('a[href="register.html"],[data-open-register]');if(r){e.preventDefault();open(register);return}const l=e.target.closest('a[href="login.html"],[data-open-login]');if(l){e.preventDefault();open(login);return}const c=e.target.closest('[data-close],[data-close-login]');if(c)close(c.closest('.tz-auth,.auth-modal'));if(e.target.classList.contains('tz-auth'))close(e.target)});
+const lf=document.getElementById('tzLoginForm')||document.getElementById('premiumLogin');lf?.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(lf),b=lf.querySelector('[type=submit]');b.disabled=true;try{const email=String(fd.get('email')||document.getElementById('loginEmail')?.value||'').trim(),pass=String(fd.get('password')||document.getElementById('loginPassword')?.value||'');const c=await signInWithEmailAndPassword(auth,email,pass);await bootstrap(c.user);status(lf,'Welcome back. Opening Teyza…',true);setTimeout(go,300)}catch(x){status(lf,x.code==='auth/invalid-credential'?'Incorrect email or password.':x.message||'Unable to log in.');b.disabled=false}});
+const rf=document.getElementById('tzRegisterForm');rf.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(rf),b=rf.querySelector('[type=submit]');b.disabled=true;try{const c=await createUserWithEmailAndPassword(auth,String(fd.get('email')).trim(),String(fd.get('password')));const full=`${fd.get('firstName')} ${fd.get('lastName')}`.trim();await updateProfile(c.user,{displayName:full});await bootstrap(c.user,{firstName:fd.get('firstName'),businessName:fd.get('businessName')});status(rf,'Your Teyza account is ready.',true);setTimeout(go,300)}catch(x){status(rf,x.code==='auth/email-already-in-use'?'This email already has a Teyza account. Log in instead.':x.message||'Unable to create your account.');b.disabled=false}});
+async function google(mode){const m=mode==='register'?register:login,f=m.querySelector('form');try{const c=await signInWithPopup(auth,provider);await bootstrap(c.user);status(f,'Connected. Opening Teyza…',true);setTimeout(go,300)}catch(x){status(f,x.code==='auth/popup-closed-by-user'?'Google sign-in was closed.':x.message||'Google sign-in failed.')}}document.getElementById('tzGoogleLogin')?.addEventListener('click',()=>google('login'));document.getElementById('googleLogin')?.addEventListener('click',()=>google('login'));document.getElementById('tzGoogleRegister')?.addEventListener('click',()=>google('register'));
+const requested=new URLSearchParams(location.search).get('auth');if(requested==='login')open(login);if(requested==='register')open(register);
