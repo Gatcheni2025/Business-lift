@@ -1,70 +1,79 @@
 # Business Expo Seller Operations
 
-Seller operations are intentionally split into a small number of seller-facing pages:
+Seller operations now run through the same-origin PHP backend. Firestore and Firebase Cloud Functions are not used for seller data.
+
+Core seller pages:
 
 - `seller-onboarding.html` — guided setup for selling connections, delivery, payments and target audience
-- `sales-channels.html` — external selling-platform connections and backend confirmation
+- `sales-channels.html` — external selling-platform connections
 - `shop-settings.html` — shop/contact/notification settings
+- `delivery-settings.html` — fulfilment and delivery preferences
 - `network.html` — Business Network profile
 - `dashboard.html` — balances, orders and selling activity
 
-The old standalone `banking.html`, `accounting.html` and `seller-setup.html` pages were removed because their useful settings are now handled through the guided setup/backend instead of separate menus.
+## PHP storage
 
-## Secure fields
+Seller settings are accessed through:
 
-Bank account numbers, PayFast merchant keys and PayFast passphrases are saved through Firebase Cloud Functions and encrypted using AES-256-GCM before being stored in Firestore.
-
-Set a 32-byte encryption key before deploying:
-
-```bash
-firebase functions:secrets:set FIELD_ENCRYPTION_KEY
+```text
+/api/settings.php
 ```
 
-Generate a compatible key:
+The browser sends the Firebase Authentication ID token only to prove the user's identity. PHP validates the token and stores the seller data in the protected server-side `storage/` directory. Firebase Authentication remains identity-only; Firestore is not used.
+
+## Sensitive payment fields
+
+Bank account numbers, PayFast Merchant Keys and PayFast passphrases are encrypted server-side with AES-256-GCM before they are written to disk.
+
+Set a strong server-only key:
+
+```text
+BUSINESS_EXPO_DATA_KEY=<64-character-random-hex-value>
+```
+
+Generate one with:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Seller operations are stored in:
+Never commit this value to GitHub. The API only returns masked bank-account information such as the final four digits, and it never returns PayFast keys/passphrases to the browser.
 
-```text
-sellerOperations/{businessId}
-```
+## Guided setup completion
 
-Do not give the browser direct Firestore read/write access to this collection. Use authenticated callable Functions.
-
-Recommended rule:
-
-```text
-match /sellerOperations/{businessId} {
-  allow read, write: if false;
-}
-```
-
-## Guided setup data
-
-The four onboarding steps are considered complete when the backend confirms:
+The four setup steps are considered complete when PHP confirms:
 
 1. At least one external selling platform is connected.
 2. A fulfilment method has been saved.
 3. EFT/bank, PayFast or another payment gateway has been saved.
 4. A target audience preference has been saved.
 
-## PayFast
+## Payments
 
-The implementation securely stores seller Merchant ID, Merchant Key and optional passphrase, plus sandbox and Split Payments preferences.
+The PHP settings backend supports:
 
-A live marketplace still needs signed PayFast checkout generation and ITN validation. Split Payments can divide transaction proceeds between PayFast accounts; bank settlement still follows PayFast's payout process.
+- EFT/banking details
+- PayFast Merchant ID, Merchant Key, passphrase and sandbox preference
+- another gateway name/reference
+
+A live marketplace checkout still requires signed PayFast checkout generation and ITN validation. Those payment-processing endpoints should decrypt secrets only on the server and must never expose them to browser JavaScript.
 
 ## Delivery
 
-Guided setup captures the seller's fulfilment mode, preferred courier/driver, dispatch address, standard delivery fee and tracking preference. More detailed delivery fields remain supported by the backend for future use.
+Seller setup captures fulfilment mode, preferred courier/driver, dispatch address, delivery fee, free-delivery threshold, delivery radius, customer pickup and tracking preference.
 
 ## Business Network
 
-`network.html` allows a seller to define their category, service area, what they offer, what they need, whether they are discoverable and whether other businesses may contact them.
+`network.html` stores category, service area, what the business offers, what it needs, discoverability and contact preference through the PHP settings API.
 
-## Advanced capabilities
+## Data path
 
-Accounting, booking and HR settings remain supported by the backend data model for future product modules, but they are deliberately not shown in the core seller menu until those modules are ready. This keeps the everyday seller experience simple.
+```text
+Browser
+  → Firebase Authentication (identity only)
+  → Authorization: Bearer <ID token>
+  → www.businessexpo.co.za/api/*.php
+  → protected PHP storage
+```
+
+There is no browser-to-Firestore or browser-to-Firebase-Functions seller operations path.
