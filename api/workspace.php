@@ -57,6 +57,25 @@ if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
   $workspace['business']['updatedAt']=gmdate('c'); saveWorkspace($user,$workspace);
   respond(200,['ok'=>true,'business'=>$workspace['business']]);
 }
+if ($action==='publishing') {
+  $productId=trim((string)($_GET['productId']??''));
+  if(!$productId) respond(422,['ok'=>false,'error'=>'Product is required']);
+  $index=-1; foreach(($workspace['products']??[]) as $i=>$p) if(($p['id']??'')===$productId){$index=$i;break;}
+  if($index<0) respond(404,['ok'=>false,'error'=>'Product not found']);
+  $product=$workspace['products'][$index]; $channels=$product['channels']??[];
+  if(!isset($product['publishing'])||!is_array($product['publishing'])) $product['publishing']=[];
+  foreach($channels as $channel) if(!isset($product['publishing'][$channel])) $product['publishing'][$channel]=['status'=>'waiting_verification','externalId'=>null,'lastSyncedAt'=>null,'error'=>null];
+  if($_SERVER['REQUEST_METHOD']==='POST'){
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    $channel=preg_replace('/[^a-z0-9_-]/','',strtolower((string)($input['channel']??'')));
+    if(!in_array($channel,$channels,true)) respond(422,['ok'=>false,'error'=>'Channel is not selected for this product']);
+    $allowed=['queued','publishing','published','error','setup_required','waiting_verification'];
+    $status=(string)($input['status']??'queued'); if(!in_array($status,$allowed,true)) $status='queued';
+    $product['publishing'][$channel]=['status'=>$status,'externalId'=>$input['externalId']??null,'lastSyncedAt'=>in_array($status,['published','error'],true)?gmdate('c'):null,'error'=>$input['error']??null];
+    $workspace['products'][$index]=$product; saveWorkspace($user,$workspace);
+  }
+  respond(200,['ok'=>true,'productId'=>$productId,'publishing'=>$product['publishing']]);
+}
 if ($action==='orders') {
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
