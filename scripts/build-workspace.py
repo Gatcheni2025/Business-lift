@@ -34,18 +34,18 @@ for name,meta in pages.items():
  scripts='\n'.join(meta['scripts'])
  page=f'''<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#087f5b"><title>{title} | Business Expo</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=2"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#087f5b"><title>{title} | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=6"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
 <body class="workspace" data-page="{name}">
 <a href="#main-content" class="skip-link">Skip to content</a>
-<aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="brand-mark">BE<span></span></span><span>Business Expo<small>YOUR BUSINESS WORKSPACE</small></span></a>
+<aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
 <div class="workspace-switch"><span class="workspace-avatar" data-business-initial>B</span><div><strong data-business-name>Your business</strong><small>Business workspace</small></div></div>
 <nav aria-label="Primary navigation">{nav}</nav>
-<div class="sidebar-footer"><button class="nav-link" data-logout type="button">{icon('logout')}<span>Sign out</span></button><small>Business Expo · Built for your growth</small></div></aside>
+<div class="sidebar-footer"><button class="nav-link" data-logout type="button">{icon('logout')}<span>Sign out</span></button><small>TEYZA · Everyone can sell.</small></div></aside>
 <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
 <div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><a class="account-link" href="business-profile.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
 <main class="page-main" id="main-content"><div class="page-heading"><div><h1>{title}</h1><p>{desc}</p></div><span class="page-date" data-current-date></span></div><div class="workspace-alert" data-workspace-status role="status" hidden></div>
 {content}
-</main><footer class="workspace-footer"><span>Business Expo</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
+</main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
 {scripts}
 </body></html>'''
