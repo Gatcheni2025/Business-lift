@@ -33,3 +33,17 @@
 .dashboard-contrast .pill{background:#050505;color:#fff}.dashboard-contrast .activity-alert strong{color:#050505}.dashboard-contrast .activity-alert p{color:#555}.dashboard-contrast .workspace-footer{background:#050505;color:#aaa;border:0}.dashboard-contrast .workspace-footer a{color:#fff;font-weight:700}
 .dashboard-contrast .workspace-alert,.dashboard-contrast .notice{border:2px solid #050505;background:#fff;color:#050505}
 @media(max-width:700px){.dashboard-contrast h1{font-size:29px}.dashboard-contrast .welcome-banner{padding:24px}.dashboard-contrast .welcome-banner h2{font-size:23px}}
+
+/* Shared Teyza identity across the complete authenticated workspace */
+.workspace.dashboard-contrast{background:#f4f4f2;color:#050505}
+.teyza-logo-mark{width:43px;height:43px;border-radius:13px;background:linear-gradient(135deg,#1ed7dd,#168cff 30%,#6739e6 58%,#e633ae 78%,#ff9c28);display:grid;place-items:center;box-shadow:0 8px 22px #6739e633;flex-shrink:0}
+.teyza-logo-mark>span{font-weight:800;font-size:24px;color:#fff;transform:skew(-8deg)}
+.teyza-word{font-weight:800;font-size:16px;letter-spacing:.08em;color:#fff}.teyza-word small{display:block;font-size:8px;letter-spacing:.04em;color:#aaa;margin-top:1px}
+.workspace.dashboard-contrast .page-heading h1{color:#050505;font-weight:800}.workspace.dashboard-contrast .page-heading p{color:#4d4d4d}
+.workspace.dashboard-contrast .card,.workspace.dashboard-contrast .panel,.workspace.dashboard-contrast .table-card,.workspace.dashboard-contrast .builder-card,.workspace.dashboard-contrast .guide,.workspace.dashboard-contrast .kanban-column,.workspace.dashboard-contrast .hero,.workspace.dashboard-contrast .workspace-panel.page-header{border:2px solid #050505;box-shadow:none;background:#fff}
+.workspace.dashboard-contrast input:not([type=checkbox]):not([type=radio]),.workspace.dashboard-contrast select,.workspace.dashboard-contrast textarea{border:1.5px solid #777;color:#050505}.workspace.dashboard-contrast input:focus,.workspace.dashboard-contrast textarea:focus,.workspace.dashboard-contrast select:focus{border-color:#050505;box-shadow:0 0 0 3px #05050518}
+.workspace.dashboard-contrast .button-primary,.workspace.dashboard-contrast .btn.primary,.workspace.dashboard-contrast .continue,.workspace.dashboard-contrast #saveDelivery,.workspace.dashboard-contrast #saveNetwork,.workspace.dashboard-contrast #saveShop,.workspace.dashboard-contrast .channels .btn{background:#050505;color:#fff;border-color:#050505}
+.workspace.dashboard-contrast .button,.workspace.dashboard-contrast .btn{border-color:#050505;color:#050505}.workspace.dashboard-contrast .button-primary:hover,.workspace.dashboard-contrast .btn.primary:hover{background:#282828}
+.workspace.dashboard-contrast .hero h2{color:#050505}.workspace.dashboard-contrast .hero p,.workspace.dashboard-contrast .muted,.workspace.dashboard-contrast .desc{color:#555}
+.workspace.dashboard-contrast .channels .card{border:2px solid #050505}.workspace.dashboard-contrast .mode{border:2px solid #050505;color:#333}.workspace.dashboard-contrast .mode.active{background:#050505;color:#fff}.workspace.dashboard-contrast .mode.active strong,.workspace.dashboard-contrast .mode.active span,.workspace.dashboard-contrast .mode.active i{color:#fff}
+.workspace.dashboard-contrast .form-status.success,.workspace.dashboard-contrast .status.connected,.workspace.dashboard-contrast .pill.success,.workspace.dashboard-contrast .included{background:#050505;color:#fff;border-color:#050505}
