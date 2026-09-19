@@ -228,7 +228,7 @@ logoutButtons.forEach((button) => {
     button.addEventListener("click", async () => {
         try {
             await signOut(auth);
-            window.location.href = "login.html";
+            window.location.href = "index.html?auth=login";
         } catch (error) {
             console.error("Logout error:", error);
         }
@@ -236,7 +236,6 @@ logoutButtons.forEach((button) => {
 });
 // Keep the requested destination when switching between authentication pages.
 if (loginForm || registerForm || resetForm) {
-    document.querySelectorAll('a[href="login.html"], a[href="register.html"], a[href="forgot-password.html"]').forEach(link => {
-        link.search = new URLSearchParams({redirect: getRedirectTarget()}).toString();
-    });
+    document.querySelectorAll('a[href="login.html"]').forEach(link=>{link.href="index.html?auth=login&redirect="+encodeURIComponent(getRedirectTarget())});
+    document.querySelectorAll('a[href="register.html"]').forEach(link=>{link.href="index.html?auth=register&redirect="+encodeURIComponent(getRedirectTarget())});
 }
