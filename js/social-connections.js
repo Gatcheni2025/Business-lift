@@ -60,7 +60,7 @@ function renderChooser(provider, state) {
   if (!Array.isArray(items) || !items.length || state.connected) return;
   const label = document.createElement("p");
   label.className = "choose-label";
-  label.textContent = provider === "meta" ? "Choose the Page Business Expo should use:" : "Choose your Merchant Center account:";
+  label.textContent = provider === "meta" ? "Choose the Page Teyza should use:" : "Choose your Merchant Center account:";
   target.appendChild(label);
   items.forEach((item) => {
     const button = document.createElement("button");
@@ -227,7 +227,7 @@ document.addEventListener("click", async (event) => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return window.location.href = "login.html";
+  if (!user) return window.location.href = "index.html?auth=login";
   businessId = await resolveBusinessId(user.uid);
   if (!businessId) {
     notify("Your business profile could not be found. Complete your business profile first.", "error");
