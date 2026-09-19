@@ -28,3 +28,10 @@ export function hydrateBusiness({businessId,business,userData},user){
  set('[data-business-id]',businessId||'');
 }
 export async function getWorkspaceSummary(user){ return api(user,'summary'); }
+
+export async function workspaceApi(user,action,options={}){return api(user,action,options);}
+export async function getWorkspaceSection(user,section){return api(user,'section&section='+encodeURIComponent(section));}
+export async function saveWorkspaceSection(user,section,data){return api(user,'section&section='+encodeURIComponent(section),{method:'POST',body:JSON.stringify(data)});}
+export async function saveBusinessProfile(user,data){const result=await api(user,'business',{method:'POST',body:JSON.stringify(data)});contexts.delete(user.uid);return result;}
+export async function getWorkspaceOrders(user){return api(user,'orders');}
+export async function createWorkspaceOrder(user,data){return api(user,'orders',{method:'POST',body:JSON.stringify(data)});}
