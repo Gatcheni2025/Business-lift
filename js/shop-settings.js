@@ -10,7 +10,7 @@ const getSummary = httpsCallable(functions, "getSellerDashboardSummary");
 let businessId = "";
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return window.location.href = "login.html";
+  if (!user) return window.location.href = "index.html?auth=login";
   try { businessId = (await getBusinessContext(user)).businessId; } catch(error) {
     const status=document.querySelector("[data-workspace-status]");
     if(status){status.hidden=false;status.textContent=workspaceError(error);}
