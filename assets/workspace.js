@@ -1,4 +1,9 @@
 (() => {
+ document.body.classList.add('dashboard-contrast');
+ document.title=document.title.replace(/Business Expo/gi,'Teyza');
+ document.querySelectorAll('.workspace-brand').forEach(brand=>{brand.innerHTML='<span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span>';});
+ document.querySelectorAll('.sidebar-footer>small,.workspace-footer>span').forEach(el=>el.textContent='TEYZA · Everyone can sell.');
+ document.querySelectorAll('p,h1,h2,h3,small,span').forEach(el=>{if(el.children.length===0&&/Business Expo/i.test(el.textContent))el.textContent=el.textContent.replace(/Business Expo/gi,'Teyza');});
  const sidebar=document.getElementById('sidebar');
  const toggle=document.getElementById('navToggle');
  const backdrop=document.getElementById('sidebarBackdrop');
