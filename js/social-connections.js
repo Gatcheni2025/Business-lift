@@ -1,7 +1,7 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
-import {collection, doc, getDoc, getDocs, limit, query, where} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import {app, auth, db} from "./firebase-config.js";
+import {app, auth} from "./firebase-config.js";
+import {getBusinessContext, hydrateBusiness, workspaceError} from "./business-context.js";
 
 const functions = getFunctions(app);
 const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
@@ -26,21 +26,6 @@ function notify(message, tone = "info") {
     return;
   }
   console.log(message);
-}
-
-async function resolveBusinessId(uid) {
-  const userSnap = await getDoc(doc(db, "users", uid));
-  const active = String(userSnap.data()?.activeBusinessId || "");
-  if (active) return active;
-  for (const field of ["ownerId", "uid", "userId"]) {
-    try {
-      const snap = await getDocs(query(collection(db, "businesses"), where(field, "==", uid), limit(1)));
-      if (!snap.empty) return snap.docs[0].id;
-    } catch (error) {
-      console.debug(`Business lookup by ${field} skipped`, error);
-    }
-  }
-  return "";
 }
 
 function labelFor(provider, state) {
@@ -228,12 +213,11 @@ document.addEventListener("click", async (event) => {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return window.location.href = "index.html?auth=login";
-  businessId = await resolveBusinessId(user.uid);
-  if (!businessId) {
-    notify("Your business profile could not be found. Complete your business profile first.", "error");
-    return;
-  }
   try {
+    const context = await getBusinessContext(user);
+    businessId = String(context.businessId || user.uid);
+    hydrateBusiness(context, user);
+    if (!businessId) throw new Error("Your Teyza workspace could not be identified.");
     await refreshConnections();
     const params = new URLSearchParams(location.search);
     const status = params.get("social");
@@ -242,6 +226,6 @@ onAuthStateChanged(auth, async (user) => {
     if (status === "cancelled") notify("Connection cancelled.", "error");
   } catch (error) {
     console.error(error);
-    notify("Unable to load selling connections.", "error");
+    notify(workspaceError(error, "load selling connections"), "error");
   }
 });
