@@ -15,7 +15,7 @@ const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
 const OAUTH_STATE_SECRET = defineSecret("OAUTH_STATE_SECRET");
 
 const APP_URL = defineString("APP_URL", {
-  default: "https://business-lift-3c19c.web.app",
+  default: "https://teyza.co.za",
 });
 const FUNCTIONS_BASE_URL = defineString("FUNCTIONS_BASE_URL", {
   default: "https://us-central1-business-lift-3c19c.cloudfunctions.net",
@@ -32,8 +32,10 @@ async function verifyBusinessAccess(uid, businessId) {
   if (!businessId || typeof businessId !== "string") {
     throw new HttpsError("invalid-argument", "businessId is required.");
   }
+  const expected = "TZ_" + crypto.createHash("sha256").update(uid).digest("hex").slice(0, 8).toUpperCase();
+  if (businessId === expected) return {businessId, ownerUid: uid, source: "teyza-workspace"};
   const snap = await db.collection("businesses").doc(businessId).get();
-  if (!snap.exists) throw new HttpsError("not-found", "Business not found.");
+  if (!snap.exists) throw new HttpsError("not-found", "Teyza workspace not found.");
   const b = snap.data() || {};
   const allowed = b.ownerId === uid || b.ownerUid === uid || b.uid === uid || b.userId === uid ||
     (Array.isArray(b.adminUids) && b.adminUids.includes(uid));
