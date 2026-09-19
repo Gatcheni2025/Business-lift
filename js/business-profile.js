@@ -1,7 +1,6 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {collection,doc,writeBatch,serverTimestamp,updateDoc} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import {auth,db} from "./firebase-config.js";
-import {getBusinessContext,hydrateBusiness,workspaceError} from "./business-context.js";
+import {auth} from "./firebase-config.js";
+import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
 const form=document.querySelector('[data-business-profile]');
 const button=form.querySelector('[type=submit]');
 const retry=document.querySelector('[data-profile-retry]');
@@ -40,20 +39,12 @@ form.addEventListener('submit',async event=>{
  if(!payload.businessName || !payload.industry){show('Enter a business name and industry.');return;}
  payload.profileComplete=completion(payload)===100;
  payload.setupProgress=completion(payload);
- payload.updatedAt=serverTimestamp();
+ 
  busy=true;button.disabled=true;button.textContent='Saving…';show('Saving your business profile…','info');
  try {
-  if(context.businessId){
-   await updateDoc(doc(db,'businesses',context.businessId),payload);
-  } else {
-   // Recover an authenticated account whose initial workspace was never created.
-   const businessRef=doc(collection(db,'businesses'));
-   const batch=writeBatch(db);
-   batch.set(businessRef,{...payload,businessId:businessRef.id,ownerId:currentUser.uid,ownerUid:currentUser.uid,plan:'start',status:'active',createdAt:serverTimestamp()});
-   batch.set(doc(db,'users',currentUser.uid),{uid:currentUser.uid,email:currentUser.email,activeBusinessId:businessRef.id,businessIds:[businessRef.id]},{merge:true});
-   await batch.commit();context.businessId=businessRef.id;
-  }
-  context.business={...context.business,...payload};hydrateBusiness(context,currentUser);updateSummary(payload);
+  const saved=await saveBusinessProfile(currentUser,payload);
+  context.business=saved.business||{...context.business,...payload};
+hydrateBusiness(context,currentUser);updateSummary(payload);
   show('Your business profile has been saved.','success');
  } catch(error){console.error('Profile save failed',error);show(workspaceError(error,'save your business profile'));}
  finally{busy=false;button.disabled=false;button.textContent='Save changes';}

@@ -39,5 +39,34 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
   foreach(['businessType','industry','country'] as $key) if(isset($input[$key])) $workspace['business'][$key]=trim((string)$input[$key]);
   saveWorkspace($user,$workspace);
 }
-if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[]]);
+if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
+if ($action==='section') {
+  $section=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['section']??''));
+  if(!$section) respond(422,['ok'=>false,'error'=>'Section is required']);
+  if($_SERVER['REQUEST_METHOD']==='POST'){
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    $workspace['settings']=$workspace['settings']??[];$workspace['settings'][$section]=$input;
+    saveWorkspace($user,$workspace); respond(200,['ok'=>true,'section'=>$section,'data'=>$input]);
+  }
+  respond(200,['ok'=>true,'section'=>$section,'data'=>$workspace['settings'][$section]??[]]);
+}
+if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $allowed=['businessName','businessType','industry','country','phone','address','about','profileComplete','setupProgress'];
+  foreach($allowed as $key) if(array_key_exists($key,$input)) $workspace['business'][$key]=$input[$key];
+  $workspace['business']['updatedAt']=gmdate('c'); saveWorkspace($user,$workspace);
+  respond(200,['ok'=>true,'business'=>$workspace['business']]);
+}
+if ($action==='orders') {
+  if($_SERVER['REQUEST_METHOD']==='POST'){
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    $productId=trim((string)($input['productId']??''));$customerId=trim((string)($input['customerId']??''));$quantity=max(1,(int)($input['quantity']??1));
+    $product=null;foreach(($workspace['products']??[]) as $p)if(($p['id']??'')===$productId){$product=$p;break;}
+    if(!$product)respond(422,['ok'=>false,'error'=>'Select a valid product']);if(!$customerId)respond(422,['ok'=>false,'error'=>'Customer is required']);
+    $shipping=max(0,(float)($input['shipping']??0));$tax=max(0,(float)($input['tax']??0));$subtotal=(float)($product['price']??0)*$quantity;
+    $order=['id'=>'ord_'.bin2hex(random_bytes(5)),'orderNumber'=>'#TZ-'.strtoupper(substr(bin2hex(random_bytes(4)),0,6)),'customerId'=>$customerId,'customerName'=>$customerId,'items'=>[['productId'=>$productId,'name'=>$product['name']??'Product','quantity'=>$quantity,'price'=>(float)($product['price']??0)]],'subtotal'=>$subtotal,'shipping'=>$shipping,'tax'=>$tax,'total'=>$subtotal+$shipping+$tax,'paymentStatus'=>(string)($input['paymentStatus']??'pending'),'orderStatus'=>(string)($input['orderStatus']??'new'),'createdAt'=>gmdate('c'),'updatedAt'=>gmdate('c')];
+    $workspace['orders']=$workspace['orders']??[];array_unshift($workspace['orders'],$order);saveWorkspace($user,$workspace);respond(200,['ok'=>true,'order'=>$order]);
+  }
+  respond(200,['ok'=>true,'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[]]);
+}
 respond(200,['ok'=>true,'businessId'=>$workspace['business']['businessId'],'business'=>$workspace['business'],'userData'=>['firstName'=>$workspace['firstName'],'email'=>$workspace['email']]]);
