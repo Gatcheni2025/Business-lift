@@ -203,7 +203,7 @@ exports.googleOAuthCallback = onRequest({
   }
 });
 
-exports.getSocialConnectUrl = onCall({
+const getSocialConnectUrlLegacy = onCall({
   secrets: [
     META_APP_ID,
     META_APP_SECRET,
@@ -263,7 +263,7 @@ exports.getSocialConnectUrl = onCall({
   throw new HttpsError("invalid-argument", "Unsupported provider.");
 });
 
-exports.socialOAuthCallback = onRequest({
+const socialOAuthCallbackLegacy = onRequest({
   secrets: [
     META_APP_ID,
     META_APP_SECRET,
@@ -463,7 +463,7 @@ exports.selectGoogleMerchantAccount = onCall(async (request) => {
   return {ok: true, account};
 });
 
-exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID]}, async (request) => {
+const getWhatsAppEmbeddedSignupConfigLegacy = onCall({secrets: [META_APP_ID]}, async (request) => {
   const uid = requireAuth(request);
   const {businessId} = request.data || {};
   await verifyBusinessAccess(uid, businessId);
@@ -474,7 +474,7 @@ exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID]}, async
   };
 });
 
-exports.completeWhatsAppEmbeddedSignup = onCall({
+const completeWhatsAppEmbeddedSignupLegacy = onCall({
   secrets: [META_APP_ID, META_APP_SECRET],
 }, async (request) => {
   const uid = requireAuth(request);
@@ -526,3 +526,10 @@ exports.completeWhatsAppEmbeddedSignup = onCall({
   }, {merge: true});
   return {ok: true, provider: "whatsapp"};
 });
+
+// Keep Meta/WhatsApp handlers out of the deployed manifest until their
+// provider credentials are configured. Google OAuth uses dedicated exports.
+void getSocialConnectUrlLegacy;
+void socialOAuthCallbackLegacy;
+void getWhatsAppEmbeddedSignupConfigLegacy;
+void completeWhatsAppEmbeddedSignupLegacy;
