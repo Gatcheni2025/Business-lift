@@ -8,8 +8,11 @@ const crypto = require("crypto");
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-const META_APP_ID = defineSecret("META_APP_ID");
-const META_APP_SECRET = defineSecret("META_APP_SECRET");
+// Meta credentials are read only by the legacy Meta/WhatsApp handlers.
+// Do not declare them as Firebase Secret params until those handlers are enabled,
+// otherwise Firebase CLI prompts for them even during Google-only deployments.
+const META_APP_ID = {value: () => process.env.META_APP_ID || ""};
+const META_APP_SECRET = {value: () => process.env.META_APP_SECRET || ""};
 const GOOGLE_CLIENT_ID = defineSecret("GOOGLE_CLIENT_ID");
 const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
 const OAUTH_STATE_SECRET = defineSecret("OAUTH_STATE_SECRET");
