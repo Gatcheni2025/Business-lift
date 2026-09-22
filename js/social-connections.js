@@ -5,6 +5,7 @@ import {getBusinessContext, hydrateBusiness, workspaceError} from "./business-co
 
 const functions = getFunctions(app);
 const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
+const getGoogleConnectUrl = httpsCallable(functions, "getGoogleConnectUrl");
 const getConnections = httpsCallable(functions, "getChannelConnections");
 const disconnectChannel = httpsCallable(functions, "disconnectChannel");
 const selectMetaPage = httpsCallable(functions, "selectMetaPage");
@@ -95,7 +96,8 @@ function returnPath() {
 }
 
 async function startOauth(provider) {
-  const result = await getConnectUrl({businessId, provider, returnTo: returnPath()});
+  const callable = provider === "google" ? getGoogleConnectUrl : getConnectUrl;
+  const result = await callable({businessId, provider, returnTo: returnPath()});
   if (!result.data?.url) throw new Error("No connection URL returned.");
   window.location.assign(result.data.url);
 }
