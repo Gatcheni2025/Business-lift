@@ -115,6 +115,94 @@ function safeConnection(provider, data = {}) {
   };
 }
 
+exports.getGoogleConnectUrl = onCall({
+  secrets: [GOOGLE_CLIENT_ID, OAUTH_STATE_SECRET],
+}, async (request) => {
+  const uid = requireAuth(request);
+  const {businessId, returnTo} = request.data || {};
+  await verifyBusinessAccess(uid, businessId);
+  const state = signState({
+    uid,
+    businessId,
+    provider: "google",
+    returnTo: safeReturnTo(returnTo),
+    nonce: crypto.randomBytes(16).toString("hex"),
+    exp: Date.now() + 10 * 60 * 1000,
+  });
+  const redirectUri = `${FUNCTIONS_BASE_URL.value()}/googleOAuthCallback`;
+  const qs = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID.value(),
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "https://www.googleapis.com/auth/content",
+    access_type: "offline",
+    include_granted_scopes: "true",
+    prompt: "consent",
+    state,
+  });
+  return {provider: "google", url: `https://accounts.google.com/o/oauth2/v2/auth?${qs}`};
+});
+
+exports.googleOAuthCallback = onRequest({
+  secrets: [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_STATE_SECRET],
+}, async (req, res) => {
+  let returnTo = "/sales-channels.html";
+  try {
+    if (req.query.error) {
+      return res.redirect(`${APP_URL.value()}${returnTo}?social=cancelled`);
+    }
+    const code = String(req.query.code || "");
+    const payload = readState(String(req.query.state || ""));
+    returnTo = safeReturnTo(payload.returnTo);
+    if (!code || payload.provider !== "google") throw new Error("Invalid Google OAuth callback");
+    await verifyBusinessAccess(payload.uid, payload.businessId);
+    const redirectUri = `${FUNCTIONS_BASE_URL.value()}/googleOAuthCallback`;
+    const tokenRes = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      new URLSearchParams({
+        code,
+        client_id: GOOGLE_CLIENT_ID.value(),
+        client_secret: GOOGLE_CLIENT_SECRET.value(),
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }).toString(),
+      {headers: {"Content-Type": "application/x-www-form-urlencoded"}},
+    );
+    const t = tokenRes.data;
+    const accountsRes = await axios.get(
+      "https://merchantapi.googleapis.com/accounts/v1/accounts",
+      {headers: {Authorization: `Bearer ${t.access_token}`}},
+    );
+    const accounts = (accountsRes.data.accounts || []).map((a) => ({
+      name: a.name || "",
+      accountId: String(a.name || "").split("/").pop(),
+      accountName: a.accountName || a.account_name || "Merchant Center",
+    }));
+    const selected = accounts.length === 1 ? accounts[0] : null;
+    const status = accounts.length === 1 ? "connected" :
+      (accounts.length > 1 ? "needs_account" : "no_accounts");
+    await channelRef(payload.businessId, "google").set({
+      provider: "google",
+      status,
+      accessToken: t.access_token,
+      refreshToken: t.refresh_token || null,
+      scope: t.scope || null,
+      accounts,
+      merchantAccountId: selected?.accountId || null,
+      displayName: selected?.accountName || null,
+      connectedByUid: payload.uid,
+      connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return res.redirect(
+      `${APP_URL.value()}${returnTo}?social=connected&provider=google`,
+    );
+  } catch (error) {
+    console.error("googleOAuthCallback", error.response?.data || error);
+    return res.redirect(`${APP_URL.value()}${returnTo}?social=error&provider=google`);
+  }
+});
+
 exports.getSocialConnectUrl = onCall({
   secrets: [
     META_APP_ID,
