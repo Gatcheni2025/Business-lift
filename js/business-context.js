@@ -26,6 +26,7 @@ export function hydrateBusiness({businessId,business,userData},user){
  set('[data-business-name]',business?.businessName||'Your Teyza Store');
  set('[data-business-initial]',(business?.businessName||'T').slice(0,1).toUpperCase());
  set('[data-business-id]',businessId||'');
+ const logo=business?.logoUrl||'';document.querySelectorAll('.workspace-avatar,.account-avatar,.profile-emblem').forEach(node=>{node.classList.toggle('has-logo',!!logo);node.style.backgroundImage=logo?`url("${logo}")`:'';});
 }
 export async function getWorkspaceSummary(user){ return api(user,'summary'); }
 
