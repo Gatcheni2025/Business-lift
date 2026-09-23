@@ -89,7 +89,7 @@ if ($action==='seller-readiness') {
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
-  $section=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['section']??''));
+  $section=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['section']??($_SERVER['HTTP_X_WORKSPACE_SECTION']??'')));
   if(!$section) respond(422,['ok'=>false,'error'=>'Section is required']);
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
