@@ -1,0 +1,8 @@
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";import {auth} from "./firebase-config.js";
+const frame=document.querySelector("[data-onboarding-frame]"),loading=document.querySelector("[data-onboarding-loading]");
+function stage(n){document.querySelectorAll("[data-stage]").forEach(x=>{const v=Number(x.dataset.stage);x.classList.toggle("active",v===n);x.classList.toggle("done",v<n)})}
+async function readiness(user){const token=await user.getIdToken();const r=await fetch("api/workspace.php?action=seller-readiness",{headers:{Authorization:"Bearer "+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Unable to load setup.");return d}
+function openStep(d){let n=1,src="business-profile.html?embedded=1";if(d.businessComplete&&!d.deliveryComplete){n=2;src="delivery-settings.html?embedded=1"}else if(d.businessComplete&&d.deliveryComplete&&!d.paymentComplete){n=3;src="seller-onboarding.html?embedded=1#payment-setup"}else if(d.productReady){sessionStorage.removeItem("teyzaOnboarding");location.replace("dashboard.html");return}stage(n);frame.src=src;frame.hidden=false;loading.hidden=true}
+onAuthStateChanged(auth,async user=>{if(!user)return location.replace("index.html?auth=login");try{openStep(await readiness(user))}catch(e){loading.textContent=e.message}});
+window.addEventListener("message",async e=>{if(e.origin!==location.origin||e.data?.type!=="teyza-onboarding-next")return;const user=auth.currentUser;if(user)openStep(await readiness(user))});
+frame.addEventListener("load",()=>{try{const path=frame.contentWindow.location.pathname;if(path.endsWith("/products.html")||path.endsWith("/dashboard.html"))location.replace(path.split("/").pop()+frame.contentWindow.location.hash)}catch(_){}});
