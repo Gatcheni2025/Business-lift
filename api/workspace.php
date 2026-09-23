@@ -42,7 +42,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
 if ($action==='seller-readiness') {
   $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))==='')$missing[]=$key;
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);}
-  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'missingBusinessFields'=>$missing]);
+  $settings=$workspace['settings']??[];$steps=0;if(!empty($workspace['sellerSetupComplete']))$steps=4;else{foreach(['delivery','audience'] as $s)if(!empty($settings[$s]))$steps++;if(!empty($settings['banking'])||!empty($settings['payfast'])||!empty($settings['paymentPreferences']))$steps++;if(!empty($settings['salesChannels'])||!empty($settings['connections']))$steps++;}
+  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
