@@ -173,6 +173,9 @@ document.getElementById("savePayments")?.addEventListener("click", async (event)
     }
     markStatus("paymentStatus", "Saved");
     setStep("payments", true);
+    if(currentUser){const token=await currentUser.getIdToken();await fetch('api/workspace.php?action=seller-readiness',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({paymentComplete:true})});}
+    const finish=document.getElementById("finishNote");if(finish)finish.textContent="Payment setup complete. You can now add your first product.";
+    setTimeout(()=>window.location.href="products.html#new-product",800);
   } catch (error) {
     alert(error.message || "Unable to save payment settings.");
   } finally {

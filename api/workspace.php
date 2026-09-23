@@ -79,9 +79,14 @@ if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'erro
 if ($action==='seller-readiness') {
   $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))==='')$missing[]=$key;
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);}
-  $settings=$workspace['settings']??[];$steps=0;if(!empty($workspace['sellerSetupComplete']))$steps=4;else{foreach(['delivery','audience'] as $s)if(!empty($settings[$s]))$steps++;if(!empty($settings['banking'])||!empty($settings['payfast'])||!empty($settings['paymentPreferences']))$steps++;if(!empty($settings['salesChannels'])||!empty($settings['connections']))$steps++;}
-  $verification=verificationState($workspace,$user);
-  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'businessVerification'=>$verification,'companyApproval'=>companyApproval($workspace),'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
+  $settings=$workspace['settings']??[];$verification=verificationState($workspace,$user);
+  if($_SERVER['REQUEST_METHOD']==='POST'){$input=$input??(json_decode((string)file_get_contents('php://input'),true)?:[]);if(array_key_exists('deliveryComplete',$input))$workspace['setupFlow']['deliveryComplete']=!empty($input['deliveryComplete']);if(array_key_exists('paymentComplete',$input))$workspace['setupFlow']['paymentComplete']=!empty($input['paymentComplete']);if(array_key_exists('sellerSetupComplete',$input))$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);}
+  $businessComplete=empty($missing)&&!empty($business['profileComplete'])&&((int)($verification['completed']??0)>=4);
+  $deliveryComplete=!empty($settings['delivery']['fulfilmentMode'])||!empty($workspace['setupFlow']['deliveryComplete']);
+  $paymentComplete=!empty($workspace['setupFlow']['paymentComplete'])||!empty($settings['banking'])||!empty($settings['payfast'])||!empty($settings['paymentPreferences']);
+  $productReady=$businessComplete&&$deliveryComplete&&$paymentComplete;
+  $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
+  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>companyApproval($workspace),'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$deliveryComplete&&$paymentComplete,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
