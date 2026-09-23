@@ -22,7 +22,7 @@ function go(step){
 function validateStep1(){
  const required=['name','sku','category','price','stock','description'];
  for(const n of required){const el=form.elements[n];if(!el?.value?.trim?.() && el?.value!==0){el?.focus();showStatus('Please complete all required product information.');return false}}
- const files=form.elements.images?.files;if(!files?.length){showStatus('Please add at least one product image.');return false}
+ const files=form.elements.images?.files;if(!editingProductId&&!files?.length){showStatus('Please add at least one product image.');return false}
  return true;
 }
 function selectedChannels(){return [...form.querySelectorAll('input[name="channels[]"]:checked')].filter(x=>!x.closest('.channel-card')?.hidden).map(x=>x.value)}
