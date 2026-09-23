@@ -6,8 +6,19 @@ const set=(s,v)=>document.querySelectorAll(s).forEach(n=>n.textContent=v);
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const totalOf=o=>Number(o.total??o.totalAmount??o.grandTotal??0)||0;
 function showError(message){const n=document.querySelector('[data-dashboard-status]');if(n){n.hidden=false;n.textContent=message;n.classList.add('error');}}
+async function getReadiness(user){const token=await user.getIdToken();const r=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to check seller setup.');return d;}
+function renderReadiness(r){
+ const business=document.querySelector('[data-readiness-business]'),setup=document.querySelector('[data-readiness-setup]'),ready=document.querySelector('[data-readiness-ready]'),badge=document.querySelector('[data-readiness-badge]'),copy=document.querySelector('[data-readiness-copy]'),action=document.querySelector('[data-primary-seller-action]');
+ const businessDone=!!r.businessComplete, setupDone=!!r.sellerSetupComplete, done=businessDone&&setupDone, count=Number(r.sellerSetupCompletedSteps||0), total=Number(r.sellerSetupTotalSteps||4);
+ if(business){business.textContent='Business information '+(businessDone?'✓':'•');business.classList.toggle('done',businessDone)}
+ if(setup){setup.textContent='Seller setup '+(setupDone?'✓':count+'/'+total);setup.classList.toggle('done',setupDone)}
+ if(ready){ready.textContent=done?'Ready to sell ✓':'Ready to sell';ready.classList.toggle('done',done)}
+ if(badge){badge.textContent=done?'READY':'SETUP REQUIRED';badge.classList.toggle('success',done)}
+ if(copy)copy.textContent=done?'Your business information and seller setup are complete. You can add products.':!businessDone?'Complete your business information first, then finish seller setup.':`Seller setup is ${count} of ${total} steps complete.`;
+ if(action){action.textContent=done?'＋ Add a product':'Complete setup →';action.href=done?'products.html#new-product':(!businessDone?'business-profile.html':'seller-onboarding.html')}
+}
 async function load(user){
- const [context,summary]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user)]); hydrateBusiness(context,user);
+ const [context,summary,readiness]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user)]); hydrateBusiness(context,user);renderReadiness(readiness);
  const business=summary.business||context.business||{}; const orders=summary.orders||[]; const products=summary.products||[];
  set('[data-greeting-name]',summary.firstName||context.userData?.firstName||user.displayName?.split(' ')[0]||'seller');
  set('[data-hero-line]',business.profileComplete?'Here’s what is happening across your Teyza workspace.':'Start by adding what you sell, then connect the channels you want to reach.');
