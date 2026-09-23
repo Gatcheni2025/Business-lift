@@ -10,14 +10,14 @@ onAuthStateChanged(auth, async user => {
  try {
   const context=await getBusinessContext(user);
   hydrateBusiness(context,user);
-  if(!context.businessId && page!=='business-profile.html'){location.replace('onboarding.html');return;}
+  if(!context.businessId && page!=='business-profile.html'&&page!=='dashboard.html'){location.replace('dashboard.html?onboarding=1');return;}
   const setupPages=new Set(['onboarding.html','business-profile.html','delivery-settings.html','seller-onboarding.html']);
   if(!setupPages.has(page)){
    const token=await user.getIdToken();
    const response=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});
    const readiness=await response.json();
    if(response.ok&&readiness.ok&&!readiness.productReady){
-    location.replace('onboarding.html');return;
+    location.replace('dashboard.html?onboarding=1');return;
    }
   }
  } catch(error) {
