@@ -45,8 +45,10 @@ function verificationState(array $workspace,array $user): array {
   $locationConfirmed=!empty($v['location']['confirmed'])&&isset($v['location']['lat'],$v['location']['lng']);
   $proofUploaded=!empty($v['proofOfAddress']['storedName']);
   $identityVerified=!empty($v['identity']['verified']);
-  $completed=(int)$phoneVerified+(int)$identityVerified+(int)$locationConfirmed+(int)$proofUploaded;
-  return ['phoneVerified'=>$phoneVerified,'identityVerified'=>$identityVerified,'identityStatus'=>(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted')),'locationConfirmed'=>$locationConfirmed,'proofOfAddressUploaded'=>$proofUploaded,'completed'=>$completed,'total'=>4,'location'=>$v['location']??null,'proofOfAddress'=>isset($v['proofOfAddress'])?['uploadedAt'=>$v['proofOfAddress']['uploadedAt']??null,'originalName'=>$v['proofOfAddress']['originalName']??'Document uploaded']:null];
+  $identityStatus=(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted'));
+  $identitySubmitted=!empty($v['identity']['submittedAt'])&&in_array($identityStatus,['pending','verified'],true);
+  $completed=(int)$phoneVerified+(int)$identitySubmitted+(int)$locationConfirmed+(int)$proofUploaded;
+  return ['phoneVerified'=>$phoneVerified,'identityVerified'=>$identityVerified,'identitySubmitted'=>$identitySubmitted,'identityStatus'=>$identityStatus,'locationConfirmed'=>$locationConfirmed,'proofOfAddressUploaded'=>$proofUploaded,'completed'=>$completed,'total'=>4,'location'=>$v['location']??null,'proofOfAddress'=>isset($v['proofOfAddress'])?['uploadedAt'=>$v['proofOfAddress']['uploadedAt']??null,'originalName'=>$v['proofOfAddress']['originalName']??'Document uploaded']:null];
 }
 if($action==='verification'){
   if($_SERVER['REQUEST_METHOD']==='POST'){
