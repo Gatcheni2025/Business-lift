@@ -57,6 +57,20 @@ if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
   $workspace['business']['updatedAt']=gmdate('c'); saveWorkspace($user,$workspace);
   respond(200,['ok'=>true,'business'=>$workspace['business']]);
 }
+if ($action==='product') {
+  $productId=trim((string)($_GET['productId']??'')); if(!$productId) respond(422,['ok'=>false,'error'=>'Product is required']);
+  $index=-1; foreach(($workspace['products']??[]) as $i=>$item) if(($item['id']??'')===$productId){$index=$i;break;} if($index<0) respond(404,['ok'=>false,'error'=>'Product not found']);
+  if($_SERVER['REQUEST_METHOD']==='DELETE'){array_splice($workspace['products'],$index,1);saveWorkspace($user,$workspace);respond(200,['ok'=>true]);}
+  if($_SERVER['REQUEST_METHOD']==='POST'){
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];$product=$workspace['products'][$index];
+    foreach(['name','sku','category','brand','condition','desc','targetArea','targetLat','targetLng','targetGender'] as $key) if(array_key_exists($key,$input))$product[$key]=trim((string)$input[$key]);
+    foreach(['price','costPrice'] as $key) if(array_key_exists($key,$input))$product[$key]=(float)$input[$key]; if(array_key_exists('stock',$input))$product['stock']=(int)$input['stock'];
+    if(array_key_exists('targetPopulation',$input))$product['targetPopulation']=max(5000,min(1000000,(int)$input['targetPopulation']));
+    if(isset($input['channels'])&&is_array($input['channels'])){$allowed=['facebook','instagram','x','whatsapp','tiktok','google'];$product['channels']=array_values(array_intersect($allowed,$input['channels']));$product['publishing']=array_reduce($product['channels'],function($out,$channel){$out[$channel]=['status'=>'waiting_verification','externalId'=>null,'lastSyncedAt'=>null,'error'=>null];return $out;},[]);}
+    $pop=(int)($product['targetPopulation']??50000);$product['reachFee']=$pop<=50000?0:($pop<=100000?50:($pop<=250000?100:($pop<=500000?200:350)));$product['verificationStatus']='pending';$product['verificationNote']='Awaiting Teyza review';$product['updatedAt']=gmdate('c');$workspace['products'][$index]=$product;saveWorkspace($user,$workspace);respond(200,['ok'=>true,'product'=>$product]);
+  }
+  respond(405,['ok'=>false,'error'=>'Method not allowed']);
+}
 if ($action==='publishing') {
   $productId=trim((string)($_GET['productId']??''));
   if(!$productId) respond(422,['ok'=>false,'error'=>'Product is required']);
