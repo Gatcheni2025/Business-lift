@@ -78,3 +78,5 @@
 body:has(.onboarding-shell){}
 body.workspace:has(script[src="js/onboarding-guide.js"]){}
 @media(max-width:700px){.onboarding-screen{padding:10px}.onboarding-modal{border-radius:18px}.onboarding-modal>header{padding:18px}.onboarding-stagebar b{display:none}.onboarding-frame-wrap iframe{height:76vh;min-height:600px}}
+
+html.embedded-onboarding .workspace-sidebar,html.embedded-onboarding .workspace-topbar,html.embedded-onboarding .workspace-footer{display:none!important}html.embedded-onboarding .workspace-main{margin-left:0!important}html.embedded-onboarding .page-main{max-width:960px;margin:0 auto;padding:24px!important}html.embedded-onboarding .page-heading{display:none!important}html.embedded-onboarding body{background:#f8f9fb!important}
