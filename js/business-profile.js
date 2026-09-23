@@ -1,53 +1,33 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {onAuthStateChanged,RecaptchaVerifier,linkWithPhoneNumber} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
-const form=document.querySelector('[data-business-profile]');
-const button=form.querySelector('[type=submit]');
-const retry=document.querySelector('[data-profile-retry]');
-const status=document.querySelector('[data-profile-status]');
-let context=null, currentUser=null, busy=false;
+const form=document.querySelector('[data-business-profile]'),button=form.querySelector('[type=submit]'),retry=document.querySelector('[data-profile-retry]'),status=document.querySelector('[data-profile-status]');
 const fields={'business-name':'businessName','business-type':'businessType',industry:'industry',country:'country',phone:'phone',address:'address',about:'about'};
+let context=null,currentUser=null,busy=false,confirmationResult=null,recaptcha=null,map=null,marker=null,currentPoint=null,verification=null;
+const $=s=>document.querySelector(s);
 function show(message,tone='error'){status.hidden=false;status.textContent=message;status.className='form-status '+tone;}
-function completion(data){const values=Object.values(fields).map(key=>String(data[key] || '').trim());return Math.round(values.filter(Boolean).length/values.length*100);}
-function updateSummary(data){document.querySelector('[data-profile-progress]').textContent=completion(data)+'%';document.querySelector('[data-verification-status]').textContent=data.profileComplete?'Ready':'In progress';}
-async function load(){
- if(!currentUser || busy)return;
- button.disabled=true;retry.hidden=true;show('Loading your saved details…','info');
- try {
-  context=await getBusinessContext(currentUser,{refresh:true});
-  const business=context.business || {};
-  for(const [field,key] of Object.entries(fields)){
-   const control=form.elements[field];const value=business[key];
-   if(value != null){
-    if(control.tagName==='SELECT' && ![...control.options].some(option=>option.value===value))control.add(new Option(value,value));
-    control.value=value;
-   }
-  }
-  hydrateBusiness(context,currentUser);updateSummary(business);
-  status.hidden=!!context.business;
-  if(!context.business)show('Finish your business details to create your workspace.','info');
-  button.disabled=false;button.textContent='Save changes';
- } catch(error){context=null;show(workspaceError(error,'load your business profile'));retry.hidden=false;button.textContent='Save changes';}
+function completion(data){const values=Object.values(fields).map(key=>String(data[key]||'').trim());return Math.round(values.filter(Boolean).length/values.length*100);}
+function updateSummary(data){$('[data-profile-progress]').textContent=completion(data)+'%';$('[data-verification-status]').textContent=data.profileComplete?'Information complete':'In progress';}
+async function api(action,options={}){const token=await currentUser.getIdToken();const r=await fetch('api/workspace.php?action='+encodeURIComponent(action),{...options,headers:{...(options.headers||{}),Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Request failed');return d;}
+function renderVerification(v={}){
+ verification=v;const items=[['[data-check-phone]',v.phoneVerified],['[data-check-identity]',v.identityVerified],['[data-check-location]',v.locationConfirmed],['[data-check-proof]',v.proofOfAddressUploaded]];
+ items.forEach(([s,done])=>{const n=$(s);if(!n)return;n.classList.toggle('done',!!done);const icon=n.querySelector(':scope > span');if(icon)icon.textContent=done?'✓':'○';});
+ const count=Number(v.completed||0),total=Number(v.total||4);$('[data-verification-title]').textContent=`Business verification — ${count} of ${total} complete`;$('[data-verification-badge]').textContent=`${count}/${total}`;$('[data-verification-badge]').classList.toggle('success',count===total);
+ $('[data-send-otp]').textContent=v.phoneVerified?'Phone verified ✓':'Verify phone';$('[data-send-otp]').disabled=!!v.phoneVerified;
+ $('[data-location-status]').textContent=v.locationConfirmed?'Location confirmed ✓':'Location not confirmed';
+ $('[data-proof-status]').textContent=v.proofOfAddressUploaded?`Uploaded: ${v.proofOfAddress?.originalName||'proof of address'}`:'Your document is stored privately and is not shown to customers.';
+ if(v.location?.lat!=null&&v.location?.lng!=null){setMapPoint(Number(v.location.lat),Number(v.location.lng),false);}
 }
-// Attach immediately, even if loading fails. Never submit profile details as a URL query.
-form.addEventListener('submit',async event=>{
- event.preventDefault();
- if(busy)return;
- if(!context || !currentUser){show('Your profile has not loaded yet. Select Retry loading before saving.');retry.hidden=false;return;}
- if(!form.reportValidity())return;
- const payload={};for(const [field,key] of Object.entries(fields))payload[key]=form.elements[field].value.trim();
- if(!payload.businessName || !payload.industry){show('Enter a business name and industry.');return;}
- payload.profileComplete=completion(payload)===100;
- payload.setupProgress=completion(payload);
- 
- busy=true;button.disabled=true;button.textContent='Saving…';show('Saving your business profile…','info');
- try {
-  const saved=await saveBusinessProfile(currentUser,payload);
-  context.business=saved.business||{...context.business,...payload};
-hydrateBusiness(context,currentUser);updateSummary(payload);
-  show(payload.profileComplete?'Your business information is complete. Continue to Seller setup before adding products.':'Your business profile has been saved. Complete all fields before adding products.','success');
- } catch(error){console.error('Profile save failed',error);show(workspaceError(error,'save your business profile'));}
- finally{busy=false;button.disabled=false;button.textContent='Save changes';}
-});
-retry.addEventListener('click',load);
-onAuthStateChanged(auth,user=>{currentUser=user;if(user)load();else{context=null;button.disabled=true;}});
+function normalizePhone(raw){let s=String(raw||'').replace(/[\s()-]/g,'');if(/^0\d{9}$/.test(s))s='+27'+s.slice(1);if(/^27\d{9}$/.test(s))s='+'+s;return s;}
+function initMap(){if(map||!window.L)return;map=L.map('businessMap').setView([-30.5595,22.9375],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);map.on('click',e=>setMapPoint(e.latlng.lat,e.latlng.lng,true));}
+function setMapPoint(lat,lng,pan=true){initMap();currentPoint={lat,lng};if(!marker){marker=L.marker([lat,lng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const p=marker.getLatLng();currentPoint={lat:p.lat,lng:p.lng};reverseAddress(p.lat,p.lng);});}else marker.setLatLng([lat,lng]);if(pan)map.setView([lat,lng],16);}
+async function reverseAddress(lat,lng){try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`,{headers:{Accept:'application/json'}});if(!r.ok)return;const d=await r.json();if(d.display_name)form.elements.address.value=d.display_name;}catch(e){console.warn('Reverse geocoding failed',e);}}
+async function refreshVerification(){const d=await api('verification');renderVerification(d.verification||{});}
+async function load(){if(!currentUser||busy)return;button.disabled=true;retry.hidden=true;show('Loading your saved details…','info');try{context=await getBusinessContext(currentUser,{refresh:true});const business=context.business||{};for(const [field,key] of Object.entries(fields)){const control=form.elements[field],value=business[key];if(value!=null){if(control.tagName==='SELECT'&&![...control.options].some(o=>o.value===value))control.add(new Option(value,value));control.value=value;}}hydrateBusiness(context,currentUser);updateSummary(business);initMap();await refreshVerification();status.hidden=!!context.business;if(!context.business)show('Finish your business details to create your workspace.','info');button.disabled=false;button.textContent='Save changes';}catch(error){context=null;show(workspaceError(error,'load your business profile'));retry.hidden=false;button.textContent='Save changes';}}
+form.addEventListener('submit',async e=>{e.preventDefault();if(busy)return;if(!context||!currentUser){show('Your profile has not loaded yet. Select Retry loading before saving.');retry.hidden=false;return;}if(!form.reportValidity())return;const payload={};for(const [field,key] of Object.entries(fields))payload[key]=form.elements[field].value.trim();if(!payload.businessName||!payload.industry){show('Enter a business name and industry.');return;}payload.profileComplete=completion(payload)===100;payload.setupProgress=completion(payload);busy=true;button.disabled=true;button.textContent='Saving…';show('Saving your business profile…','info');try{const saved=await saveBusinessProfile(currentUser,payload);context.business=saved.business||{...context.business,...payload};hydrateBusiness(context,currentUser);updateSummary(context.business);await refreshVerification();show(payload.profileComplete?'Your business information is complete. Finish the verification checks shown on the right.':'Your business profile has been saved. Complete all fields before adding products.','success');}catch(error){show(workspaceError(error,'save your business profile'));}finally{busy=false;button.disabled=false;button.textContent='Save changes';}});
+$('[data-send-otp]').addEventListener('click',async()=>{const phone=normalizePhone(form.elements.phone.value);if(!/^\+\d{10,15}$/.test(phone)){show('Enter a valid mobile number, for example +27 60 123 4567.');return;}try{$('[data-send-otp]').disabled=true;$('[data-send-otp]').textContent='Sending…';if(recaptcha){recaptcha.clear();recaptcha=null;}recaptcha=new RecaptchaVerifier(auth,'phone-recaptcha',{size:'invisible'});confirmationResult=await linkWithPhoneNumber(currentUser,phone,recaptcha);$('[data-otp-panel]').hidden=false;$('[data-otp-status]').textContent='Code sent to '+phone;show('Verification code sent.','success');}catch(e){console.error(e);show(e.code==='auth/credential-already-in-use'?'That phone number is already linked to another account.':'Could not send the verification code. Check the number and try again.');$('[data-send-otp]').disabled=false;$('[data-send-otp]').textContent='Verify phone';}});
+$('[data-confirm-otp]').addEventListener('click',async()=>{const code=$('[data-otp-code]').value.trim();if(!/^\d{6}$/.test(code)){show('Enter the 6-digit verification code.');return;}try{$('[data-confirm-otp]').disabled=true;await confirmationResult.confirm(code);await currentUser.reload();form.elements.phone.value=normalizePhone(form.elements.phone.value);const payload={...context.business,phone:form.elements.phone.value};payload.profileComplete=completion(payload)===100;payload.setupProgress=completion(payload);const saved=await saveBusinessProfile(currentUser,payload);context.business=saved.business;await refreshVerification();$('[data-otp-panel]').hidden=true;show('Business phone verified successfully.','success');}catch(e){console.error(e);show('The verification code is invalid or expired. Please try again.');}finally{$('[data-confirm-otp]').disabled=false;}});
+$('[data-use-location]').addEventListener('click',()=>{if(!navigator.geolocation){show('Location is not supported by this browser.');return;}const b=$('[data-use-location]');b.disabled=true;b.textContent='Finding location…';navigator.geolocation.getCurrentPosition(async p=>{setMapPoint(p.coords.latitude,p.coords.longitude,true);await reverseAddress(p.coords.latitude,p.coords.longitude);$('[data-location-status]').textContent=`Location found · accuracy ±${Math.round(p.coords.accuracy)}m. Move the pin if needed.`;b.disabled=false;b.textContent='Use my current location';},()=>{show('Teyza could not access your location. Allow location permission or choose the address on the map.');b.disabled=false;b.textContent='Use my current location';},{enableHighAccuracy:true,timeout:15000,maximumAge:0});});
+$('[data-confirm-location]').addEventListener('click',async()=>{if(!currentPoint){show('Use your current location or choose a point on the map first.');return;}const address=form.elements.address.value.trim();if(!address){show('Enter or select the business address before confirming the location.');return;}try{const d=await api('verification',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'location',lat:currentPoint.lat,lng:currentPoint.lng,address})});renderVerification(d.verification);show('Business location confirmed.','success');}catch(e){show(e.message);}});
+$('[data-upload-proof]').addEventListener('click',async()=>{const file=$('[data-proof-file]').files[0];if(!file){show('Choose a proof of address document first.');return;}const b=$('[data-upload-proof]');try{b.disabled=true;b.textContent='Uploading…';const token=await currentUser.getIdToken();const fd=new FormData();fd.append('proof',file);const r=await fetch('api/verification-upload.php',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload failed');await refreshVerification();show('Proof of address uploaded securely.','success');}catch(e){show(e.message);}finally{b.disabled=false;b.textContent='Upload proof';}});
+retry.addEventListener('click',load);onAuthStateChanged(auth,user=>{currentUser=user;if(user)load();else{context=null;button.disabled=true;}});
