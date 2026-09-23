@@ -8,14 +8,18 @@ const totalOf=o=>Number(o.total??o.totalAmount??o.grandTotal??0)||0;
 function showError(message){const n=document.querySelector('[data-dashboard-status]');if(n){n.hidden=false;n.textContent=message;n.classList.add('error');}}
 async function getReadiness(user){const token=await user.getIdToken();const r=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to check seller setup.');return d;}
 function renderReadiness(r){
- const business=document.querySelector('[data-readiness-business]'),setup=document.querySelector('[data-readiness-setup]'),ready=document.querySelector('[data-readiness-ready]'),badge=document.querySelector('[data-readiness-badge]'),copy=document.querySelector('[data-readiness-copy]'),action=document.querySelector('[data-primary-seller-action]');
- const businessDone=!!r.businessComplete, setupDone=!!r.sellerSetupComplete, done=businessDone&&setupDone, count=Number(r.sellerSetupCompletedSteps||0), total=Number(r.sellerSetupTotalSteps||4);
- if(business){const vc=r.businessVerification;business.textContent='Business information '+(businessDone?'✓':'•')+(vc?' · Verification '+Number(vc.completed||0)+'/'+Number(vc.total||4):'');business.classList.toggle('done',businessDone)}
- if(setup){setup.textContent='Seller setup '+(setupDone?'✓':count+'/'+total);setup.classList.toggle('done',setupDone)}
- if(ready){ready.textContent=done?'Ready to sell ✓':'Ready to sell';ready.classList.toggle('done',done)}
+ const businessDone=!!r.businessComplete,deliveryDone=!!r.deliveryComplete,paymentDone=!!r.paymentComplete,done=!!r.productReady,action=document.querySelector('[data-primary-seller-action]');
+ const business=document.querySelector('[data-readiness-business]'),setup=document.querySelector('[data-readiness-setup]'),ready=document.querySelector('[data-readiness-ready]'),badge=document.querySelector('[data-readiness-badge]'),copy=document.querySelector('[data-readiness-copy]');
+ if(business){business.textContent='Business profile '+(businessDone?'✓':'•');business.classList.toggle('done',businessDone)}
+ if(setup){setup.textContent=deliveryDone&&paymentDone?'Delivery & payment ✓':deliveryDone?'Delivery ✓ · Payment required':'Delivery & payment required';setup.classList.toggle('done',deliveryDone&&paymentDone)}
+ if(ready){ready.textContent=done?'Ready to add products ✓':'Products locked';ready.classList.toggle('done',done)}
  if(badge){badge.textContent=done?'READY':'SETUP REQUIRED';badge.classList.toggle('success',done)}
- if(copy)copy.textContent=done?'Your business information and seller setup are complete. You can add products.':!businessDone?'Complete your business information first, then finish seller setup.':`Seller setup is ${count} of ${total} steps complete.`;
- if(action){action.textContent=done?'＋ Add a product':'Complete setup →';action.href=done?'products.html#new-product':(!businessDone?'business-profile.html':'seller-onboarding.html')}
+ let href='business-profile.html?setup=1',label='Complete business profile →',message='Complete your business profile and verification first.';
+ if(businessDone&&!deliveryDone){href='delivery-settings.html?setup=1';label='Set up delivery →';message='Business profile complete. Next, choose how orders will be delivered.'}
+ else if(businessDone&&deliveryDone&&!paymentDone){href='seller-onboarding.html#payment-setup';label='Set up payments →';message='Delivery is ready. Next, choose how your business will be paid.'}
+ else if(done){href='products.html#new-product';label='＋ Add a product';message='Setup complete. You can now upload products to sell.'}
+ if(copy)copy.textContent=message;if(action){action.textContent=label;action.href=href}
+ const d=document.querySelector('[data-setup-delivery]'),p=document.querySelector('[data-setup-payment]');if(d)d.dataset.complete=String(deliveryDone);if(p)p.dataset.complete=String(paymentDone);
 }
 async function load(user){
  const [context,summary,readiness]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user)]); hydrateBusiness(context,user);renderReadiness(readiness);
