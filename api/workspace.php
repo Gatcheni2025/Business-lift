@@ -32,6 +32,27 @@ function loadWorkspace(array $firebase): array {
 function saveWorkspace(array $firebase,array $workspace): void { file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); }
 
 $user=verifyFirebase(bearer()); $workspace=loadWorkspace($user); $action=$_GET['action']??'context';
+function verificationState(array $workspace,array $user): array {
+  $v=$workspace['verification']??[];$business=$workspace['business']??[];
+  $savedPhone=preg_replace('/\D+/','',(string)($business['phone']??''));$firebasePhone=preg_replace('/\D+/','',(string)($user['phoneNumber']??''));
+  $phoneVerified=$savedPhone!==''&&$firebasePhone!==''&&(substr($savedPhone,-9)===substr($firebasePhone,-9));
+  $locationConfirmed=!empty($v['location']['confirmed'])&&isset($v['location']['lat'],$v['location']['lng']);
+  $proofUploaded=!empty($v['proofOfAddress']['storedName']);
+  $identityVerified=!empty($v['identity']['verified']);
+  $completed=(int)$phoneVerified+(int)$identityVerified+(int)$locationConfirmed+(int)$proofUploaded;
+  return ['phoneVerified'=>$phoneVerified,'identityVerified'=>$identityVerified,'locationConfirmed'=>$locationConfirmed,'proofOfAddressUploaded'=>$proofUploaded,'completed'=>$completed,'total'=>4,'location'=>$v['location']??null,'proofOfAddress'=>isset($v['proofOfAddress'])?['uploadedAt'=>$v['proofOfAddress']['uploadedAt']??null,'originalName'=>$v['proofOfAddress']['originalName']??'Document uploaded']:null];
+}
+if($action==='verification'){
+  if($_SERVER['REQUEST_METHOD']==='POST'){
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];$type=(string)($input['type']??'');
+    if($type==='location'){
+      $lat=filter_var($input['lat']??null,FILTER_VALIDATE_FLOAT);$lng=filter_var($input['lng']??null,FILTER_VALIDATE_FLOAT);$address=trim((string)($input['address']??''));
+      if($lat===false||$lng===false||$lat < -90||$lat > 90||$lng < -180||$lng > 180||$address==='')respond(422,['ok'=>false,'error'=>'Choose a valid map location and address']);
+      $workspace['verification']=$workspace['verification']??[];$workspace['verification']['location']=['confirmed'=>true,'lat'=>$lat,'lng'=>$lng,'address'=>$address,'confirmedAt'=>gmdate('c')];$workspace['business']['address']=$address;saveWorkspace($user,$workspace);
+    }
+  }
+  respond(200,['ok'=>true,'verification'=>verificationState($workspace,$user)]);
+}
 if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
   $input=json_decode((string)file_get_contents('php://input'),true)?:[];
   if (!empty($input['firstName'])) $workspace['firstName']=trim((string)$input['firstName']);
@@ -43,7 +64,8 @@ if ($action==='seller-readiness') {
   $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))==='')$missing[]=$key;
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);}
   $settings=$workspace['settings']??[];$steps=0;if(!empty($workspace['sellerSetupComplete']))$steps=4;else{foreach(['delivery','audience'] as $s)if(!empty($settings[$s]))$steps++;if(!empty($settings['banking'])||!empty($settings['payfast'])||!empty($settings['paymentPreferences']))$steps++;if(!empty($settings['salesChannels'])||!empty($settings['connections']))$steps++;}
-  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
+  $verification=verificationState($workspace,$user);
+  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'businessVerification'=>$verification,'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
