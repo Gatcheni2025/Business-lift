@@ -11,7 +11,7 @@ onAuthStateChanged(auth, async user => {
   const context=await getBusinessContext(user);
   hydrateBusiness(context,user);
   if(!context.businessId && page!=='business-profile.html'&&page!=='dashboard.html'){location.replace('dashboard.html?onboarding=1');return;}
-  const setupPages=new Set(['dashboard.html','onboarding.html','business-profile.html','delivery-settings.html','seller-onboarding.html']);
+  const setupPages=new Set(['dashboard.html','business-profile.html']);
   if(!setupPages.has(page)){
    const token=await user.getIdToken();
    const response=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});
