@@ -10,7 +10,7 @@ async function getReadiness(user){const token=await user.getIdToken();const r=aw
 function renderReadiness(r){
  const business=document.querySelector('[data-readiness-business]'),setup=document.querySelector('[data-readiness-setup]'),ready=document.querySelector('[data-readiness-ready]'),badge=document.querySelector('[data-readiness-badge]'),copy=document.querySelector('[data-readiness-copy]'),action=document.querySelector('[data-primary-seller-action]');
  const businessDone=!!r.businessComplete, setupDone=!!r.sellerSetupComplete, done=businessDone&&setupDone, count=Number(r.sellerSetupCompletedSteps||0), total=Number(r.sellerSetupTotalSteps||4);
- if(business){business.textContent='Business information '+(businessDone?'✓':'•');business.classList.toggle('done',businessDone)}
+ if(business){const vc=r.businessVerification;business.textContent='Business information '+(businessDone?'✓':'•')+(vc?' · Verification '+Number(vc.completed||0)+'/'+Number(vc.total||4):'');business.classList.toggle('done',businessDone)}
  if(setup){setup.textContent='Seller setup '+(setupDone?'✓':count+'/'+total);setup.classList.toggle('done',setupDone)}
  if(ready){ready.textContent=done?'Ready to sell ✓':'Ready to sell';ready.classList.toggle('done',done)}
  if(badge){badge.textContent=done?'READY':'SETUP REQUIRED';badge.classList.toggle('success',done)}
