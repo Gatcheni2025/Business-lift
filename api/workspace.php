@@ -39,6 +39,11 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
   foreach(['businessType','industry','country'] as $key) if(isset($input[$key])) $workspace['business'][$key]=trim((string)$input[$key]);
   saveWorkspace($user,$workspace);
 }
+if ($action==='seller-readiness') {
+  $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))==='')$missing[]=$key;
+  if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);}
+  respond(200,['ok'=>true,'businessComplete'=>empty($missing)&&!empty($business['profileComplete']),'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),'missingBusinessFields'=>$missing]);
+}
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
   $section=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['section']??''));
