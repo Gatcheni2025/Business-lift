@@ -45,7 +45,7 @@ form.addEventListener('submit',async event=>{
   const saved=await saveBusinessProfile(currentUser,payload);
   context.business=saved.business||{...context.business,...payload};
 hydrateBusiness(context,currentUser);updateSummary(payload);
-  show('Your business profile has been saved.','success');
+  show(payload.profileComplete?'Your business information is complete. Continue to Seller setup before adding products.':'Your business profile has been saved. Complete all fields before adding products.','success');
  } catch(error){console.error('Profile save failed',error);show(workspaceError(error,'save your business profile'));}
  finally{busy=false;button.disabled=false;button.textContent='Save changes';}
 });

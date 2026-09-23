@@ -14,6 +14,7 @@ let businessId = "";
 let selectedPay = "eft";
 let selectedGender = "all";
 let currentState = {platforms: false, delivery: false, payments: false, audience: false};
+let currentUser=null;
 
 function markStatus(id, text, done = true) {
   const el = document.getElementById(id);
@@ -22,8 +23,10 @@ function markStatus(id, text, done = true) {
   el.classList.toggle("connected", done);
 }
 
+async function persistReadiness(complete){if(!currentUser)return;try{const token=await currentUser.getIdToken();await fetch('api/workspace.php?action=seller-readiness',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({sellerSetupComplete:complete})})}catch(e){console.error('Unable to save seller readiness',e)}}
 function updateFinishState() {
   const complete = Object.values(currentState).every(Boolean);
+  persistReadiness(complete);
   const doneCount = Object.values(currentState).filter(Boolean).length;
   const note = document.getElementById("finishNote");
   if (note) note.textContent = complete ? "Your seller setup is complete." : `${doneCount} of 4 steps complete.`;
@@ -198,6 +201,7 @@ document.getElementById("saveAudience")?.addEventListener("click", async (event)
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return window.location.href = "index.html?auth=login";
+  currentUser=user;
   try { businessId = (await getBusinessContext(user)).businessId; } catch(error) {
     const status=document.querySelector("[data-workspace-status]");
     if(status){status.hidden=false;status.textContent=workspaceError(error);}
