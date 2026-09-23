@@ -10,7 +10,17 @@ onAuthStateChanged(auth, async user => {
  try {
   const context=await getBusinessContext(user);
   hydrateBusiness(context,user);
-  if(!context.businessId && page!=='business-profile.html')location.replace('business-profile.html');
+  if(!context.businessId && page!=='business-profile.html'){location.replace('business-profile.html?setup=1');return;}
+  const setupPages=new Set(['business-profile.html','delivery-settings.html','seller-onboarding.html']);
+  if(!setupPages.has(page)){
+   const token=await user.getIdToken();
+   const response=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});
+   const readiness=await response.json();
+   if(response.ok&&readiness.ok&&!readiness.productReady){
+    const next=!readiness.businessComplete?'business-profile.html?setup=1':!readiness.deliveryComplete?'delivery-settings.html?setup=1':'seller-onboarding.html#payment-setup';
+    location.replace(next);return;
+   }
+  }
  } catch(error) {
   console.error('Business access failed',error);
   const status=document.querySelector('[data-workspace-status]');
