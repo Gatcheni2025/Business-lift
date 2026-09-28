@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://teyza.co.za/sitemap.xml
