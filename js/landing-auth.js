@@ -79,9 +79,13 @@ function closeModal(element) {
 }
 
 function authError(error, provider) {
-  const label = providerNames[provider] || "This";
+  const label = providerNames[provider] || "Email/password";
   const messages = {
-    "auth/invalid-credential": "Incorrect email or password. Try again or reset your password.",
+    "auth/invalid-credential": "Email or password not recognised. If you created your account with Google, use Google to sign in. Otherwise reset your password.",
+    "auth/wrong-password": "Incorrect password. Reset your password if you need a new one.",
+    "auth/user-not-found": "No email/password account was found. Create an account or use the provider you signed up with.",
+    "auth/invalid-email": "Enter a valid email address.",
+    "auth/too-many-requests": "Too many attempts. Wait a little and try again, or reset your password.",
     "auth/email-already-in-use": "This email already has a Teyza account. Log in instead.",
     "auth/account-exists-with-different-credential": "This email already has an account with another sign-in method. Use that method to log in.",
     "auth/operation-not-allowed": `${label} sign-in is not enabled yet. Please use another method for now.`,
@@ -102,7 +106,7 @@ async function bootstrap(user, details = {}) {
     body: JSON.stringify(details)
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.ok) throw new Error(data.error || "Unable to open your workspace. Please retry.");
+  if (!response.ok || !data.ok) throw new Error(data.error || "Sign-in succeeded, but the seller workspace is unavailable. Please contact Teyza support or try again later.");
 }
 const allowedDestinations = new Set(["dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
 function loginDestination() {

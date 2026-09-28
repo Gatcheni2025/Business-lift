@@ -1,6 +1,8 @@
 # Teyza web sign-in provider setup
 
-The landing page uses Firebase Authentication for email/password, Google, Facebook and Apple. Code changes alone cannot activate Facebook or Apple; complete these settings in the existing Firebase project `business-lift-3c19c`.
+The landing page uses Firebase Authentication for email/password, Google, Facebook and Apple. Code changes alone cannot activate providers; complete these settings in the existing Firebase project `business-lift-3c19c`.
+
+0. In Firebase Authentication → Sign-in method, enable Email/Password (the Email/Password switch, not email-link only). Add both `teyza.co.za` and `business-lift.vercel.app` under Authorized domains. Create a fresh email account through Teyza's Create account form, then sign out and sign in with its password. An account first created with Google does not automatically gain an email/password credential. Use Google for that account unless you explicitly link an email/password credential. Check the password reset flow with an email/password account.
 
 1. In Firebase Authentication, enable the Facebook provider. Enter the Facebook app ID and app secret from the Meta developer app. In Meta Facebook Login settings, allow the Firebase OAuth redirect URI shown in the Firebase provider configuration. For this project it should be `https://business-lift-3c19c.firebaseapp.com/__/auth/handler`. Add the production website domain to the Meta app, and complete Meta's requirements to make the app available to real users.
 2. In Apple Developer, create a Services ID for web sign-in and configure the Firebase auth domain `business-lift-3c19c.firebaseapp.com` with the return URL `https://business-lift-3c19c.firebaseapp.com/__/auth/handler`. Create an Apple Sign in with Apple key. In Firebase Authentication, enable Apple and enter the Services ID, Team ID, Key ID and private key. Configure Apple's private email relay if the app emails users who choose Hide My Email.
