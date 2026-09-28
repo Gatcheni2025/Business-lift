@@ -34,7 +34,7 @@ for name,meta in pages.items():
  scripts='\n'.join(meta['scripts'])
  page=f'''<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>{title} | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=7"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>{title} | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
 <body class="workspace" data-page="{name}">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -46,7 +46,7 @@ for name,meta in pages.items():
 <main class="page-main" id="main-content"><div class="page-heading"><div><h1>{title}</h1><p>{desc}</p></div><span class="page-date" data-current-date></span></div><div class="workspace-alert" data-workspace-status role="status" hidden></div>
 {content}
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
-<script src="assets/workspace.js?v=2"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
+<script src="assets/workspace.js?v=4"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
 {scripts}
 </body></html>'''
  (ROOT/(name+'.html')).write_text(page,encoding='utf-8')
