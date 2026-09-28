@@ -107,3 +107,7 @@ html.embedded-onboarding .profile-summary .auth-actions,html.embedded-onboarding
 .channel-choice-empty,.channel-help-card{grid-column:1/-1;border:1px solid #e2e8f0;border-radius:12px;padding:13px 14px;background:#f8fafc;color:#667085}.channel-choice-empty{margin-top:10px}.channel-choice-empty strong,.channel-help-card strong{display:block;color:#344054;font-size:11px;margin-bottom:4px}.channel-choice-empty span,.channel-help-card span{display:block;font-size:10.5px;line-height:1.5}.channel-help-card{margin-top:4px}.channel-help-card.ready{background:#ecfdf3;border-color:#b7e7cb}.channel-help-card.ready strong{color:#087f5b}
 .channels .card{position:relative;overflow:hidden}.channels .card:has(.status.connected){border-color:#8dd6b2}.channels .card:has(.status.connected)::after{content:"";position:absolute;right:-36px;top:-36px;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,#e7fbf1 0,#e7fbf100 70%);pointer-events:none}
 @media(max-width:760px){.channel-choice-list{grid-template-columns:1fr}.channel-choice{grid-template-columns:38px minmax(0,1fr)}.channel-choice-action{grid-column:2}}
+
+
+/* Business verification address matching */
+.proof-address-lock{margin:8px 0 12px;padding:12px 13px;border:1px solid #f0dca5;background:#fff9e9;border-radius:10px}.proof-address-lock strong{display:block;font-size:11px;color:#7a5600;margin-bottom:3px}.proof-address-lock span{display:block;font-size:10.5px;line-height:1.5;color:#806a35}
