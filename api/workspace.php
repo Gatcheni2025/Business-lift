@@ -168,9 +168,12 @@ if ($action==='seller-readiness') {
   $paymentComplete=(trim((string)($bank['bankName']??''))!==''&&trim((string)($bank['accountHolder']??''))!==''&&(trim((string)($bank['accountNumber']??''))!==''||trim((string)($bank['accountNumberLast4']??''))!==''))
     ||(trim((string)($gateway['merchantId']??''))!==''&&trim((string)($gateway['merchantKey']??''))!=='')
     ||trim((string)($other['otherGateway']??''))!=='';
-  $productReady=$businessComplete&&$deliveryComplete&&$paymentComplete;
+  $approval=companyApproval($workspace);
+  // Selling unlocks after Teyza has approved the verified seller. Delivery and
+  // banking remain independent app tabs so sellers can configure them when needed.
+  $productReady=$businessComplete&&(($approval['status']??'pending')==='approved');
   $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
-  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>companyApproval($workspace),'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$deliveryComplete&&$paymentComplete,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
+  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
