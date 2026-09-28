@@ -165,3 +165,7 @@ html.embedded-onboarding .profile-summary .auth-actions,html.embedded-onboarding
  .app-pulse-card{min-height:118px}.app-pulse-card .app-card-link{font-size:9.5px}
  .teyza-app-dock{grid-template-columns:repeat(4,1fr);padding:7px}.teyza-app-dock a{height:52px}.dock-sell-plus{width:48px;height:48px;border-radius:15px}
 }
+
+
+/* Delivery workflow cards */
+.delivery-order-card{display:flex!important;flex-direction:column;gap:10px}.delivery-order-card>div{display:flex;flex-direction:column;gap:2px}.delivery-order-card span{font-size:11px;color:#667085}.delivery-order-card small{font-size:10px;color:#8b95a3}.delivery-order-card .button{width:100%;justify-content:center;padding:8px 10px;font-size:10.5px}
