@@ -60,7 +60,7 @@ function stage(number){
     element.classList.toggle("done",step<number);
     element.disabled=step>number;
   });
-  q("[data-ob-count]").textContent=`Step ${number} of 3`;
+  q("[data-ob-count]").textContent=number===1?"Verification":`Step ${number}`;
   if(number===1&&!frame.getAttribute("src"))frame.src="business-profile.html?embedded=1&setup=1";
 }
 function choosePayment(type){
