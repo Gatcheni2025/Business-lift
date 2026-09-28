@@ -1,18 +1,64 @@
-<section class="welcome-banner"><div><p class="eyebrow">LET’S KEEP YOUR BUSINESS MOVING</p><h2>Welcome back, <span data-greeting-name>business owner</span>.</h2><p data-hero-line>Your products, orders and next steps. Everything starts here.</p></div><div class="welcome-actions"><a class="button button-primary" href="products.html#new-product">＋ Add a product</a><a class="button" href="orders.html">View orders ↗</a></div></section>
-<section class="metric-strip" aria-label="Business activity">
-<article><div class="metric-top"><p>Total order value</p><span class="metric-icon">↗</span></div><strong data-stat-revenue>—</strong><small>Across all recorded orders</small></article>
-<article><div class="metric-top"><p>Total orders</p><span class="metric-icon blue">▤</span></div><strong data-stat-orders>—</strong><small>All-time orders</small></article>
-<article><div class="metric-top"><p>Customers</p><span class="metric-icon purple">♧</span></div><strong data-stat-customers>—</strong><small>Unique customers with orders</small></article>
-<article><div class="metric-top"><p>Products</p><span class="metric-icon gold">◇</span></div><strong data-stat-products>—</strong><small>Items in your catalog</small></article>
+<div class="workspace-alert" data-workspace-status role="status" hidden></div>
+<section class="app-home-head">
+  <div class="app-profile">
+    <span class="app-profile-avatar" data-business-initial>T</span>
+    <div class="app-profile-copy"><small data-current-date>Today</small><h1>Hi, <span data-greeting-name>seller</span></h1></div>
+  </div>
+  <div class="app-home-actions">
+    <a class="app-icon-button" href="sales-channels.html?return=dashboard" aria-label="Sales channels"><i class="ph ph-plugs-connected"></i></a>
+    <a class="app-icon-button" href="business-profile.html" aria-label="Business profile"><i class="ph ph-user-circle"></i></a>
+  </div>
 </section>
+
+<section class="app-verification-card" data-app-verification>
+  <div class="app-verification-top">
+    <div><p class="eyebrow">SELLER VERIFICATION</p><h2 data-app-verification-title>Get verified to unlock selling</h2><p data-app-verification-copy>Complete your business checks once. After approval, selling becomes a one-tap action.</p></div>
+    <div class="app-verification-score" data-app-verification-score>0/5</div>
+  </div>
+  <div class="app-verification-steps">
+    <div class="app-verify-step" data-v-step="phone"><span>○</span>Phone</div>
+    <div class="app-verify-step" data-v-step="identity"><span>○</span>Identity</div>
+    <div class="app-verify-step" data-v-step="location"><span>○</span>Location</div>
+    <div class="app-verify-step" data-v-step="proof"><span>○</span>Address</div>
+    <div class="app-verify-step" data-v-step="approval"><span>○</span>Approval</div>
+  </div>
+  <div class="app-verification-actions">
+    <a class="button button-primary" data-app-verification-action href="business-profile.html?setup=1">Continue verification →</a>
+    <a class="button" href="business-profile.html">View business profile</a>
+  </div>
+</section>
+
+<section class="app-sell-hero" data-app-sell-hero hidden>
+  <div><p class="eyebrow">READY TO SELL</p><h2>What are you selling today?</h2><p>Add a product once, then choose the channels where customers should see it.</p></div>
+  <a class="app-sell-button" data-primary-seller-action href="products.html#new-product"><strong>+</strong><span>Sell</span></a>
+</section>
+
+<section class="app-pulse-grid" aria-label="Your business today">
+  <a class="app-pulse-card" href="customers.html"><span class="app-pulse-icon"><i class="ph ph-users-three"></i></span><div><strong data-stat-customers>—</strong><small>Clients</small><div class="app-card-link">Clients & chats →</div></div></a>
+  <a class="app-pulse-card" href="orders.html#fulfilment"><span class="app-pulse-icon"><i class="ph ph-truck"></i></span><div><strong data-stat-deliveries>—</strong><small>Need delivery</small><div class="app-card-link">Complete delivery →</div></div></a>
+  <a class="app-pulse-card" href="payments.html"><span class="app-pulse-icon"><i class="ph ph-wallet"></i></span><div><strong data-stat-paid>—</strong><small>Paid sales</small><div class="app-card-link">Banking →</div></div></a>
+</section>
+
 <div class="notice" data-dashboard-status role="status" hidden></div>
-<div class="dashboard-grid">
-<section class="section-card"><div class="section-heading"><div><h2>Recent orders</h2><p>Your latest selling activity</p></div><a href="orders.html">View all orders ↗</a></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody data-recent-orders><tr><td colspan="4"><div class="empty-state">Loading recent orders…</div></td></tr></tbody></table></div></section>
-<section class="section-card"><div class="section-heading"><div><h2>Your next steps</h2><p>A strong foundation for your business</p></div><span class="pill">SETUP GUIDE</span></div><ol class="setup-list">
-<li><a href="business-profile.html" data-setup-profile><span class="step-number">1</span><div><strong>Complete your business profile</strong><small>Add your identity and contact details</small></div><span class="arrow">›</span></a></li>
-<li><a href="seller-onboarding.html"><span class="step-number">2</span><div><strong>Set up payments and delivery</strong><small>Choose how you get paid and fulfil orders</small></div><span class="arrow">›</span></a></li>
-<li><a href="products.html#new-product" data-setup-product><span class="step-number">3</span><div><strong>Add your first product</strong><small>Bring your catalog to life</small></div><span class="arrow">›</span></a></li>
-<li><a href="sales-channels.html?return=dashboard"><span class="step-number">4</span><div><strong>Connect a sales channel</strong><small>Reach customers where they already shop</small></div><span class="arrow">›</span></a></li></ol><div class="setup-tip">Take it one step at a time. Your saved settings stay with your business.</div></section>
-</div>
-<section><div class="section-heading"><h2>Quick access</h2></div><div class="quick-grid"><a class="quick-card" href="products.html"><span>◇</span><strong>Manage products ↗</strong><p>Catalog, pricing and stock</p></a><a class="quick-card" href="sales-channels.html?return=dashboard"><span>⌁</span><strong>Sales channels ↗</strong><p>Connect your selling accounts</p></a><a class="quick-card" href="delivery-settings.html"><span>▱</span><strong>Delivery settings ↗</strong><p>Shipping and fulfilment options</p></a><a class="quick-card" href="shop-settings.html"><span>⚙</span><strong>Shop settings ↗</strong><p>Support, policies and notifications</p></a></div></section>
-<section class="section-card"><div class="section-heading"><h2>Needs your attention</h2><span class="pill">BUSINESS ACTIVITY</span></div><div class="section-grid"><div class="activity-alert"><span class="metric-icon blue">▤</span><div><strong>Orders to follow up</strong><p data-opportunity-carts>Loading order activity…</p><a href="orders.html">Manage orders →</a></div></div><div class="activity-alert"><span class="metric-icon gold">◇</span><div><strong>Inventory to review</strong><p data-opportunity-stock>Loading stock levels…</p><a href="products.html">Review products →</a></div></div></div></section>
+
+<section class="app-stream-grid">
+  <article class="app-stream-card">
+    <div class="app-stream-head"><h2>Client conversations</h2><button type="button" data-open-seller-chat>Open chats</button></div>
+    <div class="app-chat-preview" data-app-chat-preview><div class="empty-state"><p>Loading conversations…</p></div></div>
+  </article>
+  <article class="app-stream-card">
+    <div class="app-stream-head"><h2>Recent sales</h2><a href="orders.html">All orders →</a></div>
+    <div class="app-order-list" data-recent-orders><div class="empty-state"><p>Loading recent sales…</p></div></div>
+  </article>
+</section>
+
+<section>
+  <div class="app-stream-head"><h2>More from Teyza</h2></div>
+  <div class="app-shortcuts">
+    <a class="app-shortcut" href="store.html"><i class="ph ph-storefront"></i><strong>Your store</strong><small>See what customers see</small></a>
+    <a class="app-shortcut" href="sales-channels.html?return=dashboard"><i class="ph ph-plugs-connected"></i><strong>Sales channels</strong><small>Facebook, Instagram, Google & more</small></a>
+    <a class="app-shortcut" href="products.html"><i class="ph ph-package"></i><strong>Products</strong><small>Catalog, price and stock</small></a>
+    <a class="app-shortcut" href="shop-settings.html"><i class="ph ph-gear"></i><strong>Shop settings</strong><small>Policies and notifications</small></a>
+    <a class="app-shortcut" href="network.html"><i class="ph ph-handshake"></i><strong>Partner network</strong><small>Grow with other businesses</small></a>
+  </div>
+</section>
