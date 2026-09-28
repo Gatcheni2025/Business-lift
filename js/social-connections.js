@@ -58,23 +58,76 @@ function renderMetaChooser(state) {
     if (!target) return;
     target.innerHTML = "";
     if (!Array.isArray(state.availablePages) || !state.availablePages.length || state.connected) return;
-    const label = document.createElement("p");
-    label.className = "choose-label";
-    label.textContent = view === "instagram" ?
-      "Choose the Facebook Page connected to your professional Instagram account:" :
-      "Choose the Facebook Page Teyza should use:";
+
+    const label = document.createElement("div");
+    label.className = "channel-choice-head";
+    label.innerHTML = view === "instagram" ?
+      "<strong>Choose your Instagram selling account</strong><span>Select the Facebook Page that has your Professional Instagram account attached.</span>" :
+      "<strong>Choose your Facebook Page</strong><span>Select the business Page Teyza should publish approved products to.</span>";
     target.appendChild(label);
+
+    const list = document.createElement("div");
+    list.className = "channel-choice-list";
+    let instagramOptions = 0;
+
     state.availablePages.forEach((item) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "choose-account";
+      button.className = "channel-choice";
       button.dataset.chooseProvider = "meta";
       button.dataset.chooseId = item.id;
-      button.textContent = item.instagramBusinessId && view === "instagram" ?
-        `${item.name} · Instagram linked` : item.name;
-      target.appendChild(button);
+      const hasInstagram = Boolean(item.instagramBusinessId);
+      if (view === "instagram" && !hasInstagram) {
+        button.disabled = true;
+        button.classList.add("unavailable");
+      } else if (view === "instagram") {
+        instagramOptions += 1;
+      }
+      const icon = view === "instagram" ? "ph-instagram-logo" : "ph-facebook-logo";
+      button.innerHTML = `<span class="channel-choice-icon"><i class="ph ${icon}"></i></span><span class="channel-choice-copy"><strong>${escapeHtml(item.name)}</strong><small>${view === "instagram" ? (hasInstagram ? "Professional Instagram linked · ready to select" : "No Professional Instagram linked to this Page") : (hasInstagram ? "Facebook Page · Instagram also linked" : "Facebook Page")}</small></span><span class="channel-choice-action">${view === "instagram" && !hasInstagram ? "Unavailable" : "Select →"}</span>`;
+      list.appendChild(button);
     });
+    target.appendChild(list);
+
+    if (view === "instagram" && instagramOptions === 0) {
+      const empty = document.createElement("div");
+      empty.className = "channel-choice-empty";
+      empty.innerHTML = "<strong>No Professional Instagram account found</strong><span>Instagram is optional. You can continue selling on Teyza, Google or Facebook now. To add Instagram later, switch/create an Instagram Professional account, link it to a Facebook Page, then reconnect.</span>";
+      target.appendChild(empty);
+    }
   });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[char]));
+}
+
+function renderChannelGuidance(meta, whatsapp) {
+  const instagramHelp = document.querySelector('[data-channel-help="instagram"]');
+  if (instagramHelp) {
+    if (meta?.connected && meta?.instagramBusinessId) {
+      instagramHelp.innerHTML = "<strong>Instagram ready</strong><span>Your Professional Instagram account is linked through the selected Facebook Page.</span>";
+      instagramHelp.classList.add("ready");
+    } else if (meta?.connected) {
+      instagramHelp.innerHTML = "<strong>No Instagram account on the selected Page?</strong><span>That is okay — Instagram is optional. Link a Professional Instagram account to a Facebook Page and choose Reconnect when you are ready.</span>";
+      instagramHelp.classList.remove("ready");
+    } else {
+      instagramHelp.innerHTML = "<strong>Don't have Instagram yet?</strong><span>Skip it for now. Teyza Store, Google Shopping and Facebook can still be used independently. Instagram can be connected later.</span>";
+      instagramHelp.classList.remove("ready");
+    }
+  }
+  const whatsappHelp = document.querySelector('[data-channel-help="whatsapp"]');
+  if (whatsappHelp) {
+    if (whatsapp?.connected) {
+      whatsappHelp.innerHTML = "<strong>WhatsApp Business ready</strong><span>Your seller WhatsApp Business account is connected through Meta.</span>";
+      whatsappHelp.classList.add("ready");
+    } else {
+      whatsappHelp.innerHTML = "<strong>No WhatsApp Business account yet?</strong><span>You can skip this channel and continue setup. When you are ready, Connect opens Meta Embedded Signup so you can create or link the business account and number you will use with customers.</span>";
+      whatsappHelp.classList.remove("ready");
+    }
+  }
 }
 
 function renderGoogleChooser(state) {
@@ -130,6 +183,7 @@ function renderConnections() {
 
   renderMetaChooser(meta);
   renderGoogleChooser(google);
+  renderChannelGuidance(meta, whatsapp);
 
   const complete = [facebookConnected, instagramConnected, Boolean(google.connected), Boolean(whatsapp.connected)]
     .filter(Boolean).length;
@@ -285,7 +339,12 @@ onAuthStateChanged(auth, async (user) => {
     const params = new URLSearchParams(location.search);
     const status = params.get("social");
     const provider = params.get("provider");
-    if (status === "connected") notify(provider === "meta" ? "Meta authorization received. Confirm your Facebook Page below." : "Authorization received. Confirm the account shown below.", "success");
+    const channel = params.get("channel");
+    if (status === "connected") {
+      if (provider === "meta" && channel === "instagram") notify("Instagram authorization received. Choose the Facebook Page that has your Professional Instagram account attached.", "success");
+      else if (provider === "meta") notify("Meta authorization received. Choose the Facebook Page Teyza should use.", "success");
+      else notify("Authorization received. Confirm the account shown below.", "success");
+    }
     if (status === "error") notify("The connection could not be completed. Check the provider setup and try again.", "error");
     if (status === "cancelled") notify("Connection cancelled.", "error");
   } catch (error) {
