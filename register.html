@@ -1,1 +1,19 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account | Teyza</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>body{margin:0;font-family:Inter;background:#f7f8fc;color:#07142f}.shell{min-height:100vh;display:grid;place-items:center;padding:24px}.card{max-width:620px;background:#fff;border:1px solid #e7eaf1;border-radius:28px;padding:45px;text-align:center;box-shadow:0 25px 70px rgba(7,20,47,.08)}.logo{font-weight:900;letter-spacing:.1em}.logo b{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:12px;color:#fff;margin-right:10px;background:linear-gradient(135deg,#1ed7dd,#168cff,#6739e6,#e633ae,#ff9c28)}h1{font-size:42px;margin:28px 0 12px}p{color:#69738a;line-height:1.6}.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:25px}.btn{border:1px solid #dfe3ec;border-radius:13px;padding:14px 20px;background:#fff;font-weight:800;cursor:pointer}.primary{border:0;color:#fff;background:linear-gradient(110deg,#168cff,#6739e6,#e633ae)}</style></head><body><main class="shell"><section class="card"><div class="logo"><b>T</b>TEYZA</div><h1>Everyone can sell.</h1><p>Your Teyza account is created in a secure popup, so you can join or sign in without being sent through separate authentication pages.</p><div class="actions"><button class="btn primary" data-open-register>Create account</button><button class="btn" data-open-login>Already have an account? Log in</button></div></section></main><script type="module" src="js/landing-auth.js"></script><script>addEventListener('DOMContentLoaded',()=>document.querySelector('[data-open-register]')?.click());</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Create an account | Teyza</title>
+  <link rel="icon" type="image/svg+xml" href="assets/teyza-icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/landing.css">
+  <link rel="stylesheet" href="assets/auth.css">
+</head>
+<body>
+  <main class="register-page"><div class="container"><a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">T</span><span>TEYZA<small>Everyone can sell.</small></span></a><h1>Your business starts here.</h1><p>Create an account, then follow the guided steps to set up your business.</p><div class="hero-actions"><button class="button button-accent" type="button" data-open-register>Create account</button><button class="button button-outline" type="button" data-open-login>Already have an account? Log in</button></div></div></main>
+  <script type="module" src="js/landing-auth.js"></script>
+</body>
+</html>
