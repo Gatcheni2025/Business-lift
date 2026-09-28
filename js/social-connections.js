@@ -1,5 +1,5 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js";
 import {app, auth} from "./firebase-config.js";
 import {getBusinessContext, hydrateBusiness, workspaceError} from "./business-context.js";
 
