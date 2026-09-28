@@ -23,7 +23,7 @@ const FUNCTIONS_BASE_URL = defineString("FUNCTIONS_BASE_URL", {
   default: "https://us-central1-business-lift-3c19c.cloudfunctions.net",
 });
 const META_GRAPH_VERSION = defineString("META_GRAPH_VERSION", {default: "v23.0"});
-const META_WHATSAPP_CONFIG_ID = defineString("META_WHATSAPP_CONFIG_ID", {default: ""});
+const META_WHATSAPP_CONFIG_ID = defineSecret("META_WHATSAPP_CONFIG_ID");
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
@@ -453,7 +453,7 @@ exports.selectGoogleMerchantAccount = onCall(async (request) => {
   return {ok: true, account};
 });
 
-exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID]}, async (request) => {
+exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID, META_WHATSAPP_CONFIG_ID]}, async (request) => {
   const uid = requireAuth(request);
   const {businessId} = request.data || {};
   await verifyBusinessAccess(uid, businessId);
