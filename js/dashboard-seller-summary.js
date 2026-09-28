@@ -1,6 +1,6 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {doc, getDoc} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {doc, getDoc} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js";
 import {app, auth, db} from "./firebase-config.js";
 
 const money = new Intl.NumberFormat("en-ZA", {style: "currency", currency: "ZAR", maximumFractionDigits: 0});
