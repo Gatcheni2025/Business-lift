@@ -1,5 +1,5 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
-import {app, auth} from "./firebase-config.js";
+import {auth} from "./firebase-config.js";
 import {getBusinessContext, hydrateBusiness, workspaceError} from "./business-context.js";
 
 const FUNCTIONS_BASE_URL = "https://us-central1-business-lift-3c19c.cloudfunctions.net";
