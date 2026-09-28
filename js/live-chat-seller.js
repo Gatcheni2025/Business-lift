@@ -67,6 +67,12 @@ function setOpen(open){
   const panel=document.querySelector("[data-tz-chat-panel]");if(panel)panel.hidden=!open;
   if(open){renderInbox();refreshInbox().catch(e=>setStatus(e.message,true));}
 }
+document.addEventListener("click",event=>{
+  if(event.target.closest("[data-open-seller-chat]")){
+    event.preventDefault();
+    setOpen(true);
+  }
+});
 async function copyLink(){
   const link=location.origin+"/chat.html?business="+encodeURIComponent(businessId);
   try{await navigator.clipboard.writeText(link);setStatus("Customer chat link copied.");}
