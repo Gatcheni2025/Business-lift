@@ -1,10 +1,18 @@
-import {onAuthStateChanged,RecaptchaVerifier,linkWithPhoneNumber} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {auth} from "./firebase-config.js";
+import {onAuthStateChanged,RecaptchaVerifier,signInWithPhoneNumber,getAuth,setPersistence,inMemoryPersistence,signOut} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import {app,auth} from "./firebase-config.js";
 import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
 import {suggestAddresses,addressAt} from "./address-search.js";
 const form=document.querySelector('[data-business-profile]'),button=form.querySelector('[type=submit]'),retry=document.querySelector('[data-profile-retry]'),status=document.querySelector('[data-profile-status]');
 const fields={'business-name':'businessName','business-type':'businessType',industry:'industry',country:'country',phone:'phone',address:'address',about:'about'};const shopFields={'support-email':'supportEmail','support-phone':'supportPhone','returns-policy':'returnsPolicy'};
-let context=null,currentUser=null,busy=false,confirmationResult=null,recaptcha=null,map=null,marker=null,currentPoint=null,verification=null,selectedAddress='',otpPhone='',addressTimer=null,addressRequest=null;
+let context=null,currentUser=null,busy=false,confirmationResult=null,recaptcha=null,map=null,marker=null,currentPoint=null,verification=null,selectedAddress='',otpPhone='',addressTimer=null,addressRequest=null,phoneVerificationAuth=null;
+async function getPhoneVerificationAuth(){
+ if(phoneVerificationAuth)return phoneVerificationAuth;
+ const named=getApps().find(a=>a.name==='teyza-phone-verification')||initializeApp(app.options,'teyza-phone-verification');
+ phoneVerificationAuth=getAuth(named);
+ await setPersistence(phoneVerificationAuth,inMemoryPersistence);
+ return phoneVerificationAuth;
+}
 const $=s=>document.querySelector(s);
 function show(message,tone='error'){status.hidden=false;status.textContent=message;status.className='form-status '+tone;}
 function completion(data){const values=Object.values(fields).map(key=>String(data[key]||'').trim());return Math.round(values.filter(Boolean).length/values.length*100);}
@@ -19,7 +27,14 @@ function renderVerification(v={}){
  const identitySummary=$('[data-identity-summary]');if(identitySummary)identitySummary.textContent=v.identityVerified?'Identity approved ✓':v.identityStatus==='pending'?'ID + selfie uploaded ✓ · awaiting admin approval':v.identityStatus==='rejected'?'Identity rejected · please resubmit':'Upload your ID and take a live selfie.';
  $('[data-send-otp]').textContent=v.phoneVerified?'Phone verified ✓':'Verify phone';$('[data-send-otp]').disabled=!!v.phoneVerified;
  $('[data-location-status]').textContent=v.locationConfirmed?'Location confirmed ✓':'Location not confirmed';
- $('[data-proof-status]').textContent=v.proofOfAddressUploaded?`Uploaded: ${v.proofOfAddress?.originalName||'proof of address'}`:'Your document is stored privately and is not shown to customers.';
+ const proofStatus=$('[data-proof-status]');
+ if(v.proofOfAddressUploaded){
+   const expected=v.proofOfAddress?.addressAtUpload||v.location?.address||'your confirmed map address';
+   const match=v.proofAddressMatchVerified?'Address match approved ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch — upload a document showing the confirmed address.':'Awaiting Teyza address-match review';
+   proofStatus.textContent=`Uploaded: ${v.proofOfAddress?.originalName||'proof of address'} · ${match} · Must show: ${expected}`;
+ }else{
+   proofStatus.textContent=v.locationConfirmed?`Upload a proof of address that clearly shows: ${v.location?.address||form.elements.address.value.trim()}`:'Confirm the map address before uploading proof of address.';
+ }
  if(v.location?.lat!=null&&v.location?.lng!=null&&v.location.address===form.elements.address.value.trim()){setMapPoint(Number(v.location.lat),Number(v.location.lng),false);selectedAddress=v.location.address;}
 }
 function normalizePhone(raw){let s=String(raw||'').replace(/[\s()-]/g,'');if(/^0\d{9}$/.test(s))s='+27'+s.slice(1);if(/^27\d{9}$/.test(s))s='+'+s;return s;}
@@ -47,7 +62,8 @@ function phoneError(e){const messages={
  'auth/operation-not-allowed':'Phone sign-in is disabled in Firebase Authentication. Enable Phone and allow South Africa in the SMS region policy.',
  'auth/unauthorized-domain':'This domain is not authorized for Firebase phone verification. Add teyza.co.za in Authentication → Settings → Authorized domains.',
  'auth/invalid-phone-number':'Enter a South African mobile number, for example +27 60 123 4567.',
- 'auth/credential-already-in-use':'This number is linked to another account. Use a different number or contact support.',
+ 'auth/credential-already-in-use':'This number is already used by another sign-in account. Teyza can still verify ownership without changing your current login. Request a new code and try again.',
+ 'auth/account-exists-with-different-credential':'This number is already used by another sign-in account. Teyza will verify the number separately without changing your current login.',
  'auth/provider-already-linked':'This account already has a verified phone. Use the same number saved on your profile.',
  'auth/too-many-requests':'Too many SMS attempts. Wait before requesting another code.',
  'auth/quota-exceeded':'The SMS quota has been reached. Contact Teyza support.',
@@ -58,27 +74,90 @@ function phoneError(e){const messages={
  'auth/invalid-verification-code':'That code is incorrect. Check the SMS and try again.',
  'auth/code-expired':'The code has expired. Request a new one.'
 };return messages[e.code]||`Phone verification failed (${e.code||'unknown error'}). Try again or contact support.`;}
-async function saveVerifiedPhone(phone){form.elements.phone.value=phone;const payload={...context.business,phone};payload.profileComplete=completion(payload)===100;payload.setupProgress=completion(payload);const saved=await saveBusinessProfile(currentUser,payload);context.business=saved.business;await currentUser.getIdToken(true);await refreshVerification();}
+async function saveVerifiedPhone(phone,phoneToken){
+ const mainToken=await currentUser.getIdToken();
+ const r=await fetch('api/workspace.php?action=verification',{
+   method:'POST',
+   headers:{Authorization:'Bearer '+mainToken,'Content-Type':'application/json','X-Phone-Verification-Token':phoneToken},
+   body:JSON.stringify({type:'phone',phone})
+ });
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok||!d.ok)throw new Error(d.error||'Phone verification could not be saved.');
+ form.elements.phone.value=phone;
+ context.business={...context.business,phone};
+ renderVerification(d.verification||{});
+ notifyOnboarding();
+}
 $('[data-send-otp]').addEventListener('click',async()=>{
  const phone=normalizePhone(form.elements.phone.value),send=$('[data-send-otp]');
  if(!/^\+27\d{9}$/.test(phone)){show('Enter a South African mobile number, for example +27 60 123 4567.');return;}
  send.disabled=true;send.textContent='Preparing phone check…';
  try{
-  if(currentUser.phoneNumber===phone){await saveVerifiedPhone(phone);show('This phone was already verified on your account.','success');return;}
+  if(currentUser.phoneNumber===phone){
+    await saveVerifiedPhone(phone,await currentUser.getIdToken(true));
+    show('This phone was already verified on your account.','success');
+    return;
+  }
   if(recaptcha){try{recaptcha.clear();}catch(_){}recaptcha=null;document.getElementById('phone-recaptcha').replaceChildren();}
-  recaptcha=new RecaptchaVerifier(auth,'phone-recaptcha',{size:'normal'});
+  const phoneAuth=await getPhoneVerificationAuth();
+  try{await signOut(phoneAuth);}catch(_){}
+  recaptcha=new RecaptchaVerifier(phoneAuth,'phone-recaptcha',{size:'normal'});
   await recaptcha.render();
   send.textContent='Sending code…';
-  confirmationResult=await linkWithPhoneNumber(currentUser,phone,recaptcha);otpPhone=phone;
-  form.elements.phone.readOnly=true;$('[data-otp-panel]').hidden=false;$('[data-otp-status]').textContent='Code sent to '+phone;
-  show('Enter the SMS code below to finish phone verification.','success');
- }catch(e){console.error('Phone verification:',e.code||e);show(phoneError(e));send.disabled=false;send.textContent='Verify phone';}
+  confirmationResult=await signInWithPhoneNumber(phoneAuth,phone,recaptcha);otpPhone=phone;
+  form.elements.phone.readOnly=true;$('[data-otp-panel]').hidden=false;$('[data-otp-code]').value='';$('[data-otp-status]').textContent='Code sent to '+phone;
+  show('Enter the SMS code below to verify that you control this business number.','success');
+ }catch(e){
+  console.error('Phone verification:',e.code||e);
+  confirmationResult=null;otpPhone='';form.elements.phone.readOnly=false;
+  show(phoneError(e));send.disabled=false;send.textContent='Verify phone';
+ }
 });
-$('[data-resend-otp]').addEventListener('click',()=>{ $('[data-send-otp]').disabled=false; $('[data-send-otp]').click(); });
-$('[data-confirm-otp]').addEventListener('click',async()=>{const code=$('[data-otp-code]').value.trim();if(!/^\d{6}$/.test(code)){show('Enter the 6-digit verification code.');return;}if(!confirmationResult){show('Request a new code first.');return;}try{$('[data-confirm-otp]').disabled=true;await confirmationResult.confirm(code);await currentUser.reload();await saveVerifiedPhone(otpPhone);form.elements.phone.readOnly=false;$('[data-otp-panel]').hidden=true;confirmationResult=null;show('Business phone verified successfully.','success');}catch(e){console.error('Phone verification:',e.code||e);show(phoneError(e));}finally{$('[data-confirm-otp]').disabled=false;}});
+$('[data-resend-otp]').addEventListener('click',()=>{
+ confirmationResult=null;otpPhone='';$('[data-otp-code]').value='';form.elements.phone.readOnly=false;
+ $('[data-send-otp]').disabled=false;$('[data-send-otp]').textContent='Verify phone';$('[data-send-otp]').click();
+});
+$('[data-confirm-otp]').addEventListener('click',async()=>{
+ const code=$('[data-otp-code]').value.trim();
+ if(!/^\d{6}$/.test(code)){show('Enter the 6-digit verification code.');return;}
+ if(!confirmationResult){show('Request a new code first.');return;}
+ try{
+   $('[data-confirm-otp]').disabled=true;
+   const credential=await confirmationResult.confirm(code);
+   const phoneToken=await credential.user.getIdToken(true);
+   await saveVerifiedPhone(otpPhone,phoneToken);
+   try{await signOut(credential.user.auth);}catch(_){}
+   form.elements.phone.readOnly=false;$('[data-otp-panel]').hidden=true;confirmationResult=null;otpPhone='';
+   $('[data-send-otp]').textContent='Phone verified ✓';$('[data-send-otp]').disabled=true;
+   show('Business phone verified successfully.','success');
+ }catch(e){
+   console.error('Phone verification:',e.code||e);
+   if(e.code==='auth/code-expired'){
+     confirmationResult=null;otpPhone='';form.elements.phone.readOnly=false;
+     $('[data-send-otp]').disabled=false;$('[data-send-otp]').textContent='Send new code';
+     $('[data-otp-status]').textContent='This code expired. Request a new SMS code.';
+   }
+   show(phoneError(e));
+ }finally{$('[data-confirm-otp]').disabled=false;}
+});
 $('[data-use-location]').addEventListener('click',()=>{if(!navigator.geolocation){show('Location is not supported by this browser.');return;}const b=$('[data-use-location]');b.disabled=true;b.textContent='Finding location…';navigator.geolocation.getCurrentPosition(async p=>{await reverseAddress(p.coords.latitude,p.coords.longitude);if(selectedAddress)$('[data-location-status]').textContent=`Current location found · accuracy ±${Math.round(p.coords.accuracy)}m. Check the address and pin before confirming.`;b.disabled=false;b.textContent='Use my current location';},e=>{show(e.code===1?'Location permission was denied. Type your address and select a suggestion, or choose a point on the map.':'Location could not be detected. Type your address and select a suggestion.');b.disabled=false;b.textContent='Use my current location';},{enableHighAccuracy:true,timeout:15000,maximumAge:0});});
 $('[data-confirm-location]').addEventListener('click',async()=>{const address=form.elements.address.value.trim();if(!currentPoint||!selectedAddress||address!==selectedAddress){show('Select an address suggestion, detect your location, or tap the map pin before confirming.');return;}try{const d=await api('verification',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'location',lat:currentPoint.lat,lng:currentPoint.lng,address})});context.business.address=address;renderVerification(d.verification);notifyOnboarding();show('Business location confirmed. Delivery will use this same collection address.','success');}catch(e){show(e.message);}});
-$('[data-upload-proof]').addEventListener('click',async()=>{const file=$('[data-proof-file]').files[0];if(!file){show('Choose a proof of address document first.');return;}const b=$('[data-upload-proof]');try{b.disabled=true;b.textContent='Uploading…';const token=await currentUser.getIdToken();const fd=new FormData();fd.append('proof',file);const r=await fetch('api/verification-upload.php',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload failed');await refreshVerification();show('Proof of address uploaded securely.','success');}catch(e){show(e.message);}finally{b.disabled=false;b.textContent='Upload proof';}});
+$('[data-upload-proof]').addEventListener('click',async()=>{
+ const file=$('[data-proof-file]').files[0];
+ if(!file){show('Choose a proof of address document first.');return;}
+ if(!verification?.locationConfirmed){show('Confirm the business address on the map first. Your proof of address must show that same address.');return;}
+ const expected=verification?.location?.address||form.elements.address.value.trim();
+ if(!window.confirm(`Upload this document as proof for:\n\n${expected}\n\nTeyza will compare the document address with this confirmed map address before approval.`))return;
+ const b=$('[data-upload-proof]');
+ try{
+   b.disabled=true;b.textContent='Uploading…';
+   const token=await currentUser.getIdToken();const fd=new FormData();fd.append('proof',file);
+   const r=await fetch('api/verification-upload.php',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload failed');
+   await refreshVerification();
+   show('Proof of address uploaded. Teyza will confirm that the document address matches the map address before seller approval.','success');
+ }catch(e){show(e.message);}finally{b.disabled=false;b.textContent='Upload proof';}
+});
 form.elements.phone.addEventListener('input',()=>{if(verification?.phoneVerified){verification={...verification,phoneVerified:false,completed:Math.max(0,Number(verification.completed||0)-1)};renderVerification(verification);}});
 $('[data-upload-logo]').addEventListener('click',async()=>{const file=$('[data-logo-file]').files[0];if(!file){show('Choose a JPG or PNG image first.');return;}const b=$('[data-upload-logo]');try{b.disabled=true;b.textContent='Uploading…';const d=await logoRequest('POST',file);context.business.logoUrl=d.logoUrl;renderLogo(d.logoUrl);show('Seller photo / business logo updated.','success');}catch(e){show(e.message);}finally{b.disabled=false;b.textContent='Upload image';}});
 $('[data-remove-logo]').addEventListener('click',async()=>{try{const d=await logoRequest('DELETE');delete context.business.logoUrl;renderLogo(d.logoUrl);show('Business image removed.','success');}catch(e){show(e.message);}});
