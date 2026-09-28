@@ -10,7 +10,7 @@
     "title": "Products",
     "description": "Build your catalog and keep your inventory up to date.",
     "scripts": [
-      "<script type=\"module\" src=\"js/products-data.js\"></script>"
+      "<script type=\"module\" src=\"js/products-data.js?v=25\"></script>"
     ]
   },
   "orders": {
@@ -45,7 +45,7 @@
     "title": "Sales channels",
     "description": "Connect your business accounts and manage where you sell.",
     "scripts": [
-      "<script type=\"module\" src=\"js/social-connections.js\"></script>",
+      "<script type=\"module\" src=\"js/social-connections.js?v=2\"></script>",
       "<script>\nconst params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard \u2192'}\n</script>"
     ]
   },
