@@ -36,4 +36,13 @@
  document.querySelectorAll('.form-status,.notice,[id$="Status"]').forEach(el=>{el.setAttribute('role','status');el.setAttribute('aria-live','polite')});
  // Block accidental native GET submission while a page's module is still loading.
  document.querySelectorAll('form').forEach(form=>form.addEventListener('submit',event=>event.preventDefault()));
+ // Seller live chat is available throughout the signed-in workspace, but not inside embedded onboarding iframes.
+ if(new URLSearchParams(location.search).get('embedded')!=='1'){
+  if(!document.querySelector('link[data-teyza-live-chat]')){
+   const link=document.createElement('link');link.rel='stylesheet';link.href='assets/live-chat.css?v=1';link.dataset.teyzaLiveChat='1';document.head.appendChild(link);
+  }
+  if(!document.querySelector('script[data-teyza-live-chat-seller]')){
+   const script=document.createElement('script');script.type='module';script.src='js/live-chat-seller.js?v=1';script.dataset.teyzaLiveChatSeller='1';document.body.appendChild(script);
+  }
+ }
 })();
