@@ -10,7 +10,7 @@ nodes.set('#teyzaOnboarding',node());nodes.set('[data-ob-message]',node());nodes
 const frame=nodes.get('[data-ob-business-frame]');frame.contentWindow={};
 const steps=[1,2,3].map(number=>Object.assign(node(),{dataset:{obStep:String(number)}}));
 const tabs=[1,2,3].map(number=>Object.assign(node(),{dataset:{obTab:String(number)}}));
-const payTabs=['eft','payfast','other'].map(pay=>Object.assign(node(),{dataset:{obPay:pay}}));
+const payTabs=['eft','yeyza','ozow','payfast','other'].map(pay=>Object.assign(node(),{dataset:{obPay:pay}}));
 const payFields=payTabs.map(tab=>Object.assign(node(),{dataset:{obPayFields:tab.dataset.obPay}}));
 const groups={'[data-ob-step]':steps,'[data-ob-tab]':tabs,'[data-ob-pay]':payTabs,'[data-ob-pay-fields]':payFields};
 const settings={};let ready={productReady:false,businessComplete:false,deliveryComplete:false,missingBusinessFields:['businessName'],businessVerification:{completed:0}};
@@ -44,7 +44,7 @@ const click=async selector=>nodes.get(selector).listeners.click({currentTarget:n
  assert.equal(nodes.get('[data-ob-address]').textContent,'12 Main Road');nodes.get('[data-ob-fee]').value='25';
  await click('[data-ob-save-delivery]');assert.deepEqual(saves,['delivery']);assert.equal(steps[2].hidden,false);
  assert.equal(settings.delivery.pickupAddress,'12 Main Road');assert.equal(settings.delivery.baseDeliveryFee,25);
- nodes.get('[data-ob-bank]').value='Test bank';nodes.get('[data-ob-holder]').value='A Seller';nodes.get('[data-ob-account]').value='12345678';
+ nodes.get('[data-ob-bank]').value='Test bank';nodes.get('[data-ob-branch]').value='123456';nodes.get('[data-ob-holder]').value='A Seller';nodes.get('[data-ob-account]').value='12345678';
  await click('[data-ob-save-payment]');assert.deepEqual(saves,['delivery','banking']);assert.equal(navigated,'products.html#new-product');
  console.log('PASS: popup stays on verification until saved, ignores foreign messages, and advances through delivery and payment');
 })().catch(error=>{console.error(error);process.exitCode=1});
