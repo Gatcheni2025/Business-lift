@@ -21,5 +21,20 @@ $fi=new finfo(FILEINFO_MIME_TYPE);$mime=$fi->file($f['tmp_name']);$ext=['applica
 $uid=preg_replace('/[^A-Za-z0-9_-]/','',$u['localId']);$base=dirname(__DIR__).'/../private_html/teyza-verification/'.$uid;if(!is_dir($base)&&!mkdir($base,0750,true)&&!is_dir($base))out(500,['ok'=>false,'error'=>'Private verification storage is unavailable']);
 foreach(glob($base.'/proof-of-address.*')?:[] as $old)@unlink($old);$stored='proof-of-address.'.$ext;if(!move_uploaded_file($f['tmp_name'],$base.'/'.$stored))out(500,['ok'=>false,'error'=>'Could not store document']);
 $dataDir=dirname(__DIR__).'/../private_html/teyza-data';$path=$dataDir.'/'.$uid.'.json';$w=is_file($path)?json_decode((string)file_get_contents($path),true):null;if(!is_array($w))out(404,['ok'=>false,'error'=>'Workspace not found']);
-$w['verification']=$w['verification']??[];$w['verification']['proofOfAddress']=['storedName'=>$stored,'originalName'=>basename((string)$f['name']),'mime'=>$mime,'uploadedAt'=>gmdate('c')];file_put_contents($path,json_encode($w,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
-out(200,['ok'=>true,'proofOfAddress'=>['originalName'=>basename((string)$f['name']),'uploadedAt'=>$w['verification']['proofOfAddress']['uploadedAt']]]);
+$location=$w['verification']['location']??[];$businessAddress=trim((string)($w['business']['address']??''));$mapAddress=trim((string)($location['address']??''));
+$norm=function(string $value):string{return strtolower((string)preg_replace('/\s+/u',' ',trim($value)));};
+if(empty($location['confirmed'])||!isset($location['lat'],$location['lng'])||$businessAddress===''||$mapAddress===''||$norm($businessAddress)!==$norm($mapAddress))out(422,['ok'=>false,'error'=>'Confirm the business address on the map before uploading proof of address']);
+$w['verification']=$w['verification']??[];$w['verification']['proofOfAddress']=[
+ 'storedName'=>$stored,
+ 'originalName'=>basename((string)$f['name']),
+ 'mime'=>$mime,
+ 'uploadedAt'=>gmdate('c'),
+ 'addressAtUpload'=>$mapAddress,
+ 'latAtUpload'=>$location['lat'],
+ 'lngAtUpload'=>$location['lng'],
+ 'addressMatchVerified'=>false,
+ 'matchStatus'=>'pending_review'
+];
+$w['companyApproval']=$w['companyApproval']??[];$w['companyApproval']['status']='pending';$w['companyApproval']['reviewedAt']=null;$w['companyApproval']['reviewedBy']=null;$w['companyApproval']['note']='Proof of address uploaded and awaiting address-match review';
+file_put_contents($path,json_encode($w,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+out(200,['ok'=>true,'proofOfAddress'=>['originalName'=>basename((string)$f['name']),'uploadedAt'=>$w['verification']['proofOfAddress']['uploadedAt'],'addressAtUpload'=>$mapAddress,'matchStatus'=>'pending_review']]);
