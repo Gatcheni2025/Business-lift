@@ -216,6 +216,7 @@ exports.getSocialConnectUrl = onCall({
     uid,
     businessId,
     provider,
+    channel: channel || provider,
     returnTo: safeReturnTo(returnTo),
     nonce: crypto.randomBytes(16).toString("hex"),
     exp: Date.now() + 10 * 60 * 1000,
@@ -376,8 +377,9 @@ exports.socialOAuthCallback = onRequest({
       throw new Error("Unsupported provider");
     }
 
+    const connectedChannel = payload.channel || provider;
     return res.redirect(
-      `${APP_URL.value()}${returnTo}?social=connected&provider=${encodeURIComponent(provider)}`,
+      `${APP_URL.value()}${returnTo}?social=connected&provider=${encodeURIComponent(provider)}&channel=${encodeURIComponent(connectedChannel)}`,
     );
   } catch (error) {
     console.error("socialOAuthCallback", error.response?.data || error);
