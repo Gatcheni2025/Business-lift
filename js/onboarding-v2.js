@@ -1,4 +1,4 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 import {getWorkspaceSection,saveWorkspaceSection} from "./business-context.js?v=2";
 import {methods,methodByCode,methodFromSaved} from "./delivery-methods.js";
