@@ -240,7 +240,6 @@ exports.getSocialConnectUrl = onCall({
       const scopes = [
         "pages_show_list",
         "pages_read_engagement",
-        "pages_manage_posts",
         "business_management",
       ];
       qs.set("scope", scopes.join(","));
@@ -468,9 +467,20 @@ exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID, META_WH
   const uid = requireAuth(request);
   const {businessId} = request.data || {};
   await verifyBusinessAccess(uid, businessId);
+  const appId = String(META_APP_ID.value() || "").trim();
+  const configId = String(META_WHATSAPP_CONFIG_ID.value() || "").trim();
+  if (!/^\d+$/.test(appId)) {
+    throw new HttpsError("failed-precondition", "META_APP_ID is missing or invalid.");
+  }
+  if (!/^\d+$/.test(configId)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "META_WHATSAPP_CONFIG_ID must be the numeric WhatsApp Embedded Signup Configuration ID from this Meta app.",
+    );
+  }
   return {
-    appId: META_APP_ID.value(),
-    configId: META_WHATSAPP_CONFIG_ID.value(),
+    appId,
+    configId,
     graphVersion: META_GRAPH_VERSION.value(),
   };
 });
