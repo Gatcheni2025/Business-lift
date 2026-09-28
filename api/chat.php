@@ -62,7 +62,7 @@ function saveChat(string $businessId,array $chat): void {
 }
 function cleanText(mixed $value,int $max): string {
   $text=trim(preg_replace('/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/u','',(string)$value)??'');
-  if(mb_strlen($text)>$max)$text=mb_substr($text,0,$max);
+  if(strlen($text)>$max)$text=substr($text,0,$max);
   return $text;
 }
 function tokenHash(string $token): string { return hash('sha256',$token); }
