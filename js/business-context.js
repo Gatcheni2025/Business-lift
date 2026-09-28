@@ -6,7 +6,9 @@ export function workspaceError(error, action = "load your Teyza workspace") {
 }
 async function api(user, action='context', options={}) {
  const token=await user.getIdToken();
- const response=await fetch(`api/workspace.php?action=${encodeURIComponent(action)}`,{...options,headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json',...(options.headers||{})}});
+ const {params={},...requestOptions}=options;
+ const query=new URLSearchParams({action,...params});
+ const response=await fetch(`api/workspace.php?${query}`,{...requestOptions,headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json',...(requestOptions.headers||{})}});
  const data=await response.json().catch(()=>({}));
  if(!response.ok || !data.ok) throw new Error(data.error||`Unable to ${action}.`);
  return data;
@@ -31,8 +33,8 @@ export function hydrateBusiness({businessId,business,userData},user){
 export async function getWorkspaceSummary(user){ return api(user,'summary'); }
 
 export async function workspaceApi(user,action,options={}){return api(user,action,options);}
-export async function getWorkspaceSection(user,section){return api(user,'section&section='+encodeURIComponent(section));}
-export async function saveWorkspaceSection(user,section,data){return api(user,'section&section='+encodeURIComponent(section),{method:'POST',body:JSON.stringify(data)});}
+export async function getWorkspaceSection(user,section){return api(user,'section',{params:{section}});}
+export async function saveWorkspaceSection(user,section,data){return api(user,'section',{params:{section},method:'POST',body:JSON.stringify(data)});}
 export async function saveBusinessProfile(user,data){const result=await api(user,'business',{method:'POST',body:JSON.stringify(data)});contexts.delete(user.uid);return result;}
 export async function getWorkspaceOrders(user){return api(user,'orders');}
 export async function createWorkspaceOrder(user,data){return api(user,'orders',{method:'POST',body:JSON.stringify(data)});}
