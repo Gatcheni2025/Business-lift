@@ -111,3 +111,57 @@ html.embedded-onboarding .profile-summary .auth-actions,html.embedded-onboarding
 
 /* Business verification address matching */
 .proof-address-lock{margin:8px 0 12px;padding:12px 13px;border:1px solid #f0dca5;background:#fff9e9;border-radius:10px}.proof-address-lock strong{display:block;font-size:11px;color:#7a5600;margin-bottom:3px}.proof-address-lock span{display:block;font-size:10.5px;line-height:1.5;color:#806a35}
+
+
+/* =========================================================
+   TEYZA APP HOME + PERSISTENT SELLER DOCK
+========================================================= */
+.has-app-dock{padding-bottom:92px}
+.teyza-app-dock{
+ position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:55;
+ width:min(560px,calc(100% - 24px));display:grid;grid-template-columns:repeat(4,1fr);
+ align-items:end;padding:8px 10px;background:rgba(255,255,255,.96);backdrop-filter:blur(18px);
+ border:1px solid rgba(216,223,232,.95);border-radius:22px;box-shadow:0 18px 52px rgba(15,23,42,.18)
+}
+.teyza-app-dock a{min-width:0;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:15px;color:#7b8797;font-size:10px;font-weight:750;transition:.16s}
+.teyza-app-dock a i{font-size:21px}.teyza-app-dock a.active{color:#4f46e5;background:#f2f1ff}
+.teyza-app-dock a[data-dock="sell"]{height:68px;margin-top:-20px;color:#fff;background:transparent}
+.dock-sell-plus{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;font-size:31px;line-height:1;font-weight:300;color:#fff;background:linear-gradient(135deg,#168cff 0%,#6d38e8 55%,#eb2ba8 100%);box-shadow:0 10px 26px rgba(99,58,230,.32);border:4px solid #fff}
+.teyza-app-dock a[data-dock="sell"]>span:last-child{color:#4d5665;margin-top:1px}
+.teyza-app-dock a[data-dock="sell"].active .dock-sell-plus{box-shadow:0 10px 30px rgba(99,58,230,.42),0 0 0 3px #e9e5ff}
+
+.teyza-app-home{max-width:980px;margin:0 auto;padding-bottom:40px}
+.app-home-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:20px}
+.app-profile{display:flex;align-items:center;gap:13px}.app-profile-avatar{width:52px;height:52px;border-radius:17px;background:linear-gradient(145deg,#eaf6ff,#f4ebff);display:grid;place-items:center;font-size:19px;font-weight:800;color:#4f46e5;background-size:cover;background-position:center}.app-profile-copy small{display:block;color:#8a94a3;font-size:11px}.app-profile-copy h1{font-size:24px;margin:2px 0 0;letter-spacing:-.6px}.app-home-actions{display:flex;gap:8px}.app-icon-button{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;background:#fff;display:grid;place-items:center;font-size:18px;color:#4d596a}
+.app-verification-card{border-radius:24px;padding:24px;background:linear-gradient(135deg,#07142f 0%,#10275a 58%,#243f84 100%);color:#fff;box-shadow:0 20px 52px rgba(7,20,47,.16);margin-bottom:18px;position:relative;overflow:hidden}
+.app-verification-card:after{content:"";position:absolute;width:210px;height:210px;border-radius:50%;right:-80px;top:-100px;background:radial-gradient(circle,#7d5bff55 0%,transparent 68%)}
+.app-verification-top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;position:relative;z-index:1}.app-verification-card .eyebrow{color:#91c7ff}.app-verification-card h2{font-size:26px;color:#fff;margin:5px 0 7px}.app-verification-card p{color:#cbd8ef;max-width:650px;margin-bottom:0}.app-verification-score{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;border:5px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);font-size:13px;font-weight:800;flex:0 0 auto}
+.app-verification-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:20px;position:relative;z-index:1}.app-verify-step{display:flex;align-items:center;gap:8px;padding:10px 11px;border-radius:13px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);font-size:10.5px;color:#d5e0f4}.app-verify-step span{width:21px;height:21px;border-radius:7px;display:grid;place-items:center;background:rgba(255,255,255,.1);font-size:10px}.app-verify-step.done{background:rgba(39,201,139,.12);color:#c9ffe9;border-color:rgba(87,221,166,.24)}.app-verification-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;position:relative;z-index:1}.app-verification-actions .button{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff}.app-verification-actions .button-primary{background:#fff;color:#07142f;border-color:#fff}
+
+.app-sell-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:22px;background:#fff;border:1px solid var(--line);border-radius:24px;padding:24px;box-shadow:0 14px 40px rgba(15,23,42,.055);margin-bottom:18px}.app-sell-hero h2{font-size:28px;margin:0 0 6px}.app-sell-hero p{margin:0}.app-sell-button{width:90px;height:90px;border-radius:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:linear-gradient(135deg,#168cff 0%,#6d38e8 55%,#eb2ba8 100%);color:#fff;font-weight:800;box-shadow:0 15px 34px rgba(100,58,231,.26)}.app-sell-button strong{font-size:38px;line-height:.8;font-weight:300}.app-sell-button span{font-size:11px}
+.app-pulse-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}.app-pulse-card{background:#fff;border:1px solid var(--line);border-radius:19px;padding:18px;min-height:138px;display:flex;flex-direction:column;justify-content:space-between;transition:.16s}.app-pulse-card:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(15,23,42,.06)}.app-pulse-icon{width:38px;height:38px;border-radius:12px;background:#f3f5ff;color:#5d53e6;display:grid;place-items:center;font-size:19px}.app-pulse-card:nth-child(2) .app-pulse-icon{background:#fff4e9;color:#b7640b}.app-pulse-card:nth-child(3) .app-pulse-icon{background:#eaf9f2;color:#087f5b}.app-pulse-card strong{font-size:22px;display:block;margin-top:16px}.app-pulse-card small{color:#7e8999}.app-pulse-card .app-card-link{font-size:11px;font-weight:750;color:#4f46e5;margin-top:8px}
+.app-stream-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:14px;margin-bottom:18px}.app-stream-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px;min-width:0}.app-stream-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}.app-stream-head h2{margin:0;font-size:17px}.app-stream-head a,.app-stream-head button{font-size:11px;font-weight:750;color:#4f46e5;border:0;background:transparent;padding:0}.app-chat-preview{display:grid;gap:9px}.app-chat-row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #eef1f5}.app-chat-row:last-child{border-bottom:0}.app-chat-avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#f0f3f8;font-weight:800;color:#5d6674}.app-chat-copy strong,.app-chat-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.app-chat-copy strong{font-size:12px}.app-chat-copy small{font-size:10px;color:#8993a1}.app-unread-dot{min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#20b574;color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center}
+.app-order-list{display:grid;gap:8px}.app-order-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px 0;border-bottom:1px solid #eef1f5}.app-order-row:last-child{border-bottom:0}.app-order-row strong,.app-order-row small{display:block}.app-order-row strong{font-size:12px}.app-order-row small{font-size:10px;color:#8993a1;margin-top:2px}.app-order-value{text-align:right;font-weight:800;font-size:12px}.app-status-mini{display:inline-flex;margin-top:3px;padding:3px 7px;border-radius:999px;background:#f1f4f8;color:#6f7a89;font-size:9px}
+.app-shortcuts{display:flex;gap:8px;overflow:auto;padding:2px 0 6px;scrollbar-width:none}.app-shortcuts::-webkit-scrollbar{display:none}.app-shortcut{flex:0 0 auto;min-width:150px;border:1px solid var(--line);border-radius:15px;background:#fff;padding:13px}.app-shortcut i{font-size:18px;color:#5c53e5}.app-shortcut strong{display:block;font-size:11px;margin-top:8px}.app-shortcut small{display:block;color:#8b95a3;font-size:9.5px;margin-top:2px}
+
+@media(max-width:980px){
+ .teyza-app-home{padding-left:16px;padding-right:16px}
+ .workspace-main{padding-bottom:86px}
+}
+@media(max-width:720px){
+ .page-main.teyza-app-home{padding-top:18px}
+ .app-home-head{margin-bottom:14px}.app-profile-avatar{width:46px;height:46px;border-radius:15px}.app-profile-copy h1{font-size:20px}
+ .app-home-actions .app-icon-button:first-child{display:none}
+ .app-verification-card{padding:19px;border-radius:20px}.app-verification-card h2{font-size:22px}.app-verification-score{width:56px;height:56px}
+ .app-verification-steps{grid-template-columns:1fr 1fr}.app-verification-steps .app-verify-step:last-child{grid-column:1/-1}
+ .app-sell-hero{padding:18px;border-radius:20px;grid-template-columns:1fr 74px}.app-sell-hero h2{font-size:22px}.app-sell-button{width:72px;height:72px;border-radius:21px}.app-sell-button strong{font-size:31px}
+ .app-pulse-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.app-pulse-card{padding:13px;min-height:126px}.app-pulse-card strong{font-size:18px}.app-pulse-card small{font-size:9.5px}.app-pulse-icon{width:34px;height:34px}
+ .app-stream-grid{grid-template-columns:1fr}.teyza-app-dock{bottom:8px;width:calc(100% - 16px);border-radius:20px}
+ .tz-chat-launcher{bottom:88px!important}
+}
+@media(max-width:440px){
+ .app-home-head{align-items:flex-start}.app-home-actions{gap:5px}.app-icon-button{width:38px;height:38px}
+ .app-verification-top{align-items:center}.app-verification-card p{font-size:12px}.app-verification-steps{gap:6px}.app-verify-step{padding:8px;font-size:9.5px}
+ .app-pulse-card{min-height:118px}.app-pulse-card .app-card-link{font-size:9.5px}
+ .teyza-app-dock{grid-template-columns:repeat(4,1fr);padding:7px}.teyza-app-dock a{height:52px}.dock-sell-plus{width:48px;height:48px;border-radius:15px}
+}
