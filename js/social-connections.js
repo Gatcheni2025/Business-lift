@@ -1,17 +1,42 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
-import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js";
 import {app, auth} from "./firebase-config.js";
 import {getBusinessContext, hydrateBusiness, workspaceError} from "./business-context.js";
 
-const functions = getFunctions(app);
-const getConnectUrl = httpsCallable(functions, "getSocialConnectUrl");
-const getGoogleConnectUrl = httpsCallable(functions, "getGoogleConnectUrl");
-const getConnections = httpsCallable(functions, "getChannelConnections");
-const disconnectChannel = httpsCallable(functions, "disconnectChannel");
-const selectMetaPage = httpsCallable(functions, "selectMetaPage");
-const selectGoogleMerchantAccount = httpsCallable(functions, "selectGoogleMerchantAccount");
-const getWhatsAppConfig = httpsCallable(functions, "getWhatsAppEmbeddedSignupConfig");
-const completeWhatsAppSignup = httpsCallable(functions, "completeWhatsAppEmbeddedSignup");
+const FUNCTIONS_BASE_URL = "https://us-central1-business-lift-3c19c.cloudfunctions.net";
+
+async function callFunction(name, payload = {}) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("You must be signed in to manage sales channels.");
+  const token = await user.getIdToken();
+  const response = await fetch(`${FUNCTIONS_BASE_URL}/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({data: payload}),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    const err = new Error(body?.error?.message || `Function ${name} failed with HTTP ${response.status}.`);
+    err.code = body?.error?.status || body?.error?.code || `http-${response.status}`;
+    err.details = body?.error?.details;
+    err.customData = {serverResponse: body};
+    throw err;
+  }
+
+  return {data: body.data ?? body.result ?? body};
+}
+
+const getConnectUrl = (payload) => callFunction("getSocialConnectUrl", payload);
+const getGoogleConnectUrl = (payload) => callFunction("getGoogleConnectUrl", payload);
+const getConnections = (payload) => callFunction("getChannelConnections", payload);
+const disconnectChannel = (payload) => callFunction("disconnectChannel", payload);
+const selectMetaPage = (payload) => callFunction("selectMetaPage", payload);
+const selectGoogleMerchantAccount = (payload) => callFunction("selectGoogleMerchantAccount", payload);
+const getWhatsAppConfig = (payload) => callFunction("getWhatsAppEmbeddedSignupConfig", payload);
+const completeWhatsAppSignup = (payload) => callFunction("completeWhatsAppEmbeddedSignup", payload);
 
 let businessId = "";
 let connectionState = {};
