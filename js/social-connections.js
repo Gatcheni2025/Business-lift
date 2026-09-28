@@ -29,58 +29,112 @@ function notify(message, tone = "info") {
   console.log(message);
 }
 
-function labelFor(provider, state) {
-  if (state?.connected) return state.displayName ? `Connected · ${state.displayName}` : "Connected";
-  if (state?.status === "needs_page") return "Choose Facebook Page";
-  if (state?.status === "needs_account") return "Choose Merchant account";
+function metaLabel(view, state) {
+  if (view === "facebook") {
+    if (state?.connected) return state.displayName ? `Connected · ${state.displayName}` : "Connected";
+    if (state?.status === "needs_page") return "Choose Facebook Page";
+    if (state?.status === "no_pages") return "No Facebook Page found";
+    return "Not linked";
+  }
+  if (state?.connected && state.instagramBusinessId) {
+    return state.displayName ? `Connected through ${state.displayName}` : "Connected";
+  }
+  if (state?.connected) return "Facebook connected · Instagram professional account not found";
+  if (state?.status === "needs_page") return "Choose the Facebook Page linked to Instagram";
   if (state?.status === "no_pages") return "No Facebook Page found";
+  return "Not linked";
+}
+
+function genericLabel(provider, state) {
+  if (state?.connected) return state.displayName ? `Connected · ${state.displayName}` : "Connected";
+  if (state?.status === "needs_account") return "Choose Merchant account";
   if (state?.status === "no_accounts") return "No Merchant account found";
   return "Not linked";
 }
 
-function renderChooser(provider, state) {
-  const target = document.querySelector(`[data-chooser="${provider}"]`);
+function renderMetaChooser(state) {
+  ["facebook","instagram"].forEach((view) => {
+    const target = document.querySelector(`[data-chooser="${view}"]`);
+    if (!target) return;
+    target.innerHTML = "";
+    if (!Array.isArray(state.availablePages) || !state.availablePages.length || state.connected) return;
+    const label = document.createElement("p");
+    label.className = "choose-label";
+    label.textContent = view === "instagram" ?
+      "Choose the Facebook Page connected to your professional Instagram account:" :
+      "Choose the Facebook Page Teyza should use:";
+    target.appendChild(label);
+    state.availablePages.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choose-account";
+      button.dataset.chooseProvider = "meta";
+      button.dataset.chooseId = item.id;
+      button.textContent = item.instagramBusinessId && view === "instagram" ?
+        `${item.name} · Instagram linked` : item.name;
+      target.appendChild(button);
+    });
+  });
+}
+
+function renderGoogleChooser(state) {
+  const target = document.querySelector('[data-chooser="google"]');
   if (!target) return;
   target.innerHTML = "";
-  const items = provider === "meta" ? state.availablePages : state.availableAccounts;
-  if (!Array.isArray(items) || !items.length || state.connected) return;
+  if (!Array.isArray(state.availableAccounts) || !state.availableAccounts.length || state.connected) return;
   const label = document.createElement("p");
   label.className = "choose-label";
-  label.textContent = provider === "meta" ? "Choose the Page Teyza should use:" : "Choose your Merchant Center account:";
+  label.textContent = "Choose your Merchant Center account:";
   target.appendChild(label);
-  items.forEach((item) => {
+  state.availableAccounts.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "choose-account";
-    button.dataset.chooseProvider = provider;
-    button.dataset.chooseId = provider === "meta" ? item.id : item.accountId;
-    button.textContent = provider === "meta" ? item.name : (item.accountName || item.accountId);
+    button.dataset.chooseProvider = "google";
+    button.dataset.chooseId = item.accountId;
+    button.textContent = item.accountName || item.accountId;
     target.appendChild(button);
   });
 }
 
 function renderConnections() {
-  ["meta", "google", "whatsapp"].forEach((provider) => {
-    const state = connectionState[provider] || {};
-    const badge = document.querySelector(`[data-status="${provider}"]`);
-    const btn = document.querySelector(`[data-connect="${provider}"]`);
+  const meta = connectionState.meta || {};
+  const google = connectionState.google || {};
+  const whatsapp = connectionState.whatsapp || {};
+
+  const facebookConnected = Boolean(meta.connected);
+  const instagramConnected = Boolean(meta.connected && meta.instagramBusinessId);
+
+  [
+    {view:"facebook", state:meta, connected:facebookConnected, text:metaLabel("facebook",meta)},
+    {view:"instagram", state:meta, connected:instagramConnected, text:metaLabel("instagram",meta)},
+    {view:"google", state:google, connected:Boolean(google.connected), text:genericLabel("google",google)},
+    {view:"whatsapp", state:whatsapp, connected:Boolean(whatsapp.connected), text:genericLabel("whatsapp",whatsapp)},
+  ].forEach(({view,state,connected,text}) => {
+    const badge = document.querySelector(`[data-status="${view}"]`);
+    const btn = document.querySelector(`[data-connect="${view}"]`);
     if (badge) {
-      badge.textContent = labelFor(provider, state);
-      badge.classList.toggle("connected", Boolean(state.connected));
-      badge.classList.toggle("attention", ["needs_page", "needs_account"].includes(state.status));
+      badge.textContent = text;
+      badge.classList.toggle("connected", connected);
+      badge.classList.toggle("attention", ["needs_page","needs_account"].includes(state.status) || (view==="instagram" && meta.connected && !meta.instagramBusinessId));
     }
     if (btn) {
       btn.disabled = false;
-      btn.textContent = state.connected ? "Disconnect" :
-        (["needs_page", "needs_account"].includes(state.status) ? "Reconnect" : "Connect");
-      btn.classList.toggle("secondary", Boolean(state.connected));
+      if (view === "instagram" && meta.connected && !meta.instagramBusinessId) btn.textContent = "Reconnect Meta";
+      else if (connected) btn.textContent = "Disconnect";
+      else if (["needs_page","needs_account"].includes(state.status)) btn.textContent = "Reconnect";
+      else btn.textContent = "Connect";
+      btn.classList.toggle("secondary", connected);
     }
-    renderChooser(provider, state);
   });
 
-  const complete = Object.values(connectionState).filter((v) => v?.connected).length;
+  renderMetaChooser(meta);
+  renderGoogleChooser(google);
+
+  const complete = [facebookConnected, instagramConnected, Boolean(google.connected), Boolean(whatsapp.connected)]
+    .filter(Boolean).length;
   const summary = document.getElementById("connectionSummary");
-  if (summary) summary.textContent = `${complete} external connection${complete === 1 ? "" : "s"} linked`;
+  if (summary) summary.textContent = `${complete} external channel${complete === 1 ? "" : "s"} linked`;
 }
 
 async function refreshConnections() {
@@ -137,6 +191,7 @@ async function finishWhatsAppIfReady() {
 
 async function startWhatsApp() {
   const config = (await getWhatsAppConfig({businessId})).data || {};
+  if (!config.appId) throw new Error("META_APP_ID is not configured in Firebase Functions.");
   if (!config.configId) {
     throw new Error("WhatsApp Embedded Signup is not configured yet. Add META_WHATSAPP_CONFIG_ID in Firebase Functions configuration.");
   }
@@ -144,8 +199,8 @@ async function startWhatsApp() {
   window.addEventListener("message", async (event) => {
     if (!event.origin.endsWith("facebook.com")) return;
     try {
-      const data = JSON.parse(event.data);
-      if (data.type !== "WA_EMBEDDED_SIGNUP") return;
+      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
       if (data.event === "FINISH") {
         whatsappSession = data.data || null;
         await finishWhatsAppIfReady();
@@ -153,7 +208,7 @@ async function startWhatsApp() {
         notify(data.data?.error_message || "WhatsApp setup failed.", "error");
       }
     } catch (_) {}
-  }, {once: false});
+  });
 
   window.FB.login(async (response) => {
     whatsappCode = response?.authResponse?.code || response?.code || "";
@@ -171,8 +226,9 @@ async function startWhatsApp() {
   });
 }
 
-async function disconnect(provider) {
-  if (!window.confirm(`Disconnect ${provider === "meta" ? "Facebook & Instagram" : provider}?`)) return;
+async function disconnect(provider, view) {
+  const label = provider === "meta" ? "Facebook & Instagram" : (view === "whatsapp" ? "WhatsApp Business" : "Google Shopping");
+  if (!window.confirm(`Disconnect ${label}?`)) return;
   await disconnectChannel({businessId, provider});
   await refreshConnections();
   notify("Connection removed.", "success");
@@ -199,11 +255,16 @@ document.addEventListener("click", async (event) => {
 
   const btn = event.target.closest?.("[data-connect]");
   if (!btn) return;
-  const provider = btn.dataset.connect;
-  if (!provider) return;
+  const view = btn.dataset.connect;
+  if (!view) return;
+  const provider = ["facebook","instagram"].includes(view) ? "meta" : view;
+  const currentlyConnected = provider === "meta" ?
+    (view === "facebook" ? Boolean(connectionState.meta?.connected) :
+      Boolean(connectionState.meta?.connected && connectionState.meta?.instagramBusinessId)) :
+    Boolean(connectionState[provider]?.connected);
   try {
     btn.disabled = true;
-    if (connectionState[provider]?.connected) await disconnect(provider);
+    if (currentlyConnected) await disconnect(provider, view);
     else if (provider === "whatsapp") await startWhatsApp();
     else await startOauth(provider);
   } catch (error) {
@@ -223,8 +284,9 @@ onAuthStateChanged(auth, async (user) => {
     await refreshConnections();
     const params = new URLSearchParams(location.search);
     const status = params.get("social");
-    if (status === "connected") notify("Authorization received. Confirm the account shown below.", "success");
-    if (status === "error") notify("The connection could not be completed. Try again.", "error");
+    const provider = params.get("provider");
+    if (status === "connected") notify(provider === "meta" ? "Meta authorization received. Confirm your Facebook Page below." : "Authorization received. Confirm the account shown below.", "success");
+    if (status === "error") notify("The connection could not be completed. Check the provider setup and try again.", "error");
     if (status === "cancelled") notify("Connection cancelled.", "error");
   } catch (error) {
     console.error(error);
