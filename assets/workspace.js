@@ -63,7 +63,7 @@
    const link=document.createElement('link');link.rel='stylesheet';link.href='assets/live-chat.css?v=1';link.dataset.teyzaLiveChat='1';document.head.appendChild(link);
   }
   if(!document.querySelector('script[data-teyza-live-chat-seller]')){
-   const script=document.createElement('script');script.type='module';script.src='js/live-chat-seller.js?v=1';script.dataset.teyzaLiveChatSeller='1';document.body.appendChild(script);
+   const script=document.createElement('script');script.type='module';script.src='js/live-chat-seller.js?v=2';script.dataset.teyzaLiveChatSeller='1';document.body.appendChild(script);
   }
  }
 })();
