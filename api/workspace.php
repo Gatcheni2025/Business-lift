@@ -43,22 +43,61 @@ $user=verifyFirebase(bearer()); $workspace=loadWorkspace($user); $action=$_GET['
 function verificationState(array $workspace,array $user): array {
   $v=$workspace['verification']??[];$business=$workspace['business']??[];
   $savedPhone=canonicalPhone((string)($business['phone']??''));$firebasePhone=canonicalPhone((string)($user['phoneNumber']??''));
-  $phoneVerified=$savedPhone!==''&&$savedPhone===$firebasePhone;
+  $storedPhone=canonicalPhone((string)($v['phone']['phone']??''));
+  $phoneVerified=$savedPhone!==''&&(($savedPhone===$firebasePhone)||(!empty($v['phone']['verified'])&&$savedPhone===$storedPhone));
   $locationConfirmed=!empty($v['location']['confirmed'])&&isset($v['location']['lat'],$v['location']['lng'])&&sameAddress((string)($business['address']??''),(string)($v['location']['address']??''));
   $proofUploaded=!empty($v['proofOfAddress']['storedName']);
+  $proofAddressMatchVerified=$proofUploaded&&!empty($v['proofOfAddress']['addressMatchVerified']);
   $identityVerified=!empty($v['identity']['verified']);
   $identityStatus=(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted'));
   $identitySubmitted=!empty($v['identity']['submittedAt'])&&in_array($identityStatus,['pending','verified'],true);
   $completed=(int)$phoneVerified+(int)$identitySubmitted+(int)$locationConfirmed+(int)$proofUploaded;
-  return ['phoneVerified'=>$phoneVerified,'identityVerified'=>$identityVerified,'identitySubmitted'=>$identitySubmitted,'identityStatus'=>$identityStatus,'locationConfirmed'=>$locationConfirmed,'proofOfAddressUploaded'=>$proofUploaded,'completed'=>$completed,'total'=>4,'location'=>$v['location']??null,'proofOfAddress'=>isset($v['proofOfAddress'])?['uploadedAt'=>$v['proofOfAddress']['uploadedAt']??null,'originalName'=>$v['proofOfAddress']['originalName']??'Document uploaded']:null];
+  return [
+    'phoneVerified'=>$phoneVerified,
+    'phoneVerifiedAt'=>$v['phone']['verifiedAt']??null,
+    'identityVerified'=>$identityVerified,
+    'identitySubmitted'=>$identitySubmitted,
+    'identityStatus'=>$identityStatus,
+    'locationConfirmed'=>$locationConfirmed,
+    'proofOfAddressUploaded'=>$proofUploaded,
+    'proofAddressMatchVerified'=>$proofAddressMatchVerified,
+    'proofAddressMatchStatus'=>$v['proofOfAddress']['matchStatus']??($proofUploaded?'pending_review':'not_uploaded'),
+    'completed'=>$completed,
+    'total'=>4,
+    'location'=>$v['location']??null,
+    'proofOfAddress'=>isset($v['proofOfAddress'])?[
+      'uploadedAt'=>$v['proofOfAddress']['uploadedAt']??null,
+      'originalName'=>$v['proofOfAddress']['originalName']??'Document uploaded',
+      'addressAtUpload'=>$v['proofOfAddress']['addressAtUpload']??null,
+      'matchStatus'=>$v['proofOfAddress']['matchStatus']??'pending_review',
+      'addressMatchVerified'=>!empty($v['proofOfAddress']['addressMatchVerified']),
+    ]:null
+  ];
 }
 if($action==='verification'){
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];$type=(string)($input['type']??'');
+    if($type==='phone'){
+      $phone=trim((string)($input['phone']??''));
+      $phoneToken=trim((string)($_SERVER['HTTP_X_PHONE_VERIFICATION_TOKEN']??''));
+      if($phone===''||$phoneToken==='')respond(422,['ok'=>false,'error'=>'Verified phone proof is required']);
+      $phoneUser=verifyFirebase($phoneToken);
+      $verifiedPhone=canonicalPhone((string)($phoneUser['phoneNumber']??''));
+      $requestedPhone=canonicalPhone($phone);
+      if($verifiedPhone===''||$requestedPhone===''||$verifiedPhone!==$requestedPhone)respond(422,['ok'=>false,'error'=>'The verified SMS number does not match the business phone number']);
+      $workspace['verification']=$workspace['verification']??[];
+      $workspace['verification']['phone']=['verified'=>true,'phone'=>$phone,'verifiedAt'=>gmdate('c')];
+      $workspace['business']['phone']=$phone;
+      saveWorkspace($user,$workspace);
+    }
     if($type==='location'){
       $lat=filter_var($input['lat']??null,FILTER_VALIDATE_FLOAT);$lng=filter_var($input['lng']??null,FILTER_VALIDATE_FLOAT);$address=trim((string)($input['address']??''));
       if($lat===false||$lng===false||$lat < -90||$lat > 90||$lng < -180||$lng > 180||$address==='')respond(422,['ok'=>false,'error'=>'Choose a valid map location and address']);
       $workspace['verification']=$workspace['verification']??[];$workspace['verification']['location']=['confirmed'=>true,'lat'=>$lat,'lng'=>$lng,'address'=>$address,'confirmedAt'=>gmdate('c')];$workspace['business']['address']=$address;
+      if(!empty($workspace['verification']['proofOfAddress']['storedName'])){
+        $workspace['verification']['proofOfAddress']['addressMatchVerified']=false;
+        $workspace['verification']['proofOfAddress']['matchStatus']='pending_review';
+      }
       if(isset($workspace['settings']['delivery'])){$workspace['settings']['delivery']['pickupAddress']=$address;$workspace['settings']['delivery']['pickupLocation']=['lat'=>$lat,'lng'=>$lng];}
       saveWorkspace($user,$workspace);
     }
@@ -78,8 +117,43 @@ if($action==='admin-overview'){if(!isAdmin($user))respond(403,['ok'=>false,'erro
 if($action==='admin-users'){if(adminRole($user)!=='super_admin')respond(403,['ok'=>false,'error'=>'Super Admin access required']);if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$email=strtolower(trim((string)($input['email']??'')));$role=in_array(($input['role']??''),['admin','super_admin'],true)?$input['role']:'admin';if(!filter_var($email,FILTER_VALIDATE_EMAIL))respond(422,['ok'=>false,'error'=>'Enter a valid admin email']);$admins=adminRegistry();$found=false;foreach($admins as &$entry){if(strtolower((string)($entry['email']??''))===$email){$entry['role']=$role;$entry['active']=true;$found=true;break;}}unset($entry);if(!$found)$admins[]=['email'=>$email,'role'=>$role,'active'=>true,'createdAt'=>gmdate('c'),'createdBy'=>$user['email']??''];saveAdminRegistry($admins);}respond(200,['ok'=>true,'admins'=>adminRegistry()]);}
 if($action==='admin-sellers'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);respond(200,['ok'=>true,'sellers'=>loadAllSellers()]);}
 if($action==='admin-identity'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$decision=(string)($input['status']??'');if(!$uid||!in_array($decision,['verified','rejected'],true))respond(422,['ok'=>false,'error'=>'Valid seller and identity decision required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);if(empty($target['verification']['identity']['submittedAt']))respond(422,['ok'=>false,'error'=>'Seller has not submitted identity verification']);$target['verification']['identity']['status']=$decision;$target['verification']['identity']['verified']=$decision==='verified';$target['verification']['identity']['reviewedAt']=gmdate('c');$target['verification']['identity']['reviewedBy']=$user['email']??'admin';$target['verification']['identity']['note']=trim((string)($input['note']??''));file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true]);}
+if($action==='admin-address-proof'){
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));
+  $matches=filter_var($input['matches']??null,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);
+  if(!$uid||$matches===null)respond(422,['ok'=>false,'error'=>'Seller and address decision are required']);
+  $path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  if(empty($target['verification']['proofOfAddress']['storedName'])||empty($target['verification']['location']['confirmed']))respond(422,['ok'=>false,'error'=>'Seller must upload proof of address and confirm the map location first']);
+  $mapAddress=(string)($target['verification']['location']['address']??'');
+  $uploadAddress=(string)($target['verification']['proofOfAddress']['addressAtUpload']??'');
+  if(!sameAddress($mapAddress,$uploadAddress))respond(422,['ok'=>false,'error'=>'The map address changed after this proof was uploaded. Ask the seller to upload proof again']);
+  $target['verification']['proofOfAddress']['addressMatchVerified']=$matches;
+  $target['verification']['proofOfAddress']['matchStatus']=$matches?'verified':'mismatch';
+  $target['verification']['proofOfAddress']['reviewedAt']=gmdate('c');
+  $target['verification']['proofOfAddress']['reviewedBy']=$user['email']??'admin';
+  $target['verification']['proofOfAddress']['reviewNote']=trim((string)($input['note']??''));
+  if(!$matches){
+    $target['companyApproval']=$target['companyApproval']??[];
+    $target['companyApproval']['status']='pending';
+    $target['companyApproval']['note']='Proof of address does not match the confirmed map address';
+  }
+  file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  respond(200,['ok'=>true,'verification'=>verificationState($target,[])]);
+}
 if($action==='admin-catalog'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);$products=[];$orders=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$seller=['uid'=>$w['uid']??basename($path,'.json'),'businessName'=>$w['business']['businessName']??'Unnamed business','email'=>$w['email']??''];foreach(($w['products']??[]) as $p)$products[]=array_merge($p,['seller'=>$seller]);foreach(($w['orders']??[]) as $o)$orders[]=array_merge($o,['seller'=>$seller]);}respond(200,['ok'=>true,'products'=>$products,'orders'=>$orders]);}
-if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$status=(string)($input['status']??'');if(!$uid||!in_array($status,['approved','rejected'],true))respond(422,['ok'=>false,'error'=>'Seller and valid decision are required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);$target['companyApproval']=['status'=>$status,'submittedAt'=>$target['companyApproval']['submittedAt']??null,'reviewedAt'=>gmdate('c'),'reviewedBy'=>$user['email']??'admin','note'=>trim((string)($input['note']??''))];file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true,'companyApproval'=>companyApproval($target)]);}
+if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$status=(string)($input['status']??'');if(!$uid||!in_array($status,['approved','rejected'],true))respond(422,['ok'=>false,'error'=>'Seller and valid decision are required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);
+if($status==='approved'){
+  $v=verificationState($target,[]);
+  if(empty($v['phoneVerified']))respond(422,['ok'=>false,'error'=>'Verify the seller phone before approval']);
+  if(empty($v['identityVerified']))respond(422,['ok'=>false,'error'=>'Approve the seller identity before company approval']);
+  if(empty($v['locationConfirmed']))respond(422,['ok'=>false,'error'=>'The seller must confirm the business location on the map']);
+  if(empty($v['proofOfAddressUploaded']))respond(422,['ok'=>false,'error'=>'The seller must upload proof of address']);
+  if(empty($v['proofAddressMatchVerified']))respond(422,['ok'=>false,'error'=>'Confirm that the proof of address matches the map address before approval']);
+}
+$target['companyApproval']=['status'=>$status,'submittedAt'=>$target['companyApproval']['submittedAt']??null,'reviewedAt'=>gmdate('c'),'reviewedBy'=>$user['email']??'admin','note'=>trim((string)($input['note']??''))];file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true,'companyApproval'=>companyApproval($target)]);}
 if ($action==='seller-readiness') {
   $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))===''||($key==='businessName'&&trim((string)($business[$key]??''))==='Your Teyza Store'))$missing[]=$key;
   $settings=$workspace['settings']??[];$verification=verificationState($workspace,$user);
