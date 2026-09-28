@@ -18,12 +18,13 @@ if($type==='identity'){
 if(empty($_FILES['proof'])||$_FILES['proof']['error']!==UPLOAD_ERR_OK)out(422,['ok'=>false,'error'=>'Choose a proof of address document']);
 $f=$_FILES['proof'];if((int)$f['size']>8*1024*1024)out(413,['ok'=>false,'error'=>'File must be 8 MB or smaller']);
 $fi=new finfo(FILEINFO_MIME_TYPE);$mime=$fi->file($f['tmp_name']);$ext=['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png'][$mime]??null;if(!$ext)out(415,['ok'=>false,'error'=>'Only PDF, JPG and PNG files are accepted']);
-$uid=preg_replace('/[^A-Za-z0-9_-]/','',$u['localId']);$base=dirname(__DIR__).'/../private_html/teyza-verification/'.$uid;if(!is_dir($base)&&!mkdir($base,0750,true)&&!is_dir($base))out(500,['ok'=>false,'error'=>'Private verification storage is unavailable']);
-foreach(glob($base.'/proof-of-address.*')?:[] as $old)@unlink($old);$stored='proof-of-address.'.$ext;if(!move_uploaded_file($f['tmp_name'],$base.'/'.$stored))out(500,['ok'=>false,'error'=>'Could not store document']);
+$uid=preg_replace('/[^A-Za-z0-9_-]/','',$u['localId']);
 $dataDir=dirname(__DIR__).'/../private_html/teyza-data';$path=$dataDir.'/'.$uid.'.json';$w=is_file($path)?json_decode((string)file_get_contents($path),true):null;if(!is_array($w))out(404,['ok'=>false,'error'=>'Workspace not found']);
 $location=$w['verification']['location']??[];$businessAddress=trim((string)($w['business']['address']??''));$mapAddress=trim((string)($location['address']??''));
 $norm=function(string $value):string{return strtolower((string)preg_replace('/\s+/u',' ',trim($value)));};
 if(empty($location['confirmed'])||!isset($location['lat'],$location['lng'])||$businessAddress===''||$mapAddress===''||$norm($businessAddress)!==$norm($mapAddress))out(422,['ok'=>false,'error'=>'Confirm the business address on the map before uploading proof of address']);
+$base=dirname(__DIR__).'/../private_html/teyza-verification/'.$uid;if(!is_dir($base)&&!mkdir($base,0750,true)&&!is_dir($base))out(500,['ok'=>false,'error'=>'Private verification storage is unavailable']);
+foreach(glob($base.'/proof-of-address.*')?:[] as $old)@unlink($old);$stored='proof-of-address.'.$ext;if(!move_uploaded_file($f['tmp_name'],$base.'/'.$stored))out(500,['ok'=>false,'error'=>'Could not store document']);
 $w['verification']=$w['verification']??[];$w['verification']['proofOfAddress']=[
  'storedName'=>$stored,
  'originalName'=>basename((string)$f['name']),
