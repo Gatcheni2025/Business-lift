@@ -149,9 +149,9 @@ function returnPath() {
     "/seller-onboarding.html" : "/sales-channels.html";
 }
 
-async function startOauth(provider) {
+async function startOauth(provider, channel = provider) {
   const callable = provider === "google" ? getGoogleConnectUrl : getConnectUrl;
-  const result = await callable({businessId, provider, returnTo: returnPath()});
+  const result = await callable({businessId, provider, channel, returnTo: returnPath()});
   if (!result.data?.url) throw new Error("No connection URL returned.");
   window.location.assign(result.data.url);
 }
@@ -266,7 +266,7 @@ document.addEventListener("click", async (event) => {
     btn.disabled = true;
     if (currentlyConnected) await disconnect(provider, view);
     else if (provider === "whatsapp") await startWhatsApp();
-    else await startOauth(provider);
+    else await startOauth(provider, view);
   } catch (error) {
     console.error("Connection action failed", error);
     notify(error.message || "Connection failed.", "error");
