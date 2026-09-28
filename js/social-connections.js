@@ -264,13 +264,24 @@ async function startWhatsApp() {
     } catch (_) {}
   });
 
-  window.FB.login(async (response) => {
+  // Meta's JS SDK rejects native async functions as FB.login callbacks.
+  // Keep the callback synchronous and hand off async work separately.
+  const handleWhatsAppLogin = async (response) => {
     whatsappCode = response?.authResponse?.code || response?.code || "";
     if (!whatsappCode) {
-      notify("WhatsApp setup was cancelled.", "error");
+      notify("WhatsApp setup was cancelled or no authorization code was returned.", "error");
       return;
     }
-    try { await finishWhatsAppIfReady(); } catch (error) { notify(error.message, "error"); }
+    try {
+      await finishWhatsAppIfReady();
+    } catch (error) {
+      console.error("WhatsApp Embedded Signup completion failed", error);
+      notify(error.message || "WhatsApp setup could not be completed.", "error");
+    }
+  };
+
+  window.FB.login(function(response) {
+    void handleWhatsAppLogin(response);
   }, {
     config_id: config.configId,
     auth_type: "rerequest",
