@@ -49,7 +49,7 @@ for name,meta in pages.items():
 <main class="{main_class}" id="main-content">{main_intro}
 {content}
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
-<script src="assets/workspace.js?v=4"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
+<script src="assets/workspace.js?v=4"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=3"></script>
 {scripts}
 </body></html>'''
  (ROOT/(name+'.html')).write_text(page,encoding='utf-8')
