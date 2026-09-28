@@ -18,16 +18,16 @@
   <div class="notice" id="connectionNotice" hidden></div>
   <section class="channels">
     <article class="card">
-      <div class="icon"><i class="ph ph-meta-logo"></i></div>
-      <div><div class="title">Facebook & Instagram</div><div class="desc">One Meta connection links your Facebook Page and its connected professional Instagram account.</div><span class="status" data-status="meta">Checking…</span></div>
-      <button class="btn" data-connect="meta">Connect</button>
-      <div class="chooser" data-chooser="meta"></div>
+      <div class="icon"><i class="ph ph-facebook-logo"></i></div>
+      <div><div class="title">Facebook</div><div class="desc">Connect your Facebook Page through Meta and publish approved Teyza products to that Page.</div><span class="status" data-status="facebook">Checking…</span></div>
+      <button class="btn" data-connect="facebook">Connect</button>
+      <div class="chooser" data-chooser="facebook"></div>
     </article>
     <article class="card">
-      <div class="icon"><i class="ph ph-google-logo"></i></div>
-      <div><div class="title">Google Shopping</div><div class="desc">Connect Merchant Center and confirm the account Business Expo should publish products to.</div><span class="status" data-status="google">Checking…</span></div>
-      <button class="btn" data-connect="google">Connect</button>
-      <div class="chooser" data-chooser="google"></div>
+      <div class="icon"><i class="ph ph-instagram-logo"></i></div>
+      <div><div class="title">Instagram</div><div class="desc">Use the professional Instagram account connected to your selected Facebook Page.</div><span class="status" data-status="instagram">Checking…</span></div>
+      <button class="btn" data-connect="instagram">Connect</button>
+      <div class="chooser" data-chooser="instagram"></div>
     </article>
     <article class="card">
       <div class="icon"><i class="ph ph-whatsapp-logo"></i></div>
@@ -36,8 +36,14 @@
       <div class="chooser" data-chooser="whatsapp"></div>
     </article>
     <article class="card">
+      <div class="icon"><i class="ph ph-google-logo"></i></div>
+      <div><div class="title">Google Shopping</div><div class="desc">Connect Merchant Center and confirm the account Teyza should publish products to.</div><span class="status" data-status="google">Checking…</span></div>
+      <button class="btn" data-connect="google">Connect</button>
+      <div class="chooser" data-chooser="google"></div>
+    </article>
+    <article class="card">
       <div class="icon"><i class="ph ph-storefront"></i></div>
-      <div><div class="title">Business Expo Store</div><div class="desc">Your Manage your catalog, orders and shop settings in Business Expo.</div><span class="status">Included in your workspace</span></div>
+      <div><div class="title">Teyza Store</div><div class="desc">Manage your catalog, orders and shop settings directly in Teyza.</div><span class="status connected">Included in your workspace</span></div>
       <a class="button" href="store.html">Manage store</a>
     </article>
   </section>
@@ -53,7 +59,7 @@
 
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
-<script type="module" src="js/social-connections.js"></script>
+<script type="module" src="js/social-connections.js?v=2"></script>
 <script>
 const params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard →'}
 </script>
