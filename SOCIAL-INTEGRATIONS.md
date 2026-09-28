@@ -1,55 +1,61 @@
-# Business Expo selling connections
+# Teyza selling connections
 
-Business Expo uses Firebase Cloud Functions to connect seller-owned commerce accounts and only shows **Connected** after the backend has a usable account.
+Teyza uses Firebase Cloud Functions to connect seller-owned commerce accounts and only shows **Connected** after the backend has a usable account.
 
 ## Seller-facing flow
 
 1. Open `sales-channels.html`.
-2. Connect Meta, Google or WhatsApp Business.
-3. If the seller manages more than one Facebook Page or Google Merchant account, choose the account Business Expo should use.
-4. The page shows a green **Connected** confirmation only after the account is selected and stored server-side.
-5. Return to `seller-onboarding.html` to continue delivery, payment and audience setup.
-
-Facebook and Instagram intentionally use **one Meta connection**. Instagram is discovered from the professional Instagram account linked to the selected Facebook Page.
+2. Connect Facebook, Instagram, WhatsApp Business or Google Shopping.
+3. Facebook and Instagram share one Meta authorization. Choose the Facebook Page Teyza should use. Instagram becomes available only when that selected Page has a professional Instagram account linked to it.
+4. WhatsApp Business uses Meta Embedded Signup and stores the connected WABA/phone-number ID server-side.
+5. Google Shopping uses the seller's Google Merchant Center account.
+6. The Add Product screen only shows external channels that are genuinely connected.
 
 ## Required Firebase secrets
 
-```bash
+Set these before deploying the social connection functions:
+
+```powershell
 firebase functions:secrets:set META_APP_ID
 firebase functions:secrets:set META_APP_SECRET
+firebase functions:secrets:set META_WHATSAPP_CONFIG_ID
 firebase functions:secrets:set GOOGLE_CLIENT_ID
 firebase functions:secrets:set GOOGLE_CLIENT_SECRET
 firebase functions:secrets:set OAUTH_STATE_SECRET
 ```
 
-## Required Functions configuration
+`META_WHATSAPP_CONFIG_ID` is the Configuration ID created in **Meta → Facebook Login for Business → Configurations → WhatsApp Embedded Signup**.
 
-Set these values for the deployed environment:
+## Functions parameters
 
-- `APP_URL`
-- `FUNCTIONS_BASE_URL`
-- `META_GRAPH_VERSION`
-- `META_WHATSAPP_CONFIG_ID`
+The code also uses:
 
-`META_WHATSAPP_CONFIG_ID` is the Configuration ID created in **Meta → Facebook Login for Business → Configurations → WhatsApp Embedded Signup**. The seller-facing WhatsApp Connect button will explain that setup is unavailable until this value is configured.
+- `APP_URL` — production default is `https://teyza.co.za`.
+- `FUNCTIONS_BASE_URL` — production default is the us-central1 URL for `business-lift-3c19c`.
+- `META_GRAPH_VERSION` — defaults to `v23.0`.
 
-## OAuth callback
+## OAuth / Embedded Signup URLs
 
-Register this callback in Meta and Google using the actual deployed Functions region/domain:
+Configure these in the provider consoles:
 
+**Meta Facebook + Instagram OAuth redirect**
 ```text
-https://us-central1-business-lift-3c19c.cloudfunctions.net/socialOAuthCallback
+https://us-central1-business-lift-3c19c.cloudfunctions.net/socialOAuthCallback?provider=meta
 ```
 
-The callback safely returns the seller to either Selling Connections or Seller Setup and does not allow arbitrary redirect paths.
+**Google Merchant Center OAuth redirect**
+```text
+https://us-central1-business-lift-3c19c.cloudfunctions.net/googleOAuthCallback
+```
+
+For WhatsApp Embedded Signup, use the same Meta app and the `META_WHATSAPP_CONFIG_ID` created for the app.
 
 ## What the backend verifies
 
-- **Meta:** OAuth succeeds and an accessible Facebook Page is selected. If multiple Pages exist, the seller must choose one before the status becomes Connected.
-- **Google:** OAuth succeeds and an accessible Merchant Center account is found. If multiple accounts exist, the seller must choose one.
-- **WhatsApp:** Embedded Signup returns a WABA ID and phone-number ID, the backend exchanges the code, fetches the phone record, stores the connection and attempts to subscribe the app to the WABA.
-
-Google account discovery uses the Merchant API `accounts.list` endpoint with the `https://www.googleapis.com/auth/content` OAuth scope.
+- **Facebook:** Meta OAuth succeeds and an accessible Facebook Page is selected.
+- **Instagram:** the selected Facebook Page must expose an `instagram_business_account`; otherwise Instagram remains unavailable on Add Product.
+- **Google Shopping:** OAuth succeeds and a Merchant Center account is selected.
+- **WhatsApp Business:** Embedded Signup returns a WABA ID and phone-number ID; the backend exchanges the code, fetches the business phone record and stores the connection.
 
 ## Firestore security
 
@@ -68,13 +74,13 @@ Cloud Functions use the Admin SDK and are not blocked by these client rules.
 
 ## Deployment sequence
 
-1. Configure Meta, Google and WhatsApp Embedded Signup.
-2. Set the Firebase secrets above.
-3. Set `META_WHATSAPP_CONFIG_ID`, `APP_URL` and `FUNCTIONS_BASE_URL`.
-4. Add the OAuth callback URL to Meta and Google.
-5. Confirm the Firestore deny rule for `/integrations/**`.
-6. Deploy Functions: `firebase deploy --only functions`.
-7. Deploy Hosting.
-8. Test with one real seller account and confirm each green Connected state.
+1. Configure the Meta app products for Facebook Login for Business, Instagram API and WhatsApp Embedded Signup.
+2. Set the six Firebase secrets above.
+3. Add the Meta and Google redirect URLs.
+4. Confirm the Firestore deny rule for `/integrations/**`.
+5. From the `functions` project directory dependencies, deploy:
+   `firebase deploy --project business-lift-3c19c --only functions`
+6. Upload the updated website/PHP files to `teyza.co.za`.
+7. Test a seller account on `sales-channels.html` and confirm Facebook, Instagram, WhatsApp and Google statuses independently.
 
-Meta production permissions can require App Review and Business Verification.
+Meta production permissions can require App Review and Business Verification before real seller accounts outside app roles can connect.
