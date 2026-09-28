@@ -81,7 +81,7 @@ function fixture() {
   const login = fixture();
   login.loginError = true;
   await login.submit('login');
-  assert.match(login.statuses.login.textContent, /Incorrect email or password/);
+  assert.match(login.statuses.login.textContent, /Email or password not recognised/);
   assert.equal(login.statuses.login.hidden, false);
   assert.equal(login.buttons.login.disabled, false);
 

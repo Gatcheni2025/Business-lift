@@ -83,8 +83,11 @@ if ($action==='seller-readiness') {
   // A confirmed map location may fill the address after the profile was last saved.
   // Derive readiness from the saved fields and checks, not a stale client flag.
   $businessComplete=empty($missing)&&((int)($verification['completed']??0)>=4);
-  $deliveryComplete=!empty($settings['delivery']['fulfilmentMode'])||!empty($workspace['setupFlow']['deliveryComplete']);
-  $paymentComplete=!empty($workspace['setupFlow']['paymentComplete'])||!empty($settings['banking'])||!empty($settings['payfast'])||!empty($settings['paymentPreferences']);
+  $deliveryComplete=!empty($settings['delivery']['fulfilmentMode'])&&trim((string)($settings['delivery']['pickupAddress']??''))!=='';
+  $bank=$settings['banking']??[];$gateway=$settings['payfast']??[];$other=$settings['paymentPreferences']??[];
+  $paymentComplete=(trim((string)($bank['bankName']??''))!==''&&trim((string)($bank['accountHolder']??''))!==''&&(trim((string)($bank['accountNumber']??''))!==''||trim((string)($bank['accountNumberLast4']??''))!==''))
+    ||(trim((string)($gateway['merchantId']??''))!==''&&trim((string)($gateway['merchantKey']??''))!=='')
+    ||trim((string)($other['otherGateway']??''))!=='';
   $productReady=$businessComplete&&$deliveryComplete&&$paymentComplete;
   $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
   respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>companyApproval($workspace),'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$deliveryComplete&&$paymentComplete,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
