@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta name="robots" content="noindex"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#07142f"><title>Dashboard | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=15"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
+<head><meta name="robots" content="noindex"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#07142f"><title>Dashboard | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=16"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
 <body class="workspace dashboard-contrast" data-page="dashboard">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -39,12 +39,18 @@
         <iframe class="ob2-business-frame" data-ob-business-frame title="Business profile and verification" allow="camera; geolocation"></iframe>
         <div class="ob2-actions"><button class="button button-primary" type="button" data-ob-refresh>Check progress & continue →</button></div>
       </section>
-      <section class="ob2-step" data-ob-step="2" hidden><h3>How will customers receive orders?</h3><p>Choose a delivery method and save the details you will use for orders.</p><div class="ob2-grid"><label>Delivery method<select data-ob-delivery-method><option value="courier">Courier</option><option value="own_driver">My own driver</option><option value="pickup">Customer pickup</option><option value="digital">Digital / service</option></select></label><label>Preferred provider<input data-ob-provider placeholder="e.g. The Courier Guy"></label><label>Dispatch / collection address<input data-ob-address placeholder="Where orders leave from"></label><label>Standard delivery fee (R)<input data-ob-fee type="number" min="0" step=".01" value="0"></label></div><div class="ob2-actions"><button class="button button-primary" type="button" data-ob-save-delivery>Save & continue →</button></div></section>
+      <section class="ob2-step" data-ob-step="2" hidden>
+        <h3>How will customers receive orders?</h3><p>Choose a South African delivery option. The prices below are guides; set what you will charge customers.</p>
+        <div class="ob2-grid"><label>Delivery service<select data-ob-delivery-method></select></label><label>Customer delivery fee (R)<input data-ob-fee type="number" min="0" step=".01" value="0"></label></div>
+        <div class="delivery-price-guide" data-ob-guide></div>
+        <div class="verified-address"><small>Dispatch / collection address · from your verified map location</small><strong data-ob-address>Loading verified address…</strong></div>
+        <div class="ob2-actions"><button class="button button-primary" type="button" data-ob-save-delivery>Save & continue →</button></div>
+      </section>
       <section class="ob2-step" data-ob-step="3" hidden><h3>How do you want to get paid?</h3><p>Set a payment option before adding your first product.</p><div class="ob2-pay-tabs"><button class="active" type="button" data-ob-pay="eft">EFT / Bank</button><button type="button" data-ob-pay="payfast">PayFast</button><button type="button" data-ob-pay="other">Other gateway</button></div><div class="ob2-grid" data-ob-pay-fields="eft"><label>Bank<input data-ob-bank placeholder="Bank name"></label><label>Account holder<input data-ob-holder></label><label>Account number<input data-ob-account inputmode="numeric" autocomplete="off"></label><label>Branch code<input data-ob-branch inputmode="numeric"></label></div><div class="ob2-grid" data-ob-pay-fields="payfast" hidden><label>Merchant ID<input data-ob-merchant></label><label>Merchant Key<input data-ob-key type="password"></label></div><div class="ob2-grid" data-ob-pay-fields="other" hidden><label>Gateway<input data-ob-gateway placeholder="e.g. Yoco"></label><label>Account / reference<input data-ob-reference></label></div><div class="ob2-actions"><button class="button button-primary" type="button" data-ob-save-payment>Finish setup & add your first product →</button></div></section>
     </div><footer class="ob2-foot"><span>Your details are saved as you go. Products can be added after setup and publish after Teyza approves your company.</span></footer>
   </section>
 </div>
 <footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><span>Secure seller workspace</span></footer></div>
 <script src="assets/workspace.js"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=2"></script>
-<script type="module" src="js/dashboard-data.js"></script><script type="module" src="js/onboarding-v2.js?v=2"></script>
+<script type="module" src="js/dashboard-data.js"></script><script type="module" src="js/onboarding-v2.js?v=3"></script>
 </body></html>

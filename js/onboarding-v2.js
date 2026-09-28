@@ -1,11 +1,20 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 import {getWorkspaceSection,saveWorkspaceSection} from "./business-context.js";
+import {methods,methodByCode,methodFromSaved} from "./delivery-methods.js";
 
 const modal=document.querySelector("#teyzaOnboarding"),message=document.querySelector("[data-ob-message]");
 const frame=document.querySelector("[data-ob-business-frame]");
 const q=s=>document.querySelector(s),all=s=>[...document.querySelectorAll(s)];
 let user=null,state=null,pay="eft",loading=false;
+const deliverySelect=q("[data-ob-delivery-method]");
+deliverySelect.innerHTML=methods.map(method=>`<option value="${method.code}">${method.name}</option>`).join("");
+function deliveryGuide(method){
+  const guide=q("[data-ob-guide]");guide.replaceChildren();
+  guide.append(document.createTextNode(method.detail+(method.guide===null?" Quote needed.":` Published guide: R${method.guide.toFixed(2)}.`)+" Set your own customer fee; actual carrier charges can vary. "));
+  if(method.source){const link=document.createElement("a");link.href=method.source;link.target="_blank";link.rel="noopener noreferrer";link.textContent="See provider price ↗";guide.append(link);}
+}
+deliverySelect.addEventListener("change",()=>{const method=methodByCode(deliverySelect.value);deliveryGuide(method);q("[data-ob-fee]").value=method.guide===null?"":method.guide.toFixed(2);});
 function notice(value){message.hidden=!value;message.textContent=value||"";}
 async function api(action){
   const token=await user.getIdToken();
@@ -27,10 +36,10 @@ function stage(number){
   if(number===1&&!frame.getAttribute("src"))frame.src="business-profile.html?embedded=1&setup=1";
 }
 function fillDelivery(data){
-  q("[data-ob-delivery-method]").value=data.fulfilmentMode||"courier";
-  q("[data-ob-provider]").value=data.courierPreference||"";
-  q("[data-ob-address]").value=data.pickupAddress||"";
-  q("[data-ob-fee]").value=data.baseDeliveryFee??0;
+  const method=methodFromSaved(data);
+  deliverySelect.value=method.code;deliveryGuide(method);
+  q("[data-ob-address]").textContent=state.businessVerification?.location?.address||"Verify your business address first";
+  q("[data-ob-fee]").value=data.baseDeliveryFee??method.guide??"";
 }
 function fillPayment(banking,payfast,other){
   q("[data-ob-bank]").value=banking.bankName||"";
@@ -74,11 +83,11 @@ q("[data-ob-refresh]").addEventListener("click",async()=>{
 q("[data-ob-save-delivery]").addEventListener("click",async event=>{
   const button=event.currentTarget;button.disabled=true;
   try{
-    const mode=q("[data-ob-delivery-method]").value,address=q("[data-ob-address]").value.trim();
+    const method=methodByCode(deliverySelect.value),location=state.businessVerification?.location||{},address=String(location.address||"").trim();
     const fee=Number(q("[data-ob-fee]").value);
-    if(!address)throw new Error("Enter a dispatch or collection address.");
-    if(!Number.isFinite(fee)||fee<0)throw new Error("Enter a valid delivery fee.");
-    await saveWorkspaceSection(user,"delivery",{fulfilmentMode:mode,courierPreference:q("[data-ob-provider]").value.trim(),pickupAddress:address,baseDeliveryFee:fee,trackingEnabled:true});
+    if(!state.businessVerification?.locationConfirmed||!address)throw new Error("Confirm your business address on the map before setting delivery.");
+    if(q("[data-ob-fee]").value===""||!Number.isFinite(fee)||fee<0)throw new Error("Enter the delivery fee you will charge customers.");
+    await saveWorkspaceSection(user,"delivery",{fulfilmentMode:method.mode,serviceCode:method.code,courierPreference:method.provider,pickupAddress:address,pickupLocation:{lat:location.lat,lng:location.lng},baseDeliveryFee:fee,trackingEnabled:true});
     await reload();
   }catch(error){notice(error.message);}finally{button.disabled=false;}
 });

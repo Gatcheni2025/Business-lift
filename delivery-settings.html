@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta name="robots" content="noindex"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#087f5b"><title>Delivery settings | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=7"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><script>if(new URLSearchParams(location.search).get('embedded')==='1')document.documentElement.classList.add('embedded-onboarding')</script></head>
+<head><meta name="robots" content="noindex"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#087f5b"><title>Delivery settings | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=16"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><script>if(new URLSearchParams(location.search).get('embedded')==='1')document.documentElement.classList.add('embedded-onboarding')</script></head>
 <body class="workspace" data-page="delivery-settings">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -18,16 +18,16 @@
 <button class="mode" data-mode="pickup"><i class="ph ph-storefront"></i><strong>Customer pickup</strong><span>Customers collect from you</span></button>
 <button class="mode" data-mode="digital"><i class="ph ph-cloud-arrow-down"></i><strong>Digital / service</strong><span>No physical parcel is required</span></button>
 </div></section>
-<section class="card"><h2>2. Delivery details</h2><p>Tell Business Expo where orders leave from and what customers normally pay.</p><div class="grid">
-<div class="field"><label>Preferred courier / provider</label><input id="courierPreference" placeholder="e.g. Pargo, The Courier Guy, own driver"></div>
-<div class="field"><label>Dispatch / collection address</label><input id="pickupAddress" placeholder="Where orders are collected from"></div>
+<section class="card"><h2>2. Delivery details</h2><p>Your dispatch address is the business address you verified on the map. Choose a service and set your customer fee.</p><div class="grid">
+<div class="field"><label>Delivery service</label><select id="deliveryService"></select></div>
+<div class="field"><label>Verified dispatch / collection address</label><input id="pickupAddress" readonly placeholder="Confirm your business address first"></div>
 <div class="field"><label>Standard delivery fee (R)</label><input id="baseDeliveryFee" type="number" min="0" step="0.01" value="0"></div>
 <div class="field"><label>Free delivery above (R)</label><input id="freeDeliveryThreshold" type="number" min="0" step="0.01" value="0"></div>
 <div class="field"><label>Own delivery radius (km)</label><input id="deliveryRadiusKm" type="number" min="0" step="1" value="0"></div>
-</div><div class="checks"><label><input id="allowCustomerPickup" type="checkbox"> Allow customer pickup too</label><label><input id="trackingEnabled" type="checkbox" checked> Enable tracking where available</label></div></section>
+</div><div class="delivery-price-guide" id="deliveryGuide"></div><div class="checks"><label><input id="allowCustomerPickup" type="checkbox"> Allow customer pickup too</label><label><input id="trackingEnabled" type="checkbox" checked> Enable tracking where available</label></div></section>
 <button class="btn" id="saveDelivery"><i class="ph ph-check-circle"></i> Save delivery settings</button><span class="status" id="saveStatus"></span>
 
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js"></script>
-<script type="module" src="js/delivery-settings.js"></script>
+<script type="module" src="js/delivery-settings.js?v=2"></script>
 <script>if(new URLSearchParams(location.search).get('embedded')==='1'){document.documentElement.classList.add('embedded-onboarding');document.body.classList.add('embedded-onboarding-body');}</script></body></html>

@@ -36,13 +36,15 @@ function adminRole(array $firebase): ?string {$email=strtolower(trim((string)($f
 function isAdmin(array $firebase): bool {return adminRole($firebase)!==null;}
 function saveAdminRegistry(array $admins): void {$path=dirname(__DIR__).'/../private_html/teyza-admins.json';file_put_contents($path,json_encode($admins,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);}
 function loadAllSellers(): array {$out=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$out[]=['uid'=>$w['uid']??basename($path,'.json'),'email'=>$w['email']??'','business'=>$w['business']??[],'verification'=>verificationState($w,[]),'companyApproval'=>companyApproval($w),'createdAt'=>$w['createdAt']??null];}return $out;}
+function sameAddress(string $a,string $b): bool {return $a!==''&&$b!==''&&strtolower(preg_replace('/\s+/u',' ',trim($a)))===strtolower(preg_replace('/\s+/u',' ',trim($b)));}
+function canonicalPhone(string $phone): string {$digits=preg_replace('/\D+/','',$phone);return preg_match('/^0\d{9}$/',$digits)?'27'.substr($digits,1):$digits;}
 
 $user=verifyFirebase(bearer()); $workspace=loadWorkspace($user); $action=$_GET['action']??'context';
 function verificationState(array $workspace,array $user): array {
   $v=$workspace['verification']??[];$business=$workspace['business']??[];
-  $savedPhone=preg_replace('/\D+/','',(string)($business['phone']??''));$firebasePhone=preg_replace('/\D+/','',(string)($user['phoneNumber']??''));
-  $phoneVerified=$savedPhone!==''&&$firebasePhone!==''&&(substr($savedPhone,-9)===substr($firebasePhone,-9));
-  $locationConfirmed=!empty($v['location']['confirmed'])&&isset($v['location']['lat'],$v['location']['lng']);
+  $savedPhone=canonicalPhone((string)($business['phone']??''));$firebasePhone=canonicalPhone((string)($user['phoneNumber']??''));
+  $phoneVerified=$savedPhone!==''&&$savedPhone===$firebasePhone;
+  $locationConfirmed=!empty($v['location']['confirmed'])&&isset($v['location']['lat'],$v['location']['lng'])&&sameAddress((string)($business['address']??''),(string)($v['location']['address']??''));
   $proofUploaded=!empty($v['proofOfAddress']['storedName']);
   $identityVerified=!empty($v['identity']['verified']);
   $identityStatus=(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted'));
@@ -56,7 +58,9 @@ if($action==='verification'){
     if($type==='location'){
       $lat=filter_var($input['lat']??null,FILTER_VALIDATE_FLOAT);$lng=filter_var($input['lng']??null,FILTER_VALIDATE_FLOAT);$address=trim((string)($input['address']??''));
       if($lat===false||$lng===false||$lat < -90||$lat > 90||$lng < -180||$lng > 180||$address==='')respond(422,['ok'=>false,'error'=>'Choose a valid map location and address']);
-      $workspace['verification']=$workspace['verification']??[];$workspace['verification']['location']=['confirmed'=>true,'lat'=>$lat,'lng'=>$lng,'address'=>$address,'confirmedAt'=>gmdate('c')];$workspace['business']['address']=$address;saveWorkspace($user,$workspace);
+      $workspace['verification']=$workspace['verification']??[];$workspace['verification']['location']=['confirmed'=>true,'lat'=>$lat,'lng'=>$lng,'address'=>$address,'confirmedAt'=>gmdate('c')];$workspace['business']['address']=$address;
+      if(isset($workspace['settings']['delivery'])){$workspace['settings']['delivery']['pickupAddress']=$address;$workspace['settings']['delivery']['pickupLocation']=['lat'=>$lat,'lng'=>$lng];}
+      saveWorkspace($user,$workspace);
     }
   }
   respond(200,['ok'=>true,'verification'=>verificationState($workspace,$user)]);
@@ -83,7 +87,9 @@ if ($action==='seller-readiness') {
   // A confirmed map location may fill the address after the profile was last saved.
   // Derive readiness from the saved fields and checks, not a stale client flag.
   $businessComplete=empty($missing)&&((int)($verification['completed']??0)>=4);
-  $deliveryComplete=!empty($settings['delivery']['fulfilmentMode'])&&trim((string)($settings['delivery']['pickupAddress']??''))!=='';
+  $deliveryComplete=in_array(($settings['delivery']['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)
+    &&isset($settings['delivery']['baseDeliveryFee'])&&is_numeric($settings['delivery']['baseDeliveryFee'])&&(float)$settings['delivery']['baseDeliveryFee']>=0
+    &&!empty($verification['locationConfirmed'])&&sameAddress((string)($settings['delivery']['pickupAddress']??''),(string)($verification['location']['address']??''));
   $bank=$settings['banking']??[];$gateway=$settings['payfast']??[];$other=$settings['paymentPreferences']??[];
   $paymentComplete=(trim((string)($bank['bankName']??''))!==''&&trim((string)($bank['accountHolder']??''))!==''&&(trim((string)($bank['accountNumber']??''))!==''||trim((string)($bank['accountNumberLast4']??''))!==''))
     ||(trim((string)($gateway['merchantId']??''))!==''&&trim((string)($gateway['merchantKey']??''))!=='')
@@ -98,6 +104,12 @@ if ($action==='section') {
   if(!$section) respond(422,['ok'=>false,'error'=>'Section is required']);
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    if($section==='delivery'){
+      $verified=verificationState($workspace,$user);$location=$verified['location']??[];
+      if(empty($verified['locationConfirmed'])||!isset($location['lat'],$location['lng']))respond(422,['ok'=>false,'error'=>'Confirm your business address on the map before setting delivery.']);
+      if(!in_array(($input['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)||!isset($input['baseDeliveryFee'])||!is_numeric($input['baseDeliveryFee'])||(float)$input['baseDeliveryFee']<0)respond(422,['ok'=>false,'error'=>'Choose a delivery method and a valid customer fee.']);
+      $input['pickupAddress']=(string)$location['address'];$input['pickupLocation']=['lat'=>$location['lat'],'lng'=>$location['lng']];
+    }
     $workspace['settings']=$workspace['settings']??[];$workspace['settings'][$section]=$input;
     saveWorkspace($user,$workspace); respond(200,['ok'=>true,'section'=>$section,'data'=>$input]);
   }
