@@ -1,5 +1,5 @@
-import {onAuthStateChanged,RecaptchaVerifier,signInWithPhoneNumber,getAuth,setPersistence,inMemoryPersistence,signOut,getAdditionalUserInfo,deleteUser} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import {onAuthStateChanged,RecaptchaVerifier,signInWithPhoneNumber,getAuth,setPersistence,inMemoryPersistence,signOut,getAdditionalUserInfo,deleteUser} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
 import {app,auth} from "./firebase-config.js";
 import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
 import {suggestAddresses,addressAt} from "./address-search.js";
