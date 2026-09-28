@@ -1,4 +1,4 @@
-import {onAuthStateChanged,RecaptchaVerifier,signInWithPhoneNumber,getAuth,setPersistence,inMemoryPersistence,signOut} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {onAuthStateChanged,RecaptchaVerifier,signInWithPhoneNumber,getAuth,setPersistence,inMemoryPersistence,signOut,getAdditionalUserInfo,deleteUser} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {initializeApp,getApps} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import {app,auth} from "./firebase-config.js";
 import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
@@ -125,8 +125,9 @@ $('[data-confirm-otp]').addEventListener('click',async()=>{
    $('[data-confirm-otp]').disabled=true;
    const credential=await confirmationResult.confirm(code);
    const phoneToken=await credential.user.getIdToken(true);
+   const isNewPhoneUser=Boolean(getAdditionalUserInfo(credential)?.isNewUser);
    await saveVerifiedPhone(otpPhone,phoneToken);
-   try{await signOut(credential.user.auth);}catch(_){}
+   try{if(isNewPhoneUser)await deleteUser(credential.user);else await signOut(credential.user.auth);}catch(_){}
    form.elements.phone.readOnly=false;$('[data-otp-panel]').hidden=true;confirmationResult=null;otpPhone='';
    $('[data-send-otp]').textContent='Phone verified ✓';$('[data-send-otp]').disabled=true;
    show('Business phone verified successfully.','success');
