@@ -1,4 +1,4 @@
-import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 
 const box=document.querySelector('[data-sellers]');
