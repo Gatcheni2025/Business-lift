@@ -105,12 +105,15 @@ async function load(){
     yes("[data-ob-location]",v.locationConfirmed,"Location confirmed");
     yes("[data-ob-proof]",v.proofOfAddressUploaded,"Proof of address");
     if(!state.businessComplete){stage(1);return;}
-    if(!state.deliveryComplete){
-      const delivery=(await getWorkspaceSection(user,"delivery")).data||{};
-      fillDelivery(delivery);stage(2);return;
+    const approval=String(state.companyApproval?.status||"pending").toLowerCase();
+    if(approval!=="approved"){
+      stage(1);
+      notice(approval==="rejected"?
+        "Teyza could not approve this verification yet. Review the verification note, correct the highlighted item and resubmit.":
+        "Your verification has been submitted. Teyza will review it before selling is unlocked.");
+      return;
     }
-    const [banking,payfast,other]=await Promise.all(["banking","payfast","paymentPreferences"].map(section=>getWorkspaceSection(user,section)));
-    fillPayment(banking.data||{},payfast.data||{},other.data||{});stage(3);
+    modal.hidden=true;document.body.classList.remove("ob2-open");
   }finally{loading=false;}
 }
 async function reload(){try{await load();notice("");}catch(error){notice(error.message);}}
