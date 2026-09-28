@@ -9,4 +9,10 @@ The landing page uses Firebase Authentication for email/password, Google, Facebo
 3. In Firebase Authentication authorized domains, include `business-lift.vercel.app`. Add `teyza.co.za` too if that host serves the site. Configure the website origin in the Meta and Apple app settings as required by those providers. Keep provider secrets in their consoles, never in this repository.
 4. Test each provider on the deployed HTTPS site with a new account and a returning account. Test cancellation, blocked popups and an email already associated with a different provider. Firebase may require that user to sign in with the original method; the landing page gives a clear message and does not automatically merge accounts.
 
+## Phone verification for seller enrollment
+
+- Enable **Phone** in Firebase Authentication → Sign-in method. In Authentication → Settings → SMS region policy, allow South Africa (+27). Add `teyza.co.za` and `business-lift.vercel.app` to Authorized domains.
+- Firebase requires the project to be linked to a Cloud Billing account to send real verification SMS. Check the SMS quota and delivery reports if a code is not received. Use a Firebase fictional test phone number and code for a controlled integration test; do not disable app verification for real numbers.
+- The profile now shows a visible reCAPTCHA and a specific Firebase error when the code cannot be sent. The phone must be linked to the same Firebase account as the seller. A number already linked to another account cannot be silently claimed.
+
 The PHP workspace bootstrap continues to use the Firebase ID token for every sign-in method. The static Vercel deployment needs a running PHP API behind `/api/workspace.php` and persistent storage for the workspace data. Deploy the landing page, styles and script together, then connect and verify that backend before considering enrollment and login complete.
