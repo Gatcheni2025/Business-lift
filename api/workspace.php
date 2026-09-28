@@ -229,6 +229,27 @@ if ($action==='publishing') {
   }
   respond(200,['ok'=>true,'productId'=>$productId,'publishing'=>$product['publishing']]);
 }
+if ($action==='order-status' && $_SERVER['REQUEST_METHOD']==='POST') {
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $orderId=trim((string)($input['orderId']??''));
+  $status=strtolower(trim((string)($input['orderStatus']??'')));
+  $allowed=['new','processing','shipping','completed'];
+  if($orderId===''||!in_array($status,$allowed,true))respond(422,['ok'=>false,'error'=>'Order and valid delivery status are required']);
+  $index=-1;foreach(($workspace['orders']??[]) as $i=>$order)if(($order['id']??'')===$orderId){$index=$i;break;}
+  if($index<0)respond(404,['ok'=>false,'error'=>'Order not found']);
+  $order=$workspace['orders'][$index];
+  $previous=(string)($order['orderStatus']??'new');
+  $order['orderStatus']=$status;
+  $order['updatedAt']=gmdate('c');
+  $order['fulfilment']=$order['fulfilment']??[];
+  if(array_key_exists('trackingNumber',$input))$order['fulfilment']['trackingNumber']=trim((string)$input['trackingNumber']);
+  $order['fulfilment']['status']=$status;
+  $order['fulfilment']['updatedAt']=gmdate('c');
+  $order['fulfilment']['history']=$order['fulfilment']['history']??[];
+  $order['fulfilment']['history'][]=['from'=>$previous,'to'=>$status,'at'=>gmdate('c')];
+  $workspace['orders'][$index]=$order;saveWorkspace($user,$workspace);
+  respond(200,['ok'=>true,'order'=>$order]);
+}
 if ($action==='orders') {
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
