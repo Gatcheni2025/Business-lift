@@ -8,6 +8,7 @@ const frame=document.querySelector("[data-ob-business-frame]");
 const q=s=>document.querySelector(s),all=s=>[...document.querySelectorAll(s)];
 let user=null,state=null,pay="eft",loading=false;
 const deliverySelect=q("[data-ob-delivery-method]");
+const bankSelect=q("[data-ob-bank]"),branchInput=q("[data-ob-branch]");
 deliverySelect.innerHTML=methods.map(method=>`<option value="${method.code}">${method.name}</option>`).join("");
 function deliveryGuide(method){
   const guide=q("[data-ob-guide]");guide.replaceChildren();
@@ -15,6 +16,33 @@ function deliveryGuide(method){
   if(method.source){const link=document.createElement("a");link.href=method.source;link.target="_blank";link.rel="noopener noreferrer";link.textContent="See provider price ↗";guide.append(link);}
 }
 deliverySelect.addEventListener("change",()=>{const method=methodByCode(deliverySelect.value);deliveryGuide(method);q("[data-ob-fee]").value=method.guide===null?"":method.guide.toFixed(2);});
+function bankOption(){return bankSelect?.selectedOptions?.[0]||null;}
+function syncBranch({force=true}={}){
+  if(!bankSelect||!branchInput)return;
+  const option=bankOption(),code=String(option?.dataset?.branch||"");
+  const manual=bankSelect.value==="__other__"||!code;
+  branchInput.readOnly=!manual;
+  branchInput.placeholder=manual?"Enter 6-digit branch code":"Universal branch code";
+  if(force)branchInput.value=code;
+}
+bankSelect?.addEventListener("change",()=>syncBranch({force:true}));
+function setSavedBank(name,branchCode){
+  if(!bankSelect||!branchInput)return;
+  const saved=String(name||"").trim(),branch=String(branchCode||"").trim();
+  if(saved){
+    let option=[...(bankSelect.options||[])].find(item=>item.value===saved);
+    if(!option&&typeof document.createElement==="function"){
+      option=document.createElement("option");option.value=saved;option.textContent=branch?`${saved} · ${branch}`:saved;
+      if(branch)option.dataset.branch=branch;
+      bankSelect.append(option);
+    }
+    bankSelect.value=saved;
+  }
+  const option=bankOption(),known=String(option?.dataset?.branch||"");
+  branchInput.value=branch||known;
+  branchInput.readOnly=Boolean(known)&&bankSelect.value!=="__other__";
+  branchInput.placeholder=branchInput.readOnly?"Universal branch code":"Enter 6-digit branch code";
+}
 function notice(value){message.hidden=!value;message.textContent=value||"";}
 async function api(action){
   const token=await user.getIdToken();
@@ -35,6 +63,11 @@ function stage(number){
   q("[data-ob-count]").textContent=`Step ${number} of 3`;
   if(number===1&&!frame.getAttribute("src"))frame.src="business-profile.html?embedded=1&setup=1";
 }
+function choosePayment(type){
+  pay=type;
+  all("[data-ob-pay]").forEach(item=>item.classList.toggle("active",item.dataset.obPay===type));
+  all("[data-ob-pay-fields]").forEach(item=>item.hidden=item.dataset.obPayFields!==type);
+}
 function fillDelivery(data){
   const method=methodFromSaved(data);
   deliverySelect.value=method.code;deliveryGuide(method);
@@ -42,12 +75,21 @@ function fillDelivery(data){
   q("[data-ob-fee]").value=data.baseDeliveryFee??method.guide??"";
 }
 function fillPayment(banking,payfast,other){
-  q("[data-ob-bank]").value=banking.bankName||"";
+  setSavedBank(banking.bankName||"",banking.branchCode||"");
   q("[data-ob-holder]").value=banking.accountHolder||"";
-  q("[data-ob-branch]").value=banking.branchCode||"";
   q("[data-ob-merchant]").value=payfast.merchantId||"";
-  q("[data-ob-gateway]").value=other.otherGateway||"";
-  q("[data-ob-reference]").value=other.otherReference||"";
+  const gateway=String(other.otherGateway||"").trim();
+  const reference=other.otherReference||"";
+  q("[data-ob-yeyza-reference]").value=gateway.toLowerCase()==="yeyza"?reference:"";
+  q("[data-ob-ozow-reference]").value=gateway.toLowerCase()==="ozow"?reference:"";
+  q("[data-ob-gateway]").value=!["yeyza","ozow"].includes(gateway.toLowerCase())?gateway:"";
+  q("[data-ob-reference]").value=!["yeyza","ozow"].includes(gateway.toLowerCase())?reference:"";
+  if(banking.bankName)choosePayment("eft");
+  else if(payfast.merchantId)choosePayment("payfast");
+  else if(gateway.toLowerCase()==="yeyza")choosePayment("yeyza");
+  else if(gateway.toLowerCase()==="ozow")choosePayment("ozow");
+  else if(gateway)choosePayment("other");
+  else choosePayment("eft");
 }
 async function load(){
   if(!user||loading)return;
@@ -91,18 +133,19 @@ q("[data-ob-save-delivery]").addEventListener("click",async event=>{
     await reload();
   }catch(error){notice(error.message);}finally{button.disabled=false;}
 });
-all("[data-ob-pay]").forEach(button=>button.addEventListener("click",()=>{
-  pay=button.dataset.obPay;
-  all("[data-ob-pay]").forEach(item=>item.classList.toggle("active",item===button));
-  all("[data-ob-pay-fields]").forEach(item=>item.hidden=item.dataset.obPayFields!==pay);
-}));
+all("[data-ob-pay]").forEach(button=>button.addEventListener("click",()=>choosePayment(button.dataset.obPay)));
 q("[data-ob-save-payment]").addEventListener("click",async event=>{
   const button=event.currentTarget;button.disabled=true;
   try{
     if(pay==="eft"){
-      const bank=q("[data-ob-bank]").value.trim(),holder=q("[data-ob-holder]").value.trim(),account=q("[data-ob-account]").value.trim();
-      if(!bank||!holder||!account)throw new Error("Complete the bank, account holder and account number.");
-      await saveWorkspaceSection(user,"banking",{bankName:bank,accountHolder:holder,accountNumber:account,accountNumberLast4:account.slice(-4),branchCode:q("[data-ob-branch]").value.trim(),accountType:"Business"});
+      const bank=bankSelect.value.trim(),holder=q("[data-ob-holder]").value.trim(),account=q("[data-ob-account]").value.trim(),branch=branchInput.value.trim();
+      if(!bank||bank==="__other__"&&!branch||!holder||!account)throw new Error("Complete the bank, account holder, account number and branch code.");
+      if(!/^\d{6}$/.test(branch))throw new Error("Branch code must be 6 digits.");
+      await saveWorkspaceSection(user,"banking",{bankName:bank==="__other__"?"Other South African bank":bank,accountHolder:holder,accountNumber:account,accountNumberLast4:account.slice(-4),branchCode:branch,accountType:"Business"});
+    }else if(pay==="yeyza"){
+      await saveWorkspaceSection(user,"paymentPreferences",{otherGateway:"Yeyza",otherReference:q("[data-ob-yeyza-reference]").value.trim()});
+    }else if(pay==="ozow"){
+      await saveWorkspaceSection(user,"paymentPreferences",{otherGateway:"Ozow",otherReference:q("[data-ob-ozow-reference]").value.trim()});
     }else if(pay==="payfast"){
       const id=q("[data-ob-merchant]").value.trim(),key=q("[data-ob-key]").value;
       if(!id||!key)throw new Error("Enter your PayFast Merchant ID and Merchant Key.");
