@@ -8,11 +8,10 @@ const crypto = require("crypto");
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-// Meta credentials are read only by the legacy Meta/WhatsApp handlers.
-// Do not declare them as Firebase Secret params until those handlers are enabled,
-// otherwise Firebase CLI prompts for them even during Google-only deployments.
-const META_APP_ID = {value: () => process.env.META_APP_ID || ""};
-const META_APP_SECRET = {value: () => process.env.META_APP_SECRET || ""};
+// Meta credentials power Facebook, Instagram and WhatsApp Business connections.
+// Store them with Firebase Functions secrets before deploying these handlers.
+const META_APP_ID = defineSecret("META_APP_ID");
+const META_APP_SECRET = defineSecret("META_APP_SECRET");
 const GOOGLE_CLIENT_ID = defineSecret("GOOGLE_CLIENT_ID");
 const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
 const OAUTH_STATE_SECRET = defineSecret("OAUTH_STATE_SECRET");
@@ -206,14 +205,8 @@ exports.googleOAuthCallback = onRequest({
   }
 });
 
-const getSocialConnectUrlLegacy = onCall({
-  secrets: [
-    META_APP_ID,
-    META_APP_SECRET,
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    OAUTH_STATE_SECRET,
-  ],
+exports.getSocialConnectUrl = onCall({
+  secrets: [META_APP_ID, OAUTH_STATE_SECRET],
 }, async (request) => {
   const uid = requireAuth(request);
   const {businessId, provider, returnTo} = request.data || {};
@@ -266,14 +259,8 @@ const getSocialConnectUrlLegacy = onCall({
   throw new HttpsError("invalid-argument", "Unsupported provider.");
 });
 
-const socialOAuthCallbackLegacy = onRequest({
-  secrets: [
-    META_APP_ID,
-    META_APP_SECRET,
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    OAUTH_STATE_SECRET,
-  ],
+exports.socialOAuthCallback = onRequest({
+  secrets: [META_APP_ID, META_APP_SECRET, OAUTH_STATE_SECRET],
 }, async (req, res) => {
   let returnTo = "/sales-channels.html";
   try {
@@ -466,7 +453,7 @@ exports.selectGoogleMerchantAccount = onCall(async (request) => {
   return {ok: true, account};
 });
 
-const getWhatsAppEmbeddedSignupConfigLegacy = onCall({secrets: [META_APP_ID]}, async (request) => {
+exports.getWhatsAppEmbeddedSignupConfig = onCall({secrets: [META_APP_ID]}, async (request) => {
   const uid = requireAuth(request);
   const {businessId} = request.data || {};
   await verifyBusinessAccess(uid, businessId);
@@ -477,7 +464,7 @@ const getWhatsAppEmbeddedSignupConfigLegacy = onCall({secrets: [META_APP_ID]}, a
   };
 });
 
-const completeWhatsAppEmbeddedSignupLegacy = onCall({
+exports.completeWhatsAppEmbeddedSignup = onCall({
   secrets: [META_APP_ID, META_APP_SECRET],
 }, async (request) => {
   const uid = requireAuth(request);
@@ -530,9 +517,3 @@ const completeWhatsAppEmbeddedSignupLegacy = onCall({
   return {ok: true, provider: "whatsapp"};
 });
 
-// Keep Meta/WhatsApp handlers out of the deployed manifest until their
-// provider credentials are configured. Google OAuth uses dedicated exports.
-void getSocialConnectUrlLegacy;
-void socialOAuthCallbackLegacy;
-void getWhatsAppEmbeddedSignupConfigLegacy;
-void completeWhatsAppEmbeddedSignupLegacy;
