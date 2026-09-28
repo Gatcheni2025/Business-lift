@@ -36,6 +36,27 @@
  document.querySelectorAll('.form-status,.notice,[id$="Status"]').forEach(el=>{el.setAttribute('role','status');el.setAttribute('aria-live','polite')});
  // Block accidental native GET submission while a page's module is still loading.
  document.querySelectorAll('form').forEach(form=>form.addEventListener('submit',event=>event.preventDefault()));
+ // App-style bottom navigation keeps the four daily seller jobs one tap away.
+ if(new URLSearchParams(location.search).get('embedded')!=='1' && !document.querySelector('[data-teyza-app-dock]')){
+  const page=(location.pathname.split('/').pop()||'dashboard.html').toLowerCase();
+  const dock=document.createElement('nav');
+  dock.className='teyza-app-dock';dock.dataset.teyzaAppDock='';dock.setAttribute('aria-label','Seller shortcuts');
+  const items=[
+   ['clients','customers.html','ph-users-three','Clients'],
+   ['sell','products.html#new-product','ph-plus','Sell'],
+   ['delivery','orders.html#fulfilment','ph-truck','Delivery'],
+   ['banking','payments.html','ph-wallet','Banking']
+  ];
+  const active=page==='customers.html'?'clients':page==='products.html'?'sell':(['orders.html','delivery-settings.html'].includes(page)?'delivery':page==='payments.html'?'banking':'');
+  items.forEach(([key,href,icon,label])=>{
+   const link=document.createElement('a');link.href=href;link.dataset.dock=key;
+   if(key==='sell')link.dataset.appDockSell='';
+   if(active===key)link.classList.add('active');
+   link.innerHTML=key==='sell'?'<span class="dock-sell-plus" aria-hidden="true">+</span><span>Sell</span>':`<i class="ph ${icon}" aria-hidden="true"></i><span>${label}</span>`;
+   dock.appendChild(link);
+  });
+  document.body.appendChild(dock);document.body.classList.add('has-app-dock');
+ }
  // Seller live chat is available throughout the signed-in workspace, but not inside embedded onboarding iframes.
  if(new URLSearchParams(location.search).get('embedded')!=='1'){
   if(!document.querySelector('link[data-teyza-live-chat]')){
