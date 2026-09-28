@@ -23,6 +23,7 @@ const FUNCTIONS_BASE_URL = defineString("FUNCTIONS_BASE_URL", {
   default: "https://us-central1-business-lift-3c19c.cloudfunctions.net",
 });
 const META_GRAPH_VERSION = defineString("META_GRAPH_VERSION", {default: "v23.0"});
+const META_INSTAGRAM_CONFIG_ID = defineString("META_INSTAGRAM_CONFIG_ID", {default: "1125727767097959"});
 const META_WHATSAPP_CONFIG_ID = defineSecret("META_WHATSAPP_CONFIG_ID");
 
 function requireAuth(request) {
@@ -209,7 +210,7 @@ exports.getSocialConnectUrl = onCall({
   secrets: [META_APP_ID, OAUTH_STATE_SECRET],
 }, async (request) => {
   const uid = requireAuth(request);
-  const {businessId, provider, returnTo} = request.data || {};
+  const {businessId, provider, channel, returnTo} = request.data || {};
   await verifyBusinessAccess(uid, businessId);
   const state = signState({
     uid,
@@ -221,21 +222,29 @@ exports.getSocialConnectUrl = onCall({
   });
 
   if (provider === "meta") {
-    const scopes = [
-      "pages_show_list",
-      "pages_read_engagement",
-      "pages_manage_posts",
-      "instagram_basic",
-      "instagram_content_publish",
-      "business_management",
-    ];
+    const isInstagram = channel === "instagram";
     const qs = new URLSearchParams({
       client_id: META_APP_ID.value(),
       redirect_uri: callbackUrl("meta"),
       state,
       response_type: "code",
-      scope: scopes.join(","),
     });
+
+    if (isInstagram) {
+      // Facebook Login for Business configurations use config_id instead of
+      // requesting permissions with the legacy scope query parameter.
+      qs.set("config_id", META_INSTAGRAM_CONFIG_ID.value());
+      qs.set("override_default_response_type", "true");
+    } else {
+      const scopes = [
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+        "business_management",
+      ];
+      qs.set("scope", scopes.join(","));
+    }
+
     return {
       provider,
       url: `https://www.facebook.com/${META_GRAPH_VERSION.value()}/dialog/oauth?${qs}`,
