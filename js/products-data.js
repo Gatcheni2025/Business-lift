@@ -32,7 +32,8 @@ async function loadConnectedChannels(){
  grid.querySelectorAll('.channel-card').forEach(card=>card.hidden=true);
  const response=await getConnections({businessId});const state=response.data||{};
  const connected=new Set();
- if(state.meta?.connected){connected.add('facebook');connected.add('instagram')}
+ if(state.meta?.connected)connected.add('facebook');
+ if(state.meta?.connected&&state.meta?.instagramBusinessId)connected.add('instagram');
  if(state.google?.connected)connected.add('google');
  if(state.whatsapp?.connected)connected.add('whatsapp');
  // X and TikTok stay hidden until their real Teyza connection handlers exist.
