@@ -29,6 +29,18 @@ function notify(message, tone = "info") {
   console.log(message);
 }
 
+function connectionError(error, fallback = "Connection failed.") {
+  const details = error?.details;
+  const detailMessage = typeof details === "string" ? details :
+    (details?.message || details?.error?.message || "");
+  const serverMessage = error?.customData?.serverResponse?.error?.message ||
+    error?.customData?.serverResponse?.message || "";
+  const message = error?.message || detailMessage || serverMessage || "";
+  const code = error?.code ? String(error.code).replace(/^functions\//, "") : "";
+  if (message && code && !message.includes(code)) return `${message} [${code}]`;
+  return message || code || fallback;
+}
+
 function metaLabel(view, state) {
   if (view === "facebook") {
     if (state?.connected) return state.displayName ? `Connected · ${state.displayName}` : "Connected";
@@ -244,51 +256,85 @@ async function finishWhatsAppIfReady() {
 }
 
 async function startWhatsApp() {
-  const config = (await getWhatsAppConfig({businessId})).data || {};
+  let config;
+  try {
+    config = (await getWhatsAppConfig({businessId})).data || {};
+  } catch (error) {
+    console.error("WhatsApp config lookup failed", error);
+    throw new Error(connectionError(error, "Teyza could not load the WhatsApp Business configuration."));
+  }
   if (!config.appId) throw new Error("META_APP_ID is not configured in Firebase Functions.");
   if (!config.configId) {
     throw new Error("WhatsApp Embedded Signup is not configured yet. Add META_WHATSAPP_CONFIG_ID in Firebase Functions configuration.");
   }
-  await loadFacebookSdk(config.appId, config.graphVersion || "v23.0");
-  window.addEventListener("message", async (event) => {
-    if (!event.origin.endsWith("facebook.com")) return;
-    try {
-      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-      if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
-      if (data.event === "FINISH") {
-        whatsappSession = data.data || null;
-        await finishWhatsAppIfReady();
-      } else if (data.event === "ERROR") {
-        notify(data.data?.error_message || "WhatsApp setup failed.", "error");
-      }
-    } catch (_) {}
+
+  console.info("Starting WhatsApp Embedded Signup", {
+    appId: String(config.appId),
+    configId: String(config.configId),
+    graphVersion: config.graphVersion || "v23.0",
   });
 
-  // Meta's JS SDK rejects native async functions as FB.login callbacks.
-  // Keep the callback synchronous and hand off async work separately.
-  const handleWhatsAppLogin = async (response) => {
+  const FB = await loadFacebookSdk(config.appId, config.graphVersion || "v23.0");
+
+  if (!window.__teyzaWhatsAppMessageListener) {
+    window.__teyzaWhatsAppMessageListener = true;
+    window.addEventListener("message", function(event) {
+      if (!event.origin.endsWith("facebook.com")) return;
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
+        if (data.event === "FINISH") {
+          whatsappSession = data.data || null;
+          void finishWhatsAppIfReady().catch(function(error) {
+            console.error("WhatsApp Embedded Signup completion failed", error);
+            notify(connectionError(error, "WhatsApp setup could not be completed."), "error");
+          });
+        } else if (data.event === "ERROR") {
+          const msg = data.data?.error_message || data.data?.error || "WhatsApp setup failed.";
+          console.error("WhatsApp Embedded Signup event error", data);
+          notify(String(msg), "error");
+        } else if (data.event === "CANCEL") {
+          notify("WhatsApp setup was cancelled.", "error");
+        }
+      } catch (error) {
+        console.error("Unable to read WhatsApp Embedded Signup event", error);
+      }
+    });
+  }
+
+  function embeddedSignupCallback(response) {
     whatsappCode = response?.authResponse?.code || response?.code || "";
     if (!whatsappCode) {
-      notify("WhatsApp setup was cancelled or no authorization code was returned.", "error");
+      console.error("WhatsApp Embedded Signup returned no code", response);
+      notify(response?.status === "not_authorized" ?
+        "WhatsApp authorization was not completed." :
+        "WhatsApp setup was cancelled or no authorization code was returned.", "error");
       return;
     }
-    try {
-      await finishWhatsAppIfReady();
-    } catch (error) {
+    void finishWhatsAppIfReady().catch(function(error) {
       console.error("WhatsApp Embedded Signup completion failed", error);
-      notify(error.message || "WhatsApp setup could not be completed.", "error");
-    }
-  };
+      notify(connectionError(error, "WhatsApp setup could not be completed."), "error");
+    });
+  }
 
-  window.FB.login(function(response) {
-    void handleWhatsAppLogin(response);
-  }, {
-    config_id: config.configId,
-    auth_type: "rerequest",
-    response_type: "code",
-    override_default_response_type: true,
-    extras: {setup: {}},
-  });
+  try {
+    FB.login(embeddedSignupCallback, {
+      config_id: String(config.configId),
+      response_type: "code",
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: "",
+        sessionInfoVersion: "3",
+      },
+    });
+  } catch (error) {
+    console.error("Meta FB.login launch failed", error, {
+      appId: config.appId,
+      configId: config.configId,
+    });
+    throw new Error(connectionError(error, "Meta could not start WhatsApp Embedded Signup."));
+  }
 }
 
 async function disconnect(provider, view) {
@@ -333,8 +379,8 @@ document.addEventListener("click", async (event) => {
     else if (provider === "whatsapp") await startWhatsApp();
     else await startOauth(provider, view);
   } catch (error) {
-    console.error("Connection action failed", error);
-    notify(error.message || "Connection failed.", "error");
+    console.error("Connection action failed", {view, provider, code:error?.code, message:error?.message, details:error?.details, error});
+    notify(connectionError(error), "error");
     btn.disabled = false;
   }
 });
