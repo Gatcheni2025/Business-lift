@@ -64,8 +64,8 @@
     ]
   },
   "payments": {
-    "title": "Payments",
-    "description": "Manage how your business gets paid.",
+    "title": "Banking",
+    "description": "See sales money, transactions and settlement details.",
     "scripts": [
       "<script type=\"module\" src=\"js/banking-data.js?v=1\"></script>"
     ]
