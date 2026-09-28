@@ -1,38 +1,174 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 import {getBusinessContext,getWorkspaceSummary,hydrateBusiness,workspaceError} from "./business-context.js";
-const money=new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0});
-const set=(s,v)=>document.querySelectorAll(s).forEach(n=>n.textContent=v);
-const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const totalOf=o=>Number(o.total??o.totalAmount??o.grandTotal??0)||0;
-function showError(message){const n=document.querySelector('[data-dashboard-status]');if(n){n.hidden=false;n.textContent=message;n.classList.add('error');}}
-async function getReadiness(user){const token=await user.getIdToken();const r=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to check seller setup.');return d;}
-function renderReadiness(r){
- const businessDone=!!r.businessComplete,deliveryDone=!!r.deliveryComplete,paymentDone=!!r.paymentComplete,done=!!r.productReady,action=document.querySelector('[data-primary-seller-action]');
- const business=document.querySelector('[data-readiness-business]'),setup=document.querySelector('[data-readiness-setup]'),ready=document.querySelector('[data-readiness-ready]'),badge=document.querySelector('[data-readiness-badge]'),copy=document.querySelector('[data-readiness-copy]');
- if(business){business.textContent='Business profile '+(businessDone?'✓':'•');business.classList.toggle('done',businessDone)}
- if(setup){setup.textContent=deliveryDone&&paymentDone?'Delivery & payment ✓':deliveryDone?'Delivery ✓ · Payment required':'Delivery & payment required';setup.classList.toggle('done',deliveryDone&&paymentDone)}
- if(ready){ready.textContent=done?'Ready to add products ✓':'Products locked';ready.classList.toggle('done',done)}
- if(badge){badge.textContent=done?'READY':'SETUP REQUIRED';badge.classList.toggle('success',done)}
- let href='business-profile.html?setup=1',label='Complete business profile →',message='Complete your business profile and verification first.';
- if(businessDone&&!deliveryDone){href='delivery-settings.html?setup=1';label='Set up delivery →';message='Business profile complete. Next, choose how orders will be delivered.'}
- else if(businessDone&&deliveryDone&&!paymentDone){href='seller-onboarding.html#payment-setup';label='Set up payments →';message='Delivery is ready. Next, choose how your business will be paid.'}
- else if(done){href='products.html#new-product';label='＋ Add a product';message='Setup complete. You can now upload products to sell.'}
- if(copy)copy.textContent=message;if(action){action.textContent=label;action.href=href}
- const d=document.querySelector('[data-setup-delivery]'),p=document.querySelector('[data-setup-payment]');if(d)d.dataset.complete=String(deliveryDone);if(p)p.dataset.complete=String(paymentDone);
+
+const moneyShort=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0});
+const money=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",minimumFractionDigits:2,maximumFractionDigits:2});
+const set=(selector,value)=>document.querySelectorAll(selector).forEach(node=>node.textContent=value);
+const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+const totalOf=order=>Number(order.total??order.totalAmount??order.grandTotal??0)||0;
+const normalizedStatus=order=>String(order.orderStatus||order.status||"new").toLowerCase();
+
+function showError(message){
+  const node=document.querySelector("[data-dashboard-status]");
+  if(!node)return;
+  node.hidden=false;node.textContent=message;node.classList.add("error");
 }
+
+async function getReadiness(user){
+  const token=await user.getIdToken();
+  const response=await fetch("api/workspace.php?action=seller-readiness",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.ok)throw new Error(data.error||"Unable to check seller verification.");
+  return data;
+}
+
+async function getChatInbox(user){
+  try{
+    const token=await user.getIdToken();
+    const url=new URL("api/chat.php",location.href);url.searchParams.set("mode","seller-inbox");
+    const response=await fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+    const data=await response.json().catch(()=>({}));
+    return response.ok&&data.ok?(data.threads||[]):[];
+  }catch(_){return []}
+}
+
+function updateVerifyStep(name,done){
+  const node=document.querySelector('[data-v-step="'+name+'"]');
+  if(!node)return;
+  node.classList.toggle("done",!!done);
+  const icon=node.querySelector("span");if(icon)icon.textContent=done?"✓":"○";
+}
+
+function renderReadiness(readiness){
+  const v=readiness.businessVerification||{};
+  const approved=String(readiness.companyApproval?.status||"pending").toLowerCase()==="approved";
+  const identityDone=Boolean(v.identityVerified);
+  const proofDone=Boolean(v.proofAddressMatchVerified);
+  const checks={phone:Boolean(v.phoneVerified),identity:identityDone,location:Boolean(v.locationConfirmed),proof:proofDone,approval:approved};
+  Object.entries(checks).forEach(([key,value])=>updateVerifyStep(key,value));
+  const complete=Object.values(checks).filter(Boolean).length;
+  set("[data-app-verification-score]",complete+"/5");
+
+  const verificationCard=document.querySelector("[data-app-verification]");
+  const sellHero=document.querySelector("[data-app-sell-hero]");
+  const title=document.querySelector("[data-app-verification-title]");
+  const copy=document.querySelector("[data-app-verification-copy]");
+  const action=document.querySelector("[data-app-verification-action]");
+  const dockSell=document.querySelector("[data-app-dock-sell]");
+  const canSell=approved&&Boolean(readiness.productReady);
+
+  let nextHref="business-profile.html?setup=1";
+  let nextLabel="Continue verification →";
+  let nextCopy="Complete your business details and verification checks once. Teyza will review your documents before selling is unlocked.";
+
+  if(!checks.phone||!v.identitySubmitted||!checks.location||!v.proofOfAddressUploaded){
+    nextHref="business-profile.html?setup=1";
+  }else if(!identityDone||!proofDone||!approved){
+    nextHref="business-profile.html";
+    nextLabel="View verification status →";
+    nextCopy="Your verification is being reviewed. Once approved, finish your delivery and banking preferences and start selling.";
+  }else if(!readiness.deliveryComplete){
+    nextHref="delivery-settings.html?setup=1";
+    nextLabel="Set delivery →";
+    nextCopy="Your business is verified. Choose how customers will receive orders.";
+  }else if(!readiness.paymentComplete){
+    nextHref="payments.html";
+    nextLabel="Set banking →";
+    nextCopy="Your business is verified. Add where your sales money should be paid.";
+  }
+
+  if(action){action.href=nextHref;action.textContent=nextLabel}
+  if(title){
+    if(canSell)title.textContent="Verified and ready to sell";
+    else if(approved)title.textContent="Verified — finish your selling setup";
+    else if(v.identitySubmitted)title.textContent="Verification in progress";
+    else title.textContent="Get verified to unlock selling";
+  }
+  if(copy)copy.textContent=canSell?"Your Teyza seller account is ready. Tap Sell whenever you want to add something new.":nextCopy;
+
+  if(verificationCard)verificationCard.hidden=canSell;
+  if(sellHero)sellHero.hidden=!canSell;
+  if(dockSell){
+    dockSell.href=canSell?"products.html#new-product":nextHref;
+    dockSell.title=canSell?"Sell a product":"Finish setup to unlock selling";
+  }
+  document.querySelectorAll("[data-primary-seller-action]").forEach(link=>{link.href=canSell?"products.html#new-product":nextHref;});
+}
+
+function renderOrders(orders){
+  const list=document.querySelector("[data-recent-orders]");
+  if(!list)return;
+  if(!orders.length){
+    list.innerHTML='<div class="empty-state"><h3>No sales yet</h3><p>Your first order will appear here after you start selling.</p></div>';
+    return;
+  }
+  list.innerHTML=orders.slice(0,4).map(order=>{
+    const status=normalizedStatus(order);
+    const product=order.items?.[0]?.name||"Order";
+    return '<a class="app-order-row" href="orders.html"><div><strong>'+escapeHtml(product)+'</strong><small>'+escapeHtml(order.customerName||order.customerId||"Customer")+' · '+escapeHtml(order.orderNumber||"Order")+'</small></div><div class="app-order-value">'+money.format(totalOf(order))+'<span class="app-status-mini">'+escapeHtml(status)+'</span></div></a>';
+  }).join("");
+}
+
+function renderChats(threads){
+  const target=document.querySelector("[data-app-chat-preview]");
+  if(!target)return;
+  if(!threads.length){
+    target.innerHTML='<div class="empty-state"><h3>No conversations yet</h3><p>Share your Teyza store or customer chat link. Buyer messages will appear here.</p><button class="button" type="button" data-open-seller-chat>Open live chat</button></div>';
+    return;
+  }
+  target.innerHTML=threads.slice(0,4).map(thread=>{
+    const unread=Number(thread.unreadSeller||0);
+    const name=thread.clientName||"Customer";
+    const initial=String(name).trim().slice(0,1).toUpperCase()||"C";
+    const unreadHtml=unread?'<span class="app-unread-dot">'+(unread>99?"99+":unread)+'</span>':"";
+    const message=thread.lastSender==="seller"?"You: "+String(thread.lastMessage||""):thread.lastMessage||"Conversation";
+    return '<button class="app-chat-row" type="button" data-open-seller-chat><span class="app-chat-avatar">'+escapeHtml(initial)+'</span><span class="app-chat-copy"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(message)+'</small></span>'+unreadHtml+'</button>';
+  }).join("");
+}
+
 async function load(user){
- const [context,summary,readiness]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user)]); hydrateBusiness(context,user);renderReadiness(readiness);
- const business=summary.business||context.business||{}; const orders=summary.orders||[]; const products=summary.products||[];
- set('[data-greeting-name]',summary.firstName||context.userData?.firstName||user.displayName?.split(' ')[0]||'seller');
- set('[data-hero-line]',business.profileComplete?'Here’s what is happening across your Teyza workspace.':'Start by adding what you sell, then connect the channels you want to reach.');
- const profile=document.querySelector('[data-setup-profile]'); if(profile) profile.dataset.complete=String(!!business.profileComplete);
- set('[data-stat-revenue]',money.format(orders.reduce((s,o)=>s+totalOf(o),0))); set('[data-stat-orders]',orders.length);
- set('[data-stat-customers]',new Set(orders.map(o=>o.customerId||o.customerEmail).filter(Boolean)).size); set('[data-stat-products]',products.length);
- const pending=orders.filter(o=>['new','processing'].includes(String(o.orderStatus||o.status||'new').toLowerCase())).length;
- set('[data-opportunity-carts]',pending?`${pending} orders need your attention.`:'You are all caught up.');
- const low=products.filter(p=>Number(p.stock||0)<=5).length; set('[data-opportunity-stock]',low?`${low} products have low or no stock.`:products.length?'Stock levels look good.':'Add your first product to start selling.');
- const productStep=document.querySelector('[data-setup-product]'); if(productStep) productStep.dataset.complete=String(products.length>0);
- const body=document.querySelector('[data-recent-orders]'); if(body) body.innerHTML=orders.length?orders.slice(0,5).map(o=>`<tr><td><strong>${escape(o.orderNumber||o.id||'Order')}</strong></td><td>${escape(o.customerName||'Customer')}</td><td><span class="pill">${escape(o.orderStatus||o.status||'New')}</span></td><td>${money.format(totalOf(o))}</td></tr>`).join(''):'<tr><td colspan="4"><div class="empty-state"><div class="empty-symbol">▤</div><h3>Your first Teyza order will appear here</h3><p>Add a product and start selling to begin.</p></div></td></tr>';
+  const [context,summary,readiness,threads]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user),getChatInbox(user)]);
+  hydrateBusiness(context,user);
+  renderReadiness(readiness);
+
+  const business=summary.business||context.business||{};
+  const orders=summary.orders||[];
+  const products=summary.products||[];
+  const firstName=summary.firstName||context.userData?.firstName||user.displayName?.split(" ")[0]||"seller";
+  set("[data-greeting-name]",firstName);
+
+  const avatar=document.querySelector(".app-profile-avatar");
+  if(avatar){
+    const logo=business.logoUrl||"";
+    avatar.textContent=logo?"":String(business.businessName||firstName||"T").slice(0,1).toUpperCase();
+    avatar.style.backgroundImage=logo?'url("'+logo+'")':"";
+    avatar.style.backgroundSize=logo?"cover":"";
+    avatar.style.backgroundPosition="center";
+  }
+
+  const customers=new Set(orders.map(order=>order.customerId||order.customerEmail||order.customerName).filter(Boolean));
+  const deliveries=orders.filter(order=>["new","processing","shipping"].includes(normalizedStatus(order))).length;
+  const paidTotal=orders.filter(order=>String(order.paymentStatus||"pending").toLowerCase()==="paid").reduce((sum,order)=>sum+totalOf(order),0);
+
+  set("[data-stat-customers]",customers.size.toLocaleString("en-ZA"));
+  set("[data-stat-deliveries]",deliveries.toLocaleString("en-ZA"));
+  set("[data-stat-paid]",moneyShort.format(paidTotal));
+
+  renderOrders(orders);
+  renderChats(threads);
+
+  const sellHero=document.querySelector("[data-app-sell-hero]");
+  if(sellHero&&!sellHero.hidden&&products.length===0){
+    const copy=sellHero.querySelector("p:not(.eyebrow)");
+    if(copy)copy.textContent="You are verified and ready. Add your first product in one tap.";
+  }
 }
-onAuthStateChanged(auth,user=>{if(user)load(user).catch(e=>{console.error(e);showError(workspaceError(e));});});
+
+onAuthStateChanged(auth,user=>{
+  if(!user)return;
+  load(user).catch(error=>{
+    console.error("Dashboard app failed",error);
+    showError(workspaceError(error));
+  });
+});
