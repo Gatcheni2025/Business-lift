@@ -31,7 +31,7 @@
     "title": "Business profile",
     "description": "Keep your business identity and contact details up to date.",
     "scripts": [
-      "<script type=\"module\" src=\"js/business-profile.js\"></script>"
+      "<script type=\"module\" src=\"js/business-profile.js?v=4\"></script>"
     ]
   },
   "seller-onboarding": {
@@ -45,7 +45,7 @@
     "title": "Sales channels",
     "description": "Connect your business accounts and manage where you sell.",
     "scripts": [
-      "<script type=\"module\" src=\"js/social-connections.js?v=2\"></script>",
+      "<script type=\"module\" src=\"js/social-connections.js?v=4\"></script>",
       "<script>\nconst params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard \u2192'}\n</script>"
     ]
   },
