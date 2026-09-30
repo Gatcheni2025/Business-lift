@@ -19,7 +19,7 @@ icons={
 'network':'<circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="m10 8-4 8m8-8 4 8M8 19h8"/>',
 'logout':'<path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h11"/>'}
 def icon(key):return '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+icons[key]+'</svg>'
-groups=[('Workspace',[('dashboard','grid'),('products','box'),('orders','orders'),('customers','users'),('sales-channels','link')]),('Online presence',[('store','store'),('website-builder','globe'),('domains','link'),('network','network')]),('Manage business',[('seller-onboarding','check'),('business-profile','building'),('shop-settings','settings'),('delivery-settings','truck'),('payments','card')])]
+groups=[('Workspace',[('dashboard','grid'),('payments','card'),('products','box'),('settings','settings')])]
 for name,meta in pages.items():
  nav=''
  for group,links in groups:
@@ -37,7 +37,7 @@ for name,meta in pages.items():
  main_intro='' if app_page else f'<div class="page-heading"><div><h1>{title}</h1><p>{desc}</p></div><span class="page-date" data-current-date></span></div><div class="workspace-alert" data-workspace-status role="status" hidden></div>'
  page=f'''<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>{title} | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>{title} | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"></head>
 <body class="workspace" data-page="{name}">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -45,11 +45,11 @@ for name,meta in pages.items():
 <nav aria-label="Primary navigation">{nav}</nav>
 <div class="sidebar-footer"><button class="nav-link" data-logout type="button">{icon('logout')}<span>Sign out</span></button><small>TEYZA · Everyone can sell.</small></div></aside>
 <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
-<div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><a class="account-link" href="business-profile.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
+<div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{title}</strong></div><a class="account-link" href="settings.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
 <main class="{main_class}" id="main-content">{main_intro}
 {content}
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
-<script src="assets/workspace.js?v=4"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=3"></script>
+<script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
 {scripts}
 </body></html>'''
  (ROOT/(name+'.html')).write_text(page,encoding='utf-8')

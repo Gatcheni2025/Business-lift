@@ -33,67 +33,10 @@ async function getChatInbox(user){
   }catch(_){return []}
 }
 
-function updateVerifyStep(name,done){
-  const node=document.querySelector('[data-v-step="'+name+'"]');
-  if(!node)return;
-  node.classList.toggle("done",!!done);
-  const icon=node.querySelector("span");if(icon)icon.textContent=done?"✓":"○";
-}
-
 function renderReadiness(readiness){
-  const v=readiness.businessVerification||{};
-  const approved=String(readiness.companyApproval?.status||"pending").toLowerCase()==="approved";
-  const identityDone=Boolean(v.identityVerified);
-  const proofDone=Boolean(v.proofAddressMatchVerified);
-  const checks={phone:Boolean(v.phoneVerified),identity:identityDone,location:Boolean(v.locationConfirmed),proof:proofDone,approval:approved};
-  Object.entries(checks).forEach(([key,value])=>updateVerifyStep(key,value));
-  const complete=Object.values(checks).filter(Boolean).length;
-  set("[data-app-verification-score]",complete+"/5");
-
-  const verificationCard=document.querySelector("[data-app-verification]");
-  const sellHero=document.querySelector("[data-app-sell-hero]");
-  const title=document.querySelector("[data-app-verification-title]");
-  const copy=document.querySelector("[data-app-verification-copy]");
-  const action=document.querySelector("[data-app-verification-action]");
-  const dockSell=document.querySelector("[data-app-dock-sell]");
-  const canSell=approved&&Boolean(readiness.productReady);
-
-  let nextHref="business-profile.html?setup=1";
-  let nextLabel="Continue verification →";
-  let nextCopy="Complete your business details and verification checks once. Teyza will review your documents before selling is unlocked.";
-
-  if(!checks.phone||!v.identitySubmitted||!checks.location||!v.proofOfAddressUploaded){
-    nextHref="business-profile.html?setup=1";
-  }else if(!identityDone||!proofDone||!approved){
-    nextHref="business-profile.html";
-    nextLabel="View verification status →";
-    nextCopy="Your verification is being reviewed. Once approved, finish your delivery and banking preferences and start selling.";
-  }else if(!readiness.deliveryComplete){
-    nextHref="delivery-settings.html?setup=1";
-    nextLabel="Set delivery →";
-    nextCopy="Your business is verified. Choose how customers will receive orders.";
-  }else if(!readiness.paymentComplete){
-    nextHref="payments.html";
-    nextLabel="Set banking →";
-    nextCopy="Your business is verified. Add where your sales money should be paid.";
-  }
-
-  if(action){action.href=nextHref;action.textContent=nextLabel}
-  if(title){
-    if(canSell)title.textContent="Verified and ready to sell";
-    else if(approved)title.textContent="Verified — finish your selling setup";
-    else if(v.identitySubmitted)title.textContent="Verification in progress";
-    else title.textContent="Get verified to unlock selling";
-  }
-  if(copy)copy.textContent=canSell?"Your Teyza seller account is ready. Tap Sell whenever you want to add something new.":nextCopy;
-
-  if(verificationCard)verificationCard.hidden=canSell;
-  if(sellHero)sellHero.hidden=!canSell;
-  if(dockSell){
-    dockSell.href=canSell?"products.html#new-product":nextHref;
-    dockSell.title=canSell?"Sell a product":"Finish setup to unlock selling";
-  }
-  document.querySelectorAll("[data-primary-seller-action]").forEach(link=>{link.href=canSell?"products.html#new-product":nextHref;});
+  if(!readiness.sellerSetupComplete){location.replace('seller-onboarding.html');return false;}
+  document.querySelectorAll('[data-primary-seller-action]').forEach(link=>link.href='products.html#new-product');
+  return true;
 }
 
 function renderOrders(orders){

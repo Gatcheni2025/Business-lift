@@ -169,11 +169,13 @@ if ($action==='seller-readiness') {
     ||(trim((string)($gateway['merchantId']??''))!==''&&trim((string)($gateway['merchantKey']??''))!=='')
     ||trim((string)($other['otherGateway']??''))!=='';
   $approval=companyApproval($workspace);
-  // Selling unlocks after Teyza has approved the verified seller. Delivery and
-  // banking remain independent app tabs so sellers can configure them when needed.
-  $productReady=$businessComplete&&(($approval['status']??'pending')==='approved');
-  $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
-  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
+  // The dashboard and selling tools unlock only after the complete onboarding
+  // journey has been saved in the backend. This is the single source of truth.
+  $approved=(($approval['status']??'pending')==='approved');
+  $sellerSetupComplete=$businessComplete&&$approved&&$deliveryComplete&&$paymentComplete;
+  $productReady=$sellerSetupComplete;
+  $steps=(int)$businessComplete+(int)$approved+(int)$deliveryComplete+(int)$paymentComplete;
+  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'approvalComplete'=>$approved,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$sellerSetupComplete,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
