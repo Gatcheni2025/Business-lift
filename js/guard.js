@@ -1,36 +1,474 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
-import {auth} from "./firebase-config.js";
-import {getBusinessContext,hydrateBusiness,workspaceError} from "./business-context.js";
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 
-const page=location.pathname.split('/').pop() || 'dashboard.html';
-const onboardingPages=new Set(['seller-onboarding.html','business-profile.html','delivery-settings.html','payments.html','sales-channels.html']);
+import {
+  auth
+} from "./firebase-config.js";
 
-async function readiness(user){
- const token=await user.getIdToken();
- const response=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
- const data=await response.json().catch(()=>({}));
- if(!response.ok||!data.ok)throw new Error(data.error||'Unable to load seller setup.');
- return data;
+import {
+  getBusinessContext,
+  hydrateBusiness,
+  workspaceError
+} from "./business-context.js";
+
+
+/* =========================================================
+   TEYZA SELLER ACCESS GUARD
+
+   RULES
+
+   1. Not logged in
+      -> Login
+
+   2. Logged in + onboarding incomplete
+      -> seller-onboarding.html
+
+   3. Logged in + onboarding complete
+      -> Dashboard / seller workspace
+
+   4. Completed seller opens onboarding normally
+      -> Dashboard
+
+   5. Completed seller opens onboarding with ?review=1
+      -> Allow access for reviewing/editing setup
+========================================================= */
+
+
+const page =
+  location.pathname.split("/").pop() ||
+  "dashboard.html";
+
+
+const onboardingPages = new Set([
+  "seller-onboarding.html"
+]);
+
+
+/*
+ * Pages that require completed seller onboarding.
+ *
+ * These must NEVER be available to an incomplete seller.
+ */
+const protectedSellerPages = new Set([
+  "dashboard.html",
+  "customers.html",
+  "orders.html",
+  "products.html",
+  "store.html",
+  "settings.html",
+  "network.html",
+  "shop-settings.html",
+  "website-builder.html",
+  "domains.html"
+]);
+
+
+/* =========================================================
+   PREVENT DASHBOARD FLASH
+
+   Hide protected seller pages while authentication and
+   backend onboarding status are being checked.
+========================================================= */
+
+const shouldLockPage =
+  protectedSellerPages.has(page);
+
+
+if (shouldLockPage) {
+  document.documentElement.classList.add(
+    "seller-access-check"
+  );
 }
 
-onAuthStateChanged(auth,async user=>{
- if(!user){location.replace('index.html?auth=login&redirect='+encodeURIComponent(page+location.search+location.hash));return;}
- document.querySelectorAll('[data-auth-name]').forEach(el=>el.textContent=user.displayName||'Business owner');
- document.querySelectorAll('[data-auth-initial]').forEach(el=>el.textContent=(user.displayName||user.email||'U')[0].toUpperCase());
- try{
-  const [context,setup]=await Promise.all([getBusinessContext(user),readiness(user)]);
-  hydrateBusiness(context,user);
-  const complete=setup.sellerSetupComplete===true;
-  if(!complete){
-   if(!onboardingPages.has(page)){location.replace('seller-onboarding.html');return;}
-   document.documentElement.classList.add('onboarding-locked');
-   document.body?.classList.add('onboarding-locked');
-  }else if(page==='seller-onboarding.html'&&!new URLSearchParams(location.search).has('review')){
-   location.replace('dashboard.html');return;
+
+/* =========================================================
+   HELPER: SHOW PAGE
+========================================================= */
+
+function unlockPage() {
+
+  document.documentElement.classList.remove(
+    "seller-access-check"
+  );
+
+  document.documentElement.classList.add(
+    "seller-access-ready"
+  );
+}
+
+
+/* =========================================================
+   HELPER: REDIRECT TO LOGIN
+========================================================= */
+
+function redirectToLogin() {
+
+  const destination =
+    page +
+    location.search +
+    location.hash;
+
+  location.replace(
+    "index.html?auth=login&redirect=" +
+    encodeURIComponent(destination)
+  );
+}
+
+
+/* =========================================================
+   HELPER: REDIRECT TO ONBOARDING
+========================================================= */
+
+function redirectToOnboarding() {
+
+  if (page === "seller-onboarding.html") {
+    return;
   }
- }catch(error){
-  console.error('Business access failed',error);
-  const status=document.querySelector('[data-workspace-status]');
-  if(status){status.hidden=false;status.classList.add('error');status.textContent=workspaceError(error);}
- }
-});
+
+  location.replace(
+    "seller-onboarding.html"
+  );
+}
+
+
+/* =========================================================
+   GET SELLER READINESS FROM BACKEND
+
+   Backend is the source of truth.
+
+   Do NOT use localStorage to decide whether onboarding
+   has been completed.
+========================================================= */
+
+async function getSellerReadiness(user) {
+
+  const token =
+    await user.getIdToken();
+
+  const response =
+    await fetch(
+      "api/workspace.php?action=seller-readiness",
+      {
+        method: "GET",
+
+        headers: {
+          Authorization:
+            "Bearer " + token,
+
+          Accept:
+            "application/json"
+        },
+
+        cache:
+          "no-store",
+
+        credentials:
+          "same-origin"
+      }
+    );
+
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
+
+
+  if (
+    !response.ok ||
+    data.ok !== true
+  ) {
+
+    throw new Error(
+      data.error ||
+      "Unable to load seller setup."
+    );
+  }
+
+
+  return data;
+}
+
+
+/* =========================================================
+   AUTHENTICATION + SELLER ACCESS
+========================================================= */
+
+onAuthStateChanged(
+  auth,
+
+  async (user) => {
+
+    /* -----------------------------------------------------
+       USER NOT LOGGED IN
+    ----------------------------------------------------- */
+
+    if (!user) {
+
+      redirectToLogin();
+
+      return;
+    }
+
+
+    /* -----------------------------------------------------
+       DISPLAY ACCOUNT INFORMATION
+    ----------------------------------------------------- */
+
+    const displayName =
+      user.displayName ||
+      "Business owner";
+
+
+    document
+      .querySelectorAll(
+        "[data-auth-name]"
+      )
+      .forEach(
+        (element) => {
+
+          element.textContent =
+            displayName;
+        }
+      );
+
+
+    const initial =
+      (
+        user.displayName ||
+        user.email ||
+        "U"
+      )
+        .charAt(0)
+        .toUpperCase();
+
+
+    document
+      .querySelectorAll(
+        "[data-auth-initial]"
+      )
+      .forEach(
+        (element) => {
+
+          element.textContent =
+            initial;
+        }
+      );
+
+
+    try {
+
+      /* ---------------------------------------------------
+         LOAD BUSINESS + ONBOARDING STATE
+      --------------------------------------------------- */
+
+      const [
+        context,
+        setup
+      ] =
+        await Promise.all([
+          getBusinessContext(user),
+          getSellerReadiness(user)
+        ]);
+
+
+      /* ---------------------------------------------------
+         HYDRATE BUSINESS INFORMATION
+      --------------------------------------------------- */
+
+      hydrateBusiness(
+        context,
+        user
+      );
+
+
+      /* ---------------------------------------------------
+         BACKEND IS SOURCE OF TRUTH
+      --------------------------------------------------- */
+
+      const complete =
+        setup.sellerSetupComplete === true;
+
+
+      /* ===================================================
+         INCOMPLETE SELLER
+      =================================================== */
+
+      if (!complete) {
+
+        /*
+         * The seller is ONLY allowed inside the
+         * onboarding experience.
+         */
+
+        if (
+          page !==
+          "seller-onboarding.html"
+        ) {
+
+          redirectToOnboarding();
+
+          return;
+        }
+
+
+        document
+          .documentElement
+          .classList
+          .add(
+            "onboarding-locked"
+          );
+
+
+        if (document.body) {
+
+          document.body
+            .classList
+            .add(
+              "onboarding-locked"
+            );
+        }
+
+
+        /*
+         * The onboarding page itself may now render.
+         */
+
+        unlockPage();
+
+        return;
+      }
+
+
+      /* ===================================================
+         COMPLETED SELLER
+      =================================================== */
+
+      document
+        .documentElement
+        .classList
+        .remove(
+          "onboarding-locked"
+        );
+
+
+      if (document.body) {
+
+        document.body
+          .classList
+          .remove(
+            "onboarding-locked"
+          );
+      }
+
+
+      /*
+       * If setup is already complete and the seller
+       * opens onboarding normally, return them to
+       * dashboard.
+       *
+       * ?review=1 allows them to intentionally review
+       * their onboarding information.
+       */
+
+      if (
+        page ===
+          "seller-onboarding.html" &&
+        !new URLSearchParams(
+          location.search
+        ).has("review")
+      ) {
+
+        location.replace(
+          "dashboard.html"
+        );
+
+        return;
+      }
+
+
+      /* ---------------------------------------------------
+         SELLER IS AUTHORISED
+      --------------------------------------------------- */
+
+      unlockPage();
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Business access failed",
+        error
+      );
+
+
+      /*
+       * IMPORTANT:
+       *
+       * A backend/readiness failure must NOT silently
+       * unlock protected seller pages.
+       */
+
+      if (
+        protectedSellerPages.has(page)
+      ) {
+
+        const status =
+          document.querySelector(
+            "[data-workspace-status]"
+          );
+
+
+        if (status) {
+
+          status.hidden =
+            false;
+
+          status.classList.add(
+            "error"
+          );
+
+          status.textContent =
+            workspaceError(error);
+        }
+
+
+        /*
+         * Keep protected page locked.
+         */
+
+        return;
+      }
+
+
+      /*
+       * On onboarding page we can display the error
+       * instead of exposing the dashboard.
+       */
+
+      const status =
+        document.querySelector(
+          "[data-workspace-status]"
+        );
+
+
+      if (status) {
+
+        status.hidden =
+          false;
+
+        status.classList.add(
+          "error"
+        );
+
+        status.textContent =
+          workspaceError(error);
+      }
+
+
+      unlockPage();
+    }
+  }
+);

@@ -1,91 +1,639 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Dashboard | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#087f5b">
+
+  <title>Dashboard | Teyza</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="assets/simple-workspace.css?v=4">
+
+<script type="module" src="js/guard.js?v=5"></script>
+<script type="module" src="js/dashboard-data.js?v=3"></script>
+<script src="js/simple-dashboard.js?v=2"></script>
+
+  <link
+    rel="stylesheet"
+    href="assets/workspace.css?v=20"
+  >
+
+  <link
+    rel="stylesheet"
+    href="assets/simple-workspace.css?v=4"
+  >
+
+  <script
+    src="https://unpkg.com/@phosphor-icons/web"
+    defer>
+  </script>
+</head>
+
 <body class="workspace" data-page="dashboard">
-<a href="#main-content" class="skip-link">Skip to content</a>
-<aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
-<div class="workspace-switch"><span class="workspace-avatar" data-business-initial>B</span><div><strong data-business-name>Your business</strong><small>Business workspace</small></div></div>
-<nav aria-label="Primary navigation"><div class="nav-group"><p class="nav-group-label">Workspace</p><a class="nav-link active" href="dashboard.html" aria-current="page"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a><a class="nav-link" href="payments.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 9h20M6 15h4"/></svg><span>Banking</span></a><a class="nav-link" href="products.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg><span>Products</span></a><a class="nav-link" href="settings.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg><span>Settings</span></a></div></nav>
-<div class="sidebar-footer"><button class="nav-link" data-logout type="button"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h11"/></svg><span>Sign out</span></button><small>TEYZA · Everyone can sell.</small></div></aside>
-<button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
-<div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Dashboard</strong></div><a class="account-link" href="settings.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
-<main class="page-main teyza-app-home" id="main-content">
-<div class="workspace-alert" data-workspace-status role="status" hidden></div>
 
-<!-- Teyza Brand Header with Official Logo -->
-<header class="simple-heading">
-  <div class="dashboard-brand-header">
-    <a href="dashboard.html" class="dashboard-brand-logo" aria-label="Teyza Home">
-      <span class="teyza-logo-mark" aria-hidden="true"><span>T</span></span>
-      <div class="teyza-word-wrap">
-        <span class="teyza-word">TEYZA</span>
-        <small class="teyza-tagline">Everyone can sell.</small>
-      </div>
-    </a>
-    <div class="dashboard-business-pill">
-      <span class="simple-kicker" data-business-name>Your business</span>
-    </div>
-  </div>
-  <a class="simple-settings" href="settings.html" aria-label="Settings" title="Settings">⚙</a>
-</header>
-
-<!-- Incomplete Onboarding Gate Notice -->
-<section class="onboarding-incomplete-card" data-onboarding-gate aria-label="Account setup notice">
-  <div class="onboarding-gate-icon" aria-hidden="true">
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="10"/>
-      <line x1="12" y1="8" x2="12" y2="12"/>
-      <line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  </div>
-  <div class="onboarding-gate-content">
-    <h2 class="onboarding-gate-title">You need to complete setting up your account</h2>
-    <p class="onboarding-gate-desc" data-onboarding-desc>Complete your business profile, identity verification, address, selling platforms and banking setup to unlock all selling features.</p>
-  </div>
-  <a class="onboarding-gate-btn" href="onboarding.html" data-onboarding-proceed>
-    <span>Proceed</span>
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+  <a href="#main-content" class="skip-link">
+    Skip to content
   </a>
-</section>
 
-<div class="simple-tabs" role="tablist" aria-label="Dashboard activity">
-  <button id="chats-tab" role="tab" aria-selected="true" aria-controls="chats-panel" data-home-tab="chats">Chats</button>
-  <button id="sales-tab" role="tab" aria-selected="false" aria-controls="sales-panel" tabindex="-1" data-home-tab="sales">Orders</button>
-</div>
 
-<div class="notice" data-dashboard-status role="status" hidden></div>
+  <!-- =====================================================
+       DESKTOP SIDEBAR
+  ====================================================== -->
 
-<section id="chats-panel" role="tabpanel" aria-labelledby="chats-tab" data-home-panel="chats">
-  <div class="simple-section-heading">
-    <div>
-      <h2>Conversations</h2>
-      <p>Stay close to your customers.</p>
+  <aside class="workspace-sidebar" id="sidebar">
+
+    <a
+      class="workspace-brand"
+      href="dashboard.html"
+      aria-label="Teyza Dashboard"
+    >
+      <span class="teyza-logo-mark">
+        <span>T</span>
+      </span>
+
+      <span class="teyza-word">
+        TEYZA
+        <small>Everyone can sell.</small>
+      </span>
+    </a>
+
+
+    <div class="workspace-switch">
+
+      <span
+        class="workspace-avatar"
+        data-business-initial>
+        B
+      </span>
+
+      <div>
+        <strong data-business-name>
+          Your business
+        </strong>
+
+        <small>
+          Business workspace
+        </small>
+      </div>
+
     </div>
-    <button class="simple-action" type="button" data-open-seller-chat>Open chats ↗</button>
-  </div>
-  <div class="app-chat-preview" data-app-chat-preview>
-    <div class="empty-state"><p>Loading conversations…</p></div>
-  </div>
-  <a class="simple-contacts" href="customers.html">View all customers →</a>
-</section>
 
-<section id="sales-panel" role="tabpanel" aria-labelledby="sales-tab" data-home-panel="sales" hidden>
-  <div class="simple-section-heading">
-    <div>
-      <h2>Recent orders</h2>
-      <p>Your latest selling activity.</p>
+
+    <nav aria-label="Primary navigation">
+
+      <div class="nav-group">
+
+        <p class="nav-group-label">
+          Workspace
+        </p>
+
+
+        <!-- Dashboard -->
+
+        <a
+          class="nav-link active"
+          href="dashboard.html"
+          aria-current="page"
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.65"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+
+          <span>Dashboard</span>
+        </a>
+
+
+        <!-- Banking -->
+
+        <a
+          class="nav-link"
+          href="payments.html"
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.65"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="3"/>
+            <path d="M2 9h20M6 15h4"/>
+          </svg>
+
+          <span>Banking</span>
+        </a>
+
+
+        <!-- Products -->
+
+        <a
+          class="nav-link"
+          href="products.html"
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.65"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z"/>
+            <path d="M3 8l9 5 9-5"/>
+            <path d="M12 13v8"/>
+            <path d="M7.5 5.5l9 5"/>
+          </svg>
+
+          <span>Products</span>
+        </a>
+
+
+        <!-- Settings -->
+
+        <a
+          class="nav-link"
+          href="settings.html"
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.65"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/>
+            <circle cx="12" cy="11" r="3"/>
+          </svg>
+
+          <span>Settings</span>
+        </a>
+
+      </div>
+
+    </nav>
+
+
+    <div class="sidebar-footer">
+
+      <button
+        class="nav-link"
+        data-logout
+        type="button"
+      >
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.65"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 3H4v18h5"/>
+          <path d="m14 7 5 5-5 5"/>
+          <path d="M8 12h11"/>
+        </svg>
+
+        <span>Sign out</span>
+      </button>
+
+      <small>
+        TEYZA · Everyone can sell.
+      </small>
+
     </div>
-    <a class="simple-action" href="orders.html">All orders ↗</a>
-  </div>
-  <div class="app-order-list" data-recent-orders>
-    <div class="empty-state"><p>Loading orders…</p></div>
-  </div>
-</section>
 
-<a class="simple-compose" href="products.html#new-product" data-primary-seller-action aria-label="Sell a product">Sell</a>
-</main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="settings.html">Settings ↗</a></footer></div>
-<script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
-<script type="module" src="js/dashboard-data.js?v=2"></script>
-<script src="js/simple-dashboard.js?v=1"></script>
-<script type="module" src="js/settings-onboarding.js?v=2"></script>
-</body></html>
+  </aside>
+
+
+  <!-- =====================================================
+       MOBILE SIDEBAR BACKDROP
+  ====================================================== -->
+
+  <button
+    class="sidebar-backdrop"
+    id="sidebarBackdrop"
+    aria-label="Close navigation"
+    tabindex="-1"
+    hidden>
+  </button>
+
+
+  <!-- =====================================================
+       MAIN WORKSPACE
+  ====================================================== -->
+
+  <div class="workspace-main">
+
+
+    <!-- Top Bar -->
+
+    <header class="workspace-topbar">
+
+      <div class="breadcrumb">
+
+        <button
+          class="menu-toggle"
+          id="navToggle"
+          aria-controls="sidebar"
+          aria-expanded="false"
+          aria-label="Open navigation"
+          type="button"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M4 6h16"/>
+            <path d="M4 12h16"/>
+            <path d="M4 18h16"/>
+          </svg>
+        </button>
+
+        <span>Workspace</span>
+
+        <span class="breadcrumb-divider">
+          /
+        </span>
+
+        <strong>
+          Dashboard
+        </strong>
+
+      </div>
+
+
+      <a
+        class="account-link"
+        href="settings.html"
+      >
+        <span data-auth-name>
+          My account
+        </span>
+
+        <span
+          class="account-avatar"
+          data-auth-initial>
+          U
+        </span>
+      </a>
+
+    </header>
+
+
+    <!-- ===================================================
+         DASHBOARD
+    ==================================================== -->
+
+    <main
+      class="page-main teyza-app-home"
+      id="main-content"
+    >
+
+      <!--
+        Backend/API errors only.
+        This is NOT an onboarding notice.
+      -->
+
+      <div
+        class="workspace-alert"
+        data-workspace-status
+        role="status"
+        hidden>
+      </div>
+
+
+      <!-- ===============================================
+           BRAND HEADER
+      ================================================ -->
+
+      <header class="simple-heading">
+
+        <div class="dashboard-brand-header">
+
+          <a
+            href="dashboard.html"
+            class="dashboard-brand-logo"
+            aria-label="Teyza Home"
+          >
+
+            <span
+              class="teyza-logo-mark"
+              aria-hidden="true"
+            >
+              <span>T</span>
+            </span>
+
+
+            <div class="teyza-word-wrap">
+
+              <span class="teyza-word">
+                TEYZA
+              </span>
+
+              <small class="teyza-tagline">
+                Everyone can sell.
+              </small>
+
+            </div>
+
+          </a>
+
+
+          <div class="dashboard-business-pill">
+
+            <span
+              class="simple-kicker"
+              data-business-name>
+              Your business
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <a
+          class="simple-settings"
+          href="settings.html"
+          aria-label="Settings"
+          title="Settings">
+          ⚙
+        </a>
+
+      </header>
+
+
+      <!--
+        IMPORTANT:
+
+        There is deliberately NO onboarding card here.
+
+        Incomplete sellers must be redirected by guard.js
+        to seller-onboarding.html before they can use this page.
+      -->
+
+
+      <!-- ===============================================
+           CHATS / ORDERS
+      ================================================ -->
+
+      <div
+        class="simple-tabs"
+        role="tablist"
+        aria-label="Dashboard activity"
+      >
+
+        <button
+          id="chats-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="chats-panel"
+          data-home-tab="chats"
+          type="button">
+          Chats
+        </button>
+
+
+        <button
+          id="sales-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="sales-panel"
+          tabindex="-1"
+          data-home-tab="sales"
+          type="button">
+          Orders
+        </button>
+
+      </div>
+
+
+      <!-- Dashboard status -->
+
+      <div
+        class="notice"
+        data-dashboard-status
+        role="status"
+        hidden>
+      </div>
+
+
+      <!-- ===============================================
+           CHATS PANEL
+      ================================================ -->
+
+      <section
+        id="chats-panel"
+        role="tabpanel"
+        aria-labelledby="chats-tab"
+        data-home-panel="chats"
+      >
+
+        <div class="simple-section-heading">
+
+          <div>
+
+            <h2>
+              Conversations
+            </h2>
+
+            <p>
+              Stay close to your customers.
+            </p>
+
+          </div>
+
+
+          <button
+            class="simple-action"
+            type="button"
+            data-open-seller-chat>
+            Open chats ↗
+          </button>
+
+        </div>
+
+
+        <div
+          class="app-chat-preview"
+          data-app-chat-preview
+        >
+
+          <div class="empty-state">
+            <p>
+              Loading conversations…
+            </p>
+          </div>
+
+        </div>
+
+
+        <a
+          class="simple-contacts"
+          href="customers.html">
+          View all customers →
+        </a>
+
+      </section>
+
+
+      <!-- ===============================================
+           ORDERS PANEL
+      ================================================ -->
+
+      <section
+        id="sales-panel"
+        role="tabpanel"
+        aria-labelledby="sales-tab"
+        data-home-panel="sales"
+        hidden
+      >
+
+        <div class="simple-section-heading">
+
+          <div>
+
+            <h2>
+              Recent orders
+            </h2>
+
+            <p>
+              Your latest selling activity.
+            </p>
+
+          </div>
+
+
+          <a
+            class="simple-action"
+            href="orders.html">
+            All orders ↗
+          </a>
+
+        </div>
+
+
+        <div
+          class="app-order-list"
+          data-recent-orders
+        >
+
+          <div class="empty-state">
+            <p>
+              Loading orders…
+            </p>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ===============================================
+           PRIMARY SELL BUTTON
+      ================================================ -->
+
+      <a
+        class="simple-compose"
+        href="products.html#new-product"
+        data-primary-seller-action
+        aria-label="Sell a product">
+        Sell
+      </a>
+
+    </main>
+
+
+    <!-- ===================================================
+         FOOTER
+    ==================================================== -->
+
+    <footer class="workspace-footer">
+
+      <span>
+        TEYZA · Everyone can sell.
+      </span>
+
+      <a href="settings.html">
+        Settings ↗
+      </a>
+
+    </footer>
+
+  </div>
+
+
+  <!-- =====================================================
+       APPLICATION SCRIPTS
+  ====================================================== -->
+
+  <script src="assets/workspace.js?v=6"></script>
+
+  <script
+    type="module"
+    src="js/auth.js">
+  </script>
+
+  <!--
+    guard.js controls access.
+
+    Incomplete onboarding:
+      -> seller-onboarding.html
+
+    Completed onboarding:
+      -> remain on dashboard
+  -->
+  <script
+    type="module"
+    src="js/guard.js?v=5">
+  </script>
+
+  <script
+    type="module"
+    src="js/dashboard-data.js?v=3">
+  </script>
+
+  <script
+    src="js/simple-dashboard.js?v=2">
+  </script>
+
+</body>
+</html>

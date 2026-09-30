@@ -1,3 +1,4 @@
+
 (() => {
  const tabs=[...document.querySelectorAll('[data-home-tab]')];
  function select(tab){tabs.forEach(item=>{const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;});document.querySelectorAll('[data-home-panel]').forEach(panel=>panel.hidden=panel.dataset.homePanel!==tab.dataset.homeTab);}

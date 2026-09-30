@@ -154,28 +154,348 @@ if($status==='approved'){
   if(empty($v['proofAddressMatchVerified']))respond(422,['ok'=>false,'error'=>'Confirm that the proof of address matches the map address before approval']);
 }
 $target['companyApproval']=['status'=>$status,'submittedAt'=>$target['companyApproval']['submittedAt']??null,'reviewedAt'=>gmdate('c'),'reviewedBy'=>$user['email']??'admin','note'=>trim((string)($input['note']??''))];file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true,'companyApproval'=>companyApproval($target)]);}
-if ($action==='seller-readiness') {
-  $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))===''||($key==='businessName'&&trim((string)($business[$key]??''))==='Your Teyza Store'))$missing[]=$key;
-  $settings=$workspace['settings']??[];$verification=verificationState($workspace,$user);
-  if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(array_key_exists('deliveryComplete',$input))$workspace['setupFlow']['deliveryComplete']=!empty($input['deliveryComplete']);if(array_key_exists('paymentComplete',$input))$workspace['setupFlow']['paymentComplete']=!empty($input['paymentComplete']);if(array_key_exists('sellerSetupComplete',$input))$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);$settings=$workspace['settings']??[];}
-  // A confirmed map location may fill the address after the profile was last saved.
-  // Derive readiness from the saved fields and checks, not a stale client flag.
-  $businessComplete=empty($missing)&&((int)($verification['completed']??0)>=4);
-  $deliveryComplete=in_array(($settings['delivery']['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)
-    &&isset($settings['delivery']['baseDeliveryFee'])&&is_numeric($settings['delivery']['baseDeliveryFee'])&&(float)$settings['delivery']['baseDeliveryFee']>=0
-    &&!empty($verification['locationConfirmed'])&&sameAddress((string)($settings['delivery']['pickupAddress']??''),(string)($verification['location']['address']??''));
-  $bank=$settings['banking']??[];$gateway=$settings['payfast']??[];$other=$settings['paymentPreferences']??[];
-  $paymentComplete=(trim((string)($bank['bankName']??''))!==''&&trim((string)($bank['accountHolder']??''))!==''&&(trim((string)($bank['accountNumber']??''))!==''||trim((string)($bank['accountNumberLast4']??''))!==''))
-    ||(trim((string)($gateway['merchantId']??''))!==''&&trim((string)($gateway['merchantKey']??''))!=='')
-    ||trim((string)($other['otherGateway']??''))!=='';
-  $approval=companyApproval($workspace);
-  // The dashboard and selling tools unlock only after the complete onboarding
-  // journey has been saved in the backend. This is the single source of truth.
-  $approved=(($approval['status']??'pending')==='approved');
-  $sellerSetupComplete=$businessComplete&&$approved&&$deliveryComplete&&$paymentComplete;
-  $productReady=$sellerSetupComplete;
-  $steps=(int)$businessComplete+(int)$approved+(int)$deliveryComplete+(int)$paymentComplete;
-  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'approvalComplete'=>$approved,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$sellerSetupComplete,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>4,'missingBusinessFields'=>$missing]);
+if ($action === 'seller-readiness') {
+
+    /*
+     * =====================================================
+     * SELLER ONBOARDING READINESS
+     *
+     * This endpoint is the single source of truth for
+     * whether a seller may enter the Teyza dashboard.
+     *
+     * Never trust a browser/localStorage flag for
+     * sellerSetupComplete.
+     * =====================================================
+     */
+
+    $business = $workspace['business'] ?? [];
+
+    $required = [
+        'businessName',
+        'businessType',
+        'industry',
+        'country',
+        'phone',
+        'address',
+        'about'
+    ];
+
+    $missing = [];
+
+    foreach ($required as $key) {
+
+        $value = trim(
+            (string)($business[$key] ?? '')
+        );
+
+        if (
+            $value === '' ||
+            (
+                $key === 'businessName' &&
+                $value === 'Your Teyza Store'
+            )
+        ) {
+            $missing[] = $key;
+        }
+    }
+
+
+    $settings =
+        $workspace['settings'] ?? [];
+
+    $verification =
+        verificationState(
+            $workspace,
+            $user
+        );
+
+
+    /*
+     * -----------------------------------------------------
+     * BUSINESS + IDENTITY VERIFICATION
+     * -----------------------------------------------------
+     */
+
+    $businessComplete =
+        empty($missing) &&
+        ((int)($verification['completed'] ?? 0) >= 4);
+
+
+    /*
+     * -----------------------------------------------------
+     * DELIVERY
+     * -----------------------------------------------------
+     *
+     * Collection address must match the verified business
+     * location.
+     */
+
+    $delivery =
+        $settings['delivery'] ?? [];
+
+    $fulfilmentMode =
+        (string)($delivery['fulfilmentMode'] ?? '');
+
+
+    $validDeliveryMethod =
+        in_array(
+            $fulfilmentMode,
+            [
+                'courier',
+                'own_driver',
+                'pickup',
+                'digital'
+            ],
+            true
+        );
+
+
+    $validDeliveryFee =
+        isset($delivery['baseDeliveryFee']) &&
+        is_numeric($delivery['baseDeliveryFee']) &&
+        (float)$delivery['baseDeliveryFee'] >= 0;
+
+
+    $locationConfirmed =
+        !empty(
+            $verification['locationConfirmed']
+        );
+
+
+    $pickupMatchesVerifiedAddress =
+        $locationConfirmed &&
+        sameAddress(
+            (string)($delivery['pickupAddress'] ?? ''),
+            (string)(
+                $verification['location']['address'] ?? ''
+            )
+        );
+
+
+    $deliveryComplete =
+        $validDeliveryMethod &&
+        $validDeliveryFee &&
+        $locationConfirmed &&
+        $pickupMatchesVerifiedAddress;
+
+
+    /*
+     * -----------------------------------------------------
+     * PAYMENT / BANKING
+     * -----------------------------------------------------
+     */
+
+    $bank =
+        $settings['banking'] ?? [];
+
+    $gateway =
+        $settings['payfast'] ?? [];
+
+    $other =
+        $settings['paymentPreferences'] ?? [];
+
+
+    $bankComplete =
+        trim(
+            (string)($bank['bankName'] ?? '')
+        ) !== '' &&
+
+        trim(
+            (string)($bank['accountHolder'] ?? '')
+        ) !== '' &&
+
+        (
+            trim(
+                (string)($bank['accountNumber'] ?? '')
+            ) !== '' ||
+
+            trim(
+                (string)($bank['accountNumberLast4'] ?? '')
+            ) !== ''
+        );
+
+
+    $gatewayComplete =
+        trim(
+            (string)($gateway['merchantId'] ?? '')
+        ) !== '' &&
+
+        trim(
+            (string)($gateway['merchantKey'] ?? '')
+        ) !== '';
+
+
+    $otherPaymentComplete =
+        trim(
+            (string)($other['otherGateway'] ?? '')
+        ) !== '';
+
+
+    $paymentComplete =
+        $bankComplete ||
+        $gatewayComplete ||
+        $otherPaymentComplete;
+
+
+    /*
+     * -----------------------------------------------------
+     * COMPANY APPROVAL
+     * -----------------------------------------------------
+     */
+
+    $approval =
+        companyApproval($workspace);
+
+
+    $approved =
+        (
+            ($approval['status'] ?? 'pending')
+            ===
+            'approved'
+        );
+
+
+    /*
+     * -----------------------------------------------------
+     * FINAL SELLER ACCESS
+     * -----------------------------------------------------
+     *
+     * Dashboard access requires ALL mandatory stages.
+     */
+
+    $sellerSetupComplete =
+        $businessComplete &&
+        $approved &&
+        $deliveryComplete &&
+        $paymentComplete;
+
+
+    /*
+     * Products can only be sold after seller onboarding.
+     */
+
+    $productReady =
+        $sellerSetupComplete;
+
+
+    /*
+     * Progress indicator
+     */
+
+    $steps =
+        (int)$businessComplete +
+        (int)$approved +
+        (int)$deliveryComplete +
+        (int)$paymentComplete;
+
+
+    /*
+     * -----------------------------------------------------
+     * SAVE DERIVED STATE
+     * -----------------------------------------------------
+     *
+     * Save the SERVER-calculated state.
+     * Never accept sellerSetupComplete from the browser.
+     */
+
+    $previousComplete =
+        !empty(
+            $workspace['sellerSetupComplete']
+        );
+
+
+    $workspace['sellerSetupComplete'] =
+        $sellerSetupComplete;
+
+
+    $workspace['setupFlow'] =
+        $workspace['setupFlow'] ?? [];
+
+
+    $workspace['setupFlow']['businessComplete'] =
+        $businessComplete;
+
+    $workspace['setupFlow']['approvalComplete'] =
+        $approved;
+
+    $workspace['setupFlow']['deliveryComplete'] =
+        $deliveryComplete;
+
+    $workspace['setupFlow']['paymentComplete'] =
+        $paymentComplete;
+
+    $workspace['setupFlow']['completedSteps'] =
+        $steps;
+
+    $workspace['setupFlow']['totalSteps'] =
+        4;
+
+
+    /*
+     * Record completion time only when the account
+     * becomes complete for the first time.
+     */
+
+    if (
+        $sellerSetupComplete &&
+        !$previousComplete
+    ) {
+        $workspace['setupFlow']['completedAt'] =
+            gmdate('c');
+    }
+
+
+    saveWorkspace(
+        $user,
+        $workspace
+    );
+
+
+    /*
+     * -----------------------------------------------------
+     * RESPONSE
+     * -----------------------------------------------------
+     */
+
+    respond(
+        200,
+        [
+            'ok' => true,
+
+            'businessComplete' =>
+                $businessComplete,
+
+            'businessVerification' =>
+                $verification,
+
+            'companyApproval' =>
+                $approval,
+
+            'approvalComplete' =>
+                $approved,
+
+            'deliveryComplete' =>
+                $deliveryComplete,
+
+            'paymentComplete' =>
+                $paymentComplete,
+
+            'productReady' =>
+                $productReady,
+
+            'sellerSetupComplete' =>
+                $sellerSetupComplete,
+
+            'sellerSetupCompletedSteps' =>
+                $steps,
+
+            'sellerSetupTotalSteps' =>
+                4,
+
+            'missingBusinessFields' =>
+                $missing
+        ]
+    );
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
