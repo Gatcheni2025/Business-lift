@@ -38,6 +38,10 @@ import {
 ========================================================= */
 
 
+const WORKSPACE_API = location.hostname.endsWith(".vercel.app")
+  ? "/backend/workspace.php"
+  : "api/workspace.php";
+
 const page =
   location.pathname.split("/").pop() ||
   "dashboard.html";
@@ -151,7 +155,7 @@ async function getSellerReadiness(user) {
 
   const response =
     await fetch(
-      "api/workspace.php?action=seller-readiness",
+      `${WORKSPACE_API}?action=seller-readiness`,
       {
         method: "GET",
 
