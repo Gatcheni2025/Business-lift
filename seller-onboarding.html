@@ -54,6 +54,8 @@
 
 
 
+  <link rel="preconnect" href="https://cdn.simpleicons.org">
+
   <link
 
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
@@ -126,7 +128,7 @@
 
 
   <style>
-    .selling-platforms{display:grid;gap:10px;margin-top:18px}.selling-platform-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e2ebe6;border-radius:18px;background:#fff}.selling-platform-row.is-selected{border-color:#b9ddc9;background:#f2faf5}.selling-platform-logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-weight:800;background:#f3f6f4;color:#183c2d}.logo-facebook{background:#1877f2;color:#fff}.logo-instagram{background:#f5e9f0;color:#c13584}.logo-whatsapp{background:#25d366;color:#fff}.logo-google{background:#fff;border:1px solid #e5e8e6;color:#4285f4}.logo-x{background:#111;color:#fff}.logo-youtube{background:#ff0000;color:#fff;font-size:17px}.selling-platform-copy strong{display:block;color:#15382b;font-size:15px}.selling-platform-copy span{display:block;margin-top:4px;color:#728178;font-size:12px;line-height:1.45}.sell-here-button{border:0;border-radius:999px;background:#e1f2e7;color:#12663e;padding:11px 17px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}.sell-here-button:hover,.sell-here-button.is-selected{background:#16865e;color:#fff}.selling-platform-note{margin:14px 4px 0;color:#718078;font-size:12px;line-height:1.5}@media(max-width:600px){.selling-platform-row{grid-template-columns:44px minmax(0,1fr);padding:13px}.selling-platform-logo{width:42px;height:42px}.sell-here-button{grid-column:2;justify-self:start;padding:10px 15px}}
+    .selling-platforms{display:grid;gap:10px;margin-top:18px}.selling-platform-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e2ebe6;border-radius:18px;background:#fff}.selling-platform-row.is-selected{border-color:#b9ddc9;background:#f2faf5}.selling-platform-logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-weight:800;background:#f3f6f4;color:#183c2d}.logo-facebook{background:#1877f2;color:#fff}.logo-instagram{background:radial-gradient(circle at 32% 100%,#feda75 0 12%,#fa7e1e 24%,#d62976 50%,#962fbf 72%,#4f5bd5 100%);color:#fff}.logo-whatsapp{background:#25d366;color:#fff}.logo-google{background:#fff;border:1px solid #e5e8e6;color:inherit}.logo-x{background:#000;color:#fff}.logo-youtube{background:#fff;color:inherit;font-size:17px}.logo-tiktok{background:#000;color:#fff}.selling-platform-logo img{display:block;width:24px;height:24px;object-fit:contain}.selling-platform-copy strong{display:block;color:#15382b;font-size:15px}.selling-platform-copy span{display:block;margin-top:4px;color:#728178;font-size:12px;line-height:1.45}.sell-here-button{border:0;border-radius:999px;background:#e1f2e7;color:#12663e;padding:11px 17px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}.sell-here-button:hover,.sell-here-button.is-selected{background:#16865e;color:#fff}.selling-platform-note{margin:14px 4px 0;color:#718078;font-size:12px;line-height:1.5}@media(max-width:600px){.selling-platform-row{grid-template-columns:44px minmax(0,1fr);padding:13px}.selling-platform-logo{width:42px;height:42px}.sell-here-button{grid-column:2;justify-self:start;padding:10px 15px}}
   </style>
 </head>
 
@@ -521,38 +523,38 @@
         <div class="selling-platforms" id="sellingPlatforms">
 
           <div class="selling-platform-row" data-selling-channel="facebook">
-            <span class="selling-platform-logo logo-facebook" aria-hidden="true">f</span>
+            <span class="selling-platform-logo logo-facebook" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/facebook/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy"><strong>Facebook</strong><span>Connect your Facebook Page through Meta and publish approved Teyza products to that Page.</span></div>
             <button type="button" class="sell-here-button" data-sell-here="facebook" aria-pressed="false">Sell here</button>
           </div>
 
           <div class="selling-platform-row" data-selling-channel="instagram">
-            <span class="selling-platform-logo logo-instagram" aria-hidden="true">◎</span>
+            <span class="selling-platform-logo logo-instagram" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/instagram/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy"><strong>Instagram</strong><span>Connect a Professional Instagram account through the Facebook Page that owns it.</span></div>
             <button type="button" class="sell-here-button" data-sell-here="instagram" aria-pressed="false">Sell here</button>
           </div>
 
           <div class="selling-platform-row" data-selling-channel="whatsapp">
-            <span class="selling-platform-logo logo-whatsapp" aria-hidden="true">◔</span>
+            <span class="selling-platform-logo logo-whatsapp" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/whatsapp/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy"><strong>WhatsApp Business</strong><span>Link the seller WhatsApp Business account and number used for customer messages and sales.</span></div>
             <button type="button" class="sell-here-button" data-sell-here="whatsapp" aria-pressed="false">Sell here</button>
           </div>
 
           <div class="selling-platform-row" data-selling-channel="google">
-            <span class="selling-platform-logo logo-google" aria-hidden="true">G</span>
+            <span class="selling-platform-logo logo-google" aria-hidden="true"><img class="brand-icon-img" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy"><strong>Google Shopping</strong><span>Connect Merchant Center and confirm the account Teyza should publish products to.</span></div>
             <button type="button" class="sell-here-button" data-sell-here="google" aria-pressed="false">Sell here</button>
           </div>
 
           <div class="selling-platform-row" data-selling-channel="x">
-            <span class="selling-platform-logo logo-x" aria-hidden="true">𝕏</span>
+            <span class="selling-platform-logo logo-x" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/x/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy"><strong>X</strong><span>Connect the seller's X account and authorize Teyza to publish approved product posts.</span></div>
             <button type="button" class="sell-here-button" data-sell-here="x" aria-pressed="false">Sell here</button>
           </div>
 
 
           <div class="selling-platform-row" data-selling-channel="youtube">
-            <span class="selling-platform-logo logo-youtube" aria-hidden="true">▶</span>
+            <span class="selling-platform-logo logo-youtube" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/youtube/FF0000" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy">
               <strong>YouTube</strong>
               <span>Connect the seller's YouTube channel for product videos, Shorts and supported analytics.</span>
@@ -561,7 +563,7 @@
           </div>
 
           <div class="selling-platform-row" data-selling-channel="tiktok">
-            <span class="selling-platform-logo logo-tiktok" aria-hidden="true">♪</span>
+            <span class="selling-platform-logo logo-tiktok" aria-hidden="true"><img class="brand-icon-img" src="https://cdn.simpleicons.org/tiktok/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
             <div class="selling-platform-copy">
               <strong>TikTok</strong>
               <span>Connect the seller's TikTok account for product video and photo publishing.</span>
