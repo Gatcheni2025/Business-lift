@@ -48,6 +48,7 @@ const page =
 
 
 const onboardingPages = new Set([
+  "business-profile.html",
   "seller-onboarding.html"
 ]);
 
@@ -67,7 +68,12 @@ const protectedSellerPages = new Set([
   "network.html",
   "shop-settings.html",
   "website-builder.html",
-  "domains.html"
+  "domains.html",
+  "sell.html",
+  "services.html",
+  "bookings.html",
+  "payments.html",
+  "sales-channels.html"
 ]);
 
 
@@ -127,15 +133,21 @@ function redirectToLogin() {
    HELPER: REDIRECT TO ONBOARDING
 ========================================================= */
 
-function redirectToOnboarding() {
+function redirectToOnboarding(setup = {}) {
 
-  if (page === "seller-onboarding.html") {
+  const destination =
+    setup.businessProfileComplete === true
+      ? "seller-onboarding.html"
+      : "business-profile.html?onboarding=1";
+
+  const destinationPage =
+    destination.split("?")[0];
+
+  if (page === destinationPage) {
     return;
   }
 
-  location.replace(
-    "seller-onboarding.html"
-  );
+  location.replace(destination);
 }
 
 
@@ -325,12 +337,15 @@ onAuthStateChanged(
          */
 
         if (
-          page !==
-          "seller-onboarding.html"
+          page === "seller-onboarding.html" &&
+          setup.businessProfileComplete !== true
         ) {
+          location.replace("business-profile.html?onboarding=1");
+          return;
+        }
 
-          redirectToOnboarding();
-
+        if (!onboardingPages.has(page)) {
+          redirectToOnboarding(setup);
           return;
         }
 
