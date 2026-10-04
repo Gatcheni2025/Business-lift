@@ -1,3 +1,7 @@
+const WORKSPACE_API = location.hostname.endsWith(".vercel.app")
+  ? "/backend/workspace.php"
+  : "api/workspace.php";
+
 const contexts = new Map();
 export function workspaceError(error, action = "load your Teyza workspace") {
  const message=String(error?.message||'');
@@ -8,7 +12,7 @@ async function api(user, action='context', options={}) {
  const token=await user.getIdToken();
  const {params={},...requestOptions}=options;
  const query=new URLSearchParams({action,...params});
- const response=await fetch(`api/workspace.php?${query}`,{...requestOptions,headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json',...(requestOptions.headers||{})}});
+ const response=await fetch(`${WORKSPACE_API}?${query}`,{...requestOptions,headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json',...(requestOptions.headers||{})}});
  const data=await response.json().catch(()=>({}));
  if(!response.ok || !data.ok) throw new Error(data.error||`Unable to ${action}.`);
  return data;
