@@ -1,6 +1,7 @@
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./firebase-config.js";
 
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const form=document.querySelector("[data-payout-form]");
 const bankSelect=document.querySelector("[data-bank-select]");
 const ownershipSelect=document.querySelector("[data-account-ownership]");
@@ -32,7 +33,7 @@ async function token(){
 
 async function paystackApi(action,{method="GET",body}={}){
   const t=await token();
-  const url=new URL("api/paystack-subaccount.php",location.href);
+  const url=new URL(`${API_BASE}/paystack-subaccount.php`,location.origin);
   url.searchParams.set("action",action);
 
   const response=await fetch(url,{
@@ -52,7 +53,7 @@ async function paystackApi(action,{method="GET",body}={}){
 
 async function workspaceBanking(){
   const t=await token();
-  const response=await fetch("api/workspace.php?action=section&section=banking",{
+  const response=await fetch(`${API_BASE}/workspace.php?action=section&section=banking`,{
     headers:{Authorization:`Bearer ${t}`},
     cache:"no-store"
   });
