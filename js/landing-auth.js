@@ -10,6 +10,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./landing-firebase.js";
 
+const WORKSPACE_API = location.hostname.endsWith(".vercel.app")
+  ? "/backend/workspace.php"
+  : "api/workspace.php";
+
 const google = new GoogleAuthProvider();
 google.setCustomParameters({prompt: "select_account"});
 const facebook = new FacebookAuthProvider();
@@ -100,7 +104,7 @@ function authError(error, provider) {
 }
 async function bootstrap(user, details = {}) {
   const token = await user.getIdToken();
-  const response = await fetch("api/workspace.php?action=bootstrap", {
+  const response = await fetch(`${WORKSPACE_API}?action=bootstrap`, {
     method: "POST",
     headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"},
     body: JSON.stringify(details)
