@@ -824,3 +824,37 @@ body.workspace .page-main{padding-bottom:120px!important}
   }
 
 }
+
+
+/* Dashboard header actions */
+.simple-heading-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.simple-logout{
+  border:1px solid #cfe2d6;
+  background:#fff;
+  color:#176940;
+  border-radius:999px;
+  min-height:44px;
+  padding:0 18px;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+}
+.simple-logout:hover{
+  background:#e8f5ed;
+}
+.simple-logout:disabled{
+  opacity:.6;
+  cursor:wait;
+}
+@media(max-width:600px){
+  .simple-heading-actions{gap:8px}
+  .simple-logout{
+    min-height:42px;
+    padding:0 14px;
+    font-size:13px;
+  }
+}
