@@ -33,9 +33,72 @@ async function getChatInbox(user){
   }catch(_){return []}
 }
 
+function renderApprovalTag(readiness){
+  const tag=document.querySelector("[data-seller-approval-tag]");
+  const text=document.querySelector("[data-seller-approval-text]");
+
+  if(!tag||!text)return;
+
+  const approval=readiness.companyApproval||{};
+  const status=String(approval.status||"").toLowerCase();
+  const submitted=Boolean(approval.submittedAt);
+
+  /*
+   * Only show "Pending admin approval" after the seller has
+   * actually submitted the verification/company-approval package.
+   */
+  if(status==="pending"&&submitted){
+    tag.hidden=false;
+    tag.dataset.approvalState="pending";
+    text.textContent="Pending admin approval";
+    tag.title="Your seller verification has been submitted and is waiting for Teyza admin review.";
+    return;
+  }
+
+  if(status==="approved"){
+    tag.hidden=false;
+    tag.dataset.approvalState="approved";
+    text.textContent="Seller approved";
+    tag.title="Your seller account has been approved by Teyza.";
+    return;
+  }
+
+  if(status==="rejected"){
+    tag.hidden=false;
+    tag.dataset.approvalState="rejected";
+    text.textContent="Admin action required";
+    tag.title=approval.note||"Teyza requested changes to your seller verification.";
+    return;
+  }
+
+  tag.hidden=true;
+  delete tag.dataset.approvalState;
+}
+
 function renderReadiness(readiness){
-  if(!readiness.sellerSetupComplete){location.replace('seller-onboarding.html');return false;}
-  document.querySelectorAll('[data-primary-seller-action]').forEach(link=>link.href='products.html#new-product');
+  const dashboardAllowed=
+    readiness.dashboardAccess===true ||
+    readiness.sellerSetupComplete===true;
+
+  console.info('[Teyza seller readiness]',{
+    dashboardAccess:readiness.dashboardAccess,
+    sellerSetupComplete:readiness.sellerSetupComplete,
+    productReady:readiness.productReady,
+    deliveryComplete:readiness.deliveryComplete,
+    paymentComplete:readiness.paymentComplete,
+    audienceComplete:readiness.audienceComplete,
+    businessProfileComplete:readiness.businessProfileComplete,
+    verificationComplete:readiness.verificationComplete,
+    approvalComplete:readiness.approvalComplete
+  });
+
+  if(!dashboardAllowed){
+    location.replace('seller-onboarding.html');
+    return false;
+  }
+
+  document.querySelectorAll('[data-primary-seller-action]')
+    .forEach(link=>link.href='sell.html');
   return true;
 }
 
@@ -50,6 +113,36 @@ function renderOrders(orders){
     const status=normalizedStatus(order);
     const product=order.items?.[0]?.name||"Order";
     return '<a class="app-order-row" href="orders.html"><div><strong>'+escapeHtml(product)+'</strong><small>'+escapeHtml(order.customerName||order.customerId||"Customer")+' · '+escapeHtml(order.orderNumber||"Order")+'</small></div><div class="app-order-value">'+money.format(totalOf(order))+'<span class="app-status-mini">'+escapeHtml(status)+'</span></div></a>';
+  }).join("");
+}
+
+function renderDeliveries(orders){
+  const target=document.querySelector("[data-dashboard-deliveries]");
+  if(!target)return;
+
+  const active=orders.filter(order=>
+    ["new","processing","shipping"].includes(
+      normalizedStatus(order)
+    )
+  );
+
+  if(!active.length){
+    target.innerHTML='<div class="empty-state"><h3>No active deliveries</h3><p>Orders that need collection or delivery will appear here.</p></div>';
+    return;
+  }
+
+  target.innerHTML=active.slice(0,6).map(order=>{
+    const state=normalizedStatus(order);
+    const customer=order.customerName||order.customerId||"Customer";
+    const reference=order.trackingNumber||order.orderNumber||"Order";
+
+    return '<a class="app-order-row" href="orders.html#fulfilment"><div><strong>'+
+      escapeHtml(reference)+'</strong><small>'+
+      escapeHtml(customer)+' · '+escapeHtml(state)+
+      '</small></div><div class="app-order-value">'+
+      money.format(totalOf(order))+
+      '<span class="app-status-mini">'+escapeHtml(state)+
+      '</span></div></a>';
   }).join("");
 }
 
@@ -73,7 +166,8 @@ function renderChats(threads){
 async function load(user){
   const [context,summary,readiness,threads]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user),getChatInbox(user)]);
   hydrateBusiness(context,user);
-  renderReadiness(readiness);
+  if(!renderReadiness(readiness))return;
+  renderApprovalTag(readiness);
 
   const business=summary.business||context.business||{};
   const orders=summary.orders||[];
@@ -99,6 +193,7 @@ async function load(user){
   set("[data-stat-paid]",moneyShort.format(paidTotal));
 
   renderOrders(orders);
+  renderDeliveries(orders);
   renderChats(threads);
 
   const sellHero=document.querySelector("[data-app-sell-hero]");

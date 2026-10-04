@@ -1,0 +1,19 @@
+
+.channel-directory-note{
+  margin:10px 0 0;
+  color:#63756c;
+  font-size:13px;
+  line-height:1.55;
+}
+.channels .card{
+  scroll-margin-top:100px;
+  transition:
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease;
+}
+.channels .card.channel-card-focus{
+  border-color:#17956b;
+  box-shadow:0 0 0 4px rgba(23,149,107,.10);
+  transform:translateY(-1px);
+}

@@ -1,0 +1,44 @@
+TEYZA SELL PRODUCT + SERVICE FIX v66
+
+ROOT CAUSE
+==========
+dashboard.html already pointed the Sell button to sell.html,
+but js/dashboard-data.js was overwriting it after the seller readiness
+check and changing the link back to:
+
+  products.html#new-product
+
+That is why clicking Sell opened the Product Publisher directly.
+
+FIX
+===
+dashboard-data.js now keeps the primary seller action as:
+
+  sell.html
+
+The flow is now:
+
+Dashboard
+  -> Sell
+  -> What do you want to sell?
+       -> Product
+       -> Service
+
+UPLOAD HOTFIX
+=============
+Upload these files to public_html, preserving paths:
+
+/dashboard.html
+/js/dashboard-data.js
+/sell.html
+
+Then use Ctrl + F5.
+
+EXPECTED
+========
+Clicking Sell must open:
+https://teyza.co.za/sell.html
+
+You should see two choices:
+- Sell a product
+- Offer a service

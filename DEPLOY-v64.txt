@@ -1,0 +1,40 @@
+TEYZA SERVICES v64
+
+Adds:
+- Sell chooser (Product or Service)
+- Service catalog
+- 4-step service wizard
+- Availability schedule
+- Full / deposit / quote configuration
+- Connected channel selection
+- Seller Bookings page
+- Dashboard Bookings tab
+
+UPLOAD TO PUBLIC_HTML:
+/dashboard.html
+/sell.html
+/services.html
+/bookings.html
+/assets/services.css
+/assets/dashboard-services.css
+/js/dashboard-data.js
+/js/dashboard-services.js
+/js/services.js
+/js/bookings.js
+/api/services.php
+
+KEEP EXISTING:
+/products.html
+/js/products-data.js
+/upload_images.php
+/api/_paystack.php
+
+TEST:
+1. Ctrl+F5
+2. Dashboard -> Sell
+3. Choose Service
+4. Complete 4 steps
+5. Confirm service appears in Services
+6. Open Bookings tab/page
+
+Buyer-facing service booking and Paystack service checkout will be the next wiring step after this seller flow is confirmed.

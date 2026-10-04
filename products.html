@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Products | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Products | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"><link rel="stylesheet" href="assets/products.css?v=10"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head>
 <body class="workspace" data-page="products">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -10,36 +10,304 @@
 <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
 <div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Products</strong></div><a class="account-link" href="settings.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
 <main class="page-main" id="main-content"><div class="page-heading"><div><h1>Products</h1><p>Build your catalog and keep your inventory up to date.</p></div><span class="page-date" data-current-date></span></div><div class="workspace-alert" data-workspace-status role="status" hidden></div>
-<section class="section-card" data-product-catalog><div class="section-heading"><div><h1>Products</h1><p>Your catalog, stock and verification status.</p></div><a class="button button-primary" href="#new-product" data-show-product-form>Add product</a></div><p data-catalog-status role="status" hidden></p><div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>SKU</th><th>Price</th><th>Stock</th><th>Channels</th><th>Verification</th><th>Action</th></tr></thead><tbody data-products-table-body><tr><td colspan="7">Loading products…</td></tr></tbody></table></div></section><section class="wizard-card" data-readiness-gate hidden><span class="eyebrow">SELLER SETUP REQUIRED</span><h2>Complete your seller account before adding products</h2><p data-readiness-message>For customer trust and reliable fulfilment, complete your business information and seller setup first.</p><div class="success-actions"><a class="button button-primary" href="business-profile.html">Complete business information →</a><a class="button" href="seller-onboarding.html">Open seller setup</a></div></section><div data-product-workspace hidden>
-<a class="simple-contacts" href="#products">← All products</a><section class="wizard-head"><span class="eyebrow" style="color:#8ebcff">TEYZA PRODUCT PUBLISHER</span><h1 style="color:white;margin:0">Add a product</h1><p>Tell us what you sell, choose where you want it seen, then review it before verification.</p>
-<div class="wizard-steps"><div class="wizard-step active" data-step-indicator="1"><b>1</b><span><strong>Product</strong><small style="display:block">Details & images</small></span></div><div class="wizard-step" data-step-indicator="2"><b>2</b><span><strong>Where to sell</strong><small style="display:block">Platforms & audience</small></span></div><div class="wizard-step" data-step-indicator="3"><b>3</b><span><strong>Review</strong><small style="display:block">Preview & submit</small></span></div></div></section>
-<form data-product-form>
-<section class="wizard-page active" data-step="1"><div class="wizard-card"><span class="eyebrow">STEP 1 OF 3</span><h2>Tell customers about your product</h2><p>Complete the information buyers need to understand and trust what you are selling.</p>
-<div class="form-grid"><label class="input-label">Product name<input name="name" required placeholder="e.g. Premium leather handbag"></label><label class="input-label">SKU / product code<input name="sku" required placeholder="e.g. BAG-001"></label><label class="input-label">Category<input name="category" required placeholder="e.g. Fashion & accessories"></label><label class="input-label">Brand<input name="brand" placeholder="Brand name"></label><label class="input-label">Selling price (ZAR)<input name="price" type="number" min="0" step=".01" required></label><label class="input-label">Cost price (ZAR)<input name="costPrice" type="number" min="0" step=".01"></label><label class="input-label">Stock available<input name="stock" type="number" min="0" step="1" required></label><label class="input-label">Condition<select name="condition"><option>New</option><option>Used - like new</option><option>Used - good</option><option>Refurbished</option></select></label></div>
-<label class="input-label">Product description<textarea name="description" required placeholder="Describe features, size, material, benefits and anything customers should know."></textarea></label>
-<div class="image-drop"><i class="ph ph-images" style="font-size:32px"></i><h3 style="margin:8px 0 4px">Add product images</h3><p>Use clear photos from different angles. JPG, PNG or WebP, maximum 5MB each.</p><input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple required><div class="image-preview" data-image-preview></div><div data-upload-progress hidden style="margin-top:16px"><div style="height:8px;background:#e8edf5;border-radius:999px;overflow:hidden"><div data-upload-bar style="height:100%;width:0;background:linear-gradient(90deg,#168cff,#6739e6);transition:width .2s"></div></div><p data-upload-text style="margin:9px 0 0;font-size:13px;font-weight:650">Preparing images…</p></div></div>
-<div class="wizard-actions"><a class="button" href="#products">Cancel</a><button class="button button-primary" type="button" data-next="2">Continue to selling platforms →</button></div></div></section>
+<section class="section-card" data-product-catalog><div class="section-heading"><div><h1>Products</h1><p>Your catalog, stock and verification status.</p></div><a class="button button-primary" href="#new-product" data-show-product-form>Add product</a></div><p data-catalog-status role="status" hidden></p><div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>SKU</th><th>Price</th><th>Stock</th><th>Channels</th><th>Performance</th><th>Verification</th><th>Action</th></tr></thead><tbody data-products-table-body><tr><td colspan="7">Loading products…</td></tr></tbody></table></div></section><section class="wizard-card" data-readiness-gate hidden><span class="eyebrow">SELLER SETUP REQUIRED</span><h2>Complete your seller account before adding products</h2><p data-readiness-message>For customer trust and reliable fulfilment, complete your business information and seller setup first.</p><div class="success-actions"><a class="button button-primary" href="business-profile.html">Complete business information →</a><a class="button" href="seller-onboarding.html">Open seller setup</a></div></section><div data-product-workspace hidden>
+<a class="product-back-link" href="#products">← All products</a>
 
-<section class="wizard-page" data-step="2"><div class="wizard-card"><span class="eyebrow">STEP 2 OF 3</span><h2>Select where you want to sell</h2><p>Choose the channels that fit your customers. Audience information below is guidance only; actual reach depends on your connected account, location, targeting and each platform's current advertising data.</p>
-<div class="target-area"><h3><i class="ph ph-map-pin"></i> Where will you be selling?</h3><p style="margin:0 0 15px;color:#6f7d91">Teyza uses your device location, with your permission, to set the centre of your selling area. Increase the slider to widen the audience around you.</p><div class="target-area-grid"><div class="location-box"><strong data-location-label>Location not detected yet</strong><small data-location-help>Allow location access when your browser asks.</small><span class="geo-coords" data-location-coords></span><button class="button" type="button" data-detect-location style="margin-top:10px">Use my location</button><div class="location-edit"><input type="text" data-location-search placeholder="Correct area, suburb, city or address"><button class="button" type="button" data-search-location>Set area</button></div><input type="hidden" name="targetArea"><input type="hidden" name="targetLat"><input type="hidden" name="targetLng"></div><div class="population-slider"><label for="reachSlider"><strong>Target population</strong></label><div class="population-value" data-population-value>50,000 people</div><input id="reachSlider" name="targetPopulation" type="range" min="5000" max="1000000" step="5000" value="50000"><small>Slide right to target a larger population. This is a Teyza targeting goal, not a live platform audience estimate.</small><div class="reach-price"><span data-plan-label>Base reach <span class="free-badge">FREE</span></span><br><strong data-reach-price>R0</strong><div style="font-size:11px;color:#738096" data-price-note>Up to 50,000 target population</div></div></div><label class="input-label">Audience<select name="targetGender"><option value="all">All genders</option><option value="female">Women</option><option value="male">Men</option></select></label></div><div class="selling-map" data-selling-map aria-label="Selling area map"></div><small style="display:block;margin-top:8px;color:#738096">Drag the map pin or search above to correct your selling area.</small><div class="target-summary" data-target-summary>Detect your location to set the centre of your selling area.</div></div>
-<div class="channel-grid" data-channel-grid>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="facebook"><div class="platform-logo fb">f</div><h3>Facebook</h3><div class="reach">Broad reach</div><p>Strong multi-age consumer audience.</p><p><b>Typical age:</b> 18–65+</p><p><b>Gender:</b> All</p><p><b>Area:</b> Local, national or international targeting</p></label>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="instagram"><div class="platform-logo ig">◎</div><h3>Instagram</h3><div class="reach">Visual discovery</div><p>Strong for visual products, brands and creators.</p><p><b>Typical age:</b> 18–44</p><p><b>Gender:</b> All</p><p><b>Area:</b> Local, national or international targeting</p></label>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="x"><div class="platform-logo x">𝕏</div><h3>X</h3><div class="reach">Conversation</div><p>Useful for real-time discovery and communities.</p><p><b>Typical age:</b> 18–49</p><p><b>Gender:</b> All</p><p><b>Area:</b> Interest and location-led audiences</p></label>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="whatsapp"><div class="platform-logo wa">◉</div><h3>WhatsApp</h3><div class="reach">Direct customers</div><p>Sell through conversations and existing contacts.</p><p><b>Typical age:</b> Broad adult audience</p><p><b>Gender:</b> All</p><p><b>Area:</b> Your customer/contact footprint</p></label>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="tiktok"><div class="platform-logo tt">♪</div><h3>TikTok</h3><div class="reach">Video discovery</div><p>Discovery-led channel with a strong younger audience.</p><p><b>Typical age:</b> 18–34</p><p><b>Gender:</b> All</p><p><b>Area:</b> Local, national or international targeting</p></label>
-<label class="channel-card"><input type="checkbox" name="channels[]" value="google"><div class="platform-logo gg">G</div><h3>Google Shopping</h3><div class="reach">High intent</div><p>Reach people actively searching for products.</p><p><b>Typical age:</b> Broad</p><p><b>Gender:</b> All</p><p><b>Area:</b> Search and location targeting</p></label>
-</div><div class="audience-note">Exact population/reach numbers are not hard-coded because they change by country, area, date, targeting settings and platform. Teyza can later connect live audience-estimate APIs where supported.</div>
-<div class="wizard-actions"><button class="button" type="button" data-back="1">← Product details</button><button class="button button-primary" type="button" data-next="3">Preview product →</button></div></div></section>
+<section class="product-wizard-shell">
+  <header class="product-wizard-header">
+    <div>
+      <span class="product-kicker">TEYZA PRODUCT PUBLISHER</span>
+      <h1>Add a product</h1>
+      <p>Add the product, confirm your saved selling setup, then review and publish.</p>
+    </div>
 
-<section class="wizard-page" data-step="3"><div class="wizard-card"><span class="eyebrow">STEP 3 OF 3</span><h2>Review before submitting</h2><p>Check how your listing looks. You can go back and make changes before sending it to Teyza verification.</p>
-<div class="preview-layout"><div class="preview-image" data-preview-image><span class="muted">Your product image</span></div><div><span class="status-pill status-pending">Pending verification</span><h2 data-preview-name style="font-size:27px;margin-top:15px">Your product</h2><div class="preview-price" data-preview-price>R0.00</div><p data-preview-description></p><p><b>Category:</b> <span data-preview-category></span></p><p><b>Stock:</b> <span data-preview-stock></span></p><p><b>Target population:</b> <span data-preview-population></span></p><p><b>Reach fee:</b> <strong data-preview-reach-price>R0</strong></p><h3 style="margin:22px 0 10px">Selected selling channels</h3><div class="selected-channels" data-preview-channels></div></div></div>
-<div class="pending-box" style="margin-top:24px"><strong>What happens next?</strong><br>Your listing will be saved with <b>Pending</b> status. Teyza will verify the product information and images before it becomes eligible for publishing to your selected connected platforms.</div>
-<div class="wizard-actions"><button class="button" type="button" data-back="2">← Selling platforms</button><button class="button button-primary" type="submit">Submit for verification</button></div><p data-product-status role="status" hidden></p></div></section><section class="success-panel wizard-card" data-submit-success><div class="success-icon">✓</div><span class="eyebrow">SUBMITTED</span><h2>Your product is pending verification</h2><p data-success-message>Teyza has received your product. We’ll verify the information and images before it becomes eligible for your selected channels.</p><div class="success-actions"><button class="button button-primary" type="button" data-add-new>＋ Add new product</button><a class="button" href="#products">View products</a></div></section></form>
+    <div class="product-stepper" aria-label="Product publishing progress">
+      <div class="product-step active" data-step-indicator="1">
+        <span>1</span>
+        <div><strong>Product</strong><small>Details & photos</small></div>
+      </div>
+      <i></i>
+      <div class="product-step" data-step-indicator="2">
+        <span>2</span>
+        <div><strong>Where to sell</strong><small>Confirm setup</small></div>
+      </div>
+      <i></i>
+      <div class="product-step" data-step-indicator="3">
+        <span>3</span>
+        <div><strong>Review</strong><small>Check & publish</small></div>
+      </div>
+    </div>
+  </header>
 
+  <form data-product-form novalidate>
+    <p class="product-form-status" data-product-status role="status" hidden></p>
+
+    <section class="product-step-page active" data-step="1">
+      <div class="product-card">
+        <div class="product-card-heading">
+          <div><span class="product-kicker">STEP 1 OF 3</span><h2>Tell customers about your product</h2>
+          <p>Keep the information clear and useful. You can edit it later.</p></div>
+        </div>
+
+        <div class="product-form-grid">
+          <label>Product name <input name="name" required placeholder="e.g. Premium leather handbag"></label>
+          <label>SKU / product code <input name="sku" required placeholder="e.g. BAG-001"></label>
+          <label>Category <input name="category" required placeholder="e.g. Fashion & accessories"></label>
+          <label>Brand <input name="brand" placeholder="Brand name"></label>
+          <label>Selling price (ZAR) <input name="price" type="number" min="0" step=".01" required placeholder="0.00"></label>
+          <label>Cost price (ZAR) <input name="costPrice" type="number" min="0" step=".01" placeholder="0.00"></label>
+          <label>Stock available <input name="stock" type="number" min="0" step="1" required placeholder="0"></label>
+          <label>Condition
+            <select name="condition">
+              <option>New</option><option>Used - like new</option><option>Used - good</option><option>Refurbished</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="product-wide-field">Product description
+          <textarea name="description" required placeholder="Describe features, size, material, benefits and anything customers should know."></textarea>
+        </label>
+
+        <div class="product-photo-uploader">
+          <div class="product-photo-icon">＋</div>
+          <div><strong>Add product photos</strong><p>Add at least 2 images. JPG, PNG or WebP. Use clear photos from different angles.</p></div>
+          <label class="product-file-button">Choose photos<input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple required></label>
+          <div class="product-image-preview" data-image-preview></div>
+          <div class="product-upload-progress" data-upload-progress hidden>
+            <div><span data-upload-bar></span></div><p data-upload-text>Preparing images…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-wizard-actions">
+        <a class="product-button secondary" href="#products">Cancel</a>
+        <button class="product-button primary" type="button" data-next="2">Continue →</button>
+      </div>
+    </section>
+
+    <section class="product-step-page" data-step="2">
+      <div class="product-card">
+        <div class="product-card-heading product-card-heading-row">
+          <div><span class="product-kicker">STEP 2 OF 3</span><h2>Confirm where you sell</h2>
+          <p>This is your saved seller setup from onboarding. You do not need to configure it again for every product.</p></div>
+          <button class="product-button secondary compact" type="button" data-edit-selling>Edit where to sell</button>
+        </div>
+
+        <div class="selling-confirm-grid">
+          <article class="selling-confirm-card">
+            <span class="selling-confirm-icon">⌖</span>
+            <div class="selling-confirm-copy">
+            <div class="selling-confirm-title"><small>SELLING AREA</small><button type="button" class="inline-edit" data-detect-selling-area>Use current location</button></div>
+            <strong data-confirm-area>Detecting your current location…</strong>
+            <p data-confirm-audience>Your current location will be used as your primary selling area.</p>
+            <div class="selling-area-list" data-selling-area-list></div>
+            <button type="button" class="add-area-button" data-add-selling-area>+ Add another selling area</button>
+            <div class="reach-builder">
+              <div class="reach-builder-head"><div><small>POTENTIAL REACH</small><strong data-reach-value>5,000 people</strong></div><strong data-reach-cost>Included</strong></div>
+              <input type="range" name="targetPopulation" min="5000" max="50000" step="1000" value="5000" data-reach-slider>
+              <div class="reach-scale"><span>5,000</span><span>50,000</span></div>
+              <p><strong>5,000 people included.</strong> Increase reach for R20 per additional 1,000 people.</p>
+            </div>
+          </div>
+          </article>
+
+          <article class="selling-confirm-card">
+            <span class="selling-confirm-icon">◎</span>
+            <div><small>SELLING CHANNELS</small><strong>Teyza Store is always included</strong>
+            <div class="confirmed-channel-list" data-confirm-channels><span>Loading connected channels…</span></div></div>
+          </article>
+
+          <article class="selling-confirm-card">
+            <span class="selling-confirm-icon">→</span>
+            <div class="selling-confirm-copy"><div class="selling-confirm-title"><small>DELIVERY</small><button type="button" class="inline-edit" data-edit-delivery>Edit</button></div>
+            <strong data-confirm-delivery>Loading delivery setup…</strong>
+            <p data-confirm-delivery-address></p></div>
+          </article>
+
+          <article class="selling-confirm-card">
+            <span class="selling-confirm-icon">R</span>
+            <div class="selling-confirm-copy"><div class="selling-confirm-title"><small>STANDARD DELIVERY FEE</small><button type="button" class="inline-edit" data-edit-delivery-fee>Edit</button></div>
+            <strong data-confirm-delivery-fee>Loading…</strong>
+            <p data-confirm-delivery-fee-note>Saved from seller onboarding.</p></div>
+          </article>
+        </div>
+
+        <!-- Hidden submission fields populated from the saved onboarding setup. -->
+        <input type="hidden" name="targetArea">
+        <input type="hidden" name="targetLat">
+        <input type="hidden" name="targetLng">
+        <input type="hidden" name="targetGender" value="all">
+        <input type="hidden" name="sellingAreas" value="[]">
+        <input type="hidden" name="deliveryMethod">
+        <input type="hidden" name="deliveryProvider">
+        <input type="hidden" name="deliveryFee" value="0">
+
+        <div class="channel-grid product-hidden-channels" data-channel-grid aria-hidden="true">
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="facebook"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="instagram"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="whatsapp"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="google"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="x"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="youtube"></label>
+          <label class="channel-card"><input type="checkbox" name="channels[]" value="tiktok"></label>
+        </div>
+
+        <div class="selling-confirm-note">
+          <strong>Need to change something?</strong>
+          <span>Update your seller settings once and Teyza will use the new setup for future products.</span>
+        </div>
+      </div>
+
+      <div class="product-wizard-actions">
+        <button class="product-button secondary" type="button" data-back="1">← Back</button>
+        <button class="product-button primary" type="button" data-next="3">Confirm & continue →</button>
+      </div>
+    </section>
+
+    <section class="product-step-page" data-step="3">
+      <div class="product-card">
+        <div class="product-card-heading">
+          <div><span class="product-kicker">STEP 3 OF 3</span><h2>Review your product</h2>
+          <p>Check the listing and selling setup before sending it to Teyza for verification.</p></div>
+        </div>
+
+        <div class="product-review-layout">
+          <div class="product-review-image" data-preview-image><span>Your product image</span></div>
+          <div class="product-review-copy">
+            <span class="review-status">Ready to submit</span>
+            <h2 data-preview-name>Your product</h2>
+            <div class="product-review-price" data-preview-price>R0.00</div>
+            <p data-preview-description></p>
+            <dl>
+              <div><dt>Category</dt><dd data-preview-category>—</dd></div>
+              <div><dt>Stock</dt><dd data-preview-stock>—</dd></div>
+              <div><dt>Selling area</dt><dd data-review-area>—</dd></div>
+              <div><dt>Potential reach</dt><dd data-review-reach>5,000 people</dd></div>
+              <div><dt>Reach boost</dt><dd data-review-reach-fee>Included</dd></div>
+              <div><dt>Delivery</dt><dd data-review-delivery>—</dd></div>
+              <div><dt>Delivery fee</dt><dd data-review-delivery-fee>—</dd></div>
+            </dl>
+            <div class="review-channels"><small>SELLING ON</small><div class="selected-channels" data-preview-channels></div></div>
+            <span data-preview-population hidden></span><span data-preview-reach-price hidden></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-wizard-actions">
+        <button class="product-button secondary" type="button" data-back="2">← Back</button>
+        <button class="product-button primary publish" type="submit">Submit for verification</button>
+      </div>
+    </section>
+  </form>
+
+  <section class="product-success" data-submit-success>
+    <div class="product-success-icon">✓</div>
+    <h2>Product submitted</h2>
+    <p data-success-message>Your product has been sent to Teyza admin for verification.</p>
+    <div><a class="product-button primary" href="#products">View products</a><button class="product-button secondary" type="button" data-add-new>Add another product</button></div>
+  </section>
+</section>
+</div>
+
+
+
+
+
+<div class="selling-channel-modal" data-area-editor hidden>
+  <div class="selling-channel-modal-card" role="dialog" aria-modal="true" aria-labelledby="areaEditorTitle">
+    <div class="selling-channel-modal-head">
+      <div><span class="product-kicker">SELLING AREA</span><h2 id="areaEditorTitle">Add another selling area</h2>
+      <p>Add another town, suburb, ward or city where you want customers to discover this product.</p></div>
+      <button class="selling-channel-close" type="button" data-close-area-editor aria-label="Close">×</button>
+    </div>
+    <div class="delivery-editor-fields">
+      <label>Search area
+        <input type="text" data-area-search placeholder="e.g. Umhlanga, Durban CBD, Pinetown">
+      </label>
+      <div class="area-search-results" data-area-search-results></div>
+    </div>
+    <div class="selling-channel-actions">
+      <button class="product-button secondary" type="button" data-cancel-area-editor>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="selling-channel-modal" data-delivery-editor hidden>
+  <div class="selling-channel-modal-card" role="dialog" aria-modal="true" aria-labelledby="deliveryEditorTitle">
+    <div class="selling-channel-modal-head">
+      <div><span class="product-kicker">DELIVERY</span><h2 id="deliveryEditorTitle">Edit delivery</h2>
+      <p>Choose how this product will be delivered.</p></div>
+      <button class="selling-channel-close" type="button" data-close-delivery-editor aria-label="Close">×</button>
+    </div>
+    <div class="delivery-editor-fields">
+      <label>Delivery method
+        <select data-delivery-method>
+          <option value="Delivery">Delivery</option>
+          <option value="Courier">Courier</option>
+          <option value="Collection">Customer collection</option>
+          <option value="Own delivery">Own delivery</option>
+        </select>
+      </label>
+      <label>Provider
+        <input type="text" data-delivery-provider placeholder="e.g. The Courier Guy, PAXI, Pargo">
+      </label>
+      <label>Standard delivery fee (R)
+        <input type="number" data-delivery-fee min="0" step="1" placeholder="0">
+        <small>Enter 0 for free delivery.</small>
+      </label>
+    </div>
+    <div class="selling-channel-actions">
+      <button class="product-button secondary" type="button" data-cancel-delivery-editor>Cancel</button>
+      <button class="product-button primary" type="button" data-save-delivery-editor>Save delivery</button>
+    </div>
+  </div>
+</div>
+
+<div class="selling-channel-modal" data-selling-channel-modal hidden>
+  <div class="selling-channel-modal-card" role="dialog" aria-modal="true" aria-labelledby="sellingChannelTitle">
+    <div class="selling-channel-modal-head">
+      <div>
+        <span class="product-kicker">WHERE TO SELL</span>
+        <h2 id="sellingChannelTitle">Choose selling channels</h2>
+        <p>Select where this product should be sold. Teyza Store is always included.</p>
+      </div>
+      <button class="selling-channel-close" type="button" data-close-selling-channels aria-label="Close">×</button>
+    </div>
+    <div class="selling-channel-options" data-selling-channel-options></div>
+    <p class="selling-channel-help"><strong>Build the selling list now.</strong> Connected channels can publish after approval. Disconnected channels can also be selected and will stay on the product as <b>connect later</b> until that seller account is linked.</p>
+    <div class="selling-channel-actions">
+      <button class="product-button secondary" type="button" data-cancel-selling-channels>Cancel</button>
+      <button class="product-button primary" type="button" data-save-selling-channels>Save selling list</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="performance-modal" data-performance-modal hidden>
+  <div class="performance-modal-card" role="dialog" aria-modal="true" aria-labelledby="performanceTitle">
+    <div class="performance-modal-head">
+      <div>
+        <span class="product-kicker">PRODUCT PERFORMANCE</span>
+        <h2 id="performanceTitle" data-performance-title>Performance</h2>
+        <p>Provider metrics are shown only when the connected provider makes them available.</p>
+      </div>
+      <button class="selling-channel-close" type="button" data-close-performance aria-label="Close">×</button>
+    </div>
+
+    <div class="performance-periods">
+      <button type="button" data-performance-period="today">Today</button>
+      <button type="button" data-performance-period="7">7 days</button>
+      <button type="button" class="active" data-performance-period="30">30 days</button>
+      <button type="button" data-performance-period="all">All time</button>
+    </div>
+
+    <div class="performance-loading" data-performance-loading>Loading performance…</div>
+    <div class="performance-content" data-performance-content hidden></div>
+  </div>
+</div>
 
 <div class="product-modal" data-product-modal><div class="product-modal-card"><button class="button modal-close" type="button" data-close-product>✕</button><div data-product-detail></div></div></div></div>
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
-<script type="module" src="js/products-data.js?v=26"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="js/products-data.js?v=50"></script>
 </body></html>

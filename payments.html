@@ -1,29 +1,167 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Banking | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#087f5b">
+  <title>Banking | Teyza</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/workspace.css?v=20">
+  <link rel="stylesheet" href="assets/simple-workspace.css?v=4">
+  <link rel="stylesheet" href="assets/payout-banking.css?v=2">
+</head>
 <body class="workspace" data-page="payments">
-<a href="#main-content" class="skip-link">Skip to content</a>
-<aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
-<div class="workspace-switch"><span class="workspace-avatar" data-business-initial>B</span><div><strong data-business-name>Your business</strong><small>Business workspace</small></div></div>
-<nav aria-label="Primary navigation"><div class="nav-group"><p class="nav-group-label">Workspace</p><a class="nav-link" href="dashboard.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a><a class="nav-link active" href="payments.html" aria-current="page"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 9h20M6 15h4"/></svg><span>Banking</span></a><a class="nav-link" href="products.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg><span>Products</span></a><a class="nav-link" href="settings.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg><span>Settings</span></a></div></nav>
-<div class="sidebar-footer"><button class="nav-link" data-logout type="button"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h11"/></svg><span>Sign out</span></button><small>TEYZA · Everyone can sell.</small></div></aside>
-<button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
-<div class="workspace-main"><header class="workspace-topbar"><div class="breadcrumb"><button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Banking</strong></div><a class="account-link" href="settings.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a></header>
-<main class="page-main teyza-app-home" id="main-content">
-<section class="app-home-head"><div class="app-profile"><span class="app-profile-avatar"><i class="ph ph-wallet"></i></span><div class="app-profile-copy"><small>Your money</small><h1>Banking</h1></div></div><div class="app-home-actions"><a class="app-icon-button" href="seller-onboarding.html#payment-setup" aria-label="Banking settings"><i class="ph ph-gear"></i></a></div></section>
-<div class="workspace-alert" data-workspace-status role="status" hidden></div>
-<section class="app-pulse-grid">
- <article class="app-pulse-card"><span class="app-pulse-icon"><i class="ph ph-check-circle"></i></span><div><strong data-bank-paid>—</strong><small>Paid sales</small><div class="app-card-link">Received on orders</div></div></article>
- <article class="app-pulse-card"><span class="app-pulse-icon"><i class="ph ph-clock"></i></span><div><strong data-bank-pending>—</strong><small>Pending</small><div class="app-card-link">Awaiting payment</div></div></article>
- <article class="app-pulse-card"><span class="app-pulse-icon"><i class="ph ph-chart-line-up"></i></span><div><strong data-bank-total>—</strong><small>Total sales</small><div class="app-card-link">All recorded orders</div></div></article>
-</section>
-<section class="app-stream-grid">
- <article class="app-stream-card"><div class="app-stream-head"><h2>Settlement account</h2><a href="seller-onboarding.html#payment-setup">Edit →</a></div><div class="profile-detail"><span>Bank</span><strong data-bank-name>Not set</strong></div><div class="profile-detail"><span>Account holder</span><strong data-bank-holder>—</strong></div><div class="profile-detail"><span>Account</span><strong data-bank-account>—</strong></div><div class="profile-detail"><span>Branch code</span><strong data-bank-branch>—</strong></div><p class="field-help">Teyza shows your saved settlement preference here. Order payment status is based on your recorded sales.</p></article>
- <article class="app-stream-card"><div class="app-stream-head"><h2>Money tools</h2></div><div class="app-shortcuts" style="display:grid;grid-template-columns:1fr 1fr;overflow:visible"><a class="app-shortcut" href="seller-onboarding.html#payment-setup"><i class="ph ph-bank"></i><strong>Banking details</strong><small>Choose where you get paid</small></a><a class="app-shortcut" href="orders.html"><i class="ph ph-receipt"></i><strong>Orders</strong><small>Review payment status</small></a></div></article>
-</section>
-<section class="app-stream-card"><div class="app-stream-head"><div><h2>Transactions</h2><p>Sales recorded in your Teyza orders.</p></div><a href="orders.html">Orders →</a></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Amount</th></tr></thead><tbody data-bank-transactions><tr><td colspan="4">Loading transactions…</td></tr></tbody></table></div></section>
+  <a href="#main-content" class="skip-link">Skip to content</a>
 
-</main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
-<script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
-<script type="module" src="js/banking-data.js?v=1"></script>
-</body></html>
+  <aside class="workspace-sidebar" id="sidebar">
+    <a class="workspace-brand" href="dashboard.html">
+      <span class="teyza-logo-mark"><span>T</span></span>
+      <span class="teyza-word">TEYZA<small>Everyone can sell.</small></span>
+    </a>
+
+    <div class="workspace-switch">
+      <span class="workspace-avatar" data-business-initial>B</span>
+      <div>
+        <strong data-business-name>Your business</strong>
+        <small>Business workspace</small>
+      </div>
+    </div>
+
+    <nav aria-label="Primary navigation">
+      <div class="nav-group">
+        <p class="nav-group-label">Workspace</p>
+        <a class="nav-link" href="dashboard.html"><span>Dashboard</span></a>
+        <a class="nav-link active" href="payments.html" aria-current="page"><span>Banking</span></a>
+        <a class="nav-link" href="products.html"><span>Products</span></a>
+        <a class="nav-link" href="settings.html"><span>Settings</span></a>
+      </div>
+    </nav>
+  </aside>
+
+  <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
+
+  <div class="workspace-main">
+    <header class="workspace-topbar">
+      <div class="breadcrumb">
+        <button class="menu-toggle" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" type="button">☰</button>
+        <span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Banking</strong>
+      </div>
+      <a class="account-link" href="settings.html"><span data-auth-name>My account</span><span class="account-avatar" data-auth-initial>U</span></a>
+    </header>
+
+    <main class="page-main payout-page" id="main-content">
+      <div class="page-heading">
+        <div>
+          <span class="payout-kicker">SELLER PAYOUTS</span>
+          <h1>Where should Teyza pay you?</h1>
+          <p>Add the South African bank account where you want to receive your Teyza sales.</p>
+        </div>
+      </div>
+
+      <div class="workspace-alert" data-workspace-status role="status" hidden></div>
+
+      <section class="payout-connected-card" data-payout-summary hidden>
+        <div class="payout-summary-icon">✓</div>
+        <div class="payout-summary-copy">
+          <span class="payout-status-pill">Payout account connected</span>
+          <h2 data-payout-bank>Bank account</h2>
+          <p><strong data-payout-holder>Account holder</strong> · <span data-payout-last4>••••</span></p>
+          <p class="payout-helper">Eligible Teyza sales can be settled to this account through Paystack.</p>
+        </div>
+        <button class="button" type="button" data-change-payout>Change payout account</button>
+      </section>
+
+      <section class="payout-form-card" data-payout-form-card>
+        <div class="payout-card-head">
+          <div>
+            <h2>Payout bank account</h2>
+            <p>Teyza validates your South African bank account before connecting it to Paystack.</p>
+          </div>
+          <span class="payout-security">🔒 Secure setup</span>
+        </div>
+
+        <form data-payout-form>
+          <label class="payout-field">
+            <span>Bank</span>
+            <select name="bankCode" data-bank-select required>
+              <option value="">Loading supported South African banks…</option>
+            </select>
+          </label>
+
+          <label class="payout-field">
+            <span>Account number</span>
+            <input name="accountNumber" inputmode="numeric" autocomplete="off" required placeholder="Enter account number">
+          </label>
+
+          <label class="payout-field">
+            <span>Account holder name</span>
+            <input name="accountName" autocomplete="name" required placeholder="Exactly as registered with the bank">
+          </label>
+
+          <label class="payout-field">
+            <span>Account ownership</span>
+            <select name="accountOwnership" data-account-ownership required>
+              <option value="personal">Personal account</option>
+              <option value="business">Business account</option>
+            </select>
+          </label>
+
+          <label class="payout-field" data-document-type-wrap>
+            <span>Identification type</span>
+            <select name="documentType" data-document-type required>
+              <option value="identityNumber">South African ID number</option>
+              <option value="passportNumber">Passport number</option>
+            </select>
+          </label>
+
+          <label class="payout-field">
+            <span data-document-number-label>South African ID number</span>
+            <input name="documentNumber" autocomplete="off" required placeholder="Used once for Paystack bank validation">
+          </label>
+
+          <div class="payout-privacy-note">
+            <strong>Why is this required?</strong>
+            <span>South African bank verification uses Paystack Account Validation. Your ID or business registration number is sent securely to Paystack for this check and is not stored in your normal Teyza workspace.</span>
+          </div>
+
+          <label class="payout-confirm">
+            <input type="checkbox" name="confirmAccount" required>
+            <span>I confirm these are the correct payout banking and identity details for this account.</span>
+          </label>
+
+          <button class="button button-primary payout-connect-button" type="submit" data-connect-payout>
+            Verify &amp; connect payout account
+          </button>
+
+          <div class="payout-form-status" data-payout-status hidden></div>
+        </form>
+      </section>
+
+      <section class="payout-info-grid">
+        <article>
+          <span>01</span>
+          <strong>Buyer pays securely</strong>
+          <p>Customer payments are processed through Teyza's Paystack checkout.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <strong>Teyza applies the split</strong>
+          <p>When split payments are enabled, Teyza's platform fee and your seller share are calculated server-side.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <strong>Your share settles</strong>
+          <p>Paystack settles your seller share to this connected payout account.</p>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/workspace.js?v=6"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/guard.js?v=8"></script>
+  <script type="module" src="js/payout-banking.js?v=2"></script>
+</body>
+</html>

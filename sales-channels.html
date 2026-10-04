@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Sales channels | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Sales channels | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"><link rel="stylesheet" href="assets/sales-channels-extra.css?v=1"></head>
 <body class="workspace" data-page="sales-channels">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -13,37 +13,72 @@
 <section class="hero">
     <h2>Where do you want to sell?</h2>
     <p>Connect the business accounts you already use. Your connection status updates after your account is verified.</p>
-    <div class="summary" id="connectionSummary">Checking connections…</div>
+    <div class="summary" id="connectionSummary">Checking connections…</div><p class="channel-directory-note">All Teyza selling channels are listed below. Connected accounts show <b>Connected</b>; the others remain available to connect when the seller is ready.</p>
   </section>
   <div class="notice" id="connectionNotice" hidden></div>
   <section class="channels">
-    <article class="card">
+    <article class="card" id="channel-facebook" data-channel-card="facebook">
       <div class="icon"><i class="ph ph-facebook-logo"></i></div>
       <div><div class="title">Facebook</div><div class="desc">Connect your Facebook Page through Meta and publish approved Teyza products to that Page.</div><span class="status" data-status="facebook">Checking…</span></div>
       <button class="btn" data-connect="facebook">Connect</button>
       <div class="chooser" data-chooser="facebook"></div>
     </article>
-    <article class="card">
+    <article class="card" id="channel-instagram" data-channel-card="instagram">
       <div class="icon"><i class="ph ph-instagram-logo"></i></div>
       <div><div class="title">Instagram</div><div class="desc">Connect a Professional Instagram account through the Facebook Page that owns it.</div><span class="status" data-status="instagram">Checking…</span></div>
       <button class="btn" data-connect="instagram">Connect</button>
       <div class="chooser" data-chooser="instagram"></div>
       <div class="channel-help-card" data-channel-help="instagram"><strong>Instagram is optional</strong><span>You can connect it later without blocking your Teyza setup.</span></div>
     </article>
-    <article class="card">
+    <article class="card" id="channel-whatsapp" data-channel-card="whatsapp">
       <div class="icon"><i class="ph ph-whatsapp-logo"></i></div>
       <div><div class="title">WhatsApp Business</div><div class="desc">Link the seller WhatsApp Business account and number used for customer messages and sales.</div><span class="status" data-status="whatsapp">Checking…</span></div>
       <button class="btn" data-connect="whatsapp">Connect</button>
       <div class="chooser" data-chooser="whatsapp"></div>
       <div class="channel-help-card" data-channel-help="whatsapp"><strong>WhatsApp is optional</strong><span>If you do not have WhatsApp Business yet, skip it and connect later.</span></div>
     </article>
-    <article class="card">
+    <article class="card" id="channel-google" data-channel-card="google">
       <div class="icon"><i class="ph ph-google-logo"></i></div>
       <div><div class="title">Google Shopping</div><div class="desc">Connect Merchant Center and confirm the account Teyza should publish products to.</div><span class="status" data-status="google">Checking…</span></div>
       <button class="btn" data-connect="google">Connect</button>
       <div class="chooser" data-chooser="google"></div>
     </article>
-    <article class="card">
+    <article class="card" id="channel-x" data-channel-card="x">
+      <div class="icon"><span aria-hidden="true" style="font-size:24px;font-weight:800">𝕏</span></div>
+      <div><div class="title">X</div><div class="desc">Connect the seller's X account using OAuth. Teyza will use only the permissions approved by the seller.</div><span class="status" data-status="x">Checking…</span></div>
+      <button class="btn" data-connect="x">Connect</button>
+      <div class="channel-help-card"><strong>Seller-authorized connection</strong><span>Approved product publishing to X can be enabled from this connection. X API usage may consume developer credits.</span></div>
+    </article>
+
+    <article class="card" id="channel-youtube" data-channel-card="youtube">
+      <div class="icon"><i class="ph ph-youtube-logo"></i></div>
+      <div>
+        <div class="title">YouTube</div>
+        <div class="desc">Connect the seller's YouTube channel for product videos, Shorts and supported analytics.</div>
+        <span class="status" data-status="youtube">Checking…</span>
+      </div>
+      <button class="btn" data-connect="youtube">Connect</button>
+      <div class="channel-help-card">
+        <strong>Video-first selling channel</strong>
+        <span>Teyza connects the seller's own YouTube channel. Product videos/Shorts can use this authorization when publishing is enabled.</span>
+      </div>
+    </article>
+
+    <article class="card" id="channel-tiktok" data-channel-card="tiktok">
+      <div class="icon"><span aria-hidden="true" style="font-size:23px;font-weight:900">♪</span></div>
+      <div>
+        <div class="title">TikTok</div>
+        <div class="desc">Connect the seller's TikTok account for product videos, photo posts and supported performance data.</div>
+        <span class="status" data-status="tiktok">Checking…</span>
+      </div>
+      <button class="btn" data-connect="tiktok">Connect</button>
+      <div class="channel-help-card">
+        <strong>Content Posting API</strong>
+        <span>Direct public posting requires TikTok approval/audit for the required publishing permission. Connection can still be configured first.</span>
+      </div>
+    </article>
+
+    <article class="card" id="channel-teyza" data-channel-card="teyza">
       <div class="icon"><i class="ph ph-storefront"></i></div>
       <div><div class="title">Teyza Store</div><div class="desc">Manage your catalog, orders and shop settings directly in Teyza.</div><span class="status connected">Included in your workspace</span></div>
       <a class="button" href="store.html">Manage store</a>
@@ -61,7 +96,7 @@
 
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
-<script type="module" src="js/social-connections.js?v=8"></script>
+<script type="module" src="js/social-connections.js?v=12"></script>
 <script>
 const params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard →'}
 </script>

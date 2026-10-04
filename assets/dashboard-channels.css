@@ -1,0 +1,125 @@
+
+.dashboard-sales-channels{
+  margin:18px 0 20px;
+}
+.dashboard-sales-channels-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:10px;
+}
+.dashboard-sales-channels-head>div{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+.dashboard-sales-channels-head strong{
+  font-size:14px;
+  color:#12392e;
+}
+.dashboard-sales-channels-head span{
+  font-size:12px;
+  color:#72837a;
+}
+.dashboard-manage-channels{
+  color:#087f5b;
+  font-size:12px;
+  font-weight:800;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.dashboard-channel-scroll{
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  padding:2px 2px 8px;
+  overscroll-behavior-inline:contain;
+}
+.dashboard-channel-pill{
+  position:relative;
+  min-width:150px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px 10px 10px;
+  border:1px solid #dce7e1;
+  border-radius:18px;
+  background:#f8fbf9;
+  color:#133a2f;
+  text-decoration:none;
+  transition:.16s ease;
+}
+.dashboard-channel-pill:hover{
+  transform:translateY(-1px);
+  border-color:#abd7c5;
+  background:#fff;
+}
+.dashboard-channel-logo{
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  flex:0 0 38px;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+  font-weight:900;
+  background:#edf3ef;
+}
+.dashboard-channel-logo i{
+  font-size:22px;
+}
+.logo-teyza{background:#11865f;color:#fff;font-style:italic}
+.logo-facebook{background:#e8f1ff;color:#1877f2}
+.logo-instagram{background:#f8eaf2;color:#d62976}
+.logo-whatsapp{background:#e6f8ed;color:#12a45b}
+.logo-google{background:#fff;color:#4285f4;border:1px solid #e4e9e6}
+.logo-x{background:#111;color:#fff}
+.logo-youtube{background:#fff0f0;color:#ff0000}
+.logo-tiktok{background:#111;color:#fff}
+.dashboard-channel-copy{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.dashboard-channel-copy strong{
+  font-size:13px;
+  white-space:nowrap;
+}
+.dashboard-channel-copy small{
+  font-size:11px;
+  color:#7b8a82;
+  white-space:nowrap;
+}
+.dashboard-channel-dot{
+  position:absolute;
+  top:9px;
+  right:9px;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#bac4be;
+}
+.dashboard-channel-pill.is-connected{
+  border-color:#c4e5d6;
+  background:#f2fbf6;
+}
+.dashboard-channel-pill.is-connected .dashboard-channel-dot{
+  background:#0f9568;
+}
+.dashboard-channel-pill.is-connected .dashboard-channel-copy small{
+  color:#087f5b;
+  font-weight:800;
+}
+@media(max-width:700px){
+  .dashboard-sales-channels-head>div{
+    display:block;
+  }
+  .dashboard-sales-channels-head span{
+    display:none;
+  }
+  .dashboard-channel-pill{
+    min-width:136px;
+  }
+}

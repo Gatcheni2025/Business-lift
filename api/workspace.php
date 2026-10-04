@@ -30,14 +30,220 @@ function loadWorkspace(array $firebase): array {
   file_put_contents($path,json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); return $workspace;
 }
 function saveWorkspace(array $firebase,array $workspace): void { file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); }
-function companyApproval(array $workspace): array {$a=$workspace['companyApproval']??[];return ['status'=>$a['status']??'pending','submittedAt'=>$a['submittedAt']??null,'reviewedAt'=>$a['reviewedAt']??null,'note'=>$a['note']??''];}
+function companyApproval(array $workspace): array {$a=$workspace['companyApproval']??[];return ['status'=>$a['status']??'pending','submittedAt'=>$a['submittedAt']??null,'reviewedAt'=>$a['reviewedAt']??null,'reviewedBy'=>$a['reviewedBy']??null,'note'=>$a['note']??''];}
 function adminRegistry(): array {$path=dirname(__DIR__).'/../private_html/teyza-admins.json';$saved=is_file($path)?json_decode((string)file_get_contents($path),true):[];$admins=is_array($saved)?$saved:[];$bootstrap='admin@teyza.co.za';$exists=false;foreach($admins as $a){if(strtolower((string)($a['email']??''))===$bootstrap){$exists=true;break;}}if(!$exists)$admins[]=['email'=>$bootstrap,'role'=>'super_admin','active'=>true,'bootstrap'=>true];return $admins;}
 function adminRole(array $firebase): ?string {$email=strtolower(trim((string)($firebase['email']??'')));if($email==='admin@teyza.co.za')return 'super_admin';foreach(adminRegistry() as $a){if(!empty($a['active'])&&strtolower(trim((string)($a['email']??'')))===$email)return (string)($a['role']??'admin');}$configured=array_filter(array_map('trim',explode(',',strtolower((string)(getenv('TEYZA_ADMIN_EMAILS')?:'')))));return in_array($email,$configured,true)?'super_admin':null;}
 function isAdmin(array $firebase): bool {return adminRole($firebase)!==null;}
 function saveAdminRegistry(array $admins): void {$path=dirname(__DIR__).'/../private_html/teyza-admins.json';file_put_contents($path,json_encode($admins,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);}
-function loadAllSellers(): array {$out=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$out[]=['uid'=>$w['uid']??basename($path,'.json'),'email'=>$w['email']??'','business'=>$w['business']??[],'verification'=>verificationState($w,[]),'companyApproval'=>companyApproval($w),'createdAt'=>$w['createdAt']??null];}return $out;}
+function loadAllSellers(): array {
+  $out=[];
+  foreach(glob(dataDir().'/*.json')?:[] as $path){
+    $w=json_decode((string)file_get_contents($path),true);
+    if(!is_array($w))continue;
+    $out[]=[
+      'uid'=>$w['uid']??basename($path,'.json'),
+      'email'=>$w['email']??'',
+      'firstName'=>$w['firstName']??'',
+      'business'=>$w['business']??[],
+      'verification'=>verificationState($w,[]),
+      'companyApproval'=>companyApproval($w),
+      'setupFlow'=>$w['setupFlow']??[],
+      'sellerSetupComplete'=>!empty($w['sellerSetupComplete']),
+      'productCount'=>count($w['products']??[]),
+      'orderCount'=>count($w['orders']??[]),
+      'createdAt'=>$w['createdAt']??null
+    ];
+  }
+  usort($out,function($a,$b){
+    return strcmp((string)($b['createdAt']??''),(string)($a['createdAt']??''));
+  });
+  return $out;
+}
 function sameAddress(string $a,string $b): bool {return $a!==''&&$b!==''&&strtolower(preg_replace('/\s+/u',' ',trim($a)))===strtolower(preg_replace('/\s+/u',' ',trim($b)));}
 function canonicalPhone(string $phone): string {$digits=preg_replace('/\D+/','',$phone);return preg_match('/^0\d{9}$/',$digits)?'27'.substr($digits,1):$digits;}
+
+
+function adminPaymentView(array $settings): array {
+  $bank=$settings['banking']??[];
+  $payfast=$settings['payfast']??[];
+  $other=$settings['paymentPreferences']??[];
+
+  return [
+    'banking'=>[
+      'bankName'=>$bank['bankName']??'',
+      'accountHolder'=>$bank['accountHolder']??'',
+      'accountNumber'=>$bank['accountNumber']??'',
+      'accountNumberLast4'=>$bank['accountNumberLast4']??'',
+      'branchCode'=>$bank['branchCode']??'',
+      'accountType'=>$bank['accountType']??''
+    ],
+    'payfast'=>[
+      'merchantId'=>$payfast['merchantId']??'',
+      'connected'=>!empty($payfast['connected']),
+      'sandboxMode'=>!empty($payfast['sandboxMode']),
+      'merchantKeyConfigured'=>trim((string)($payfast['merchantKey']??''))!=='',
+      'passphraseConfigured'=>trim((string)($payfast['passphrase']??''))!==''
+    ],
+    'paymentPreferences'=>[
+      'otherGateway'=>$other['otherGateway']??''
+    ]
+  ];
+}
+
+function normalizeSellerChannels(array $workspace): array {
+  $settings=$workspace['settings']??[];
+  $raw=$settings['sellingChannels']??($settings['salesChannels']??($settings['channels']??[]));
+  $channels=[];
+
+  if(is_array($raw)){
+    if(array_is_list($raw)){
+      foreach($raw as $value){
+        if(is_string($value)&&trim($value)!=='')$channels[]=strtolower(trim($value));
+      }
+    }else{
+      $selected=$raw['selected']??($raw['channels']??[]);
+      if(is_array($selected)){
+        foreach($selected as $value){
+          if(is_string($value)&&trim($value)!=='')$channels[]=strtolower(trim($value));
+        }
+      }else{
+        foreach($raw as $key=>$value){
+          if($value===true||$value===1||$value==='1')$channels[]=strtolower((string)$key);
+        }
+      }
+    }
+  }
+
+  foreach(($workspace['products']??[]) as $product){
+    foreach(($product['channels']??[]) as $channel){
+      if(is_string($channel)&&trim($channel)!=='')$channels[]=strtolower(trim($channel));
+    }
+  }
+
+  array_unshift($channels,'teyza');
+  $channels=array_values(array_unique(array_filter($channels)));
+
+  return $channels;
+}
+
+function adminSellerChecklist(array $workspace): array {
+  $business=$workspace['business']??[];
+  $settings=$workspace['settings']??[];
+  $verification=verificationState($workspace,[]);
+  $approval=companyApproval($workspace);
+
+  $required=['businessName','businessType','industry','country','phone','address','about'];
+  $missing=[];
+  foreach($required as $key){
+    $value=trim((string)($business[$key]??''));
+    if($value===''||($key==='businessName'&&$value==='Your Teyza Store'))$missing[]=$key;
+  }
+
+  $businessProfileComplete=empty($missing);
+
+  $delivery=$settings['delivery']??[];
+  $deliveryComplete=
+    in_array((string)($delivery['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true) &&
+    isset($delivery['baseDeliveryFee']) &&
+    is_numeric($delivery['baseDeliveryFee']) &&
+    (float)$delivery['baseDeliveryFee']>=0 &&
+    !empty($verification['locationConfirmed']) &&
+    sameAddress(
+      (string)($delivery['pickupAddress']??''),
+      (string)($verification['location']['address']??'')
+    );
+
+  $bank=$settings['banking']??[];
+  $payfast=$settings['payfast']??[];
+  $other=$settings['paymentPreferences']??[];
+
+  $paymentComplete=
+    (
+      trim((string)($bank['bankName']??''))!=='' &&
+      trim((string)($bank['accountHolder']??''))!=='' &&
+      (
+        trim((string)($bank['accountNumber']??''))!=='' ||
+        trim((string)($bank['accountNumberLast4']??''))!==''
+      )
+    ) ||
+    (
+      trim((string)($payfast['merchantId']??''))!=='' &&
+      trim((string)($payfast['merchantKey']??''))!==''
+    ) ||
+    trim((string)($other['otherGateway']??''))!=='';
+
+  $audience=$settings['audience']??[];
+  $audienceComplete=trim((string)($audience['gender']??''))!=='';
+
+  $sellerSetupComplete=$deliveryComplete&&$paymentComplete&&$audienceComplete;
+  $verificationComplete=((int)($verification['completed']??0)>=4);
+  $approved=(($approval['status']??'pending')==='approved');
+
+  $items=[
+    ['key'=>'business','label'=>'Business profile','complete'=>$businessProfileComplete],
+    ['key'=>'logo','label'=>'Seller photo / business logo','complete'=>trim((string)($business['logoUrl']??''))!==''],
+    ['key'=>'phone','label'=>'Phone verification','complete'=>!empty($verification['phoneVerified'])],
+    ['key'=>'location','label'=>'Business location','complete'=>!empty($verification['locationConfirmed'])],
+    ['key'=>'proof','label'=>'Proof of address uploaded','complete'=>!empty($verification['proofOfAddressUploaded'])],
+    ['key'=>'proofMatch','label'=>'Proof matches confirmed address','complete'=>!empty($verification['proofAddressMatchVerified'])],
+    ['key'=>'identity','label'=>'Identity verification','complete'=>!empty($verification['identityVerified'])],
+    ['key'=>'delivery','label'=>'Delivery setup','complete'=>$deliveryComplete],
+    ['key'=>'payments','label'=>'Payment / banking setup','complete'=>$paymentComplete],
+    ['key'=>'audience','label'=>'Audience setup','complete'=>$audienceComplete],
+    ['key'=>'approval','label'=>'Admin approval','complete'=>$approved]
+  ];
+
+  $done=0;
+  foreach($items as $item)if(!empty($item['complete']))$done++;
+
+  return [
+    'items'=>$items,
+    'completed'=>$done,
+    'total'=>count($items),
+    'missingBusinessFields'=>$missing,
+    'businessProfileComplete'=>$businessProfileComplete,
+    'verificationComplete'=>$verificationComplete,
+    'deliveryComplete'=>$deliveryComplete,
+    'paymentComplete'=>$paymentComplete,
+    'audienceComplete'=>$audienceComplete,
+    'sellerSetupComplete'=>$sellerSetupComplete,
+    'dashboardAccess'=>$sellerSetupComplete,
+    'productReady'=>$sellerSetupComplete&&$businessProfileComplete&&$verificationComplete&&$approved
+  ];
+}
+
+function adminSellerDetail(array $workspace): array {
+  $settings=$workspace['settings']??[];
+  return [
+    'uid'=>$workspace['uid']??'',
+    'email'=>$workspace['email']??'',
+    'firstName'=>$workspace['firstName']??'',
+    'createdAt'=>$workspace['createdAt']??null,
+    'business'=>$workspace['business']??[],
+    'verification'=>verificationState($workspace,[]),
+    'verificationRaw'=>[
+      'phone'=>$workspace['verification']['phone']??null,
+      'location'=>$workspace['verification']['location']??null,
+      'proofOfAddress'=>$workspace['verification']['proofOfAddress']??null,
+      'identity'=>$workspace['verification']['identity']??null,
+      'identityDraft'=>$workspace['verification']['identityDraft']??null
+    ],
+    'companyApproval'=>companyApproval($workspace),
+    'setupFlow'=>$workspace['setupFlow']??[],
+    'sellerSetupComplete'=>!empty($workspace['sellerSetupComplete']),
+    'checklist'=>adminSellerChecklist($workspace),
+    'settings'=>[
+      'shop'=>$settings['shop']??[],
+      'delivery'=>$settings['delivery']??[],
+      'audience'=>$settings['audience']??[],
+      'setupGuide'=>$settings['setupGuide']??[],
+      'payments'=>adminPaymentView($settings),
+      'sellingChannels'=>normalizeSellerChannels($workspace)
+    ],
+    'products'=>$workspace['products']??[],
+    'orders'=>$workspace['orders']??[]
+  ];
+}
 
 $user=verifyFirebase(bearer()); $workspace=loadWorkspace($user); $action=$_GET['action']??'context';
 function verificationState(array $workspace,array $user): array {
@@ -51,6 +257,9 @@ function verificationState(array $workspace,array $user): array {
   $identityVerified=!empty($v['identity']['verified']);
   $identityStatus=(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted'));
   $identitySubmitted=!empty($v['identity']['submittedAt'])&&in_array($identityStatus,['pending','verified'],true);
+  $identityDraft=$v['identityDraft']??[];
+  $identityDocumentDraft=!empty($identityDraft['documentStoredName']);
+  $identitySelfieDraft=!empty($identityDraft['selfieStoredName']);
   $completed=(int)$phoneVerified+(int)$identitySubmitted+(int)$locationConfirmed+(int)$proofUploaded;
   return [
     'phoneVerified'=>$phoneVerified,
@@ -58,6 +267,13 @@ function verificationState(array $workspace,array $user): array {
     'identityVerified'=>$identityVerified,
     'identitySubmitted'=>$identitySubmitted,
     'identityStatus'=>$identityStatus,
+    'identityDocumentDraft'=>$identityDocumentDraft,
+    'identitySelfieDraft'=>$identitySelfieDraft,
+    'identityDraft'=>[
+      'documentOriginalName'=>$identityDraft['documentOriginalName']??null,
+      'documentUploadedAt'=>$identityDraft['documentUploadedAt']??null,
+      'selfieUploadedAt'=>$identityDraft['selfieUploadedAt']??null,
+    ],
     'locationConfirmed'=>$locationConfirmed,
     'proofOfAddressUploaded'=>$proofUploaded,
     'proofAddressMatchVerified'=>$proofAddressMatchVerified,
@@ -116,6 +332,17 @@ if($action==='admin-session'){if(!isAdmin($user))respond(403,['ok'=>false,'error
 if($action==='admin-overview'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);$s=loadAllSellers();$products=0;$orders=0;$pending=0;foreach($s as $seller){$path=pathFor($seller['uid']);$w=is_file($path)?json_decode((string)file_get_contents($path),true):[];$products+=count($w['products']??[]);$orders+=count($w['orders']??[]);if(($seller['companyApproval']['status']??'pending')==='pending')$pending++;}respond(200,['ok'=>true,'stats'=>['sellers'=>count($s),'pendingSellers'=>$pending,'products'=>$products,'orders'=>$orders],'recentSellers'=>array_slice($s,0,6)]);}
 if($action==='admin-users'){if(adminRole($user)!=='super_admin')respond(403,['ok'=>false,'error'=>'Super Admin access required']);if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];$email=strtolower(trim((string)($input['email']??'')));$role=in_array(($input['role']??''),['admin','super_admin'],true)?$input['role']:'admin';if(!filter_var($email,FILTER_VALIDATE_EMAIL))respond(422,['ok'=>false,'error'=>'Enter a valid admin email']);$admins=adminRegistry();$found=false;foreach($admins as &$entry){if(strtolower((string)($entry['email']??''))===$email){$entry['role']=$role;$entry['active']=true;$found=true;break;}}unset($entry);if(!$found)$admins[]=['email'=>$email,'role'=>$role,'active'=>true,'createdAt'=>gmdate('c'),'createdBy'=>$user['email']??''];saveAdminRegistry($admins);}respond(200,['ok'=>true,'admins'=>adminRegistry()]);}
 if($action==='admin-sellers'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);respond(200,['ok'=>true,'sellers'=>loadAllSellers()]);}
+if($action==='admin-seller-detail'){
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['uid']??''));
+  if($uid==='')respond(422,['ok'=>false,'error'=>'Seller is required']);
+  $path=pathFor($uid);
+  if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  if(!is_array($target))respond(500,['ok'=>false,'error'=>'Seller workspace could not be read']);
+  respond(200,['ok'=>true,'seller'=>adminSellerDetail($target)]);
+}
+
 if($action==='admin-identity'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$decision=(string)($input['status']??'');if(!$uid||!in_array($decision,['verified','rejected'],true))respond(422,['ok'=>false,'error'=>'Valid seller and identity decision required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);if(empty($target['verification']['identity']['submittedAt']))respond(422,['ok'=>false,'error'=>'Seller has not submitted identity verification']);$target['verification']['identity']['status']=$decision;$target['verification']['identity']['verified']=$decision==='verified';$target['verification']['identity']['reviewedAt']=gmdate('c');$target['verification']['identity']['reviewedBy']=$user['email']??'admin';$target['verification']['identity']['note']=trim((string)($input['note']??''));file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true]);}
 if($action==='admin-address-proof'){
   if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
@@ -144,6 +371,71 @@ if($action==='admin-address-proof'){
   respond(200,['ok'=>true,'verification'=>verificationState($target,[])]);
 }
 if($action==='admin-catalog'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);$products=[];$orders=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$seller=['uid'=>$w['uid']??basename($path,'.json'),'businessName'=>$w['business']['businessName']??'Unnamed business','email'=>$w['email']??''];foreach(($w['products']??[]) as $p)$products[]=array_merge($p,['seller'=>$seller]);foreach(($w['orders']??[]) as $o)$orders[]=array_merge($o,['seller'=>$seller]);}respond(200,['ok'=>true,'products'=>$products,'orders'=>$orders]);}
+
+if($action==='admin-product-review'){
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);
+
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));
+  $productId=trim((string)($input['productId']??''));
+  $decision=strtolower(trim((string)($input['decision']??'')));
+  $note=trim((string)($input['note']??''));
+
+  if(!$uid||$productId===''||!in_array($decision,['approved','rejected'],true)){
+    respond(422,['ok'=>false,'error'=>'Seller, product and a valid review decision are required']);
+  }
+
+  $path=pathFor($uid);
+  if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller workspace not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  if(!is_array($target))respond(500,['ok'=>false,'error'=>'Seller workspace could not be read']);
+
+  $index=-1;
+  foreach(($target['products']??[]) as $i=>$product){
+    if((string)($product['id']??'')===$productId){$index=$i;break;}
+  }
+  if($index<0)respond(404,['ok'=>false,'error'=>'Product not found']);
+
+  $product=$target['products'][$index];
+  $images=is_array($product['images']??null)?$product['images']:[];
+  if($decision==='approved'&&count($images)<2){
+    respond(422,['ok'=>false,'error'=>'This product needs at least 2 images before it can be approved']);
+  }
+
+  $now=gmdate('c');
+  $product['verificationStatus']=$decision;
+  $product['verificationNote']=$note!==''?$note:($decision==='approved'?'Approved by Teyza admin':'Rejected by Teyza admin');
+  $product['reviewedAt']=$now;
+  $product['reviewedBy']=$user['email']??'admin';
+
+  $channels=is_array($product['channels']??null)?$product['channels']:[];
+  $product['publishing']=[];
+  foreach($channels as $channel){
+    if($decision==='approved'){
+      $product['publishing'][$channel]=[
+        'status'=>$channel==='teyza'?'published':'queued',
+        'externalId'=>null,
+        'lastSyncedAt'=>$channel==='teyza'?$now:null,
+        'error'=>null
+      ];
+    }else{
+      $product['publishing'][$channel]=[
+        'status'=>'waiting_verification',
+        'externalId'=>null,
+        'lastSyncedAt'=>null,
+        'error'=>$product['verificationNote']
+      ];
+    }
+  }
+
+  $product['updatedAt']=$now;
+  $target['products'][$index]=$product;
+  file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+
+  respond(200,['ok'=>true,'product'=>$product]);
+}
+
 if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$status=(string)($input['status']??'');if(!$uid||!in_array($status,['approved','rejected'],true))respond(422,['ok'=>false,'error'=>'Seller and valid decision are required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);
 if($status==='approved'){
   $v=verificationState($target,[]);
@@ -212,13 +504,31 @@ if ($action === 'seller-readiness') {
 
     /*
      * -----------------------------------------------------
-     * BUSINESS + IDENTITY VERIFICATION
+     * BUSINESS PROFILE + VERIFICATION
      * -----------------------------------------------------
+     *
+     * IMPORTANT:
+     * Completing the seller's own onboarding and passing
+     * Teyza verification are two different states.
+     *
+     * The seller may enter the dashboard after completing
+     * their own setup. Verification/admin approval can remain
+     * pending and will only control selling/publishing access.
      */
 
-    $businessComplete =
-        empty($missing) &&
+    $businessProfileComplete =
+        empty($missing);
+
+    $verificationComplete =
         ((int)($verification['completed'] ?? 0) >= 4);
+
+    /*
+     * Preserve the existing businessComplete response field
+     * as the fully verified business state for compatibility.
+     */
+    $businessComplete =
+        $businessProfileComplete &&
+        $verificationComplete;
 
 
     /*
@@ -339,6 +649,23 @@ if ($action === 'seller-readiness') {
 
     /*
      * -----------------------------------------------------
+     * AUDIENCE
+     * -----------------------------------------------------
+     *
+     * This is Step 4 of the seller-owned onboarding wizard.
+     */
+
+    $audience =
+        $settings['audience'] ?? [];
+
+    $audienceComplete =
+        trim(
+            (string)($audience['gender'] ?? '')
+        ) !== '';
+
+
+    /*
+     * -----------------------------------------------------
      * COMPANY APPROVAL
      * -----------------------------------------------------
      */
@@ -357,36 +684,66 @@ if ($action === 'seller-readiness') {
 
     /*
      * -----------------------------------------------------
-     * FINAL SELLER ACCESS
+     * DASHBOARD ACCESS VS SELLING ACCESS
      * -----------------------------------------------------
      *
-     * Dashboard access requires ALL mandatory stages.
+     * sellerSetupComplete means:
+     * "The seller has completed the setup they control."
+     *
+     * It MUST NOT depend on Teyza/admin approval or identity
+     * verification. Otherwise a completed seller is forced
+     * back into Step 1 forever while approval is pending.
+     *
+     * Verification and approval continue to control
+     * productReady/publishing.
      */
-
-    $sellerSetupComplete =
-        $businessComplete &&
-        $approved &&
-        $deliveryComplete &&
-        $paymentComplete;
-
 
     /*
-     * Products can only be sold after seller onboarding.
+     * Dashboard access follows the seller-owned 4-step wizard.
+     * Step 1 is complete because Teyza Store is always included.
+     * Verification/admin approval remains separate and controls
+     * productReady, not access to the dashboard.
      */
+    $sellingComplete =
+        true;
 
-    $productReady =
+    $sellerSetupComplete =
+        $sellingComplete &&
+        $deliveryComplete &&
+        $paymentComplete &&
+        $audienceComplete;
+
+    $dashboardAccess =
         $sellerSetupComplete;
 
 
     /*
-     * Progress indicator
+     * Selling/publishing remains locked until:
+     * - seller-owned setup is complete
+     * - all required verification is complete
+     * - Teyza/admin approval is approved
+     */
+
+    $productReady =
+        $sellerSetupComplete &&
+        $businessProfileComplete &&
+        $verificationComplete &&
+        $approved;
+
+
+    /*
+     * Progress indicator for the 4-step onboarding wizard.
+     *
+     * Selling is always available through Teyza Store, so
+     * Step 1 is considered complete without requiring any
+     * external social channel to be connected.
      */
 
     $steps =
-        (int)$businessComplete +
-        (int)$approved +
+        1 +
         (int)$deliveryComplete +
-        (int)$paymentComplete;
+        (int)$paymentComplete +
+        (int)$audienceComplete;
 
 
     /*
@@ -412,6 +769,19 @@ if ($action === 'seller-readiness') {
         $workspace['setupFlow'] ?? [];
 
 
+    $workspace['setupFlow']['sellingComplete'] =
+        $sellingComplete;
+
+    $workspace['setupFlow']['businessProfileComplete'] =
+        $businessProfileComplete;
+
+    $workspace['setupFlow']['verificationComplete'] =
+        $verificationComplete;
+
+    /*
+     * Compatibility field: this remains the fully verified
+     * business state, not dashboard access.
+     */
     $workspace['setupFlow']['businessComplete'] =
         $businessComplete;
 
@@ -423,6 +793,15 @@ if ($action === 'seller-readiness') {
 
     $workspace['setupFlow']['paymentComplete'] =
         $paymentComplete;
+
+    $workspace['setupFlow']['audienceComplete'] =
+        $audienceComplete;
+
+    $workspace['setupFlow']['dashboardAccess'] =
+        $dashboardAccess;
+
+    $workspace['setupFlow']['productReady'] =
+        $productReady;
 
     $workspace['setupFlow']['completedSteps'] =
         $steps;
@@ -462,8 +841,17 @@ if ($action === 'seller-readiness') {
         [
             'ok' => true,
 
+            'sellingComplete' =>
+                $sellingComplete,
+
+            'businessProfileComplete' =>
+                $businessProfileComplete,
+
             'businessComplete' =>
                 $businessComplete,
+
+            'verificationComplete' =>
+                $verificationComplete,
 
             'businessVerification' =>
                 $verification,
@@ -479,6 +867,12 @@ if ($action === 'seller-readiness') {
 
             'paymentComplete' =>
                 $paymentComplete,
+
+            'audienceComplete' =>
+                $audienceComplete,
+
+            'dashboardAccess' =>
+                $dashboardAccess,
 
             'productReady' =>
                 $productReady,
@@ -530,8 +924,8 @@ if ($action==='product') {
     foreach(['name','sku','category','brand','condition','desc','targetArea','targetLat','targetLng','targetGender'] as $key) if(array_key_exists($key,$input))$product[$key]=trim((string)$input[$key]);
     foreach(['price','costPrice'] as $key) if(array_key_exists($key,$input))$product[$key]=(float)$input[$key]; if(array_key_exists('stock',$input))$product['stock']=(int)$input['stock'];
     if(array_key_exists('targetPopulation',$input))$product['targetPopulation']=max(5000,min(1000000,(int)$input['targetPopulation']));
-    if(isset($input['channels'])&&is_array($input['channels'])){$allowed=['facebook','instagram','x','whatsapp','tiktok','google'];$product['channels']=array_values(array_intersect($allowed,$input['channels']));$product['publishing']=array_reduce($product['channels'],function($out,$channel){$out[$channel]=['status'=>'waiting_verification','externalId'=>null,'lastSyncedAt'=>null,'error'=>null];return $out;},[]);}
-    $pop=(int)($product['targetPopulation']??50000);$product['reachFee']=$pop<=50000?0:($pop<=100000?50:($pop<=250000?100:($pop<=500000?200:350)));$product['verificationStatus']='pending';$product['verificationNote']='Awaiting Teyza review';$product['updatedAt']=gmdate('c');$workspace['products'][$index]=$product;saveWorkspace($user,$workspace);respond(200,['ok'=>true,'product'=>$product]);
+    if(isset($input['channels'])&&is_array($input['channels'])){$allowed=['teyza','facebook','instagram','x','youtube','whatsapp','tiktok','google'];$product['channels']=array_values(array_intersect($allowed,$input['channels']));if(!in_array('teyza',$product['channels'],true))array_unshift($product['channels'],'teyza');$product['publishing']=array_reduce($product['channels'],function($out,$channel){$out[$channel]=['status'=>'waiting_verification','externalId'=>null,'lastSyncedAt'=>null,'error'=>null];return $out;},[]);}
+    $pop=max(5000,(int)($product['targetPopulation']??5000));$product['reachFee']=max(0,(int)ceil(($pop-5000)/1000))*20;$product['verificationStatus']='pending';$product['verificationNote']='Awaiting Teyza admin verification';$product['submittedForVerificationAt']=gmdate('c');$product['updatedAt']=gmdate('c');$workspace['products'][$index]=$product;saveWorkspace($user,$workspace);respond(200,['ok'=>true,'product'=>$product]);
   }
   respond(405,['ok'=>false,'error'=>'Method not allowed']);
 }

@@ -1,0 +1,105 @@
+
+/* Teyza seller approval tag v59 */
+
+.dashboard-business-pill{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:7px;
+}
+
+.seller-approval-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  width:max-content;
+  max-width:100%;
+  padding:7px 11px;
+  border-radius:999px;
+  border:1px solid transparent;
+  font-size:12px;
+  line-height:1;
+  font-weight:800;
+  text-decoration:none;
+  white-space:nowrap;
+  transition:
+    transform .16s ease,
+    box-shadow .16s ease,
+    background .16s ease;
+}
+
+.seller-approval-tag[hidden]{
+  display:none !important;
+}
+
+.seller-approval-tag:hover{
+  transform:translateY(-1px);
+}
+
+.seller-approval-dot{
+  width:8px;
+  height:8px;
+  flex:0 0 8px;
+  border-radius:50%;
+}
+
+/* Submitted and waiting for Teyza admin */
+.seller-approval-tag[data-approval-state="pending"]{
+  color:#8a5b00;
+  background:#fff7df;
+  border-color:#f1d58f;
+}
+
+.seller-approval-tag[data-approval-state="pending"] .seller-approval-dot{
+  background:#e5a100;
+  box-shadow:0 0 0 4px rgba(229,161,0,.12);
+  animation:approvalPulse 1.8s ease-in-out infinite;
+}
+
+/* Approved */
+.seller-approval-tag[data-approval-state="approved"]{
+  color:#087653;
+  background:#eaf8f1;
+  border-color:#bfe5d2;
+}
+
+.seller-approval-tag[data-approval-state="approved"] .seller-approval-dot{
+  background:#0f9568;
+}
+
+/* Rejected / needs seller action */
+.seller-approval-tag[data-approval-state="rejected"]{
+  color:#a33b31;
+  background:#fff0ee;
+  border-color:#efc2bd;
+}
+
+.seller-approval-tag[data-approval-state="rejected"] .seller-approval-dot{
+  background:#d85649;
+}
+
+@keyframes approvalPulse{
+  0%,100%{
+    transform:scale(1);
+    opacity:1;
+  }
+  50%{
+    transform:scale(.82);
+    opacity:.55;
+  }
+}
+
+@media(max-width:700px){
+  .seller-approval-tag{
+    font-size:11px;
+    padding:6px 9px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .seller-approval-tag,
+  .seller-approval-dot{
+    animation:none !important;
+    transition:none !important;
+  }
+}

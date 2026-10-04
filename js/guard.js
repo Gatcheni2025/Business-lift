@@ -21,11 +21,14 @@ import {
    1. Not logged in
       -> Login
 
-   2. Logged in + onboarding incomplete
+   2. Logged in + seller-owned onboarding incomplete
       -> seller-onboarding.html
 
-   3. Logged in + onboarding complete
+   3. Seller-owned onboarding complete
       -> Dashboard / seller workspace
+
+      Verification/admin approval may still be pending.
+      Those states control selling/publishing, not dashboard access.
 
    4. Completed seller opens onboarding normally
       -> Dashboard
@@ -287,8 +290,23 @@ onAuthStateChanged(
          BACKEND IS SOURCE OF TRUTH
       --------------------------------------------------- */
 
+      /*
+       * Dashboard access is based on completion of the
+       * seller-owned onboarding flow.
+       *
+       * Verification/admin approval is intentionally NOT
+       * used here. Those states control productReady instead.
+       */
       const complete =
+        setup.dashboardAccess === true ||
         setup.sellerSetupComplete === true;
+
+      console.info('[Teyza access guard]', {
+        page,
+        dashboardAccess: setup.dashboardAccess,
+        sellerSetupComplete: setup.sellerSetupComplete,
+        productReady: setup.productReady
+      });
 
 
       /* ===================================================

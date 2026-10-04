@@ -15,10 +15,9 @@
     rel="stylesheet"
   >
   <link rel="stylesheet" href="assets/simple-workspace.css?v=4">
-
-<script type="module" src="js/guard.js?v=5"></script>
-<script type="module" src="js/dashboard-data.js?v=3"></script>
-<script src="js/simple-dashboard.js?v=2"></script>
+  <link rel="stylesheet" href="assets/dashboard-approval.css?v=1">
+  <link rel="stylesheet" href="assets/dashboard-channels.css?v=1">
+  <link rel="stylesheet" href="assets/dashboard-services.css?v=1">
 
   <link
     rel="stylesheet"
@@ -385,6 +384,21 @@
               Your business
             </span>
 
+            <a
+              class="seller-approval-tag"
+              data-seller-approval-tag
+              href="business-profile.html?step=7"
+              hidden>
+              <span
+                class="seller-approval-dot"
+                aria-hidden="true">
+              </span>
+
+              <span data-seller-approval-text>
+                Pending admin approval
+              </span>
+            </a>
+
           </div>
 
         </div>
@@ -415,35 +429,114 @@
            CHATS / ORDERS
       ================================================ -->
 
-      <div
-        class="simple-tabs"
-        role="tablist"
-        aria-label="Dashboard activity"
-      >
+      <div class="simple-tabs" role="tablist">
+  <button
+    type="button"
+    id="chats-tab"
+    role="tab"
+    aria-controls="chats-panel"
+    aria-selected="true"
+    data-dashboard-tab="chats">
+    Chats
+  </button>
 
-        <button
-          id="chats-tab"
-          role="tab"
-          aria-selected="true"
-          aria-controls="chats-panel"
-          data-home-tab="chats"
-          type="button">
-          Chats
-        </button>
+  <button
+    type="button"
+    id="orders-tab"
+    role="tab"
+    aria-controls="orders-panel"
+    aria-selected="false"
+    tabindex="-1"
+    data-dashboard-tab="orders">
+    Orders
+  </button>
 
 
-        <button
-          id="sales-tab"
-          role="tab"
-          aria-selected="false"
-          aria-controls="sales-panel"
-          tabindex="-1"
-          data-home-tab="sales"
-          type="button">
-          Orders
-        </button>
+  <button
+    type="button"
+    id="bookings-tab"
+    role="tab"
+    aria-controls="bookings-panel"
+    aria-selected="false"
+    tabindex="-1"
+    data-dashboard-tab="bookings">
+    Bookings
+  </button>
 
-      </div>
+  <button
+    type="button"
+    id="deliveries-tab"
+    role="tab"
+    aria-controls="deliveries-panel"
+    aria-selected="false"
+    tabindex="-1"
+    data-dashboard-tab="deliveries">
+    Deliveries
+  </button>
+</div>
+
+<section class="dashboard-sales-channels" aria-labelledby="dashboardSalesChannelsTitle">
+  <div class="dashboard-sales-channels-head">
+    <div>
+      <strong id="dashboardSalesChannelsTitle">Selling channels</strong>
+      <span>Choose a platform to connect or manage it.</span>
+    </div>
+    <a href="sales-channels.html?return=dashboard" class="dashboard-manage-channels">Manage all →</a>
+  </div>
+
+  <div class="dashboard-channel-scroll" data-dashboard-channel-list>
+    <a class="dashboard-channel-pill is-connected"
+       href="sales-channels.html?return=dashboard#channel-teyza"
+       data-dashboard-channel="teyza"
+       data-channel-state="connected">
+      <span class="dashboard-channel-logo logo-teyza">T</span>
+      <span class="dashboard-channel-copy"><strong>Teyza Store</strong><small data-dashboard-channel-status="teyza">Included</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-facebook" data-dashboard-channel="facebook">
+      <span class="dashboard-channel-logo logo-facebook"><i class="ph ph-facebook-logo"></i></span>
+      <span class="dashboard-channel-copy"><strong>Facebook</strong><small data-dashboard-channel-status="facebook">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-instagram" data-dashboard-channel="instagram">
+      <span class="dashboard-channel-logo logo-instagram"><i class="ph ph-instagram-logo"></i></span>
+      <span class="dashboard-channel-copy"><strong>Instagram</strong><small data-dashboard-channel-status="instagram">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-whatsapp" data-dashboard-channel="whatsapp">
+      <span class="dashboard-channel-logo logo-whatsapp"><i class="ph ph-whatsapp-logo"></i></span>
+      <span class="dashboard-channel-copy"><strong>WhatsApp</strong><small data-dashboard-channel-status="whatsapp">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-google" data-dashboard-channel="google">
+      <span class="dashboard-channel-logo logo-google">G</span>
+      <span class="dashboard-channel-copy"><strong>Google</strong><small data-dashboard-channel-status="google">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-x" data-dashboard-channel="x">
+      <span class="dashboard-channel-logo logo-x">𝕏</span>
+      <span class="dashboard-channel-copy"><strong>X</strong><small data-dashboard-channel-status="x">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-youtube" data-dashboard-channel="youtube">
+      <span class="dashboard-channel-logo logo-youtube"><i class="ph ph-youtube-logo"></i></span>
+      <span class="dashboard-channel-copy"><strong>YouTube</strong><small data-dashboard-channel-status="youtube">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+
+    <a class="dashboard-channel-pill" href="sales-channels.html?return=dashboard#channel-tiktok" data-dashboard-channel="tiktok">
+      <span class="dashboard-channel-logo logo-tiktok">♪</span>
+      <span class="dashboard-channel-copy"><strong>TikTok</strong><small data-dashboard-channel-status="tiktok">Checking…</small></span>
+      <span class="dashboard-channel-dot" aria-hidden="true"></span>
+    </a>
+  </div>
+</section>
 
 
       <!-- Dashboard status -->
@@ -520,10 +613,10 @@
       ================================================ -->
 
       <section
-        id="sales-panel"
+        id="orders-panel"
         role="tabpanel"
-        aria-labelledby="sales-tab"
-        data-home-panel="sales"
+        aria-labelledby="orders-tab"
+        data-home-panel="orders"
         hidden
       >
 
@@ -567,15 +660,62 @@
       </section>
 
 
+
+      <!-- SERVICE BOOKINGS PANEL -->
+      <section id="bookings-panel" role="tabpanel" aria-labelledby="bookings-tab" data-home-panel="bookings" hidden>
+        <div class="simple-section-heading">
+          <div><h2>Service bookings</h2><p>Appointments and service requests from your customers.</p></div>
+          <a class="simple-action" href="bookings.html">All bookings ↗</a>
+        </div>
+        <div class="app-order-list" data-dashboard-bookings>
+          <div class="empty-state"><p>Loading bookings…</p></div>
+        </div>
+      </section>
+
+      <!-- ===============================================
+           DELIVERIES PANEL
+      ================================================ -->
+
+      <section
+        id="deliveries-panel"
+        role="tabpanel"
+        aria-labelledby="deliveries-tab"
+        data-home-panel="deliveries"
+        hidden
+      >
+        <div class="simple-section-heading">
+          <div>
+            <h2>Deliveries</h2>
+            <p>Track orders that still need collection, shipping or completion.</p>
+          </div>
+
+          <a
+            class="simple-action"
+            href="orders.html#fulfilment">
+            Open delivery queue ↗
+          </a>
+        </div>
+
+        <div
+          class="app-order-list"
+          data-dashboard-deliveries
+        >
+          <div class="empty-state">
+            <p>Loading deliveries…</p>
+          </div>
+        </div>
+      </section>
+
+
       <!-- ===============================================
            PRIMARY SELL BUTTON
       ================================================ -->
 
       <a
         class="simple-compose"
-        href="products.html#new-product"
+        href="sell.html"
         data-primary-seller-action
-        aria-label="Sell a product">
+        aria-label="Sell a product or service">
         Sell
       </a>
 
@@ -623,17 +763,19 @@
   -->
   <script
     type="module"
-    src="js/guard.js?v=5">
+    src="js/guard.js?v=8">
   </script>
 
   <script
     type="module"
-    src="js/dashboard-data.js?v=3">
+    src="js/dashboard-data.js?v=7">
   </script>
 
   <script
-    src="js/simple-dashboard.js?v=2">
+    src="js/simple-dashboard.js?v=3">
   </script>
 
+  <script type="module" src="js/dashboard-channels.js?v=1"></script>
+  <script type="module" src="js/dashboard-services.js?v=1"></script>
 </body>
 </html>
