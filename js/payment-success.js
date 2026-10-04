@@ -1,3 +1,4 @@
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const params=new URLSearchParams(location.search);
 const reference=params.get("reference")||params.get("trxref")||"";
 
@@ -22,7 +23,7 @@ async function verify(){
   }
 
   try{
-    const url=new URL("api/paystack-verify.php",location.href);
+    const url=new URL(`${API_BASE}/paystack-verify.php`,location.origin);
     url.searchParams.set("reference",reference);
 
     const response=await fetch(url,{cache:"no-store"});
