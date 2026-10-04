@@ -2,6 +2,8 @@ import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/fir
 import {auth} from "./firebase-config.js";
 import {getBusinessContext,getWorkspaceSummary,getWorkspaceSection,workspaceError} from "./business-context.js";
 
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
+const ROOT_BACKEND=location.hostname.endsWith(".vercel.app")?"/root-backend":".";
 const form=document.querySelector('[data-product-form]');
 const statusNode=document.querySelector('[data-product-status]');
 const tableBody=document.querySelector('[data-products-table-body]');
@@ -369,7 +371,7 @@ async function prepareAndUploadImages(button){
  const compressed=[];for(let i=0;i<files.length;i++){compressed.push(await compressImage(files[i]));bar.style.width=(12+Math.round(((i+1)/files.length)*38))+'%';label.textContent=`Compressing image ${i+1} of ${files.length}…`}
  label.textContent='Uploading images securely…';bar.style.width='58%';
  const fd=new FormData();compressed.forEach(f=>fd.append('images[]',f,f.name));const token=await currentUser.getIdToken();
- const r=await fetch('upload_images.php',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:fd});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||'Image upload failed.');
+ const r=await fetch(`${ROOT_BACKEND}/upload_images.php`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:fd});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||'Image upload failed.');
  stagedImages=d.images||[];bar.style.width='100%';label.textContent=`✓ ${stagedImages.length} image${stagedImages.length===1?'':'s'} compressed and uploaded`;return stagedImages;
 }
 function buildPreview(){
@@ -427,7 +429,7 @@ function render(products=[]){
  tableBody.querySelectorAll('tr').forEach(row=>{if(row.children.length===8)[...row.children].forEach((cell,index)=>cell.dataset.label=labels[index]);});
 }
 function openProduct(id){const p=loadedProducts.find(x=>x.id===id);if(!p)return;const detail=document.querySelector('[data-product-detail]');if(!detail)return;detail.innerHTML=`${p.images?.[0]?`<img src="${safe(p.images[0])}" alt="${safe(p.name)}">`:''}<span class="status-pill status-pending" style="display:inline-block;margin-top:15px">${safe(p.verificationStatus||'Pending')}</span><h2>${safe(p.name)}</h2><div class="preview-price">${money.format(Number(p.price||0))}</div><p>${safe(p.desc||'')}</p><p><b>SKU:</b> ${safe(p.sku||'-')} · <b>Stock:</b> ${Number(p.stock||0)}</p><p><b>Selling area:</b> ${safe(p.targetArea||'Not set')}</p><p><b>Target population:</b> ${Number(p.targetPopulation||0).toLocaleString('en-ZA')}</p><p><b>Reach fee:</b> ${Number(p.reachFee||0)===0?'Free':'R'+Number(p.reachFee)}</p><p><b>Publishing:</b></p><div class="selected-channels">${(p.channels||[]).map(c=>'<span class="pill">'+publishLabel(p,c)+' '+safe(channelLabel(c))+' · '+safe((p.publishing?.[c]?.status||'waiting_verification').replaceAll('_',' '))+'</span>').join(' ')||'—'}</div>`;const modal=document.querySelector('[data-product-modal]');if(modal){modal.classList.add('show');document.body.classList.add('product-modal-open')}}
-async function deleteProduct(id){const p=loadedProducts.find(x=>x.id===id);if(!p||!confirm('Delete "'+p.name+'"? This cannot be undone.'))return;const token=await currentUser.getIdToken();const r=await fetch('api/workspace.php?action=product&productId='+encodeURIComponent(id),{method:'DELETE',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to delete product.');await refresh()}
+async function deleteProduct(id){const p=loadedProducts.find(x=>x.id===id);if(!p||!confirm('Delete "'+p.name+'"? This cannot be undone.'))return;const token=await currentUser.getIdToken();const r=await fetch(`${API_BASE}/workspace.php?action=product&productId=`+encodeURIComponent(id),{method:'DELETE',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to delete product.');await refresh()}
 function editProduct(id){
  const p=loadedProducts.find(x=>x.id===id);if(!p)return;
  document.querySelector('[data-submit-success]')?.classList.remove('show');
@@ -445,7 +447,7 @@ let performanceProductId='',performancePeriod='30';
 
 async function getTeyzaPerformance(productId,period){
  const token=await currentUser.getIdToken();
- const url=new URL('api/workspace.php',location.href);
+ const url=new URL(`${API_BASE}/workspace.php`,location.origin);
  url.searchParams.set('action','product-performance');
  url.searchParams.set('productId',productId);
  url.searchParams.set('period',period);
@@ -586,7 +588,7 @@ form?.addEventListener('submit',async e=>{
  b.disabled=true;b.textContent='Sending for verification…';
  try{
   const token=await currentUser.getIdToken();
-  const r=await fetch(editingProductId?'api/workspace.php?action=product&productId='+encodeURIComponent(editingProductId):'upload_product.php',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:editingProductId?JSON.stringify(Object.fromEntries(
+  const r=await fetch(editingProductId?`${API_BASE}/workspace.php?action=product&productId=`+encodeURIComponent(editingProductId):`${ROOT_BACKEND}/upload_product.php`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:editingProductId?JSON.stringify(Object.fromEntries(
    [...fd.entries()]
     .filter(([k])=>!["channels","connectedChannels"].includes(k))
     .concat([
@@ -606,7 +608,7 @@ form?.addEventListener('submit',async e=>{
   if(successMessage)successMessage.textContent=`${d.product?.name||'Your product'} has been sent to Teyza admin for verification.`;
  }catch(x){showStatus(workspaceError(x,'submit your product'))}finally{b.disabled=false;b.textContent='Submit for verification'}
 });
-async function enforceReadiness(user){const token=await user.getIdToken();const r=await fetch('api/workspace.php?action=seller-readiness',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to check seller setup.');const ready=!!d.productReady;sellerReady=ready;syncProductView();if(!ready){const msg=!d.businessComplete?'Complete your business profile and verification first.':!d.deliveryComplete?'Your business profile is complete. Set up delivery before adding products.':'Delivery is complete. Set up how your business will be paid before adding products.';document.querySelector('[data-readiness-message]').textContent=msg;const actions=document.querySelector('[data-readiness-gate] .success-actions');if(actions)actions.innerHTML=!d.businessComplete?'<a class="button button-primary" href="business-profile.html?setup=1">Complete business profile →</a>':!d.deliveryComplete?'<a class="button button-primary" href="delivery-settings.html?setup=1">Set up delivery →</a>':'<a class="button button-primary" href="seller-onboarding.html#payment-setup">Set up payments →</a>';}else if(d.companyApproval?.status!=='approved'){showStatus('Company approval is '+(d.companyApproval?.status||'pending')+'. You can add products now, but products will remain pending and will not publish until Teyza approves your company.','success');}return ready}
+async function enforceReadiness(user){const token=await user.getIdToken();const r=await fetch(`${API_BASE}/workspace.php?action=seller-readiness`,{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Unable to check seller setup.');const ready=!!d.productReady;sellerReady=ready;syncProductView();if(!ready){const msg=!d.businessComplete?'Complete your business profile and verification first.':!d.deliveryComplete?'Your business profile is complete. Set up delivery before adding products.':'Delivery is complete. Set up how your business will be paid before adding products.';document.querySelector('[data-readiness-message]').textContent=msg;const actions=document.querySelector('[data-readiness-gate] .success-actions');if(actions)actions.innerHTML=!d.businessComplete?'<a class="button button-primary" href="business-profile.html?setup=1">Complete business profile →</a>':!d.deliveryComplete?'<a class="button button-primary" href="delivery-settings.html?setup=1">Set up delivery →</a>':'<a class="button button-primary" href="seller-onboarding.html#payment-setup">Set up payments →</a>';}else if(d.companyApproval?.status!=='approved'){showStatus('Company approval is '+(d.companyApproval?.status||'pending')+'. You can add products now, but products will remain pending and will not publish until Teyza approves your company.','success');}return ready}
 onAuthStateChanged(auth,async user=>{if(!user){location.href='index.html?auth=login';return}currentUser=user;try{const context=await getBusinessContext(user);businessId=String(context.businessId||user.uid);const ready=await enforceReadiness(user);await refresh();if(ready){await loadSavedSellingSetup();await loadConnectedChannels()}}catch(e){showStatus(workspaceError(e,'load your selling channels'));const catalogStatus=document.querySelector('[data-catalog-status]');catalogStatus.hidden=false;catalogStatus.textContent=workspaceError(e,'load products');tableBody.innerHTML='<tr><td colspan="8">Products could not be loaded. Refresh to try again.</td></tr>'}});
 
 document.querySelector('[data-add-new]')?.addEventListener('click',async()=>{
