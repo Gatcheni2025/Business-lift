@@ -4,6 +4,10 @@
     {
       "source": "/backend/:path*",
       "destination": "https://teyza.co.za/api/:path*"
+    },
+    {
+      "source": "/root-backend/:path*",
+      "destination": "https://teyza.co.za/:path*"
     }
   ]
 }
