@@ -14,6 +14,8 @@ const WORKSPACE_API = location.hostname.endsWith(".vercel.app")
   ? "/backend/workspace.php"
   : "api/workspace.php";
 
+console.info("[Teyza auth] workspace API", WORKSPACE_API);
+
 const google = new GoogleAuthProvider();
 google.setCustomParameters({prompt: "select_account"});
 const facebook = new FacebookAuthProvider();
