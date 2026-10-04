@@ -2,6 +2,7 @@ import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/fir
 import {auth} from "./firebase-config.js";
 import {getBusinessContext,getWorkspaceSummary,hydrateBusiness,workspaceError} from "./business-context.js";
 
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const moneyShort=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0});
 const money=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",minimumFractionDigits:2,maximumFractionDigits:2});
 const set=(selector,value)=>document.querySelectorAll(selector).forEach(node=>node.textContent=value);
@@ -17,7 +18,7 @@ function showError(message){
 
 async function getReadiness(user){
   const token=await user.getIdToken();
-  const response=await fetch("api/workspace.php?action=seller-readiness",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+  const response=await fetch(`${API_BASE}/workspace.php?action=seller-readiness`,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
   const data=await response.json().catch(()=>({}));
   if(!response.ok||!data.ok)throw new Error(data.error||"Unable to check seller verification.");
   return data;
@@ -26,7 +27,7 @@ async function getReadiness(user){
 async function getChatInbox(user){
   try{
     const token=await user.getIdToken();
-    const url=new URL("api/chat.php",location.href);url.searchParams.set("mode","seller-inbox");
+    const url=new URL(`${API_BASE}/chat.php`,location.origin);url.searchParams.set("mode","seller-inbox");
     const response=await fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
     const data=await response.json().catch(()=>({}));
     return response.ok&&data.ok?(data.threads||[]):[];
@@ -93,7 +94,10 @@ function renderReadiness(readiness){
   });
 
   if(!dashboardAllowed){
-    location.replace('seller-onboarding.html');
+    /*
+     * guard.js is the single owner of access redirects.
+     * Dashboard data must never create a second onboarding redirect loop.
+     */
     return false;
   }
 
