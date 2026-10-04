@@ -14,7 +14,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="assets/simple-workspace.css?v=4">
+  <link rel="stylesheet" href="assets/simple-workspace.css?v=5">
   <link rel="stylesheet" href="assets/dashboard-approval.css?v=1">
   <link rel="stylesheet" href="assets/dashboard-channels.css?v=1">
   <link rel="stylesheet" href="assets/dashboard-services.css?v=1">
@@ -404,13 +404,23 @@
         </div>
 
 
-        <a
-          class="simple-settings"
-          href="settings.html"
-          aria-label="Settings"
-          title="Settings">
-          ⚙
-        </a>
+        <div class="simple-heading-actions">
+          <a
+            class="simple-settings"
+            href="settings.html"
+            aria-label="Settings"
+            title="Settings">
+            ⚙
+          </a>
+
+          <button
+            class="simple-logout"
+            type="button"
+            data-logout
+            aria-label="Log out">
+            Log out
+          </button>
+        </div>
 
       </header>
 
@@ -749,7 +759,7 @@
 
   <script
     type="module"
-    src="js/auth.js">
+    src="js/auth.js?v=4">
   </script>
 
   <!--
