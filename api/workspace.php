@@ -495,6 +495,12 @@ if ($action === 'seller-readiness') {
     $settings =
         $workspace['settings'] ?? [];
 
+    $onboardingStatus =
+        $settings['onboardingStatus'] ?? [];
+
+    $onboardingSubmitted =
+        !empty($onboardingStatus['submitted']);
+
     $verification =
         verificationState(
             $workspace,
@@ -707,11 +713,19 @@ if ($action === 'seller-readiness') {
     $sellingComplete =
         true;
 
-    $sellerSetupComplete =
+    $computedSellerSetupComplete =
         $sellingComplete &&
         $deliveryComplete &&
         $paymentComplete &&
         $audienceComplete;
+
+    $previousComplete =
+        !empty($workspace['sellerSetupComplete']);
+
+    $sellerSetupComplete =
+        $previousComplete ||
+        $onboardingSubmitted ||
+        $computedSellerSetupComplete;
 
     $dashboardAccess =
         $sellerSetupComplete;
@@ -754,12 +768,6 @@ if ($action === 'seller-readiness') {
      * Save the SERVER-calculated state.
      * Never accept sellerSetupComplete from the browser.
      */
-
-    $previousComplete =
-        !empty(
-            $workspace['sellerSetupComplete']
-        );
-
 
     $workspace['sellerSetupComplete'] =
         $sellerSetupComplete;
@@ -880,6 +888,9 @@ if ($action === 'seller-readiness') {
             'sellerSetupComplete' =>
                 $sellerSetupComplete,
 
+            'onboardingSubmitted' =>
+                $onboardingSubmitted,
+
             'sellerSetupCompletedSteps' =>
                 $steps,
 
@@ -897,6 +908,62 @@ if ($action==='section') {
   if(!$section) respond(422,['ok'=>false,'error'=>'Section is required']);
   if($_SERVER['REQUEST_METHOD']==='POST'){
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+
+    if($section==='onboardingStatus' && !empty($input['submitted'])){
+      $settingsNow=$workspace['settings']??[];
+      $verificationNow=verificationState($workspace,$user);
+
+      $deliveryNow=$settingsNow['delivery']??[];
+      $deliveryModeOk=in_array(($deliveryNow['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true);
+      $deliveryFeeOk=isset($deliveryNow['baseDeliveryFee'])&&is_numeric($deliveryNow['baseDeliveryFee'])&&(float)$deliveryNow['baseDeliveryFee']>=0;
+      $deliveryLocationOk=!empty($verificationNow['locationConfirmed'])&&sameAddress((string)($deliveryNow['pickupAddress']??''),(string)($verificationNow['location']['address']??''));
+      $deliveryOk=$deliveryModeOk&&$deliveryFeeOk&&$deliveryLocationOk;
+
+      $bankNow=$settingsNow['banking']??[];
+      $payfastNow=$settingsNow['payfast']??[];
+      $paymentPreferencesNow=$settingsNow['paymentPreferences']??[];
+
+      $bankOk=
+        trim((string)($bankNow['bankName']??''))!=='' &&
+        trim((string)($bankNow['accountHolder']??''))!=='' &&
+        (
+          trim((string)($bankNow['accountNumber']??''))!=='' ||
+          trim((string)($bankNow['accountNumberLast4']??''))!==''
+        );
+
+      $payfastOk=
+        trim((string)($payfastNow['merchantId']??''))!=='' &&
+        trim((string)($payfastNow['merchantKey']??''))!=='';
+
+      $paymentPreferenceOk=
+        trim((string)($paymentPreferencesNow['otherGateway']??''))!=='';
+
+      $paymentOk=$bankOk||$payfastOk||$paymentPreferenceOk;
+
+      $audienceNow=$settingsNow['audience']??[];
+      $audienceOk=trim((string)($audienceNow['gender']??''))!=='';
+
+      if(!$deliveryOk||!$paymentOk||!$audienceOk){
+        respond(422,[
+          'ok'=>false,
+          'error'=>'Finish Delivery, Payments and Audience before submitting seller setup.',
+          'deliveryComplete'=>$deliveryOk,
+          'paymentComplete'=>$paymentOk,
+          'audienceComplete'=>$audienceOk
+        ]);
+      }
+
+      $input['submitted']=true;
+      $input['submittedAt']=$input['submittedAt']??gmdate('c');
+      $input['externalChannelsOptional']=true;
+
+      $workspace['sellerSetupComplete']=true;
+      $workspace['setupFlow']=$workspace['setupFlow']??[];
+      $workspace['setupFlow']['dashboardAccess']=true;
+      $workspace['setupFlow']['sellerSetupComplete']=true;
+      $workspace['setupFlow']['completedAt']=$workspace['setupFlow']['completedAt']??gmdate('c');
+    }
+
     if($section==='delivery'){
       $verified=verificationState($workspace,$user);$location=$verified['location']??[];
       if(empty($verified['locationConfirmed'])||!isset($location['lat'],$location['lng']))respond(422,['ok'=>false,'error'=>'Confirm your business address on the map before setting delivery.']);
