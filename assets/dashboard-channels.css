@@ -123,3 +123,19 @@
     min-width:136px;
   }
 }
+
+
+.dashboard-channel-logo img{
+  display:block;
+  width:21px;
+  height:21px;
+  object-fit:contain;
+}
+.dashboard-channel-logo.logo-instagram{
+  background:radial-gradient(circle at 32% 100%,#feda75 0 12%,#fa7e1e 24%,#d62976 50%,#962fbf 72%,#4f5bd5 100%);
+}
+.dashboard-channel-logo.logo-whatsapp{background:#25d366}
+.dashboard-channel-logo.logo-facebook{background:#1877f2}
+.dashboard-channel-logo.logo-x,.dashboard-channel-logo.logo-tiktok{background:#000}
+.dashboard-channel-logo.logo-google,.dashboard-channel-logo.logo-youtube{background:#fff}
+.dashboard-channel-logo.logo-youtube img{width:23px;height:23px}
