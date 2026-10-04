@@ -113,7 +113,7 @@ function loginDestination() {
   const target = new URLSearchParams(location.search).get("redirect") || "dashboard.html";
   return allowedDestinations.has(target.split(/[?#]/)[0]) && !target.includes("/") && !target.includes("\\") ? target : "dashboard.html";
 }
-const go = isNew => location.assign(isNew ? "dashboard.html?onboarding=1" : loginDestination());
+const go = isNew => location.assign(isNew ? "business-profile.html?onboarding=1" : loginDestination());
 
 async function socialSignIn(button) {
   if (button.disabled) return;
