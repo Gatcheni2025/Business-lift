@@ -287,3 +287,24 @@ button{cursor:pointer}
   .offer-copy h3{font-size:24px}
   .offer-store-note{padding:18px;gap:14px}
 }
+
+
+/* =========================================================
+   OFFICIAL SOCIAL BRAND MARKS
+========================================================= */
+.brand-icon-img{display:block;width:24px;height:24px;object-fit:contain}
+.brand-icon-img.mini{width:18px;height:18px}
+.channel-mini,.channel-logo{overflow:hidden}
+.channel-mini.facebook,.channel-logo.facebook{background:#1877f2;color:#fff}
+.channel-mini.instagram,.channel-logo.instagram{
+  background:radial-gradient(circle at 32% 100%,#feda75 0 12%,#fa7e1e 24%,#d62976 50%,#962fbf 72%,#4f5bd5 100%);
+  color:#fff;
+}
+.channel-mini.whatsapp,.channel-logo.whatsapp{background:#25d366;color:#fff}
+.channel-mini.google,.channel-logo.google{background:#fff;color:inherit}
+.channel-mini.x,.channel-logo.x{background:#000;color:#fff}
+.channel-mini.youtube,.channel-logo.youtube{background:#fff;color:inherit}
+.channel-mini.tiktok,.channel-logo.tiktok{background:#000;color:#fff}
+.channel-logo.google .brand-icon-img{width:25px;height:25px}
+.channel-logo.youtube .brand-icon-img{width:27px;height:27px}
+.channel-logo.tiktok .brand-icon-img{width:24px;height:24px}
