@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://teyza.co.za/api/:path*"
+    },
+    {
+      "source": "/upload_images.php",
+      "destination": "https://teyza.co.za/upload_images.php"
+    },
+    {
+      "source": "/upload_product.php",
+      "destination": "https://teyza.co.za/upload_product.php"
+    },
+    {
+      "source": "/publish_channel.php",
+      "destination": "https://teyza.co.za/publish_channel.php"
+    },
+    {
+      "source": "/product_event.php",
+      "destination": "https://teyza.co.za/product_event.php"
+    }
+  ]
+}
