@@ -1,3 +1,4 @@
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const params=new URLSearchParams(location.search);
 const seller=params.get("seller")||"";
 const productId=params.get("product")||"";
@@ -76,7 +77,7 @@ async function loadProduct(){
   }
 
   try{
-    const url=new URL("api/storefront.php",location.href);
+    const url=new URL(`${API_BASE}/storefront.php`,location.origin);
     url.searchParams.set("action","product");
     url.searchParams.set("seller",seller);
     url.searchParams.set("product",productId);
@@ -158,7 +159,7 @@ form.addEventListener("submit",async event=>{
   payButton.innerHTML='<span class="checkout-spinner"></span><span>Preparing secure payment…</span>';
 
   try{
-    const response=await fetch("api/paystack-initialize.php",{
+    const response=await fetch(`${API_BASE}/paystack-initialize.php`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
