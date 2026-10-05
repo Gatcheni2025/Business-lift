@@ -102,6 +102,7 @@ function deferredSellingChannels() {
 ========================================================= */
 
 const FUNCTIONS_BASE_URL = "https://us-central1-business-lift-3c19c.cloudfunctions.net";
+const WORKSPACE_API = location.hostname.endsWith(".vercel.app") ? "/backend/workspace.php" : "api/workspace.php";
 let sellingConnectionState = {};
 let whatsappSession = null;
 let whatsappCode = "";
@@ -2363,7 +2364,7 @@ async function readiness(
 
 
 
-      "api/workspace.php?action=seller-readiness",
+      `${WORKSPACE_API}?action=seller-readiness`,
 
 
 
@@ -6003,7 +6004,7 @@ async function verifyBusinessLocation() {
   const token = await currentUser.getIdToken();
 
   const response = await fetch(
-    "api/workspace.php?action=verification",
+    `${WORKSPACE_API}?action=verification`,
     {
       method: "POST",
       headers: {
