@@ -1,0 +1,31 @@
+.payout-page{max-width:1050px;margin:0 auto}.payout-kicker{display:inline-block;color:#087f5b;font-size:11px;font-weight:800;letter-spacing:.12em}.payout-page .page-heading h1{margin:7px 0 6px}.payout-page .page-heading p{max-width:720px}.payout-connected-card,.payout-form-card{background:#fff;border:1px solid #dce8e2;border-radius:22px;padding:24px;margin-top:18px}.payout-connected-card{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;background:linear-gradient(135deg,#f4fbf7,#fff)}.payout-summary-icon{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#dff3e8;color:#087f5b;font-weight:900;font-size:20px}.payout-status-pill{display:inline-flex;padding:6px 9px;border-radius:999px;background:#e6f6ed;color:#087f5b;font-size:10px;font-weight:800}.payout-summary-copy h2{margin:8px 0 4px;font-size:20px}.payout-summary-copy p{margin:3px 0;color:#60756b}.payout-helper{font-size:11px}.payout-card-head{display:flex;justify-content:space-between;gap:18px;margin-bottom:20px}.payout-card-head h2{margin:0}.payout-card-head p{margin:6px 0 0;color:#60756b}.payout-security{font-size:11px;color:#60756b}.payout-form-card form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.payout-field{display:grid;gap:7px}.payout-field span{font-size:12px;font-weight:800}.payout-field input,.payout-field select{min-height:48px;border:1px solid #cfded6;border-radius:13px;padding:0 13px;font:inherit;background:#fff;outline:0}.payout-field input:focus,.payout-field select:focus{border-color:#7cc1a7;box-shadow:0 0 0 4px rgba(8,127,91,.08)}.payout-verify-button{align-self:end;min-height:48px}.payout-resolved{grid-column:1/-1;padding:14px;border-radius:14px;background:#eef8f2;border:1px solid #cee8da}.payout-resolved span,.payout-resolved strong{display:block}.payout-resolved span{font-size:10px;color:#60756b;text-transform:uppercase;letter-spacing:.08em;font-weight:800}.payout-resolved strong{margin-top:5px}.payout-confirm{grid-column:1/-1;display:flex;gap:10px;background:#f4f8f6;padding:13px;border-radius:14px;color:#60756b;font-size:12px}.payout-connect-button{grid-column:1/-1;min-height:50px}.payout-form-status{grid-column:1/-1;padding:12px;border-radius:12px;font-size:12px}.payout-form-status.success{background:#e9f7ef;color:#087f5b}.payout-form-status.error{background:#fff0ee;color:#a03930}.payout-info-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0 60px}.payout-info-grid article{background:#fff;border:1px solid #dce8e2;border-radius:18px;padding:19px}.payout-info-grid article>span{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#e8f5ee;color:#087f5b;font-weight:800;font-size:11px}.payout-info-grid strong{display:block;margin:12px 0 6px}.payout-info-grid p{color:#60756b;font-size:12px;line-height:1.55;margin:0}@media(max-width:760px){.payout-connected-card{grid-template-columns:auto 1fr}.payout-connected-card>.button{grid-column:1/-1}.payout-form-card form{grid-template-columns:1fr}.payout-resolved,.payout-confirm,.payout-connect-button,.payout-form-status{grid-column:auto}.payout-info-grid{grid-template-columns:1fr}}
+
+
+/* v63 — South Africa Paystack Account Validation */
+.payout-privacy-note{
+  grid-column:1/-1;
+  display:flex;
+  gap:8px;
+  flex-direction:column;
+  padding:14px 15px;
+  border-radius:14px;
+  background:#f4f8f6;
+  border:1px solid #dce8e2;
+  color:#60756b;
+  font-size:12px;
+  line-height:1.55;
+}
+.payout-privacy-note strong{color:#183b30}
+.payout-inline-spinner{
+  display:inline-block;width:16px;height:16px;
+  border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;
+  animation:payoutSpin .7s linear infinite
+}
+.payout-connect-button{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px
+}
+@keyframes payoutSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+  .payout-inline-spinner{animation:none!important}
+}

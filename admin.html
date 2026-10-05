@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="noindex" name="robots"/>
+<meta content="#087f5b" name="theme-color"/>
+<title>Teyza Admin</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<style>
+:root{--g:#087f5b;--g2:#0a936a;--ink:#14352b;--muted:#6b7e75;--line:#dce8e1;--bg:#f3f7f4;--card:#fff;--warn:#aa5b00;--danger:#a72e26}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,textarea,select{font:inherit}button{cursor:pointer}
+.admin-app{min-height:100vh;display:grid;grid-template-columns:250px 1fr}
+.sidebar{background:#0e3329;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}.brand-mark{width:46px;height:46px;border-radius:14px;background:#0ba071;display:grid;place-items:center;font-size:25px;font-weight:800}.brand strong{display:block;font-size:20px}.brand small{color:#b6d6ca}
+.nav{display:grid;gap:7px}.nav button{border:0;background:transparent;color:#cfe2da;text-align:left;padding:12px 14px;border-radius:12px;font-weight:700}.nav button.active,.nav button:hover{background:#ffffff17;color:#fff}
+.sidebar-foot{position:absolute;left:18px;right:18px;bottom:20px}.admin-user{font-size:12px;color:#b9d2c8;overflow-wrap:anywhere}.signout{margin-top:10px;width:100%;border:1px solid #ffffff2b;background:transparent;color:#fff;padding:10px;border-radius:12px}
+.main{min-width:0}.topbar{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 30px;position:sticky;top:0;z-index:20}.topbar strong{font-size:17px}.role{background:#e5f5eb;color:#08714f;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:800}
+.content{padding:30px;max-width:1500px}.page-head{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.page-head h1{margin:0;font-size:34px}.page-head p{margin:7px 0 0;color:var(--muted)}
+.status{margin-bottom:18px;padding:13px 15px;border-radius:13px;background:#fff3f1;border:1px solid #efcbc6;color:#a32b23}.status.success{background:#eef9f2;border-color:#cde8d7;color:#176943}
+.panel{display:none}.panel.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.stat{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px}.stat small{font-size:11px;letter-spacing:.07em;font-weight:800;color:var(--muted)}.stat strong{display:block;font-size:31px;margin-top:8px}
+.section{background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;margin-top:18px}.section-head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}.section-head h2{margin:0;font-size:21px}.section-head p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.filters{display:flex;gap:8px;flex-wrap:wrap}.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:800}.filter.active{background:var(--g);color:#fff;border-color:var(--g)}
+.list{display:grid;gap:14px}.empty{padding:42px;text-align:center;color:var(--muted);background:#f7faf8;border-radius:15px}
+.seller-card,.product-card{border:1px solid #e0ebe4;border-radius:18px;padding:18px;background:#fbfdfc}.seller-top,.product-top{display:flex;justify-content:space-between;gap:16px}.seller-top h3,.product-top h3{margin:0 0 5px}.sub{font-size:12px;color:var(--muted)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.chip{padding:6px 9px;border-radius:999px;font-size:11px;font-weight:800;background:#eef3f0;color:#5f7169}.chip.ok{background:#e2f4e8;color:#08734f}.chip.pending{background:#fff4df;color:#9a5b00}.chip.bad{background:#feeceb;color:#a12b24}
+.seller-actions,.review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.btn{border:0;border-radius:999px;padding:10px 14px;font-weight:800}.primary{background:var(--g);color:#fff}.secondary{background:#fff;border:1px solid var(--line);color:#285646}.danger{background:#fff0ef;color:var(--danger);border:1px solid #efc8c4}.btn:disabled{opacity:.45;cursor:not-allowed}
+.product-card{display:grid;grid-template-columns:230px 1fr;gap:18px}.gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gallery img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:#edf2ef}.gallery .noimg{grid-column:1/-1;min-height:160px;display:grid;place-items:center;border-radius:13px;background:#edf2ef;color:var(--muted)}
+.product-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}.product-meta div{background:#f2f7f4;border-radius:11px;padding:10px}.product-meta small{display:block;font-size:9px;letter-spacing:.06em;color:var(--muted);font-weight:800}.product-meta strong{display:block;margin-top:4px;font-size:12px}
+.note{width:100%;min-height:74px;border:1px solid #cfddd5;border-radius:12px;padding:11px;margin-top:12px;resize:vertical}
+.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px;text-align:left;border-bottom:1px solid #e8efeb;font-size:13px}.table th{font-size:10px;letter-spacing:.06em;color:var(--muted)}
+.admin-form{display:flex;gap:10px;flex-wrap:wrap}.admin-form input,.admin-form select{border:1px solid #cfded6;border-radius:12px;padding:11px 12px;background:#fff}.admin-form input{min-width:260px}
+@media(max-width:1000px){.admin-app{grid-template-columns:1fr}.sidebar{height:auto;position:relative}.sidebar-foot{position:static;margin-top:20px}.nav{grid-template-columns:repeat(4,1fr)}.content{padding:20px}.stats{grid-template-columns:1fr 1fr}.product-card{grid-template-columns:1fr}.product-meta{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.nav{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr}.topbar{padding:0 16px}.content{padding:16px}.page-head{display:block}.product-meta{grid-template-columns:1fr}.admin-form input{min-width:0;width:100%}}
+</style>
+<link href="assets/admin-seller-360.css?v=1" rel="stylesheet"/></head>
+<body>
+<div class="admin-app">
+<aside class="sidebar">
+<div class="brand"><div class="brand-mark">T</div><div><strong>TEYZA</strong><small>Admin Console</small></div></div>
+<nav class="nav">
+<button class="active" data-view="overview">Overview</button>
+<button data-view="sellers">Sellers</button>
+<button data-view="products">Products</button><button data-view="orders">Orders</button>
+<button data-view="admins">Admin users</button>
+</nav>
+<div class="sidebar-foot"><div class="admin-user" data-admin-email="">Checking admin session…</div><button class="signout" data-signout="" type="button">Sign out</button></div>
+</aside>
+<div class="main">
+<header class="topbar"><strong data-page-title="">Overview</strong><span class="role" data-admin-role="">ADMIN</span></header>
+<main class="content">
+<div class="status" data-admin-status="" hidden=""></div>
+<section class="panel active" data-panel="overview">
+<div class="page-head"><div><h1>Admin overview</h1><p>Seller verification, product reviews and platform operations.</p></div></div>
+<div class="stats">
+<article class="stat"><small>SELLERS</small><strong data-stat-sellers="">—</strong></article>
+<article class="stat"><small>PENDING SELLERS</small><strong data-stat-pending="">—</strong></article>
+<article class="stat"><small>PRODUCTS</small><strong data-stat-products="">—</strong></article>
+<article class="stat"><small>ORDERS</small><strong data-stat-orders="">—</strong></article>
+</div>
+<section class="section"><div class="section-head"><div><h2>Recent sellers</h2><p>Latest businesses in the Teyza workspace.</p></div></div><div class="list" data-recent-sellers=""><div class="empty">Loading sellers…</div></div></section>
+</section>
+<section class="panel" data-panel="sellers">
+<div class="page-head"><div><h1>Seller verification</h1><p>Review identity, proof of address and business approval.</p></div></div>
+<div class="admin-toolbar">
+<label class="admin-search">
+<span>Search sellers</span>
+<input autocomplete="off" data-seller-search="" placeholder="Business, email, phone or seller ID" type="search"/>
+</label>
+<div aria-label="Seller status filters" class="filters">
+<button class="filter active" data-seller-filter="all" type="button">All</button>
+<button class="filter" data-seller-filter="pending" type="button">Pending approval</button>
+<button class="filter" data-seller-filter="approved" type="button">Approved</button>
+<button class="filter" data-seller-filter="rejected" type="button">Action required</button>
+</div>
+</div><section class="section"><div class="list" data-sellers=""><div class="empty">Loading sellers…</div></div></section>
+</section>
+<section class="panel" data-panel="products">
+<div class="page-head"><div><h1>Product verification</h1><p>Every seller product must be approved before publishing.</p></div></div>
+<div class="filters">
+<button class="filter active" data-product-filter="pending">Pending <span data-count-pending="">0</span></button>
+<button class="filter" data-product-filter="approved">Approved <span data-count-approved="">0</span></button>
+<button class="filter" data-product-filter="rejected">Rejected <span data-count-rejected="">0</span></button>
+<button class="filter" data-product-filter="all">All <span data-count-all="">0</span></button>
+</div>
+<section class="section"><div class="list" data-products=""><div class="empty">Loading products…</div></div></section>
+</section>
+<section class="panel" data-panel="orders">
+<div class="page-head">
+<div>
+<h1>Seller orders</h1>
+<p>View orders across every seller workspace and open the seller account behind each order.</p>
+</div>
+</div>
+<section class="section">
+<div class="admin-toolbar">
+<label class="admin-search">
+<span>Search orders</span>
+<input autocomplete="off" data-order-search="" placeholder="Order number, customer or seller" type="search"/>
+</label>
+</div>
+<div class="table-wrap">
+<table class="table admin-orders-table">
+<thead>
+<tr>
+<th>Order</th>
+<th>Seller</th>
+<th>Customer</th>
+<th>Total</th>
+<th>Status</th>
+<th>Date</th>
+<th></th>
+</tr>
+</thead>
+<tbody data-admin-orders="">
+<tr><td colspan="7">Loading orders…</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</section><section class="panel" data-panel="admins">
+<div class="page-head"><div><h1>Admin users</h1><p>Manage accounts that can access the Teyza admin console.</p></div></div>
+<section class="section">
+<form class="admin-form" data-admin-form=""><input name="email" placeholder="admin@example.com" required="" type="email"/><select name="role"><option value="admin">Admin</option><option value="super_admin">Super Admin</option></select><button class="btn primary" type="submit">Add admin</button></form>
+<div class="table-wrap" style="margin-top:18px"><table class="table"><thead><tr><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody data-admin-users=""><tr><td colspan="3">Loading…</td></tr></tbody></table></div>
+</section>
+</section>
+</main>
+</div>
+</div><div class="admin-file-viewer-shell" data-admin-file-viewer="" hidden="">
+<button aria-label="Close file preview" class="admin-file-backdrop" data-close-file-viewer="" type="button"></button>
+<div aria-labelledby="adminFileTitle" aria-modal="true" class="admin-file-viewer" role="dialog">
+<header>
+<h2 data-admin-file-title="" id="adminFileTitle">Verification document</h2>
+<button aria-label="Close" class="admin-icon-button" data-close-file-viewer="" type="button">×</button>
+</header>
+<div class="admin-file-body" data-admin-file-body="">
+<div class="seller360-loading"><span class="admin-spinner"></span><strong>Loading document…</strong></div>
+</div>
+</div>
+</div><div class="admin-drawer-shell" data-seller-drawer="" hidden="">
+<button aria-label="Close seller details" class="admin-drawer-backdrop" data-close-seller-drawer="" type="button"></button>
+<aside aria-labelledby="seller360Title" aria-modal="true" class="admin-drawer" role="dialog">
+<div class="admin-drawer-head">
+<div class="seller360-heading">
+<div class="seller360-logo" data-seller360-logo="">T</div>
+<div>
+<span class="seller360-kicker">SELLER 360</span>
+<h2 data-seller360-name="" id="seller360Title">Seller details</h2>
+<p data-seller360-subtitle="">Loading seller information…</p>
+</div>
+</div>
+<button aria-label="Close" class="admin-icon-button" data-close-seller-drawer="" type="button">×</button>
+</div>
+<div class="seller360-status-row">
+<span class="chip pending" data-seller360-approval="">pending</span>
+<span class="seller360-progress-copy" data-seller360-progress="">Checking setup…</span>
+</div>
+<div class="seller360-progress-track"><i data-seller360-progress-bar=""></i></div>
+<nav aria-label="Seller information sections" class="seller360-tabs">
+<button class="active" data-seller360-tab="overview" type="button">Overview</button>
+<button data-seller360-tab="verification" type="button">Verification</button>
+<button data-seller360-tab="setup" type="button">Setup</button>
+<button data-seller360-tab="payments" type="button">Payments</button>
+<button data-seller360-tab="catalog" type="button">Products &amp; orders</button>
+</nav>
+<div class="admin-drawer-body">
+<div class="seller360-loading" data-seller360-loading="">
+<span aria-hidden="true" class="admin-spinner"></span>
+<strong>Loading complete seller workspace…</strong>
+</div>
+<div data-seller360-content="" hidden="">
+<section class="seller360-panel active" data-seller360-panel="overview">
+<div class="seller360-section">
+<h3>Getting started checklist</h3>
+<div class="seller-checklist" data-seller360-checklist=""></div>
+</div>
+<div class="seller360-section">
+<h3>Business profile</h3>
+<div class="seller-data-grid" data-seller360-business=""></div>
+</div>
+<div class="seller360-section">
+<h3>Account</h3>
+<div class="seller-data-grid" data-seller360-account=""></div>
+</div>
+</section>
+<section class="seller360-panel" data-seller360-panel="verification">
+<div class="seller360-section">
+<div class="seller360-section-head">
+<div>
+<h3>Verification status</h3>
+<p>Review seller evidence before company approval.</p>
+</div>
+</div>
+<div class="verification-grid" data-seller360-verification=""></div>
+</div>
+<div class="seller360-section">
+<h3>Verification files</h3>
+<div class="verification-file-actions" data-seller360-files=""></div>
+</div>
+<div class="seller360-section">
+<h3>Admin review</h3>
+<textarea class="note" data-seller360-note="" placeholder="Optional review note visible in the seller approval record"></textarea>
+<div class="review-actions" data-seller360-review-actions=""></div>
+</div>
+</section>
+<section class="seller360-panel" data-seller360-panel="setup">
+<div class="seller360-section">
+<h3>Delivery</h3>
+<div class="seller-data-grid" data-seller360-delivery=""></div>
+</div>
+<div class="seller360-section">
+<h3>Audience</h3>
+<div class="seller-data-grid" data-seller360-audience=""></div>
+</div>
+<div class="seller360-section">
+<h3>Shop &amp; support</h3>
+<div class="seller-data-grid" data-seller360-shop=""></div>
+</div>
+<div class="seller360-section">
+<h3>Selling channels</h3>
+<div class="chips" data-seller360-channels=""></div>
+<p class="seller360-help">This shows channels saved or used by the seller workspace. OAuth tokens and provider secrets are never exposed in the admin browser.</p>
+</div>
+</section>
+<section class="seller360-panel" data-seller360-panel="payments">
+<div class="seller360-section">
+<h3>Banking details</h3>
+<div class="seller-data-grid" data-seller360-banking=""></div>
+</div>
+<div class="seller360-section">
+<h3>Payment integrations</h3>
+<div class="seller-data-grid" data-seller360-payment-integrations=""></div>
+</div>
+</section>
+<section class="seller360-panel" data-seller360-panel="catalog">
+<div class="seller360-section">
+<h3>Products</h3>
+<div class="seller-mini-list" data-seller360-products=""></div>
+</div>
+<div class="seller360-section">
+<h3>Orders</h3>
+<div class="seller-mini-list" data-seller360-orders=""></div>
+</div>
+</section>
+</div>
+</div>
+</aside>
+</div>
+<script src="js/admin.js?v=60" type="module"></script>
+</body>
+</html>

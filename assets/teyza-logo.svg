@@ -1,19 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
 <title id="title">Teyza</title>
-<desc id="desc">Teyza gradient icon with white T and the Teyza wordmark</desc>
+<desc id="desc">Teyza green icon with white T and the words Teyza, Everyone can sell.</desc>
 <defs>
-  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#20d5f5"/>
-    <stop offset=".34" stop-color="#245df0"/>
-    <stop offset=".68" stop-color="#762de9"/>
-    <stop offset="1" stop-color="#ff2f86"/>
-  </linearGradient>
   <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-    <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#312e81" flood-opacity=".18"/>
+    <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0d8d65" flood-opacity=".16"/>
   </filter>
 </defs>
-<rect x="28" y="28" width="304" height="304" rx="82" fill="url(#g)" filter="url(#shadow)"/>
+<rect x="28" y="28" width="304" height="304" rx="82" fill="#0d8d65" filter="url(#shadow)"/>
 <path d="M112 112h156l-11 48h-51l-25 116h-51l25-116h-54z" fill="#fff"/>
-<text x="390" y="190" font-family="Inter,Arial,sans-serif" font-size="118" font-weight="800" letter-spacing="8" fill="#07142f">TEYZA</text>
-<text x="397" y="246" font-family="Inter,Arial,sans-serif" font-size="33" font-weight="600" letter-spacing=".5" fill="#64748b">Everyone can sell.</text>
+<text x="390" y="190" font-family="Inter,Arial,sans-serif" font-size="118" font-weight="800" letter-spacing="8" fill="#0d8d65">TEYZA</text>
+<text x="397" y="246" font-family="Inter,Arial,sans-serif" font-size="33" font-weight="600" letter-spacing=".5" fill="#667b73">Everyone can sell.</text>
 </svg>

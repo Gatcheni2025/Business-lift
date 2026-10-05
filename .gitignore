@@ -1,1 +1,8 @@
 .vscode/sftp.json
+
+functions/.env.business-lift-3c19c
+private_html/teyza-payments/config.php
+functions/.env*
+*.pem
+*.p12
+*.key

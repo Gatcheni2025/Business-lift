@@ -10,6 +10,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {auth} from "./landing-firebase.js";
 
+const WORKSPACE_API = location.hostname.endsWith(".vercel.app")
+  ? "/backend/workspace.php"
+  : "api/workspace.php";
+
+console.info("[Teyza auth] workspace API", WORKSPACE_API);
+
 const google = new GoogleAuthProvider();
 google.setCustomParameters({prompt: "select_account"});
 const facebook = new FacebookAuthProvider();
@@ -100,7 +106,7 @@ function authError(error, provider) {
 }
 async function bootstrap(user, details = {}) {
   const token = await user.getIdToken();
-  const response = await fetch("api/workspace.php?action=bootstrap", {
+  const response = await fetch(`${WORKSPACE_API}?action=bootstrap`, {
     method: "POST",
     headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"},
     body: JSON.stringify(details)
@@ -113,7 +119,7 @@ function loginDestination() {
   const target = new URLSearchParams(location.search).get("redirect") || "dashboard.html";
   return allowedDestinations.has(target.split(/[?#]/)[0]) && !target.includes("/") && !target.includes("\\") ? target : "dashboard.html";
 }
-const go = isNew => location.assign(isNew ? "dashboard.html?onboarding=1" : loginDestination());
+const go = isNew => location.assign(isNew ? "business-profile.html?onboarding=1" : loginDestination());
 
 async function socialSignIn(button) {
   if (button.disabled) return;

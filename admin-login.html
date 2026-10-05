@@ -1,1 +1,70 @@
-<!doctype html><html lang="en"><head><meta name="robots" content="noindex"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin sign in | Teyza</title><link rel="stylesheet" href="assets/workspace.css?v=10"><style>body{margin:0;background:#f4f7fb}.admin-login{min-height:100vh;display:grid;place-items:center;padding:24px}.admin-login-card{width:min(430px,100%);background:#fff;border:1px solid #dde4ee;border-radius:20px;padding:34px;box-shadow:0 18px 60px #07142f12}.admin-brand{display:flex;gap:12px;align-items:center;margin-bottom:28px}.admin-login-card h1{margin-bottom:6px}.admin-login-card .input-label{display:block;margin:16px 0}.admin-login-card .button{width:100%;justify-content:center}.admin-note{margin-top:20px;padding:12px;border-radius:10px;background:#f6f8fc;font-size:12px}</style></head><body><main class="admin-login"><section class="admin-login-card"><div class="admin-brand"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>ADMINISTRATION</small></span></div><span class="eyebrow">SECURE ADMIN PORTAL</span><h1>Sign in to Teyza Admin</h1><p>Use your authorised administrator account.</p><form data-admin-login><label class="input-label">Admin email<input name="email" type="email" autocomplete="username" required></label><label class="input-label">Password<input name="password" type="password" autocomplete="current-password" required></label><div class="form-status" data-admin-status hidden></div><button class="button button-primary" type="submit">Sign in to Admin</button></form><div class="admin-note">Seller accounts cannot access this portal unless a Super Admin has granted them an administrator role.</div></section></main><script type="module" src="js/admin-login.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#087f5b">
+<title>Admin Login | Teyza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--green:#087f5b;--dark:#11372d;--ink:#14352b;--muted:#6c7f76;--line:#d9e7df;--bg:#eef5f1}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,Arial,sans-serif;color:var(--ink)}
+body{min-height:100vh;background:linear-gradient(135deg,#eaf4ef 0%,#f7faf8 55%,#eef5f1 100%);display:grid;place-items:center;padding:24px}
+.login-shell{width:min(1020px,100%);min-height:620px;background:#fff;border:1px solid var(--line);border-radius:30px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;box-shadow:0 30px 80px rgba(17,55,45,.12)}
+.brand-panel{background:linear-gradient(145deg,#0c382d,#087f5b);color:#fff;padding:50px;display:flex;flex-direction:column;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:14px}.brand-mark{width:54px;height:54px;border-radius:16px;background:#11a575;display:grid;place-items:center;font-size:29px;font-weight:850}.brand strong{display:block;font-size:26px;letter-spacing:.08em}.brand small{color:#cbe3d9}
+.brand-copy h1{font-size:42px;line-height:1.08;margin:0 0 16px;letter-spacing:-1.3px}.brand-copy p{color:#d4e8e0;line-height:1.7;max-width:420px}.secure-note{font-size:12px;color:#b9d8cc}
+.form-panel{padding:50px;display:flex;align-items:center}.form-wrap{width:100%;max-width:390px;margin:auto}
+.kicker{color:var(--green);font-size:12px;font-weight:800;letter-spacing:.12em}.form-wrap h2{font-size:31px;margin:9px 0 8px}.intro{color:var(--muted);margin:0 0 28px;line-height:1.55}
+label{display:block;font-size:13px;font-weight:750;margin:15px 0 7px}.field{width:100%;border:1px solid #cadbd2;border-radius:14px;padding:14px 15px;font:inherit;outline:none;background:#fbfdfc}.field:focus{border-color:var(--green);box-shadow:0 0 0 4px rgba(8,127,91,.1);background:#fff}
+.password-row{position:relative}.password-row .field{padding-right:62px}.toggle{position:absolute;right:8px;top:8px;border:0;background:#edf5f0;color:#285b48;border-radius:10px;padding:7px 9px;font-weight:700}
+.primary{width:100%;border:0;border-radius:999px;background:var(--green);color:#fff;padding:14px 18px;font:inherit;font-weight:800;margin-top:20px;cursor:pointer;box-shadow:0 10px 24px rgba(8,127,91,.18)}.primary:disabled,.google:disabled{opacity:.55;cursor:wait}
+.divider{display:flex;align-items:center;gap:12px;color:#91a099;font-size:11px;margin:22px 0}.divider:before,.divider:after{content:"";height:1px;background:#e1ebe5;flex:1}
+.google{width:100%;border:1px solid var(--line);border-radius:999px;background:#fff;color:#244b3d;padding:13px 18px;font:inherit;font-weight:750;cursor:pointer}.google span{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:#f2f5f3;font-weight:850}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:12px}.link{border:0;background:transparent;color:var(--green);font-weight:750;padding:0;cursor:pointer;text-decoration:none}
+.status{margin-top:17px;border-radius:13px;padding:12px 13px;font-size:13px;line-height:1.45}.status[hidden]{display:none}.status.error{background:#fff0ee;color:#a12e25;border:1px solid #ecc6c2}.status.info{background:#eef7f2;color:#25634c;border:1px solid #cee6d8}.status.success{background:#eaf8ef;color:#136d45;border:1px solid #c5e8d2}
+.back{display:inline-block;margin-top:24px;color:#63796f;text-decoration:none;font-size:13px}
+@media(max-width:760px){.login-shell{grid-template-columns:1fr;min-height:auto}.brand-panel{padding:32px;min-height:250px}.brand-copy h1{font-size:32px}.secure-note{display:none}.form-panel{padding:32px 24px}}
+</style>
+</head>
+<body>
+<main class="login-shell">
+<section class="brand-panel">
+ <div class="brand"><div class="brand-mark">T</div><div><strong>TEYZA</strong><small>Admin Console</small></div></div>
+ <div class="brand-copy"><h1>Manage Teyza with confidence.</h1><p>Review sellers, verify products and manage platform operations from one secure admin workspace.</p></div>
+ <div class="secure-note">Administrator access only · Authentication is verified by Teyza before access is granted.</div>
+</section>
+<section class="form-panel">
+ <div class="form-wrap">
+  <span class="kicker">ADMIN ACCESS</span>
+  <h2>Sign in</h2>
+  <p class="intro">Use an authorised Teyza administrator account.</p>
+
+  <form data-admin-login-form>
+   <label for="adminEmail">Email address</label>
+   <input class="field" id="adminEmail" name="email" type="email" autocomplete="username" placeholder="admin@teyza.co.za" required>
+
+   <label for="adminPassword">Password</label>
+   <div class="password-row">
+    <input class="field" id="adminPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password" required>
+    <button class="toggle" type="button" data-toggle-password>Show</button>
+   </div>
+
+   <button class="primary" type="submit" data-email-login>Sign in to Admin</button>
+  </form>
+
+  <div class="row"><button class="link" type="button" data-forgot-password>Forgot password?</button></div>
+
+  <div class="divider">OR</div>
+  <button class="google" type="button" data-google-login><span>G</span>Continue with Google</button>
+
+  <div class="status" data-login-status hidden></div>
+  <a class="back" href="index.html">← Return to Teyza</a>
+ </div>
+</section>
+</main>
+<script type="module" src="js/admin-login.js?v=39"></script>
+</body>
+</html>

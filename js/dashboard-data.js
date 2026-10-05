@@ -2,6 +2,7 @@ import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/fir
 import {auth} from "./firebase-config.js";
 import {getBusinessContext,getWorkspaceSummary,hydrateBusiness,workspaceError} from "./business-context.js";
 
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const moneyShort=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0});
 const money=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",minimumFractionDigits:2,maximumFractionDigits:2});
 const set=(selector,value)=>document.querySelectorAll(selector).forEach(node=>node.textContent=value);
@@ -17,7 +18,7 @@ function showError(message){
 
 async function getReadiness(user){
   const token=await user.getIdToken();
-  const response=await fetch("api/workspace.php?action=seller-readiness",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+  const response=await fetch(`${API_BASE}/workspace.php?action=seller-readiness`,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
   const data=await response.json().catch(()=>({}));
   if(!response.ok||!data.ok)throw new Error(data.error||"Unable to check seller verification.");
   return data;
@@ -26,74 +27,83 @@ async function getReadiness(user){
 async function getChatInbox(user){
   try{
     const token=await user.getIdToken();
-    const url=new URL("api/chat.php",location.href);url.searchParams.set("mode","seller-inbox");
+    const url=new URL(`${API_BASE}/chat.php`,location.origin);url.searchParams.set("mode","seller-inbox");
     const response=await fetch(url,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
     const data=await response.json().catch(()=>({}));
     return response.ok&&data.ok?(data.threads||[]):[];
   }catch(_){return []}
 }
 
-function updateVerifyStep(name,done){
-  const node=document.querySelector('[data-v-step="'+name+'"]');
-  if(!node)return;
-  node.classList.toggle("done",!!done);
-  const icon=node.querySelector("span");if(icon)icon.textContent=done?"✓":"○";
+function renderApprovalTag(readiness){
+  const tag=document.querySelector("[data-seller-approval-tag]");
+  const text=document.querySelector("[data-seller-approval-text]");
+
+  if(!tag||!text)return;
+
+  const approval=readiness.companyApproval||{};
+  const status=String(approval.status||"").toLowerCase();
+  const submitted=Boolean(approval.submittedAt);
+
+  /*
+   * Only show "Pending admin approval" after the seller has
+   * actually submitted the verification/company-approval package.
+   */
+  if(status==="pending"&&submitted){
+    tag.hidden=false;
+    tag.dataset.approvalState="pending";
+    text.textContent="Pending admin approval";
+    tag.title="Your seller verification has been submitted and is waiting for Teyza admin review.";
+    return;
+  }
+
+  if(status==="approved"){
+    tag.hidden=false;
+    tag.dataset.approvalState="approved";
+    text.textContent="Seller approved";
+    tag.title="Your seller account has been approved by Teyza.";
+    return;
+  }
+
+  if(status==="rejected"){
+    tag.hidden=false;
+    tag.dataset.approvalState="rejected";
+    text.textContent="Admin action required";
+    tag.title=approval.note||"Teyza requested changes to your seller verification.";
+    return;
+  }
+
+  tag.hidden=true;
+  delete tag.dataset.approvalState;
 }
 
 function renderReadiness(readiness){
-  const v=readiness.businessVerification||{};
-  const approved=String(readiness.companyApproval?.status||"pending").toLowerCase()==="approved";
-  const identityDone=Boolean(v.identityVerified);
-  const proofDone=Boolean(v.proofAddressMatchVerified);
-  const checks={phone:Boolean(v.phoneVerified),identity:identityDone,location:Boolean(v.locationConfirmed),proof:proofDone,approval:approved};
-  Object.entries(checks).forEach(([key,value])=>updateVerifyStep(key,value));
-  const complete=Object.values(checks).filter(Boolean).length;
-  set("[data-app-verification-score]",complete+"/5");
+  const dashboardAllowed=
+    readiness.dashboardAccess===true ||
+    readiness.sellerSetupComplete===true;
 
-  const verificationCard=document.querySelector("[data-app-verification]");
-  const sellHero=document.querySelector("[data-app-sell-hero]");
-  const title=document.querySelector("[data-app-verification-title]");
-  const copy=document.querySelector("[data-app-verification-copy]");
-  const action=document.querySelector("[data-app-verification-action]");
-  const dockSell=document.querySelector("[data-app-dock-sell]");
-  const canSell=approved&&Boolean(readiness.productReady);
+  console.info('[Teyza seller readiness]',{
+    dashboardAccess:readiness.dashboardAccess,
+    sellerSetupComplete:readiness.sellerSetupComplete,
+    productReady:readiness.productReady,
+    deliveryComplete:readiness.deliveryComplete,
+    paymentComplete:readiness.paymentComplete,
+    audienceComplete:readiness.audienceComplete,
+    businessProfileComplete:readiness.businessProfileComplete,
+    verificationComplete:readiness.verificationComplete,
+    approvalComplete:readiness.approvalComplete
+  });
 
-  let nextHref="business-profile.html?setup=1";
-  let nextLabel="Continue verification →";
-  let nextCopy="Complete your business details and verification checks once. Teyza will review your documents before selling is unlocked.";
-
-  if(!checks.phone||!v.identitySubmitted||!checks.location||!v.proofOfAddressUploaded){
-    nextHref="business-profile.html?setup=1";
-  }else if(!identityDone||!proofDone||!approved){
-    nextHref="business-profile.html";
-    nextLabel="View verification status →";
-    nextCopy="Your verification is being reviewed. Once approved, finish your delivery and banking preferences and start selling.";
-  }else if(!readiness.deliveryComplete){
-    nextHref="delivery-settings.html?setup=1";
-    nextLabel="Set delivery →";
-    nextCopy="Your business is verified. Choose how customers will receive orders.";
-  }else if(!readiness.paymentComplete){
-    nextHref="payments.html";
-    nextLabel="Set banking →";
-    nextCopy="Your business is verified. Add where your sales money should be paid.";
+  if(!dashboardAllowed){
+    /*
+     * guard.js is the single owner of access redirects.
+     * Dashboard data must never create a second onboarding redirect loop.
+     */
+    return false;
   }
 
-  if(action){action.href=nextHref;action.textContent=nextLabel}
-  if(title){
-    if(canSell)title.textContent="Verified and ready to sell";
-    else if(approved)title.textContent="Verified — finish your selling setup";
-    else if(v.identitySubmitted)title.textContent="Verification in progress";
-    else title.textContent="Get verified to unlock selling";
-  }
-  if(copy)copy.textContent=canSell?"Your Teyza seller account is ready. Tap Sell whenever you want to add something new.":nextCopy;
-
-  if(verificationCard)verificationCard.hidden=canSell;
-  if(sellHero)sellHero.hidden=!canSell;
-  if(dockSell){
-    dockSell.href=canSell?"products.html#new-product":nextHref;
-    dockSell.title=canSell?"Sell a product":"Finish setup to unlock selling";
-  }
-  document.querySelectorAll("[data-primary-seller-action]").forEach(link=>{link.href=canSell?"products.html#new-product":nextHref;});
+  document.querySelectorAll('[data-primary-seller-action]')
+    .forEach(link=>link.href='sell.html');
+  return true;
 }
 
 function renderOrders(orders){
@@ -107,6 +117,36 @@ function renderOrders(orders){
     const status=normalizedStatus(order);
     const product=order.items?.[0]?.name||"Order";
     return '<a class="app-order-row" href="orders.html"><div><strong>'+escapeHtml(product)+'</strong><small>'+escapeHtml(order.customerName||order.customerId||"Customer")+' · '+escapeHtml(order.orderNumber||"Order")+'</small></div><div class="app-order-value">'+money.format(totalOf(order))+'<span class="app-status-mini">'+escapeHtml(status)+'</span></div></a>';
+  }).join("");
+}
+
+function renderDeliveries(orders){
+  const target=document.querySelector("[data-dashboard-deliveries]");
+  if(!target)return;
+
+  const active=orders.filter(order=>
+    ["new","processing","shipping"].includes(
+      normalizedStatus(order)
+    )
+  );
+
+  if(!active.length){
+    target.innerHTML='<div class="empty-state"><h3>No active deliveries</h3><p>Orders that need collection or delivery will appear here.</p></div>';
+    return;
+  }
+
+  target.innerHTML=active.slice(0,6).map(order=>{
+    const state=normalizedStatus(order);
+    const customer=order.customerName||order.customerId||"Customer";
+    const reference=order.trackingNumber||order.orderNumber||"Order";
+
+    return '<a class="app-order-row" href="orders.html#fulfilment"><div><strong>'+
+      escapeHtml(reference)+'</strong><small>'+
+      escapeHtml(customer)+' · '+escapeHtml(state)+
+      '</small></div><div class="app-order-value">'+
+      money.format(totalOf(order))+
+      '<span class="app-status-mini">'+escapeHtml(state)+
+      '</span></div></a>';
   }).join("");
 }
 
@@ -130,7 +170,8 @@ function renderChats(threads){
 async function load(user){
   const [context,summary,readiness,threads]=await Promise.all([getBusinessContext(user),getWorkspaceSummary(user),getReadiness(user),getChatInbox(user)]);
   hydrateBusiness(context,user);
-  renderReadiness(readiness);
+  if(!renderReadiness(readiness))return;
+  renderApprovalTag(readiness);
 
   const business=summary.business||context.business||{};
   const orders=summary.orders||[];
@@ -156,6 +197,7 @@ async function load(user){
   set("[data-stat-paid]",moneyShort.format(paidTotal));
 
   renderOrders(orders);
+  renderDeliveries(orders);
   renderChats(threads);
 
   const sellHero=document.querySelector("[data-app-sell-hero]");

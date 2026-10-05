@@ -1,0 +1,68 @@
+
+.channel-directory-note{
+  margin:10px 0 0;
+  color:#63756c;
+  font-size:13px;
+  line-height:1.55;
+}
+.channels .card{
+  scroll-margin-top:100px;
+  transition:
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease;
+}
+.channels .card.channel-card-focus{
+  border-color:#17956b;
+  box-shadow:0 0 0 4px rgba(23,149,107,.10);
+  transform:translateY(-1px);
+}
+
+
+/* Provider chooser + approval messaging */
+.channels .chooser{
+  grid-column:1 / -1;
+  width:100%;
+  min-width:0;
+}
+.choose-label{
+  margin:8px 0 10px;
+  color:#344054;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.45;
+}
+.choose-account{
+  width:100%;
+  min-width:0;
+  margin-top:8px;
+  padding:11px 13px;
+  border:1px solid #dfe5ec;
+  border-radius:10px;
+  background:#fff;
+  color:#27364a;
+  text-align:left;
+  overflow-wrap:anywhere;
+}
+.provider-note{
+  margin:6px 0 9px;
+  padding:9px 10px;
+  border-radius:9px;
+  background:#fff8e7;
+  color:#7b5c12;
+  font-size:10.5px;
+  line-height:1.5;
+}
+@media(max-width:700px){
+  .channel-choice-head strong,
+  .channel-choice-head span,
+  .choose-label{
+    overflow-wrap:anywhere;
+  }
+  .channel-choice{
+    grid-template-columns:38px minmax(0,1fr);
+  }
+  .channel-choice-action{
+    grid-column:2;
+  }
+}

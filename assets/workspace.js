@@ -1,5 +1,6 @@
 (() => {
  document.body.classList.add('dashboard-contrast');
+ if(new URLSearchParams(location.search).get('embedded')==='1')document.documentElement.classList.add('embedded-onboarding');
  document.title=document.title.replace(/Business Expo/gi,'Teyza');
  document.querySelectorAll('.workspace-brand').forEach(brand=>{brand.innerHTML='<span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span>';});
  document.querySelectorAll('.sidebar-footer>small,.workspace-footer>span').forEach(el=>el.textContent='TEYZA · Everyone can sell.');
@@ -36,22 +37,21 @@
  document.querySelectorAll('.form-status,.notice,[id$="Status"]').forEach(el=>{el.setAttribute('role','status');el.setAttribute('aria-live','polite')});
  // Block accidental native GET submission while a page's module is still loading.
  document.querySelectorAll('form').forEach(form=>form.addEventListener('submit',event=>event.preventDefault()));
+ // Use normal pages for setup; never render an entire workspace inside another one.
+ if(!document.querySelector('script[src*="settings-onboarding.js"]')){
+  const guide=document.createElement('script');guide.type='module';guide.src='js/settings-onboarding.js?v=2';document.body.append(guide);
+ }
  // App-style bottom navigation keeps the four daily seller jobs one tap away.
  if(new URLSearchParams(location.search).get('embedded')!=='1' && !document.querySelector('[data-teyza-app-dock]')){
   const page=(location.pathname.split('/').pop()||'dashboard.html').toLowerCase();
   const dock=document.createElement('nav');
   dock.className='teyza-app-dock';dock.dataset.teyzaAppDock='';dock.setAttribute('aria-label','Seller shortcuts');
-  const items=[
-   ['clients','customers.html','ph-users-three','Clients'],
-   ['sell','products.html#new-product','ph-plus','Sell'],
-   ['delivery','orders.html#fulfilment','ph-truck','Delivery'],
-   ['banking','payments.html','ph-wallet','Banking']
-  ];
-  const active=page==='customers.html'?'clients':page==='products.html'?'sell':(['orders.html','delivery-settings.html'].includes(page)?'delivery':page==='payments.html'?'banking':'');
+  const items=[['chats','dashboard.html','ph-chat-circle','Chats'],['banking','payments.html','ph-wallet','Banking'],['products','products.html','ph-package','Products'],['settings','settings.html','ph-gear','Settings']];
+  const active=page==='dashboard.html'?'chats':page==='payments.html'?'banking':page==='products.html'?'products':'settings';
   items.forEach(([key,href,icon,label])=>{
    const link=document.createElement('a');link.href=href;link.dataset.dock=key;
    if(key==='sell')link.dataset.appDockSell='';
-   if(active===key)link.classList.add('active');
+   if(active===key){link.classList.add('active');link.setAttribute('aria-current','page');}
    link.innerHTML=key==='sell'?'<span class="dock-sell-plus" aria-hidden="true">+</span><span>Sell</span>':`<i class="ph ${icon}" aria-hidden="true"></i><span>${label}</span>`;
    dock.appendChild(link);
   });
@@ -63,7 +63,7 @@
    const link=document.createElement('link');link.rel='stylesheet';link.href='assets/live-chat.css?v=1';link.dataset.teyzaLiveChat='1';document.head.appendChild(link);
   }
   if(!document.querySelector('script[data-teyza-live-chat-seller]')){
-   const script=document.createElement('script');script.type='module';script.src='js/live-chat-seller.js?v=2';script.dataset.teyzaLiveChatSeller='1';document.body.appendChild(script);
+   const script=document.createElement('script');script.type='module';script.src='js/live-chat-seller.js?v=3';script.dataset.teyzaLiveChatSeller='1';document.body.appendChild(script);
   }
  }
 })();

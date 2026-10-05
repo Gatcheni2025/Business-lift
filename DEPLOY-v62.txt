@@ -1,0 +1,159 @@
+TEYZA BUYER CHECKOUT + PAYSTACK SPLIT v62
+
+WHAT THIS BUILD ADDS
+====================
+
+BUYER SIDE
+----------
+/shop.html
+- Public Teyza Store
+- Only approved products from approved sellers
+- Search + category filter
+- Buy now button
+
+/checkout.html
+- Guest checkout
+- Buyer name, email, phone
+- Delivery address when required
+- Quantity control
+- Server-calculated order total
+- Secure redirect to Paystack
+
+/payment-success.html
+- Server-side Paystack verification
+- Paid / pending / failed result
+- Teyza order number and seller
+
+SELLER BANKING / PAYOUT
+-----------------------
+/payments.html is now seller payout banking only.
+
+It:
+- loads live Paystack-supported South African banks
+- verifies account number + account holder
+- creates a Paystack seller subaccount
+- saves only masked bank details in the normal Teyza workspace
+- removes the old full account number from normal workspace JSON after connection
+
+PAYMENT BACKEND
+---------------
+/api/storefront.php
+/api/paystack-initialize.php
+/api/paystack-verify.php
+/api/paystack-webhook.php
+/api/paystack-subaccount.php
+/api/_paystack.php
+
+PRIVATE CONFIG
+--------------
+Copy:
+  /private_html/teyza-payments/config.example.php
+
+to:
+  /private_html/teyza-payments/config.php
+
+Then edit config.php and add your TEST Paystack secret key.
+
+START WITH:
+  'split_mode' => 'none'
+
+This lets us test the complete buyer flow first.
+
+AFTER SELLER PAYOUT ACCOUNTS ARE CONNECTED
+==========================================
+
+OPTION A — PERCENTAGE
+---------------------
+'split_mode' => 'percent'
+'platform_fee_percent' => 5
+
+Example R1,000 order:
+Teyza fee: R50
+Seller gross share: R950
+
+OPTION B — FLAT
+---------------
+'split_mode' => 'flat'
+'platform_fee_flat_zar' => 10
+
+Example R1,000 order:
+Teyza fee: R10
+Seller gross share: R990
+
+The payment initializer uses the seller's:
+  settings.banking.paystackSubaccountCode
+
+and sends Paystack:
+  subaccount
+  transaction_charge
+  bearer
+
+SECURITY
+========
+- Paystack secret key stays under private_html.
+- Checkout never trusts price/total sent by the browser.
+- Seller and product approval are re-checked server-side.
+- Product stock is re-checked server-side.
+- Webhook signature is verified with HMAC SHA-512.
+- Payment amount + ZAR currency are checked before an order is marked paid.
+- Product stock is reduced only once after confirmed payment.
+- Buyer card details never touch Teyza's PHP server.
+
+WEBHOOK
+=======
+In Paystack Dashboard set the webhook URL to:
+
+https://teyza.co.za/api/paystack-webhook.php
+
+CALLBACK
+========
+https://teyza.co.za/payment-success.html
+
+UPLOAD TO PUBLIC_HTML
+=====================
+/shop.html
+/checkout.html
+/payment-success.html
+/payments.html
+/assets/shop.css
+/assets/checkout.css
+/assets/payout-banking.css
+/js/shop.js
+/js/checkout.js
+/js/payment-success.js
+/js/payout-banking.js
+/api/_paystack.php
+/api/storefront.php
+/api/paystack-initialize.php
+/api/paystack-verify.php
+/api/paystack-webhook.php
+/api/paystack-subaccount.php
+
+UPLOAD OUTSIDE PUBLIC_HTML
+==========================
+/private_html/teyza-payments/config.php
+
+Use the supplied config.example.php as the template.
+
+TEST ORDER
+==========
+1. Put sk_test_... in config.php
+2. Keep split_mode = none
+3. Open:
+   https://teyza.co.za/shop.html
+4. Choose an approved Teyza product
+5. Complete checkout
+6. Pay with a Paystack test method
+7. Return to payment-success.html
+8. Seller Orders and Admin Orders should contain the new order
+9. Confirm paymentStatus = paid
+
+THEN TEST SPLIT
+===============
+1. Seller opens Banking
+2. Verify account
+3. Connect payout account
+4. settings.banking.paystackSubaccountCode is saved
+5. Change config split_mode to percent or flat
+6. Run another TEST transaction
+7. Confirm the split in Paystack Dashboard -> Transactions / Subaccounts
