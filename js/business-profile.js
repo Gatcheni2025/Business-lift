@@ -2,6 +2,7 @@ import {onAuthStateChanged,RecaptchaVerifier,PhoneAuthProvider,updatePhoneNumber
 import {app,auth} from "./firebase-config.js";
 import {getBusinessContext,hydrateBusiness,workspaceError,saveBusinessProfile} from "./business-context.js";
 import {suggestAddresses,addressAt} from "./address-search.js";
+const API_BASE=location.hostname.endsWith(".vercel.app")?"/backend":"api";
 const form=document.querySelector('[data-business-profile]'),retry=document.querySelector('[data-profile-retry]'),status=document.querySelector('[data-profile-status]');
 const fields={'business-name':'businessName','business-type':'businessType',industry:'industry',country:'country',phone:'phone',address:'address',about:'about'};const shopFields={'support-email':'supportEmail','support-phone':'supportPhone','returns-policy':'returnsPolicy'};
 let context=null,currentUser=null,busy=false,phoneVerificationId='',recaptcha=null,recaptchaWidgetId=null,map=null,marker=null,currentPoint=null,verification=null,selectedAddress='',otpPhone='',addressTimer=null,addressRequest=null,phoneVerificationAuth=null,currentProfileStep=1;
@@ -417,9 +418,9 @@ function renderLogo(url){
 
  syncStepOneContinue();
 }
-async function logoRequest(method,file){const token=await currentUser.getIdToken();const opts={method,headers:{Authorization:'Bearer '+token}};if(file){const fd=new FormData();fd.append('logo',file);opts.body=fd;}const res=await fetch('api/business-logo.php',opts);const d=await res.json();if(!res.ok||!d.ok)throw new Error(d.error||'Image update failed');return d;}
+async function logoRequest(method,file){const token=await currentUser.getIdToken();const opts={method,headers:{Authorization:'Bearer '+token}};if(file){const fd=new FormData();fd.append('logo',file);opts.body=fd;}const res=await fetch(`${API_BASE}/business-logo.php`,opts);const d=await res.json();if(!res.ok||!d.ok)throw new Error(d.error||'Image update failed');return d;}
 function updateSummary(data){$('[data-profile-progress]').textContent=completion(data)+'%';$('[data-verification-status]').textContent=data.profileComplete?'Information complete':'In progress';}
-async function api(action,options={}){const token=await currentUser.getIdToken();const r=await fetch('api/workspace.php?action='+encodeURIComponent(action),{...options,headers:{...(options.headers||{}),Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Request failed');return d;}
+async function api(action,options={}){const token=await currentUser.getIdToken();const r=await fetch(`${API_BASE}/workspace.php?action=${encodeURIComponent(action)}`,{...options,headers:{...(options.headers||{}),Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Request failed');return d;}
 function renderVerification(v={}){
  verification=v;const items=[['[data-check-phone]',v.phoneVerified],['[data-check-identity]',v.identitySubmitted||v.identityVerified],['[data-check-location]',v.locationConfirmed],['[data-check-proof]',v.proofOfAddressUploaded]];
  items.forEach(([s,done])=>{const n=$(s);if(!n)return;n.classList.toggle('done',!!done);const icon=n.querySelector(':scope > span');if(icon)icon.textContent=done?'✓':'○';});
@@ -555,7 +556,7 @@ function phoneError(e){const messages={
  'auth/too-many-requests':'Too many SMS attempts. Wait before requesting another code.',
  'auth/quota-exceeded':'The SMS quota has been reached. Contact Teyza support.',
  'auth/billing-not-enabled':'SMS billing is not enabled for this Firebase project. Contact Teyza support.',
- 'auth/captcha-check-failed':`The Firebase phone security check was rejected for ${location.hostname}. Confirm Phone Auth is enabled, South Africa is allowed in the SMS region policy, ${location.hostname} is an Authorized domain, and reCAPTCHA Enterprise phone protection is not blocking the request.`,
+ 'auth/captcha-check-failed':`Firebase rejected the phone security check for ${location.hostname}. This is a hostname authorization problem. Add ${location.hostname} under Firebase Authentication → Settings → Authorized domains. For production use teyza.co.za (and www.teyza.co.za if you serve www). For Vercel phone testing, use the stable business-lift.vercel.app domain or authorize the exact preview hostname.`,
  'auth/invalid-app-credential':'The security check could not verify this site. Check the authorized domain and try again.',
  'auth/network-request-failed':'Connection failed while sending the code. Check your internet connection and retry.',
  'auth/invalid-verification-code':'That code is incorrect. Check the SMS and try again.',
@@ -590,7 +591,7 @@ async function buildPhoneRecaptcha(){
 
 async function saveVerifiedPhone(phone,phoneToken){
  const mainToken=await currentUser.getIdToken();
- const r=await fetch('api/workspace.php?action=verification',{
+ const r=await fetch(`${API_BASE}/workspace.php?action=verification`,{
    method:'POST',
    headers:{Authorization:'Bearer '+mainToken,'Content-Type':'application/json','X-Phone-Verification-Token':phoneToken},
    body:JSON.stringify({type:'phone',phone})
@@ -604,6 +605,14 @@ async function saveVerifiedPhone(phone,phoneToken){
 }
 $('[data-send-otp]').addEventListener('click',async()=>{
  const phone=normalizePhone(form.elements.phone.value),send=$('[data-send-otp]');
+
+ if(location.hostname.toLowerCase()==='www.teyza.co.za'){
+  const canonical=new URL(location.href);
+  canonical.hostname='teyza.co.za';
+  show('Opening the secure Teyza domain for phone verification…','info');
+  location.replace(canonical.toString());
+  return;
+ }
 
  if(!/^\+27\d{9}$/.test(phone)){
   show('Enter a South African mobile number, for example +27 60 123 4567.');
@@ -750,7 +759,7 @@ $('[data-upload-proof]').addEventListener('click',async()=>{
  try{
    b.disabled=true;b.textContent='Uploading…';
    const token=await currentUser.getIdToken();const fd=new FormData();fd.append('proof',file);
-   const r=await fetch('api/verification-upload.php',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
+   const r=await fetch(`${API_BASE}/verification-upload.php`,{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
    const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||(r.status===413?'The server upload limit was exceeded. Choose a smaller file.':'Upload failed. Please try again.'));
    await refreshVerification();
    updateProfileStepStates();
@@ -939,7 +948,7 @@ async function uploadIdentityDraft(type,file,filename){
  fd.append('type',type);
  fd.append(type==='identity-document-draft'?'document':'selfie',file,filename||file.name);
 
- const res=await fetch('api/verification-upload.php',{
+ const res=await fetch(`${API_BASE}/verification-upload.php`,{
   method:'POST',
   headers:{Authorization:'Bearer '+token},
   body:fd
@@ -1034,7 +1043,7 @@ $('[data-submit-identity]')?.addEventListener('click',async()=>{
   fd.append('type','identity-submit');
   fd.append('consent','yes');
 
-  const res=await fetch('api/verification-upload.php',{
+  const res=await fetch(`${API_BASE}/verification-upload.php`,{
    method:'POST',
    headers:{Authorization:'Bearer '+token},
    body:fd
