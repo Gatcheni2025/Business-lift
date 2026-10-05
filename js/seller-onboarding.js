@@ -261,8 +261,18 @@ function renderOnboardingChooser(channel) {
   chooser.dataset.onboardingAccountChooser = channel;
   chooser.className = "onboarding-account-chooser";
   const title = document.createElement("strong");
-  title.textContent = channel === "google" ? "Choose your Google Merchant account" : `Choose the Facebook Page for ${channel === "instagram" ? "Instagram" : "Facebook"}`;
-  chooser.appendChild(title);
+  const help = document.createElement("span");
+  if (channel === "google") {
+    title.textContent = "Choose the Merchant Center account for Google Shopping";
+    help.textContent = "Select the Merchant Center account Teyza should use for approved product listings.";
+  } else if (channel === "instagram") {
+    title.textContent = "Choose the Facebook Page for Instagram";
+    help.textContent = "Select the Facebook Page that owns the Professional Instagram account you want to use.";
+  } else {
+    title.textContent = "Choose the Facebook Page for Facebook";
+    help.textContent = "Select the business Facebook Page Teyza should use for approved product publishing.";
+  }
+  chooser.append(title, help);
 
   items.forEach((item) => {
     if (channel === "instagram" && !item.instagramBusinessId) return;
