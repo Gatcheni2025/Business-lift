@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Sales channels | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"><link rel="stylesheet" href="assets/sales-channels-extra.css?v=1"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#087f5b"><title>Sales channels | Teyza</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/workspace.css?v=20"><script src="https://unpkg.com/@phosphor-icons/web" defer></script><link rel="stylesheet" href="assets/simple-workspace.css?v=3"><link rel="stylesheet" href="assets/sales-channels-extra.css?v=2"></head>
 <body class="workspace" data-page="sales-channels">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <aside class="workspace-sidebar" id="sidebar"><a class="workspace-brand" href="dashboard.html"><span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span></a>
@@ -39,7 +39,7 @@
     </article>
     <article class="card" id="channel-google" data-channel-card="google">
       <div class="icon"><i class="ph ph-google-logo"></i></div>
-      <div><div class="title">Google Shopping</div><div class="desc">Connect Merchant Center and confirm the account Teyza should publish products to.</div><span class="status" data-status="google">Checking…</span></div>
+      <div><div class="title">Google Shopping</div><div class="desc">Connect Merchant Center and confirm the account Teyza should publish products to.</div><div class="provider-note">If Google shows <b>Access blocked</b>, public OAuth access is still awaiting Google verification. Test users can still be added in Google Auth Platform → Audience.</div><span class="status" data-status="google">Checking…</span></div>
       <button class="btn" data-connect="google">Connect</button>
       <div class="chooser" data-chooser="google"></div>
     </article>
@@ -55,6 +55,7 @@
       <div>
         <div class="title">YouTube</div>
         <div class="desc">Connect the seller's YouTube channel for product videos, Shorts and supported analytics.</div>
+        <div class="provider-note">YouTube connection for public sellers requires Google OAuth verification for the requested YouTube scopes.</div>
         <span class="status" data-status="youtube">Checking…</span>
       </div>
       <button class="btn" data-connect="youtube">Connect</button>
@@ -96,7 +97,7 @@
 
 </main><footer class="workspace-footer"><span>TEYZA · Everyone can sell.</span><a href="seller-onboarding.html">Need a hand? Open the setup guide ↗</a></footer></div>
 <script src="assets/workspace.js?v=6"></script><script type="module" src="js/auth.js"></script><script type="module" src="js/guard.js?v=4"></script>
-<script type="module" src="js/social-connections.js?v=12"></script>
+<script type="module" src="js/social-connections.js?v=13"></script>
 <script>
 const params=new URLSearchParams(location.search);const back=params.get('return');if(back==='dashboard'){document.getElementById('continueSetup').href='dashboard.html';document.getElementById('continueSetup').textContent='Back to dashboard →'}
 </script>
