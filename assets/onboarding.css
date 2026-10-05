@@ -549,3 +549,33 @@ a {
     padding:12px;
   }
 }
+
+
+/* Selling channel chooser v4 */
+.selling-platform-row{min-width:0}
+.selling-platform-copy{min-width:0}
+.selling-platform-row > .onboarding-account-chooser,
+.selling-platform-row > [data-onboarding-account-chooser]{
+  grid-column:1 / -1 !important;width:100% !important;min-width:0 !important;max-width:none !important;
+  margin:8px 0 0 !important;padding:14px !important;display:grid !important;
+  grid-template-columns:minmax(0,1fr) !important;gap:9px !important;align-items:stretch !important;
+  border:1px solid #dbe8e1 !important;border-radius:14px !important;background:#f7fbf9 !important;
+}
+.onboarding-account-chooser > strong,.onboarding-account-chooser > span{
+  width:100% !important;min-width:0 !important;max-width:none !important;
+  white-space:normal !important;overflow-wrap:normal !important;word-break:normal !important;
+}
+.onboarding-account-chooser .btn{
+  display:flex !important;width:100% !important;min-width:0 !important;min-height:42px !important;
+  padding:10px 12px !important;align-items:center !important;justify-content:flex-start !important;
+  white-space:normal !important;overflow-wrap:anywhere !important;word-break:normal !important;text-align:left !important;
+}
+.channel-setup-hint{grid-column:1 / -1;margin:7px 0 0;padding:11px 13px;border-radius:12px;background:#f4f8f6;color:#62766e;font-size:11px;line-height:1.55}
+.channel-setup-hint strong{display:block;margin-bottom:3px;color:#173c2e;font-size:12px}
+@media(max-width:600px){
+  .selling-platform-row{grid-template-columns:42px minmax(0,1fr) !important}
+  .sell-here-button{grid-column:2 !important;justify-self:start !important}
+  .selling-platform-row > .onboarding-account-chooser,
+  .selling-platform-row > [data-onboarding-account-chooser],
+  .channel-setup-hint{grid-column:1 / -1 !important}
+}
