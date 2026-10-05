@@ -301,6 +301,27 @@ function renderOnboardingChooser(channel) {
   card.appendChild(chooser);
 }
 
+function renderChannelSetupHint(channel) {
+  const card = document.querySelector(`[data-selling-channel="${channel}"]`);
+  if (!card) return;
+  card.querySelector("[data-channel-setup-hint]")?.remove();
+  if (channelConnected(channel)) return;
+
+  const copy = {
+    whatsapp: ["Choose your WhatsApp Business account","Meta Embedded Signup lets you create or link the WhatsApp Business account and phone number Teyza should use. A Facebook Page is not required for this step."],
+    x: ["Choose your X account","X will ask you to authorize the seller account Teyza should use for supported publishing."],
+    youtube: ["Choose your YouTube channel","Google will ask you to authorize the Google account that owns the YouTube channel. Public access remains subject to Google OAuth verification."],
+    tiktok: ["Choose your TikTok account","TikTok will ask you to authorize the creator or business account Teyza should use for approved posting."]
+  }[channel];
+  if (!copy) return;
+
+  const hint = document.createElement("div");
+  hint.className = "channel-setup-hint";
+  hint.dataset.channelSetupHint = channel;
+  hint.innerHTML = `<strong>${copy[0]}</strong><span>${copy[1]}</span>`;
+  card.appendChild(hint);
+}
+
 function renderSellingConnections() {
   ["facebook", "instagram", "whatsapp", "google", "x", "youtube", "tiktok"].forEach((channel) => {
     const button = document.querySelector(`[data-sell-here="${channel}"]`);
@@ -317,6 +338,7 @@ function renderSellingConnections() {
     if (["facebook", "instagram", "google"].includes(channel)) {
       renderOnboardingChooser(channel);
     }
+    renderChannelSetupHint(channel);
   });
 
   const deferred = deferredSellingChannels();
