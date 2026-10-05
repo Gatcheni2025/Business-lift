@@ -102,8 +102,8 @@ function renderMetaChooser(state) {
     const label = document.createElement("div");
     label.className = "channel-choice-head";
     label.innerHTML = view === "instagram" ?
-      "<strong>Choose your Instagram selling account</strong><span>Select the Facebook Page that has your Professional Instagram account attached.</span>" :
-      "<strong>Choose your Facebook Page</strong><span>Select the business Page Teyza should publish approved products to.</span>";
+      "<strong>Choose the Facebook Page for Instagram</strong><span>Select the Facebook Page that owns the Professional Instagram account you want to use.</span>" :
+      "<strong>Choose the Facebook Page for Facebook</strong><span>Select the business Facebook Page Teyza should use for approved product publishing.</span>";
     target.appendChild(label);
 
     const list = document.createElement("div");
@@ -177,7 +177,7 @@ function renderGoogleChooser(state) {
   if (!Array.isArray(state.availableAccounts) || !state.availableAccounts.length || state.connected) return;
   const label = document.createElement("p");
   label.className = "choose-label";
-  label.textContent = "Choose your Merchant Center account:";
+  label.textContent = "Choose the Merchant Center account for Google Shopping";
   target.appendChild(label);
   state.availableAccounts.forEach((item) => {
     const button = document.createElement("button");
