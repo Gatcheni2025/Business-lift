@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://cdn.simpleicons.org">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="assets/landing.css?v=63">
+  <link rel="stylesheet" href="assets/landing.css?v=64">
   <link rel="stylesheet" href="assets/auth.css">
 
   <script type="application/ld+json">
@@ -60,14 +60,12 @@
 
   <header class="site-header" data-site-header>
     <div class="container header-inner">
-      <a class="brand" href="/" aria-label="Teyza home">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span class="brand-word">TEYZA<small>Everyone can sell.</small></span>
+      <a class="brand brand-logo-link" href="/" aria-label="Teyza home">
+        <img class="brand-logo-image" src="assets/teyza-logo.svg?v=2" alt="Teyza — Everyone can sell." width="210" height="59">
       </a>
 
       <nav class="site-nav" aria-label="Main navigation" data-desktop-nav>
         <a href="#how">How it works</a>
-        <a href="#sell">Products & services</a>
         <a href="#sell">Products & services</a>
         <a href="#workspace">Workspace</a>
         <a href="#channels">Selling channels</a>
@@ -86,6 +84,7 @@
     <div class="mobile-menu" data-mobile-menu hidden>
       <div class="container mobile-menu-inner">
         <a href="#how">How it works</a>
+        <a href="#sell">Products & services</a>
         <a href="#workspace">Workspace</a>
         <a href="#channels">Selling channels</a>
         <a href="#questions">Questions</a>
@@ -147,7 +146,10 @@
 
           <div class="floating-dashboard" aria-label="Teyza dashboard preview">
             <div class="mock-top">
-              <div class="mock-brand"><span>T</span> TEYZA</div>
+              <div class="mock-brand">
+                <img src="assets/teyza-icon.svg?v=2" alt="" aria-hidden="true" width="28" height="28">
+                <strong>TEYZA</strong>
+              </div>
               <span class="mock-live">Live workspace</span>
             </div>
 
