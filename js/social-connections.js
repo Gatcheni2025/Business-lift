@@ -31,6 +31,9 @@ async function callFunction(name, payload = {}) {
 
 const getConnectUrl = (payload) => callFunction("getSocialConnectUrl", payload);
 const getGoogleConnectUrl = (payload) => callFunction("getGoogleConnectUrl", payload);
+const getXConnectUrl = (payload) => callFunction("getXConnectUrl", payload);
+const getYouTubeConnectUrl = (payload) => callFunction("getYouTubeConnectUrl", payload);
+const getTikTokConnectUrl = (payload) => callFunction("getTikTokConnectUrl", payload);
 const getConnections = (payload) => callFunction("getChannelConnections", payload);
 const disconnectChannel = (payload) => callFunction("disconnectChannel", payload);
 const selectMetaPage = (payload) => callFunction("selectMetaPage", payload);
@@ -99,8 +102,8 @@ function renderMetaChooser(state) {
     const label = document.createElement("div");
     label.className = "channel-choice-head";
     label.innerHTML = view === "instagram" ?
-      "<strong>Choose your Instagram selling account</strong><span>Select the Facebook Page that has your Professional Instagram account attached.</span>" :
-      "<strong>Choose your Facebook Page</strong><span>Select the business Page Teyza should publish approved products to.</span>";
+      "<strong>Choose the Facebook Page for Instagram</strong><span>Select the Facebook Page that owns the Professional Instagram account you want to use.</span>" :
+      "<strong>Choose the Facebook Page for Facebook</strong><span>Select the business Facebook Page Teyza should use for approved product publishing.</span>";
     target.appendChild(label);
 
     const list = document.createElement("div");
@@ -174,7 +177,7 @@ function renderGoogleChooser(state) {
   if (!Array.isArray(state.availableAccounts) || !state.availableAccounts.length || state.connected) return;
   const label = document.createElement("p");
   label.className = "choose-label";
-  label.textContent = "Choose your Merchant Center account:";
+  label.textContent = "Choose the Merchant Center account for Google Shopping";
   target.appendChild(label);
   state.availableAccounts.forEach((item) => {
     const button = document.createElement("button");
@@ -191,6 +194,9 @@ function renderConnections() {
   const meta = connectionState.meta || {};
   const google = connectionState.google || {};
   const whatsapp = connectionState.whatsapp || {};
+  const x = connectionState.x || {};
+  const youtube = connectionState.youtube || {};
+  const tiktok = connectionState.tiktok || {};
 
   const facebookConnected = Boolean(meta.connected);
   const instagramConnected = Boolean(meta.connected && meta.instagramBusinessId);
@@ -200,6 +206,9 @@ function renderConnections() {
     {view:"instagram", state:meta, connected:instagramConnected, text:metaLabel("instagram",meta)},
     {view:"google", state:google, connected:Boolean(google.connected), text:genericLabel("google",google)},
     {view:"whatsapp", state:whatsapp, connected:Boolean(whatsapp.connected), text:genericLabel("whatsapp",whatsapp)},
+    {view:"x", state:x, connected:Boolean(x.connected), text:genericLabel("x",x)},
+    {view:"youtube", state:youtube, connected:Boolean(youtube.connected), text:genericLabel("youtube",youtube)},
+    {view:"tiktok", state:tiktok, connected:Boolean(tiktok.connected), text:genericLabel("tiktok",tiktok)},
   ].forEach(({view,state,connected,text}) => {
     const badge = document.querySelector(`[data-status="${view}"]`);
     const btn = document.querySelector(`[data-connect="${view}"]`);
@@ -222,8 +231,15 @@ function renderConnections() {
   renderGoogleChooser(google);
   renderChannelGuidance(meta, whatsapp);
 
-  const complete = [facebookConnected, instagramConnected, Boolean(google.connected), Boolean(whatsapp.connected)]
-    .filter(Boolean).length;
+  const complete = [
+    facebookConnected,
+    instagramConnected,
+    Boolean(google.connected),
+    Boolean(whatsapp.connected),
+    Boolean(x.connected),
+    Boolean(youtube.connected),
+    Boolean(tiktok.connected),
+  ].filter(Boolean).length;
   const summary = document.getElementById("connectionSummary");
   if (summary) summary.textContent = `${complete} external channel${complete === 1 ? "" : "s"} linked`;
 }
@@ -233,15 +249,21 @@ async function refreshConnections() {
   const response = await getConnections({businessId});
   connectionState = response.data || {};
   renderConnections();
+  focusRequestedChannel();
 }
 
 function returnPath() {
   return window.location.pathname.endsWith("seller-onboarding.html") ?
-    "/seller-onboarding.html" : "/sales-channels.html";
+    "/seller-onboarding.html?review=1&step=1" : "/sales-channels.html";
 }
 
 async function startOauth(provider, channel = provider) {
-  const callable = provider === "google" ? getGoogleConnectUrl : getConnectUrl;
+  const callable =
+    provider === "google" ? getGoogleConnectUrl :
+    provider === "x" ? getXConnectUrl :
+    provider === "youtube" ? getYouTubeConnectUrl :
+    provider === "tiktok" ? getTikTokConnectUrl :
+    getConnectUrl;
   const result = await callable({businessId, provider, channel, returnTo: returnPath()});
   if (!result.data?.url) throw new Error("No connection URL returned.");
   window.location.assign(result.data.url);
@@ -363,7 +385,15 @@ async function startWhatsApp() {
 }
 
 async function disconnect(provider, view) {
-  const label = provider === "meta" ? "Facebook & Instagram" : (view === "whatsapp" ? "WhatsApp Business" : "Google Shopping");
+  const labels = {
+    meta: "Facebook & Instagram",
+    whatsapp: "WhatsApp Business",
+    google: "Google Shopping",
+    x: "X",
+    youtube: "YouTube",
+    tiktok: "TikTok",
+  };
+  const label = labels[provider] || view || provider;
   if (!window.confirm(`Disconnect ${label}?`)) return;
   await disconnectChannel({businessId, provider});
   await refreshConnections();
@@ -410,6 +440,43 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+
+function focusRequestedChannel() {
+  const targetId =
+    String(location.hash || "")
+      .replace(/^#/, "");
+
+  if (!targetId.startsWith("channel-")) {
+    return;
+  }
+
+  const card =
+    document.getElementById(targetId);
+
+  if (!card) return;
+
+  document
+    .querySelectorAll("[data-channel-card]")
+    .forEach((node) => {
+      node.classList.toggle(
+        "channel-card-focus",
+        node === card
+      );
+    });
+
+  requestAnimationFrame(() => {
+    card.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  });
+}
+
+window.addEventListener(
+  "hashchange",
+  focusRequestedChannel
+);
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) return window.location.href = "index.html?auth=login";
   try {
@@ -425,6 +492,9 @@ onAuthStateChanged(auth, async (user) => {
     if (status === "connected") {
       if (provider === "meta" && channel === "instagram") notify("Instagram authorization received. Choose the Facebook Page that has your Professional Instagram account attached.", "success");
       else if (provider === "meta") notify("Meta authorization received. Choose the Facebook Page Teyza should use.", "success");
+      else if (provider === "x") notify("X connected successfully. Teyza can now use this seller-authorized X account.", "success");
+      else if (provider === "youtube") notify("YouTube connected successfully.", "success");
+      else if (provider === "tiktok") notify("TikTok connected successfully.", "success");
       else notify("Authorization received. Confirm the account shown below.", "success");
     }
     if (status === "error") notify("The connection could not be completed. Check the provider setup and try again.", "error");

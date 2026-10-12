@@ -3,7 +3,7 @@ import {auth} from "./firebase-config.js";
 import {getBusinessContext} from "./business-context.js";
 
 const esc=(v)=>String(v??"");
-let currentUser=null,businessId="",businessName="Your business",threads=[],activeThreadId="",panelOpen=false,pollTimer=null;
+let currentUser=null,businessId="",businessName="Your business",threads=[],activeThreadId="",panelOpen=false,pollTimer=null,pollBusy=false;
 
 function el(tag,className,text){
   const node=document.createElement(tag);
@@ -25,7 +25,8 @@ async function api(mode,options={}){
   const url=new URL("api/chat.php",location.href);
   url.searchParams.set("mode",mode);
   if(options.threadId)url.searchParams.set("threadId",options.threadId);
-  const response=await fetch(url,{method:options.method||"GET",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:options.body?JSON.stringify(options.body):undefined,cache:"no-store"});
+  let response;
+  try{response=await fetch(url,{method:options.method||"GET",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:options.body?JSON.stringify(options.body):undefined,cache:"no-store"});}catch(error){throw new Error(navigator.onLine===false?"You are offline. Chat will reconnect when your connection returns.":"Could not connect to live chat. Retrying automatically; your reply has not been sent.");}
   const data=await response.json().catch(()=>({}));
   if(!response.ok||!data.ok)throw new Error(data.error||"Live chat is unavailable.");
   return data;
@@ -148,26 +149,41 @@ async function openThread(id){
   try{const data=await api("seller-thread",{threadId:id});renderMessages(data.thread);await refreshInbox();}
   catch(error){setStatus(error.message,true)}
 }
-function startPolling(){
-  clearInterval(pollTimer);
-  pollTimer=setInterval(async()=>{
-    try{
-      await refreshInbox();
-      if(panelOpen&&activeThreadId){
-        const data=await api("seller-thread",{threadId:activeThreadId});
-        renderMessages(data.thread);
+async function poll(){
+  if(pollBusy||!currentUser||!businessId||navigator.onLine===false||document.hidden)return;
+  pollBusy=true;
+  try{
+    await refreshInbox();
+    // Update message bubbles without replacing the reply form or its unsent draft.
+    if(panelOpen&&activeThreadId){
+      const id=activeThreadId,data=await api("seller-thread",{threadId:id});
+      const messages=document.querySelector('[data-tz-messages]');
+      if(messages&&activeThreadId===id){
+        const atBottom=messages.scrollHeight-messages.scrollTop-messages.clientHeight<40;
+        const bubbles=(data.thread.messages||[]).map(message=>{
+          const bubble=el('div','tz-chat-message '+(message.sender==='seller'?'me':'them'));
+          bubble.append(document.createTextNode(esc(message.text)),el('small','',timeLabel(message.createdAt)));
+          return bubble;
+        });
+        messages.replaceChildren(...bubbles);
+        if(atBottom)messages.scrollTop=messages.scrollHeight;
       }
-    }catch(_){}
-  },5000);
+    }
+    setStatus("");
+  }catch(error){setStatus(error.message,true)}finally{pollBusy=false;}
 }
+function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(poll,5000);}
+window.addEventListener("online",poll);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)poll();});
+window.addEventListener("pagehide",()=>clearInterval(pollTimer));
 onAuthStateChanged(auth,async user=>{
-  if(!user)return;
-  currentUser=user;
+  clearInterval(pollTimer);currentUser=user;
+  if(!user){businessId="";threads=[];activeThreadId="";setOpen(false);document.querySelector("[data-tz-seller-chat]")?.remove();document.querySelector("[data-tz-chat-panel]")?.remove();return;}
   try{
     const context=await getBusinessContext(user);
     businessId=String(context.businessId||"");
     businessName=String(context.business?.businessName||"Your business");
     if(!businessId)return;
-    build();await refreshInbox();startPolling();
-  }catch(error){console.error("Seller live chat failed",error)}
+    build();startPolling();await poll();
+  }catch(error){setStatus(error.message,true);console.error("Seller live chat initialization failed",error);}
 });

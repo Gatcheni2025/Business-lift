@@ -226,11 +226,26 @@ onAuthStateChanged(auth, (user) => {
 
 logoutButtons.forEach((button) => {
     button.addEventListener("click", async () => {
+        if (button instanceof HTMLButtonElement) {
+            button.disabled = true;
+            button.textContent = "Logging out…";
+        }
+
         try {
             await signOut(auth);
-            window.location.href = "index.html?auth=login";
+
+            /*
+             * Return to the public landing page with the login
+             * panel ready, so another seller account can be tested.
+             */
+            window.location.replace("index.html?auth=login");
         } catch (error) {
             console.error("Logout error:", error);
+
+            if (button instanceof HTMLButtonElement) {
+                button.disabled = false;
+                button.textContent = "Log out";
+            }
         }
     });
 });

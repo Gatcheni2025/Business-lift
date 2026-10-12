@@ -1,90 +1,520 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-ZA">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#10213f">
-  <title>Teyza | Sell Online, Manage Orders &amp; Grow Your Business</title>
-  <meta name="description" content="Create your Teyza selling workspace. Add products once, connect selling channels, manage orders and customers, arrange delivery, and grow your business in South Africa.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2f26">
+
+  <title>Teyza | Sell Products, Offer Services & Grow Your Business</title>
+  <meta name="description" content="Teyza gives South African businesses one workspace to sell products, offer bookable services, manage orders and bookings, connect selling channels, arrange delivery and receive payments.">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <link rel="canonical" href="https://business-lift.vercel.app/">
+  <link rel="canonical" href="https://teyza.co.za/">
+
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Teyza">
-  <meta property="og:url" content="https://business-lift.vercel.app/">
-  <meta property="og:title" content="Teyza | Sell Online, Manage Orders &amp; Grow Your Business">
-  <meta property="og:description" content="Add products once, connect selling channels, manage orders and delivery, and grow your business with Teyza.">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Teyza | Everyone can sell">
-  <meta name="twitter:description" content="One workspace for products, connected selling channels, orders, customers and delivery.">
+  <meta property="og:url" content="https://teyza.co.za/">
+  <meta property="og:title" content="Teyza | Sell products. Offer services.">
+  <meta property="og:description" content="Sell products, offer services, manage orders and bookings, and run your business from one Teyza workspace.">
+  <meta property="og:image" content="https://images.pexels.com/photos/18005394/pexels-photo-18005394.jpeg?auto=compress&cs=tinysrgb&w=1200">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Teyza | Sell products. Offer services.">
+  <meta name="twitter:description" content="One workspace for products, services, orders, bookings, customers, delivery and growth.">
+  <meta name="twitter:image" content="https://images.pexels.com/photos/18005394/pexels-photo-18005394.jpeg?auto=compress&cs=tinysrgb&w=1200">
+
   <link rel="icon" type="image/svg+xml" href="assets/teyza-icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://images.pexels.com">
+  <link rel="preconnect" href="https://cdn.simpleicons.org">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/landing.css">
+
+  <link rel="stylesheet" href="assets/landing.css?v=64">
   <link rel="stylesheet" href="assets/auth.css">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Teyza","url":"https://business-lift.vercel.app/","description":"A selling workspace for products, connected channels, orders, customers and delivery."}</script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Teyza",
+    "url": "https://teyza.co.za/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "A business workspace for selling products, offering bookable services, managing orders, bookings, customers, delivery and payments.",
+    "featureList": ["Product selling","Service listings","Service bookings","Orders","Customers","Delivery","Payments","Connected selling channels"],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "ZAR"
+    },
+    "areaServed": {
+      "@type": "Country",
+      "name": "South Africa"
+    }
+  }
+  </script>
 </head>
+
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
+
+  <header class="site-header" data-site-header>
     <div class="container header-inner">
-      <a class="brand" href="/" aria-label="Teyza home"><span class="brand-mark" aria-hidden="true">T</span><span>TEYZA<small>Everyone can sell.</small></span></a>
-      <nav class="site-nav" aria-label="Main navigation"><a href="#how">How it works</a><a href="#features">What you can do</a><a href="#questions">Questions</a></nav>
-      <div class="header-actions"><button class="text-button" type="button" data-open-login>Log in</button><a class="button button-dark" href="register.html">Start selling</a></div>
+      <a class="brand brand-logo-link" href="/" aria-label="Teyza home">
+        <img class="brand-logo-image" src="assets/teyza-logo.svg?v=2" alt="Teyza — Everyone can sell." width="210" height="59">
+      </a>
+
+      <nav class="site-nav" aria-label="Main navigation" data-desktop-nav>
+        <a href="#how">How it works</a>
+        <a href="#sell">Products & services</a>
+        <a href="#workspace">Workspace</a>
+        <a href="#channels">Selling channels</a>
+        <a href="#questions">Questions</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="text-button desktop-login" type="button" data-open-login>Log in</button>
+        <a class="button button-dark desktop-start" href="register.html">Start selling</a>
+        <button class="menu-button" type="button" aria-label="Open menu" aria-expanded="false" data-menu-button>
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-menu" data-mobile-menu hidden>
+      <div class="container mobile-menu-inner">
+        <a href="#how">How it works</a>
+        <a href="#sell">Products & services</a>
+        <a href="#workspace">Workspace</a>
+        <a href="#channels">Selling channels</a>
+        <a href="#questions">Questions</a>
+        <div class="mobile-menu-actions">
+          <button class="button button-outline" type="button" data-open-login>Log in</button>
+          <a class="button button-accent" href="register.html">Create free account</a>
+        </div>
+      </div>
     </div>
   </header>
+
   <main id="main">
     <section class="hero">
+      <div class="hero-orb hero-orb-one" aria-hidden="true"></div>
+      <div class="hero-orb hero-orb-two" aria-hidden="true"></div>
+
       <div class="container hero-grid">
-        <div class="hero-copy">
-          <p class="eyebrow">A simpler way to sell online</p>
-          <h1>Your business.<br><span>One place to sell.</span></h1>
-          <p class="hero-lead">Set up your business, add products, connect your selling channels and manage every order from one clear workspace.</p>
-          <div class="hero-actions"><a class="button button-accent" href="register.html">Create your free account <span aria-hidden="true">→</span></a><button class="button button-outline" type="button" data-open-login>Already have an account? Log in</button></div>
-          <p class="hero-note">Built for South African sellers · Start with your business details</p>
-        </div>
-        <div class="workspace-preview" aria-label="Illustration of the Teyza selling workspace">
-          <div class="preview-top"><span class="preview-brand"><span class="preview-dot"></span> TEYZA</span><span class="preview-label">Workspace preview</span></div>
-          <div class="preview-intro"><p>GOOD MORNING</p><h2>What would you like to do today?</h2><span>Keep your products, orders and customers together.</span></div>
-          <div class="preview-actions">
-            <div><span class="preview-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><strong>Add a product</strong><small>Image, price and description</small></div>
-            <div><span class="preview-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M8 14h5"/></svg></span><strong>Check orders</strong><small>Stay on top of each sale</small></div>
+        <div class="hero-copy reveal">
+          <div class="hero-badge">
+            <span class="status-dot"></span>
+            Built for South African sellers
           </div>
-          <div class="preview-channel"><span class="preview-check" aria-hidden="true">✓</span><div><strong>Choose where to sell</strong><small>Connect channels when you are ready</small></div><span aria-hidden="true">→</span></div>
+
+          <h1>Sell products.<br>Offer services.<br><span>Run it all from Teyza.</span></h1>
+
+          <p class="hero-lead">
+            Set up your business, sell products, offer bookable services, manage orders and bookings, arrange delivery and keep customer activity together in one simple workspace.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-accent button-large" href="register.html">
+              Create your free account <span aria-hidden="true">→</span>
+            </a>
+            <button class="button button-outline button-large" type="button" data-open-login>
+              Log in
+            </button>
+          </div>
+
+          <div class="hero-proof" aria-label="Teyza benefits">
+            <span><b>✓</b> Guided seller setup</span>
+            <span><b>✓</b> Teyza Store included</span>
+            <span><b>✓</b> Products, services & bookings</span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal reveal-delay">
+          <div class="hero-photo-card">
+            <img
+              src="https://images.pexels.com/photos/18005394/pexels-photo-18005394.jpeg?auto=compress&cs=tinysrgb&w=1400"
+              alt="A small business seller in Johannesburg"
+              width="1400"
+              height="980"
+              fetchpriority="high">
+            <div class="hero-photo-overlay">
+              <span class="mini-label">SELL WITH CONFIDENCE</span>
+              <strong>Your business stays at the centre.</strong>
+            </div>
+          </div>
+
+          <div class="floating-dashboard" aria-label="Teyza dashboard preview">
+            <div class="mock-top">
+              <div class="mock-brand">
+                <img src="assets/teyza-icon.svg?v=2" alt="" aria-hidden="true" width="28" height="28">
+                <strong>TEYZA</strong>
+              </div>
+              <span class="mock-live">Live workspace</span>
+            </div>
+
+            <div class="mock-greeting">
+              <small>GOOD MORNING</small>
+              <h2>What would you like to do today?</h2>
+            </div>
+
+            <div class="mock-actions">
+              <div>
+                <span class="mock-icon">＋</span>
+                <strong>Add listing</strong>
+                <small>Product or service</small>
+              </div>
+              <div>
+                <span class="mock-icon">↗</span>
+                <strong>Orders & bookings</strong>
+                <small>Track every customer</small>
+              </div>
+            </div>
+
+            <div class="mock-order">
+              <div>
+                <span class="mock-order-icon">✓</span>
+                <span><strong>Seller setup</strong><small>Saved as you go</small></span>
+              </div>
+              <b>Ready</b>
+            </div>
+          </div>
+
+          <div class="floating-sale-card">
+            <span class="sale-icon">R</span>
+            <div><small>ONE WORKSPACE</small><strong>Products · Services · Orders · Bookings</strong></div>
+          </div>
         </div>
       </div>
     </section>
-    <section class="section section-tint" id="how">
+
+    <section class="channel-strip" aria-label="Selling channel options">
+      <div class="container channel-strip-inner">
+        <p>Sell products. Offer services. Keep everything together.</p>
+        <div class="channel-mini-list">
+          <span class="channel-mini teyza">T</span>
+          <span class="channel-mini facebook"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/facebook/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini instagram"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/instagram/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini whatsapp"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/whatsapp/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini google"><img class="brand-icon-img mini" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini x"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/x/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini youtube"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/youtube/FF0000" alt="" aria-hidden="true" width="24" height="24"></span>
+          <span class="channel-mini tiktok"><img class="brand-icon-img mini" src="https://cdn.simpleicons.org/tiktok/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></span>
+        </div>
+        <small>Channel availability depends on account eligibility and provider approval.</small>
+      </div>
+    </section>
+
+    <section class="section offer-section" id="sell">
       <div class="container">
-        <div class="section-heading"><p class="eyebrow">How it works</p><h2>From setup to your first sale</h2><p>Follow the next step shown in your workspace. Your progress is saved as you go.</p></div>
-        <div class="steps">
-          <article class="step"><span class="step-number">01</span><h3>Create your business profile</h3><p>Sign up and add your business details. Complete the verification checks in your guided setup.</p></article>
-          <article class="step"><span class="step-number">02</span><h3>Choose delivery and payment</h3><p>Tell Teyza how customers receive orders and how your business accepts payments.</p></article>
-          <article class="step"><span class="step-number">03</span><h3>Add products and sell</h3><p>Upload products, connect the channels you use, then follow orders and customers in one dashboard.</p></article>
+        <div class="section-heading split-heading reveal">
+          <div>
+            <p class="eyebrow">WHAT YOU CAN SELL</p>
+            <h2>Products and services belong in the same business.</h2>
+          </div>
+          <p>Teyza lets a seller build a product catalog and a service catalog from one workspace, while customers can shop products or book services through Teyza Store.</p>
+        </div>
+
+        <div class="offer-grid">
+          <article class="offer-card offer-product reveal">
+            <div class="offer-media">
+              <img src="https://images.pexels.com/photos/5632402/pexels-photo-5632402.jpeg?auto=compress&cs=tinysrgb&w=1200"
+                   alt="Products prepared for online selling"
+                   width="1200" height="850" loading="lazy">
+              <span class="offer-badge">PRODUCTS</span>
+            </div>
+            <div class="offer-copy">
+              <h3>Sell physical products</h3>
+              <p>Add photos, descriptions, pricing and stock. Publish to Teyza Store and choose eligible connected selling channels for each product.</p>
+              <ul>
+                <li>Product catalog and inventory</li>
+                <li>Orders, customers and delivery</li>
+                <li>Connected channel publishing</li>
+              </ul>
+              <a class="offer-link" href="register.html">Start selling products <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+
+          <article class="offer-card offer-service reveal">
+            <div class="offer-media">
+              <img src="https://images.pexels.com/photos/3768916/pexels-photo-3768916.jpeg?auto=compress&cs=tinysrgb&w=1200"
+                   alt="A service professional helping a customer"
+                   width="1200" height="850" loading="lazy">
+              <span class="offer-badge">SERVICES</span>
+            </div>
+            <div class="offer-copy">
+              <h3>Offer bookable services</h3>
+              <p>Create a service, set the price, location, booking method and availability, then receive customer booking requests or scheduled appointments.</p>
+              <ul>
+                <li>Fixed, hourly or starting-from pricing</li>
+                <li>Appointments, requests and availability</li>
+                <li>Full payment, deposit or quote-first flow</li>
+              </ul>
+              <a class="offer-link" href="register.html">Start offering services <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+        </div>
+
+        <div class="offer-store-note reveal">
+          <span class="offer-store-mark">T</span>
+          <div>
+            <strong>Teyza Store brings both together.</strong>
+            <p>Customers can browse products, discover services, buy items and book appointments from one marketplace.</p>
+          </div>
+          <a href="shop.html">Explore Teyza Store →</a>
         </div>
       </div>
     </section>
-    <section class="section" id="features">
+
+    <section class="section" id="how">
       <div class="container">
-        <div class="section-heading"><p class="eyebrow">Your selling workspace</p><h2>The essentials, together</h2><p>Everything you need to set up, run and grow your selling business.</p></div>
-        <div class="feature-grid">
-          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10h16l-2-6H6l-2 6ZM5 10v10h14V10M9 20v-6h6v6"/></svg></span><h3>Products and storefront</h3><p>Add a product image, price and description, then keep your catalog in one place.</p></article>
-          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h5"/></svg></span><h3>Orders and customers</h3><p>See incoming orders and the customers behind them without switching tools.</p></article>
-          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 8-4M8 13l8 4"/></svg></span><h3>Connected selling channels</h3><p>Choose the platforms you want to connect and manage where your products appear.</p></article>
-          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 4v3h-7M6 17a2 2 0 1 0 4 0M16 17a2 2 0 1 0 4 0"/></svg></span><h3>Delivery and growth</h3><p>Set delivery options and keep track of the work that helps your business grow.</p></article>
+        <div class="section-heading centered reveal">
+          <p class="eyebrow">HOW TEYZA WORKS</p>
+          <h2>From business setup to your next sale</h2>
+          <p>Teyza guides sellers through the work that matters, one clear step at a time.</p>
+        </div>
+
+        <div class="journey-grid">
+          <article class="journey-card reveal">
+            <span class="journey-number">01</span>
+            <div class="journey-icon">⌂</div>
+            <h3>Build your seller profile</h3>
+            <p>Add your business details, seller image or logo, phone, location and verification information.</p>
+            <span class="journey-meta">Your progress is saved</span>
+          </article>
+
+          <article class="journey-card reveal">
+            <span class="journey-number">02</span>
+            <div class="journey-icon">↗</div>
+            <h3>Choose how you sell</h3>
+            <p>Teyza Store is included. Connect additional selling channels when your business is ready.</p>
+            <span class="journey-meta">Setup now or later</span>
+          </article>
+
+          <article class="journey-card reveal">
+            <span class="journey-number">03</span>
+            <div class="journey-icon">▣</div>
+            <h3>Add products or services</h3>
+            <p>Create a product with stock and pricing, or add a service with booking, availability and payment rules.</p>
+            <span class="journey-meta">Two catalogs, one workspace</span>
+          </article>
+
+          <article class="journey-card reveal">
+            <span class="journey-number">04</span>
+            <div class="journey-icon">✓</div>
+            <h3>Manage sales and bookings</h3>
+            <p>Follow orders, bookings, customers, delivery and service activity from the same workspace.</p>
+            <span class="journey-meta">Stay in control</span>
+          </article>
         </div>
       </div>
     </section>
-    <section class="section section-tint" id="questions">
-      <div class="container faq-layout"><div class="section-heading"><p class="eyebrow">Questions</p><h2>Good to know before you start</h2><p>Set up at your own pace. Your dashboard will guide you through the next step.</p></div><div class="faq-list">
-        <details><summary>How do I set up my business?</summary><p>Create an account, complete your business details and verification, then choose delivery and payment options.</p></details>
-        <details><summary>Can I add products once?</summary><p>Yes. Add a product with its image, description and price in your workspace, then choose the channels you connect for publishing.</p></details>
-        <details><summary>Is Teyza for South African sellers?</summary><p>Yes. The workspace supports rand pricing, local business details and delivery settings for sellers in South Africa.</p></details>
-      </div></div>
+
+    <section class="section section-soft" id="workspace">
+      <div class="container story-grid">
+        <div class="story-image reveal">
+          <img
+            src="https://images.pexels.com/photos/19838484/pexels-photo-19838484.jpeg?auto=compress&cs=tinysrgb&w=1200"
+            alt="A seller working inside a retail store"
+            width="1200"
+            height="1000"
+            loading="lazy">
+          <div class="story-image-badge">
+            <b>Simple enough for everyday selling.</b>
+            <span>Powerful enough to grow with you.</span>
+          </div>
+        </div>
+
+        <div class="story-copy reveal">
+          <p class="eyebrow">YOUR SELLING WORKSPACE</p>
+          <h2>Less switching. More selling and serving.</h2>
+          <p class="story-lead">
+            Teyza is designed around the seller journey. Instead of moving between disconnected pages and tools, the workspace brings the day-to-day work of selling together.
+          </p>
+
+          <div class="story-list">
+            <div><span>01</span><p><strong>Products</strong><small>Images, pricing, stock, verification and publishing choices.</small></p></div>
+            <div><span>02</span><p><strong>Services</strong><small>Pricing, booking methods, availability, locations and service photos.</small></p></div>
+            <div><span>03</span><p><strong>Orders & bookings</strong><small>See what was sold, what was booked and what needs attention next.</small></p></div>
+            <div><span>04</span><p><strong>Customers</strong><small>Keep buyer and booking activity close to the customer relationship.</small></p></div>
+            <div><span>05</span><p><strong>Delivery & payments</strong><small>Handle fulfilment, service payments and the payout details used by your business.</small></p></div>
+          </div>
+        </div>
+      </div>
     </section>
-    <section class="final-cta"><div class="container cta-inner"><div><p class="eyebrow">Ready when you are</p><h2>Start with one product. Grow from there.</h2><p>Bring your selling work together in Teyza.</p></div><a class="button button-white" href="register.html">Create your free account <span aria-hidden="true">→</span></a></div></section>
+
+    <section class="section" id="channels">
+      <div class="container">
+        <div class="section-heading split-heading reveal">
+          <div>
+            <p class="eyebrow">SELLING CHANNELS</p>
+            <h2>Choose where your business shows up</h2>
+          </div>
+          <p>Start with Teyza Store, then connect the business accounts you already use. Each seller remains in control of which channels are connected and used.</p>
+        </div>
+
+        <div class="channels-grid">
+          <article class="channel-card primary-channel reveal">
+            <div class="channel-logo teyza">T</div>
+            <div><h3>Teyza Store</h3><p>Your built-in selling destination. Included automatically with your seller workspace.</p></div>
+            <span class="availability ready">Included</span>
+          </article>
+
+          <article class="channel-card reveal"><div class="channel-logo facebook"><img class="brand-icon-img" src="https://cdn.simpleicons.org/facebook/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>Facebook</h3><p>Connect a Facebook Page through Meta for approved product publishing.</p></div><span class="availability">Connect</span></article>
+          <article class="channel-card reveal"><div class="channel-logo instagram"><img class="brand-icon-img" src="https://cdn.simpleicons.org/instagram/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>Instagram</h3><p>Use a supported Professional Instagram account linked through Meta.</p></div><span class="availability">Connect</span></article>
+          <article class="channel-card reveal"><div class="channel-logo whatsapp"><img class="brand-icon-img" src="https://cdn.simpleicons.org/whatsapp/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>WhatsApp Business</h3><p>Link the business number used for customer messages and seller activity.</p></div><span class="availability">Connect</span></article>
+          <article class="channel-card reveal"><div class="channel-logo google"><img class="brand-icon-img" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>Google Shopping</h3><p>Connect the Merchant Center account used for eligible product listings.</p></div><span class="availability">Connect</span></article>
+          <article class="channel-card reveal"><div class="channel-logo x"><img class="brand-icon-img" src="https://cdn.simpleicons.org/x/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>X</h3><p>Authorize the seller's X account through OAuth for supported publishing activity.</p></div><span class="availability">Connect</span></article>
+          <article class="channel-card reveal"><div class="channel-logo youtube"><img class="brand-icon-img" src="https://cdn.simpleicons.org/youtube/FF0000" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>YouTube</h3><p>Connect a supported YouTube account as provider access becomes available.</p></div><span class="availability review">Provider approval</span></article>
+          <article class="channel-card reveal"><div class="channel-logo tiktok"><img class="brand-icon-img" src="https://cdn.simpleicons.org/tiktok/FFFFFF" alt="" aria-hidden="true" width="24" height="24"></div><div><h3>TikTok</h3><p>Prepare for supported TikTok content and product activity through approved integrations.</p></div><span class="availability review">Provider approval</span></article>
+        </div>
+
+        <p class="channels-note">External channel features depend on provider permissions, review status and seller account eligibility. Teyza Store remains available inside the seller workspace.</p>
+      </div>
+    </section>
+
+    <section class="section section-dark">
+      <div class="container dashboard-showcase">
+        <div class="dashboard-copy reveal">
+          <p class="eyebrow light">BUILT AROUND THE SELLER</p>
+          <h2>Know what needs attention without hunting for it.</h2>
+          <p>Your dashboard keeps the most important actions close: conversations, orders, bookings, deliveries, selling channels and account status.</p>
+          <div class="dashboard-points">
+            <span>✓ Seller verification status</span>
+            <span>✓ Product publishing status</span>
+            <span>✓ Orders, bookings and customer activity</span>
+            <span>✓ Delivery and banking setup</span>
+          </div>
+        </div>
+
+        <div class="dashboard-window reveal">
+          <div class="dashboard-window-top"><span></span><span></span><span></span><b>teyza.co.za/dashboard</b></div>
+          <div class="dashboard-window-body">
+            <div class="dashboard-brand-row"><div><span class="dash-t">T</span><b>TEYZA</b></div><span class="dash-status">Pending admin approval</span></div>
+            <p class="dashboard-kicker">GOOD MORNING</p>
+            <h3>What would you like to do today?</h3>
+            <div class="dashboard-shortcuts">
+              <div><span>＋</span><strong>Sell</strong><small>Product or service</small></div>
+              <div><span>☰</span><strong>Orders</strong><small>Manage incoming sales</small></div>
+              <div><span>⌁</span><strong>Delivery</strong><small>Complete fulfilment</small></div>
+            </div>
+            <div class="dashboard-nav-pills"><span class="active">Chats</span><span>Orders</span><span>Bookings</span><span>Deliveries</span><span>Facebook</span><span>Google</span><span>𝕏</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container security-grid">
+        <div class="security-copy reveal">
+          <p class="eyebrow">TRUST & VERIFICATION</p>
+          <h2>A clearer path from signup to a trusted seller account</h2>
+          <p>Sellers can complete business details and verification step by step. Teyza keeps account setup separate from optional selling channels, so a seller can continue building the business while provider connections are completed later.</p>
+
+          <div class="security-tags">
+            <span>Phone verification</span>
+            <span>Business location</span>
+            <span>Proof of address</span>
+            <span>ID document</span>
+            <span>Live face scan</span>
+            <span>Admin review</span>
+          </div>
+        </div>
+
+        <div class="security-card reveal">
+          <div class="security-card-head"><span class="shield">✓</span><div><small>SELLER SETUP</small><strong>Progress saved automatically</strong></div></div>
+          <div class="security-progress"><i></i></div>
+          <div class="security-steps">
+            <div class="done"><span>✓</span><p><strong>Business profile</strong><small>Business information saved</small></p></div>
+            <div class="done"><span>✓</span><p><strong>Phone & location</strong><small>Verification recorded</small></p></div>
+            <div class="done"><span>✓</span><p><strong>Identity</strong><small>Submitted for review</small></p></div>
+            <div class="pending"><span>4</span><p><strong>Admin approval</strong><small>Review in progress</small></p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="questions">
+      <div class="container faq-layout">
+        <div class="section-heading reveal">
+          <p class="eyebrow">QUESTIONS</p>
+          <h2>Good to know before you start</h2>
+          <p>Your workspace guides you through the next step, and your progress is saved as you go.</p>
+        </div>
+
+        <div class="faq-list reveal">
+          <details open>
+            <summary>What do I need to create a seller account?</summary>
+            <p>Start with your business details and seller profile. Teyza then guides you through phone verification, location, supporting documents, identity checks, delivery, payment details and audience setup.</p>
+          </details>
+
+          <details>
+            <summary>Do I have to connect every selling channel?</summary>
+            <p>No. Teyza Store is included automatically. External selling channels are optional and can be connected when the seller has the required account and provider access.</p>
+          </details>
+
+          <details>
+            <summary>Can I add a product once and choose where it sells?</summary>
+            <p>Yes. Create the product in your Teyza catalog, then choose from the connected selling channels available to that seller account.</p>
+          </details>
+
+          <details>
+            <summary>Can I offer services as well as products?</summary>
+            <p>Yes. A seller can create bookable services with pricing, location, availability and booking rules. Customers can discover those services in Teyza Store and submit a booking or payment flow supported by the service setup.</p>
+          </details>
+
+          <details>
+            <summary>What happens after a customer buys?</summary>
+            <p>The sale can be followed from the seller workspace so orders, customers and delivery work stay connected.</p>
+          </details>
+
+          <details>
+            <summary>Is Teyza designed for South African businesses?</summary>
+            <p>Yes. The experience is built around South African seller details, rand pricing and local business workflows.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <div class="container cta-inner reveal">
+        <div>
+          <p class="eyebrow light">READY WHEN YOU ARE</p>
+          <h2>Start with one product.<br>Grow from there.</h2>
+          <p>Build your seller workspace today and keep the work of selling together.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="button button-white button-large" href="register.html">Create your free account <span aria-hidden="true">→</span></a>
+          <button class="button button-ghost-light button-large" type="button" data-open-login>Log in</button>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer class="site-footer"><div class="container footer-inner"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">T</span><span>TEYZA<small>Everyone can sell.</small></span></a><p>Sell · Connect · Grow</p><p style="display:flex;gap:14px;flex-wrap:wrap"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="data-deletion.html">Data deletion</a></p><small>© 2026 Teyza. All rights reserved.</small></div></footer>
-  <script type="module" src="js/landing-auth.js?v=20260928b"></script>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span class="brand-word">TEYZA<small>Everyone can sell.</small></span>
+        </a>
+        <p>One workspace for products, selling channels, orders, customers and delivery.</p>
+      </div>
+
+      <div class="footer-links">
+        <div><strong>Product</strong><a href="#how">How it works</a><a href="#workspace">Workspace</a><a href="#channels">Selling channels</a></div>
+        <div><strong>Account</strong><button type="button" data-open-login>Log in</button><a href="register.html">Create account</a></div>
+        <div><strong>Legal</strong><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="data-deletion.html">Data deletion</a></div>
+      </div>
+    </div>
+
+    <div class="container footer-bottom">
+      <small>© 2026 Teyza. All rights reserved.</small>
+      <small>Sell · Connect · Grow</small>
+    </div>
+  </footer>
+
+  <script type="module" src="js/landing-auth.js?v=20261004c"></script>
+  <script src="js/landing-page.js?v=61" defer></script>
 </body>
 </html>

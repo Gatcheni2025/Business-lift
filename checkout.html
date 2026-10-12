@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f5b">
+  <title>Checkout | Teyza</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/checkout.css?v=1">
+</head>
+<body>
+  <header class="checkout-header">
+    <div class="checkout-wrap checkout-header-inner">
+      <a class="checkout-brand" href="shop.html">
+        <span class="checkout-brand-mark">T</span>
+        <span>TEYZA<small>Secure checkout</small></span>
+      </a>
+      <span class="checkout-secure">🔒 Secure payment</span>
+    </div>
+  </header>
+
+  <main class="checkout-wrap checkout-main">
+    <a class="checkout-back" href="shop.html">← Continue shopping</a>
+
+    <div class="checkout-loading" data-checkout-loading>
+      <span class="checkout-spinner"></span>
+      <strong>Loading your order…</strong>
+    </div>
+
+    <div class="checkout-layout" data-checkout-content hidden>
+      <section class="checkout-form-card">
+        <span class="checkout-eyebrow">BUYER DETAILS</span>
+        <h1>Complete your order</h1>
+        <p class="checkout-intro">Enter the details the seller needs to fulfil your order.</p>
+
+        <form data-checkout-form novalidate>
+          <div class="field-grid">
+            <label class="field">
+              <span>Full name</span>
+              <input name="name" autocomplete="name" required placeholder="Your full name">
+            </label>
+
+            <label class="field">
+              <span>Email</span>
+              <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Mobile number</span>
+            <input name="phone" inputmode="tel" autocomplete="tel" required placeholder="e.g. 082 123 4567">
+          </label>
+
+          <div data-delivery-fields>
+            <label class="field">
+              <span>Delivery address</span>
+              <textarea name="address" rows="3" autocomplete="street-address" placeholder="Street address"></textarea>
+            </label>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>City / Town</span>
+                <input name="city" autocomplete="address-level2" placeholder="City">
+              </label>
+
+              <label class="field">
+                <span>Province</span>
+                <select name="province" autocomplete="address-level1">
+                  <option value="">Choose province</option>
+                  <option>Eastern Cape</option>
+                  <option>Free State</option>
+                  <option>Gauteng</option>
+                  <option>KwaZulu-Natal</option>
+                  <option>Limpopo</option>
+                  <option>Mpumalanga</option>
+                  <option>North West</option>
+                  <option>Northern Cape</option>
+                  <option>Western Cape</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Postal code</span>
+              <input name="postalCode" inputmode="numeric" autocomplete="postal-code" placeholder="Postal code">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Order note <small>Optional</small></span>
+            <textarea name="note" rows="2" placeholder="Anything the seller should know?"></textarea>
+          </label>
+
+          <label class="checkout-consent">
+            <input type="checkbox" name="terms" required>
+            <span>I confirm these order details are correct and agree to proceed to secure payment.</span>
+          </label>
+
+          <div class="checkout-error" data-checkout-error hidden></div>
+
+          <button class="checkout-pay-button" type="submit" data-pay-button>
+            <span data-pay-label>Pay securely</span>
+            <span aria-hidden="true">→</span>
+          </button>
+
+          <p class="checkout-payment-note">Payment is processed by Paystack. Teyza does not collect or store your card details.</p>
+        </form>
+      </section>
+
+      <aside class="order-card">
+        <span class="checkout-eyebrow">ORDER SUMMARY</span>
+
+        <div class="order-product">
+          <div class="order-image" data-product-image></div>
+          <div>
+            <strong data-product-name>Product</strong>
+            <span data-seller-name>Seller</span>
+          </div>
+        </div>
+
+        <div class="quantity-row">
+          <span>Quantity</span>
+          <div class="quantity-control">
+            <button type="button" data-qty-down aria-label="Decrease quantity">−</button>
+            <strong data-quantity>1</strong>
+            <button type="button" data-qty-up aria-label="Increase quantity">+</button>
+          </div>
+        </div>
+
+        <div class="order-lines">
+          <div><span>Subtotal</span><strong data-subtotal>R0.00</strong></div>
+          <div><span data-delivery-label>Delivery</span><strong data-delivery>R0.00</strong></div>
+          <div class="order-total"><span>Total</span><strong data-total>R0.00</strong></div>
+        </div>
+
+        <div class="seller-trust">
+          <span class="trust-icon">✓</span>
+          <div>
+            <strong>Approved Teyza seller</strong>
+            <span data-delivery-copy>Delivery information will appear here.</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="js/checkout.js?v=2" type="module"></script>
+</body>
+</html>

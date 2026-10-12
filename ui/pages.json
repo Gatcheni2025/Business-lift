@@ -3,14 +3,16 @@
     "title": "Dashboard",
     "description": "An overview of your business, all in one place.",
     "scripts": [
-      "<script type=\"module\" src=\"js/dashboard-data.js\"></script>"
+      "<script type=\"module\" src=\"js/dashboard-data.js?v=2\"></script>",
+      "<script src=\"js/simple-dashboard.js?v=1\"></script>",
+      "<script type=\"module\" src=\"js/settings-onboarding.js?v=2\"></script>"
     ]
   },
   "products": {
     "title": "Products",
     "description": "Build your catalog and keep your inventory up to date.",
     "scripts": [
-      "<script type=\"module\" src=\"js/products-data.js?v=25\"></script>"
+      "<script type=\"module\" src=\"js/products-data.js?v=26\"></script>"
     ]
   },
   "orders": {
@@ -31,7 +33,7 @@
     "title": "Business profile",
     "description": "Keep your business identity and contact details up to date.",
     "scripts": [
-      "<script type=\"module\" src=\"js/business-profile.js?v=5\"></script>"
+      "<script type=\"module\" src=\"js/business-profile.js?v=28\"></script>"
     ]
   },
   "seller-onboarding": {
@@ -91,5 +93,12 @@
     "title": "Domains",
     "description": "Manage the address customers use to find you online.",
     "scripts": []
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "All your business preferences in one place.",
+    "scripts": [
+      "<script type=\"module\" src=\"js/settings-onboarding.js?v=2\"></script>"
+    ]
   }
 }

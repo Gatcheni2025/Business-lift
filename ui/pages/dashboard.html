@@ -1,64 +1,7 @@
 <div class="workspace-alert" data-workspace-status role="status" hidden></div>
-<section class="app-home-head">
-  <div class="app-profile">
-    <span class="app-profile-avatar" data-business-initial>T</span>
-    <div class="app-profile-copy"><small data-current-date>Today</small><h1>Hi, <span data-greeting-name>seller</span></h1></div>
-  </div>
-  <div class="app-home-actions">
-    <a class="app-icon-button" href="sales-channels.html?return=dashboard" aria-label="Sales channels"><i class="ph ph-plugs-connected"></i></a>
-    <a class="app-icon-button" href="business-profile.html" aria-label="Business profile"><i class="ph ph-user-circle"></i></a>
-  </div>
-</section>
-
-<section class="app-verification-card" data-app-verification>
-  <div class="app-verification-top">
-    <div><p class="eyebrow">SELLER VERIFICATION</p><h2 data-app-verification-title>Get verified to unlock selling</h2><p data-app-verification-copy>Complete your business checks once. After approval, selling becomes a one-tap action.</p></div>
-    <div class="app-verification-score" data-app-verification-score>0/5</div>
-  </div>
-  <div class="app-verification-steps">
-    <div class="app-verify-step" data-v-step="phone"><span>○</span>Phone</div>
-    <div class="app-verify-step" data-v-step="identity"><span>○</span>Identity</div>
-    <div class="app-verify-step" data-v-step="location"><span>○</span>Location</div>
-    <div class="app-verify-step" data-v-step="proof"><span>○</span>Address</div>
-    <div class="app-verify-step" data-v-step="approval"><span>○</span>Approval</div>
-  </div>
-  <div class="app-verification-actions">
-    <a class="button button-primary" data-app-verification-action href="business-profile.html?setup=1">Continue verification →</a>
-    <a class="button" href="business-profile.html">View business profile</a>
-  </div>
-</section>
-
-<section class="app-sell-hero" data-app-sell-hero hidden>
-  <div><p class="eyebrow">READY TO SELL</p><h2>What are you selling today?</h2><p>Add a product once, then choose the channels where customers should see it.</p></div>
-  <a class="app-sell-button" data-primary-seller-action href="products.html#new-product"><strong>+</strong><span>Sell</span></a>
-</section>
-
-<section class="app-pulse-grid" aria-label="Your business today">
-  <a class="app-pulse-card" href="customers.html"><span class="app-pulse-icon"><i class="ph ph-users-three"></i></span><div><strong data-stat-customers>—</strong><small>Clients</small><div class="app-card-link">Clients & chats →</div></div></a>
-  <a class="app-pulse-card" href="orders.html#fulfilment"><span class="app-pulse-icon"><i class="ph ph-truck"></i></span><div><strong data-stat-deliveries>—</strong><small>Need delivery</small><div class="app-card-link">Complete delivery →</div></div></a>
-  <a class="app-pulse-card" href="payments.html"><span class="app-pulse-icon"><i class="ph ph-wallet"></i></span><div><strong data-stat-paid>—</strong><small>Paid sales</small><div class="app-card-link">Banking →</div></div></a>
-</section>
-
+<header class="simple-heading"><div><span class="simple-kicker" data-business-name>Your business</span><h1>Teyza</h1></div><a class="simple-settings" href="settings.html" aria-label="Settings">⚙</a></header>
+<div class="simple-tabs" role="tablist" aria-label="Dashboard activity"><button id="chats-tab" role="tab" aria-selected="true" aria-controls="chats-panel" data-home-tab="chats">Chats</button><button id="sales-tab" role="tab" aria-selected="false" aria-controls="sales-panel" tabindex="-1" data-home-tab="sales">Orders</button></div>
 <div class="notice" data-dashboard-status role="status" hidden></div>
-
-<section class="app-stream-grid">
-  <article class="app-stream-card">
-    <div class="app-stream-head"><h2>Client conversations</h2><button type="button" data-open-seller-chat>Open chats</button></div>
-    <div class="app-chat-preview" data-app-chat-preview><div class="empty-state"><p>Loading conversations…</p></div></div>
-  </article>
-  <article class="app-stream-card">
-    <div class="app-stream-head"><h2>Recent sales</h2><a href="orders.html">All orders →</a></div>
-    <div class="app-order-list" data-recent-orders><div class="empty-state"><p>Loading recent sales…</p></div></div>
-  </article>
-</section>
-
-<section>
-  <div class="app-stream-head"><h2>More from Teyza</h2></div>
-  <div class="app-shortcuts">
-    <a class="app-shortcut" href="store.html"><i class="ph ph-storefront"></i><strong>Your store</strong><small>See what customers see</small></a>
-    <a class="app-shortcut" href="sales-channels.html?return=dashboard"><i class="ph ph-plugs-connected"></i><strong>Sales channels</strong><small>Facebook, Instagram, Google & more</small></a>
-    <a class="app-shortcut" href="products.html"><i class="ph ph-package"></i><strong>Products</strong><small>Catalog, price and stock</small></a>
-    <a class="app-shortcut" href="shop-settings.html"><i class="ph ph-gear"></i><strong>Shop settings</strong><small>Policies and notifications</small></a>
-    <a class="app-shortcut" href="network.html"><i class="ph ph-handshake"></i><strong>Partner network</strong><small>Grow with other businesses</small></a>
-  </div>
-</section>
+<section id="chats-panel" role="tabpanel" aria-labelledby="chats-tab" data-home-panel="chats"><div class="simple-section-heading"><div><h2>Conversations</h2><p>Stay close to your customers.</p></div><button class="simple-action" type="button" data-open-seller-chat>Open chats ↗</button></div><div class="app-chat-preview" data-app-chat-preview><div class="empty-state"><p>Loading conversations…</p></div></div><a class="simple-contacts" href="customers.html">View all customers →</a></section>
+<section id="sales-panel" role="tabpanel" aria-labelledby="sales-tab" data-home-panel="sales" hidden><div class="simple-section-heading"><div><h2>Recent orders</h2><p>Your latest selling activity.</p></div><a class="simple-action" href="orders.html">All orders ↗</a></div><div class="app-order-list" data-recent-orders><div class="empty-state"><p>Loading orders…</p></div></div></section>
+<a class="simple-compose" href="products.html#new-product" data-primary-seller-action aria-label="Sell a product">Sell</a>

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f5b">
+  <title>Payment status | Teyza</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/checkout.css?v=1">
+</head>
+<body class="payment-result-page">
+  <main class="payment-result-shell">
+    <a class="checkout-brand result-brand" href="shop.html">
+      <span class="checkout-brand-mark">T</span>
+      <span>TEYZA<small>Everyone can sell.</small></span>
+    </a>
+
+    <section class="payment-result-card" data-result-card>
+      <div class="payment-result-icon pending" data-result-icon>
+        <span class="checkout-spinner"></span>
+      </div>
+
+      <span class="checkout-eyebrow">PAYMENT STATUS</span>
+      <h1 data-result-title>Confirming your payment…</h1>
+      <p data-result-copy>Please keep this page open while Teyza confirms the transaction with Paystack.</p>
+
+      <div class="payment-result-order" data-result-order hidden>
+        <div><span>Order</span><strong data-result-order-number>—</strong></div>
+        <div><span>Seller</span><strong data-result-seller>—</strong></div>
+        <div><span>Total</span><strong data-result-total>—</strong></div>
+        <div><span>Payment</span><strong data-result-payment>—</strong></div>
+      </div>
+
+      <div class="result-actions">
+        <a class="checkout-pay-button result-button" href="shop.html">Continue shopping</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/payment-success.js?v=2" type="module"></script>
+</body>
+</html>

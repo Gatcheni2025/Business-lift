@@ -1,0 +1,55 @@
+TEYZA PAYSTACK SOUTH AFRICA BANK VALIDATION v63
+
+WHY THE ERROR HAPPENED
+======================
+v62 used GET /bank/resolve.
+That endpoint is for Nigeria/Ghana account resolution.
+
+South Africa must use Paystack:
+  POST /bank/validate
+
+This fixes:
+  Please supply one of the following valid currencies: NGN, USD, GHS, KES
+
+NEW FLOW
+========
+Bank
+Account number
+Account holder name
+Account ownership: Personal / Business
+Identification type
+ID / Passport / Business registration number
+Confirm details
+Verify & connect payout account
+
+BACKEND
+=======
+Banks:
+  GET /bank?currency=ZAR&enabled_for_verification=true
+
+Validation:
+  POST /bank/validate
+  country_code = ZA
+
+After successful validation:
+- creates or updates seller Paystack subaccount
+- stores only masked account details + subaccount code
+- does NOT store full account number
+- does NOT store ID/passport/business registration number
+
+UPLOAD
+======
+/payments.html
+/js/payout-banking.js
+/assets/payout-banking.css
+/api/paystack-subaccount.php
+
+CACHE
+=====
+payout-banking.js?v=2
+payout-banking.css?v=2
+
+KEEP
+====
+/api/_paystack.php
+/private_html/teyza-payments/config.php

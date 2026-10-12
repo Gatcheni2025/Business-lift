@@ -44,7 +44,7 @@ if(!isAdmin($user))fail(403,'Admin access required');
 
 $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['uid']??''));
 $type=(string)($_GET['type']??'proof');
-if(!$uid||!in_array($type,['proof','identity-document','identity-selfie'],true))fail(422,'Invalid verification file request');
+if(!$uid||!in_array($type,['proof','identity-document','identity-selfie','identity-document-draft','identity-selfie-draft'],true))fail(422,'Invalid verification file request');
 
 $dataPath=dirname(__DIR__).'/../private_html/teyza-data/'.$uid.'.json';
 if(!is_file($dataPath))fail(404,'Seller not found');
@@ -54,7 +54,9 @@ if(!is_array($workspace))fail(404,'Seller verification record not found');
 $verification=$workspace['verification']??[];
 if($type==='proof')$stored=$verification['proofOfAddress']['storedName']??'';
 elseif($type==='identity-document')$stored=$verification['identity']['documentName']??'';
-else $stored=$verification['identity']['selfieName']??'';
+elseif($type==='identity-selfie')$stored=$verification['identity']['selfieName']??'';
+elseif($type==='identity-document-draft')$stored=$verification['identityDraft']['documentStoredName']??'';
+else $stored=$verification['identityDraft']['selfieStoredName']??'';
 
 $stored=basename((string)$stored);
 if($stored==='')fail(404,'Verification file not found');

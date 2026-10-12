@@ -1,0 +1,584 @@
+
+/* Teyza Business Profile Wizard v56 */
+
+#profile-form{
+  overflow:visible;
+}
+
+.profile-layout{
+  align-items:start;
+}
+
+.profile-wizard-form{
+  display:block;
+}
+
+.profile-wizard-progress{
+  padding:22px;
+  margin-bottom:22px;
+  border:1px solid #dce7e1;
+  border-radius:24px;
+  background:#fff;
+}
+
+.profile-wizard-progress-head{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  align-items:flex-start;
+  margin-bottom:16px;
+}
+
+.profile-wizard-progress-head h2{
+  margin:5px 0 0;
+  font-size:24px;
+}
+
+.profile-wizard-progress-head strong{
+  color:#087f5b;
+  font-size:14px;
+}
+
+.profile-wizard-track{
+  height:7px;
+  background:#e9f0ec;
+  border-radius:999px;
+  overflow:hidden;
+  margin-bottom:18px;
+}
+
+.profile-wizard-track i{
+  display:block;
+  width:14.285%;
+  height:100%;
+  background:#16865e;
+  border-radius:999px;
+  transition:width .25s ease;
+}
+
+.profile-wizard-steps{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:8px;
+}
+
+.profile-wizard-steps button{
+  appearance:none;
+  border:0;
+  background:transparent;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+  color:#7b8982;
+  cursor:pointer;
+  font:inherit;
+  padding:4px;
+}
+
+.profile-wizard-steps button span{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid #cfdcd5;
+  background:#f3f7f5;
+  font-weight:800;
+}
+
+.profile-wizard-steps button small{
+  font-weight:700;
+}
+
+.profile-wizard-steps button.active{
+  color:#087f5b;
+}
+
+.profile-wizard-steps button.active span{
+  background:#16865e;
+  color:#fff;
+  border-color:#16865e;
+}
+
+.profile-wizard-steps button.done span{
+  background:#e4f7ed;
+  color:#087f5b;
+  border-color:#bce4d1;
+}
+
+.profile-wizard-panel{
+  border:1px solid #dce7e1;
+  border-radius:24px;
+  padding:26px;
+  background:#fff;
+}
+
+.profile-wizard-panel[hidden]{
+  display:none !important;
+}
+
+.profile-step-heading{
+  padding-bottom:18px;
+  margin-bottom:22px;
+  border-bottom:1px solid #e6ece8;
+}
+
+.profile-step-heading h3{
+  margin:6px 0 8px;
+  font-size:28px;
+  color:#102d25;
+}
+
+.profile-step-heading p{
+  margin:0;
+  color:#687b71;
+  line-height:1.6;
+}
+
+.profile-step-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:24px;
+  padding-top:20px;
+  border-top:1px solid #e6ece8;
+}
+
+.profile-step-spacer{
+  display:block;
+}
+
+.profile-step-note{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  background:#f2f7f4;
+  border-radius:16px;
+  padding:15px 17px;
+  margin-top:16px;
+  color:#547066;
+}
+
+.profile-step-note strong{
+  color:#234b3d;
+}
+
+.profile-otp-card{
+  display:block !important;
+  margin-top:14px;
+  border:1px solid #dbe6e0;
+  border-radius:18px;
+  padding:18px;
+  background:#f8fbf9;
+}
+
+.profile-otp-card .otp-entry{
+  margin-top:12px;
+}
+
+.profile-otp-card input:disabled{
+  opacity:.6;
+  background:#edf2ef;
+}
+
+.profile-otp-hint{
+  margin:10px 0 0;
+}
+
+#phone-recaptcha{
+  min-height:0;
+  margin-top:14px;
+}
+
+.verification-map{
+  min-height:380px !important;
+  height:380px !important;
+  width:100% !important;
+  border-radius:18px;
+  overflow:hidden;
+  background:#eef3f0;
+  position:relative;
+  z-index:1;
+}
+
+.verification-map .leaflet-container,
+#businessMap.leaflet-container{
+  width:100% !important;
+  height:380px !important;
+}
+
+.profile-review-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+
+.profile-review-grid article{
+  border:1px solid #dce7e1;
+  border-radius:18px;
+  padding:18px;
+  background:#fbfdfc;
+}
+
+.profile-review-grid article span,
+.profile-review-grid article small{
+  display:block;
+  color:#74847c;
+}
+
+.profile-review-grid article strong{
+  display:block;
+  margin:7px 0;
+  color:#14372c;
+  font-size:17px;
+}
+
+.profile-review-wide{
+  grid-column:1/-1;
+}
+
+.profile-review-wide .button{
+  margin-top:12px;
+}
+
+.profile-wizard-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:14px;
+}
+
+.profile-wizard-footer a{
+  color:#087f5b;
+  font-weight:700;
+}
+
+[data-profile-status]{
+  margin-top:16px;
+}
+
+@media(max-width:900px){
+  .profile-layout{
+    grid-template-columns:1fr !important;
+  }
+}
+
+@media(max-width:680px){
+  .profile-wizard-progress,
+  .profile-wizard-panel{
+    padding:18px;
+    border-radius:20px;
+  }
+
+  .profile-wizard-steps{
+    gap:2px;
+  }
+
+  .profile-wizard-steps button small{
+    font-size:10px;
+  }
+
+  .profile-wizard-steps button span{
+    width:30px;
+    height:30px;
+  }
+
+  .profile-step-heading h3{
+    font-size:24px;
+  }
+
+  .profile-review-grid{
+    grid-template-columns:1fr;
+  }
+
+  .profile-review-wide{
+    grid-column:auto;
+  }
+
+  .verification-field,
+  .otp-entry,
+  .location-tools{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .verification-map,
+  #businessMap.leaflet-container{
+    height:320px !important;
+    min-height:320px !important;
+  }
+}
+
+
+/* v57: identity is part of the main wizard */
+.profile-wizard-panel .identity-upload-box{
+  display:flex;
+  min-height:180px;
+  border:1.5px dashed #b9d4c8;
+  border-radius:20px;
+  background:#f8fbf9;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:8px;
+  padding:24px;
+  cursor:pointer;
+  position:relative;
+}
+
+.profile-wizard-panel .identity-upload-box input{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+
+.profile-wizard-panel .identity-camera{
+  max-width:560px;
+  margin:18px auto;
+  border-radius:24px;
+  overflow:hidden;
+  background:#10231e;
+}
+
+.profile-wizard-panel .identity-camera video,
+.profile-wizard-panel .identity-camera img{
+  width:100%;
+  aspect-ratio:1/1;
+  object-fit:cover;
+}
+
+.profile-wizard-panel .identity-camera-placeholder{
+  min-height:360px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:8px;
+  text-align:center;
+  color:#d8e4df;
+}
+
+.profile-wizard-panel .identity-camera-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+.profile-wizard-panel .identity-camera-guide{
+  text-align:center;
+  color:#65776e;
+}
+
+.profile-wizard-panel .identity-review-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  margin:16px 0;
+}
+
+.profile-wizard-panel .identity-review-item{
+  padding:18px;
+  border:1px solid #dce7e1;
+  border-radius:18px;
+  background:#fbfdfc;
+}
+
+.profile-wizard-panel .identity-review-item span,
+.profile-wizard-panel .identity-review-item small{
+  display:block;
+  color:#73847b;
+}
+
+.profile-wizard-panel .identity-review-item strong{
+  display:block;
+  margin:7px 0;
+  color:#14372c;
+}
+
+.profile-wizard-panel .identity-consent{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  margin:20px 0;
+  padding:16px;
+  border-radius:16px;
+  background:#f2f7f4;
+}
+
+.profile-wizard-panel .identity-consent input{
+  margin-top:4px;
+}
+
+.identity-draft-status{
+  margin-top:16px;
+}
+
+.profile-complete-actions{
+  margin-top:18px;
+  text-align:right;
+}
+
+@media(max-width:860px){
+  .profile-wizard-steps{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
+
+@media(max-width:620px){
+  .profile-wizard-steps{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    row-gap:12px;
+  }
+
+  .profile-wizard-steps button small{
+    max-width:64px;
+    white-space:normal;
+    line-height:1.15;
+  }
+
+  .profile-wizard-panel .identity-review-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* v58 — profile load, upload and save feedback */
+
+[data-step1-continue][hidden]{
+  display:none !important;
+}
+
+.business-logo-editor{
+  position:relative;
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease,
+    transform .2s ease;
+}
+
+.business-logo-editor.is-uploading{
+  border-color:#8fcdb5;
+  box-shadow:0 0 0 4px rgba(22,134,94,.08);
+}
+
+.business-logo-editor.is-uploaded,
+.business-logo-editor.image-ready{
+  border-color:#9ed9bd;
+  box-shadow:0 0 0 4px rgba(22,134,94,.06);
+}
+
+.business-logo-editor.upload-error{
+  border-color:#efb4ad;
+}
+
+.profile-upload-progress{
+  margin-top:14px;
+  padding:14px 16px;
+  border-radius:16px;
+  background:#f2f8f5;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  animation:profileFadeIn .22s ease both;
+}
+
+.profile-upload-progress[hidden]{
+  display:none !important;
+}
+
+.profile-upload-progress strong,
+.profile-upload-progress small{
+  display:block;
+}
+
+.profile-upload-progress small{
+  margin-top:3px;
+  color:#687b71;
+}
+
+.upload-spinner,
+.inline-spinner{
+  display:inline-block;
+  width:20px;
+  height:20px;
+  flex:0 0 auto;
+  border:2px solid rgba(22,134,94,.22);
+  border-top-color:#16865e;
+  border-radius:50%;
+  animation:profileSpin .75s linear infinite;
+}
+
+.inline-spinner{
+  width:16px;
+  height:16px;
+  border-color:rgba(255,255,255,.35);
+  border-top-color:#fff;
+}
+
+.button-loading{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  cursor:wait !important;
+}
+
+.business-logo-preview img{
+  transition:opacity .2s ease, transform .25s ease;
+}
+
+.business-logo-editor.is-uploading .business-logo-preview img{
+  opacity:.55;
+  transform:scale(.96);
+}
+
+.business-logo-editor.is-uploaded .business-logo-preview img{
+  animation:profileImageSaved .42s ease both;
+}
+
+[data-step1-continue]{
+  animation:profileContinueIn .35s cubic-bezier(.2,.75,.25,1) both;
+}
+
+.form-status.success{
+  animation:profileFadeIn .22s ease both;
+}
+
+@keyframes profileSpin{
+  to{transform:rotate(360deg)}
+}
+
+@keyframes profileFadeIn{
+  from{opacity:0;transform:translateY(5px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+@keyframes profileImageSaved{
+  0%{transform:scale(.94);opacity:.75}
+  65%{transform:scale(1.04);opacity:1}
+  100%{transform:scale(1);opacity:1}
+}
+
+@keyframes profileContinueIn{
+  from{opacity:0;transform:translateY(8px) scale(.98)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .upload-spinner,
+  .inline-spinner,
+  .profile-upload-progress,
+  .business-logo-editor,
+  .business-logo-preview img,
+  [data-step1-continue],
+  .form-status.success{
+    animation:none !important;
+    transition:none !important;
+  }
+}
