@@ -89,7 +89,7 @@ After emulator tests and function code review, deploy the rules to the **staging
 
 Deploy only these six marketplace callable functions to staging, not the existing website's functions:
 
-    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID deploy --only functions:registerMarketplaceShop,functions:configureMarketplaceFulfilment,functions:publishMarketplaceListing,functions:unpublishMarketplaceListing,functions:placeMarketplaceOrder,functions:reviewMarketplaceOrder
+    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID deploy --only functions:registerMarketplaceShop,functions:configureMarketplaceFulfilment,functions:publishMarketplaceListing,functions:unpublishMarketplaceListing,functions:placeMarketplaceOrder,functions:reviewMarketplaceOrder,functions:requestMarketplaceService,functions:respondMarketplaceServiceRequest,functions:decideMarketplaceServiceQuote
 
 The marketplace Functions are in functions/marketplace.js and exported by functions/index.js. They require the Cloud Functions deployment environment but no Paystack keys.
 
@@ -97,13 +97,14 @@ When staging functions are running, **do not test real live customer payments**.
 
 ## 6. Test merchant / buyer path
 
-1. Create two DIFFERENT staging Firebase Auth accounts (seller and buyer).
-2. Seller opens Sell tab -> Register shop -> pending.
+1. Create two DIFFERENT staging Firebase Auth accounts (merchant on website and customer in the app).
+2. Seller opens merchant-marketplace.html on an appropriate STAGING hosting origin -> Register marketplace shop -> pending.
 3. In staging Firestore, a trusted admin changes only teyzaMarketplaceShops/{sellerUid}.status from pending to approved after a test verification. The mobile app has no permission to self-approve.
-4. Seller publishes a test item with real price and stock.
+4. On the merchant website, approved seller publishes a test item with real price and stock.
 5. Buyer explores it, adds it to basket and requests pickup or delivery offered by the seller.
-6. Seller sees order, accepts or declines. On acceptance, server decreases stock transactionally.
+6. Seller sees the order on merchant-marketplace.html, accepts or declines. On acceptance, server decreases stock transactionally.
 7. Seller marks ready then fulfilled, and buyer sees its status. PaymentStatus remains unpaid.
+8. Merchant lists a test service on website -> buyer opens Services tab, requests a quote -> merchant sends quote -> buyer accepts/declines in Activity. No booking charge is made.
 
 Merchant product photos can be selected from the device gallery and uploaded to the staging Storage bucket after shop approval. Test JPG/PNG only, under 5 MB. Storage rule source: storage.marketplace.rules.
 
@@ -134,3 +135,7 @@ After adding image_picker, confirm Info.plist includes NSPhotoLibraryUsageDescri
 - https://firebase.google.com/docs/functions/callable
 - https://docs.flutter.dev/deployment/android
 - https://firebase.google.com/docs/storage/flutter/upload-files
+
+## Two-platform reminder
+
+Shopper app: Shop / Services / Activity / Basket / Account only. Business owner onboarding and marketplace administration belong on the website. Use merchant-marketplace.html on a staging hosting origin with a staging Firebase config. Do **not** publish that page to the live site with production credentials until the matching Functions, Rules, migration and merchant approval process have been validated. See TEYZA-PLATFORM-ARCHITECTURE.md.
