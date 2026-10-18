@@ -93,3 +93,6 @@ Object.assign(exports, require("./sellerFlow"));
 
 // Isolated, opt-in TEYZA Marketplace Phase 1 functions (not deployed by this PR).
 Object.assign(exports, require("./marketplace"));
+
+// Customer-only mobile service enquiries handled by the merchant website.
+Object.assign(exports, require("./serviceRequests"));
