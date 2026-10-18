@@ -22,6 +22,7 @@
     <a href="payments.html">Accounts</a>
   </nav>
   <span class="pill">Merchant-only workspace</span>
+  <button id="merchantLogout" class="soft-btn" hidden type="button">Sign out</button>
 </header>
 <main class="layout">
   <div class="heading">
@@ -35,7 +36,15 @@
   <section id="authRequired" class="panel" hidden>
     <h2>Sign in to manage your business</h2>
     <p>Use your Teyza merchant account on the website. Shoppers manage orders in the Teyza mobile app.</p>
-    <a class="action" href="index.html">Sign in or create a business account</a>
+    <form id="merchantAuthForm" class="auth-panel">
+      <label>Business email<input name="email" type="email" autocomplete="email" required placeholder="merchant@example.co.za"></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="6"></label>
+      <div class="actions auth-actions">
+        <button class="action" type="submit" data-auth-action="login">Sign in</button>
+        <button class="soft-btn" type="submit" data-auth-action="register">Create merchant account</button>
+      </div>
+    </form>
+    <p class="muted small">For Firebase staging tests only. New businesses are always pending verification; no shop can self-approve.</p>
   </section>
   <section id="registerShop" class="panel" hidden>
     <p class="eyebrow">LIST YOUR BUSINESS IN THE TEYZA APP</p>
