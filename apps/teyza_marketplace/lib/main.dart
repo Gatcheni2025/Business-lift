@@ -6,13 +6,21 @@ import 'package:flutter/material.dart';
 import 'market_api.dart';
 import 'market_brand.dart';
 import 'market_discover.dart';
+import 'preview_app.dart';
 import 'service_requests.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Configure native Firebase SDKs before running: see README.
-  await Firebase.initializeApp();
-  runApp(const TeyzaApp());
+  // A CI debug APK has no production Firebase configuration. Do not crash on
+  // startup: allow design review in a labelled, read-only offline preview.
+  // The real shopper app is used only with a working native Firebase app.
+  try {
+    await Firebase.initializeApp();
+    runApp(const TeyzaApp());
+  } catch (error) {
+    debugPrint('Teyza Firebase not configured: $error');
+    runApp(const TeyzaPreviewApp());
+  }
 }
 
 class TeyzaApp extends StatelessWidget {
