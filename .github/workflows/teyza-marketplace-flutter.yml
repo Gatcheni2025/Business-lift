@@ -24,6 +24,9 @@ jobs:
       - name: Generate Android project files (staging only)
         working-directory: apps/teyza_marketplace
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_marketplace .
+      - name: Remove generated Flutter sample test
+        working-directory: apps/teyza_marketplace
+        run: rm -f test/widget_test.dart
       - name: Resolve Dart packages
         working-directory: apps/teyza_marketplace
         run: flutter pub get
