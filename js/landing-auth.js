@@ -20,11 +20,9 @@ apple.addScope("name");
 const providers = {google, facebook, apple};
 const providerNames = {google: "Google", facebook: "Facebook", apple: "Apple"};
 
-const brand = `<div class="brand"><span class="brand-mark" aria-hidden="true">T</span><span>TEYZA<small>Everyone can sell.</small></span></div>`;
+const brand = `<div class="brand"><span class="brand-mark" aria-hidden="true">T</span><span>TEYZA<small>Local shops. Local growth.</small></span></div>`;
 const providerButtons = mode => `<div class="auth-providers">
   <button class="auth-provider" type="button" data-provider="google" data-mode="${mode}"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.35 12.24c0-.74-.07-1.46-.19-2.16H12v4.09h5.24a4.48 4.48 0 0 1-1.95 2.95v2.45h3.16c1.85-1.71 2.9-4.23 2.9-7.33Z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.36l-3.16-2.45c-.88.59-2 .94-3.29.94a5.87 5.87 0 0 1-5.52-4.07H3.22v2.52A9.75 9.75 0 0 0 12 21.5Z"/><path fill="#FBBC05" d="M6.48 13.56a5.9 5.9 0 0 1 0-3.12V7.92H3.22a9.75 9.75 0 0 0 0 8.16l3.26-2.52Z"/><path fill="#EA4335" d="M12 6.37c1.43 0 2.71.49 3.72 1.45l2.79-2.79A9.3 9.3 0 0 0 12 2.5a9.75 9.75 0 0 0-8.78 5.42l3.26 2.52A5.87 5.87 0 0 1 12 6.37Z"/></svg>Continue with Google</button>
-  <button class="auth-provider" type="button" data-provider="facebook" data-mode="${mode}"><span class="facebook-symbol" aria-hidden="true">f</span>Continue with Facebook</button>
-  <button class="auth-provider" type="button" data-provider="apple" data-mode="${mode}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M16.49 12.56c.03 2.68 2.38 3.57 2.41 3.59-.02.06-.38 1.35-1.24 2.69-.75 1.16-1.53 2.3-2.75 2.33-1.2.02-1.59-.72-2.96-.72-1.36 0-1.79.7-2.93.74-1.18.05-2.07-1.25-2.82-2.4-1.54-2.36-2.72-6.68-1.13-9.36a4.37 4.37 0 0 1 3.69-2.25c1.15-.02 2.23.79 2.94.79.7 0 2.01-.97 3.39-.83.58.03 2.22.23 3.27 1.8-.09.06-1.95 1.2-1.87 3.62ZM14.93 5.65c.62-.76 1.04-1.82.93-2.88-.9.04-2 .6-2.66 1.35-.59.67-1.1 1.75-.97 2.79 1 .08 2.04-.51 2.7-1.26Z"/></svg>Continue with Apple</button>
 </div>`;
 
 function modal(mode) {
@@ -32,9 +30,9 @@ function modal(mode) {
   return `<div class="auth-backdrop" id="tz${login ? "Login" : "Register"}" aria-hidden="true">
     <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="tz${login ? "Login" : "Register"}Title">
       <button class="auth-close" type="button" data-close aria-label="Close dialog">×</button>${brand}
-      <h2 id="tz${login ? "Login" : "Register"}Title">${login ? "Welcome back" : "Start selling with Teyza"}</h2>
-      <p class="auth-subtitle">${login ? "Log in to your business workspace." : "Create your free account, then follow the guided business setup."}</p>
-      <p class="auth-status" data-status role="status" aria-live="polite" hidden></p>
+      <h2 id="tz${login ? "Login" : "Register"}Title">${login ? "Welcome back" : "Register your local shop"}</h2>
+      <p class="auth-subtitle">${login ? "Sign in to manage your local shop." : "Create your account to manage products, stock and orders."}</p>
+      <p class="auth-status" data-status role="status" aria-live="polite" hidden></p><div class="auth-recovery" data-auth-recovery hidden><a href="dashboard.html">Open shop dashboard (limited access) →</a><small>Firebase sign-in worked, but the website cannot load shop records. Full shop tools remain unavailable until the server is fixed.</small></div>
       ${providerButtons(mode)}<div class="auth-divider">or continue with email</div>
       <form id="tz${login ? "Login" : "Register"}Form">
         ${login ? "" : `<div class="auth-grid"><label class="auth-field">First name<input name="firstName" autocomplete="given-name" required></label><label class="auth-field">Last name<input name="lastName" autocomplete="family-name" required></label></div>`}
@@ -66,6 +64,8 @@ function openModal(element) {
   document.querySelectorAll(".auth-backdrop.open").forEach(closeModal);
   returnFocus = document.activeElement;
   clearStatus(element);
+  const recovery = element.querySelector("[data-auth-recovery]");
+  if (recovery) recovery.hidden = true;
   element.classList.add("open");
   element.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -81,6 +81,9 @@ function closeModal(element) {
 function authError(error, provider) {
   const label = providerNames[provider] || "Email/password";
   const messages = {
+    "auth/api-key-not-valid": "Teyza Firebase is using an invalid Web API key. The site administrator must restore the current Firebase Web app configuration.",
+    "auth/invalid-api-key": "The Firebase API key is invalid. Check Project settings in the Firebase Console.",
+    "auth/app-not-authorized": "The Firebase key is not authorized for this site. Check its HTTP referrer restrictions and allowed APIs.",
     "auth/invalid-credential": "Email or password not recognised. If you created your account with Google, use Google to sign in. Otherwise reset your password.",
     "auth/wrong-password": "Incorrect password. Reset your password if you need a new one.",
     "auth/user-not-found": "No email/password account was found. Create an account or use the provider you signed up with.",
@@ -98,15 +101,47 @@ function authError(error, provider) {
   };
   return messages[error?.code] || error?.message || "Sign-in failed. Please try again.";
 }
+
+class TeyzaWorkspaceError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.name = "TeyzaWorkspaceError";
+    this.workspaceUnavailable = true;
+    this.status = status;
+  }
+}
 async function bootstrap(user, details = {}) {
   const token = await user.getIdToken();
-  const response = await fetch("api/workspace.php?action=bootstrap", {
-    method: "POST",
-    headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"},
-    body: JSON.stringify(details)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.ok) throw new Error(data.error || "Sign-in succeeded, but the seller workspace is unavailable. Please contact Teyza support or try again later.");
+  let response;
+  try {
+    response = await fetch("api/workspace.php?action=bootstrap", {
+      method: "POST",
+      headers: {Authorization: "Bearer " + token, "Content-Type": "application/json"},
+      body: JSON.stringify(details)
+    });
+  } catch (_error) {
+    throw new TeyzaWorkspaceError("Firebase sign-in succeeded, but the PHP shop workspace cannot be reached. Check the hosting server.");
+  }
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+  if (!response.ok || !data?.ok) {
+    const status = response.status;
+    const hints = {
+      401: "PHP could not verify your Firebase session. Check token verification and the Authorization header.",
+      403: "This account has no permission for that Teyza shop.",
+      404: "The server is missing api/workspace.php.",
+      500: "The PHP server returned an error. Check PHP logs, extensions and private_html/teyza-data permissions.",
+      503: "Firebase signing certificate verification or the PHP server is unavailable."
+    };
+    const detail = typeof data?.error === "string" && data.error.length < 280 ? data.error : (hints[status] || "The workspace did not return valid shop data.");
+    throw new TeyzaWorkspaceError("Firebase sign-in succeeded, but shop records could not load (workspace HTTP " + status + "). " + detail, status);
+  }
+  return data;
+}
+function reportAuthenticationFailure(container, error, provider) {
+  showStatus(container, error.workspaceUnavailable ? error.message : authError(error, provider));
+  const recovery = container.querySelector("[data-auth-recovery]");
+  if (recovery) recovery.hidden = !(error.workspaceUnavailable && !!auth.currentUser);
 }
 const allowedDestinations = new Set(["dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
 function loginDestination() {
@@ -129,7 +164,7 @@ async function socialSignIn(button) {
     showStatus(container, isNew ? "Account created. Opening business setup…" : "Signed in. Opening your workspace…", "success");
     go(isNew);
   } catch (error) {
-    showStatus(container, authError(error, name));
+    reportAuthenticationFailure(container, error, name);
     button.disabled = false;
   }
 }
@@ -147,7 +182,7 @@ loginForm.addEventListener("submit", async event => {
     showStatus(loginModal, "Signed in. Opening your workspace…", "success");
     go(false);
   } catch (error) {
-    showStatus(loginModal, authError(error));
+    reportAuthenticationFailure(loginModal, error);
     button.disabled = false;
   }
 });
@@ -174,7 +209,7 @@ registerForm.addEventListener("submit", async event => {
     showStatus(registerModal, "Account created. Opening business setup…", "success");
     go(true);
   } catch (error) {
-    showStatus(registerModal, authError(error));
+    reportAuthenticationFailure(registerModal, error);
     button.disabled = false;
   }
 });
@@ -185,7 +220,7 @@ document.addEventListener("click", event => {
   if (event.target.closest("[data-open-register],a[href='register.html']")) {
     event.preventDefault(); openModal(registerModal); return;
   }
-  if (event.target.closest("[data-open-login]")) {
+  if (event.target.closest("[data-open-login],a[href='login.html']")) {
     event.preventDefault(); openModal(loginModal); return;
   }
   const toggle = event.target.closest("[data-toggle-password]");
@@ -208,5 +243,5 @@ document.addEventListener("keydown", event => {
   }
 });
 const requested = new URLSearchParams(location.search).get("auth");
-if (requested === "login") openModal(loginModal);
+if (requested === "login" || location.pathname.endsWith("/login.html")) openModal(loginModal);
 if (requested === "register" || location.pathname.endsWith("/register.html")) openModal(registerModal);

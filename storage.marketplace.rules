@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Image content is public only after the owner shares its URL in a listing.
+    // Lists, customer documents, KYC documents and other paths are never public.
+    match /teyza_marketplace_products/{ownerUid}/{filename} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+        && request.auth.uid == ownerUid
+        && firestore.exists(/databases/(default)/documents/teyzaMarketplaceShops/$(ownerUid))
+        && firestore.get(/databases/(default)/documents/teyzaMarketplaceShops/$(ownerUid)).data.ownerUid == ownerUid
+        && firestore.get(/databases/(default)/documents/teyzaMarketplaceShops/$(ownerUid)).data.status == 'approved'
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)');
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
