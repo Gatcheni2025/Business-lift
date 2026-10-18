@@ -1,4 +1,4 @@
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import {doc, onSnapshot, collection, query, where, limit} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js";
 import {app, auth, db} from "./firebase-config.js";
@@ -51,6 +51,7 @@ function clearListeners() {
 onAuthStateChanged(auth, (signedIn) => {
   clearListeners();
   user = signedIn;
+  show("merchantLogout", !!user);
   shop = null;
   listings = [];
   orders = [];
@@ -306,5 +307,39 @@ element("serviceRequests").addEventListener("click", async (event) => {
     note(report(error), true);
   } finally {
     btn.disabled = false;
+  }
+});
+
+const merchantAuthForm = element("merchantAuthForm");
+let merchantAuthAction = "login";
+merchantAuthForm.querySelectorAll("[data-auth-action]").forEach((button) => {
+  button.addEventListener("click", () => {merchantAuthAction = button.dataset.authAction;});
+});
+merchantAuthForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(merchantAuthForm);
+  const email = String(data.get("email") || "").trim();
+  const password = String(data.get("password") || "");
+  const controls = merchantAuthForm.querySelectorAll("button");
+  controls.forEach((button) => {button.disabled = true;});
+  try {
+    if (merchantAuthAction === "register") {
+      await createUserWithEmailAndPassword(auth, email, password);
+      note("Merchant account created. Complete your shop registration for verification.");
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      note("Signed in to your Teyza merchant account.");
+    }
+  } catch (error) {
+    note(report(error), true);
+  } finally {
+    controls.forEach((button) => {button.disabled = false;});
+  }
+});
+element("merchantLogout").addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    note(report(error), true);
   }
 });
