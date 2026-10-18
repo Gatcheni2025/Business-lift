@@ -48,6 +48,31 @@ service cloud.firestore {
   // Legacy catalog channel metadata only. OAuth credentials belong in server-only integrations.
   match /channels/{channelId} { allow read: if manages(resource.data.businessId); }
   // Banking details, tokens, balances and seller operations are accessed through authenticated Functions.
+
+  // TEYZA Marketplace has its own public discovery collections.
+  // All seller and customer writes are validated by authenticated Cloud Functions.
+  // Public clients can only discover ACTIVE listings and APPROVED shops.
+  match /teyzaMarketplaceShops/{shopId} {
+    allow get, list: if resource.data.status == 'approved'
+      || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    allow create, update, delete: if false;
+  }
+  match /teyzaMarketplaceListings/{listingId} {
+    allow get, list: if resource.data.status == 'active'
+      || (signedIn() && resource.data.sellerUid == request.auth.uid);
+    allow create, update, delete: if false;
+  }
+  match /teyzaMarketplaceOrders/{orderId} {
+    allow get, list: if signedIn()
+      && (resource.data.buyerUid == request.auth.uid
+          || resource.data.sellerUid == request.auth.uid);
+    allow create, update, delete: if false;
+  }
+  // Wholesale pricing, financing applications and settlement records
+  // are intentionally not publicly accessible.
+  match /teyzaMarketplaceWholesaleOffers/{offerId} { allow read, write: if false; }
+  match /teyzaMarketplaceFinancing/{applicationId} { allow read, write: if false; }
+
   match /{document=**} { allow read, write: if false; }
  }
 }
