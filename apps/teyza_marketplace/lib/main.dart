@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'market_api.dart';
 import 'market_brand.dart';
 import 'market_discover.dart';
-import 'seller.dart';
+import 'service_requests.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -106,28 +106,31 @@ class _MarketHomeState extends State<MarketHome> {
         icon: const Icon(Icons.account_circle_outlined),
         color: Colors.white, tooltip: 'My account')]),
     body: SafeArea(child: [
-      discover(),
-      const WholesalePage(),
-      const SellerPage(),
-      const OrdersPage(),
+      discover('all'),
+      discover('service'),
+      const CustomerActivityPage(ordersPage: OrdersPage()),
       cart(),
+      const CustomerAccountPage(),
     ][tab]),
     bottomNavigationBar: NavigationBar(selectedIndex: tab,
       onDestinationSelected: (index) => setState(() => tab = index),
       destinations: [
-        const NavigationDestination(icon: Icon(Icons.storefront_outlined), label: 'Explore'),
-        const NavigationDestination(icon: Icon(Icons.warehouse_outlined), label: 'Wholesale'),
-        const NavigationDestination(icon: Icon(Icons.add_business_outlined), label: 'Sell'),
-        const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+        const NavigationDestination(icon: Icon(Icons.storefront_outlined), label: 'Shop'),
+        const NavigationDestination(icon: Icon(Icons.handyman_outlined), label: 'Services'),
+        const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Activity'),
         NavigationDestination(icon: Badge(
           isLabelVisible: basket.isNotEmpty, label: Text(basket.length.toString()),
           child: const Icon(Icons.shopping_basket_outlined)), label: 'Basket'),
+        const NavigationDestination(icon: Icon(Icons.person_outline), label: 'Account'),
       ]),
   );
 
-  Widget discover() => MarketDiscoverScreen(onAddProduct: (id, details) {
-    addProduct(Product(id, details));
-  });
+  Widget discover(String filter) => MarketDiscoverScreen(
+    key: ValueKey('teyza-discover-' + filter),
+    initialType: filter,
+    onAddProduct: (id, details) => addProduct(Product(id, details)),
+    onRequestService: (id, service) => showServiceRequest(context, id, service),
+  );
 
   Widget cart() {
     if (basket.isEmpty) return const Center(
@@ -213,7 +216,7 @@ class _MarketHomeState extends State<MarketHome> {
                 });
                 if (!mounted) return;
                 Navigator.pop(sheet);
-                setState(() { basket.clear(); tab = 3; });
+                setState(() { basket.clear(); tab = 2; });
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('Order requested. The shop must accept before fulfilment.')));
               } catch (e) {
@@ -228,25 +231,6 @@ class _MarketHomeState extends State<MarketHome> {
       address.dispose();
     }
   }
-}
-
-class WholesalePage extends StatelessWidget {
-  const WholesalePage({super.key});
-  @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(20), children: const [
-    Icon(Icons.warehouse_outlined, size: 55, color: teyzaGreen),
-    SizedBox(height: 12),
-    Text('Give spaza shops buying power', style: TextStyle(
-      fontSize: 24, fontWeight: FontWeight.w900)),
-    SizedBox(height: 15),
-    Text('Wholesale ordering and collective bulk buying will become available after suppliers are verified.'),
-    Card(child: ListTile(leading: Icon(Icons.inventory_2_outlined),
-      title: Text('Wholesale ordering'), subtitle: Text('Supplier stock, packs and minimum quantities · planned'))),
-    Card(child: ListTile(leading: Icon(Icons.groups_2_outlined),
-      title: Text('Group buying'), subtitle: Text('Combine spaza orders to improve buying prices · planned'))),
-    Card(child: ListTile(leading: Icon(Icons.account_balance_outlined),
-      title: Text('Credit for stock'), subtitle: Text('Future referrals to authorised finance partners — not active'))),
-  ]);
 }
 
 class OrdersPage extends StatelessWidget {
@@ -278,5 +262,36 @@ class OrdersPage extends StatelessWidget {
         },
       );
     },
+  );
+}
+
+class CustomerAccountPage extends StatelessWidget {
+  const CustomerAccountPage({super.key});
+  @override
+  Widget build(BuildContext context) => StreamBuilder<User?>(
+    stream: FirebaseAuth.instance.authStateChanges(),
+    builder: (context, auth) => ListView(padding: const EdgeInsets.all(20), children: [
+      const Icon(Icons.account_circle_outlined, size: 60, color: TeyzaBrand.deepGreen),
+      const SizedBox(height: 12),
+      const Center(child: Text('My Teyza', style: TextStyle(
+        fontSize: 25, fontWeight: FontWeight.w900))),
+      const SizedBox(height: 8),
+      Center(child: Text(auth.data?.email ?? 'Sign in to see your activity',
+        style: const TextStyle(color: TeyzaBrand.muted))),
+      const SizedBox(height: 20),
+      Card(child: ListTile(leading: const Icon(Icons.shopping_bag_outlined),
+        title: const Text('Shopping & service activity'),
+        subtitle: const Text('Your purchases and quote requests are under Activity.'))),
+      Card(child: ListTile(leading: const Icon(Icons.pin_drop_outlined),
+        title: const Text('Collection or delivery'),
+        subtitle: const Text('Choose the available option at each shop checkout.'))),
+      const SizedBox(height: 12),
+      FilledButton(
+        onPressed: () => showLogin(context),
+        child: Text(auth.data == null ? 'Create account or sign in' : 'Manage sign-in')),
+      const SizedBox(height: 16),
+      const Text('Shop owners and service providers manage their businesses at teyza.co.za.',
+        textAlign: TextAlign.center, style: TextStyle(color: TeyzaBrand.muted, fontSize: 12)),
+    ]),
   );
 }
