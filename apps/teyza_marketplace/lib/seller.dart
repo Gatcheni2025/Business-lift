@@ -152,7 +152,7 @@ class _SellerPageState extends State<SellerPage> {
                         SnackBar(content: Text(marketError(e))));
                     }
                   }, child: Text(action.toUpperCase()))).toList()),
-              ]))));
+              ])));
           }).toList());
         }),
       const SizedBox(height: 14),
@@ -233,7 +233,7 @@ class _SellerPageState extends State<SellerPage> {
               }
             }, child: Text(sending ? 'Publishing…' : 'Publish listing')),
           ]),
-        ))));
+        )))));
     } finally {
       productName.dispose();
       description.dispose();
