@@ -3,12 +3,30 @@
     "rules": "firestore.rules"
   },
   "functions": [
-    {"source": "functions", "codebase": "default"}
+    {
+      "source": "functions",
+      "codebase": "default"
+    }
   ],
   "emulators": {
-    "auth": {"port": 9099},
-    "firestore": {"port": 8080},
-    "functions": {"port": 5001},
-    "ui": {"enabled": true, "port": 4000}
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "storage": {
+      "port": 9199
+    }
+  },
+  "storage": {
+    "rules": "storage.marketplace.rules"
   }
 }
