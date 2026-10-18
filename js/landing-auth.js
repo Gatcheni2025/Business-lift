@@ -81,6 +81,9 @@ function closeModal(element) {
 function authError(error, provider) {
   const label = providerNames[provider] || "Email/password";
   const messages = {
+    "auth/api-key-not-valid": "Teyza Firebase is using an invalid Web API key. The site administrator must restore the current Firebase Web app configuration.",
+    "auth/invalid-api-key": "The Firebase API key is invalid. Check Project settings in the Firebase Console.",
+    "auth/app-not-authorized": "The Firebase key is not authorized for this site. Check its HTTP referrer restrictions and allowed APIs.",
     "auth/invalid-credential": "Email or password not recognised. If you created your account with Google, use Google to sign in. Otherwise reset your password.",
     "auth/wrong-password": "Incorrect password. Reset your password if you need a new one.",
     "auth/user-not-found": "No email/password account was found. Create an account or use the provider you signed up with.",
