@@ -8,20 +8,20 @@
 <link rel="canonical" href="https://teyza.co.za/">
 <link rel="icon" href="assets/teyza-icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/shop-first.css?v=1">
-</head>
+<link rel="stylesheet" href="assets/auth.css?v=20261018p3"><link rel="stylesheet" href="assets/landing-popup.css?v=20261018p3"></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap header">
 <a href="index.html" class="logo" aria-label="Teyza home"><span class="mark">T</span><strong>TEYZA</strong><small>FOR LOCAL SHOPS</small></a>
 <nav aria-label="Main navigation"><a href="#how">How it works</a><a href="#for-shops">Who can join</a><a href="#features">Shop tools</a><a href="#shopper-app">See the app</a><a href="#faq">Questions</a></nav>
-<div class="header-cta"><a class="login" href="register.html">Register</a><a class="btn green" href="dashboard.html">My shop dashboard →</a></div>
+<div class="header-cta"><a class="login" data-open-register href="register.html">Register</a><a class="btn green" data-open-login href="login.html">Shop owner login →</a></div>
 </div></header>
 <main id="main">
 <section class="hero"><div class="wrap hero-grid">
 <div class="hero-copy"><span class="eyebrow"><i></i> BUILT FOR SOUTH AFRICA'S LOCAL BUSINESSES</span>
 <h1>Your local shop.<br><em>More local orders.</em></h1>
 <p>From your corner spaza to the neighbourhood supermarket, Teyza helps customers discover what you sell and request collection or delivery through the shopper app.</p>
-<div class="hero-actions"><a href="register.html" class="btn coral">Register your shop →</a><a href="dashboard.html" class="btn ghost">Open my shop dashboard</a></div>
+<div class="hero-actions"><a data-open-register href="register.html" class="btn coral">Register your shop →</a><a data-open-login href="login.html" class="btn ghost">Log in to my shop</a></div>
 <div class="features-mini"><span>✓ Manage stock</span><span>✓ Receive orders</span><span>✓ Pickup or delivery</span></div>
 </div>
 <div class="visual" aria-label="Illustrated local shop and sample Teyza shopping basket"><div class="sun"></div>
@@ -41,7 +41,7 @@
       <img src="assets/teyza-shopper-preview.svg" width="1220" height="630" loading="lazy" decoding="async" alt="Illustrated TEYZA shopper app with five screens: Shop, Services, Activity, Basket, and Account.">
       <figcaption>Design concept with example products and stores. Live shopping requires a connected and tested marketplace backend.</figcaption>
     </figure>
-    <a class="btn green" href="register.html">Get your local shop ready →</a>
+    <a class="btn green" data-open-register href="register.html">Get your local shop ready →</a>
   </div>
 </section>
 <section class="section" id="how"><div class="wrap"><div class="section-intro"><span class="eyebrow dark">HOW TEYZA WORKS</span><h2>One simple journey from local shop to local customer.</h2><p><strong>Shop owners use the Teyza website.</strong> Shoppers use the Teyza mobile app.</p></div>
@@ -67,6 +67,6 @@
 <details><summary>Will my shop appear in the app as soon as I register?</summary><p>Only after merchant verification and marketplace integration have been configured and tested.</p></details>
 <details><summary>What happens if my shop cannot deliver?</summary><p>You can offer customer collection where enabled. Local delivery depends on each shop's supported operations.</p></details>
 <details><summary>Can I offer services?</summary><p>Yes. Services begin with enquiries and quotations, with appointments and payment integrations added after testing.</p></details></div></div></section>
-<section class="final-cta"><div class="wrap cta-grid"><div><span class="eyebrow">YOUR NEIGHBOURHOOD IS YOUR MARKET</span><h2>Take your shop forward with Teyza.</h2><p>Create a shop account and prepare to serve nearby customers.</p></div><a class="btn coral" href="register.html">Register your local shop →</a></div></section>
+<section class="final-cta"><div class="wrap cta-grid"><div><span class="eyebrow">YOUR NEIGHBOURHOOD IS YOUR MARKET</span><h2>Take your shop forward with Teyza.</h2><p>Create a shop account and prepare to serve nearby customers.</p></div><a class="btn coral" data-open-register href="register.html">Register your local shop →</a></div></section>
 </main><footer><div class="wrap footer"><div><b>TEYZA</b><small>Local shops. Local customers. Local growth.</small></div><div><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html">Support</a></div><small>© 2026 Teyza</small></div></footer>
-</body></html>
+<script type="module" src="js/landing-auth.js?v=20261018p3"></script></body></html>
