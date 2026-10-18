@@ -289,7 +289,7 @@ class _MarketHomeState extends State<MarketHome> {
                 if (sheet.mounted) update(() => busy = false);
               }
             }, child: Text(busy ? 'Submitting…' : 'Send order request · Pay at fulfilment')),
-          ])))));
+          ]))));
     } finally {
       address.dispose();
     }
