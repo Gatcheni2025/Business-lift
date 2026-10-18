@@ -68,6 +68,14 @@ service cloud.firestore {
           || resource.data.sellerUid == request.auth.uid);
     allow create, update, delete: if false;
   }
+  // Customers see only their own service requests. Approved merchants see
+  // requests addressed to them. Quoting and customer decisions use Functions.
+  match /teyzaMarketplaceServiceRequests/{requestId} {
+    allow get, list: if signedIn()
+      && (resource.data.buyerUid == request.auth.uid
+          || resource.data.providerUid == request.auth.uid);
+    allow create, update, delete: if false;
+  }
   // Wholesale pricing, financing applications and settlement records
   // are intentionally not publicly accessible.
   match /teyzaMarketplaceWholesaleOffers/{offerId} { allow read, write: if false; }
