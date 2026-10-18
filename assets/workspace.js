@@ -67,3 +67,11 @@
   }
  }
 })();
+
+// Load the simplified Teyza local shop navigation (no external channel setup).
+if (!document.querySelector('script[data-shop-first]')) {
+ const script=document.createElement('script');script.src='assets/shop-first-workspace.js?v=1';script.dataset.shopFirst='1';document.body.append(script);
+}
+if (!document.querySelector('link[data-shop-first]')) {
+ const link=document.createElement('link');link.rel='stylesheet';link.href='assets/shop-first-workspace.css?v=1';link.dataset.shopFirst='1';document.head.append(link);
+}
