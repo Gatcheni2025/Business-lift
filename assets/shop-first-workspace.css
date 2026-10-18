@@ -1,0 +1,20 @@
+/* Teyza spaza-first workspace — existing social integrations remain dormant. */
+.dashboard-sales-channels,
+[data-dashboard-channel-list],
+[data-social-shortcut],
+.selling-channel-modal[data-selling-channel-modal],
+.product-hidden-channels,
+.review-channels,
+[data-confirm-channels] {
+  display: none !important;
+}
+.local-shop-header {
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  background:linear-gradient(120deg,#122228,#117658);
+  padding:22px;border-radius:17px;color:white;margin:15px 0 20px;
+}
+.local-shop-header h2 { color:white;font-size:clamp(21px,3vw,30px);margin:5px 0 7px;line-height:1.2; }
+.local-shop-header p { color:#9cf0cf;font-size:10px;font-weight:900;letter-spacing:1.3px;margin:0; }
+.local-shop-header span {color:#d7ebdf;font-size:12px}
+.local-shop-header a { color:white;background:#0da574;border-radius:11px;padding:12px 15px;font-size:12px;font-weight:900;text-decoration:none; }
+.local-shop-setup {background:#e7f8ef;color:#136145;border:1px solid #b3e8ce;border-radius:13px;padding:17px;font-size:13px;}
