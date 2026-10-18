@@ -22,6 +22,7 @@ Use the **actual project ID** assigned by Firebase wherever the examples say YOU
 In Firebase console, enable:
 - Authentication -> Sign-in method -> Email/Password
 - Cloud Firestore -> Create database (choose appropriate staging location)
+- Cloud Storage -> Create default bucket (Blaze billing plan is currently required for Cloud Storage). Set billing alerts/budget limits.
 - Cloud Functions -> eligible billing/Blaze plan if deploying HTTPS callables
 - App Check later for Android and iOS when the signed apps have been registered
 
@@ -80,11 +81,11 @@ From the repository root, install the Cloud Functions dependencies:
 
 Test using the Firebase Emulator Suite:
 
-    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID emulators:start --only auth,firestore,functions
+    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID emulators:start --only auth,firestore,functions,storage
 
 After emulator tests and function code review, deploy the rules to the **staging** project:
 
-    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID deploy --only firestore:rules
+    firebase --config firebase.marketplace.staging.json --project YOUR_STAGING_PROJECT_ID deploy --only firestore:rules,storage
 
 Deploy only these six marketplace callable functions to staging, not the existing website's functions:
 
@@ -104,6 +105,8 @@ When staging functions are running, **do not test real live customer payments**.
 6. Seller sees order, accepts or declines. On acceptance, server decreases stock transactionally.
 7. Seller marks ready then fulfilled, and buyer sees its status. PaymentStatus remains unpaid.
 
+Merchant product photos can be selected from the device gallery and uploaded to the staging Storage bucket after shop approval. Test JPG/PNG only, under 5 MB. Storage rule source: storage.marketplace.rules.
+
 Run at least ownership, stock concurrency, invalid order, collection/delivery and cancellation tests before inviting real merchants.
 
 ## 7. iOS and TestFlight
@@ -114,7 +117,7 @@ On a Mac with Xcode and Apple Developer membership, generate iOS native scaffold
     flutter create --platforms=ios --org za.co.teyza --project-name teyza_marketplace .
     flutterfire configure --project YOUR_STAGING_PROJECT_ID --platforms ios
 
-Verify iOS bundle ID, App Store Connect application, iOS signing team and capabilities, then test device sign-in and upload a signed build. The FlutterFire docs require iOS 15+ for recent Firebase Flutter SDKs. Do not reuse another brand's bundle identifier or signing configuration.
+After adding image_picker, confirm Info.plist includes NSPhotoLibraryUsageDescription with a clear explanation of why the app needs product photos. Verify iOS bundle ID, App Store Connect application, iOS signing team and capabilities, then test device sign-in and upload a signed build. The FlutterFire docs require iOS 15+ for recent Firebase Flutter SDKs. Do not reuse another brand's bundle identifier or signing configuration.
 
 ## 8. Remaining before production
 
@@ -130,3 +133,4 @@ Verify iOS bundle ID, App Store Connect application, iOS signing team and capabi
 - https://firebase.google.com/docs/flutter/setup
 - https://firebase.google.com/docs/functions/callable
 - https://docs.flutter.dev/deployment/android
+- https://firebase.google.com/docs/storage/flutter/upload-files
