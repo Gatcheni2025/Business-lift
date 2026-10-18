@@ -233,7 +233,7 @@ class _SellerPageState extends State<SellerPage> {
               }
             }, child: Text(sending ? 'Publishing…' : 'Publish listing')),
           ]),
-        )))));
+        ))));
     } finally {
       productName.dispose();
       description.dispose();
