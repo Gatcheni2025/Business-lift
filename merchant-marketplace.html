@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#122228">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Teyza Business | Marketplace operations</title>
+  <link rel="stylesheet" href="assets/merchant-marketplace.css">
+  <script type="module" src="js/merchant-marketplace.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="dashboard.html" aria-label="Teyza Business Dashboard">
+    <span class="mark">T</span>
+    <span><strong>TEYZA</strong><small>BUSINESS PLATFORM</small></span>
+  </a>
+  <nav aria-label="Merchant links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="orders.html">Orders</a>
+    <a href="products.html">Products</a>
+    <a href="payments.html">Accounts</a>
+  </nav>
+  <span class="pill">Merchant-only workspace</span>
+</header>
+<main class="layout">
+  <div class="heading">
+    <div><p class="eyebrow">ONE PLATFORM. EVERY BUSINESS.</p>
+      <h1>Your business, beyond the shop.</h1>
+      <p>Manage your storefront, customer orders, service enquiries and tomorrow's wholesale opportunities from the web.</p>
+    </div>
+    <a class="soft-btn" href="seller-onboarding.html">Business setup ↗</a>
+  </div>
+  <div id="message" class="notice" role="status" hidden></div>
+  <section id="authRequired" class="panel" hidden>
+    <h2>Sign in to manage your business</h2>
+    <p>Use your Teyza merchant account on the website. Shoppers manage orders in the Teyza mobile app.</p>
+    <a class="action" href="index.html">Sign in or create a business account</a>
+  </section>
+  <section id="registerShop" class="panel" hidden>
+    <p class="eyebrow">LIST YOUR BUSINESS IN THE TEYZA APP</p>
+    <h2>Join the Teyza local marketplace</h2>
+    <p>Existing Teyza business tools remain available. Register your merchant storefront separately for verification before products are shown to shoppers.</p>
+    <form id="shopForm" class="form-grid">
+      <label>Business name<input name="name" maxlength="100" required placeholder="e.g. Khaya Spaza"></label>
+      <label>Business type
+        <select name="type" required>
+          <option value="spaza">Spaza shop</option>
+          <option value="retailer">Independent retailer</option>
+          <option value="informal_seller">Informal seller</option>
+          <option value="service_provider">Service provider</option>
+          <option value="wholesaler">Wholesaler / distributor</option>
+        </select>
+      </label>
+      <label>Town / City<input name="city" maxlength="100" required></label>
+      <label>Suburb / Township<input name="suburb" maxlength="100" required></label>
+      <label class="check"><input type="checkbox" name="pickupEnabled" checked>Customers can collect</label>
+      <label class="check"><input type="checkbox" name="deliveryEnabled">We offer local delivery</label>
+      <label>Local delivery fee (R)<input name="deliveryFee" type="number" min="0" max="1000000" step="0.01" value="15.00"></label>
+      <div class="actions"><button class="action" type="submit">Submit for Teyza verification</button></div>
+    </form>
+    <p class="muted small">Seller verification is required. Wholesale and funding approval are separate processes.</p>
+  </section>
+  <section id="merchantWorkspace" hidden>
+    <div class="merchant-status">
+      <div>
+        <p class="eyebrow">YOUR MARKETPLACE STOREFRONT</p>
+        <h2 id="merchantTitle">My local business</h2>
+        <p id="merchantSummary">Shop and service operations</p>
+      </div>
+      <span class="status" id="shopStatus">Checking status</span>
+    </div>
+    <div class="stats" aria-label="Merchant overview">
+      <div class="metric"><span>Active listings</span><strong id="statListings">—</strong></div>
+      <div class="metric"><span>Customer orders</span><strong id="statOrders">—</strong></div>
+      <div class="metric"><span>Service requests</span><strong id="statServices">—</strong></div>
+      <div class="metric"><span>Action needed</span><strong id="statPending">—</strong></div>
+    </div>
+    <div class="merchant-links">
+      <a href="business-profile.html"><span>🏪</span><strong>My business</strong><small>Profile and verification</small></a>
+      <a href="products.html"><span>📦</span><strong>Inventory</strong><small>Existing Teyza catalog</small></a>
+      <a href="orders.html"><span>🧾</span><strong>Orders</strong><small>Existing website orders</small></a>
+      <a href="payments.html"><span>💳</span><strong>Accounts</strong><small>Banking and financial records</small></a>
+      <a href="delivery-settings.html"><span>🚚</span><strong>Delivery</strong><small>Collection, couriers and fees</small></a>
+      <a href="network.html"><span>🤝</span><strong>Business network</strong><small>Find partner sellers</small></a>
+    </div>
+    <div id="approvalNotice" class="notice" hidden>Marketplace publishing is disabled until Teyza approves this merchant. Your existing website workspace remains available.</div>
+    <div class="two-col">
+      <section class="panel">
+        <div class="section-top"><div><p class="eyebrow">CUSTOMER-APP CATALOGUE</p><h2>Products and services</h2></div></div>
+        <form id="listingForm" class="form-grid" hidden>
+          <label>Name<input name="name" maxlength="120" required></label>
+          <label>Listing type<select name="kind" id="listingKind">
+            <option value="product">Product</option><option value="service">Service</option>
+          </select></label>
+          <label>Category<select name="category" id="listingCategory">
+            <option value="groceries">Groceries</option><option value="food">Food &amp; snacks</option>
+            <option value="household">Household</option><option value="beauty">Beauty</option>
+            <option value="fashion">Fashion</option><option value="electronics">Electronics</option>
+            <option value="other">Other</option>
+          </select></label>
+          <label>Price / starting price (R)<input type="number" step="0.01" min="0.01" name="price" required></label>
+          <label id="stockRow">Available stock<input type="number" min="0" max="100000" step="1" name="stock" value="1"></label>
+          <label>HTTPS photo URL (optional)<input name="imageUrl" type="url" placeholder="https://..." maxlength="1800"></label>
+          <label class="wide">Description<textarea name="description" required minlength="1" maxlength="1200"></textarea></label>
+          <div class="actions"><button type="submit" class="action">Publish to Teyza App</button></div>
+        </form>
+        <p class="muted small">Use the existing Products page for your legacy web catalogue. This is the new mobile marketplace catalogue; automatic sync will come after verified opt-in.</p>
+        <div id="listings" class="stack"><p class="muted">Loading listings…</p></div>
+      </section>
+      <section class="panel">
+        <p class="eyebrow">LOCAL SHOPPING</p><h2>Mobile customer orders</h2>
+        <p class="muted small">Accept incoming app requests, prepare orders and mark them ready. These starter orders are not automatically paid.</p>
+        <div id="orders" class="stack"><p class="muted">Loading orders…</p></div>
+      </section>
+    </div>
+    <section class="panel">
+      <p class="eyebrow">SERVICES MARKETPLACE</p><h2>Service enquiries &amp; quotations</h2>
+      <p class="muted small">Respond to customer requests with a quote. Quotes are not confirmed bookings or payments.</p>
+      <div id="serviceRequests" class="stack"><p class="muted">Loading requests…</p></div>
+    </section>
+    <section class="panel">
+      <p class="eyebrow">YOUR NEXT BUSINESS ADVANTAGE</p>
+      <h2>More than a marketplace</h2>
+      <div class="feature-grid">
+        <article><div class="feature-icon">🛒</div><h3>Wholesale purchasing</h3><p>Supplier catalogues, case pricing, bulk discounts and stock replenishment.</p><span class="planned">Planned</span></article>
+        <article><div class="feature-icon">🏦</div><h3>Business funding</h3><p>Future optional stock-finance referrals to authorised providers, with transparent terms.</p><span class="planned">Partner-dependent</span></article>
+        <article><div class="feature-icon">📚</div><h3>Bookkeeping</h3><p>Daily cashbook, expenses, purchase invoices, receivables and statements.</p><span class="planned">Planned</span></article>
+        <article><div class="feature-icon">📊</div><h3>Business insights</h3><p>Revenue reporting, fast-selling products, stock alerts and demand trends.</p><span class="planned">Planned</span></article>
+        <article><div class="feature-icon">👥</div><h3>Staff &amp; branches</h3><p>Multi-user permissions, shifts, tills and multiple selling locations.</p><span class="planned">Planned</span></article>
+        <article><div class="feature-icon">📣</div><h3>Marketing tools</h3><p>Discount codes, loyalty, promotions and WhatsApp customer updates.</p><span class="planned">Planned</span></article>
+      </div>
+    </section>
+  </section>
+</main>
+<footer>TEYZA BUSINESS · Build, sell and grow with your community.</footer>
+</body>
+</html>
