@@ -60,12 +60,7 @@ class MarketHome extends StatefulWidget {
 
 class _MarketHomeState extends State<MarketHome> {
   int tab = 0;
-  String category = 'All';
   final basket = <BasketItem>[];
-  static const categories = [
-    'All', 'groceries', 'food', 'household', 'beauty',
-    'fashion', 'electronics', 'other', 'services',
-  ];
 
   void addProduct(Product p) {
     if (p.kind == 'service' || p.stock == 0) return;
