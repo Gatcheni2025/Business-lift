@@ -87,7 +87,7 @@ Future<void> showServiceRequest(
                   color: TeyzaBrand.muted, fontSize: 11)),
             ]),
         ),
-      )),
+      ),
     );
   } finally {
     details.dispose();
