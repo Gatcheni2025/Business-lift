@@ -3,18 +3,32 @@ import 'package:flutter/material.dart';
 import 'market_brand.dart';
 
 typedef MarketAdd = void Function(String id, Map<String, dynamic> data);
+typedef MarketServiceRequest = void Function(String id, Map<String, dynamic> service);
 
 /// A native interpretation of the uploaded TEYZA 2026 shopping homepage.
 class MarketDiscoverScreen extends StatefulWidget {
   final MarketAdd onAddProduct;
-  const MarketDiscoverScreen({super.key, required this.onAddProduct});
+  final MarketServiceRequest onRequestService;
+  final String initialType;
+  const MarketDiscoverScreen({
+    super.key,
+    required this.onAddProduct,
+    required this.onRequestService,
+    this.initialType = 'all',
+  });
   @override
   State<MarketDiscoverScreen> createState() => _MarketDiscoverScreenState();
 }
 
 class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
   final search = TextEditingController();
-  String category = 'All', type = 'all';
+  String category = 'All';
+  late String type;
+  @override
+  void initState() {
+    super.initState();
+    type = widget.initialType;
+  }
   static const cats = [
     _Category('All', 'Explore all', Icons.apps_rounded, Color(0xFFE0F2EC)),
     _Category('groceries', 'Spaza shops', Icons.storefront_outlined, Color(0xFFE5F5EF)),
@@ -268,9 +282,9 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
               backgroundColor: item.kind == 'service'
                 ? TeyzaBrand.dark : TeyzaBrand.green,
               padding: const EdgeInsets.symmetric(horizontal: 6)),
-            onPressed: item.kind == 'service' ? () => _details(item) :
+            onPressed: item.kind == 'service' ? () => widget.onRequestService(item.id, item.raw) :
               item.stock < 1 ? null : () => widget.onAddProduct(item.id, item.raw),
-            child: Text(item.kind == 'service' ? 'View service' :
+            child: Text(item.kind == 'service' ? 'Request quote' :
               item.stock < 1 ? 'Sold out' : '+ Add to basket',
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
           ))),
@@ -303,17 +317,20 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
               style: const TextStyle(color: TeyzaBrand.muted, height: 1.5)),
             const SizedBox(height: 16),
             if (item.kind == 'service')
-              const Text('Service booking and enquiry will be connected after Firebase staging tests.',
+              const Text('Request a quote. The provider will respond with availability and pricing.',
                 style: TextStyle(color: TeyzaBrand.muted))
             else
               Text(item.stock > 0 ? item.stock.toString() + ' available' : 'Sold out'),
             const SizedBox(height: 18),
             FilledButton(
-              onPressed: item.kind != 'service' && item.stock > 0 ? () {
+              onPressed: item.kind == 'service' ? () {
+                Navigator.pop(sheet);
+                widget.onRequestService(item.id, item.raw);
+              } : item.stock > 0 ? () {
                 Navigator.pop(sheet);
                 widget.onAddProduct(item.id, item.raw);
               } : null,
-              child: Text(item.kind == 'service' ? 'Booking coming soon' :
+              child: Text(item.kind == 'service' ? 'Request service quote' :
                 item.stock > 0 ? 'Add to basket' : 'Sold out')),
           ]))));
   }
@@ -348,5 +365,6 @@ class _Item {
   String get description => raw['description']?.toString() ?? '';
   String get imageUrl => raw['imageUrl']?.toString() ?? '';
   int get stock => (raw['stock'] as num?)?.toInt() ?? 0;
-  String get price => 'R ' + (((raw['priceCents'] as num?)?.toInt() ?? 0) / 100).toStringAsFixed(2);
+  String get price => (kind == 'service' ? 'From R ' : 'R ') +
+    (((raw['priceCents'] as num?)?.toInt() ?? 0) / 100).toStringAsFixed(2);
 }
