@@ -2,13 +2,14 @@
 
 **Status: developer foundation, not released to Play Store, App Store or Firebase production.**
 
-The original site at teyza.co.za is preserved. This native customer + seller app lives in its own folder and independent Firebase marketplace collections. It follows the brand colours and mobile shop layout extracted from the uploaded October 2026 teyza.co.za.zip:
+The original site at teyza.co.za is preserved. This native **customer-only app** lives in its own folder and independent Firebase marketplace collections. It follows the brand colours and mobile shop layout extracted from the uploaded October 2026 teyza.co.za.zip:
 
 - Charcoal #122228, emerald #0da574, coral #ff5238 and white cards.
 - Custom TEYZA logo painted natively, hero, local seller shelf, quick categories, search, product/service tabs and responsive product grid.
 - Shopper: explore real Firestore items, view details, add to basket, choose merchant collection or delivery, request order, view order history.
-- Seller: register pending shop, manual admin approval, create product/service listings, upload JPG/PNG product photos to protected Firebase Storage, accept/decline orders, mark ready and fulfilled.
-- Wholesale and inventory credit are planned; they are not transactional screens.
+- Services: request a quote from a provider; view and accept/decline quoted work. Quote acceptance does not automatically book an appointment or pay.
+- Merchants manage business registration, listings, mobile customer orders and service quotes on the **merchant-marketplace.html website page** (separate from the Flutter app).
+- Wholesale and inventory credit are future merchant website modules; the customer app does not contain them.
 - Order requests are CASH-ON-FULFILMENT ONLY and are NOT marked paid. No real card charges, settlement or escrow.
 
 ## Start here
@@ -30,11 +31,15 @@ GitHub Actions workflow:
 - Generates a temporary native Android project, resolves packages, analyzes Dart, runs tests and attempts an internal debug APK.
 - Do not treat a green CI build as live payment/compliance verification.
 
+## Role separation
+
+The Android/iOS app contains Shop, Services, Activity, Basket and Account. It intentionally contains no merchant registration or wholesale tab. The merchant portal is merchant-marketplace.html on the website development branch. Read TEYZA-PLATFORM-ARCHITECTURE.md in repo root for full division of responsibilities.
+
 ## Staged backend
 
 - Cloud Functions: functions/marketplace.js.
-- Collections: teyzaMarketplaceShops, teyzaMarketplaceListings, teyzaMarketplaceOrders.
-- Images: teyza_marketplace_products/{sellerUid}/{photo}.jpg/png with per-seller upload rules.
+- Collections: teyzaMarketplaceShops, teyzaMarketplaceListings, teyzaMarketplaceOrders, teyzaMarketplaceServiceRequests.
+- Images: merchant-side product image publishing uses verified HTTPS links in the current portal; separate Storage rules are staged for future merchant photo uploads.
 - Security: server computes catalog price, checks available stock and seller ownership, and only a verified approved shop may add listings.
 - Seller stock decreases in a Firestore transaction when an order is accepted.
 
