@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'market_api.dart';
 
 class SellerPage extends StatefulWidget {
@@ -167,7 +169,7 @@ class _SellerPageState extends State<SellerPage> {
     final price = TextEditingController();
     final stock = TextEditingController(text: '10');
     final image = TextEditingController();
-    bool sending = false;
+    bool sending = false, uploading = false;
     String kind = 'product', category = 'groceries';
     try {
       await showModalBottomSheet<void>(context: context, isScrollControlled: true,
@@ -211,7 +213,48 @@ class _SellerPageState extends State<SellerPage> {
             ],
             const SizedBox(height: 10),
             TextField(controller: image,
-              decoration: const InputDecoration(labelText: 'Image HTTPS URL (optional)')),
+              decoration: const InputDecoration(labelText: 'Product photo URL (or upload below)')),
+            const SizedBox(height: 9),
+            if (image.text.isNotEmpty) ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(image.text, height: 135, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(height: 45,
+                  child: Center(child: Text('Photo preview unavailable'))))),
+            OutlinedButton.icon(
+              onPressed: sending || uploading ? null : () async {
+                update(() => uploading = true);
+                try {
+                  final selected = await ImagePicker().pickImage(
+                    source: ImageSource.gallery, imageQuality: 80, maxWidth: 1600);
+                  if (selected == null) return;
+                  final filename = selected.name.toLowerCase();
+                  final png = filename.endsWith('.png');
+                  if (!png && !filename.endsWith('.jpg') && !filename.endsWith('.jpeg')) {
+                    throw const FormatException('Choose a JPG or PNG photo.');
+                  }
+                  final bytes = await selected.readAsBytes();
+                  if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+                    throw const FormatException('Product photos must be below 5 MB.');
+                  }
+                  final uid = FirebaseAuth.instance.currentUser?.uid;
+                  if (uid == null) throw const FormatException('Sign in to upload photos.');
+                  final extension = png ? '.png' : '.jpg';
+                  final storageRef = FirebaseStorage.instance.ref()
+                    .child('teyza_marketplace_products/' + uid + '/p_' +
+                      DateTime.now().microsecondsSinceEpoch.toString() + extension);
+                  final saved = await storageRef.putData(bytes,
+                    SettableMetadata(contentType: png ? 'image/png' : 'image/jpeg'));
+                  final url = await saved.ref.getDownloadURL();
+                  if (sheet.mounted) update(() => image.text = url);
+                } catch (e) {
+                  if (sheet.mounted) ScaffoldMessenger.of(sheet).showSnackBar(
+                    SnackBar(content: Text(marketError(e))));
+                } finally {
+                  if (sheet.mounted) update(() => uploading = false);
+                }
+              },
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(uploading ? 'Uploading photo…' : 'Choose photo from phone')),
             const SizedBox(height: 16),
             FilledButton(onPressed: sending ? null : () async {
               update(() => sending = true);
