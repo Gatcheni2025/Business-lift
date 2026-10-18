@@ -94,7 +94,7 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
               ])),
             ])),
           TeyzaSectionTitle(eyebrow: 'DISCOVER LOCAL', title: 'Products & services',
-            actionLabel: filtered.length.toString() + ' items', onAction: () {}),
+            actionLabel: filtered.length.toString() + ' items', onAction: () => setState(() { category = 'All'; type = 'all'; search.clear(); })),
           if (snapshot.hasError)
             _state(Icons.wifi_off_rounded, 'Unable to load catalogue',
                 'Check your connection and Firebase project setup.')
@@ -151,7 +151,7 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
           Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(color: TeyzaBrand.coral,
               borderRadius: BorderRadius.circular(30)),
-            child: const Text('SHOP LOCAL  ↗', style: TextStyle(
+            child: const Text('EXPLORE BELOW  ↓', style: TextStyle(
               color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))),
         ])),
     ]),
@@ -208,7 +208,10 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
     ])),
   );
 
-  Widget _shopCard(String name) => Container(width: 174,
+  Widget _shopCard(String name) => InkWell(
+    onTap: () => setState(() { search.text = name; type = 'all'; category = 'All'; }),
+    borderRadius: BorderRadius.circular(16),
+    child: Container(width: 174,
     padding: const EdgeInsets.all(13),
     decoration: BoxDecoration(color: Colors.white,
       border: Border.all(color: TeyzaBrand.border),
@@ -223,7 +226,7 @@ class _MarketDiscoverScreenState extends State<MarketDiscoverScreen> {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12))),
     ]),
-  );
+  ));
 
   Widget _listingCard(_Item item) => Material(
     color: Colors.white, borderRadius: BorderRadius.circular(17),
