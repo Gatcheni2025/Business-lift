@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'market_api.dart';
+import 'market_brand.dart';
+import 'market_discover.dart';
 import 'seller.dart';
 
 void main() async {
@@ -20,9 +22,9 @@ class TeyzaApp extends StatelessWidget {
     title: 'TEYZA Marketplace', debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: const Color(0xFFF6F8F4),
-      colorScheme: ColorScheme.fromSeed(seedColor: teyzaGreen),
-      appBarTheme: const AppBarTheme(backgroundColor: Color(0xFFF6F8F4)),
+      scaffoldBackgroundColor: TeyzaBrand.background,
+      colorScheme: ColorScheme.fromSeed(seedColor: TeyzaBrand.green),
+      appBarTheme: const AppBarTheme(backgroundColor: TeyzaBrand.dark, foregroundColor: Colors.white),
       inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
     ),
@@ -92,13 +94,22 @@ class _MarketHomeState extends State<MarketHome> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Column(
-      crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('TEYZA', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
-        Text('Everyone can sell.', style: TextStyle(color: teyzaGreen, fontSize: 11)),
+    appBar: AppBar(
+      toolbarHeight: 68,
+      title: const Row(children: [
+        TeyzaMark(size: 43),
+        SizedBox(width: 9),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('TEYZA', style: TextStyle(
+            fontWeight: FontWeight.w900, letterSpacing: 2.2,
+            fontSize: 23, color: Colors.white)),
+          Text('Shop products. Find local services.',
+            style: TextStyle(color: Color(0xFFBEDFD6), fontSize: 10)),
+        ]),
       ]),
       actions: [IconButton(onPressed: () => showLogin(context),
-        icon: const Icon(Icons.account_circle_outlined), tooltip: 'My account')]),
+        icon: const Icon(Icons.account_circle_outlined),
+        color: Colors.white, tooltip: 'My account')]),
     body: SafeArea(child: [
       discover(),
       const WholesalePage(),
@@ -119,81 +130,9 @@ class _MarketHomeState extends State<MarketHome> {
       ]),
   );
 
-  Widget discover() => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-    stream: FirebaseFirestore.instance.collection('teyzaMarketplaceListings')
-      .where('status', isEqualTo: 'active').limit(80).snapshots(),
-    builder: (context, snapshot) {
-      final products = snapshot.data?.docs.map((d) => Product(d.id, d.data()))
-        .where((p) => category == 'All' || p.category == category).toList() ?? [];
-      return CustomScrollView(slivers: [
-        SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(25),
-            decoration: BoxDecoration(color: teyzaGreen, borderRadius: BorderRadius.circular(24)),
-            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('SHOP LOCAL. GROW TOGETHER.',
-                style: TextStyle(color: Color(0xFFBCF2D6), fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
-              Text('Your township.\nYour marketplace.',
-                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
-              SizedBox(height: 10),
-              Text('Spaza groceries, independent sellers and everyday services.',
-                style: TextStyle(color: Colors.white)),
-            ]),
-          ),
-          const Padding(padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text('Find what you need', style: TextStyle(
-              fontSize: 21, fontWeight: FontWeight.w800))),
-          SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.all(14),
-            child: Row(children: categories.map((c) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(label: Text(c), selected: category == c,
-                onSelected: (_) => setState(() => category = c)))).toList())),
-          const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Text('From local sellers', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
-        ])),
-        if (snapshot.hasError) SliverToBoxAdapter(child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('Could not load shop listings: ' + marketError(snapshot.error!)))),
-        if (!snapshot.hasData && !snapshot.hasError) const SliverToBoxAdapter(
-          child: Center(child: CircularProgressIndicator())),
-        if (snapshot.hasData && products.isEmpty) const SliverToBoxAdapter(
-          child: Padding(padding: EdgeInsets.all(20),
-            child: Text('No verified sellers have published in this category yet.'))),
-        SliverPadding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
-          sliver: SliverLayoutBuilder(builder: (ctx, constraints) => SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: constraints.crossAxisExtent >= 760 ? 4 : 2,
-              childAspectRatio: .68, crossAxisSpacing: 12, mainAxisSpacing: 12),
-            delegate: SliverChildBuilderDelegate((ctx, index) =>
-              productCard(products[index]), childCount: products.length)))),
-      ]);
-    },
-  );
-
-  Widget productCard(Product p) => Card(
-    color: Colors.white, clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Expanded(child: p.imageUrl.isEmpty ? const ColoredBox(color: Color(0xFFEAF0EA),
-        child: Icon(Icons.shopping_basket_outlined, color: teyzaGreen, size: 42))
-        : Image.network(p.imageUrl, fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))),
-      Padding(padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
-        child: Text(p.shopName, maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: teyzaGreen, fontSize: 11, fontWeight: FontWeight.bold))),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Text(p.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.bold))),
-      Padding(padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
-        child: Text(zar(p.cents), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
-      Padding(padding: const EdgeInsets.all(7),
-        child: FilledButton.tonal(
-          onPressed: p.kind == 'service' || p.stock <= 0 ? null : () => addProduct(p),
-          child: Text(p.kind == 'service' ? 'Enquiry soon' :
-            p.stock <= 0 ? 'Sold out' : 'Add to basket',
-            style: const TextStyle(fontSize: 11)))),
-    ]),
-  );
+  Widget discover() => MarketDiscoverScreen(onAddProduct: (id, details) {
+    addProduct(Product(id, details));
+  });
 
   Widget cart() {
     if (basket.isEmpty) return const Center(
