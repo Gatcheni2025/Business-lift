@@ -31,12 +31,12 @@ class Product {
 }
 class Shop {
   final String id, name, area, photo, phone;
-  final bool pickup, delivery, demo;
+  final bool pickup, delivery;
   final double? latitude, longitude;
   final List<Product> products;
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
-    {this.demo = false, this.latitude, this.longitude});
+    {this.latitude, this.longitude});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -532,7 +532,7 @@ class _ShopperHomeState extends State<ShopperHome> {
             const SizedBox(height:12),
             Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),
               decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(6)),
-              child:const Text('EXAMPLE PRICES · DEMO',style:TextStyle(
+              child:const Text('FIND YOUR LOCAL SPAZA',style:TextStyle(
                 fontSize:10,fontWeight:FontWeight.w900,color:green)))
           ])),
           const Icon(Icons.shopping_basket_rounded,color:Colors.white,size:77)
@@ -601,11 +601,9 @@ class _ShopperHomeState extends State<ShopperHome> {
   Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),child:SizedBox(width:111,
     child:Column(children:[
       Stack(children:[Container(width:83,height:83,decoration:BoxDecoration(
-        shape:BoxShape.circle,color:s.demo?const Color(0xFFB4E2DA):const Color(0xFFD1EEDB)),
+        shape:BoxShape.circle,color:const Color(0xFFD1EEDB)),
         child:ClipOval(child:photo(s.photo,size:83,icon:Icons.store))),
-        if(s.demo)Positioned(bottom:0,right:0,child:Container(
-          color:const Color(0xFFFCDF9F),padding:const EdgeInsets.all(3),
-          child:const Text('DEMO',style:TextStyle(fontSize:8,fontWeight:FontWeight.bold))))]),
+]),
       const SizedBox(height:8),
       Text(s.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
         style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:ink))
@@ -624,18 +622,14 @@ class _ShopperHomeState extends State<ShopperHome> {
             style:const TextStyle(fontSize:12,fontWeight:FontWeight.w800)),
           Text(rand(p.priceCents),style:const TextStyle(fontSize:17,
             fontWeight:FontWeight.w900,color:ink)),
-          Text(p.id.startsWith('demo-')?'Example price':'Shop-listed price',
+          const Text('Shop-listed price',
             style:const TextStyle(color:muted,fontSize:10))
         ]))).toList()));
   }
   Widget shopTile(Shop s)=>Card(color:Colors.white,elevation:0,
     margin:const EdgeInsets.only(bottom:11),child:InkWell(onTap:()=>openShop(s),
       child:Padding(padding:const EdgeInsets.all(13),child:Row(children:[
-        Stack(children:[photo(s.photo,size:84),
-          if(s.demo)Positioned(left:0,bottom:0,child:Container(
-            padding:const EdgeInsets.symmetric(horizontal:5,vertical:3),
-            color:const Color(0xFFFFDF9E),child:const Text('DEMO',style:TextStyle(fontSize:9,
-              fontWeight:FontWeight.bold))))]),
+        photo(s.photo,size:84),
         const SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(s.name,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w900)),
@@ -732,13 +726,11 @@ class _ShopperHomeState extends State<ShopperHome> {
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(shop.name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
         Text(shop.area,style:const TextStyle(color:muted,fontSize:12)),
-        if(shop.demo)const Text('DEMO SHOP · Not a trading business',
-          style:TextStyle(fontSize:10,fontWeight:FontWeight.bold,color:Color(0xFFB56C00))),
+
         if(distance(shop)!=null)Text(distance(shop)!.toStringAsFixed(1)+' km away (approx.)',
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
-    section('Available products',subtitle:shop.demo?
-      'Sample prices only · Cannot place real orders':'Shop-supplied price and stock'),
+    section('Available products',subtitle:'Merchant-published prices and stock'),
     LayoutBuilder(builder:(context,c)=>GridView.builder(
       shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
       itemCount:shop.products.length,
@@ -756,7 +748,7 @@ class _ShopperHomeState extends State<ShopperHome> {
               style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
             Text(rand(p.priceCents),style:const TextStyle(
               fontSize:17,color:ink,fontWeight:FontWeight.w900)),
-            Text(shop.demo?'Example price':p.stock.toString()+' in stock',
+            Text(p.stock.toString()+' in stock',
               style:const TextStyle(color:muted,fontSize:10)),
             SizedBox(width:double.infinity,child:FilledButton(
               onPressed:()=>quantity(p,1),
@@ -805,9 +797,7 @@ class _ShopperHomeState extends State<ShopperHome> {
     else ...[
       Text(selected!.name,style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
       const SizedBox(height:8),
-      if(selected!.demo)const Card(color:Color(0xFFFFF1CE),
-        child:ListTile(leading:Icon(Icons.info_outline),title:Text('Demo basket only'),
-          subtitle:Text('These are sample products and prices. No real order can be sent.'))),
+
       ...basketItems.map((p)=>Card(color:Colors.white,child:ListTile(
         leading:photo(p.picture,size:55,icon:Icons.shopping_bag),
         title:Text(p.name),
@@ -821,9 +811,9 @@ class _ShopperHomeState extends State<ShopperHome> {
       Text('Estimated total: '+rand(total),style:const TextStyle(
         fontSize:24,fontWeight:FontWeight.w900)),
       const SizedBox(height:13),
-      FilledButton(onPressed: selected!.demo||selected!.phone.isEmpty?null:sendWhatsApp,
+      FilledButton(onPressed: selected!.phone.isEmpty?null:sendWhatsApp,
         child:const Text('Ask shop to confirm via WhatsApp')),
-      if(!selected!.demo && selected!.phone.isEmpty)
+      if(selected!.phone.isEmpty)
         const Text('The shop has not enabled ordering yet.',textAlign:TextAlign.center),
       const SizedBox(height:9),
       const Text('No payment is taken inside Teyza Shopper.',
