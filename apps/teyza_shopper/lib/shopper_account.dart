@@ -25,7 +25,22 @@ class _AccountState extends State<ShopperAccountPanel> {
         await widget.session.signIn(email.text,password.text);
       }
       password.clear();
-      if (mounted) setState(() {status='Welcome to Teyza!';failure=false;});
+      if (registering) {
+        try {
+          await widget.session.sendEmailVerification();
+          if (mounted) setState(() {
+            status='Account created. Check your inbox for the verification link.';
+            failure=false;
+          });
+        } catch (_) {
+          if (mounted) setState(() {
+            status='Account created. Use the verification button below to request a link.';
+            failure=false;
+          });
+        }
+      } else if (mounted) {
+        setState(() {status='Welcome to Teyza!';failure=false;});
+      }
     } catch (error) {
       if (mounted) setState(() {status=authMessage(error);failure=true;});
     } finally { if (mounted) setState(() => working=false); }
@@ -71,6 +86,46 @@ class _AccountState extends State<ShopperAccountPanel> {
           Card(color:Colors.white,child:Column(children:[
             ListTile(leading:const Icon(Icons.email_outlined),
               title:const Text('Email'),subtitle:Text(widget.session.email??'')),
+            const Divider(height:1),
+            ListTile(
+              leading:Icon(widget.session.emailVerified?
+                Icons.verified_user:Icons.mark_email_unread_outlined,
+                color:widget.session.emailVerified?const Color(0xFF078E66):null),
+              title:Text(widget.session.emailVerified?'Email verified':'Verify your email'),
+              subtitle:Text(widget.session.emailVerified?
+                'Your shopper email has been confirmed.' :
+                'Required before sending a real order enquiry.'),
+            ),
+            if (!widget.session.emailVerified) ...[
+              FilledButton.icon(
+                onPressed:working?null:() async {
+                  setState(() {working=true;status=null;});
+                  try {
+                    await widget.session.sendEmailVerification();
+                    if(mounted)setState(() {
+                      status='Verification link sent. Check your inbox, then tap Check verification.';
+                      failure=false;
+                    });
+                  } catch(e) {
+                    if(mounted)setState(() {status=authMessage(e);failure=true;});
+                  } finally { if(mounted)setState(()=>working=false); }
+                },
+                icon:const Icon(Icons.mark_email_read_outlined),
+                label:const Text('Send verification email')),
+              TextButton.icon(
+                onPressed:working?null:() async {
+                  setState(()=>working=true);
+                  await widget.session.refreshEmailStatus();
+                  if(mounted)setState(() {
+                    working=false;
+                    status=widget.session.emailVerified?
+                      'Your email has been verified.':'Not verified yet. Open the email link first.';
+                    failure=!widget.session.emailVerified;
+                  });
+                },
+                icon:const Icon(Icons.refresh),
+                label:const Text('Check verification status')),
+            ],
             const Divider(height:1),
             const ListTile(leading:Icon(Icons.location_on_outlined),
               title:Text('Your shopping area'),

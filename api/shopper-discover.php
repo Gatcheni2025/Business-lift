@@ -31,6 +31,18 @@ $curated=[
  ['id'=>'ext-penzance-umbilo','name'=>'Penzance Superette','area'=>'Umbilo, Durban','address'=>'646 Umbilo Rd, Umbilo, Durban','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Penzance%20Superette%20Durban'],
  ['id'=>'ext-pioneer-durban','name'=>'Pioneer Wholesale And Spaza','area'=>'Durban Central','address'=>'80 Johannes Nkosi St, Durban','sourceUrl'=>'https://rsa.worldorgs.com/catalog/durban/supermarket/pioneer-wholesale-and-spaza'],
  ['id'=>'ext-madiba-greyville','name'=>'Madiba Wholesale & Spaza','area'=>'Greyville, Durban','address'=>'165 Julius Nyerere St, Durban','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Madiba%20Wholesale%20Spaza%20Durban'],
+ // Additional individually named online listings. Presence/stock/hours NOT verified by Teyza.
+ ['id'=>'ext-mbali-inanda','name'=>"Mbali's Tuckshop",'area'=>'Amatikwe, Inanda','address'=>'55 109356 St, Amatikwe, Inanda, 4310','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Mbali%27s%20Tuckshop%20Inanda'],
+ ['id'=>'ext-ebhasini-inanda','name'=>'Ebhasini Tuckshop','area'=>'Inanda Congo','address'=>'20 120046 St, Inanda Congo, Inanda, 4310','sourceUrl'=>'https://ethekwini.co.za/places/ebhasini-tuckshop/'],
+ ['id'=>'ext-ziphozakhe-inanda','name'=>'Ziphozakhe tuck shop','area'=>'Inanda Glebe','address'=>'58 107617 St, Inanda Glebe, Inanda, 4310','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Ziphozakhe%20tuck%20shop%20Inanda'],
+ ['id'=>'ext-shalom-kwamashu','name'=>'Shalom Spaza','area'=>'Emlanjeni, KwaMashu','address'=>'Isipingo Rd, Emlanjeni, KwaMashu, 4051','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Shalom%20Spaza%20KwaMashu'],
+ ['id'=>'ext-yolanda-kwamashu','name'=>"Yolanda's Tuck Shop",'area'=>'KwaMashu','address'=>'M2294 Umhlabelo Grove, KwaMashu, 4360','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Yolandas%20Tuck%20Shop%20KwaMashu'],
+ ['id'=>'ext-edombolweni-umlazi','name'=>'Edombolweni Tuck Shop','area'=>'Umlazi N, Durban','address'=>'54 Mdumiseni Close, Umlazi N, Umlazi, 4066','sourceUrl'=>'https://www.google.com/maps/search/?api=1&query=Edombolweni%20Tuck%20Shop%20Umlazi'],
+ ['id'=>'ext-masuku-kwamashu','name'=>'Masuku Tuck Shop','area'=>'KwaMashu','address'=>'H443 Mpunzi Road, KwaMashu','sourceUrl'=>'https://www.kznedtea.gov.za/documents/tender/Bids/2025/Request%20For%20Quotation%202026030304%20Pest%20Control%20Services.pdf'],
+ ['id'=>'ext-thandi-kwamashu','name'=>"Thandi's Tuck Shop",'area'=>'KwaMashu','address'=>'L1195 Mbondwe Road, KwaMashu','sourceUrl'=>'https://www.kznedtea.gov.za/documents/tender/Bids/2025/Request%20For%20Quotation%202026030304%20Pest%20Control%20Services.pdf'],
+ ['id'=>'ext-stella-kwamashu','name'=>'Stella Tuckshop','area'=>'KwaMashu','address'=>'P297 Ithunge Road, KwaMashu','sourceUrl'=>'https://www.kznedtea.gov.za/documents/tender/Bids/2025/Request%20For%20Quotation%202026030304%20Pest%20Control%20Services.pdf'],
+ ['id'=>'ext-pioneer-inanda-square','name'=>'Pioneer Xpress - Inanda Square','area'=>'Newlands West, Durban','address'=>'Inanda Square Centre, Newlands West, Durban','sourceUrl'=>'https://www.findglocal.com/ZA/Durban/103707884911720/Pioneer-Xpress'],
+
 ];
 $entryFn=static function(array $e): array {
   return ['id'=>$e['id'],'name'=>$e['name'],'area'=>$e['area'],
