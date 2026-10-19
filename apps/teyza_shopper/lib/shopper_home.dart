@@ -463,12 +463,18 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(catalogueError!=null) Padding(padding:const EdgeInsets.only(top:8),
         child:Text('Real-shop connection: '+catalogueError!,
           style:const TextStyle(color:muted,fontSize:11))),
-      section('QUICK SHOPS',subtitle:'Teyza demo shops and approved merchants',
+      section('REAL SPAZA SHOPS',subtitle:'Find existing local spazas near you',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
-      SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
-        children:displayShops.take(9).map((s)=>quickShop(s)).toList())),
-      section('DISCOVER REAL SHOPS ONLINE',
-        subtitle:'Independent public listings · Not registered Teyza stores',
+      if(displayedOnline.isNotEmpty)
+        SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
+          children:displayedOnline.take(12).map(directoryCircle).toList()))
+      else if(displayShops.isNotEmpty)
+        SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
+          children:displayShops.take(9).map(quickShop).toList()))
+      else if(loadingOnline)const Padding(padding:EdgeInsets.all(18),
+        child:Center(child:CircularProgressIndicator())),
+      section('SPAZAS FOUND ONLINE',
+        subtitle:'Named local shops · tap to see shop details',
         action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
       if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
         child:Center(child:CircularProgressIndicator())),
@@ -514,22 +520,59 @@ class _ShopperHomeState extends State<ShopperHome> {
             onSelected:(_)=>setState(()=>category=c),
             selectedColor:const Color(0xFFC6EDE0),backgroundColor:Colors.white,
             side:const BorderSide(color:Color(0xFFE1EAE6)))).toList()),
-      section('EVERYDAY ESSENTIALS',subtitle:'Real shop prices when connected · other prices are examples'),
-      productShelf(featured),
-      section('SPAZA SHOPS NEAR YOU',subtitle:area==null?
+      section('GROCERIES & ESSENTIALS',
+        subtitle:featured.isEmpty?'Browse common grocery categories':
+          'Available products and prices from participating shops'),
+      if(featured.isEmpty)essentialsShelf()else productShelf(featured),
+      section('TEYZA SHOPS WITH LIVE PRODUCTS',subtitle:area==null?
         'Choose an area to see local listings':'Sorted by approximate distance where available',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
-      if(displayShops.isEmpty)empty('No shops found','Try another area or refresh the catalogue.'),
+      if(displayShops.isEmpty)empty('More shop catalogues coming soon',
+        'Real shops are listed above. Owners can claim their store and publish confirmed products.'),
       ...displayShops.take(5).map((s)=>shopTile(s)),
-      section('MORE LOCAL DIRECTORY LISTINGS',
-        subtitle:'Third-party entries, not verified Teyza stores'),
+      section('MORE NEIGHBOURHOOD SPAZAS',
+        subtitle:'Found online · product catalogues not connected yet'),
       ...displayedOnline.skip(4).take(14).map(onlineTile),
       const Padding(padding:EdgeInsets.only(top:8,bottom:10),child:
         Text('Online business data may be incomplete. Confirm details with the shop. '
           '© OpenStreetMap contributors (ODbL).',
           style:TextStyle(fontSize:10,color:muted)))
     ]));
+
+  Widget directoryCircle(OnlineShop s)=>InkWell(onTap:()=>selectDirectory(s),
+    child:SizedBox(width:112,child:Column(children:[
+      Container(width:82,height:82,decoration:const BoxDecoration(
+        color:Color(0xFFDEF2E8),shape:BoxShape.circle),
+        child:const Icon(Icons.storefront_rounded,color:green,size:40)),
+      const SizedBox(height:7),
+      Text(s.name,maxLines:2,textAlign:TextAlign.center,
+        overflow:TextOverflow.ellipsis,
+        style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700))
+    ])));
+
+  Widget essentialsShelf(){
+    const items=<(String,String,String)>[
+      ('Bread','bread','Bakery'),('Milk','milk','Dairy'),
+      ('Eggs','eggs','Dairy'),('Rice','rice','Pantry'),
+      ('Maize meal','maize','Pantry'),('Cooking oil','oil','Pantry'),
+      ('Snacks','snacks','Snacks'),('Cleaning','soap','Household')
+    ];
+    return SizedBox(height:164,child:ListView(scrollDirection:Axis.horizontal,
+      children:items.where((x)=>category=='All'||x.$3==category).map((x)=>
+        Container(width:126,margin:const EdgeInsets.only(right:9),
+          padding:const EdgeInsets.all(10),
+          decoration:BoxDecoration(color:Colors.white,
+            borderRadius:BorderRadius.circular(15)),
+          child:Column(children:[
+            Expanded(child:Image.network(photos+x.$2+'.webp',
+              fit:BoxFit.contain,errorBuilder:(_,err,stack)=>
+                const Icon(Icons.shopping_bag_outlined,color:green,size:44))),
+            const SizedBox(height:5),
+            Text(x.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
+            const Text('Shop category',style:TextStyle(color:muted,fontSize:10))
+          ]))).toList()));
+  }
 
   Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),child:SizedBox(width:111,
     child:Column(children:[
