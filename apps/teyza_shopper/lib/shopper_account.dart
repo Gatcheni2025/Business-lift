@@ -123,7 +123,7 @@ class _AccountState extends State<ShopperAccountPanel> {
         if(status!=null)Padding(padding:const EdgeInsets.only(top:12),
           child:Card(color:failure?const Color(0xFFFFEDE8):const Color(0xFFE3F5EC),
             child:Padding(padding:const EdgeInsets.all(13),child:Text(status!,
-              style:TextStyle(color:failure?Colors.red.shade900:const Color(0xFF087D5E))))),
+              style:TextStyle(color:failure?Colors.red.shade900:const Color(0xFF087D5E)))))) ,
         const SizedBox(height:20),
         const Text('Your account is private. Location is optional; '
           'the app only uses it to find shops in your area.',
