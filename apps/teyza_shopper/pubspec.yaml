@@ -1,0 +1,21 @@
+name: teyza_shopper
+description: Teyza Shopper - find verified local spaza shops and available stock.
+publish_to: none
+version: 0.2.0+2
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.3.0
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
