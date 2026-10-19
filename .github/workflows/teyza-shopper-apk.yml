@@ -16,6 +16,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Check PHP discovery endpoints
+        run: |
+          php -l api/shopper-discover.php
+          php -l api/shopper-google-places-provider.php
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
