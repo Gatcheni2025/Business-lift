@@ -1,0 +1,65 @@
+name: Teyza Shopper APK
+
+on:
+  pull_request:
+    paths:
+      - 'apps/teyza_shopper/**'
+      - '.github/workflows/teyza-shopper-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android wrapper for shopper
+        working-directory: apps/teyza_shopper
+        run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Remove Flutter template widget test
+        working-directory: apps/teyza_shopper
+        run: rm -f test/widget_test.dart
+      - name: Enable release internet access
+        working-directory: apps/teyza_shopper
+        run: |
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          grep INTERNET android/app/src/main/AndroidManifest.xml
+      - name: Packages
+        working-directory: apps/teyza_shopper
+        run: flutter pub get
+      - name: Static analysis
+        working-directory: apps/teyza_shopper
+        run: flutter analyze --no-fatal-infos
+      - name: Unit tests
+        working-directory: apps/teyza_shopper
+        run: flutter test
+      - name: Build shopper debug APK
+        working-directory: apps/teyza_shopper
+        run: flutter build apk --debug
+      - name: Build smaller Android ARM64 test APK
+        working-directory: apps/teyza_shopper
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Upload smaller APK for testing
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-shopper-arm64-test-apk
+          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          retention-days: 14
+      - name: Upload APK for real-device testing
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-shopper-spaza-debug-apk
+          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
