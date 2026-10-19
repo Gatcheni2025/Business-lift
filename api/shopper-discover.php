@@ -56,7 +56,7 @@ if ($hasPoint) {
   if (is_file($cache)&&filemtime($cache)>time()-3600) {
     $payload=json_decode((string)@file_get_contents($cache),true);
   } else {
-    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"^(convenience|general|grocery|supermarket|kiosk)$"]["name"];);out center 75;';
+    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"^(convenience|general|grocery|kiosk)$"]["name"];);out center 75;';
     $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
     curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
       CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
