@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 
 const ink = Color(0xFF182831);
 const deep = Color(0xFF16332F);
@@ -195,18 +194,20 @@ class _ShopperHomeState extends State<ShopperHome> {
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
           timeLimit: Duration(seconds: 15)));
-      String placeName = 'Current area';
-      String city = '';
-      try {
-        final places = await placemarkFromCoordinates(position.latitude, position.longitude);
-        if (places.isNotEmpty) {
-          final place = places.first;
-          placeName = [place.subLocality, place.locality].whereType<String>()
-            .where((x) => x.trim().isNotEmpty).toSet().join(', ');
-          if (placeName.isEmpty) placeName = place.administrativeArea ?? 'Current area';
-          city = place.locality ?? '';
+      // GPS distances are exact for this position. Names are approximate and
+      // are never sent to a third-party reverse-geocoding provider.
+      Area? nearbyName;
+      var shortestKm = 30.0;
+      for (final candidate in areas) {
+        final d = km(position.latitude, position.longitude,
+          candidate.lat, candidate.lng);
+        if (d < shortestKm) {
+          shortestKm = d;
+          nearbyName = candidate;
         }
-      } catch (_) { /* GPS still works without reverse geocoding. */ }
+      }
+      final placeName = nearbyName?.label ?? 'My current area';
+      final city = nearbyName?.city ?? '';
       if (!mounted) return;
       setState(() {
         area = Area(placeName, city, position.latitude, position.longitude);
