@@ -334,6 +334,30 @@ class _ShopperHomeState extends State<ShopperHome> {
       .compareTo(distance(b) ?? double.infinity));
     return filtered;
   }
+
+  List<OnlineShop> get displayedOnline {
+    final q=search.toLowerCase().trim();
+    final places=online.where((place)=>q.isEmpty ||
+      (place.name+' '+place.area+' '+place.address).toLowerCase().contains(q)).toList();
+    if(area!=null) {
+      double d(OnlineShop p)=>p.lat==null||p.lng==null?double.infinity:
+        km(area!.lat,area!.lng,p.lat!,p.lng!);
+      places.sort((a,b)=>d(a).compareTo(d(b)));
+    }
+    return places;
+  }
+
+  Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
+    margin:const EdgeInsets.only(bottom:9),
+    child:ListTile(onTap:()=>selectDirectory(place),
+      leading:const CircleAvatar(backgroundColor:Color(0xFFE0F4EC),
+        child:Icon(Icons.storefront_rounded,color:green)),
+      title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
+      subtitle:Text((place.address.isNotEmpty?place.address:place.area)+
+        '\nLocal shop · product catalogue pending',maxLines:3),
+      isThreeLine:true,
+      trailing:const Icon(Icons.chevron_right,color:green,size:20)));
+
   List<Shop> get displayShops {
     final q=search.toLowerCase().trim();
     return nearbyReal.where((shop)=>q.isEmpty ||
@@ -624,6 +648,82 @@ class _ShopperHomeState extends State<ShopperHome> {
         ])),
         const Icon(Icons.chevron_right,color:green)
       ]))));
+
+
+  Widget allShopsPage()=>ListView(
+    padding:const EdgeInsets.all(16),children:[
+      section('SPAZA SHOPS NEAR YOU',
+        subtitle:'Local businesses already listed online'),
+      if(loadingOnline)const Center(child:CircularProgressIndicator()),
+      if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
+      ...displayedOnline.map(onlineTile),
+      if(displayedOnline.isEmpty&&!loadingOnline)
+        empty('No online listings nearby','Try GPS or choose another area.'),
+      section('SHOPS SELLING ON TEYZA',
+        subtitle:'Merchant-published stock, pricing and availability'),
+      ...displayShops.map(shopTile),
+      if(displayShops.isEmpty)empty('Shops joining soon',
+        'Spaza owners can claim their listing and connect a real product catalogue.')
+    ]);
+
+  Widget directoryPage(OnlineShop shop)=>ListView(
+    padding:const EdgeInsets.all(18),children:[
+      TextButton.icon(onPressed:()=>setState(()=>directorySelected=null),
+        icon:const Icon(Icons.arrow_back),label:const Text('Browse all spaza shops')),
+      const SizedBox(height:10),
+      Container(height:140,decoration:BoxDecoration(
+        borderRadius:BorderRadius.circular(22),
+        gradient:const LinearGradient(colors:[Color(0xFF15342D),Color(0xFF119C77)])),
+        child:const Icon(Icons.storefront_rounded,color:Colors.white,size:75)),
+      const SizedBox(height:16),
+      Text(shop.name,style:const TextStyle(
+        fontSize:25,fontWeight:FontWeight.w900,color:ink)),
+      const SizedBox(height:6),
+      Text(shop.address.isNotEmpty?shop.address:shop.area,
+        style:const TextStyle(fontSize:14,color:muted)),
+      const SizedBox(height:14),
+      Container(padding:const EdgeInsets.all(14),
+        decoration:BoxDecoration(color:const Color(0xFFEAF5EF),
+          borderRadius:BorderRadius.circular(13)),
+        child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text('LOCAL SHOP · ONLINE LISTING',style:TextStyle(
+            fontWeight:FontWeight.w900,fontSize:11,color:green)),
+          SizedBox(height:5),
+          Text('This shop has been found online. Products, prices, current opening '
+            'hours and trading status still need confirmation by its owner.',
+            style:TextStyle(fontSize:12,color:ink))
+        ])),
+      const SizedBox(height:14),
+      FilledButton.icon(onPressed:() async {
+        final uri=Uri.tryParse(shop.source);
+        if(uri!=null&&uri.scheme=='https') {
+          await launchUrl(uri,mode:LaunchMode.externalApplication);
+        }
+      },icon:const Icon(Icons.directions_outlined),
+        label:const Text('View location and public listing')),
+      const SizedBox(height:8),
+      OutlinedButton.icon(onPressed:()=>setState(()=>tab=3),
+        icon:Icon(session.emailVerified?Icons.verified_user_outlined:
+          Icons.mark_email_read_outlined),
+        label:Text(session.emailVerified?'View verified shopper account':
+          'Verify my shopper account')),
+      section('SHOP GROCERIES'),
+      empty('Shop stock not connected yet',
+        'This real spaza has not published its products to Teyza. '
+        'Explore everyday groceries below while more shop owners register.'),
+      essentialsShelf(),
+      const SizedBox(height:15),
+      OutlinedButton.icon(onPressed:() async {
+        await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
+          mode:LaunchMode.externalApplication);
+      },icon:const Icon(Icons.add_business_outlined),
+        label:const Text('Own this shop? Claim your listing')),
+      const SizedBox(height:13),
+      const Text('Online directory listing only. No verified stock or checkout '
+        'is available for this shop yet.',
+        textAlign:TextAlign.center,
+        style:TextStyle(color:muted,fontSize:11))
+    ]);
 
   Widget shopPage(Shop shop)=>ListView(padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
