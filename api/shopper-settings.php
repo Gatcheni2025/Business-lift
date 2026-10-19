@@ -34,6 +34,7 @@ if ($method==='GET') {
  output(200,['ok'=>true,'approved'=>$approval==='approved',
   'approvalStatus'=>$approval,'shopperEnabled'=>($business['shopperEnabled']??false)===true,
   'shopperWhatsAppOptIn'=>($business['shopperWhatsAppOptIn']??false)===true,
+  'shopperLocationOptIn'=>($business['shopperLocationOptIn']??false)===true,
   'productsVisible'=>count(array_filter($workspace['products']??[],
     static fn($p)=>is_array($p)&&($p['marketplaceVisible']??false)===true&&(int)($p['stock']??0)>0))]);
 }
@@ -42,6 +43,7 @@ $input=json_decode((string)file_get_contents('php://input'),true);
 if (!is_array($input)) output(400,['ok'=>false,'error'=>'Invalid request']);
 $enable=($input['shopperEnabled']??false)===true;
 $whatsapp=($input['shopperWhatsAppOptIn']??false)===true;
+$locationOptIn=($input['shopperLocationOptIn']??false)===true;
 if ($enable && $approval!=='approved') {
  output(403,['ok'=>false,'error'=>'Teyza must approve your shop before it appears in the shopper app.']);
 }
@@ -53,6 +55,7 @@ if ($enable && (trim((string)($business['businessName']??''))==='' ||
 if ($whatsapp && !$enable) output(422,['ok'=>false,'error'=>'Enable your shop listing before WhatsApp requests.']);
 $business['shopperEnabled']=$enable;
 $business['shopperWhatsAppOptIn']=$whatsapp && $enable;
+$business['shopperLocationOptIn']=$locationOptIn && $enable;
 $business['updatedAt']=gmdate('c');
 $workspace['business']=$business;
 $published=0;
@@ -75,4 +78,4 @@ if ($encoded===false || ftruncate($fp,0)===false || rewind($fp)===false ||
 }
 flock($fp,LOCK_UN); fclose($fp);
 output(200,['ok'=>true,'shopperEnabled'=>$enable,'shopperWhatsAppOptIn'=>$whatsapp&&$enable,
- 'publishedProducts'=>$published]);
+ 'shopperLocationOptIn'=>$locationOptIn&&$enable,'publishedProducts'=>$published]);
