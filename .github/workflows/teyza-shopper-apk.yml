@@ -24,6 +24,9 @@ jobs:
       - name: Generate Android wrapper for shopper
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Remove Flutter template widget test
+        working-directory: apps/teyza_shopper
+        run: rm -f test/widget_test.dart
       - name: Enable release internet access
         working-directory: apps/teyza_shopper
         run: |
