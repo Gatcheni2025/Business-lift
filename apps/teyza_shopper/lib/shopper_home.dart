@@ -776,7 +776,15 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   Future<void> sendWhatsApp() async {
     final shop=selected;
-    if(shop==null||shop.demo||shop.phone.isEmpty||basketItems.isEmpty)return;
+    if(shop==null||shop.phone.isEmpty||basketItems.isEmpty)return;
+    await session.refreshEmailStatus();
+    if(session.idToken==null||!session.emailVerified) {
+      if(!mounted)return;
+      setState(()=>tab=3);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Please verify your shopper email before requesting an order.')));
+      return;
+    }
     final lines=basketItems.map((p)=>'- '+p.name+' ×'+(cart[p.id]??0).toString()+
       ' '+rand(p.priceCents*(cart[p.id]??0))).join('\n');
     final message='Hi '+shop.name+', I found your shop on Teyza. Please confirm:\n'+
@@ -835,11 +843,13 @@ class _ShopperHomeState extends State<ShopperHome> {
       title:Text(locationName),subtitle:const Text('Change shopping area'),
       onTap:areaSheet)),
     const Card(child:ListTile(leading:Icon(Icons.verified_outlined),
-      title:Text('Real shops and demos are separate'),
-      subtitle:Text('Demo listings and prices are for design testing only.'))),
+      title:Text('Real spaza listings'),
+      subtitle:Text('Online-listed shops show real names but no unconfirmed stock. '
+        'Only registered merchants can publish actual inventory and prices.'))),
     const Card(child:ListTile(leading:Icon(Icons.lock_outline),
       title:Text('Location privacy'),
-      subtitle:Text('GPS is optional and used on this device to sort shops.'))),
+      subtitle:Text('GPS is optional. Approximate coordinates are used to look up '
+        'online shops when you choose location discovery.'))),
     const Card(child:ListTile(leading:Icon(Icons.payment_outlined),
       title:Text('No online payment yet'),
       subtitle:Text('Contact real shops directly if they enable order enquiries.'))),
