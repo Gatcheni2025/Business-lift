@@ -574,7 +574,7 @@ class _ShopperHomeState extends State<ShopperHome> {
           IconButton(onPressed:()=>quantity(p,-1),icon:const Icon(Icons.remove_circle_outline)),
           Text((cart[p.id]??0).toString()),
           IconButton(onPressed:()=>quantity(p,1),icon:const Icon(Icons.add_circle_outline))
-        ]))),
+        ])))),
       const SizedBox(height:15),
       Text('Estimated total: '+rand(total),style:const TextStyle(
         fontSize:24,fontWeight:FontWeight.w900)),
