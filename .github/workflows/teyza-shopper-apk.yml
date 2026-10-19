@@ -31,6 +31,8 @@ jobs:
         working-directory: apps/teyza_shopper
         run: |
           sed -i '/<manifest /a\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
           grep INTERNET android/app/src/main/AndroidManifest.xml
       - name: Packages
         working-directory: apps/teyza_shopper
