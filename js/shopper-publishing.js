@@ -5,6 +5,7 @@ const node = document.getElementById('shopper-publish-status');
 const button = document.getElementById('shopper-publish');
 const disable = document.getElementById('shopper-unpublish');
 const whatsapp = document.getElementById('shopper-whatsapp');
+const locationOptIn = document.getElementById('shopper-location-opt-in');
 let user = null;
 function status(message, error = false) {
   if (!node) return;
@@ -37,6 +38,7 @@ onAuthStateChanged(auth, async (signedIn) => {
     button.disabled = !data.approved;
     disable.disabled = !data.shopperEnabled;
     whatsapp.checked = !!data.shopperWhatsAppOptIn;
+    if (locationOptIn) locationOptIn.checked = !!data.shopperLocationOptIn;
     status(data.shopperEnabled ?
       'Your shop is visible to Teyza shoppers. ' + data.productsVisible + ' stocked products are currently listed.' :
       data.approved ? 'Your shop is approved. Publish your products so shoppers can find you.' :
@@ -51,7 +53,8 @@ button?.addEventListener('click', async () => {
   try {
     const data = await call('POST', {
       shopperEnabled: true,
-      shopperWhatsAppOptIn: whatsapp.checked
+      shopperWhatsAppOptIn: whatsapp.checked,
+      shopperLocationOptIn: !!locationOptIn?.checked
     });
     disable.disabled = false;
     status('Published! ' + data.publishedProducts + ' product listings are ready for Teyza Shopper. Please refresh the app.');
