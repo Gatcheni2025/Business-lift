@@ -314,7 +314,9 @@ class _ShopperHomeState extends State<ShopperHome> {
             const Text('Where are you shopping?', style: TextStyle(fontSize: 23,
               fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            const Text('Your area helps us show the nearest participating spaza shops.',
+            const Text('Your area helps find nearby shops. Approximate coordinates '
+              'are sent to our directory search only when you select an area or GPS. '
+              'Exact GPS coordinates are not included in the public request.',
               style: TextStyle(color: muted)),
             const SizedBox(height: 14),
             FilledButton.icon(onPressed: () {
@@ -538,10 +540,31 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(catalogueError!=null) Padding(padding:const EdgeInsets.only(top:8),
         child:Text('Real-shop connection: '+catalogueError!,
           style:const TextStyle(color:muted,fontSize:11))),
-      section('QUICK SHOPS',subtitle:'Choose a spaza shop to see its products',
+      section('QUICK SHOPS',subtitle:'Teyza demo shops and approved merchants',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
         children:displayShops.take(9).map((s)=>quickShop(s)).toList())),
+      section('DISCOVER REAL SHOPS ONLINE',
+        subtitle:'Independent public listings · Not registered Teyza stores',
+        action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
+      if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
+        child:Center(child:CircularProgressIndicator())),
+      if(onlineWarning!=null)Text(onlineWarning!,
+        style:const TextStyle(color:muted,fontSize:12)),
+      ...displayedOnline.take(4).map(onlineTile),
+      if(displayedOnline.isEmpty && !loadingOnline)
+        const Text('Select your area or refresh to find public shop listings.',
+          style:TextStyle(color:muted,fontSize:12)),
+      Card(color:const Color(0xFFE5F4ED),
+        child:ListTile(leading:const Icon(Icons.add_business_outlined,color:green),
+          title:const Text('Own a spaza? Register with Teyza',
+            style:TextStyle(fontSize:13,fontWeight:FontWeight.bold)),
+          subtitle:const Text('Claim your shop and publish actual product prices.'),
+          trailing:const Icon(Icons.open_in_new,size:17),
+          onTap:() async {
+            final uri=Uri.parse('https://teyza.co.za/?auth=register');
+            await launchUrl(uri,mode:LaunchMode.externalApplication);
+          })),
       const SizedBox(height:15),
       Container(height:155,padding:const EdgeInsets.all(21),decoration:BoxDecoration(
         borderRadius:BorderRadius.circular(21),
@@ -576,16 +599,9 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
       if(displayShops.isEmpty)empty('No shops found','Try another area or refresh the catalogue.'),
       ...displayShops.take(5).map((s)=>shopTile(s)),
-      section('FOUND ONLINE NEAR YOU',
-        subtitle:'Public directory listings · Not yet registered with Teyza',
-        action:TextButton(onPressed:reloadOnline,child:const Text('Refresh'))),
-      if(loadingOnline)const Center(child:Padding(padding:EdgeInsets.all(16),
-        child:CircularProgressIndicator())),
-      if(onlineWarning!=null)Text(onlineWarning!,
-        style:const TextStyle(color:muted,fontSize:12)),
-      ...displayedOnline.take(12).map(onlineTile),
-      if(displayedOnline.isEmpty && !loadingOnline)
-        empty('No online listings found','Try another suburb or refresh the area search.'),
+      section('MORE LOCAL DIRECTORY LISTINGS',
+        subtitle:'Third-party entries, not verified Teyza stores'),
+      ...displayedOnline.skip(4).take(14).map(onlineTile),
       const Padding(padding:EdgeInsets.only(top:8,bottom:10),child:
         Text('Online business data may be incomplete. Confirm details with the shop. '
           '© OpenStreetMap contributors (ODbL).',
