@@ -69,10 +69,24 @@ foreach (glob($directory.'/*.json') ?: [] as $file) {
     if (preg_match('/^0[0-9]{9}$/',$digits)) $digits='27'.substr($digits,1);
     if (preg_match('/^27[0-9]{9}$/',$digits)) $publicPhone=$digits;
   }
+  // Share only approximate location when an approved merchant explicitly opts in.
+  // 3 decimal places is roughly 100 metres: never expose exact verification coordinates.
+  $approxLat=null; $approxLng=null;
+  if (($business['shopperLocationOptIn']??false)===true) {
+    $loc=$merchant['verification']['location']??[];
+    if (!empty($loc['confirmed']) && isset($loc['lat'],$loc['lng']) &&
+        is_numeric($loc['lat']) && is_numeric($loc['lng'])) {
+      $lat=(float)$loc['lat']; $lng=(float)$loc['lng'];
+      if ($lat>=-90 && $lat<=90 && $lng>=-180 && $lng<=180) {
+        $approxLat=round($lat,3); $approxLng=round($lng,3);
+      }
+    }
+  }
   $shops[]=[
     'id'=>label($business['businessId']??basename($file,'.json'),128),
     'name'=>$name,'area'=>label($business['suburb']??$business['city']??$business['address']??'',120),
     'photoUrl'=>publicUrl(label($business['logoUrl']??'',300)),
+    'latitude'=>$approxLat,'longitude'=>$approxLng,
     'pickupEnabled'=>$pickupEnabled,'deliveryEnabled'=>$deliveryEnabled,
     'deliveryFeeCents'=>$deliveryEnabled?(int)round(max(0,(float)($settings['baseDeliveryFee']??0))*100):0,
     'whatsappPhone'=>$publicPhone,'products'=>$products
