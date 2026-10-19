@@ -27,6 +27,12 @@ jobs:
       - name: Remove Flutter template widget test
         working-directory: apps/teyza_shopper
         run: rm -f test/widget_test.dart
+      - name: Create TEYZA launcher icons
+        working-directory: apps/teyza_shopper
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 scripts/make_launcher_icon.py
+          sed -i 's/android:label="teyza_shopper"/android:label="TEYZA Shopper"/' android/app/src/main/AndroidManifest.xml
       - name: Enable release internet access
         working-directory: apps/teyza_shopper
         run: |

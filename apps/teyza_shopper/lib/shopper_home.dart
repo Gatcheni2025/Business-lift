@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'shopper_auth.dart';
+import 'shopper_account.dart';
+import 'shopper_discovery.dart';
 
 const ink = Color(0xFF182831);
 const deep = Color(0xFF16332F);
@@ -150,9 +155,54 @@ class _ShopperHomeState extends State<ShopperHome> {
   String category = 'All';
   int tab = 0;
   final cart = <String, int>{};
+  final session = ShopperSession();
+  List<OnlineShop> online = [];
+  String? onlineWarning;
+  bool loadingOnline = false;
 
   @override
-  void initState() { super.initState(); load(); _restoreGrantedLocation(); }
+  void initState() {
+    super.initState();
+    load();
+    _restoreSavedArea();
+    session.restore();
+  }
+  @override
+  void dispose() { session.dispose(); super.dispose(); }
+
+  Future<void> _restoreSavedArea() async {
+    final prefs = await SharedPreferences.getInstance();
+    final selectedName=prefs.getString('teyza_selected_area');
+    if (!mounted) return;
+    if (selectedName != null && selectedName != 'gps') {
+      for (final a in areas) {
+        if (a.label==selectedName) { chooseArea(a,persist:false); return; }
+      }
+    }
+    if (selectedName=='gps') {
+      await _restoreGrantedLocation();
+    } else {
+      await reloadOnline();
+    }
+  }
+
+  Future<void> reloadOnline() async {
+    if (!mounted) return;
+    setState(() { loadingOnline=true; onlineWarning=null; });
+    try {
+      final places=await findOnlineShops(area:area?.label??'',
+        latitude:area?.lat,longitude:area?.lng);
+      if (!mounted) return;
+      setState(() { online=places;loadingOnline=false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        loadingOnline=false;
+        onlineWarning='Online shop search is temporarily unavailable. Try again shortly.';
+      });
+    }
+  }
+
 
   Future<void> load() async {
     setState(() { loading = true; catalogueError = null; });
@@ -206,8 +256,22 @@ class _ShopperHomeState extends State<ShopperHome> {
           nearbyName = candidate;
         }
       }
-      final placeName = nearbyName?.label ?? 'My current area';
-      final city = nearbyName?.city ?? '';
+      var placeName = nearbyName?.label ?? 'My current area';
+      var city = nearbyName?.city ?? '';
+      // Android's geocoder provides suburb/locality when available.
+      // Manual area selection remains available if it is inaccurate.
+      try {
+        final marks=await placemarkFromCoordinates(position.latitude,position.longitude);
+        if (marks.isNotEmpty) {
+          final mark=marks.first;
+          final neighbourhood=(mark.subLocality?.trim().isNotEmpty==true
+            ?mark.subLocality:mark.locality);
+          if (neighbourhood != null && neighbourhood.trim().isNotEmpty) {
+            placeName=neighbourhood.trim();
+          }
+          city=mark.locality?.trim()??city;
+        }
+      } catch (_) { /* Fall back to approximate built-in area names. */ }
       if (!mounted) return;
       setState(() {
         area = Area(placeName, city, position.latitude, position.longitude);
@@ -215,6 +279,9 @@ class _ShopperHomeState extends State<ShopperHome> {
         selected = null;
         cart.clear();
       });
+      final prefs=await SharedPreferences.getInstance();
+      await prefs.setString('teyza_selected_area','gps');
+      await reloadOnline();
     } catch (e) {
       if (!mounted) return;
       setState(() { locationWarning = e is FormatException ? e.message : 'Could not find your area. Choose it manually.'; });
@@ -223,7 +290,7 @@ class _ShopperHomeState extends State<ShopperHome> {
     }
   }
 
-  void chooseArea(Area choice) {
+  void chooseArea(Area choice,{bool persist=true}) {
     setState(() {
       area = choice;
       locationName = choice.label;
@@ -233,6 +300,11 @@ class _ShopperHomeState extends State<ShopperHome> {
       cart.clear();
       tab = 0;
     });
+    if (persist) {
+      SharedPreferences.getInstance().then((prefs)=>
+        prefs.setString('teyza_selected_area',choice.label));
+    }
+    reloadOnline();
   }
   Future<void> areaSheet() async {
     await showModalBottomSheet<void>(context: context, showDragHandle: true,
@@ -242,7 +314,9 @@ class _ShopperHomeState extends State<ShopperHome> {
             const Text('Where are you shopping?', style: TextStyle(fontSize: 23,
               fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            const Text('Your area helps us show the nearest participating spaza shops.',
+            const Text('Your area helps find nearby shops. Approximate coordinates '
+              'are sent to our directory search only when you select an area or GPS. '
+              'Exact GPS coordinates are not included in the public request.',
               style: TextStyle(color: muted)),
             const SizedBox(height: 14),
             FilledButton.icon(onPressed: () {
@@ -282,6 +356,64 @@ class _ShopperHomeState extends State<ShopperHome> {
       .compareTo(distance(b) ?? double.infinity));
     return filtered.isEmpty && area == null ? sampleShops.take(4).toList() : filtered;
   }
+  List<OnlineShop> get displayedOnline {
+    final q=search.toLowerCase().trim();
+    final candidates=online.where((s) =>
+      q.isEmpty || (s.name+' '+s.area+' '+s.address).toLowerCase().contains(q)).toList();
+    if (area!=null) {
+      candidates.sort((a,b) {
+        double d(OnlineShop s)=>s.lat==null || s.lng==null
+          ? double.infinity : km(area!.lat,area!.lng,s.lat!,s.lng!);
+        return d(a).compareTo(d(b));
+      });
+    }
+    return candidates;
+  }
+
+  Future<void> showOnlineShop(OnlineShop place) async {
+    await showModalBottomSheet<void>(
+      context:context,isScrollControlled:true,showDragHandle:true,
+      builder:(sheet)=>SafeArea(child:Padding(
+        padding:const EdgeInsets.all(22),
+        child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          const Text('FOUND ONLINE · NOT ON TEYZA',style:TextStyle(
+            fontSize:11,color:green,fontWeight:FontWeight.w900,letterSpacing:1.2)),
+          const SizedBox(height:10),
+          Text(place.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
+          const SizedBox(height:5),
+          Text(place.address.isEmpty?place.area:place.address,style:const TextStyle(color:muted)),
+          const SizedBox(height:14),
+          const Text('This business appears in a public online directory. Teyza has not confirmed its current trading status, products, opening times or prices.'),
+          const SizedBox(height:15),
+          FilledButton.icon(onPressed:() async {
+            final uri=Uri.tryParse(place.source);
+            if(uri!=null && uri.scheme=='https') await launchUrl(uri,
+              mode:LaunchMode.externalApplication);
+          },icon:const Icon(Icons.map_outlined),label:const Text('Open source / directions')),
+          const SizedBox(height:9),
+          OutlinedButton.icon(onPressed:() async {
+            final uri=Uri.tryParse(place.claimUrl);
+            if(uri!=null && uri.scheme=='https') await launchUrl(uri,
+              mode:LaunchMode.externalApplication);
+          },icon:const Icon(Icons.store_outlined),label:const Text('Own this shop? Claim it')),
+          const SizedBox(height:8),
+          if(place.origin=='openstreetmap')
+            const Text('Map data © OpenStreetMap contributors (ODbL).',
+              textAlign:TextAlign.center,style:TextStyle(color:muted,fontSize:11))
+        ]))));
+  }
+
+  Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
+    margin:const EdgeInsets.only(bottom:9),
+    child:ListTile(onTap:()=>showOnlineShop(place),
+      leading:const CircleAvatar(backgroundColor:Color(0xFFE0F4EC),
+        child:Icon(Icons.place_outlined,color:green)),
+      title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
+      subtitle:Text((place.address.isNotEmpty?place.address:place.area)+
+        '\nOnline listing · Stock not connected',maxLines:3),
+      isThreeLine:true,
+      trailing:const Icon(Icons.open_in_new,color:green,size:20)));
+
   List<Shop> get displayShops {
     final real = nearbyReal;
     final examples = demos;
@@ -365,13 +497,19 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(toolbarHeight:54,title:const Row(children:[
-      Text('TEYZA',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:2.2,fontSize:23)),
-      SizedBox(width:7),Text('SHOPPER',style:TextStyle(fontSize:11,letterSpacing:1.4,color:aqua))]),
+    appBar:AppBar(toolbarHeight:54,title:Row(children:[
+      Container(width:35,height:35,alignment:Alignment.center,
+        decoration:BoxDecoration(color:green,borderRadius:BorderRadius.circular(9)),
+        child:const Text('T',style:TextStyle(fontWeight:FontWeight.w900,
+          fontSize:24,fontStyle:FontStyle.italic,color:Colors.white))),
+      const SizedBox(width:9),
+      const Text('TEYZA',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:2.2,fontSize:23)),
+      const SizedBox(width:7),
+      const Text('SHOPPER',style:TextStyle(fontSize:11,letterSpacing:1.4,color:aqua))]),
       actions:[IconButton(tooltip:'Find my area',onPressed:areaSheet,
         icon:const Icon(Icons.my_location_outlined)),
         IconButton(tooltip:'Refresh shops',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:tab==3?infoPage():tab==2?basketPage():
+    body:tab==3?ShopperAccountPanel(session:session):tab==2?basketPage():
       Column(children:[locationHeader(),Expanded(child:tab==1 && selected!=null?
         shopPage(selected!):homePage())]),
     bottomNavigationBar:NavigationBar(height:75,backgroundColor:Colors.white,
@@ -402,10 +540,31 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(catalogueError!=null) Padding(padding:const EdgeInsets.only(top:8),
         child:Text('Real-shop connection: '+catalogueError!,
           style:const TextStyle(color:muted,fontSize:11))),
-      section('QUICK SHOPS',subtitle:'Choose a spaza shop to see its products',
+      section('QUICK SHOPS',subtitle:'Teyza demo shops and approved merchants',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
         children:displayShops.take(9).map((s)=>quickShop(s)).toList())),
+      section('DISCOVER REAL SHOPS ONLINE',
+        subtitle:'Independent public listings · Not registered Teyza stores',
+        action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
+      if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
+        child:Center(child:CircularProgressIndicator())),
+      if(onlineWarning!=null)Text(onlineWarning!,
+        style:const TextStyle(color:muted,fontSize:12)),
+      ...displayedOnline.take(4).map(onlineTile),
+      if(displayedOnline.isEmpty && !loadingOnline)
+        const Text('Select your area or refresh to find public shop listings.',
+          style:TextStyle(color:muted,fontSize:12)),
+      Card(color:const Color(0xFFE5F4ED),
+        child:ListTile(leading:const Icon(Icons.add_business_outlined,color:green),
+          title:const Text('Own a spaza? Register with Teyza',
+            style:TextStyle(fontSize:13,fontWeight:FontWeight.bold)),
+          subtitle:const Text('Claim your shop and publish actual product prices.'),
+          trailing:const Icon(Icons.open_in_new,size:17),
+          onTap:() async {
+            final uri=Uri.parse('https://teyza.co.za/?auth=register');
+            await launchUrl(uri,mode:LaunchMode.externalApplication);
+          })),
       const SizedBox(height:15),
       Container(height:155,padding:const EdgeInsets.all(21),decoration:BoxDecoration(
         borderRadius:BorderRadius.circular(21),
@@ -432,14 +591,21 @@ class _ShopperHomeState extends State<ShopperHome> {
             onSelected:(_)=>setState(()=>category=c),
             selectedColor:const Color(0xFFC6EDE0),backgroundColor:Colors.white,
             side:const BorderSide(color:Color(0xFFE1EAE6)))).toList()),
-      section('EVERYDAY ESSENTIALS',subtitle:'Illustrative prices until shops publish their stock'),
+      section('EVERYDAY ESSENTIALS',subtitle:'Real shop prices when connected · other prices are examples'),
       productShelf(featured),
       section('SPAZA SHOPS NEAR YOU',subtitle:area==null?
         'Choose an area to see local listings':'Sorted by approximate distance where available',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
       if(displayShops.isEmpty)empty('No shops found','Try another area or refresh the catalogue.'),
-      ...displayShops.take(5).map((s)=>shopTile(s))
+      ...displayShops.take(5).map((s)=>shopTile(s)),
+      section('MORE LOCAL DIRECTORY LISTINGS',
+        subtitle:'Third-party entries, not verified Teyza stores'),
+      ...displayedOnline.skip(4).take(14).map(onlineTile),
+      const Padding(padding:EdgeInsets.only(top:8,bottom:10),child:
+        Text('Online business data may be incomplete. Confirm details with the shop. '
+          '© OpenStreetMap contributors (ODbL).',
+          style:TextStyle(fontSize:10,color:muted)))
     ]));
 
   Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),child:SizedBox(width:111,
@@ -468,7 +634,8 @@ class _ShopperHomeState extends State<ShopperHome> {
             style:const TextStyle(fontSize:12,fontWeight:FontWeight.w800)),
           Text(rand(p.priceCents),style:const TextStyle(fontSize:17,
             fontWeight:FontWeight.w900,color:ink)),
-          const Text('Demo price',style:TextStyle(color:muted,fontSize:10))
+          Text(p.id.startsWith('demo-')?'Example price':'Shop-listed price',
+            style:const TextStyle(color:muted,fontSize:10))
         ]))).toList()));
   }
   Widget shopTile(Shop s)=>Card(color:Colors.white,elevation:0,

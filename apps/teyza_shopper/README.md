@@ -1,39 +1,30 @@
-# Teyza Shopper APK
+# Teyza Shopper — Spaza discovery, app logo and account login (0.4.0)
 
-**Shoppers, not shop owners.** This Android app does not contain merchant registration, banking or funding.
+## Customer app
+Shoppers choose their area, browse Teyza-approved shops with published actual stock, and explore other shops **found in online public directories**. These two types are explicitly separate:
+- **Registered Teyza sellers**: approved and opted in, actual catalogue and published prices.
+- **Found online**: publicly indexed shop name and address only, links to source and to merchant registration. No invented stock, hours, affiliation or active selling.
+- **DEMO examples**: fictional sample spaza shops with illustrative grocery prices; baskets are not real transactions.
 
-## Features
-- Browse participating approved spaza shops without an account
-- Search shop name, neighbourhood and product
-- Select a shop and see its live published products, prices and stock quantities
-- Real public product photos from teyza.co.za with safe placeholders
-- Basket for one shop at a time; adjust quantities up to reported stock
-- Optional WhatsApp order enquiry ONLY if the merchant explicitly opts in
-- No in-app card payments. WhatsApp contact is an enquiry, not a confirmed order
+The UI uses a Teyza green adaptive launcher icon, nearby list, quick shops, grocery category shelf, basket and account.
 
-## Live data integration
-Endpoint: `https://teyza.co.za/api/shopper-catalog.php`.
-Deploy `api/shopper-catalog.php` and `api/shopper-settings.php` to the hosting document root.
-Only shops with **admin-approved** company status AND **shopperEnabled=true** appear.
-Only positive-stock products explicitly marked published and visible appear.
-This intentionally shows an accurate "No shops listed yet" message until shops actually opt in; no fabricated sample shops.
+## Login
+Native shopper account supports email/password sign-up and sign-in using the current Teyza Firebase Identity Toolkit project, password-reset email, persistent encrypted session, refresh on app launch, and sign-out. Browsing does not require an account. Google/Apple native sign-in is **not** configured yet and is not presented as working.
 
-### Merchant publishing
-The public PHP catalogue exposes no funding documents, owner accounts, ID uploads, bank records or unpublished products. Merchant settings use Firebase ID-token verification and allow approved shop owners to opt into public listing. Direct WhatsApp order enquiries are disabled unless opted in.
+## Location
+Optional GPS (permission requested by user), Android geocoding for suburb when available, saved manual selection, and map-distance sort for shops with coordinates. The online directory search sends rounded (~1 km) coordinates to Teyza and on to OpenStreetMap's Overpass service on demand; do not present it as strictly local-only device processing. No GPS is needed to search by manually selected area. Denied permissions still allow manual selection.
 
-## Build / test
-From this app directory:
+## Sources
+- Merchant API: `https://teyza.co.za/api/shopper-catalog.php`
+- Online discovery API: `https://teyza.co.za/api/shopper-discover.php` with a curated set of public listings plus cached OpenStreetMap convenience shops.
+- OSM attribution © OpenStreetMap contributors (ODbL). Online listings are unclaimed and may be outdated.
+- Source URLs are provided inside the directory entries. Curated names are from public business listings; not claimed as endorsements or partners.
 
-```bash
-flutter create --platforms android --org za.co.teyza --project-name teyza_shopper .
-flutter pub get
-flutter test
-flutter build apk --debug
-```
+## Deployment
+1. Deploy PHP endpoint `api/shopper-discover.php` into live hosting public_html/api (permissions 0644, folders 0755).
+2. Ensure existing `api/shopper-catalog.php` and merchant publishing settings are live.
+3. Build app from `apps/teyza_shopper`, or download debug / ARM64 test APK from the CI artifacts.
+4. Verify GPS permission, manual area, online directory search, account create/login/reset, logo, shop prices and demo gating on Android.
+5. Never show online-directory shops as selectable checkout merchants until they register and publish real stock.
 
-GitHub Actions `Teyza Shopper APK` performs these steps and uploads `teyza-shopper-spaza-debug-apk`.
-The debug APK is for testing only, not Play Store release signed.
-Production requires end-to-end storefront and connectivity testing, abuse safeguards for enquiries, release signing and store disclosures.
-
-## Privacy
-No buyer location request or private seller data in the mobile APK. Search by published area text. Shopper app does not retrieve the six-month banking/funding records.
+A debug test build or ARM64 build signed with CI test keys is NOT Play Store ready. Production requires final release keystore, merchant syncing, real-device tests, account/privacy disclosures, abuse throttling and a compliant map-data source/service agreement.
