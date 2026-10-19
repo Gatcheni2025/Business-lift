@@ -26,6 +26,7 @@ String authMessage(Object error) {
 class ShopperSession extends ChangeNotifier {
   bool isReady = false;
   bool isBusy = false;
+  bool emailVerified = false;
   String? email, name, idToken;
   String? _refreshToken;
 
@@ -57,6 +58,7 @@ class ShopperSession extends ChangeNotifier {
           idToken = data['id_token'] as String?;
           _refreshToken = data['refresh_token'] as String? ?? _refreshToken;
           await _vault.write(key:'teyza_refresh',value:_refreshToken);
+          await refreshEmailStatus();
         } else {
           idToken=null; _refreshToken=null; email=null; name=null;
           await _vault.delete(key:'teyza_refresh');
@@ -67,6 +69,7 @@ class ShopperSession extends ChangeNotifier {
     } catch (_) {
       // Preserve no assumed session when refresh cannot be verified.
       idToken = null;
+      emailVerified = false;
     } finally {
       isReady=true;
       notifyListeners();
@@ -82,7 +85,31 @@ class ShopperSession extends ChangeNotifier {
     await _vault.write(key:'teyza_refresh',value:_refreshToken);
     await _vault.write(key:'teyza_email',value:email);
     await _vault.write(key:'teyza_name',value:name);
+    await refreshEmailStatus();
     notifyListeners();
+  }
+
+  Future<void> refreshEmailStatus() async {
+    if (idToken == null) { emailVerified=false;notifyListeners();return; }
+    try {
+      final result = await _post(Uri.parse(
+        'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=$_projectApiKey'),
+        {'idToken':idToken!});
+      final profiles=result['users'];
+      emailVerified=profiles is List && profiles.isNotEmpty &&
+        profiles.first is Map && (profiles.first as Map)['emailVerified']==true;
+      notifyListeners();
+    } catch (_) {
+      emailVerified=false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> sendEmailVerification() async {
+    if (idToken==null) throw StateError('Sign in first.');
+    await _post(Uri.parse(
+      'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$_projectApiKey'),
+      {'requestType':'VERIFY_EMAIL','idToken':idToken!});
   }
 
   Future<void> signIn(String emailAddress,String password) async {
@@ -119,7 +146,7 @@ class ShopperSession extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    idToken=null;email=null;name=null;_refreshToken=null;
+    idToken=null;email=null;name=null;_refreshToken=null;emailVerified=false;
     await _vault.delete(key:'teyza_refresh');
     await _vault.delete(key:'teyza_email');
     await _vault.delete(key:'teyza_name');
