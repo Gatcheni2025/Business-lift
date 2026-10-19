@@ -91,39 +91,6 @@ double km(double latA, double lngA, double latB, double lngB) {
     math.pow(math.sin(b / 2), 2);
   return radius * 2 * math.atan2(math.sqrt(v.toDouble()), math.sqrt(1 - v.toDouble()));
 }
-Product sample(String key, String title, int cents, String category, String photoKey) =>
-  Product('demo-' + key, title, category, photos + photoKey + '.webp', cents, 100);
-List<Product> demoProducts(String prefix) => [
-  sample(prefix + '-bread', 'Fresh bread 700g', 1899, 'Bakery', 'bread'),
-  sample(prefix + '-milk', 'Full cream milk 1L', 2299, 'Dairy', 'milk'),
-  sample(prefix + '-eggs', 'Large eggs 6 pack', 2699, 'Dairy', 'eggs'),
-  sample(prefix + '-rice', 'White rice 2kg', 4999, 'Pantry', 'rice'),
-  sample(prefix + '-maize', 'Maize meal 2.5kg', 4299, 'Pantry', 'maize'),
-  sample(prefix + '-sugar', 'White sugar 1kg', 2999, 'Pantry', 'sugar'),
-  sample(prefix + '-oil', 'Cooking oil 750ml', 3899, 'Pantry', 'oil'),
-  sample(prefix + '-cool', 'Cold drink 2L', 2499, 'Drinks', 'drinks'),
-  sample(prefix + '-snack', 'Potato crisps 120g', 1799, 'Snacks', 'snacks'),
-  sample(prefix + '-veg', 'Fresh vegetables', 2499, 'Fresh', 'produce'),
-  sample(prefix + '-flour', 'Cake flour 1kg', 2299, 'Pantry', 'flour'),
-  sample(prefix + '-water', 'Bottled water 1.5L', 1499, 'Drinks', 'water'),
-  sample(prefix + '-tea', 'Tea 26 bags', 2999, 'Drinks', 'tea'),
-  sample(prefix + '-toilet', 'Toilet paper 2 pack', 2699, 'Household', 'paper'),
-];
-Shop demoShop(String id, String name, String area, double lat, double lng) =>
-  Shop('demo-' + id, name, area, '', '', true, true, demoProducts(id),
-    demo: true, latitude: lat, longitude: lng);
-final sampleShops = <Shop>[
-  demoShop('durban', 'Teyza Sample Spaza', 'Durban CBD · Sample only', -29.8587, 31.0218),
-  demoShop('umlazi', 'Township Corner Demo', 'Umlazi · Sample only', -29.9733, 30.8789),
-  demoShop('kwamashu', 'Neighbourhood Grocer Demo', 'KwaMashu · Sample only', -29.7402, 30.9920),
-  demoShop('pinetown', 'Everyday Essentials Demo', 'Pinetown · Sample only', -29.8145, 30.8597),
-  demoShop('umhlanga', 'Local Market Demo', 'Umhlanga · Sample only', -29.7248, 31.0826),
-  demoShop('jhb', 'Metro Spaza Demo', 'Johannesburg · Sample only', -26.2041, 28.0473),
-  demoShop('soweto', 'Neighbourhood Basket Demo', 'Soweto · Sample only', -26.2678, 27.8585),
-  demoShop('pta', 'Corner Market Demo', 'Pretoria · Sample only', -25.7479, 28.2293),
-  demoShop('cpt', 'Cape Grocer Demo', 'Cape Town · Sample only', -33.9249, 18.4241),
-];
-
 void main() => runApp(const TeyzaShopper());
 class TeyzaShopper extends StatelessWidget {
   const TeyzaShopper({super.key});
@@ -151,6 +118,7 @@ class _ShopperHomeState extends State<ShopperHome> {
   String? catalogueError;
   bool loading = true;
   Shop? selected;
+  OnlineShop? directorySelected;
   String search = '';
   String category = 'All';
   int tab = 0;
@@ -179,10 +147,24 @@ class _ShopperHomeState extends State<ShopperHome> {
         if (a.label==selectedName) { chooseArea(a,persist:false); return; }
       }
     }
-    if (selectedName=='gps') {
+    if(selectedName=='gps') {
       await _restoreGrantedLocation();
-    } else {
-      await reloadOnline();
+      if(area==null)await reloadOnline();
+      return;
+    }
+    await reloadOnline();
+    if(selectedName==null) {
+      final permission=await Geolocator.checkPermission();
+      final alreadyAsked=prefs.getBool('teyza_gps_initial_prompt_done')??false;
+      if(permission==LocationPermission.always ||
+         permission==LocationPermission.whileInUse) {
+        await useLocation(askPermission:false);
+      } else if(!alreadyAsked && permission==LocationPermission.denied) {
+        await prefs.setBool('teyza_gps_initial_prompt_done',true);
+        if(mounted) WidgetsBinding.instance.addPostFrameCallback((_) {
+          if(mounted) useLocation(askPermission:true);
+        });
+      }
     }
   }
 
@@ -277,6 +259,8 @@ class _ShopperHomeState extends State<ShopperHome> {
         area = Area(placeName, city, position.latitude, position.longitude);
         locationName = placeName;
         selected = null;
+        directorySelected = null;
+        search='';
         cart.clear();
       });
       final prefs=await SharedPreferences.getInstance();
@@ -296,6 +280,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       locationName = choice.label;
       locationWarning = null;
       selected = null;
+      directorySelected = null;
       search = '';
       cart.clear();
       tab = 0;
@@ -349,90 +334,21 @@ class _ShopperHomeState extends State<ShopperHome> {
       .compareTo(distance(b) ?? double.infinity));
     return filtered;
   }
-  List<Shop> get demos {
-    final filtered = sampleShops.where((shop) =>
-      area == null || (distance(shop) ?? double.infinity) <= 30).toList();
-    filtered.sort((a,b) => (distance(a) ?? double.infinity)
-      .compareTo(distance(b) ?? double.infinity));
-    return filtered.isEmpty && area == null ? sampleShops.take(4).toList() : filtered;
-  }
-  List<OnlineShop> get displayedOnline {
-    final q=search.toLowerCase().trim();
-    final candidates=online.where((s) =>
-      q.isEmpty || (s.name+' '+s.area+' '+s.address).toLowerCase().contains(q)).toList();
-    if (area!=null) {
-      candidates.sort((a,b) {
-        double d(OnlineShop s)=>s.lat==null || s.lng==null
-          ? double.infinity : km(area!.lat,area!.lng,s.lat!,s.lng!);
-        return d(a).compareTo(d(b));
-      });
-    }
-    return candidates;
-  }
-
-  Future<void> showOnlineShop(OnlineShop place) async {
-    await showModalBottomSheet<void>(
-      context:context,isScrollControlled:true,showDragHandle:true,
-      builder:(sheet)=>SafeArea(child:Padding(
-        padding:const EdgeInsets.all(22),
-        child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          const Text('FOUND ONLINE · NOT ON TEYZA',style:TextStyle(
-            fontSize:11,color:green,fontWeight:FontWeight.w900,letterSpacing:1.2)),
-          const SizedBox(height:10),
-          Text(place.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
-          const SizedBox(height:5),
-          Text(place.address.isEmpty?place.area:place.address,style:const TextStyle(color:muted)),
-          const SizedBox(height:14),
-          const Text('This business appears in a public online directory. Teyza has not confirmed its current trading status, products, opening times or prices.'),
-          const SizedBox(height:15),
-          FilledButton.icon(onPressed:() async {
-            final uri=Uri.tryParse(place.source);
-            if(uri!=null && uri.scheme=='https') await launchUrl(uri,
-              mode:LaunchMode.externalApplication);
-          },icon:const Icon(Icons.map_outlined),label:const Text('Open source / directions')),
-          const SizedBox(height:9),
-          OutlinedButton.icon(onPressed:() async {
-            final uri=Uri.tryParse(place.claimUrl);
-            if(uri!=null && uri.scheme=='https') await launchUrl(uri,
-              mode:LaunchMode.externalApplication);
-          },icon:const Icon(Icons.store_outlined),label:const Text('Own this shop? Claim it')),
-          const SizedBox(height:8),
-          if(place.origin=='openstreetmap')
-            const Text('Map data © OpenStreetMap contributors (ODbL).',
-              textAlign:TextAlign.center,style:TextStyle(color:muted,fontSize:11))
-        ]))));
-  }
-
-  Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
-    margin:const EdgeInsets.only(bottom:9),
-    child:ListTile(onTap:()=>showOnlineShop(place),
-      leading:const CircleAvatar(backgroundColor:Color(0xFFE0F4EC),
-        child:Icon(Icons.place_outlined,color:green)),
-      title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
-      subtitle:Text((place.address.isNotEmpty?place.address:place.area)+
-        '\nOnline listing · Stock not connected',maxLines:3),
-      isThreeLine:true,
-      trailing:const Icon(Icons.open_in_new,color:green,size:20)));
-
   List<Shop> get displayShops {
-    final real = nearbyReal;
-    final examples = demos;
-    if (search.isEmpty) return [...real, ...examples];
-    final q = search.toLowerCase();
-    return [...real,...examples].where((s) =>
-      (s.name + ' ' + s.area + ' ' + s.products.map((p) => p.name).join(' '))
+    final q=search.toLowerCase().trim();
+    return nearbyReal.where((shop)=>q.isEmpty ||
+      (shop.name+' '+shop.area+' '+shop.products.map((p)=>p.name).join(' '))
         .toLowerCase().contains(q)).toList();
   }
   List<Product> get featured {
-    final candidates = [...nearbyReal, ...demos];
-    final result = <Product>[];
-    final seen = <String>{};
-    for (final shop in candidates) {
-      for (final p in shop.products) {
-        if (seen.add(p.name) && (category == 'All' || p.category == category) &&
-            (search.isEmpty || p.name.toLowerCase().contains(search.toLowerCase()))) {
+    final result=<Product>[];
+    final seen=<String>{};
+    for(final shop in nearbyReal) {
+      for(final p in shop.products) {
+        if(seen.add(p.id) && (category=='All'||p.category==category) &&
+          (search.isEmpty||p.name.toLowerCase().contains(search.toLowerCase()))) {
           result.add(p);
-          if (result.length >= 18) return result;
+          if(result.length>=18)return result;
         }
       }
     }
@@ -450,9 +366,14 @@ class _ShopperHomeState extends State<ShopperHome> {
   void openShop(Shop shop) => setState(() {
     if (selected?.id != shop.id) cart.clear();
     selected = shop;
+    directorySelected = null;
     search = '';
     category = 'All';
     tab = 1;
+  });
+
+  void selectDirectory(OnlineShop shop)=>setState((){
+    directorySelected=shop;selected=null;search='';tab=1;cart.clear();
   });
 
   Widget photo(String url,{double size=92, IconData icon=Icons.storefront_outlined}) =>
@@ -510,8 +431,10 @@ class _ShopperHomeState extends State<ShopperHome> {
         icon:const Icon(Icons.my_location_outlined)),
         IconButton(tooltip:'Refresh shops',onPressed:load,icon:const Icon(Icons.refresh))]),
     body:tab==3?ShopperAccountPanel(session:session):tab==2?basketPage():
-      Column(children:[locationHeader(),Expanded(child:tab==1 && selected!=null?
-        shopPage(selected!):homePage())]),
+      Column(children:[locationHeader(),Expanded(child:tab==1?
+        (selected!=null?shopPage(selected!):
+         directorySelected!=null?directoryPage(directorySelected!):allShopsPage())
+        :homePage())]),
     bottomNavigationBar:NavigationBar(height:75,backgroundColor:Colors.white,
       selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
       destinations:[
