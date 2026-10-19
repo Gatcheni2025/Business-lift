@@ -4,14 +4,20 @@ import 'package:http/http.dart' as http;
 class OnlineShop {
   final String id, name, area, address, source, origin, claimUrl;
   final double? lat, lng;
+  final List<Map<String,String>> providerAttributions;
   const OnlineShop(this.id,this.name,this.area,this.address,this.source,
-    this.origin,this.claimUrl,this.lat,this.lng);
+    this.origin,this.claimUrl,this.lat,this.lng,{this.providerAttributions=const []});
   factory OnlineShop.fromJson(Map<String,dynamic> p) => OnlineShop(
     (p['id']??'').toString(),(p['name']??'').toString(),
     (p['area']??'').toString(),(p['address']??'').toString(),
     (p['sourceUrl']??'').toString(),(p['origin']??'').toString(),
     (p['claimUrl']??'').toString(),
-    (p['latitude'] as num?)?.toDouble(),(p['longitude'] as num?)?.toDouble());
+    (p['latitude'] as num?)?.toDouble(),(p['longitude'] as num?)?.toDouble(),
+    providerAttributions:((p['attributions'] as List?)??const [])
+      .whereType<Map>()
+      .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
+      .where((v)=>v['name']!.isNotEmpty && v['url']!.startsWith('https://'))
+      .toList());
 }
 
 Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
