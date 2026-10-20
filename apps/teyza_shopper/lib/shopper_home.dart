@@ -34,9 +34,12 @@ class Shop {
   final bool pickup, delivery;
   final double? latitude, longitude;
   final List<Product> products;
+  final String shopCategory;
+  final bool? acceptsCard, cashback;
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
-    {this.latitude, this.longitude});
+    {this.latitude, this.longitude,this.shopCategory='spaza',
+    this.acceptsCard,this.cashback});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -47,7 +50,14 @@ class Shop {
       .where((p) => p.id.isNotEmpty && p.name.isNotEmpty &&
         p.priceCents > 0 && p.stock > 0).toList(),
     latitude: (x['latitude'] as num?)?.toDouble(),
-    longitude: (x['longitude'] as num?)?.toDouble());
+    longitude: (x['longitude'] as num?)?.toDouble(),
+    shopCategory:x['shopCategory']=='variety'?'variety':'spaza',
+    acceptsCard:x['services'] is Map &&
+      (x['services'] as Map)['cardPayments'] is bool
+        ?(x['services'] as Map)['cardPayments'] as bool:null,
+    cashback:x['services'] is Map &&
+      (x['services'] as Map)['cashback'] is bool
+        ?(x['services'] as Map)['cashback'] as bool:null);
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   final remote = client ?? http.Client();
@@ -127,6 +137,8 @@ class _ShopperHomeState extends State<ShopperHome> {
   List<OnlineShop> online = [];
   String? onlineWarning;
   bool loadingOnline = false;
+  String discoveryType='spaza';
+  int _onlineRequestSerial=0;
 
   @override
   void initState() {
@@ -168,12 +180,27 @@ class _ShopperHomeState extends State<ShopperHome> {
     }
   }
 
+  Future<void> setDiscoveryType(String type) async {
+    if(type!='spaza'&&type!='variety')return;
+    if(discoveryType==type)return;
+    setState(() {
+      discoveryType=type;
+      online=[];
+      directorySelected=null;
+      search='';
+    });
+    await reloadOnline();
+  }
+
   Future<void> reloadOnline() async {
     if (!mounted) return;
     setState(() { loadingOnline=true; onlineWarning=null; });
     try {
+      final requestSerial=++_onlineRequestSerial;
+      final chosenType=discoveryType;
       final places=await findOnlineShops(area:area?.label??'',
-        latitude:area?.lat,longitude:area?.lng);
+        latitude:area?.lat,longitude:area?.lng,category:chosenType);
+      if(requestSerial!=_onlineRequestSerial)return;
       if (!mounted) return;
       setState(() { online=places;loadingOnline=false; });
     } catch (_) {
@@ -381,14 +408,15 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   List<Shop> get displayShops {
     final q=search.toLowerCase().trim();
-    return nearbyReal.where((shop)=>q.isEmpty ||
+    return nearbyReal.where((shop)=>(shop.shopCategory==discoveryType)&&
+      (q.isEmpty ||
       (shop.name+' '+shop.area+' '+shop.products.map((p)=>p.name).join(' '))
-        .toLowerCase().contains(q)).toList();
+        .toLowerCase().contains(q))).toList();
   }
   List<Product> get featured {
     final result=<Product>[];
     final seen=<String>{};
-    for(final shop in nearbyReal) {
+    for(final shop in nearbyReal.where((s)=>s.shopCategory==discoveryType)) {
       for(final p in shop.products) {
         if(seen.add(p.id) && (category=='All'||p.category==category) &&
           (search.isEmpty||p.name.toLowerCase().contains(search.toLowerCase()))) {
