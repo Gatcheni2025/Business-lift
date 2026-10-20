@@ -1,12 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/shopper_discovery.dart';
+import 'package:teyza_shopper/shopper_chat.dart';
+import 'package:teyza_shopper/shopper_home.dart';
 
 void main() {
   test('Firebase authentication errors have clear messages', () {
     expect(authMessage(StateError('INVALID_LOGIN_CREDENTIALS')), contains('Incorrect email'));
     expect(authMessage(StateError('EMAIL_EXISTS')), contains('already registered'));
     expect(authMessage(StateError('TOO_MANY_ATTEMPTS_TRY_LATER')), contains('Too many'));
+  });
+  test('Shopper chat requires a real Teyza seller business ID', () {
+    expect(ShopperChatApi.isTeyzaShop('TZ_AB12CD34'),isTrue);
+    expect(ShopperChatApi.isTeyzaShop('google-ChIJTest123'),isFalse);
+    expect(ShopperChatApi.isTeyzaShop(''),isFalse);
+  });
+  test('Basic shop listing can appear without a priced catalogue', () {
+    final listing=Shop.fromJson({
+      'id':'TZ_AB12CD34','name':'Example Local Shop','area':'KwaMashu',
+      'listingPlan':'basic','products':[]
+    });
+    expect(listing.products,isEmpty);
+    expect(listing.name,'Example Local Shop');
   });
   test('Google spaza listing retains its maps link and provider attributions', () {
     final s=OnlineShop.fromJson({

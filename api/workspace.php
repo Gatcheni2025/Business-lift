@@ -26,7 +26,7 @@ function loadWorkspace(array $firebase): array {
   $uid=$firebase['localId']; $path=pathFor($uid);
   if (is_file($path)) { $saved=json_decode((string)file_get_contents($path),true); if(is_array($saved)) return $saved; }
   $name=trim((string)($firebase['displayName']??''));
-  $workspace=['uid'=>$uid,'email'=>$firebase['email']??'','firstName'=>$name?explode(' ',$name)[0]:'','business'=>['businessId'=>'TZ_'.strtoupper(substr(hash('sha256',$uid),0,8)),'businessName'=>'','profileComplete'=>false],'orders'=>[],'products'=>[],'createdAt'=>gmdate('c')];
+  $workspace=['uid'=>$uid,'email'=>$firebase['email']??'','firstName'=>$name?explode(' ',$name)[0]:'','business'=>['businessId'=>'TZ_'.strtoupper(substr(hash('sha256',$uid),0,8)),'businessName'=>'','profileComplete'=>false],'orders'=>[],'products'=>[], 'subscription'=>['plan'=>null,'status'=>'not_selected','updatedAt'=>gmdate('c')],'createdAt'=>gmdate('c')];
   file_put_contents($path,json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); return $workspace;
 }
 function saveWorkspace(array $firebase,array $workspace): void { file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); }
@@ -110,6 +110,61 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
   if (!empty($input['businessName'])) $workspace['business']['businessName']=trim((string)$input['businessName']);
   foreach(['businessType','industry','country'] as $key) if(isset($input[$key])) $workspace['business'][$key]=trim((string)$input[$key]);
   saveWorkspace($user,$workspace);
+}
+if($action==='seller-subscription') {
+  $current=$workspace['subscription']??['plan'=>null,'status'=>'not_selected'];
+  if($_SERVER['REQUEST_METHOD']==='POST') {
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    $plan=(string)($input['plan']??'');
+    if(!in_array($plan,['basic','plus','sponsored'],true))
+      respond(422,['ok'=>false,'error'=>'Choose a valid listing plan']);
+    if(($input['publicListingConsent']??false)!==true)
+      respond(422,['ok'=>false,'error'=>'Confirm that your shop name, photo and approximate business location may appear in the shopper app']);
+    // Seller cannot set paid/active, transaction reference, expiry or price.
+    $workspace['subscription']=[
+      'plan'=>$plan,
+      'status'=>$plan==='basic'?'pending_payment':'quote_requested',
+      'monthlyPriceCents'=>$plan==='basic'?9900:null,
+      'currency'=>'ZAR',
+      'updatedAt'=>gmdate('c'),
+      'requestedBy'=>$user['localId'],
+    ];
+    // Explicit public listing consent from the seller. Approximate coordinates
+    // are only published if address verification has been confirmed.
+    $workspace['business']['shopperEnabled']=true;
+    $workspace['business']['shopperLocationOptIn']=true;
+    saveWorkspace($user,$workspace);
+    $current=$workspace['subscription'];
+  }
+  respond(200,['ok'=>true,'subscription'=>$current,
+    'paymentEnabled'=>false,'message'=>'Request saved. A listing is not activated until payment is independently verified by Teyza.']);
+}
+if($action==='admin-seller-subscription') {
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'POST required']);
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));
+  $reference=trim((string)($input['verifiedPaymentReference']??''));
+  if($uid===''||!preg_match('/^[A-Za-z0-9_-]{8,100}$/',$reference))
+    respond(422,['ok'=>false,'error'=>'A seller UID and independently verified payment reference are required']);
+  $path=pathFor($uid);
+  if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  $subscription=$target['subscription']??[];
+  $plan=(string)($subscription['plan']??'');
+  if(!in_array($plan,['basic','plus','sponsored'],true))
+    respond(422,['ok'=>false,'error'=>'Seller must select a plan first']);
+  // This administrative action is for payments verified outside this API.
+  // No consumer-side event can activate a paid listing.
+  $now=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+  $subscription['status']='active';
+  $subscription['activatedAt']=$now->format(DateTimeInterface::ATOM);
+  $subscription['expiresAt']=$now->add(new DateInterval('P1M'))->format(DateTimeInterface::ATOM);
+  $subscription['verifiedPaymentReference']=$reference;
+  $subscription['activatedBy']=$user['email']??'admin';
+  $target['subscription']=$subscription;
+  file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  respond(200,['ok'=>true,'subscription'=>$subscription]);
 }
 if($action==='company-approval'){if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(($input['intent']??'')==='submit'){$workspace['companyApproval']=$workspace['companyApproval']??[];$workspace['companyApproval']['status']='pending';$workspace['companyApproval']['submittedAt']=gmdate('c');$workspace['companyApproval']['reviewedAt']=null;$workspace['companyApproval']['note']='';saveWorkspace($user,$workspace);}}respond(200,['ok'=>true,'companyApproval'=>companyApproval($workspace)]);}
 if($action==='admin-session'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'This account does not have Teyza administrator access.']);respond(200,['ok'=>true,'admin'=>['email'=>$user['email']??'','name'=>$user['displayName']??'Teyza Admin','role'=>adminRole($user)]]);}
