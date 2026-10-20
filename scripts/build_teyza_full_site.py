@@ -18,15 +18,16 @@ DIST = ROOT / "dist"
 RELEASE = "TEYZA_FULL_SITE_R3_20261020"
 ZIP_PATH = DIST / "TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip"
 EXCLUDE = {
-    "js/firebase-config.js",       # preserve currently working Firebase app credentials/settings
-    "js/firebase-settings.js",     # preserve currently working Firebase runtime settings
+    # Public Firebase Web SDK config is REQUIRED by login and account modules.
+    # Include js/firebase-config.js and js/firebase-settings.js in deployment.
+    # These are client-side project identifiers, NOT secret server credentials.
     "api/teyza-firebase-verify.php",  # preserve live Firebase verification/server settings
 }
 SKIP = ("uploads/", "private_html/", "node_modules/", ".git/", "apps/", ".github/")
 MANAGED = (
     "Every top-level .html page",
     "All assets/* shared CSS, SVG and frontend assets",
-    "All js/*.js except preserved Firebase runtime configuration",
+    "All js/*.js including required public Firebase client configuration",
     "All api/*.php except existing server authentication helper",
     "Public top-level PHP endpoints, robots.txt, and sitemap.xml",
 )
@@ -63,6 +64,7 @@ def checked_pages(entries: dict[str,bytes]) -> None:
       "assets/workspace.js","assets/workspace.css",
       "assets/teyza-sprout-wordmark.svg","assets/spaza-onboarding.css",
       "js/guard.js","js/landing-auth.js","js/business-profile.js",
+      "js/firebase-settings.js","js/firebase-config.js","js/landing-firebase.js",
       "js/dashboard-data.js","js/spaza-activation.js","api/workspace.php",
     ]
     missing = [n for n in required if not entries.get(n)]
