@@ -82,12 +82,21 @@ foreach (glob($directory.'/*.json') ?: [] as $file) {
       }
     }
   }
+  // Public service flags are opt-in by the approved shop owner.
+  // Missing values must remain unknown, not be shown as enabled or disabled.
+  $shopperServices=is_array($business['shopperServices']??null)?$business['shopperServices']:[];
+  $cardPayments=isset($shopperServices['cardPayments']) && is_bool($shopperServices['cardPayments'])
+    ?$shopperServices['cardPayments']:null;
+  $cashback=isset($shopperServices['cashback']) && is_bool($shopperServices['cashback'])
+    ?$shopperServices['cashback']:null;
+  $shopperType=(($business['shopperCategory']??'spaza')==='variety')?'variety':'spaza';
   $shops[]=[
     'id'=>label($business['businessId']??basename($file,'.json'),128),
     'name'=>$name,'area'=>label($business['suburb']??$business['city']??$business['address']??'',120),
     'photoUrl'=>publicUrl(label($business['logoUrl']??'',300)),
     'latitude'=>$approxLat,'longitude'=>$approxLng,
     'pickupEnabled'=>$pickupEnabled,'deliveryEnabled'=>$deliveryEnabled,
+    'shopCategory'=>$shopperType,'services'=>['cardPayments'=>$cardPayments,'cashback'=>$cashback],
     'deliveryFeeCents'=>$deliveryEnabled?(int)round(max(0,(float)($settings['baseDeliveryFee']??0))*100):0,
     'whatsappPhone'=>$publicPhone,'products'=>$products
   ];
