@@ -33,6 +33,13 @@ function modal(mode) {
       <h2 id="tz${login ? "Login" : "Register"}Title">${login ? "Welcome back" : "Register your local shop"}</h2>
       <p class="auth-subtitle">${login ? "Sign in to manage your local shop." : "Create your account to manage products, stock and orders."}</p>
       <p class="auth-status" data-status role="status" aria-live="polite" hidden></p><div class="auth-recovery" data-auth-recovery hidden><a href="dashboard.html">Open shop dashboard (limited access) →</a><small>Firebase sign-in worked, but the website cannot load shop records. Full shop tools remain unavailable until the server is fixed.</small></div>
+      ${login ? "" : `<fieldset class="tz-seller-type" aria-label="What kind of shop do you own?">
+          <legend>What kind of shop do you own?</legend>
+          <label class="tz-type-option"><input type="radio" name="sellerCategory" value="spaza" form="tzRegisterForm" required checked>
+            <span><strong>🏪 Spaza Shop</strong><small>Simple shop dashboard · priority application review</small></span></label>
+          <label class="tz-type-option"><input type="radio" name="sellerCategory" value="retail" form="tzRegisterForm" required>
+            <span><strong>🏬 Other Retail / Wholesale</strong><small>China Mall, China Mart, wholesale, discount and general retailers</small></span></label>
+        </fieldset>`}
       ${providerButtons(mode)}<div class="auth-divider">or continue with email</div>
       <form id="tz${login ? "Login" : "Register"}Form">
         ${login ? "" : `<div class="auth-grid"><label class="auth-field">First name<input name="firstName" autocomplete="given-name" required></label><label class="auth-field">Last name<input name="lastName" autocomplete="family-name" required></label></div>`}
@@ -143,12 +150,23 @@ function reportAuthenticationFailure(container, error, provider) {
   const recovery = container.querySelector("[data-auth-recovery]");
   if (recovery) recovery.hidden = !(error.workspaceUnavailable && !!auth.currentUser);
 }
-const allowedDestinations = new Set(["dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
+const allowedDestinations = new Set(["retailer-dashboard.html", "retail-details.html", "dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
 function loginDestination() {
   const target = new URLSearchParams(location.search).get("redirect") || "dashboard.html";
   return allowedDestinations.has(target.split(/[?#]/)[0]) && !target.includes("/") && !target.includes("\\") ? target : "dashboard.html";
 }
-const go = isNew => location.assign(isNew ? "dashboard.html?onboarding=1" : loginDestination());
+const go = (isNew, result) => {
+  const category=result?.sellerCategory || result?.business?.sellerCategory || "";
+  const target=isNew ? (category==="retail"?"retailer-dashboard.html?onboarding=1":"dashboard.html?onboarding=1") :
+    (new URLSearchParams(location.search).has("redirect") ? loginDestination() :
+      category==="retail"?"retailer-dashboard.html":"dashboard.html");
+  location.assign(target);
+};
+function signupCategory(){
+  const chosen=registerModal.querySelector('input[name="sellerCategory"]:checked');
+  if(!chosen)throw new Error("Select Spaza Shop or Other Retail / Wholesale to continue.");
+  return chosen.value;
+}
 
 async function socialSignIn(button) {
   if (button.disabled) return;
@@ -160,9 +178,10 @@ async function socialSignIn(button) {
   try {
     const result = await signInWithPopup(auth, providers[name]);
     const isNew = getAdditionalUserInfo(result)?.isNewUser === true;
-    await bootstrap(result.user);
+    const sellerType=mode==="register"&&isNew?signupCategory():undefined;
+    const data=await bootstrap(result.user,sellerType?{sellerCategory:sellerType}:{});
     showStatus(container, isNew ? "Account created. Opening business setup…" : "Signed in. Opening your workspace…", "success");
-    go(isNew);
+    go(isNew,data);
   } catch (error) {
     reportAuthenticationFailure(container, error, name);
     button.disabled = false;
@@ -178,9 +197,9 @@ loginForm.addEventListener("submit", async event => {
   showStatus(loginModal, "Signing in…", "info");
   try {
     const result = await signInWithEmailAndPassword(auth, String(details.get("email")).trim(), String(details.get("password")));
-    await bootstrap(result.user);
+    const data=await bootstrap(result.user);
     showStatus(loginModal, "Signed in. Opening your workspace…", "success");
-    go(false);
+    go(false,data);
   } catch (error) {
     reportAuthenticationFailure(loginModal, error);
     button.disabled = false;
@@ -195,6 +214,7 @@ registerForm.addEventListener("submit", async event => {
   const details = new FormData(registerForm);
   const email = String(details.get("email")).trim();
   const fullName = `${details.get("firstName")} ${details.get("lastName")}`.trim();
+  const sellerCategory=signupCategory();
   showStatus(registerModal, "Creating your account…", "info");
   try {
     let user = auth.currentUser;
@@ -204,10 +224,10 @@ registerForm.addEventListener("submit", async event => {
       sessionStorage.setItem("teyzaPendingEnrollment", user.uid);
     }
     if (user.displayName !== fullName) await updateProfile(user, {displayName: fullName});
-    await bootstrap(user, {firstName: String(details.get("firstName")).trim(), businessName: String(details.get("businessName")).trim()});
+    const data=await bootstrap(user, {firstName: String(details.get("firstName")).trim(), businessName: String(details.get("businessName")).trim(),sellerCategory});
     sessionStorage.removeItem("teyzaPendingEnrollment");
     showStatus(registerModal, "Account created. Opening business setup…", "success");
-    go(true);
+    go(true,data);
   } catch (error) {
     reportAuthenticationFailure(registerModal, error);
     button.disabled = false;
