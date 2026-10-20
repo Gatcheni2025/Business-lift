@@ -151,30 +151,31 @@ class _ShopperHomeState extends State<ShopperHome> {
   void dispose() { session.dispose(); super.dispose(); }
 
   Future<void> _restoreSavedArea() async {
-    final prefs = await SharedPreferences.getInstance();
-    final selectedName=prefs.getString('teyza_selected_area');
-    if (!mounted) return;
-    if (selectedName != null && selectedName != 'gps') {
-      for (final a in areas) {
-        if (a.label==selectedName) { chooseArea(a,persist:false); return; }
+    // Never require the shopper to tap refresh after reopening the app.
+    // Recheck permission at startup, respecting Android privacy settings.
+    final prefs=await SharedPreferences.getInstance();
+    final saved=prefs.getString('teyza_selected_area');
+    final permission=await Geolocator.checkPermission();
+    if (!mounted)return;
+    if(permission==LocationPermission.always ||
+       permission==LocationPermission.whileInUse) {
+      await useLocation(askPermission:false);
+      if(area!=null)return;
+    }
+    if(saved!=null&&saved!='gps') {
+      for(final entry in areas) {
+        if(entry.label==saved) {
+          await chooseArea(entry,persist:false);
+          return;
+        }
       }
     }
-    if(selectedName=='gps') {
-      await _restoreGrantedLocation();
-      if(area==null)await reloadOnline();
-      return;
-    }
-    await reloadOnline();
-    if(selectedName==null) {
-      final permission=await Geolocator.checkPermission();
-      final alreadyAsked=prefs.getBool('teyza_gps_initial_prompt_done')??false;
-      if(permission==LocationPermission.always ||
-         permission==LocationPermission.whileInUse) {
-        await useLocation(askPermission:false);
-      } else if(!alreadyAsked && permission==LocationPermission.denied) {
-        await prefs.setBool('teyza_gps_initial_prompt_done',true);
-        if(mounted) WidgetsBinding.instance.addPostFrameCallback((_) {
-          if(mounted) useLocation(askPermission:true);
+    if(permission==LocationPermission.denied &&
+       !(prefs.getBool('teyza_gps_initial_prompt_done')??false)) {
+      await prefs.setBool('teyza_gps_initial_prompt_done',true);
+      if(mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if(mounted)useLocation(askPermission:true);
         });
       }
     }
@@ -197,6 +198,10 @@ class _ShopperHomeState extends State<ShopperHome> {
     setState(() { loadingOnline=true; onlineWarning=null; });
     try {
       final requestSerial=++_onlineRequestSerial;
+      if(area==null) {
+        if(mounted)setState(() {loadingOnline=false;online=[];});
+        return;
+      }
       final chosenType=discoveryType;
       final places=await findOnlineShops(area:area?.label??'',
         latitude:area?.lat,longitude:area?.lng,category:chosenType);
@@ -451,8 +456,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(place.address.isNotEmpty?place.address:place.area,
           maxLines:2,overflow:TextOverflow.ellipsis),
-        onlineProviderLabel(place),
-        const Text('Shop stock not connected',style:TextStyle(
+        const Text('Catalogue not yet available',style:TextStyle(
           fontSize:11,color:muted)),
       ]),
       isThreeLine:true,
@@ -596,7 +600,7 @@ class _ShopperHomeState extends State<ShopperHome> {
         child:Text('Real-shop connection: '+catalogueError!,
           style:const TextStyle(color:muted,fontSize:11))),
       categoryPicker(),
-      section(discoveryType=='spaza'?'REAL SPAZA SHOPS':'VARIETY & WHOLESALE',
+      section(discoveryType=='spaza'?'SPAZA SHOPS':'VARIETY & WHOLESALE',
         subtitle:discoveryType=='spaza'?'Find local spazas near you':
           'Discover China Malls, China Marts and variety retailers',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
@@ -608,7 +612,7 @@ class _ShopperHomeState extends State<ShopperHome> {
           children:displayShops.take(9).map(quickShop).toList()))
       else if(loadingOnline)const Padding(padding:EdgeInsets.all(18),
         child:Center(child:CircularProgressIndicator())),
-      section(discoveryType=='spaza'?'SPAZAS FOUND ONLINE':'VARIETY STORES FOUND ONLINE',
+      section(discoveryType=='spaza'?'NEARBY SPAZAS':'VARIETY STORES FOUND ONLINE',
         subtitle:'Named local shops · tap to see shop details',
         action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
       if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
@@ -659,14 +663,14 @@ class _ShopperHomeState extends State<ShopperHome> {
         subtitle:featured.isEmpty?'Browse common grocery categories':
           'Available products and prices from participating shops'),
       if(featured.isEmpty)essentialsShelf()else productShelf(featured),
-      section('TEYZA SHOPS WITH LIVE PRODUCTS',subtitle:area==null?
+      section('SHOPS ON TEYZA',subtitle:area==null?
         'Choose an area to see local listings':'Sorted by approximate distance where available',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
-      if(displayShops.isEmpty)empty('More shop catalogues coming soon',
+      if(displayShops.isEmpty)empty('Shops joining Teyza',
         'Real shops are listed above. Owners can claim their store and publish confirmed products.'),
       ...displayShops.take(5).map((s)=>shopTile(s)),
-      section(discoveryType=='spaza'?'MORE NEIGHBOURHOOD SPAZAS':'MORE VARIETY & WHOLESALE',
+      section(discoveryType=='spaza'?'MORE SHOPS NEAR YOU':'MORE VARIETY & WHOLESALE',
         subtitle:'Found online · product catalogues not connected yet'),
       ...displayedOnline.skip(4).take(14).map(onlineTile),
       if(online.any((x)=>x.origin=='google_places'))
@@ -684,8 +688,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       Text(s.name,maxLines:2,textAlign:TextAlign.center,
         overflow:TextOverflow.ellipsis,
         style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
-      if(s.origin=='google_places')const Text('Google Maps',
-        style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))),
+
     ])));
 
   Widget essentialsShelf(){
@@ -767,7 +770,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       ...displayedOnline.map(onlineTile),
       if(displayedOnline.isEmpty&&!loadingOnline)
         empty('No online listings nearby','Try GPS or choose another area.'),
-      section('SHOPS SELLING ON TEYZA',
+      section('SHOPS ON TEYZA',
         subtitle:'Merchant-published stock, pricing and availability'),
       ...displayShops.map(shopTile),
       if(displayShops.isEmpty)empty('Shops joining soon',
@@ -1217,8 +1220,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                       Text(shop.address.isNotEmpty?shop.address:shop.area,
                         maxLines:2,overflow:TextOverflow.ellipsis),
-                      Text((shop.origin=='google_places'?'Google Maps listing':'Public directory')+
-                        _distanceLabel(_distance(shop.lat,shop.lng)),
+                      Text('Nearby shop'+_distanceLabel(_distance(shop.lat,shop.lng)),
                         style:const TextStyle(fontSize:11,color:muted)),
                       const Text('Shop products not yet connected',
                         style:TextStyle(fontSize:11,color:muted)),
