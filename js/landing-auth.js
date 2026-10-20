@@ -35,11 +35,11 @@ function modal(mode) {
       <p class="auth-status" data-status role="status" aria-live="polite" hidden></p><div class="auth-recovery" data-auth-recovery hidden><a href="dashboard.html">Open shop dashboard (limited access) →</a><small>Firebase sign-in worked, but the website cannot load shop records. Full shop tools remain unavailable until the server is fixed.</small></div>
       ${login ? "" : `<fieldset class="tz-seller-type" aria-label="What kind of shop do you own?">
           <legend>What kind of shop do you own?</legend>
-          <label class="tz-type-option"><input type="radio" name="sellerCategory" value="spaza" form="tzRegisterForm" required checked>
+          <label class="tz-type-option"><input type="radio" name="sellerCategory" value="spaza" form="tzRegisterForm" required>
             <span><strong>🏪 Spaza Shop</strong><small>Simple shop dashboard · priority application review</small></span></label>
           <label class="tz-type-option"><input type="radio" name="sellerCategory" value="retail" form="tzRegisterForm" required>
             <span><strong>🏬 Other Retail / Wholesale</strong><small>China Mall, China Mart, wholesale, discount and general retailers</small></span></label>
-        </fieldset>`}
+        </fieldset><button type="button" class="auth-submit" data-finish-category hidden>Save shop type and continue</button>`}
       ${providerButtons(mode)}<div class="auth-divider">or continue with email</div>
       <form id="tz${login ? "Login" : "Register"}Form">
         ${login ? "" : `<div class="auth-grid"><label class="auth-field">First name<input name="firstName" autocomplete="given-name" required></label><label class="auth-field">Last name<input name="lastName" autocomplete="family-name" required></label></div>`}
@@ -73,6 +73,7 @@ function openModal(element) {
   clearStatus(element);
   const recovery = element.querySelector("[data-auth-recovery]");
   if (recovery) recovery.hidden = true;
+  element.classList.remove("completing-category");
   element.classList.add("open");
   element.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -167,6 +168,30 @@ function signupCategory(){
   if(!chosen)throw new Error("Select Spaza Shop or Other Retail / Wholesale to continue.");
   return chosen.value;
 }
+let categoryCompletionUser=null;
+function requestCategoryCompletion(user){
+  categoryCompletionUser=user;
+  openModal(registerModal);
+  registerModal.classList.add("completing-category");
+  showStatus(registerModal,"Choose your shop type to finish creating your Teyza seller workspace.","info");
+}
+registerModal.querySelector("[data-finish-category]").addEventListener("click",async event=>{
+  if(!categoryCompletionUser)return;
+  const button=event.currentTarget;
+  try{
+    const selected=signupCategory();
+    button.disabled=true;
+    showStatus(registerModal,"Saving your shop category…","info");
+    const data=await bootstrap(categoryCompletionUser,{sellerCategory:selected});
+    if(data.categorySelectionRequired)throw new Error("Please choose your shop category.");
+    categoryCompletionUser=null;
+    showStatus(registerModal,"Shop category saved. Opening your dashboard…","success");
+    go(true,data);
+  }catch(error){
+    reportAuthenticationFailure(registerModal,error);
+    button.disabled=false;
+  }
+});
 
 async function socialSignIn(button) {
   if (button.disabled) return;
@@ -176,10 +201,12 @@ async function socialSignIn(button) {
   button.disabled = true;
   showStatus(container, `Opening ${providerNames[name]} sign-in…`, "info");
   try {
+    // Collect the choice before opening Google: cancelling OAuth must not create an unclassified seller.
+    const sellerType=mode==="register"?signupCategory():undefined;
     const result = await signInWithPopup(auth, providers[name]);
     const isNew = getAdditionalUserInfo(result)?.isNewUser === true;
-    const sellerType=mode==="register"&&isNew?signupCategory():undefined;
     const data=await bootstrap(result.user,sellerType?{sellerCategory:sellerType}:{});
+    if(data.categorySelectionRequired){requestCategoryCompletion(result.user);return;}
     showStatus(container, isNew ? "Account created. Opening business setup…" : "Signed in. Opening your workspace…", "success");
     go(isNew,data);
   } catch (error) {
@@ -198,6 +225,7 @@ loginForm.addEventListener("submit", async event => {
   try {
     const result = await signInWithEmailAndPassword(auth, String(details.get("email")).trim(), String(details.get("password")));
     const data=await bootstrap(result.user);
+    if(data.categorySelectionRequired){requestCategoryCompletion(result.user);return;}
     showStatus(loginModal, "Signed in. Opening your workspace…", "success");
     go(false,data);
   } catch (error) {
@@ -225,6 +253,7 @@ registerForm.addEventListener("submit", async event => {
     }
     if (user.displayName !== fullName) await updateProfile(user, {displayName: fullName});
     const data=await bootstrap(user, {firstName: String(details.get("firstName")).trim(), businessName: String(details.get("businessName")).trim(),sellerCategory});
+    if(data.categorySelectionRequired)throw new Error("Please choose your shop category.");
     sessionStorage.removeItem("teyzaPendingEnrollment");
     showStatus(registerModal, "Account created. Opening business setup…", "success");
     go(true,data);
@@ -238,7 +267,7 @@ document.addEventListener("click", event => {
   const providerButton = event.target.closest("[data-provider]");
   if (providerButton) return void socialSignIn(providerButton);
   if (event.target.closest("[data-open-register],a[href='register.html']")) {
-    event.preventDefault(); openModal(registerModal); return;
+    event.preventDefault(); categoryCompletionUser=null; openModal(registerModal); return;
   }
   if (event.target.closest("[data-open-login],a[href='login.html']")) {
     event.preventDefault(); openModal(loginModal); return;
