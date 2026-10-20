@@ -396,11 +396,57 @@ class _ShopperHomeState extends State<ShopperHome> {
       :Text(shop.origin=='openstreetmap'?'OpenStreetMap · Public listing':
         'Public directory listing',style:const TextStyle(color:muted,fontSize:12));
 
+
+  Widget onlinePhoto(OnlineShop shop,{double width=86,double height=86}) {
+    final ref=shop.photoRef;
+    final placeholder=Container(width:width,height:height,
+      alignment:Alignment.center,color:const Color(0xFFE4F3EA),
+      child:Icon(shop.shopCategory=='variety'?Icons.store_mall_directory_outlined:
+        Icons.storefront_outlined,color:green,size:width*.42));
+    if(shop.origin!='google_places'||ref==null||ref.isEmpty)return
+      ClipRRect(borderRadius:BorderRadius.circular(14),child:placeholder);
+    final url=Uri.https('teyza.co.za','/api/shopper-place-photo.php',{'ref':ref}).toString();
+    return ClipRRect(borderRadius:BorderRadius.circular(14),
+      child:Image.network(url,width:width,height:height,fit:BoxFit.cover,
+        errorBuilder:(_,__,___)=>placeholder,
+        loadingBuilder:(context,child,progress)=>progress==null?child:placeholder));
+  }
+
+  Widget _serviceRow(IconData icon,String label,bool? available)=>Container(
+    padding:const EdgeInsets.symmetric(horizontal:12,vertical:10),
+    margin:const EdgeInsets.only(bottom:7),
+    decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),
+    child:Row(children:[
+      Icon(icon,color:green,size:22),const SizedBox(width:12),
+      Expanded(child:Text(label,style:const TextStyle(fontWeight:FontWeight.w700))),
+      Flexible(child:Text(available==true?'Available':
+        available==false?'Not offered':'Not confirmed',
+        textAlign:TextAlign.end,style:TextStyle(fontSize:11,
+          color:available==true?green:muted)))
+    ]));
+
+  Widget onlineServices(OnlineShop shop)=>Column(
+    crossAxisAlignment:CrossAxisAlignment.start,children:[
+      section('Shop services',subtitle:'Ask the owner to confirm these options'),
+      _serviceRow(Icons.credit_card_outlined,'Pay by card',null),
+      _serviceRow(Icons.account_balance_wallet_outlined,'Cashback',null),
+      _serviceRow(Icons.local_shipping_outlined,'Delivery',null),
+      _serviceRow(Icons.shopping_bag_outlined,'Collection',null),
+    ]);
+
+  Widget merchantServices(Shop shop)=>Column(
+    crossAxisAlignment:CrossAxisAlignment.start,children:[
+      section('Shop services',subtitle:'Information published by the merchant'),
+      _serviceRow(Icons.credit_card_outlined,'Pay by card',shop.acceptsCard),
+      _serviceRow(Icons.account_balance_wallet_outlined,'Cashback',shop.cashback),
+      _serviceRow(Icons.local_shipping_outlined,'Delivery',shop.delivery),
+      _serviceRow(Icons.shopping_bag_outlined,'Collection',shop.pickup),
+    ]);
+
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
     margin:const EdgeInsets.only(bottom:9),
     child:ListTile(onTap:()=>selectDirectory(place),
-      leading:const CircleAvatar(backgroundColor:Color(0xFFE0F4EC),
-        child:Icon(Icons.storefront_rounded,color:green)),
+      leading:onlinePhoto(place,width:66,height:68),
       title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
       subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(place.address.isNotEmpty?place.address:place.area,
@@ -623,9 +669,7 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   Widget directoryCircle(OnlineShop s)=>InkWell(onTap:()=>selectDirectory(s),
     child:SizedBox(width:112,child:Column(children:[
-      Container(width:82,height:82,decoration:const BoxDecoration(
-        color:Color(0xFFDEF2E8),shape:BoxShape.circle),
-        child:const Icon(Icons.storefront_rounded,color:green,size:40)),
+      onlinePhoto(s,width:82,height:82),
       const SizedBox(height:7),
       Text(s.name,maxLines:2,textAlign:TextAlign.center,
         overflow:TextOverflow.ellipsis,
@@ -724,10 +768,20 @@ class _ShopperHomeState extends State<ShopperHome> {
       TextButton.icon(onPressed:()=>setState(()=>directorySelected=null),
         icon:const Icon(Icons.arrow_back),label:const Text('Browse all spaza shops')),
       const SizedBox(height:10),
-      Container(height:140,decoration:BoxDecoration(
-        borderRadius:BorderRadius.circular(22),
-        gradient:const LinearGradient(colors:[Color(0xFF15342D),Color(0xFF119C77)])),
-        child:const Icon(Icons.storefront_rounded,color:Colors.white,size:75)),
+      SizedBox(width:double.infinity,height:210,
+        child:onlinePhoto(shop,width:420,height:210)),
+      if(shop.photoRef!=null)...[
+        const SizedBox(height:6),
+        const Text('Photo · Google Maps',style:TextStyle(color:muted,fontSize:11)),
+        for(final credit in shop.photoAttributions)
+          TextButton.icon(onPressed:() async {
+            final url=Uri.tryParse(credit['url']??'');
+            if(url!=null&&url.scheme=='https') {
+              await launchUrl(url,mode:LaunchMode.externalApplication);
+            }
+          },icon:const Icon(Icons.open_in_new,size:14),
+            label:Text('Photo by '+(credit['name']??''))),
+      ],
       const SizedBox(height:16),
       Text(shop.name,style:const TextStyle(
         fontSize:25,fontWeight:FontWeight.w900,color:ink)),
@@ -772,7 +826,8 @@ class _ShopperHomeState extends State<ShopperHome> {
           Icons.mark_email_read_outlined),
         label:Text(session.emailVerified?'View verified shopper account':
           'Verify my shopper account')),
-      section('SHOP GROCERIES'),
+      onlineServices(shop),
+      section('SHOP ITEMS'),
       empty('Shop stock not connected yet',
         'This real spaza has not published its products to Teyza. '
         'Explore everyday groceries below while more shop owners register.'),
@@ -801,6 +856,7 @@ class _ShopperHomeState extends State<ShopperHome> {
         if(distance(shop)!=null)Text(distance(shop)!.toStringAsFixed(1)+' km away (approx.)',
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
+    merchantServices(shop),
     section('Available products',subtitle:'Merchant-published prices and stock'),
     LayoutBuilder(builder:(context,c)=>GridView.builder(
       shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
