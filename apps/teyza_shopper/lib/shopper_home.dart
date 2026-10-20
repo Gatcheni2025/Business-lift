@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -120,7 +121,7 @@ class ShopperHome extends StatefulWidget {
   @override
   State<ShopperHome> createState() => _ShopperHomeState();
 }
-class _ShopperHomeState extends State<ShopperHome> {
+class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Area? area;
   String locationName = 'Choose your area';
   String? locationWarning;
@@ -140,16 +141,41 @@ class _ShopperHomeState extends State<ShopperHome> {
   bool loadingOnline = false;
   String discoveryType='spaza';
   int _onlineRequestSerial=0;
+  int unreadChats=0;
+  Timer? chatWatch;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
+    refreshUnread();
     load();
     _restoreSavedArea();
     session.restore();
   }
   @override
-  void dispose() { session.dispose(); super.dispose(); }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    chatWatch?.cancel();
+    session.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if(state==AppLifecycleState.resumed) {
+      refreshUnread();
+      _restoreSavedArea();
+    }
+  }
+
+  Future<void> refreshUnread() async {
+    try {
+      final unread=await ShopperChatApi.unreadTotal();
+      if(mounted)setState(()=>unreadChats=unread);
+    }catch(_){/* Unread service unavailable; do not block shopping. */}
+  }
 
   Future<void> _restoreSavedArea() async {
     // Never require the shopper to tap refresh after reopening the app.
@@ -568,14 +594,18 @@ class _ShopperHomeState extends State<ShopperHome> {
          directorySelected!=null?directoryPage(directorySelected!):allShopsPage())
         :homePage())]),
     bottomNavigationBar:NavigationBar(height:75,backgroundColor:Colors.white,
-      selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
+      selectedIndex:tab,onDestinationSelected:(v) {
+        setState(()=>tab=v);
+        if(v==3)refreshUnread();
+      },
       destinations:[
         const NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home,color:green),label:'Home'),
         const NavigationDestination(icon:Icon(Icons.storefront_outlined),selectedIcon:Icon(Icons.storefront,color:green),label:'Shops'),
         NavigationDestination(icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
           child:const Icon(Icons.shopping_basket_outlined)),label:'Basket'),
-        const NavigationDestination(icon:Icon(Icons.chat_bubble_outline),
-          label:'Chat'),
+        NavigationDestination(icon:Badge(isLabelVisible:unreadChats>0,
+          label:Text(unreadChats>99?'99+':unreadChats.toString()),
+          child:const Icon(Icons.chat_bubble_outline)),label:'Chat'),
         const NavigationDestination(icon:Icon(Icons.person_outline),label:'Account')]));
 
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
