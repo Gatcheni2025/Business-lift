@@ -21,6 +21,24 @@ void main() {
     expect(s.source,contains('maps.google'));
     expect(s.providerAttributions.single['name'],'Provider');
   });
+  test('Google photo and variety shop category parse with author links', () {
+    final store=OnlineShop.fromJson({
+      'id':'google-abcdef','name':'China Mall',
+      'origin':'google_places','shopCategory':'variety',
+      'photoRef':'places/test123456/photos/testphoto12345',
+      'photoAttributions':[{'name':'Photographer','url':'https://example.org/author'}],
+    });
+    expect(store.shopCategory,'variety');
+    expect(store.photoRef,contains('photos/'));
+    expect(store.photoAttributions.first['name'],'Photographer');
+  });
+  test('Missing shop photos and services remain unknown', () {
+    final store=OnlineShop.fromJson({'id':'listed-1','name':'Local store'});
+    expect(store.photoRef,isNull);
+    expect(store.photoAttributions,isEmpty);
+    expect(store.shopCategory,'spaza');
+  });
+
   test('Online listed stores do not invent stock or merchant approval', () {
     final s=OnlineShop.fromJson({
       'id':'osm-node-1','name':'Test listed spaza','area':'Inanda',
