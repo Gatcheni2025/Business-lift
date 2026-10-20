@@ -280,6 +280,35 @@ if($action==='admin-address-proof'){
   respond(200,['ok'=>true,'verification'=>verificationState($target,[])]);
 }
 if($action==='admin-catalog'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);$products=[];$orders=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$seller=['uid'=>$w['uid']??basename($path,'.json'),'businessName'=>$w['business']['businessName']??'Unnamed business','email'=>$w['email']??''];foreach(($w['products']??[]) as $p)$products[]=array_merge($p,['seller'=>$seller]);foreach(($w['orders']??[]) as $o)$orders[]=array_merge($o,['seller'=>$seller]);}respond(200,['ok'=>true,'products'=>$products,'orders'=>$orders]);}
+if($action==='admin-seller-category') {
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  if($_SERVER['REQUEST_METHOD']!=='POST')
+    respond(405,['ok'=>false,'error'=>'POST required']);
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));
+  $kind=(string)($input['shopperCategory']??'');
+  if(!$uid || !in_array($kind,['spaza','variety'],true))
+    respond(422,['ok'=>false,'error'=>'Valid seller and category are required']);
+  $path=pathFor($uid);
+  if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  if(!is_array($target))respond(500,['ok'=>false,'error'=>'Seller record could not be read']);
+  $current=sellerCategory($target['business']??[]);
+  if($current!==$kind) {
+    $target['business']['shopperCategory']=$kind;
+    $target['business']['reviewLane']=sellerReviewLane($target['business']);
+    $target['business']['categoryChangedAt']=gmdate('c');
+    $target['business']['categoryChangedBy']=$user['email']??'admin';
+    // A reclassified seller needs another manual approval before public listing.
+    $target['companyApproval']['status']='pending';
+    $target['companyApproval']['submittedAt']=gmdate('c');
+    $target['companyApproval']['reviewedAt']=null;
+    $target['companyApproval']['note']='Category updated by admin; reapproval required';
+    file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  }
+  respond(200,['ok'=>true,'shopperCategory'=>sellerCategory($target['business']),
+    'companyApproval'=>companyApproval($target)]);
+}
 if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$status=(string)($input['status']??'');if(!$uid||!in_array($status,['approved','rejected'],true))respond(422,['ok'=>false,'error'=>'Seller and valid decision are required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);
 if($status==='approved'){
   $v=verificationState($target,[]);
