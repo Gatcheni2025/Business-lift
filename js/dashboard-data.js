@@ -42,58 +42,59 @@ function updateVerifyStep(name,done){
 
 function renderReadiness(readiness){
   const v=readiness.businessVerification||{};
-  const approved=String(readiness.companyApproval?.status||"pending").toLowerCase()==="approved";
+  const approved=readiness.companyApproval?.status==="approved";
+  const spaza=readiness.sellerCategory==="spaza";
   const identityDone=Boolean(v.identityVerified);
-  const proofDone=Boolean(v.proofAddressMatchVerified);
-  const checks={phone:Boolean(v.phoneVerified),identity:identityDone,location:Boolean(v.locationConfirmed),proof:proofDone,approval:approved};
-  Object.entries(checks).forEach(([key,value])=>updateVerifyStep(key,value));
-  const complete=Object.values(checks).filter(Boolean).length;
-  set("[data-app-verification-score]",complete+"/5");
-
-  const verificationCard=document.querySelector("[data-app-verification]");
+  const checks={
+    phone:Boolean(v.phoneVerified),
+    identity:identityDone,
+    location:Boolean(v.locationConfirmed),
+    proof:spaza?Boolean(v.shopPhotoUploaded):Boolean(v.proofAddressMatchVerified),
+    approval:approved
+  };
+  Object.entries(checks).forEach(([k,done])=>updateVerifyStep(k,done));
+  const score=Object.values(checks).filter(Boolean).length;
+  set("[data-app-verification-score]",score+"/5");
+  const photo=document.querySelector('[data-v-step="proof"]');
+  if(photo&&spaza)photo.lastChild.textContent="Shop photo";
+  const card=document.querySelector("[data-app-verification]");
   const sellHero=document.querySelector("[data-app-sell-hero]");
   const title=document.querySelector("[data-app-verification-title]");
   const copy=document.querySelector("[data-app-verification-copy]");
   const action=document.querySelector("[data-app-verification-action]");
-  const dockSell=document.querySelector("[data-app-dock-sell]");
+  const dock=document.querySelector("[data-app-dock-sell]");
+  const plan=readiness.subscription||{};
+  const active=plan.status==="active";
   const canSell=approved&&Boolean(readiness.productReady);
-
-  let nextHref="business-profile.html?setup=1";
-  let nextLabel="Continue verification →";
-  let nextCopy="Complete your business details and verification checks once. Teyza will review your documents before selling is unlocked.";
-
-  if(!checks.phone||!v.identitySubmitted||!checks.location||!v.proofOfAddressUploaded){
-    nextHref="business-profile.html?setup=1";
-  }else if(!identityDone||!proofDone||!approved){
-    nextHref="business-profile.html";
-    nextLabel="View verification status →";
-    nextCopy="Your spaza application is in the priority review queue. Your phone, identity and address checks must still be approved.";
-  }else if(!readiness.deliveryComplete){
-    nextHref="delivery-settings.html?setup=1";
-    nextLabel="Set delivery →";
-    nextCopy="Your business is verified. Choose how customers will receive orders.";
-  }else if(!readiness.paymentComplete){
-    nextHref="payments.html";
-    nextLabel="Set banking →";
-    nextCopy="Your business is verified. Add where your sales money should be paid.";
+  const setupPage=spaza?"business-profile.html?setup=spaza":"business-profile.html?setup=1";
+  const submitted=Boolean(v.phoneVerified&&v.identitySubmitted&&v.locationConfirmed
+    &&(spaza?v.shopPhotoUploaded:v.proofOfAddressUploaded));
+  let nextHref=setupPage, nextLabel="Complete your verification →";
+  let nextCopy=spaza
+    ?"Save your shop details, verify your phone, upload your shop photo and submit your ID/passport with a camera selfie. Company registration is optional."
+    :"Complete your business profile and verification checks.";
+  if(spaza&&submitted){
+    nextHref="seller-activation.html";
+    nextLabel=approved?"Activate my shop · R99/month →":"Request activation · R99/month →";
+    nextCopy=approved
+      ?"Your Spaza Shop is approved. Authorise R99 monthly collection through the secure provider link to publish your listing."
+      :"Your Spaza application is in priority review. You can request the R99 listing while approval is pending.";
+  }else if(!spaza&&submitted&&!approved){
+    nextHref="business-profile.html";nextLabel="View review status →";
+    nextCopy="Your application is under review by Teyza.";
   }
-
   if(action){action.href=nextHref;action.textContent=nextLabel}
-  if(title){
-    if(canSell)title.textContent="Verified and ready to sell";
-    else if(approved)title.textContent="Verified — finish your selling setup";
-    else if(v.identitySubmitted)title.textContent="Verification in progress";
-    else title.textContent="Get verified to unlock selling";
-  }
-  if(copy)copy.textContent=canSell?"Your Teyza seller account is ready. Tap Sell whenever you want to add something new.":nextCopy;
-
-  if(verificationCard)verificationCard.hidden=canSell;
+  if(title)title.textContent=spaza?active?"Your Spaza listing is active":submitted?"Spaza registration submitted":"Finish your quick Spaza setup":
+    canSell?"Verified and ready to sell":submitted?"Verification under review":"Complete your seller verification";
+  if(copy)copy.textContent=spaza&&active
+    ?"Your R99/month Basic listing is active. Manage your products or subscription any time."
+    :nextCopy;
+  if(card)card.hidden=spaza?active:canSell;
   if(sellHero)sellHero.hidden=!canSell;
-  if(dockSell){
-    dockSell.href=canSell?"products.html#new-product":nextHref;
-    dockSell.title=canSell?"Sell a product":"Finish setup to unlock selling";
-  }
-  document.querySelectorAll("[data-primary-seller-action]").forEach(link=>{link.href=canSell?"products.html#new-product":nextHref;});
+  if(dock){dock.href=canSell?"products.html#new-product":nextHref;dock.title=canSell?"Sell a product":"Finish verification";}
+  document.querySelectorAll("[data-primary-seller-action]").forEach(a=>{
+    a.href=canSell?"products.html#new-product":nextHref;
+  });
 }
 
 function renderOrders(orders){
