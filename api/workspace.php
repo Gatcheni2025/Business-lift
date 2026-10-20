@@ -73,6 +73,7 @@ function loadAllSellers(): array {
       'reviewLane'=>$needsCategory?'classification_pending':($cat==='spaza'?'priority_spaza':'retail'),
       'verification'=>verificationState($w,[]),
       'companyApproval'=>$approval,
+      'subscription'=>array_intersect_key($w['subscription']??[],array_flip(['plan','status','monthlyPriceCents'])),
       'createdAt'=>$w['createdAt']??null
     ];
   }
@@ -384,7 +385,7 @@ if ($action==='seller-readiness') {
     &&!empty($verification['phoneVerified'])&&!empty($verification['identitySubmitted'])
     &&!empty($verification['locationConfirmed'])
     &&(sellerCategory($workspace)==='spaza'
-      ?!empty($verification['shopPhotoUploaded'])
+      ?(!empty($verification['shopPhotoUploaded']) || (companyApproval($workspace)['status']==='approved'))
       :(!empty($verification['proofOfAddressUploaded'])&&retailDetailsReady($workspace)));
   $deliveryComplete=in_array(($settings['delivery']['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)
     &&isset($settings['delivery']['baseDeliveryFee'])&&is_numeric($settings['delivery']['baseDeliveryFee'])&&(float)$settings['delivery']['baseDeliveryFee']>=0
