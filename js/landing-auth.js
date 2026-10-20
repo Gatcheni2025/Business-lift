@@ -151,7 +151,7 @@ function reportAuthenticationFailure(container, error, provider) {
   const recovery = container.querySelector("[data-auth-recovery]");
   if (recovery) recovery.hidden = !(error.workspaceUnavailable && !!auth.currentUser);
 }
-const allowedDestinations = new Set(["retailer-dashboard.html", "retail-details.html", "dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
+const allowedDestinations = new Set(["retailer-dashboard.html", "retail-details.html", "dashboard.html", "products.html", "orders.html", "customers.html", "business-profile.html", "seller-onboarding.html", "seller-activation.html", "shop-settings.html", "delivery-settings.html", "payments.html", "sales-channels.html", "network.html", "store.html"]);
 function loginDestination() {
   const target = new URLSearchParams(location.search).get("redirect") || "dashboard.html";
   return allowedDestinations.has(target.split(/[?#]/)[0]) && !target.includes("/") && !target.includes("\\") ? target : "dashboard.html";
