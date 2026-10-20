@@ -1,0 +1,76 @@
+name: Teyza Seller Categories Website
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'dashboard.html'
+      - 'business-profile.html'
+      - 'retail-dashboard.html'
+      - 'api/workspace.php'
+      - 'api/shopper-catalog.php'
+      - 'js/landing-auth.js'
+      - 'js/seller-category-route.js'
+      - 'js/retail-dashboard.js'
+      - 'js/admin-sellers.js'
+      - 'js/business-profile.js'
+      - 'assets/auth.css'
+      - 'docs/TEYZA_1.0_SELLER_CATEGORIES_SETUP.md'
+      - '.github/workflows/teyza-seller-categories-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax
+        run: |
+          php -l api/workspace.php
+          php -l api/shopper-catalog.php
+      - name: JavaScript syntax
+        run: |
+          for file in js/landing-auth.js js/seller-category-route.js js/retail-dashboard.js js/admin-sellers.js js/business-profile.js; do
+            node --input-type=module --check < "$file"
+          done
+      - name: Regression safeguards
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          auth=Path('js/landing-auth.js').read_text()
+          api=Path('api/workspace.php').read_text()
+          cat=Path('api/shopper-catalog.php').read_text()
+          dashboard=Path('dashboard.html').read_text()
+          admin=Path('js/admin-sellers.js').read_text()
+          assert 'name="shopperCategory"' in auth
+          assert "value=\"spaza\"" in auth and "value=\"variety\"" in auth
+          assert "shopperCategory" in api and "priority_spaza" in api and "standard_retail" in api
+          assert "'admin-seller-category'" in api
+          assert "if(empty($v['identityVerified']))" in api
+          assert "if(empty($v['proofAddressMatchVerified']))" in api
+          assert "'shopCategory'=>$shopperType" in cat
+          assert 'js/seller-category-route.js' in dashboard
+          assert 'Change shop category' in admin
+          for file in ['retail-dashboard.html','js/retail-dashboard.js','business-profile.html','assets/auth.css']:
+            assert Path(file).is_file() and Path(file).stat().st_size > 100
+          print("Category registration and approval safeguards passed.")
+          PY
+      - name: Package deployable website ZIP
+        run: |
+          mkdir -p deploy/api deploy/js deploy/assets
+          cp index.html dashboard.html business-profile.html retail-dashboard.html deploy/
+          cp api/workspace.php api/shopper-catalog.php deploy/api/
+          cp js/landing-auth.js js/seller-category-route.js js/retail-dashboard.js js/admin-sellers.js js/business-profile.js deploy/js/
+          cp assets/auth.css deploy/assets/
+          cp docs/TEYZA_1.0_SELLER_CATEGORIES_SETUP.md deploy/README-DEPLOY-FIRST.md
+          (cd deploy && zip -q -r ../TEYZA_1.0_SELLER_CATEGORIES_WEBSITE.zip .)
+          unzip -t TEYZA_1.0_SELLER_CATEGORIES_WEBSITE.zip
+          test -s TEYZA_1.0_SELLER_CATEGORIES_WEBSITE.zip
+      - name: Upload deployment ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-1-0-seller-categories-website
+          path: TEYZA_1.0_SELLER_CATEGORIES_WEBSITE.zip
+          retention-days: 14

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-ZA"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><meta name="theme-color" content="#13362d">
+<title>Retail & Wholesale Dashboard | Teyza</title>
+<link rel="stylesheet" href="assets/workspace.css?v=20261020repair1">
+<style>
+.retail-app{--retail:#0d8d64;font-family:Inter,system-ui,-apple-system,sans-serif;background:#f4f8f6;color:#17362d;min-height:100vh}
+.retail-top{background:#11382f;color:white;padding:17px 24px}.retail-head{max-width:1150px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.retail-brand{font-size:24px;font-weight:900;letter-spacing:1px}.retail-top a{color:#e3f5e9;text-decoration:none;font-size:13px;font-weight:700}
+.retail-wrap{max-width:1150px;margin:auto;padding:28px 20px 55px}.retail-label{text-transform:uppercase;color:#078866;letter-spacing:1.3px;font-size:11px;font-weight:850}
+.retail-wrap h1{font-size:clamp(27px,4.3vw,41px);line-height:1.1;margin:8px 0}.retail-muted{color:#61736b;line-height:1.6}
+.retail-alert{background:#e6f4ed;border:1px solid #c9e4d4;padding:15px;border-radius:14px;margin:19px 0;line-height:1.6}
+.retail-alert.warn{background:#fff8e8;border-color:#f1dfb3}.retail-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:23px}
+.retail-card{background:white;border:1px solid #dce8e0;border-radius:17px;padding:21px;box-shadow:0 7px 19px rgba(15,66,42,.035)}.retail-card strong{font-size:24px;display:block}.retail-card small{font-size:12px;color:#60766d}
+.retail-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:23px 0}
+.retail-link{text-decoration:none;border-radius:15px;background:white;border:1px solid #dce8e0;padding:18px;display:flex;flex-direction:column;gap:9px;color:#183c31;font-weight:800;min-height:104px}
+.retail-link span{font-size:13px;color:#62756b;font-weight:450;line-height:1.4}
+.retail-details{background:#fff;border:1px solid #dce8e0;border-radius:18px;padding:25px;margin-top:20px}.retail-details h2{margin:0 0 8px;font-size:22px}
+.retail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:17px 0}
+.retail-grid label{font-size:13px;font-weight:750;display:grid;gap:7px}.retail-grid input,.retail-grid select{padding:12px;border:1px solid #d5e2d9;border-radius:11px;font:inherit;min-width:0;width:100%;background:white}
+.retail-submit{background:#0b986d;color:white;border:none;border-radius:11px;padding:13px 20px;cursor:pointer;font-weight:800}
+.retail-foot{margin-top:22px;color:#63756c;font-size:12px}
+@media(max-width:740px){.retail-cards,.retail-tools,.retail-grid{grid-template-columns:1fr}.retail-card{padding:16px}.retail-wrap{padding:24px 14px}}
+</style></head>
+<body class="retail-app">
+<header class="retail-top"><div class="retail-head"><div class="retail-brand">TEYZA <span style="font-size:13px;font-weight:500">Retail & Wholesale</span></div><div><a href="business-profile.html">Business profile</a> &nbsp;·&nbsp; <a href="seller-subscriptions.html">Seller plans</a> &nbsp;·&nbsp; <a href="index.html">Website</a></div></div></header>
+<main class="retail-wrap">
+<div class="retail-label">Your seller workspace</div>
+<h1 data-retail-name>Loading retail dashboard…</h1>
+<p class="retail-muted" data-retail-summary>Manage your store, products, wholesale pricing and fulfilment in one place.</p>
+<div class="retail-alert" data-retail-status role="status" aria-live="polite">Checking your retail account…</div>
+<section class="retail-cards" aria-label="Retail overview">
+<article class="retail-card"><small>Listed products</small><strong data-count-products>—</strong><small>Use Product & Stock tools to update</small></article>
+<article class="retail-card"><small>Orders</small><strong data-count-orders>—</strong><small>Incoming customer orders</small></article>
+<article class="retail-card"><small>Business approval</small><strong data-retail-approval>—</strong><small>Complete required verification</small></article>
+</section>
+<section class="retail-tools" aria-label="Retail tools">
+<a class="retail-link" href="products.html">📦 Products & Stock<span>Catalogues, pricing, stock quantity and product images</span></a>
+<a class="retail-link" href="orders.html">🛒 Orders<span>New orders, processing and collections</span></a>
+<a class="retail-link" href="customers.html">👥 Customers<span>Manage customer details and enquiries</span></a>
+<a class="retail-link" href="business-profile.html">🏢 Business verification<span>Company profile, location, ID and address checks</span></a>
+<a class="retail-link" href="delivery-settings.html">🚚 Delivery & Collection<span>Pickup settings and delivery methods</span></a>
+<a class="retail-link" href="seller-subscriptions.html">⭐ Subscription<span>Basic, Plus and Sponsored listing requests</span></a>
+<a class="retail-link" href="shop-settings.html">🏷️ Shop details<span>Shop photo, hours, contact and customer policies</span></a>
+<a class="retail-link" href="payments.html">💳 Payments<span>Seller payment configuration</span></a>
+<a class="retail-link" href="dashboard.html?classic=1">📊 Seller overview<span>Use the original dashboard for additional tools</span></a>
+</section>
+<section class="retail-details">
+<h2>Retail and wholesale details</h2>
+<p class="retail-muted">These details help Teyza support larger retailers without complicating the spaza-owner registration process. Registration and VAT numbers are optional if not applicable.</p>
+<form id="retailDetails">
+<div class="retail-grid">
+<label>Store category<select name="retailKind">
+<option value="china_mall">China Mall / China Mart / Variety Shop</option><option value="wholesale">Wholesaler / Distributor</option><option value="supermarket">Supermarket / Mini-market</option>
+<option value="fashion">Fashion & Clothing</option><option value="hardware">Hardware / Home Improvement</option>
+<option value="electronics">Electronics / Accessories</option><option value="general_retail">General Retail Shop</option><option value="other">Other Retail</option>
+</select></label>
+<label>How do customers buy?<select name="retailOperatingMode"><option value="walk_in">In-store / collection</option><option value="wholesale">Wholesale / trade orders</option><option value="both">In-store and wholesale</option><option value="online">Online / delivery orders</option></select></label>
+<label>Trading name<input name="retailTradingName" maxlength="160" placeholder="Name on the shopfront"></label>
+<label>Company registration number (if registered)<input name="businessRegistrationNumber" maxlength="160" placeholder="e.g. 2026/000000/07"></label>
+<label>VAT number (if VAT registered)<input name="vatNumber" maxlength="160" placeholder="Optional"></label>
+</div>
+<button type="submit" class="retail-submit">Save retail details</button>
+<p role="status" data-retail-form-status class="retail-muted" aria-live="polite"></p>
+</form></section>
+<p class="retail-foot">Teyza never automatically approves an identity or location solely because of a chosen shop category. Approval and payment status are verified separately.</p>
+</main>
+<script type="module" src="js/retail-dashboard.js?v=20261020r1"></script>
+</body></html>

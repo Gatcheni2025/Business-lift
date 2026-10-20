@@ -39,6 +39,9 @@ function render(list){
   box.innerHTML=list.length?list.map(s=>{
     const b=s.business||{},a=s.companyApproval||{},v=s.verification||{},proof=v.proofOfAddress||{};
     const ready=approvalReady(v);
+    const shopCategory=(b.shopperCategory||s.shopCategory)==='variety'?'variety':'spaza';
+    const categoryName=shopCategory==='spaza'?'Spaza Shop':'Other Retail / Wholesale';
+    const lane=shopCategory==='spaza'?'Priority review':'Standard review';
     const proofMatch=v.proofAddressMatchVerified?'Address matches ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch':'Needs address review';
     const checklist=[
       ['Phone',v.phoneVerified],
@@ -53,7 +56,7 @@ function render(list){
           ${b.logoUrl?`<img class="seller-logo" src="${esc(b.logoUrl)}" alt="">`:'<div class="seller-logo seller-logo-empty">T</div>'}
           <div><h2>${esc(b.businessName||'Unnamed business')}</h2><small>${esc(s.email||'')}</small></div>
         </div>
-        <div class="seller-meta"><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
+        <div class="seller-meta"><span class="pill">${esc(categoryName)}</span><span class="pill">${esc(lane)}</span><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
         <div class="review-checklist">${checklist}</div>
         <div class="address-review">
           <div><span>Confirmed map address</span><strong>${esc(v.location?.address||b.address||'Not confirmed')}</strong></div>
@@ -66,6 +69,8 @@ function render(list){
       <div class="seller-actions">
         ${v.proofOfAddressUploaded?`<button class="button" data-view-proof data-uid="${esc(s.uid)}">View proof of address</button><button class="button address-ok" data-address-match="true" data-uid="${esc(s.uid)}">✓ Address matches map</button><button class="button" data-address-match="false" data-uid="${esc(s.uid)}">Address mismatch</button>`:''}
         ${v.identitySubmitted&&!v.identityVerified?'<button class="button" data-identity-decision="verified" data-uid="'+esc(s.uid)+'">Verify identity</button><button class="button" data-identity-decision="rejected" data-uid="'+esc(s.uid)+'">Reject identity</button>':''}
+        <button class="button" data-switch-category data-uid="${esc(s.uid)}"
+          data-current-category="${esc(shopCategory)}">Change shop category</button>
         <button class="button button-primary" data-decision="approved" data-uid="${esc(s.uid)}" ${ready?'':'disabled title="Complete all verification checks first"'}>Approve seller</button>
         <button class="button" data-decision="rejected" data-uid="${esc(s.uid)}">Reject seller</button>
       </div>
@@ -79,6 +84,20 @@ async function load(){
 }
 
 box.addEventListener('click',async e=>{
+  const categoryButton=e.target.closest('[data-switch-category]');
+  if(categoryButton){
+    const next=categoryButton.dataset.currentCategory==='spaza'?'variety':'spaza';
+    const label=next==='variety'?'Other Retail / Wholesale':'Spaza Shop';
+    if(!confirm('Change this shop to '+label+'? This will reset its existing approval to pending and require a new review.'))return;
+    categoryButton.disabled=true;
+    try{
+      await api('admin-seller-category',{method:'POST',
+        body:JSON.stringify({uid:categoryButton.dataset.uid,shopperCategory:next})});
+      await load();
+    }catch(error){alert(error.message)}
+    finally{categoryButton.disabled=false;}
+    return;
+  }
   const proof=e.target.closest('[data-view-proof]');
   if(proof){
     proof.disabled=true;
