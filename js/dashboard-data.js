@@ -68,6 +68,11 @@ function renderReadiness(readiness){
   const canSell=approved&&Boolean(readiness.productReady);
   document.body.classList.toggle('spaza-pending',spaza&&!canSell);
   const setupPage=spaza?"business-profile.html?setup=spaza":"business-profile.html?setup=1";
+  if(spaza){
+    document.querySelectorAll('a[href="business-profile.html"]').forEach(link=>{
+      link.href="business-profile.html?setup=spaza";
+    });
+  }
   const submitted=Boolean(v.phoneVerified&&v.identitySubmitted&&v.locationConfirmed
     &&(spaza?v.shopPhotoUploaded:v.proofOfAddressUploaded));
   let nextHref=setupPage, nextLabel="Complete your verification →";
