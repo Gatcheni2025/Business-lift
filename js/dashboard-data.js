@@ -66,6 +66,7 @@ function renderReadiness(readiness){
   const plan=readiness.subscription||{};
   const active=plan.status==="active";
   const canSell=approved&&Boolean(readiness.productReady);
+  document.body.classList.toggle('spaza-pending',spaza&&!canSell);
   const setupPage=spaza?"business-profile.html?setup=spaza":"business-profile.html?setup=1";
   const submitted=Boolean(v.phoneVerified&&v.identitySubmitted&&v.locationConfirmed
     &&(spaza?v.shopPhotoUploaded:v.proofOfAddressUploaded));
