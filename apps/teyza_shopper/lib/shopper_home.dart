@@ -577,74 +577,196 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             Center(child:Icon(icon,color:const Color(0xFF91CABA),size:size*.42)),
           errorBuilder:(_,error,stack)=>Icon(icon,color:aqua,size:size*.42)));
 
-  Widget locationHeader() => Container(color: ink, padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-    child: Column(children: [
-      Row(children: [
-        Expanded(child: InkWell(onTap: areaSheet, child: Row(children: [
-          const Icon(Icons.location_on_outlined,color:aqua,size:23),
-          const SizedBox(width: 5),
-          Flexible(child:Text(locationName,maxLines:1,overflow:TextOverflow.ellipsis,
-            style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold,fontSize:15))),
-          const Icon(Icons.keyboard_arrow_down,color:Colors.white,size:20)
-        ]))),
-        if (geolocating) const SizedBox(width:18,height:18,child:CircularProgressIndicator(
-          color:aqua,strokeWidth:2)),
-        const SizedBox(width: 10),
-        chip('Shop local',Icons.storefront_rounded),
-        const SizedBox(width:8),
-        chip('Collect / Deliver',Icons.local_shipping_outlined)
+  Shop? get nearestRegisteredSpaza {
+    if(area==null)return null;
+    final options=nearbyReal.where((s)=>s.shopCategory=='spaza' &&
+      s.latitude!=null && s.longitude!=null).toList();
+    options.sort((a,b)=>(distance(a)??double.infinity)
+      .compareTo(distance(b)??double.infinity));
+    return options.isEmpty?null:options.first;
+  }
+
+  OnlineShop? get nearestDirectorySpaza {
+    if(area==null||discoveryType!='spaza')return null;
+    final options=online.where((s)=>s.shopCategory=='spaza' &&
+      s.lat!=null && s.lng!=null).toList();
+    options.sort((a,b)=>km(area!.lat,area!.lng,a.lat!,a.lng!)
+      .compareTo(km(area!.lat,area!.lng,b.lat!,b.lng!)));
+    return options.isEmpty?null:options.first;
+  }
+
+  Widget _shopMode(String label,String description,IconData icon,
+      String type,Color activeColor) {
+    final active=discoveryType==type;
+    return Expanded(child:Material(
+      color:active?activeColor:const Color(0xFFF1F5F3),
+      borderRadius:BorderRadius.circular(18),
+      child:InkWell(borderRadius:BorderRadius.circular(18),
+        onTap:()=>setDiscoveryType(type),
+        child:Container(height:89,padding:const EdgeInsets.all(12),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Icon(icon,color:active?Colors.white:deep,size:24),
+            const Spacer(),
+            Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,
+                color:active?Colors.white:ink)),
+            Text(description,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:10,
+                color:active?Colors.white70:muted))
+          ])))));
+  }
+
+  Widget nearestShopCard() {
+    final merchant=nearestRegisteredSpaza, directory=nearestDirectorySpaza;
+    final dMerchant=merchant==null?double.infinity:(distance(merchant)??double.infinity);
+    final dDirectory=directory==null?double.infinity:
+      km(area!.lat,area!.lng,directory.lat!,directory.lng!);
+    final useMerchant=merchant!=null && dMerchant<=dDirectory;
+    final chosenName=useMerchant?merchant.name:directory?.name;
+    final chosenDistance=useMerchant?dMerchant:dDirectory;
+    final hasShop=chosenName!=null;
+    final subtitle=hasShop?'Approx. '+chosenDistance.toStringAsFixed(1)+' km away':
+      area==null?'Allow location or choose an area to find shops':
+      discoveryType=='variety'?'Switch to Spaza Shops to discover nearby spazas':
+        'Looking for nearby spazas around '+locationName;
+    return Material(
+      color:const Color(0xFFF1F8F4),borderRadius:BorderRadius.circular(18),
+      child:InkWell(borderRadius:BorderRadius.circular(18),
+        onTap:hasShop?()=>useMerchant?openShop(merchant):selectDirectory(directory!):areaSheet,
+        child:Padding(padding:const EdgeInsets.all(13),child:Row(children:[
+          Container(width:46,height:46,decoration:BoxDecoration(
+            color:const Color(0xFFD7EDE2),borderRadius:BorderRadius.circular(14)),
+            child:const Icon(Icons.place_rounded,color:green,size:26)),
+          const SizedBox(width:12),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('NEAREST SPAZA SHOP',style:TextStyle(color:green,
+              fontWeight:FontWeight.w900,letterSpacing:.7,fontSize:10)),
+            const SizedBox(height:3),
+            Text(chosenName??'Find a shop near me',maxLines:1,
+              overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:deep,fontWeight:FontWeight.w900,fontSize:16)),
+            const SizedBox(height:3),
+            Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:muted,fontSize:11))
+          ])),
+          const Icon(Icons.chevron_right_rounded,color:green)
+        ]))));
+  }
+
+  Widget locationHeader() => Container(
+    padding:const EdgeInsets.fromLTRB(16,14,16,14),
+    decoration:const BoxDecoration(color:Colors.white,
+      borderRadius:BorderRadius.vertical(bottom:Radius.circular(24))),
+    child:Column(children:[
+      Row(children:[
+        _shopMode('SPAZA SHOPS','Your local favourites',
+          Icons.storefront_rounded,'spaza',const Color(0xFF087F63)),
+        const SizedBox(width:10),
+        _shopMode('OTHER RETAIL','Stores & wholesale',
+          Icons.store_mall_directory_rounded,'variety',deep),
       ]),
-      const SizedBox(height:15),
-      TextField(onChanged:(v)=>setState(()=>search=v),style:const TextStyle(color:ink),
-        decoration:InputDecoration(hintText:'Search groceries, shops and essentials',
-          filled:true,fillColor:Colors.white,
-          prefixIcon:const Icon(Icons.search,color:muted),suffixIcon:const Icon(Icons.tune,color:muted),
-          contentPadding:const EdgeInsets.symmetric(vertical:13),
-          enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none),
-          focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:aqua,width:2))))
+      const SizedBox(height:13),
+      nearestShopCard(),
+      const SizedBox(height:11),
+      InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(12),
+        child:Padding(padding:const EdgeInsets.symmetric(vertical:4,horizontal:2),
+          child:Row(children:[
+            const Icon(Icons.my_location_rounded,size:17,color:green),
+            const SizedBox(width:7),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(_usingGps?'YOUR CURRENT LOCATION':'YOUR SHOPPING AREA',
+                style:const TextStyle(fontSize:9,fontWeight:FontWeight.w900,
+                  letterSpacing:.7,color:muted)),
+              Text(_usingGps?_currentLocationDetail:locationName,maxLines:1,
+                overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:12,color:ink,fontWeight:FontWeight.w700))
+            ])),
+            if(geolocating)const SizedBox(width:15,height:15,
+              child:CircularProgressIndicator(strokeWidth:2)),
+            const Icon(Icons.keyboard_arrow_down_rounded,color:deep)
+          ]))),
+      if(selected==null && directorySelected==null)...[
+        const SizedBox(height:12),
+        TextField(key:ValueKey(discoveryType),
+          onChanged:(value)=>setState(()=>search=value),
+          decoration:InputDecoration(hintText:discoveryType=='spaza'?
+              'Search spaza shops and groceries':'Search retailers, malls and products',
+            hintStyle:const TextStyle(fontSize:13,color:muted),
+            filled:true,fillColor:const Color(0xFFF3F6F4),
+            prefixIcon:const Icon(Icons.search_rounded,color:green),
+            contentPadding:const EdgeInsets.symmetric(vertical:12),
+            border:OutlineInputBorder(borderRadius:BorderRadius.circular(15),
+              borderSide:BorderSide.none)))
+      ]
     ]));
 
-  Widget chip(String text,IconData icon)=>Container(
-    padding:const EdgeInsets.symmetric(horizontal:9,vertical:8),
-    decoration:BoxDecoration(border:Border.all(color:aqua,width:1),borderRadius:BorderRadius.circular(30)),
-    child:Row(children:[Icon(icon,color:aqua,size:17),const SizedBox(width:5),
-      Text(text,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w700,fontSize:10))]));
+  void openBasket(){
+    Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
+      StatefulBuilder(builder:(routeContext,refresh)=>Scaffold(
+        appBar:AppBar(title:const Text('Your basket'),
+          backgroundColor:deep,foregroundColor:Colors.white),
+        body:basketPage(refresh:()=>refresh((){}))))));
+  }
+
+  void openInbox(){
+    Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
+      ShopperChatPage(session:session)));
+  }
 
   @override
-  Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(toolbarHeight:54,title:Row(children:[
-      Container(width:35,height:35,alignment:Alignment.center,
-        decoration:BoxDecoration(color:green,borderRadius:BorderRadius.circular(9)),
-        child:const Text('T',style:TextStyle(fontWeight:FontWeight.w900,
-          fontSize:24,fontStyle:FontStyle.italic,color:Colors.white))),
-      const SizedBox(width:9),
-      const Text('TEYZA',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:2.2,fontSize:23)),
-      const SizedBox(width:7),
-      const Text('SHOPPER',style:TextStyle(fontSize:11,letterSpacing:1.4,color:aqua))]),
-      actions:[IconButton(tooltip:'Find my area',onPressed:areaSheet,
-        icon:const Icon(Icons.my_location_outlined)),
-        IconButton(tooltip:'Refresh shops',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:tab==4?ShopperAccountPanel(session:session):
-      tab==3?ShopperChatPage(session:session):
-      tab==2?basketPage():
-      Column(children:[locationHeader(),Expanded(child:tab==1?
-        (selected!=null?shopPage(selected!):
-         directorySelected!=null?directoryPage(directorySelected!):allShopsPage())
-        :homePage())]),
-    bottomNavigationBar:NavigationBar(height:75,backgroundColor:Colors.white,
-      selectedIndex:tab,onDestinationSelected:(v) {
-        setState(()=>tab=v);
-        if(v==3)refreshUnread();
-      },
-      destinations:[
-        const NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home,color:green),label:'Home'),
-        const NavigationDestination(icon:Icon(Icons.storefront_outlined),selectedIcon:Icon(Icons.storefront,color:green),label:'Shops'),
-        NavigationDestination(icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
-          child:const Icon(Icons.shopping_basket_outlined)),label:'Basket'),
-        NavigationDestination(icon:Badge(isLabelVisible:unreadChats>0,
-          label:Text(unreadChats>99?'99+':unreadChats.toString()),
-          child:const Icon(Icons.chat_bubble_outline)),label:'Chat'),
-        const NavigationDestination(icon:Icon(Icons.person_outline),label:'Account')]));
+  Widget build(BuildContext context) {
+    if(!_launchReady)return const ShopperLaunchScreen();
+    return Scaffold(
+      appBar:AppBar(
+        backgroundColor:deep,foregroundColor:Colors.white,toolbarHeight:63,
+        titleSpacing:16,
+        title:Row(children:[
+          Container(width:37,height:37,alignment:Alignment.center,
+            decoration:BoxDecoration(color:green,
+              borderRadius:BorderRadius.circular(13)),
+            child:const Text('T',style:TextStyle(color:Colors.white,
+              fontWeight:FontWeight.w900,fontSize:26))),
+          const SizedBox(width:10),
+          const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('TEYZA',style:TextStyle(letterSpacing:2,
+              fontWeight:FontWeight.w900,fontSize:22)),
+            Text('SHOP LOCAL. LIVE BETTER.',style:TextStyle(
+              color:Color(0xFFACDACB),letterSpacing:.6,fontSize:9))
+          ])
+        ]),
+        actions:[
+          IconButton(tooltip:'Messages',onPressed:openInbox,
+            icon:Badge(isLabelVisible:unreadChats>0,
+              label:Text(unreadChats>99?'99+':unreadChats.toString()),
+              child:const Icon(Icons.chat_bubble_outline_rounded))),
+          IconButton(tooltip:'Your basket',onPressed:openBasket,
+            icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
+              child:const Icon(Icons.shopping_bag_outlined))),
+          const SizedBox(width:3)
+        ]),
+      body:tab==3?ShopperAccountPanel(session:session):
+        tab==1?servicesPage():tab==2?deliveryPage():
+        Column(children:[locationHeader(),Expanded(child:
+          selected!=null?shopPage(selected!):
+          directorySelected!=null?directoryPage(directorySelected!):
+          showAllShops?allShopsPage():homePage())]),
+      bottomNavigationBar:NavigationBar(
+        height:72,backgroundColor:Colors.white,
+        indicatorColor:const Color(0xFFDAF3E8),
+        selectedIndex:tab,onDestinationSelected:(index){
+          setState(()=>tab=index);
+        },
+        destinations:const [
+          NavigationDestination(icon:Icon(Icons.storefront_outlined),
+            selectedIcon:Icon(Icons.storefront_rounded,color:green),label:'Shop'),
+          NavigationDestination(icon:Icon(Icons.grid_view_outlined),
+            selectedIcon:Icon(Icons.grid_view_rounded,color:green),label:'Services'),
+          NavigationDestination(icon:Icon(Icons.local_shipping_outlined),
+            selectedIcon:Icon(Icons.local_shipping_rounded,color:green),label:'Delivery'),
+          NavigationDestination(icon:Icon(Icons.person_outline_rounded),
+            selectedIcon:Icon(Icons.person_rounded,color:green),label:'Profile')
+        ]));
+  }
 
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
     padding:const EdgeInsets.fromLTRB(0,15,0,12), child:Row(children:[
