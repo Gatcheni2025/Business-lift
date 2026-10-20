@@ -56,7 +56,7 @@ function teyzaGoogleTextSearch(string $key,string $query,float $lat,float $lon):
             'Content-Type: application/json',
             'X-Goog-Api-Key: '.$key,
             // Request minimal non-sensitive business details; avoid expensive reviews/hours/photos.
-            'X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.businessStatus,places.primaryType,places.attributions'
+            'X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.businessStatus,places.primaryType,places.attributions,places.photos'
         ],
         CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>3,
         CURLOPT_TIMEOUT=>9,CURLOPT_FOLLOWLOCATION=>false,
@@ -70,11 +70,16 @@ function teyzaGoogleTextSearch(string $key,string $query,float $lat,float $lon):
     return is_array($decoded)&&isset($decoded['places'])&&is_array($decoded['places'])
         ?$decoded['places']:null;
 }
-function teyzaGoogleSpazaEntries(float $lat,float $lon): ?array {
+function teyzaGoogleSpazaEntries(float $lat,float $lon,string $category='spaza'): ?array {
     $key=teyzaGooglePlacesKey();
     if ($key===''||!teyzaGooglePlacesRateAllowed()) return null;
     $results=[];$seen=[];
-    foreach(['spaza shop','tuck shop'] as $query) {
+    $isVariety=($category==='variety');
+    // Focus search on real retail destinations, not generic malls or unrelated businesses.
+    $queries=$isVariety
+      ? ['China Mall','China Mart','variety and discount store']
+      : ['spaza shop','tuck shop'];
+    foreach($queries as $query) {
         $places=teyzaGoogleTextSearch($key,$query,$lat,$lon);
         if($places===null) continue;
         foreach($places as $p) {
@@ -89,8 +94,13 @@ function teyzaGoogleSpazaEntries(float $lat,float $lon): ?array {
             $km=teyzaGoogleDistance($lat,$lon,(float)$lat2,(float)$lon2);
             if($km>11.0||isset($seen[$pid]))continue;
             $primaryType=strtolower((string)($p['primaryType']??''));
-            if(!preg_match('/spaza|tuck.?shop|mini.?market|superette|grocery|convenience|corner.?shop|general.?store/i',$name)
-               && !in_array($primaryType,['grocery_store','convenience_store'],true)) continue;
+            if ($isVariety) {
+                if (!preg_match('/china\\s?(?:mall|mart|market|city)|variety|discount|bargain|wholesale|general\\s?(?:dealer|merchandise)|value\\s?(?:mart|center)|factory\\s?(?:store|shop)|import|bazaar|hypermarket/i',$name)
+                    && !in_array($primaryType,['discount_store','department_store','shopping_mall'],true)) continue;
+            } else {
+                if(!preg_match('/spaza|tuck.?shop|mini.?market|superette|grocery|convenience|corner.?shop|general.?store/i',$name)
+                    && !in_array($primaryType,['grocery_store','convenience_store'],true)) continue;
+            }
             $seen[$pid]=true;
             $source=(string)($p['googleMapsUri']??'');
             if(!str_starts_with($source,'https://maps.google.') &&
@@ -106,6 +116,23 @@ function teyzaGoogleSpazaEntries(float $lat,float $lon): ?array {
                 if($provider!==''&&str_starts_with($url,'https://'))
                     $attr[]=['name'=>$provider,'url'=>$url];
             }
+            // Include at most one photo per result. Photo media is fetched only when
+            // a shopper views the result; neither the server nor app persists Google images.
+            $photoRef=null;$photoAttributions=[];
+            $photo=$p['photos'][0]??null;
+            if(is_array($photo)) {
+                $candidate=(string)($photo['name']??'');
+                if(preg_match('#^places/[A-Za-z0-9_-]{8,200}/photos/[A-Za-z0-9_-]{8,600}$#D',$candidate)) {
+                    $photoRef=$candidate;
+                    foreach(($photo['authorAttributions']??[]) as $credit) {
+                        if(!is_array($credit))continue;
+                        $person=substr(trim((string)($credit['displayName']??'')),0,100);
+                        $url=(string)($credit['uri']??'');
+                        if($person!=='' && str_starts_with($url,'https://'))
+                          $photoAttributions[]=['name'=>$person,'url'=>$url];
+                    }
+                }
+            }
             $results[]=[
                 'id'=>'google-'.$pid,
                 'googlePlaceId'=>$pid,
@@ -115,12 +142,13 @@ function teyzaGoogleSpazaEntries(float $lat,float $lon): ?array {
                 'sourceUrl'=>$source,
                 'latitude'=>(float)$lat2,'longitude'=>(float)$lon2,
                 'distanceKm'=>round($km,1),
-                'origin'=>'google_places',
+                'origin'=>'google_places','shopCategory'=>$isVariety?'variety':'spaza',
+                'photoRef'=>$photoRef,'photoAttributions'=>$photoAttributions,
                 'attributions'=>$attr,
                 'claimUrl'=>'https://teyza.co.za/?auth=register'
             ];
         }
-        if(count($results)>=18)break;
+        if(count($results)>=22)break;
     }
     if(!$results)return null;
     usort($results,static fn($a,$b)=>$a['distanceKm']<=>$b['distanceKm']);
