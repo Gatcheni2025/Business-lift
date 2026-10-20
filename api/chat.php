@@ -110,6 +110,17 @@ if($method==='GET'&&$mode==='public-info'){
   out(200,['ok'=>true,'businessId'=>$id,'businessName'=>$name?:'Teyza seller']);
 }
 
+if($method==='GET'&&$mode==='client-unread') {
+  $id=businessId((string)($_GET['businessId']??''));
+  if(!findSeller($id))out(404,['ok'=>false,'error'=>'Shop not found']);
+  $token=strtolower(trim((string)($_GET['clientToken']??'')));
+  if(!validToken($token))out(200,['ok'=>true,'unread'=>0]);
+  $chat=loadChat($id);
+  $index=clientThreadIndex($chat['threads']??[],tokenHash($token));
+  $count=$index<0?0:max(0,(int)($chat['threads'][$index]['unreadClient']??0));
+  out(200,['ok'=>true,'unread'=>$count]);
+}
+
 if($method==='GET'&&$mode==='client-thread'){
   $id=businessId((string)($_GET['businessId']??''));
   if(!findSeller($id))out(404,['ok'=>false,'error'=>'Seller not found']);
