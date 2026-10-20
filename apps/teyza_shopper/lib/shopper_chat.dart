@@ -27,6 +27,24 @@ class ShopperChatApi {
     }catch(_){return [];}
   }
   static Future<String?> token(String id)=>chatStore.read(key:'shopper_chat_'+id);
+  static Future<int> unreadTotal() async {
+    final convos=await list();
+    var count=0;
+    for(final shop in convos.take(20)) {
+      final key=await token(shop.id);
+      if(key==null)continue;
+      try {
+        final uri=Uri.parse(chatEndpoint).replace(queryParameters:{
+          'mode':'client-unread','businessId':shop.id,'clientToken':key});
+        final res=await http.get(uri).timeout(const Duration(seconds:8));
+        if(res.statusCode!=200)continue;
+        final data=jsonDecode(res.body);
+        if(data is Map && data['unread'] is num)count+=(data['unread'] as num).toInt();
+      }catch(_){/* A failed shop request must not block the inbox. */}
+    }
+    return count;
+  }
+
   static Future<void> save(ShopperConversation shop,String tokenValue) async {
     await chatStore.write(key:'shopper_chat_'+shop.id,value:tokenValue);
     final current=await list();
