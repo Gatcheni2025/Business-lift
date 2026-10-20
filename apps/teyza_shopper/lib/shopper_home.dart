@@ -347,14 +347,26 @@ class _ShopperHomeState extends State<ShopperHome> {
     return places;
   }
 
+  Widget onlineProviderLabel(OnlineShop shop) =>
+    shop.origin=='google_places'
+      ?const Text('Google Maps',style:TextStyle(
+          fontSize:12,color:Color(0xFF5E5E5E),fontWeight:FontWeight.w400))
+      :Text(shop.origin=='openstreetmap'?'OpenStreetMap · Public listing':
+        'Public directory listing',style:const TextStyle(color:muted,fontSize:12));
+
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
     margin:const EdgeInsets.only(bottom:9),
     child:ListTile(onTap:()=>selectDirectory(place),
       leading:const CircleAvatar(backgroundColor:Color(0xFFE0F4EC),
         child:Icon(Icons.storefront_rounded,color:green)),
       title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
-      subtitle:Text((place.address.isNotEmpty?place.address:place.area)+
-        '\nLocal shop · product catalogue pending',maxLines:3),
+      subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(place.address.isNotEmpty?place.address:place.area,
+          maxLines:2,overflow:TextOverflow.ellipsis),
+        onlineProviderLabel(place),
+        const Text('Shop stock not connected',style:TextStyle(
+          fontSize:11,color:muted)),
+      ]),
       isThreeLine:true,
       trailing:const Icon(Icons.chevron_right,color:green,size:20)));
 
@@ -558,10 +570,12 @@ class _ShopperHomeState extends State<ShopperHome> {
       section('MORE NEIGHBOURHOOD SPAZAS',
         subtitle:'Found online · product catalogues not connected yet'),
       ...displayedOnline.skip(4).take(14).map(onlineTile),
-      const Padding(padding:EdgeInsets.only(top:8,bottom:10),child:
-        Text('Online business data may be incomplete. Confirm details with the shop. '
-          '© OpenStreetMap contributors (ODbL).',
-          style:TextStyle(fontSize:10,color:muted)))
+      if(online.any((x)=>x.origin=='google_places'))
+        const Padding(padding:EdgeInsets.only(top:8,bottom:10),
+          child:Text('Google Maps',style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))))
+      else const Padding(padding:EdgeInsets.only(top:8,bottom:10),
+        child:Text('Public business listings · Map data © OpenStreetMap contributors (ODbL).',
+          style:TextStyle(fontSize:11,color:muted)))
     ]));
 
   Widget directoryCircle(OnlineShop s)=>InkWell(onTap:()=>selectDirectory(s),
@@ -572,7 +586,9 @@ class _ShopperHomeState extends State<ShopperHome> {
       const SizedBox(height:7),
       Text(s.name,maxLines:2,textAlign:TextAlign.center,
         overflow:TextOverflow.ellipsis,
-        style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700))
+        style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
+      if(s.origin=='google_places')const Text('Google Maps',
+        style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))),
     ])));
 
   Widget essentialsShelf(){
@@ -647,7 +663,7 @@ class _ShopperHomeState extends State<ShopperHome> {
   Widget allShopsPage()=>ListView(
     padding:const EdgeInsets.all(16),children:[
       section('SPAZA SHOPS NEAR YOU',
-        subtitle:'Local businesses already listed online'),
+        subtitle:'Nearby businesses from Google Maps or public directories'),
       if(loadingOnline)const Center(child:CircularProgressIndicator()),
       if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
       ...displayedOnline.map(onlineTile),
@@ -675,12 +691,23 @@ class _ShopperHomeState extends State<ShopperHome> {
       const SizedBox(height:6),
       Text(shop.address.isNotEmpty?shop.address:shop.area,
         style:const TextStyle(fontSize:14,color:muted)),
+      const SizedBox(height:8),
+      onlineProviderLabel(shop),
+      for(final credit in shop.providerAttributions)
+        Align(alignment:Alignment.centerLeft,
+          child:TextButton.icon(onPressed:() async {
+            final source=Uri.tryParse(credit['url']??'');
+            if(source!=null && source.scheme=='https') {
+              await launchUrl(source,mode:LaunchMode.externalApplication);
+            }
+          },icon:const Icon(Icons.open_in_new,size:14),
+          label:Text('Data: ${credit['name']??''}'))),
       const SizedBox(height:14),
       Container(padding:const EdgeInsets.all(14),
         decoration:BoxDecoration(color:const Color(0xFFEAF5EF),
           borderRadius:BorderRadius.circular(13)),
         child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text('LOCAL SHOP · ONLINE LISTING',style:TextStyle(
+          Text('LOCAL SHOP · NOT YET ON TEYZA',style:TextStyle(
             fontWeight:FontWeight.w900,fontSize:11,color:green)),
           SizedBox(height:5),
           Text('This shop has been found online. Products, prices, current opening '
@@ -694,7 +721,8 @@ class _ShopperHomeState extends State<ShopperHome> {
           await launchUrl(uri,mode:LaunchMode.externalApplication);
         }
       },icon:const Icon(Icons.directions_outlined),
-        label:const Text('View location and public listing')),
+        label:Text(shop.origin=='google_places'?
+          'View on Google Maps':'View location and public listing')),
       const SizedBox(height:8),
       OutlinedButton.icon(onPressed:()=>setState(()=>tab=3),
         icon:Icon(session.emailVerified?Icons.verified_user_outlined:

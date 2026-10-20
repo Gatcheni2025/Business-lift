@@ -8,6 +8,19 @@ void main() {
     expect(authMessage(StateError('EMAIL_EXISTS')), contains('already registered'));
     expect(authMessage(StateError('TOO_MANY_ATTEMPTS_TRY_LATER')), contains('Too many'));
   });
+  test('Google spaza listing retains its maps link and provider attributions', () {
+    final s=OnlineShop.fromJson({
+      'id':'google-ChIJTest123','name':'Shalom Spaza',
+      'address':'KwaMashu Durban',
+      'origin':'google_places',
+      'sourceUrl':'https://maps.google.com/?cid=123',
+      'latitude':-29.74,'longitude':30.99,
+      'attributions':[{'name':'Provider','url':'https://provider.example/'}]
+    });
+    expect(s.origin,'google_places');
+    expect(s.source,contains('maps.google'));
+    expect(s.providerAttributions.single['name'],'Provider');
+  });
   test('Online listed stores do not invent stock or merchant approval', () {
     final s=OnlineShop.fromJson({
       'id':'osm-node-1','name':'Test listed spaza','area':'Inanda',

@@ -21,6 +21,27 @@ $lat=$hasPoint?round((float)$lat,2):null;
 $lon=$hasPoint?round((float)$lon,2):null;
 $area=strtolower(v($_GET['area']??'',75));
 
+// Google Places (New) is preferred when a server-side key is configured.
+// A live Google response is never cached and is displayed with Google Maps attribution.
+// When not configured/unavailable, existing public-directory/OpenStreetMap fallback works.
+require_once __DIR__.'/shopper-google-places-provider.php';
+if ($hasPoint) {
+  $fromGoogle=teyzaGoogleSpazaEntries((float)$lat,(float)$lon);
+  if ($fromGoogle!==null && count($fromGoogle)>0) {
+    header('Cache-Control: private, no-store, max-age=0');
+    respond([
+      'ok'=>true,
+      'entries'=>$fromGoogle,
+      'count'=>count($fromGoogle),
+      'provider'=>'google_places',
+      'attribution'=>'Google Maps',
+      'googleAttributionRequired'=>true,
+      'areaSearchKm'=>11,
+      'note'=>'Business listings from Google Maps. Not registered Teyza shops; no guaranteed stock or prices.'
+    ]);
+  }
+}
+
 // Public online listings gathered individually from searchable business directories.
 // Source URLs are given for transparency; not a live trading or affiliation claim.
 $curated=[
