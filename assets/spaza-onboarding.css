@@ -30,3 +30,5 @@
 .spaza-setup :focus-visible{outline:3px solid #fcb62d;outline-offset:3px}
 @media(max-width:980px){.spaza-setup .profile-layout{grid-template-columns:1fr}.spaza-setup .spaza-setup-hero img{max-width:112px}}
 @media(max-width:660px){.spaza-setup .page-main{padding:18px 12px 40px}.spaza-setup .spaza-setup-hero{padding:18px}.spaza-setup .spaza-setup-hero img{display:none}.spaza-setup .section-card{padding:18px}.spaza-setup .spaza-setup-pills{gap:5px}.spaza-setup .spaza-setup-pills span{font-size:10px}.spaza-setup .business-logo-editor{flex-wrap:wrap}}
+
+.spaza-photo-check{display:none!important}.spaza-setup .spaza-photo-check{display:flex!important}
