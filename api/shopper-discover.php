@@ -91,7 +91,11 @@ if ($hasPoint) {
   if (is_file($cache)&&filemtime($cache)>time()-3600) {
     $payload=json_decode((string)@file_get_contents($cache),true);
   } else {
-    $shopFilter=$shopCategory==='variety'?'^(variety_store|department_store|general|wholesale|mall)
+    $types=$shopCategory==='variety'
+      ? ['variety_store','department_store','general','wholesale','mall']
+      : ['convenience','general','grocery','kiosk'];
+    $shopFilter='^('.implode(chr(124),$types).')$';
+    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"'.$shopFilter.'"]["name"];);out center 75;';
     $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
     curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
       CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
@@ -136,100 +140,5 @@ if ($hasPoint) {
   } else $overpassError=true;
 }
 respond(['ok'=>true,'entries'=>$listed,'count'=>count($listed),'shopCategory'=>$shopCategory,
- 'areaSearchKm'=>$hasPoint?6:null,'openstreetmapTemporarilyUnavailable'=>$overpassError,
- 'attribution'=>'© OpenStreetMap contributors · ODbL. Third-party online listings; not Teyza merchants.']);
-:'^(convenience|general|grocery|kiosk)
-    $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
-    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
-      CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
-      CURLOPT_USERAGENT=>'Teyza-Shopper-Directory/1.0 (https://teyza.co.za)',
-      CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>15]);
-    $raw=curl_exec($ch);
-    $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
-    $result=$code===200?json_decode((string)$raw,true):null;
-    if (is_array($result)&&isset($result['elements'])&&is_array($result['elements'])) {
-      $payload=$result;
-      @file_put_contents($cache,json_encode($payload),LOCK_EX);
-    }
-  }
-  if (is_array($payload)) {
-    $seen=[];
-    foreach ($payload['elements'] as $element) {
-      if (count($seen)>=75) break;
-      $tags=$element['tags']??[];
-      $name=v($tags['name']??'',85);
-      if ($name==='') continue;
-      $lat2=$element['lat']??$element['center']['lat']??null;
-      $lon2=$element['lon']??$element['center']['lon']??null;
-      if (!is_numeric($lat2)||!is_numeric($lon2)) continue;
-      $type=v($element['type']??'',10);
-      $id=(int)($element['id']??0);
-      if (!in_array($type,['node','way','relation'],true)||$id<=0) continue;
-      $clean=strtolower(preg_replace('/\s+/',' ',trim($name)));
-      if (isset($seen[$clean])) continue;
-      $seen[$clean]=true;
-      $address=implode(', ',array_filter([
-        v($tags['addr:housenumber']??'',12).' '.v($tags['addr:street']??'',80),
-        v($tags['addr:suburb']??$tags['addr:city']??'',75)
-      ],fn($v)=>trim($v)!==''));
-      $listed[]=[
-        'id'=>'osm-'.$type.'-'.$id,'name'=>$name,
-        'area'=>v($tags['addr:suburb']??$tags['addr:city']??'Public map listing',80),
-        'address'=>$address,'sourceUrl'=>'https://www.openstreetmap.org/'.$type.'/'.$id,
-        'latitude'=>(float)$lat2,'longitude'=>(float)$lon2,
-        'origin'=>'openstreetmap','claimUrl'=>'https://teyza.co.za/?auth=register'
-      ];
-    }
-  } else $overpassError=true;
-}
-respond(['ok'=>true,'entries'=>$listed,'count'=>count($listed),
- 'areaSearchKm'=>$hasPoint?6:null,'openstreetmapTemporarilyUnavailable'=>$overpassError,
- 'attribution'=>'© OpenStreetMap contributors · ODbL. Third-party online listings; not Teyza merchants.']);
-;
-    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"'.$shopFilter.'"]["name"];);out center 75;';
-    $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
-    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
-      CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
-      CURLOPT_USERAGENT=>'Teyza-Shopper-Directory/1.0 (https://teyza.co.za)',
-      CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>15]);
-    $raw=curl_exec($ch);
-    $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
-    $result=$code===200?json_decode((string)$raw,true):null;
-    if (is_array($result)&&isset($result['elements'])&&is_array($result['elements'])) {
-      $payload=$result;
-      @file_put_contents($cache,json_encode($payload),LOCK_EX);
-    }
-  }
-  if (is_array($payload)) {
-    $seen=[];
-    foreach ($payload['elements'] as $element) {
-      if (count($seen)>=75) break;
-      $tags=$element['tags']??[];
-      $name=v($tags['name']??'',85);
-      if ($name==='') continue;
-      $lat2=$element['lat']??$element['center']['lat']??null;
-      $lon2=$element['lon']??$element['center']['lon']??null;
-      if (!is_numeric($lat2)||!is_numeric($lon2)) continue;
-      $type=v($element['type']??'',10);
-      $id=(int)($element['id']??0);
-      if (!in_array($type,['node','way','relation'],true)||$id<=0) continue;
-      $clean=strtolower(preg_replace('/\s+/',' ',trim($name)));
-      if (isset($seen[$clean])) continue;
-      $seen[$clean]=true;
-      $address=implode(', ',array_filter([
-        v($tags['addr:housenumber']??'',12).' '.v($tags['addr:street']??'',80),
-        v($tags['addr:suburb']??$tags['addr:city']??'',75)
-      ],fn($v)=>trim($v)!==''));
-      $listed[]=[
-        'id'=>'osm-'.$type.'-'.$id,'name'=>$name,
-        'area'=>v($tags['addr:suburb']??$tags['addr:city']??'Public map listing',80),
-        'address'=>$address,'sourceUrl'=>'https://www.openstreetmap.org/'.$type.'/'.$id,
-        'latitude'=>(float)$lat2,'longitude'=>(float)$lon2,
-        'origin'=>'openstreetmap','claimUrl'=>'https://teyza.co.za/?auth=register'
-      ];
-    }
-  } else $overpassError=true;
-}
-respond(['ok'=>true,'entries'=>$listed,'count'=>count($listed),
  'areaSearchKm'=>$hasPoint?6:null,'openstreetmapTemporarilyUnavailable'=>$overpassError,
  'attribution'=>'© OpenStreetMap contributors · ODbL. Third-party online listings; not Teyza merchants.']);
