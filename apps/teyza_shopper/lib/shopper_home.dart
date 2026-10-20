@@ -274,7 +274,7 @@ class _ShopperHomeState extends State<ShopperHome> {
     }
   }
 
-  void chooseArea(Area choice,{bool persist=true}) {
+  Future<void> chooseArea(Area choice,{bool persist=true}) async {
     setState(() {
       area = choice;
       locationName = choice.label;
@@ -286,35 +286,44 @@ class _ShopperHomeState extends State<ShopperHome> {
       tab = 0;
     });
     if (persist) {
-      SharedPreferences.getInstance().then((prefs)=>
-        prefs.setString('teyza_selected_area',choice.label));
+      final prefs=await SharedPreferences.getInstance();
+      await prefs.setString('teyza_selected_area',choice.label);
     }
-    reloadOnline();
+    await reloadOnline();
   }
   Future<void> areaSheet() async {
-    await showModalBottomSheet<void>(context: context, showDragHandle: true,
-      isScrollControlled: true, builder: (modal) => SafeArea(
-        child: Padding(padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Where are you shopping?', style: TextStyle(fontSize: 23,
-              fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            const Text('Your area helps find nearby shops. Approximate coordinates '
-              'are sent to our directory search only when you select an area or GPS. '
-              'Exact GPS coordinates are not included in the public request.',
-              style: TextStyle(color: muted)),
-            const SizedBox(height: 14),
-            FilledButton.icon(onPressed: () {
-              Navigator.pop(modal);
-              useLocation();
-            }, icon: const Icon(Icons.my_location), label: const Text('Use my current location')),
-            const SizedBox(height: 12),
-            const Text('Or choose an area', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 310, child: ListView(children: areas.map((a) =>
-              ListTile(leading: const Icon(Icons.location_on_outlined, color: green),
-                title: Text(a.label), subtitle: Text(a.city),
-                onTap: () { chooseArea(a); Navigator.pop(modal); })).toList()))
-          ]))));
+    await showModalBottomSheet<void>(
+      context:context, showDragHandle:true, isScrollControlled:true,
+      useSafeArea:true, backgroundColor:pale,
+      builder:(sheetContext)=>FractionallySizedBox(
+        heightFactor:.91,
+        child:_NearbySpazaPicker(
+          initialArea:area, initialOnline:online, initialMerchants:nearbyReal,
+          initialError:onlineWarning, initialLoading:loadingOnline,
+          onLocate:() async {
+            await useLocation();
+            return (area:area, places:online, merchants:nearbyReal,
+              error:locationWarning??onlineWarning);
+          },
+          onChooseArea:(choice) async {
+            await chooseArea(choice);
+            return (area:area, places:online, merchants:nearbyReal,
+              error:onlineWarning);
+          },
+          onRefresh:() async {
+            await reloadOnline();
+            return (area:area, places:online, merchants:nearbyReal,
+              error:onlineWarning);
+          },
+          onOpenOnline:(shop) {
+            Navigator.of(sheetContext).pop();
+            selectDirectory(shop);
+          },
+          onOpenMerchant:(shop) {
+            Navigator.of(sheetContext).pop();
+            selectShop(shop);
+          },
+        )));
   }
 
   double? distance(Shop shop) {
