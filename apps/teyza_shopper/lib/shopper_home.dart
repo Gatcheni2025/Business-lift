@@ -321,7 +321,7 @@ class _ShopperHomeState extends State<ShopperHome> {
           },
           onOpenMerchant:(shop) {
             Navigator.of(sheetContext).pop();
-            selectShop(shop);
+            openShop(shop);
           },
         )));
   }
