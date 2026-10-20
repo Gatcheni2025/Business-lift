@@ -1,0 +1,49 @@
+name: TEYZA Firebase JS 404 Repair
+
+on:
+  push:
+    branches:
+      - fix/teyza-firebase-settings-404
+    paths:
+      - 'js/firebase-settings.js'
+      - 'js/firebase-config.js'
+      - 'js/landing-firebase.js'
+      - 'scripts/build_teyza_firebase_404_repair.py'
+      - 'scripts/build_teyza_full_site.py'
+      - '.github/workflows/teyza-firebase-js-404-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required Firebase browser modules
+        run: |
+          set -euo pipefail
+          node --input-type=module --check < js/firebase-settings.js
+          node --input-type=module --check < js/firebase-config.js
+          node --input-type=module --check < js/landing-firebase.js
+          grep -q 'firebase-settings.js' js/firebase-config.js
+          grep -q 'firebase-settings.js' js/landing-firebase.js
+          python3 -m py_compile scripts/build_teyza_full_site.py scripts/build_teyza_firebase_404_repair.py
+      - name: Build safe JS repair ZIP
+        run: python3 scripts/build_teyza_firebase_404_repair.py
+      - name: Verify ZIP and import paths
+        run: |
+          set -euo pipefail
+          unzip -t dist/TEYZA_FIREBASE_JS_404_REPAIR.zip
+          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/firebase-settings.js'
+          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/firebase-config.js'
+          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/landing-firebase.js'
+      - name: Upload targeted Firebase fix
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-FIREBASE-JS-404-REPAIR
+          path: dist/TEYZA_FIREBASE_JS_404_REPAIR.zip
+          retention-days: 30
+          if-no-files-found: error
