@@ -30,12 +30,42 @@ function loadWorkspace(array $firebase): array {
   file_put_contents($path,json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); return $workspace;
 }
 function saveWorkspace(array $firebase,array $workspace): void { file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); }
-function companyApproval(array $workspace): array {$a=$workspace['companyApproval']??[];return ['status'=>$a['status']??'pending','submittedAt'=>$a['submittedAt']??null,'reviewedAt'=>$a['reviewedAt']??null,'note'=>$a['note']??''];}
+function sellerCategory(array $business): string {return (($business['shopperCategory']??'spaza')==='variety')?'variety':'spaza';}
+function sellerReviewLane(array $business): string {
+  return sellerCategory($business)==='spaza'?'priority_spaza':'standard_retail';
+}
+function companyApproval(array $workspace): array {
+  $a=$workspace['companyApproval']??[];$b=$workspace['business']??[];
+  return ['status'=>$a['status']??'pending','submittedAt'=>$a['submittedAt']??null,
+    'reviewedAt'=>$a['reviewedAt']??null,'note'=>$a['note']??'',
+    'reviewLane'=>sellerReviewLane($b),'shopCategory'=>sellerCategory($b)];
+}
 function adminRegistry(): array {$path=dirname(__DIR__).'/../private_html/teyza-admins.json';$saved=is_file($path)?json_decode((string)file_get_contents($path),true):[];$admins=is_array($saved)?$saved:[];$bootstrap='admin@teyza.co.za';$exists=false;foreach($admins as $a){if(strtolower((string)($a['email']??''))===$bootstrap){$exists=true;break;}}if(!$exists)$admins[]=['email'=>$bootstrap,'role'=>'super_admin','active'=>true,'bootstrap'=>true];return $admins;}
 function adminRole(array $firebase): ?string {$email=strtolower(trim((string)($firebase['email']??'')));if($email==='admin@teyza.co.za')return 'super_admin';foreach(adminRegistry() as $a){if(!empty($a['active'])&&strtolower(trim((string)($a['email']??'')))===$email)return (string)($a['role']??'admin');}$configured=array_filter(array_map('trim',explode(',',strtolower((string)(getenv('TEYZA_ADMIN_EMAILS')?:'')))));return in_array($email,$configured,true)?'super_admin':null;}
 function isAdmin(array $firebase): bool {return adminRole($firebase)!==null;}
 function saveAdminRegistry(array $admins): void {$path=dirname(__DIR__).'/../private_html/teyza-admins.json';file_put_contents($path,json_encode($admins,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);}
-function loadAllSellers(): array {$out=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$out[]=['uid'=>$w['uid']??basename($path,'.json'),'email'=>$w['email']??'','business'=>$w['business']??[],'verification'=>verificationState($w,[]),'companyApproval'=>companyApproval($w),'createdAt'=>$w['createdAt']??null];}return $out;}
+function loadAllSellers(): array {
+  $out=[];
+  foreach(glob(dataDir().'/*.json')?:[] as $path){
+    $w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;
+    $b=$w['business']??[];
+    $out[]=['uid'=>$w['uid']??basename($path,'.json'),'email'=>$w['email']??'',
+      'business'=>$b,'shopCategory'=>sellerCategory($b),
+      'reviewLane'=>sellerReviewLane($b),
+      'verification'=>verificationState($w,[]),
+      'companyApproval'=>companyApproval($w),'createdAt'=>$w['createdAt']??null];
+  }
+  usort($out,static function($a,$b) {
+    $pendingA=($a['companyApproval']['status']??'pending')==='pending';
+    $pendingB=($b['companyApproval']['status']??'pending')==='pending';
+    if($pendingA!==$pendingB)return $pendingA?-1:1;
+    $fastA=($a['reviewLane']==='priority_spaza');$fastB=($b['reviewLane']==='priority_spaza');
+    if($pendingA&&$fastA!==$fastB)return $fastA?-1:1;
+    return strcmp((string)($a['companyApproval']['submittedAt']??$a['createdAt']??''),
+      (string)($b['companyApproval']['submittedAt']??$b['createdAt']??''));
+  });
+  return $out;
+}
 function sameAddress(string $a,string $b): bool {return $a!==''&&$b!==''&&strtolower(preg_replace('/\s+/u',' ',trim($a)))===strtolower(preg_replace('/\s+/u',' ',trim($b)));}
 function canonicalPhone(string $phone): string {$digits=preg_replace('/\D+/','',$phone);return preg_match('/^0\d{9}$/',$digits)?'27'.substr($digits,1):$digits;}
 
@@ -108,7 +138,34 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
   $input=json_decode((string)file_get_contents('php://input'),true)?:[];
   if (!empty($input['firstName'])) $workspace['firstName']=trim((string)$input['firstName']);
   if (!empty($input['businessName'])) $workspace['business']['businessName']=trim((string)$input['businessName']);
-  foreach(['businessType','industry','country'] as $key) if(isset($input[$key])) $workspace['business'][$key]=trim((string)$input[$key]);
+  // Classification is selected during registration, can only be set once.
+  // Existing accounts without a category remain legacy spaza shops until reviewed.
+  if(array_key_exists('shopperCategory',$input)) {
+    $kind=(string)$input['shopperCategory'];
+    if(!in_array($kind,['spaza','variety'],true))
+      respond(422,['ok'=>false,'error'=>'Select Spaza Shop or Other Retail / Wholesale']);
+    $existing=$workspace['business']['shopperCategory']??null;
+    if($existing!==null && $existing!==$kind)
+      respond(409,['ok'=>false,'error'=>'Your registered business category cannot be changed during sign-in. Contact Teyza support to request a review.']);
+    if($existing===null) {
+      $workspace['business']['shopperCategory']=$kind;
+      $workspace['business']['reviewLane']=sellerReviewLane($workspace['business']);
+      $workspace['business']['categoryChosenAt']=gmdate('c');
+      $workspace['business']['businessType']='Retail';
+      $workspace['business']['industry']=$kind==='spaza'?'Spaza · groceries and daily essentials':'Retail & wholesale';
+      $workspace['business']['country']='South Africa';
+    }
+  }
+  if(array_key_exists('retailKind',$input) && sellerCategory($workspace['business'])==='variety') {
+    $validKinds=['china_mall','wholesale','supermarket','fashion','hardware','electronics','general_retail','other'];
+    $retailKind=(string)$input['retailKind'];
+    if(!in_array($retailKind,$validKinds,true))
+      respond(422,['ok'=>false,'error'=>'Choose a supported retail shop category']);
+    if(empty($workspace['business']['retailKind']))$workspace['business']['retailKind']=$retailKind;
+  }
+  foreach(['businessType','industry','country'] as $key)
+    if(isset($input[$key]) && trim((string)($workspace['business'][$key]??''))==='')
+      $workspace['business'][$key]=trim((string)$input[$key]);
   saveWorkspace($user,$workspace);
 }
 if($action==='seller-subscription') {
@@ -165,6 +222,30 @@ if($action==='admin-seller-subscription') {
   $target['subscription']=$subscription;
   file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
   respond(200,['ok'=>true,'subscription'=>$subscription]);
+}
+if($action==='retail-details') {
+  if(sellerCategory($workspace['business']??[])!=='variety')
+    respond(403,['ok'=>false,'error'=>'Advanced retail setup is only for Other Retail / Wholesale sellers']);
+  if($_SERVER['REQUEST_METHOD']==='POST') {
+    $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+    $allowed=['retailKind','retailTradingName','businessRegistrationNumber','vatNumber','retailOperatingMode'];
+    $current=$workspace['business']['retailDetails']??[];
+    foreach($allowed as $key) {
+      if(!array_key_exists($key,$input))continue;
+      $value=trim((string)$input[$key]);
+      if(strlen($value)>160)respond(422,['ok'=>false,'error'=>'Retail details exceed the allowed length']);
+      if($key==='retailKind'&&!in_array($value,['china_mall','wholesale','supermarket','fashion','hardware','electronics','general_retail','other'],true))
+        respond(422,['ok'=>false,'error'=>'Unsupported type of retailer']);
+      if($key==='retailOperatingMode'&&!in_array($value,['walk_in','wholesale','both','online'],true))
+        respond(422,['ok'=>false,'error'=>'Choose a valid retail operating mode']);
+      $current[$key]=$value;
+    }
+    $workspace['business']['retailDetails']=$current;
+    $workspace['business']['retailKind']=$current['retailKind']??$workspace['business']['retailKind']??'general_retail';
+    saveWorkspace($user,$workspace);
+  }
+  respond(200,['ok'=>true,'retailDetails'=>$workspace['business']['retailDetails']??[],
+    'shopperCategory'=>'variety']);
 }
 if($action==='company-approval'){if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(($input['intent']??'')==='submit'){$workspace['companyApproval']=$workspace['companyApproval']??[];$workspace['companyApproval']['status']='pending';$workspace['companyApproval']['submittedAt']=gmdate('c');$workspace['companyApproval']['reviewedAt']=null;$workspace['companyApproval']['note']='';saveWorkspace($user,$workspace);}}respond(200,['ok'=>true,'companyApproval'=>companyApproval($workspace)]);}
 if($action==='admin-session'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'This account does not have Teyza administrator access.']);respond(200,['ok'=>true,'admin'=>['email'=>$user['email']??'','name'=>$user['displayName']??'Teyza Admin','role'=>adminRole($user)]]);}
@@ -228,7 +309,7 @@ if ($action==='seller-readiness') {
   // banking remain independent app tabs so sellers can configure them when needed.
   $productReady=$businessComplete&&(($approval['status']??'pending')==='approved');
   $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
-  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
+  respond(200,['ok'=>true,'shopperCategory'=>sellerCategory($business),'reviewLane'=>sellerReviewLane($business),'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing]);
 }
 if ($action==='summary') respond(200,['ok'=>true,'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
@@ -320,4 +401,4 @@ if ($action==='orders') {
   }
   respond(200,['ok'=>true,'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[]]);
 }
-respond(200,['ok'=>true,'businessId'=>$workspace['business']['businessId'],'business'=>$workspace['business'],'userData'=>['firstName'=>$workspace['firstName'],'email'=>$workspace['email']]]);
+respond(200,['ok'=>true,'businessId'=>$workspace['business']['businessId'],'business'=>$workspace['business'],'shopperCategory'=>sellerCategory($workspace['business']),'userData'=>['firstName'=>$workspace['firstName'],'email'=>$workspace['email']]]);
