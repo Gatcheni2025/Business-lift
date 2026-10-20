@@ -96,6 +96,16 @@ async function load(){
   loading=true;
   try{
     state=await api("seller-readiness");
+    if(state.sellerCategory==="spaza"){
+      // The simple Spaza flow is a full page, never a dashboard nested in an iframe.
+      modal.hidden=true;
+      document.body.classList.remove("ob2-open");
+      const params=new URLSearchParams(location.search);
+      if(params.has("onboarding")&&!state.productReady){
+        location.replace("business-profile.html?setup=spaza");
+      }
+      return;
+    }
     if(state.productReady){modal.hidden=true;document.body.classList.remove("ob2-open");return;}
     modal.hidden=false;document.body.classList.add("ob2-open");
     const v=state.businessVerification||{};

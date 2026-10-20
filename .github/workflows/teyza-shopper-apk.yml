@@ -23,13 +23,22 @@ jobs:
           php -l api/shopper-place-photo.php
           php -l api/shopper-catalog.php
           php -l api/workspace.php
+          php -l api/business-logo.php
+          php -l api/verification-upload.php
           php -l api/chat.php
       - name: Validate category signup JavaScript modules
         run: |
-          for file in js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js; do
+          for file in js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js js/business-profile.js js/spaza-activation.js; do
             node --input-type=module --check < "$file"
           done
           test -s retailer-dashboard.html
+          test -s seller-activation.html
+          test -s teyza-release-check.html
+          ! grep -q 'id="teyzaOnboarding"' dashboard.html
+          grep -q 'SPAZA_QUICK_SETUP_20261020' dashboard.html
+          grep -q 'seller-activation.html' js/guard.js
+          test -s business-profile.html
+          test -s assets/spaza-onboarding.css
           test -s docs/TEYZA_1.0_SELLER_CATEGORIES.md
       - name: Verify growing Y brand assets
         run: |
@@ -62,7 +71,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          for document in ["index.html", "dashboard.html", "retailer-dashboard.html", "seller-subscriptions.html"]:
+          for document in ["index.html", "dashboard.html", "business-profile.html", "seller-activation.html", "retailer-dashboard.html", "seller-subscriptions.html"]:
               source = Path(document).read_text(encoding="utf-8")
               for url in re.findall(r'(?:href|src)=["\\\'](assets/[^"\\\']+)', source):
                   asset = Path(url.split("?")[0])
@@ -70,25 +79,28 @@ jobs:
                       raise SystemExit(f"{document} references missing asset: {asset}")
           print("Required landing and dashboard assets exist.")
           PY
-      - name: Package TEYZA 1.1 branded seller website
+      - name: Package TEYZA simplified Spaza seller onboarding website
         run: |
           mkdir -p deploy/api deploy/js deploy/assets
-          cp api/workspace.php deploy/api/
-          cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js deploy/js/
-          cp index.html dashboard.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html deploy/
-          cp assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg deploy/assets/
-          cp docs/TEYZA_1.1_GROWING_Y_BRAND.md deploy/README-INSTALL.md
-          (cd deploy && zip -q -r ../TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip api js assets index.html dashboard.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html README-INSTALL.md)
-          unzip -t TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip
-          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'assets/shop-first.css'
-          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'assets/teyza-sprout-wordmark-light.svg'
-          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'seller-subscriptions.html'
-          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
+          cp api/workspace.php api/business-logo.php api/verification-upload.php deploy/api/
+          cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js js/business-profile.js js/spaza-activation.js deploy/js/
+          cp index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html teyza-release-check.html deploy/
+          cp assets/spaza-onboarding.css assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg deploy/assets/
+          cp docs/TEYZA_SPAZA_SIMPLE_ONBOARDING.md deploy/README-INSTALL.md
+          (cd deploy && zip -q -r ../TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip api js assets index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html teyza-release-check.html README-INSTALL.md)
+          unzip -t TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/shop-first.css'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/teyza-sprout-wordmark-light.svg'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'seller-subscriptions.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'seller-activation.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'teyza-release-check.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/spaza-onboarding.css'
       - name: Upload fresh brand website ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-1-1-sprout-brand-website
-          path: TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip
+          name: teyza-spaza-quick-setup-r2-website
+          path: TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip
           retention-days: 14
       - name: Package standalone CSS recovery ZIP
         run: |

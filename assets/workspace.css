@@ -181,3 +181,13 @@ html.embedded-onboarding .profile-summary .auth-actions,html.embedded-onboarding
 .teyza-logo-mark{flex-shrink:0}
 .dashboard-contrast .workspace-brand .workspace-sprout-wordmark{filter:brightness(0) invert(1)}
 .button-primary,.primary{background-color:#078F64}
+
+/* Pending Spaza merchants see a calm, single-purpose dashboard, not a busy enterprise workspace. */
+body.spaza-pending .app-pulse-grid,
+body.spaza-pending .app-stream-grid,
+body.spaza-pending main section:has(> .app-shortcuts),
+body.spaza-pending .app-sell-hero{display:none!important}
+body.spaza-pending .app-verification-card{max-width:930px;border:1px solid #b8e2ca;box-shadow:0 15px 38px #004c4b11;background:linear-gradient(135deg,#fff,#effaf3)}
+body.spaza-pending .app-verification-actions .button-primary{background:#078f64}
+body.spaza-pending .app-verification-steps{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+@media(max-width:600px){body.spaza-pending .app-verification-card{padding:18px}body.spaza-pending .app-verification-actions{display:grid}body.spaza-pending .app-verification-actions .button{width:100%}}
