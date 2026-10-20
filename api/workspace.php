@@ -420,7 +420,7 @@ if ($action==='section') {
 }
 if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
   $input=json_decode((string)file_get_contents('php://input'),true)?:[];
-  $allowed=['businessName','businessType','industry','country','phone','address','about','profileComplete','setupProgress','registrationNumber'];
+  $allowed=['businessName','businessType','industry','country','phone','address','about','profileComplete','setupProgress','registrationNumber','companyName'];
   foreach($allowed as $key) if(array_key_exists($key,$input)) {
     if(!is_string($input[$key])&&!is_numeric($input[$key])&&!is_bool($input[$key]))
       respond(422,['ok'=>false,'error'=>'Invalid business field: '.$key]);
