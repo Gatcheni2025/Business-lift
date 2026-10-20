@@ -38,10 +38,11 @@ class Shop {
   final List<Product> products;
   final String shopCategory;
   final bool? acceptsCard, cashback;
+  final bool sponsored;
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
-    this.acceptsCard,this.cashback});
+    this.acceptsCard,this.cashback,this.sponsored=false});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -59,7 +60,8 @@ class Shop {
         ?(x['services'] as Map)['cardPayments'] as bool:null,
     cashback:x['services'] is Map &&
       (x['services'] as Map)['cashback'] is bool
-        ?(x['services'] as Map)['cashback'] as bool:null);
+        ?(x['services'] as Map)['cashback'] as bool:null,
+    sponsored:x['sponsored']==true);
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   final remote = client ?? http.Client();
@@ -396,8 +398,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       return text.contains(area!.label.toLowerCase()) ||
           (area!.city.isNotEmpty && text.contains(area!.city.toLowerCase()));
     }).toList();
-    filtered.sort((a,b) => (distance(a) ?? double.infinity)
-      .compareTo(distance(b) ?? double.infinity));
+    filtered.sort((a,b) {
+      if(a.sponsored!=b.sponsored)return a.sponsored?-1:1;
+      return (distance(a)??double.infinity).compareTo(distance(b)??double.infinity);
+    });
     return filtered;
   }
 
@@ -775,12 +779,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         photo(s.photo,size:84),
         const SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text(s.name,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w900)),
+          Row(children:[
+            Expanded(child:Text(s.name,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w900))),
+            if(s.sponsored)const Text('Sponsored',style:TextStyle(color:green,fontSize:11))
+          ]),
           Text(s.area,maxLines:2,overflow:TextOverflow.ellipsis,
             style:const TextStyle(color:muted,fontSize:11)),
           const SizedBox(height:7),
-          Text(s.products.length.toString()+' products'+(distance(s)!=null ?
-            ' · '+distance(s)!.toStringAsFixed(1)+' km':''),
+          Text((s.products.isEmpty?'Shop listed on Teyza':s.products.length.toString()+' products')+
+            (distance(s)!=null?' · '+distance(s)!.toStringAsFixed(1)+' km':''),
             style:const TextStyle(color:green,fontSize:12,fontWeight:FontWeight.bold))
         ])),
         const Icon(Icons.chevron_right,color:green)
