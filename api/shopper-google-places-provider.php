@@ -3,12 +3,13 @@ declare(strict_types=1);
 /**
  * Live Google Places (New) search for SA neighbourhood spazas.
  * Never stores/caches Google Places Content. Place IDs are identifiers only.
- * Secret must be installed on the server, NOT in Git, APK or public_html.
+ * Secret must be installed in the domain root /teyza-config or the server environment,
+ * never in public_html or DirectAdmin's possibly web-exposed private_html.
  */
 function teyzaGooglePlacesKey(): string {
     $key = trim((string)(getenv('TEYZA_GOOGLE_PLACES_API_KEY') ?: ($_SERVER['TEYZA_GOOGLE_PLACES_API_KEY'] ?? '')));
     if ($key === '') {
-        $private = dirname(__DIR__,2).'/private_html/teyza-config/google-places-key.php';
+        $private = dirname(__DIR__,2).'/teyza-config/google-places-key.php';
         if (is_file($private) && is_readable($private)) {
             $value = require $private; // private file must return the key, not echo it
             if (is_string($value)) $key=trim($value);
