@@ -1075,6 +1075,19 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
     }
   }
 
+  Widget _shopThumb(OnlineShop shop) {
+    final missing=const CircleAvatar(radius:29,
+      backgroundColor:Color(0xFFE4F3EA),
+      child:Icon(Icons.storefront_outlined,color:green));
+    final ref=shop.photoRef;
+    if(shop.origin!='google_places'||ref==null||ref.isEmpty)return missing;
+    final src=Uri.https('teyza.co.za','/api/shopper-place-photo.php',
+      {'ref':ref}).toString();
+    return ClipRRect(borderRadius:BorderRadius.circular(12),
+      child:Image.network(src,width:62,height:62,fit:BoxFit.cover,
+        errorBuilder:(_,__,___)=>missing));
+  }
+
   double? _distance(double? lat,double? lng) {
     if(current==null||lat==null||lng==null)return null;
     return km(current!.lat,current!.lng,lat,lng);
@@ -1199,8 +1212,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                 ...filteredOnline.map((shop)=>Card(color:Colors.white,
                   child:ListTile(
                     contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:4),
-                    leading:const CircleAvatar(backgroundColor:Color(0xFFE4F3EA),
-                      child:Icon(Icons.storefront_outlined,color:green)),
+                    leading:_shopThumb(shop),
                     title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
                     subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                       Text(shop.address.isNotEmpty?shop.address:shop.area,
