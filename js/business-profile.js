@@ -28,7 +28,7 @@ function updateSummary(data){
 }
 async function api(action,options={}){const token=await currentUser.getIdToken();const r=await fetch('api/workspace.php?action='+encodeURIComponent(action),{...options,headers:{...(options.headers||{}),Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Request failed');return d;}
 function renderVerification(v={}){
- verification=v;const items=[['[data-check-phone]',v.phoneVerified],['[data-check-identity]',v.identitySubmitted||v.identityVerified],['[data-check-location]',v.locationConfirmed],['[data-check-proof]',spazaSetup?v.shopPhotoUploaded:v.proofOfAddressUploaded]];
+ verification=v;const items=[['[data-check-phone]',v.phoneVerified],['[data-check-identity]',v.identitySubmitted||v.identityVerified],['[data-check-location]',v.locationConfirmed],['[data-check-photo]',v.shopPhotoUploaded],['[data-check-proof]',v.proofOfAddressUploaded]];
  items.forEach(([s,done])=>{const n=$(s);if(!n)return;n.classList.toggle('done',!!done);const icon=n.querySelector(':scope > span');if(icon)icon.textContent=done?'✓':'○';});
  const count=Number(v.completed||0),total=Number(v.total||4);$('[data-verification-title]').textContent=spazaSetup
     ?`Spaza setup — ${count} of ${total} steps complete`
