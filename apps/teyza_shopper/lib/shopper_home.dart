@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'shopper_auth.dart';
 import 'shopper_account.dart';
 import 'shopper_discovery.dart';
+import 'shopper_chat.dart';
 
 const ink = Color(0xFF182831);
 const deep = Color(0xFF16332F);
@@ -71,7 +72,7 @@ Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
     }
     return (data['shops'] as List).whereType<Map>()
       .map((s) => Shop.fromJson(Map<String, dynamic>.from(s)))
-      .where((s) => s.id.isNotEmpty && s.name.isNotEmpty && s.products.isNotEmpty).toList();
+      .where((s) => s.id.isNotEmpty && s.name.isNotEmpty).toList();
   } finally {
     if (client == null) remote.close();
   }
@@ -559,7 +560,9 @@ class _ShopperHomeState extends State<ShopperHome> {
       actions:[IconButton(tooltip:'Find my area',onPressed:areaSheet,
         icon:const Icon(Icons.my_location_outlined)),
         IconButton(tooltip:'Refresh shops',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:tab==3?ShopperAccountPanel(session:session):tab==2?basketPage():
+    body:tab==4?ShopperAccountPanel(session:session):
+      tab==3?ShopperChatPage(session:session):
+      tab==2?basketPage():
       Column(children:[locationHeader(),Expanded(child:tab==1?
         (selected!=null?shopPage(selected!):
          directorySelected!=null?directoryPage(directorySelected!):allShopsPage())
@@ -571,6 +574,8 @@ class _ShopperHomeState extends State<ShopperHome> {
         const NavigationDestination(icon:Icon(Icons.storefront_outlined),selectedIcon:Icon(Icons.storefront,color:green),label:'Shops'),
         NavigationDestination(icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
           child:const Icon(Icons.shopping_basket_outlined)),label:'Basket'),
+        const NavigationDestination(icon:Icon(Icons.chat_bubble_outline),
+          label:'Chat'),
         const NavigationDestination(icon:Icon(Icons.person_outline),label:'Account')]));
 
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
@@ -667,7 +672,7 @@ class _ShopperHomeState extends State<ShopperHome> {
         'Choose an area to see local listings':'Sorted by approximate distance where available',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
-      if(displayShops.isEmpty)empty('Shops joining Teyza',
+      if(displayShops.isEmpty)empty('More shops joining Teyza',
         'Real shops are listed above. Owners can claim their store and publish confirmed products.'),
       ...displayShops.take(5).map((s)=>shopTile(s)),
       section(discoveryType=='spaza'?'MORE SHOPS NEAR YOU':'MORE VARIETY & WHOLESALE',
@@ -773,7 +778,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       section('SHOPS ON TEYZA',
         subtitle:'Merchant-published stock, pricing and availability'),
       ...displayShops.map(shopTile),
-      if(displayShops.isEmpty)empty('Shops joining soon',
+      if(displayShops.isEmpty)empty('More shops joining Teyza',
         'Shop owners can claim their listing and connect a real product catalogue.')
     ]);
 
@@ -827,19 +832,23 @@ class _ShopperHomeState extends State<ShopperHome> {
         ])),
       const SizedBox(height:14),
       FilledButton.icon(onPressed:() async {
-        final uri=Uri.tryParse(shop.source);
-        if(uri!=null&&uri.scheme=='https') {
-          await launchUrl(uri,mode:LaunchMode.externalApplication);
-        }
+        final destination=shop.lat!=null&&shop.lng!=null
+          ?shop.lat.toString()+','+shop.lng.toString()
+          :shop.name+' '+(shop.address.isNotEmpty?shop.address:shop.area);
+        final uri=Uri.https('www.google.com','/maps/dir/',
+          {'api':'1','destination':destination});
+        await launchUrl(uri,mode:LaunchMode.externalApplication);
       },icon:const Icon(Icons.directions_outlined),
-        label:Text(shop.origin=='google_places'?
-          'View on Google Maps':'View location and public listing')),
+        label:const Text('Directions to shop')),
       const SizedBox(height:8),
-      OutlinedButton.icon(onPressed:()=>setState(()=>tab=3),
+      OutlinedButton.icon(onPressed:()=>setState(()=>tab=4),
         icon:Icon(session.emailVerified?Icons.verified_user_outlined:
           Icons.mark_email_read_outlined),
         label:Text(session.emailVerified?'View verified shopper account':
           'Verify my shopper account')),
+      const Padding(padding:EdgeInsets.only(top:9,bottom:6),
+        child:Text('Messaging is available when the shop registers with Teyza.',
+          style:TextStyle(fontSize:12,color:muted))),
       onlineServices(shop),
       section('SHOP ITEMS'),
       empty('Shop stock not connected yet',
@@ -870,6 +879,20 @@ class _ShopperHomeState extends State<ShopperHome> {
         if(distance(shop)!=null)Text(distance(shop)!.toStringAsFixed(1)+' km away (approx.)',
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
+    if(ShopperChatApi.isTeyzaShop(shop.id))
+      Padding(padding:const EdgeInsets.only(top:12),child:SizedBox(
+        width:double.infinity,child:FilledButton.icon(
+          icon:const Icon(Icons.chat_bubble_outline),
+          label:const Text('Chat with this shop'),onPressed:(){
+            if(session.idToken==null||!session.emailVerified) {
+              setState(()=>tab=4);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content:Text('Sign in and verify your account to chat with this shop.')));
+              return;
+            }
+            Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ShopperChatPage(
+              session:session,initialShop:ShopperConversation(shop.id,shop.name))));
+          }))),
     merchantServices(shop),
     OutlinedButton.icon(onPressed:() async {
       final destination=shop.latitude!=null && shop.longitude!=null
@@ -880,7 +903,10 @@ class _ShopperHomeState extends State<ShopperHome> {
       await launchUrl(url,mode:LaunchMode.externalApplication);
     },icon:const Icon(Icons.directions_outlined),
        label:const Text('Directions (approximate shop location)')),
-    section('Available products',subtitle:'Merchant-published prices and stock'),
+    if(shop.products.isEmpty)
+      empty('Shop details available', 'This shop has not published a priced catalogue yet. You can contact the merchant once chat is enabled.'),
+    if(shop.products.isNotEmpty) section('Available products',
+      subtitle:'Merchant-published prices and stock'),
     LayoutBuilder(builder:(context,c)=>GridView.builder(
       shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
       itemCount:shop.products.length,
