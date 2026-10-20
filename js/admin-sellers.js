@@ -39,6 +39,9 @@ function render(list){
   box.innerHTML=list.length?list.map(s=>{
     const b=s.business||{},a=s.companyApproval||{},v=s.verification||{},proof=v.proofOfAddress||{};
     const ready=approvalReady(v);
+    const shopCategory=(b.shopperCategory||s.shopCategory)==='variety'?'variety':'spaza';
+    const categoryName=shopCategory==='spaza'?'Spaza Shop':'Other Retail / Wholesale';
+    const lane=shopCategory==='spaza'?'Priority review':'Standard review';
     const proofMatch=v.proofAddressMatchVerified?'Address matches ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch':'Needs address review';
     const checklist=[
       ['Phone',v.phoneVerified],
@@ -53,7 +56,7 @@ function render(list){
           ${b.logoUrl?`<img class="seller-logo" src="${esc(b.logoUrl)}" alt="">`:'<div class="seller-logo seller-logo-empty">T</div>'}
           <div><h2>${esc(b.businessName||'Unnamed business')}</h2><small>${esc(s.email||'')}</small></div>
         </div>
-        <div class="seller-meta"><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
+        <div class="seller-meta"><span class="pill">${esc(categoryName)}</span><span class="pill">${esc(lane)}</span><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
         <div class="review-checklist">${checklist}</div>
         <div class="address-review">
           <div><span>Confirmed map address</span><strong>${esc(v.location?.address||b.address||'Not confirmed')}</strong></div>
