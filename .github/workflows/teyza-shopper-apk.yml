@@ -33,6 +33,10 @@ jobs:
           done
           test -s retailer-dashboard.html
           test -s seller-activation.html
+          test -s teyza-release-check.html
+          ! grep -q 'id="teyzaOnboarding"' dashboard.html
+          grep -q 'SPAZA_QUICK_SETUP_20261020' dashboard.html
+          grep -q 'seller-activation.html' js/guard.js
           test -s business-profile.html
           test -s assets/spaza-onboarding.css
           test -s docs/TEYZA_1.0_SELLER_CATEGORIES.md
@@ -80,22 +84,23 @@ jobs:
           mkdir -p deploy/api deploy/js deploy/assets
           cp api/workspace.php api/business-logo.php api/verification-upload.php deploy/api/
           cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js js/business-profile.js js/spaza-activation.js deploy/js/
-          cp index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html deploy/
+          cp index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html teyza-release-check.html deploy/
           cp assets/spaza-onboarding.css assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg deploy/assets/
           cp docs/TEYZA_SPAZA_SIMPLE_ONBOARDING.md deploy/README-INSTALL.md
-          (cd deploy && zip -q -r ../TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip api js assets index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html README-INSTALL.md)
-          unzip -t TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'assets/shop-first.css'
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'assets/teyza-sprout-wordmark-light.svg'
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'seller-subscriptions.html'
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'seller-activation.html'
-          unzip -Z1 TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip | grep -qx 'assets/spaza-onboarding.css'
+          (cd deploy && zip -q -r ../TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip api js assets index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html teyza-release-check.html README-INSTALL.md)
+          unzip -t TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/shop-first.css'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/teyza-sprout-wordmark-light.svg'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'seller-subscriptions.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'seller-activation.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'teyza-release-check.html'
+          unzip -Z1 TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip | grep -qx 'assets/spaza-onboarding.css'
       - name: Upload fresh brand website ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-spaza-simplified-onboarding-website
-          path: TEYZA_SPAZA_SIMPLE_ONBOARDING_WEBSITE.zip
+          name: teyza-spaza-quick-setup-r2-website
+          path: TEYZA_SPAZA_QUICK_SETUP_R2_WEBSITE.zip
           retention-days: 14
       - name: Package standalone CSS recovery ZIP
         run: |
