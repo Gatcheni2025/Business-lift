@@ -24,20 +24,54 @@ jobs:
           php -l api/shopper-catalog.php
           php -l api/workspace.php
           php -l api/chat.php
+      - name: Verify required website presentation assets
+        run: |
+          test -s assets/shop-first.css
+          test -s assets/auth.css
+          test -s assets/landing-popup.css
+          test -s assets/workspace.css
+          test -s assets/teyza-icon.svg
+          test -s assets/teyza-shopper-preview.svg
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for document in ["index.html", "dashboard.html"]:
+              source = Path(document).read_text(encoding="utf-8")
+              for url in re.findall(r'(?:href|src)=["\\\'](assets/[^"\\\']+)', source):
+                  asset = Path(url.split("?")[0])
+                  if not asset.is_file() or asset.stat().st_size == 0:
+                      raise SystemExit(f"{document} references missing asset: {asset}")
+          print("Required landing and dashboard assets exist.")
+          PY
       - name: Package 0.9 Teyza website patch
         run: |
-          mkdir -p deploy/api deploy/js
+          mkdir -p deploy/api deploy/js deploy/assets
           cp api/workspace.php api/shopper-catalog.php api/chat.php deploy/api/
           cp index.html dashboard.html seller-subscriptions.html deploy/
           cp js/seller-subscriptions.js deploy/js/
+          cp assets/shop-first.css assets/auth.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg deploy/assets/
           cp docs/TEYZA_0.9_RELEASE_AND_SUBSCRIPTIONS.md deploy/SETUP.md
-          (cd deploy && zip -q -r ../TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip api js index.html dashboard.html seller-subscriptions.html SETUP.md)
+          (cd deploy && zip -q -r ../TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip api js assets index.html dashboard.html seller-subscriptions.html SETUP.md)
           unzip -t TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
       - name: Upload website update
         uses: actions/upload-artifact@v4
         with:
           name: teyza-shopper-0-9-website-patch
           path: TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
+          retention-days: 14
+      - name: Package standalone CSS recovery ZIP
+        run: |
+          mkdir -p repair/assets
+          cp index.html dashboard.html repair/
+          cp assets/shop-first.css assets/auth.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg repair/assets/
+          cp docs/TEYZA_0.9_STYLE_RECOVERY.md repair/README-DEPLOY-FIRST.md
+          (cd repair && zip -q -r ../TEYZA_0.9_STYLE_RECOVERY.zip index.html dashboard.html assets README-DEPLOY-FIRST.md)
+          unzip -t TEYZA_0.9_STYLE_RECOVERY.zip
+      - name: Upload standalone CSS recovery ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-0-9-css-recovery
+          path: TEYZA_0.9_STYLE_RECOVERY.zip
           retention-days: 14
       - name: Install Flutter
         uses: subosito/flutter-action@v2
