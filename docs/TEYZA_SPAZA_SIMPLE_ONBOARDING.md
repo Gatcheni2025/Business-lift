@@ -41,3 +41,12 @@ After submitting, the user can visit `seller-activation.html` to request the **B
 7. Verify retailer/wholesaler advanced registration and existing approved shops still work.
 
 **Do not launch recurring bank debits until your PSP contract, recurring mandate disclosures, consent, payment confirmation, POPIA practices and cancellation process are finalised.**
+
+## R2 live version diagnostic — old popup still displayed
+For Spaza users, `dashboard.html` **no longer contains** the legacy `#teyzaOnboarding` iframe modal at all; new users go straight to `business-profile.html?setup=spaza`. The former `js/onboarding-v2.js` import was removed from Spaza dashboard and the authenticated `js/guard.js` routing was updated. Retail accounts still use their separate advanced profile.
+
+**Publish `teyza-spaza-quick-setup-r2-website`, not previous ZIP artifacts.** ZIP root contains `dashboard.html`, `business-profile.html`, `seller-activation.html`, `teyza-release-check.html`, the new scripts under `js/`, and CSS under `assets/` (no extra wrapping folder).
+
+After backup and extraction to the actual document root for `teyza.co.za`, visit `https://teyza.co.za/teyza-release-check.html`. All seven checks must pass. A 404 means wrong folder, or ZIP has not been extracted. If the check page exists but the dashboard check is red, old `dashboard.html` is still active or a web cache is stale. Purge cPanel / Cloudflare page caches and perform Ctrl+Shift+R in an incognito tab. If the old modal still appears, check the browser's View Source for `SPAZA_QUICK_SETUP_20261020`: absent marker proves wrong live `index.html`/docroot or old cached `dashboard.html`.
+
+No direct server changes are made by preparing the artifact: only uploading and extracting the new ZIP makes the site live.
