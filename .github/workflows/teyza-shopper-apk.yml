@@ -22,18 +22,22 @@ jobs:
           php -l api/shopper-google-places-provider.php
           php -l api/shopper-place-photo.php
           php -l api/shopper-catalog.php
-      - name: Package safe hosting update
+          php -l api/workspace.php
+          php -l api/chat.php
+      - name: Package 0.9 Teyza website patch
         run: |
-          mkdir -p deploy/api
-          cp api/shopper-discover.php api/shopper-google-places-provider.php api/shopper-place-photo.php deploy/api/
-          cp docs/TEYZA_GOOGLE_PLACES_SETUP.md deploy/SETUP.md
-          (cd deploy && zip -q -r ../TEYZA_SHOPPER_0.8_PHOTOS_VARIETY_HOSTING_PATCH.zip api SETUP.md)
-          unzip -t TEYZA_SHOPPER_0.8_PHOTOS_VARIETY_HOSTING_PATCH.zip
-      - name: Upload hosting update
+          mkdir -p deploy/api deploy/js
+          cp api/workspace.php api/shopper-catalog.php api/chat.php deploy/api/
+          cp index.html dashboard.html seller-subscriptions.html deploy/
+          cp js/seller-subscriptions.js deploy/js/
+          cp docs/TEYZA_0.9_RELEASE_AND_SUBSCRIPTIONS.md deploy/SETUP.md
+          (cd deploy && zip -q -r ../TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip api js index.html dashboard.html seller-subscriptions.html SETUP.md)
+          unzip -t TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
+      - name: Upload website update
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-shopper-0-8-hosting-patch
-          path: TEYZA_SHOPPER_0.8_PHOTOS_VARIETY_HOSTING_PATCH.zip
+          name: teyza-shopper-0-9-website-patch
+          path: TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
           retention-days: 14
       - name: Install Flutter
         uses: subosito/flutter-action@v2
@@ -70,10 +74,14 @@ jobs:
         run: flutter test
       - name: Build shopper debug APK
         working-directory: apps/teyza_shopper
-        run: flutter build apk --debug
+        env:
+          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
-        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+        env:
+          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
       - name: Upload smaller APK for testing
         if: success()
         uses: actions/upload-artifact@v4
