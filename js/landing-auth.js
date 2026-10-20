@@ -33,6 +33,23 @@ function modal(mode) {
       <h2 id="tz${login ? "Login" : "Register"}Title">${login ? "Welcome back" : "Register your local shop"}</h2>
       <p class="auth-subtitle">${login ? "Sign in to manage your local shop." : "Create your account to manage products, stock and orders."}</p>
       <p class="auth-status" data-status role="status" aria-live="polite" hidden></p><div class="auth-recovery" data-auth-recovery hidden><a href="dashboard.html">Open shop dashboard (limited access) →</a><small>Firebase sign-in worked, but the website cannot load shop records. Full shop tools remain unavailable until the server is fixed.</small></div>
+      ${login ? "" : `<fieldset class="seller-kind-fieldset"><legend>What kind of shop do you own? <span aria-hidden="true">*</span></legend>
+        <div class="seller-kind-grid">
+          <label class="seller-kind-option"><input type="radio" name="shopperCategory" value="spaza" form="tzRegisterForm" required checked><span><strong>🏪 Spaza Shop</strong><small>Easy stock management, local orders and priority approval review.</small></span></label>
+          <label class="seller-kind-option"><input type="radio" name="shopperCategory" value="variety" form="tzRegisterForm" required><span><strong>🏬 Other Retail / Wholesale</strong><small>China Mall, wholesale, fashion, electronics and other retail stores.</small></span></label>
+        </div>
+        <label class="auth-field seller-retail-kind" data-retail-kind hidden>Which kind of retail business?
+          <select name="retailKind" form="tzRegisterForm">
+            <option value="china_mall">China Mall / China Mart / Variety Store</option>
+            <option value="wholesale">Wholesaler / Distributor</option>
+            <option value="supermarket">Mini-market / Supermarket</option>
+            <option value="fashion">Clothing / Fashion</option>
+            <option value="hardware">Hardware / Home improvement</option>
+            <option value="electronics">Electronics / Accessories</option>
+            <option value="general_retail">General retailer</option>
+            <option value="other">Other retail shop</option>
+          </select>
+        </label></fieldset>`}
       ${providerButtons(mode)}<div class="auth-divider">or continue with email</div>
       <form id="tz${login ? "Login" : "Register"}Form">
         ${login ? "" : `<div class="auth-grid"><label class="auth-field">First name<input name="firstName" autocomplete="given-name" required></label><label class="auth-field">Last name<input name="lastName" autocomplete="family-name" required></label></div>`}
@@ -148,7 +165,19 @@ function loginDestination() {
   const target = new URLSearchParams(location.search).get("redirect") || "dashboard.html";
   return allowedDestinations.has(target.split(/[?#]/)[0]) && !target.includes("/") && !target.includes("\\") ? target : "dashboard.html";
 }
-const go = isNew => location.assign(isNew ? "dashboard.html?onboarding=1" : loginDestination());
+function chosenCategory(){
+  return registerModal.querySelector('input[name="shopperCategory"]:checked')?.value||'';
+}
+function categoryDetails(){
+  const shopperCategory=chosenCategory();
+  if(!['spaza','variety'].includes(shopperCategory))throw new Error('Choose a shop type before signing up.');
+  const retailKind=shopperCategory==='variety'
+    ?(registerModal.querySelector('[name="retailKind"]')?.value||'general_retail'):null;
+  return {shopperCategory,...(retailKind?{retailKind}:{})};
+}
+const go = (isNew,kind) => location.assign(
+  isNew?(kind==='variety'?'retail-dashboard.html?onboarding=1':'dashboard.html?onboarding=1')
+    :loginDestination());
 
 async function socialSignIn(button) {
   if (button.disabled) return;
@@ -158,11 +187,13 @@ async function socialSignIn(button) {
   button.disabled = true;
   showStatus(container, `Opening ${providerNames[name]} sign-in…`, "info");
   try {
+    const category=mode==='register'?categoryDetails():null;
     const result = await signInWithPopup(auth, providers[name]);
     const isNew = getAdditionalUserInfo(result)?.isNewUser === true;
-    await bootstrap(result.user);
+    const saved=await bootstrap(result.user,mode==='register'?category:{});
+    const destinationCategory=saved?.business?.shopperCategory||saved?.shopperCategory||category?.shopperCategory;
     showStatus(container, isNew ? "Account created. Opening business setup…" : "Signed in. Opening your workspace…", "success");
-    go(isNew);
+    go(isNew,destinationCategory);
   } catch (error) {
     reportAuthenticationFailure(container, error, name);
     button.disabled = false;
@@ -188,6 +219,15 @@ loginForm.addEventListener("submit", async event => {
 });
 
 const registerForm = document.getElementById("tzRegisterForm");
+function refreshKindChoice(){
+  const kind=chosenCategory();
+  const field=registerModal.querySelector('[data-retail-kind]');
+  if(field)field.hidden=kind!=='variety';
+}
+registerModal.addEventListener('change',e=>{
+  if(e.target.matches('[name="shopperCategory"]'))refreshKindChoice();
+});
+refreshKindChoice();
 registerForm.addEventListener("submit", async event => {
   event.preventDefault();
   const button = registerForm.querySelector('[type="submit"]');
@@ -204,10 +244,12 @@ registerForm.addEventListener("submit", async event => {
       sessionStorage.setItem("teyzaPendingEnrollment", user.uid);
     }
     if (user.displayName !== fullName) await updateProfile(user, {displayName: fullName});
-    await bootstrap(user, {firstName: String(details.get("firstName")).trim(), businessName: String(details.get("businessName")).trim()});
+    const category=categoryDetails();
+    await bootstrap(user, {firstName: String(details.get("firstName")).trim(),
+      businessName: String(details.get("businessName")).trim(),...category});
     sessionStorage.removeItem("teyzaPendingEnrollment");
     showStatus(registerModal, "Account created. Opening business setup…", "success");
-    go(true);
+    go(true,chosenCategory());
   } catch (error) {
     reportAuthenticationFailure(registerModal, error);
     button.disabled = false;
