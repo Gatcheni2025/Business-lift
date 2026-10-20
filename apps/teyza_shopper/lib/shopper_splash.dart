@@ -59,5 +59,5 @@ class _ShopperLaunchScreenState extends State<ShopperLaunchScreen>
         'SPAZA SHOPS  •  OTHER RETAIL  •  DELIVERY',
         textAlign:TextAlign.center,
         style:TextStyle(color:Color(0xFFB8DECE),fontSize:10,letterSpacing:1.1)))
-    ]))));
+    ])));
 }
