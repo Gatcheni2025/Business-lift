@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
@@ -13,11 +14,11 @@ import 'shopper_discovery.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
 
-const ink = Color(0xFF182831);
-const deep = Color(0xFF16332F);
-const green = Color(0xFF079B76);
-const aqua = Color(0xFF45B0B1);
-const pale = Color(0xFFF1F5F7);
+const ink = Color(0xFF173943);
+const deep = Color(0xFF003F4A);
+const green = Color(0xFF079B65);
+const aqua = Color(0xFF6ADBAB);
+const pale = Color(0xFFF3FAF6);
 const muted = Color(0xFF6A7C82);
 const catalogUrl = 'https://teyza.co.za/api/shopper-catalog.php';
 const photos = 'https://teyza.co.za/assets/catalog-real/';
@@ -663,7 +664,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     child:Column(children:[
       Row(children:[
         _shopMode('SPAZA SHOPS','Your local favourites',
-          Icons.storefront_rounded,'spaza',const Color(0xFF087F63)),
+          Icons.storefront_rounded,'spaza',const Color(0xFF05895F)),
         const SizedBox(width:10),
         _shopMode('OTHER RETAIL','Stores & wholesale',
           Icons.store_mall_directory_rounded,'variety',deep),
@@ -723,20 +724,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       appBar:AppBar(
         backgroundColor:deep,foregroundColor:Colors.white,toolbarHeight:63,
         titleSpacing:16,
-        title:Row(children:[
-          Container(width:37,height:37,alignment:Alignment.center,
-            decoration:BoxDecoration(color:green,
-              borderRadius:BorderRadius.circular(13)),
-            child:const Text('T',style:TextStyle(color:Colors.white,
-              fontWeight:FontWeight.w900,fontSize:26))),
-          const SizedBox(width:10),
-          const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text('TEYZA',style:TextStyle(letterSpacing:2,
-              fontWeight:FontWeight.w900,fontSize:22)),
-            Text('SHOP LOCAL. LIVE BETTER.',style:TextStyle(
-              color:Color(0xFFACDACB),letterSpacing:.6,fontSize:9))
-          ])
-        ]),
+        title:Semantics(
+          label:'TEYZA, your neighbourhood shopping marketplace',
+          child:SvgPicture.asset(
+            'assets/brand/teyza-sprout-wordmark-light.svg',
+            width:156,height:45,fit:BoxFit.contain,
+            alignment:Alignment.centerLeft),
+        ),
         actions:[
           IconButton(tooltip:'Messages',onPressed:openInbox,
             icon:Badge(isLabelVisible:unreadChats>0,
@@ -755,7 +749,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           showAllShops?allShopsPage():homePage())]),
       bottomNavigationBar:NavigationBar(
         height:72,backgroundColor:Colors.white,
-        indicatorColor:const Color(0xFFDAF3E8),
+        indicatorColor:const Color(0xFFE1F6E7),
         selectedIndex:tab,onDestinationSelected:(index){
           setState(()=>tab=index);
         },

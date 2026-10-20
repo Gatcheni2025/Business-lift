@@ -31,6 +31,24 @@ jobs:
           done
           test -s retailer-dashboard.html
           test -s docs/TEYZA_1.0_SELLER_CATEGORIES.md
+      - name: Verify growing Y brand assets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree
+          for file in [
+              "assets/teyza-logo.svg",
+              "assets/teyza-icon.svg",
+              "assets/teyza-sprout-wordmark.svg",
+              "assets/teyza-sprout-wordmark-light.svg",
+              "apps/teyza_shopper/assets/brand/teyza-sprout-wordmark-light.svg",
+              "apps/teyza_shopper/assets/brand/teyza-sprout-icon.svg",
+          ]:
+              ElementTree.parse(file)
+              print("Valid SVG:", file)
+          PY
+          grep -q "assets/brand/teyza-sprout-wordmark-light.svg" apps/teyza_shopper/pubspec.yaml
+          grep -q "assets/brand/teyza-sprout-icon.svg" apps/teyza_shopper/pubspec.yaml
       - name: Verify required website presentation assets
         run: |
           test -s assets/shop-first.css
@@ -38,11 +56,13 @@ jobs:
           test -s assets/landing-popup.css
           test -s assets/workspace.css
           test -s assets/teyza-icon.svg
+          test -s assets/teyza-sprout-wordmark.svg
+          test -s assets/teyza-sprout-wordmark-light.svg
           test -s assets/teyza-shopper-preview.svg
           python3 - <<'PY'
           from pathlib import Path
           import re
-          for document in ["index.html", "dashboard.html"]:
+          for document in ["index.html", "dashboard.html", "retailer-dashboard.html", "seller-subscriptions.html"]:
               source = Path(document).read_text(encoding="utf-8")
               for url in re.findall(r'(?:href|src)=["\\\'](assets/[^"\\\']+)', source):
                   asset = Path(url.split("?")[0])
@@ -50,37 +70,39 @@ jobs:
                       raise SystemExit(f"{document} references missing asset: {asset}")
           print("Required landing and dashboard assets exist.")
           PY
-      - name: Package 1.0 seller category website update
+      - name: Package TEYZA 1.1 branded seller website
         run: |
           mkdir -p deploy/api deploy/js deploy/assets
           cp api/workspace.php deploy/api/
           cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js deploy/js/
-          cp index.html dashboard.html retailer-dashboard.html admin-sellers.html deploy/
-          cp assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg deploy/assets/
-          cp docs/TEYZA_1.0_SELLER_CATEGORIES.md deploy/README-INSTALL.md
-          (cd deploy && zip -q -r ../TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip api js assets index.html dashboard.html retailer-dashboard.html admin-sellers.html README-INSTALL.md)
-          unzip -t TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip
-          unzip -Z1 TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip | grep -qx 'assets/shop-first.css'
-          unzip -Z1 TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
-      - name: Upload seller category website ZIP
+          cp index.html dashboard.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html deploy/
+          cp assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg deploy/assets/
+          cp docs/TEYZA_1.1_GROWING_Y_BRAND.md deploy/README-INSTALL.md
+          (cd deploy && zip -q -r ../TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip api js assets index.html dashboard.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html README-INSTALL.md)
+          unzip -t TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip
+          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'assets/shop-first.css'
+          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'assets/teyza-sprout-wordmark-light.svg'
+          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'seller-subscriptions.html'
+          unzip -Z1 TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
+      - name: Upload fresh brand website ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-1-0-category-signup-website
-          path: TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip
+          name: teyza-1-1-sprout-brand-website
+          path: TEYZA_1.1_GROWING_Y_BRAND_WEBSITE.zip
           retention-days: 14
       - name: Package standalone CSS recovery ZIP
         run: |
           mkdir -p repair/assets
           cp index.html dashboard.html repair/
-          cp assets/shop-first.css assets/auth.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg repair/assets/
+          cp assets/shop-first.css assets/auth.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg repair/assets/
           cp docs/TEYZA_0.9_STYLE_RECOVERY.md repair/README-DEPLOY-FIRST.md
-          (cd repair && zip -q -r ../TEYZA_0.9_STYLE_RECOVERY.zip index.html dashboard.html assets README-DEPLOY-FIRST.md)
-          unzip -t TEYZA_0.9_STYLE_RECOVERY.zip
+          (cd repair && zip -q -r ../TEYZA_1.1_STYLE_AND_BRAND_RECOVERY.zip index.html dashboard.html assets README-DEPLOY-FIRST.md)
+          unzip -t TEYZA_1.1_STYLE_AND_BRAND_RECOVERY.zip
       - name: Upload standalone CSS recovery ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-0-9-css-recovery
-          path: TEYZA_0.9_STYLE_RECOVERY.zip
+          name: teyza-1-1-style-brand-recovery
+          path: TEYZA_1.1_STYLE_AND_BRAND_RECOVERY.zip
           retention-days: 14
       - name: Install Flutter
         uses: subosito/flutter-action@v2
@@ -96,7 +118,7 @@ jobs:
       - name: Create TEYZA launcher icons
         working-directory: apps/teyza_shopper
         run: |
-          python3 -m pip install --quiet pillow
+          python3 -m pip install --quiet pillow cairosvg
           python3 scripts/make_launcher_icon.py
           sed -i 's/android:label="teyza_shopper"/android:label="TEYZA Shopper"/' android/app/src/main/AndroidManifest.xml
       - name: Enable release internet access
