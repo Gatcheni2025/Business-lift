@@ -2,8 +2,35 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+ini_set('display_errors','0');
+error_reporting(E_ALL);
 
-
+// Safe, non-sensitive diagnostics; exact PHP details are logged server-side,
+// never exposed to a browser holding a Firebase session.
+set_exception_handler(static function(Throwable $e): void {
+  error_log('TEYZA_WORKSPACE_FATAL: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
+  if(!headers_sent()) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+  }
+  echo json_encode(['ok'=>false,
+    'error'=>'Shop workspace service failed (WORKSPACE_FATAL). The hosting PHP error log has the reason.',
+    'code'=>'WORKSPACE_FATAL'],JSON_UNESCAPED_SLASHES);
+  exit;
+});
+register_shutdown_function(static function(): void {
+  $e=error_get_last();
+  if($e && in_array((int)$e['type'],[E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR],true)){
+    error_log('TEYZA_WORKSPACE_SHUTDOWN: '.($e['message']??'PHP error'));
+    if(!headers_sent()) {
+      http_response_code(500);
+      header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['ok'=>false,'error'=>'Shop workspace PHP failed (WORKSPACE_SHUTDOWN). Check server PHP logs.',
+      'code'=>'WORKSPACE_SHUTDOWN']);
+  }
+});
 function respond(int $status, array $data): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_SLASHES); exit; }
 function bearer(): string {
   $header=$_SERVER['HTTP_AUTHORIZATION']??$_SERVER['REDIRECT_HTTP_AUTHORIZATION']??'';
@@ -14,22 +41,77 @@ function bearer(): string {
   }
   return preg_match('/^Bearer\s+(.+)$/i',$header,$m)?trim($m[1]):'';
 }
-require_once __DIR__ . '/teyza-firebase-verify.php';
+$verifier=__DIR__ . '/teyza-firebase-verify.php';
+if(!is_file($verifier)||!is_readable($verifier)){
+  error_log('TEYZA_WORKSPACE_AUTH_HELPER_MISSING: required api/teyza-firebase-verify.php');
+  respond(503,['ok'=>false,'error'=>'Shop authentication service file is missing (AUTH_HELPER_MISSING). Restore api/teyza-firebase-verify.php.',
+    'code'=>'AUTH_HELPER_MISSING']);
+}
+require_once $verifier;
+if(!function_exists('teyzaVerifiedFirebaseUser')){
+  error_log('TEYZA_WORKSPACE_AUTH_HELPER_INVALID');
+  respond(503,['ok'=>false,'error'=>'Shop authentication helper is invalid (AUTH_HELPER_INVALID). Check PHP logs.',
+    'code'=>'AUTH_HELPER_INVALID']);
+}
 function verifyFirebase(string $token): array {return teyzaVerifiedFirebaseUser($token);}
 function dataDir(): string {
-  $dir=dirname(__DIR__).'/../private_html/teyza-data';
-  if (!is_dir($dir) && !mkdir($dir,0750,true) && !is_dir($dir)) respond(500,['ok'=>false,'error'=>'Workspace storage is unavailable']);
+  $privateRoot=dirname(__DIR__).'/../private_html';
+  $dir=$privateRoot.'/teyza-data';
+  // Never create another private_html tree silently: a wrong document root
+  // could otherwise appear to lose merchants by creating an empty database.
+  if(!is_dir($privateRoot)){
+    error_log('TEYZA_WORKSPACE_PRIVATE_ROOT_MISSING');
+    respond(503,['ok'=>false,'code'=>'PRIVATE_ROOT_MISSING',
+      'error'=>'Private website data folder is missing (PRIVATE_ROOT_MISSING). Restore the original private_html folder.']);
+  }
+  if(!is_dir($dir)){
+    error_log('TEYZA_WORKSPACE_DATA_DIR_MISSING');
+    respond(503,['ok'=>false,'code'=>'DATA_DIR_MISSING',
+      'error'=>'Private shop records folder is missing (DATA_DIR_MISSING). Check private_html/teyza-data. Existing seller records must be preserved.']);
+  }
+  if(!is_readable($dir)||!is_writable($dir)){
+    error_log('TEYZA_WORKSPACE_DATA_DIR_PERMISSIONS');
+    respond(503,['ok'=>false,'code'=>'DATA_DIR_PERMISSIONS',
+      'error'=>'Private shop records folder is not readable or writable by PHP (DATA_DIR_PERMISSIONS). Check ownership and access.']);
+  }
   return $dir;
 }
 function pathFor(string $uid): string { return dataDir().'/'.preg_replace('/[^A-Za-z0-9_-]/','',$uid).'.json'; }
 function loadWorkspace(array $firebase): array {
   $uid=$firebase['localId']; $path=pathFor($uid);
-  if (is_file($path)) { $saved=json_decode((string)file_get_contents($path),true); if(is_array($saved)) return $saved; }
+  if(is_file($path)){
+    $raw=@file_get_contents($path);
+    if($raw===false){
+      error_log('TEYZA_WORKSPACE_RECORD_UNREADABLE');
+      respond(503,['ok'=>false,'code'=>'RECORD_UNREADABLE',
+        'error'=>'Shop record is not readable (RECORD_UNREADABLE). Do not delete the saved file.']);
+    }
+    $saved=json_decode($raw,true);
+    if(!is_array($saved)){
+      error_log('TEYZA_WORKSPACE_RECORD_JSON_INVALID: '.json_last_error_msg());
+      respond(503,['ok'=>false,'code'=>'RECORD_JSON_INVALID',
+        'error'=>'Existing shop record has invalid JSON (RECORD_JSON_INVALID). Restore from a backup, do not overwrite.']);
+    }
+    return $saved;
+  }
   $name=trim((string)($firebase['displayName']??''));
   $workspace=['uid'=>$uid,'email'=>$firebase['email']??'','firstName'=>$name?explode(' ',$name)[0]:'','business'=>['businessId'=>'TZ_'.strtoupper(substr(hash('sha256',$uid),0,8)),'businessName'=>'','profileComplete'=>false,'sellerCategory'=>null],'orders'=>[],'products'=>[], 'subscription'=>['plan'=>null,'status'=>'not_selected','updatedAt'=>gmdate('c')],'createdAt'=>gmdate('c')];
-  file_put_contents($path,json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); return $workspace;
+  $bytes=@file_put_contents($path,json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  if($bytes===false){
+    error_log('TEYZA_WORKSPACE_RECORD_CREATE_FAILED');
+    respond(503,['ok'=>false,'code'=>'RECORD_CREATE_FAILED',
+      'error'=>'Shop record cannot be created (RECORD_CREATE_FAILED). Check private storage permissions.']);
+  }
+  return $workspace;
 }
-function saveWorkspace(array $firebase,array $workspace): void { file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX); }
+function saveWorkspace(array $firebase,array $workspace): void {
+  $bytes=@file_put_contents(pathFor($firebase['localId']),json_encode($workspace,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  if($bytes===false){
+    error_log('TEYZA_WORKSPACE_RECORD_SAVE_FAILED');
+    respond(503,['ok'=>false,'code'=>'RECORD_SAVE_FAILED',
+      'error'=>'Shop changes cannot be saved (RECORD_SAVE_FAILED). Check storage permissions.']);
+  }
+}
 function sellerCategory(array $workspace): string {
   $business=$workspace['business']??[];
   $category=(string)($business['sellerCategory']??'');

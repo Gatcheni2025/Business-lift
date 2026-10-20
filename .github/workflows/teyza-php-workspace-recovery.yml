@@ -1,0 +1,42 @@
+name: TEYZA PHP Workspace 500 Recovery
+
+on:
+  push:
+    branches:
+      - fix/teyza-workspace-http500-diagnostics
+    paths:
+      - 'api/workspace.php'
+      - 'api/teyza-server-health.php'
+      - 'api/teyza-firebase-verify.php'
+      - 'scripts/build_teyza_workspace_repair.py'
+      - '.github/workflows/teyza-php-workspace-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP and storage health probe
+        run: |
+          set -euo pipefail
+          php -l api/workspace.php
+          php -l api/teyza-server-health.php
+          php -l api/teyza-firebase-verify.php
+          grep -q 'AUTH_HELPER_MISSING' api/workspace.php
+          grep -q 'DATA_DIR_PERMISSIONS' api/workspace.php
+          grep -q 'RECORD_JSON_INVALID' api/workspace.php
+          grep -q 'php_at_least_8_1' api/teyza-server-health.php
+      - name: Package small, safe API repair
+        run: python3 scripts/build_teyza_workspace_repair.py
+      - name: Upload targeted 500 repair
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-PHP-WORKSPACE-500-SAFE-REPAIR
+          path: TEYZA_PHP_WORKSPACE_500_SAFE_REPAIR.zip
+          retention-days: 30
+          if-no-files-found: error
