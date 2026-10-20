@@ -326,21 +326,27 @@ class _ShopperHomeState extends State<ShopperHome> {
         heightFactor:.91,
         child:_NearbySpazaPicker(
           initialArea:area, initialOnline:online, initialMerchants:nearbyReal,
+          initialType:discoveryType,
           initialError:onlineWarning, initialLoading:loadingOnline,
           onLocate:() async {
             await useLocation();
             return (area:area, places:online, merchants:nearbyReal,
-              error:locationWarning??onlineWarning);
+              error:locationWarning??onlineWarning,category:discoveryType);
           },
           onChooseArea:(choice) async {
             await chooseArea(choice);
             return (area:area, places:online, merchants:nearbyReal,
-              error:onlineWarning);
+              error:onlineWarning,category:discoveryType);
+          },
+          onChooseCategory:(value) async {
+            await setDiscoveryType(value);
+            return (area:area, places:online, merchants:nearbyReal,
+              error:onlineWarning,category:discoveryType);
           },
           onRefresh:() async {
             await reloadOnline();
             return (area:area, places:online, merchants:nearbyReal,
-              error:onlineWarning);
+              error:onlineWarning,category:discoveryType);
           },
           onOpenOnline:(shop) {
             Navigator.of(sheetContext).pop();
@@ -919,6 +925,7 @@ typedef _NearbyPickerResult = ({
   List<OnlineShop> places,
   List<Shop> merchants,
   String? error,
+  String category,
 });
 
 /// Shows real nearby shops right inside "Where are you shopping?".
@@ -928,14 +935,17 @@ class _NearbySpazaPicker extends StatefulWidget {
   final List<Shop> initialMerchants;
   final String? initialError;
   final bool initialLoading;
+  final String initialType;
   final Future<_NearbyPickerResult> Function() onLocate, onRefresh;
+  final Future<_NearbyPickerResult> Function(String) onChooseCategory;
   final Future<_NearbyPickerResult> Function(Area) onChooseArea;
   final ValueChanged<OnlineShop> onOpenOnline;
   final ValueChanged<Shop> onOpenMerchant;
   const _NearbySpazaPicker({
     required this.initialArea, required this.initialOnline,
     required this.initialMerchants, required this.initialError,
-    required this.initialLoading, required this.onLocate,
+    required this.initialLoading, required this.initialType,
+    required this.onChooseCategory, required this.onLocate,
     required this.onChooseArea, required this.onRefresh,
     required this.onOpenOnline, required this.onOpenMerchant
   });
@@ -951,11 +961,13 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
   String query='';
   bool busy=false;
   bool showAreas=false;
+  String currentType='spaza';
 
   @override
   void initState() {
     super.initState();
     current=widget.initialArea;
+    currentType=widget.initialType;
     found=widget.initialOnline;
     selling=widget.initialMerchants;
     error=widget.initialError;
@@ -974,6 +986,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
       if(!mounted)return;
       setState(() {
         current=updated.area;
+        currentType=updated.category;
         found=updated.places;
         selling=updated.merchants;
         error=updated.error;
@@ -1005,6 +1018,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
         .compareTo(_distance(b.lat,b.lng)??double.infinity));
     final filteredMerchants=selling.where((shop)=>term.isEmpty||
       (shop.name+' '+shop.area).toLowerCase().contains(term))
+      .where((shop)=>shop.shopCategory==currentType)
       .toList()
       ..sort((a,b)=>(_distance(a.latitude,a.longitude)??double.infinity)
         .compareTo(_distance(b.latitude,b.longitude)??double.infinity));
@@ -1017,13 +1031,22 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
             fontSize:25,fontWeight:FontWeight.w900,color:ink)),
           const SizedBox(height:4),
           Text(current==null?'Find a nearby spaza shop by location or suburb.':
-            'Spaza shops near '+current!.label,
+            (currentType=='spaza'?'Spaza shops near ':'Variety and wholesale shops near ')+current!.label,
             style:const TextStyle(color:muted,fontSize:13)),
-          const SizedBox(height:14),
+          const SizedBox(height:11),
+          Wrap(spacing:8,runSpacing:7,children:[
+            ChoiceChip(label:const Text('Spaza Shops'),
+              selected:currentType=='spaza',onSelected:busy?null:
+                (_) => _perform(()=>widget.onChooseCategory('spaza'))),
+            ChoiceChip(label:const Text('Variety & Wholesale'),
+              selected:currentType=='variety',onSelected:busy?null:
+                (_) => _perform(()=>widget.onChooseCategory('variety'))),
+          ]),
+          const SizedBox(height:10),
           SizedBox(width:double.infinity,child:FilledButton.icon(
             onPressed:busy?null:()=>_perform(widget.onLocate),
             icon:const Icon(Icons.my_location),
-            label:Text(current==null?'Find spaza shops near me':'Update my GPS location'),
+            label:Text(current==null?'Find shops near me':'Update my GPS location'),
           )),
           const SizedBox(height:8),
           OutlinedButton.icon(
@@ -1044,7 +1067,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
           if(current!=null)...[
             const SizedBox(height:9),
             TextField(onChanged:(v)=>setState(()=>query=v),
-              decoration:InputDecoration(hintText:'Search nearby spaza shops',
+              decoration:InputDecoration(hintText:'Search nearby shops',
                 prefixIcon:const Icon(Icons.search),isDense:true,
                 filled:true,fillColor:Colors.white,
                 border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),
@@ -1091,7 +1114,8 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
               if(filteredOnline.isNotEmpty)...[
                 Padding(padding:const EdgeInsets.only(top:12,bottom:7),
                   child:Row(children:[
-                    const Expanded(child:Text('OTHER NEARBY SPAZA SHOPS',
+                    Expanded(child:Text(currentType=='spaza'?
+                      'OTHER NEARBY SPAZA SHOPS':'VARIETY MALLS & WHOLESALE',
                       style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink))),
                     if(googleResults)const Text('Google Maps',
                       style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))),
@@ -1120,7 +1144,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     const Icon(Icons.search_off,size:47,color:green),
                     const SizedBox(height:10),
                     Text(term.isNotEmpty?'No matching shop found':
-                      'No nearby spazas found right now',
+                      'No nearby shops found right now',
                       textAlign:TextAlign.center,style:const TextStyle(
                         fontWeight:FontWeight.bold,fontSize:17)),
                     const SizedBox(height:8),
