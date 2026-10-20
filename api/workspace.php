@@ -429,6 +429,9 @@ if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
   if(isset($workspace['business']['registrationNumber']) &&
      strlen((string)$workspace['business']['registrationNumber'])>36)
     respond(422,['ok'=>false,'error'=>'Company registration number too long']);
+  if(isset($workspace['business']['companyName']) &&
+     strlen((string)$workspace['business']['companyName'])>160)
+    respond(422,['ok'=>false,'error'=>'Company name too long']);
   $workspace['business']['updatedAt']=gmdate('c'); saveWorkspace($user,$workspace);
   respond(200,['ok'=>true,'business'=>$workspace['business']]);
 }
