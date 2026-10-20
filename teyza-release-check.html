@@ -1,42 +1,81 @@
-<!doctype html><html lang="en-ZA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#003F4A"><title>TEYZA | Deployment check</title>
-<style>body{background:#f2faf5;color:#003f4a;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;margin:0}
-main{max-width:720px;padding:28px;margin:35px auto;background:white;border:1px solid #d4ebdf;border-radius:24px}
-h1{font-size:27px;line-height:1.2}small{color:#547465}
-a{color:#047955}code{background:#e9f5ec;padding:3px 7px;border-radius:5px}.ok{color:#087a4b}.fail{color:#b03428}
-li{margin-bottom:12px}.label{font-weight:750}
-</style></head><body><main><img src="assets/teyza-sprout-wordmark.svg" width="188" height="55" alt="TEYZA"/>
-<h1>Spaza Quick Setup · Release R2</h1><p>This file only ships in the corrected <strong>TEYZA Spaza Quick Setup R2</strong> website package.</p>
-<p><strong>Release ID:</strong> <code>SPAZA_SETUP_R2_20261020</code></p>
-<h2>Check live files</h2><ol id="checks"><li>Checking…</li></ol>
-<p><small>If any check is red, the ZIP was not fully extracted into the live website directory, or the browser/server is still serving old files. Extract and overwrite the ZIP directly into the active <code>public_html</code> folder; then hard refresh.</small></p>
-<p><a href="dashboard.html?onboarding=1">Open dashboard</a> · <a href="business-profile.html?setup=spaza">Open quick setup</a> · <a href="seller-activation.html">Open activation</a></p></main>
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#003F4A">
+<title>TEYZA Full Website R3 | Release Check</title>
+<style>
+*{box-sizing:border-box}
+body{background:#f2faf5;color:#003f4a;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;margin:0}
+main{max-width:760px;padding:26px;margin:32px auto 48px;background:white;border:1px solid #d4ebdf;border-radius:24px;box-shadow:0 18px 55px #003f4a10}
+h1{font-size:clamp(25px,5vw,36px);line-height:1.17}
+h2{font-size:18px;margin:26px 0 8px}
+p{color:#547465}
+a{color:#047955}
+code{background:#e9f5ec;padding:3px 7px;border-radius:5px}
+.ok{color:#087a4b}.fail{color:#b03428}
+li{margin:12px 0;padding:9px 12px;border-radius:10px;background:#f8fbf8}
+.summary{font-weight:800;padding:15px;border:1px solid #c8e5d2;background:#edfaef;border-radius:14px}
+.help{background:#f5fbf6;border-radius:13px;padding:15px}
+.small{font-size:13px}
+@media(max-width:650px){main{margin:10px;padding:18px}}
+</style>
+</head>
+<body><main>
+<img src="assets/teyza-sprout-wordmark.svg" alt="TEYZA" width="185" height="55">
+<p class="small">WEBSITE DEPLOYMENT DIAGNOSTIC</p>
+<h1>TEYZA full website — Release R3</h1>
+<p>Confirm that the updated <strong>Spaza Shop dashboard</strong>, retailer pages, and activation service have all reached the same hosting folder. This page checks public file versions, not user accounts or bank details.</p>
+<div class="summary" id="summary" role="status" aria-live="polite">Checking public files…</div>
+<h2>Version verification</h2><ol id="checks"><li>Loading release files…</li></ol>
+<div class="help">
+ <strong>Still seeing the old nested verification popup?</strong>
+ <p class="small">Extract the <code>TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip</code> file into the <em>same folder</em> containing the live <code>index.html</code> and <code>dashboard.html</code>, replacing matching public files. Do not create a second website directory. Then clear your host/CDN cache and refresh with Ctrl+Shift+R.</p>
+ <p class="small">The ZIP does not overwrite Firebase runtime settings, private seller data or existing uploads.</p>
+</div>
+<p><a href="index.html">Homepage</a> · <a href="dashboard.html">Spaza dashboard</a> · <a href="business-profile.html?setup=spaza">Quick signup</a> · <a href="seller-activation.html">R99 activation</a></p>
+</main>
 <script>
 (async()=>{
- const files=[
-  {path:'dashboard.html',text:'SPAZA_QUICK_SETUP_20261020',label:'New dashboard (old popup removed)'},
-  {path:'js/guard.js',text:'seller-activation.html',label:'Correct signup routing'},
-  {path:'business-profile.html',text:'spaza-setup-hero',label:'Simplified Spaza form'},
-  {path:'js/business-profile.js',text:'spazaSetup',label:'Phone / ID / selfie setup'},
-  {path:'seller-activation.html',text:'R99',label:'R99 debit-order activation page'},
-  {path:'api/workspace.php',authRequired:true,label:'Backend accessible (authentication required)'},
-  {path:'assets/spaza-onboarding.css',text:'spaza-setup',label:'Mobile setup styling'}
- ];
- const ol=document.querySelector('#checks');ol.replaceChildren();
- for(const f of files){
-  const li=document.createElement('li');
-  try{
-   const r=await fetch(f.path+'?teyza_release='+Date.now(),{cache:'no-store'});
-   const body=await r.text();
-   // PHP seller API is intentionally private. A 401 proves the route is
-   // responding without pretending a public visitor can inspect its internals.
-   const pass=f.authRequired
-     ?r.status===401
-     :r.ok&&body.includes(f.text);
-   li.className=pass?'ok':'fail';
-   li.textContent=(pass?'✓ ':'✕ ')+f.label+(pass?'':(' — '+r.status+' or wrong file version'));
-  }catch(err){li.className='fail';li.textContent='✕ '+f.label+' — not accessible'}
-  ol.append(li);
- }
+  const release='TEYZA_FULL_SITE_R3_20261020';
+  const files=[
+    {path:'teyza-full-release-manifest.json',text:release,label:'R3 release manifest'},
+    {path:'index.html',text:release,label:'Public homepage'},
+    {path:'dashboard.html',text:release,label:'New Spaza dashboard'},
+    {path:'dashboard.html',absent:'id="teyzaOnboarding"',label:'Old nested dashboard popup removed'},
+    {path:'dashboard.html',absent:'onboarding-v2.js',label:'Retired popup script not loaded'},
+    {path:'business-profile.html',text:'spaza-setup-hero',label:'Simple business / face scan registration'},
+    {path:'retailer-dashboard.html',text:'RETAIL',label:'Other Retail / Wholesale dashboard'},
+    {path:'seller-activation.html',text:'R99',label:'Monthly listing activation page'},
+    {path:'assets/workspace.js',text:'teyza-sprout-wordmark-light.svg',label:'New growing-Y brand applied across workspace'},
+    {path:'js/guard.js',text:'business-profile.html?setup=spaza',label:'New seller login routing'},
+    {path:'assets/spaza-onboarding.css',text:'spaza-setup',label:'Mobile registration styles'},
+    {path:'js/spaza-activation.js',text:'seller-debit-order',label:'R99 activation scripts'}
+  ];
+  const ol=document.querySelector('#checks');ol.replaceChildren();
+  const cache=new Map();
+  let passed=0;
+  for(const file of files){
+    let result=cache.get(file.path);
+    if(!result){
+      try{
+        const response=await fetch(file.path+'?check='+Date.now(),{cache:'no-store'});
+        result={ok:response.ok,content:await response.text(),status:response.status};
+      }catch(_){result={ok:false,content:'',status:'offline'}}
+      cache.set(file.path,result);
+    }
+    const good=result.ok && (file.text?result.content.includes(file.text):!result.content.includes(file.absent));
+    if(good)passed++;
+    const li=document.createElement('li');
+    li.className=good?'ok':'fail';
+    li.textContent=(good?'✓ ':'✕ ')+file.label+(good?'':(' — missing/wrong version ('+result.status+')'));
+    ol.append(li);
+  }
+  const summary=document.querySelector('#summary');
+  summary.textContent=passed===files.length
+    ?('All '+passed+' checks passed. Full website R3 files are installed.')
+    :('Only '+passed+' of '+files.length+' checks passed — hosting files are mixed or cached.');
+  summary.className='summary '+(passed===files.length?'ok':'fail');
 })();
-</script></body></html>
+</script>
+</body></html>

@@ -1,0 +1,88 @@
+name: Teyza Full Website R3
+
+on:
+  push:
+    branches:
+      - feature/teyza-full-website-r3
+    paths:
+      - '*.html'
+      - '*.php'
+      - 'assets/**'
+      - 'js/**'
+      - 'api/**'
+      - 'scripts/build_teyza_full_site.py'
+      - '.github/workflows/teyza-full-website-release.yml'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '*.html'
+      - '*.php'
+      - 'assets/**'
+      - 'js/**'
+      - 'api/**'
+      - 'scripts/build_teyza_full_site.py'
+      - '.github/workflows/teyza-full-website-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  full_public_website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Validate PHP endpoints and site scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in api/*.php ./*.php; do
+            php -l "$file"
+          done
+          for file in js/*.js assets/*.js; do
+            # Test all modules through node's module parser; do not execute browser globals.
+            node --input-type=module --check < "$file"
+          done
+
+      - name: Validate TEYZA Spaza onboarding constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s business-profile.html
+          test -s seller-activation.html
+          test -s js/guard.js
+          test -s api/workspace.php
+          ! grep -q 'id="teyzaOnboarding"' dashboard.html
+          ! grep -q 'data-ob-business-frame' dashboard.html
+          ! grep -q 'onboarding-v2.js' dashboard.html
+          grep -q 'SPAZA_QUICK_SETUP_20261020' dashboard.html
+          grep -q 'seller-activation.html' js/guard.js
+          grep -q 'teyza-sprout-wordmark-light.svg' assets/workspace.js
+          grep -q 'seller-debit-order' api/workspace.php
+
+      - name: Build verified full public website ZIP
+        run: python3 scripts/build_teyza_full_site.py
+
+      - name: Test archive content and preserved settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'index.html'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'dashboard.html'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'teyza-release-check.html'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'assets/workspace.js'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'js/guard.js'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'api/workspace.php'
+          ! unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -q '^js/firebase-config.js$'
+          ! unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -q '^api/teyza-firebase-verify.php$'
+
+      - name: Upload full site — extract directly in live document root
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-FULL-WEBSITE-R3-COMPLETE
+          path: dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip
+          retention-days: 30
+          if-no-files-found: error
