@@ -622,7 +622,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final dDirectory=directory==null?double.infinity:
       km(area!.lat,area!.lng,directory.lat!,directory.lng!);
     final useMerchant=merchant!=null && dMerchant<=dDirectory;
-    final chosenName=useMerchant?merchant!.name:directory?.name;
+    final chosenName=useMerchant?merchant.name:directory?.name;
     final chosenDistance=useMerchant?dMerchant:dDirectory;
     final hasShop=chosenName!=null;
     final subtitle=hasShop?'Approx. '+chosenDistance.toStringAsFixed(1)+' km away':
@@ -633,7 +633,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       color:const Color(0xFFF1F8F4),borderRadius:BorderRadius.circular(18),
       child:InkWell(borderRadius:BorderRadius.circular(18),
         onTap:hasShop?(){
-          if(useMerchant)openShop(merchant!);
+          if(useMerchant)openShop(merchant);
           else selectDirectory(directory!);
         }:areaSheet,
         child:Padding(padding:const EdgeInsets.all(13),child:Row(children:[
