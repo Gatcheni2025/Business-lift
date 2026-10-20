@@ -221,6 +221,8 @@ if($action==='retail-details') {
     'complete'=>retailDetailsReady($workspace),'sellerCategory'=>'retail']);
 }
 if($action==='seller-subscription') {
+  if(categorySelectionRequired($workspace))
+    respond(403,['ok'=>false,'error'=>'Choose your seller category before requesting a listing']);
   $current=$workspace['subscription']??['plan'=>null,'status'=>'not_selected'];
   if($_SERVER['REQUEST_METHOD']==='POST') {
     $input=json_decode((string)file_get_contents('php://input'),true)?:[];
@@ -262,6 +264,8 @@ function validMandateUrl(string $url): bool {
   return count($hosts)>0&&in_array($host,$hosts,true);
 }
 if($action==='seller-debit-order'){
+  if(categorySelectionRequired($workspace))
+    respond(403,['ok'=>false,'error'=>'Choose Spaza Shop during registration first']);
   if(sellerCategory($workspace)!=='spaza')respond(403,['ok'=>false,'error'=>'Spaza subscription setup only']);
   $sub=$workspace['subscription']??[];
   $url=(string)($sub['mandateLink']??'');
