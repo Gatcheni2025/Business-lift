@@ -45,6 +45,21 @@ class _AccountState extends State<ShopperAccountPanel> {
       if (mounted) setState(() {status=authMessage(error);failure=true;});
     } finally { if (mounted) setState(() => working=false); }
   }
+  Future<void> googleLogin() async {
+    setState(() {working=true;status=null;failure=false;});
+    try {
+      await widget.session.signInWithGoogle();
+      if(mounted)setState(() {
+        status=widget.session.idToken!=null?'Welcome to Teyza!':'Google sign-in cancelled.';
+        failure=false;
+      });
+    } catch(e) {
+      if(mounted)setState(() {
+        status=authMessage(e);failure=true;
+      });
+    } finally {if(mounted)setState(()=>working=false);}
+  }
+
   Future<void> reset() async {
     if (!email.text.contains('@')) {
       setState(() {status='Enter your email above first.';failure=true;}); return;
@@ -165,6 +180,11 @@ class _AccountState extends State<ShopperAccountPanel> {
               onPressed:working?null:submit,
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
               child:Text(working?'Please wait…':registering?'Create shopper account':'Log in'))),
+            const SizedBox(height:12),
+            SizedBox(width:double.infinity,child:OutlinedButton.icon(
+              onPressed:working?null:googleLogin,
+              icon:const Icon(Icons.account_circle_outlined),
+              label:const Text('Continue with Google'))),
             const SizedBox(height:7),
             TextButton(onPressed:working?null:()=>setState(() {
               registering=!registering;status=null;
