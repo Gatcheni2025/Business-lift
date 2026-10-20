@@ -11,6 +11,7 @@ import 'shopper_auth.dart';
 import 'shopper_account.dart';
 import 'shopper_discovery.dart';
 import 'shopper_chat.dart';
+import 'shopper_splash.dart';
 
 const ink = Color(0xFF182831);
 const deep = Color(0xFF16332F);
@@ -131,6 +132,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<Shop> live = [];
   String? catalogueError;
   bool loading = true;
+  bool _launchReady=false;
+  bool _usingGps=false;
+  String _currentLocationDetail='';
+  bool showAllShops=false;
   Shop? selected;
   OnlineShop? directorySelected;
   String search = '';
@@ -152,10 +157,39 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
     refreshUnread();
-    load();
-    _restoreSavedArea();
+    _prepareLaunch();
     session.restore();
   }
+  Future<void> _prepareLaunch() async {
+    // Catalogue and area discovery start together. Never trap people forever
+    // on a splash screen when mobile data or location services are slow.
+    try {
+      await Future.wait<void>([load(),_restoreSavedArea()])
+        .timeout(const Duration(seconds:11));
+    } catch (_) {/* Continue with clear offline/permission states. */}
+    if(!mounted)return;
+    final urls=<String>[
+      ...live.where((s)=>s.photo.startsWith('https://')).take(3)
+        .map((s)=>s.photo),
+      ...online.where((s)=>s.origin=='google_places' &&
+        s.photoRef!=null && s.photoRef!.isNotEmpty).take(3)
+        .map((s)=>Uri.https('teyza.co.za','/api/shopper-place-photo.php',
+          {'ref':s.photoRef!}).toString()),
+      for(final name in ['bread','milk','eggs'])
+        photos+name+'.webp',
+    ];
+    try {
+      await Future.wait<void>(urls.map((url) async {
+        try {
+          await precacheImage(NetworkImage(url),context)
+            .timeout(const Duration(seconds:3));
+        } catch (_) {/* Individual photos may be unavailable. */}
+      })).timeout(const Duration(seconds:4));
+    } catch (_) {/* Placeholders remain visible for slow photo providers. */}
+    await Future<void>.delayed(const Duration(milliseconds:380));
+    if(mounted)setState(()=>_launchReady=true);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -217,6 +251,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(discoveryType==type)return;
     setState(() {
       discoveryType=type;
+      showAllShops=false;
       online=[];
       directorySelected=null;
       search='';
@@ -311,6 +346,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       setState(() {
         area = Area(placeName, city, position.latitude, position.longitude);
         locationName = placeName;
+        _usingGps=true;
+        _currentLocationDetail=placeName+(city.isNotEmpty && city!=placeName?', '+city:'');
         selected = null;
         directorySelected = null;
         search='';
@@ -331,6 +368,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     setState(() {
       area = choice;
       locationName = choice.label;
+      _usingGps=false;
+      _currentLocationDetail='';
       locationWarning = null;
       selected = null;
       directorySelected = null;
@@ -519,13 +558,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if (selected?.id != shop.id) cart.clear();
     selected = shop;
     directorySelected = null;
+    showAllShops=true;
     search = '';
     category = 'All';
-    tab = 1;
+    tab = 0;
   });
 
   void selectDirectory(OnlineShop shop)=>setState((){
-    directorySelected=shop;selected=null;search='';tab=1;cart.clear();
+    directorySelected=shop;selected=null;showAllShops=true;search='';tab=0;cart.clear();
   });
 
   Widget photo(String url,{double size=92, IconData icon=Icons.storefront_outlined}) =>
@@ -533,6 +573,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(15)),
       child:url.isEmpty ? Icon(icon,size:size*.48,color:aqua) :
         Image.network(url,fit:BoxFit.contain,
+          loadingBuilder:(context,child,progress)=>progress==null?child:
+            Center(child:Icon(icon,color:const Color(0xFF91CABA),size:size*.42)),
           errorBuilder:(_,error,stack)=>Icon(icon,color:aqua,size:size*.42)));
 
   Widget locationHeader() => Container(color: ink, padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
@@ -737,7 +779,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             borderRadius:BorderRadius.circular(15)),
           child:Column(children:[
             Expanded(child:Image.network(photos+x.$2+'.webp',
-              fit:BoxFit.contain,errorBuilder:(_,err,stack)=>
+              fit:BoxFit.contain,
+              loadingBuilder:(context,child,progress)=>progress==null?child:
+                const Icon(Icons.shopping_bag_outlined,color:Color(0xFF91CABA),size:44),
+              errorBuilder:(_,err,stack)=>
                 const Icon(Icons.shopping_bag_outlined,color:green,size:44))),
             const SizedBox(height:5),
             Text(x.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
