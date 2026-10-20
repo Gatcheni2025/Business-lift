@@ -100,13 +100,16 @@ function verificationState(array $workspace,array $user): array {
   $identityVerified=!empty($v['identity']['verified']);
   $identityStatus=(string)($v['identity']['status']??($identityVerified?'verified':'not_submitted'));
   $identitySubmitted=!empty($v['identity']['submittedAt'])&&in_array($identityStatus,['pending','verified'],true);
-  $completed=(int)$phoneVerified+(int)$identitySubmitted+(int)$locationConfirmed+(int)$proofUploaded;
+  $spaza=sellerCategory($workspace)==='spaza';
+  $photo=!empty($business['logoUrl']);
+  $completed=(int)$phoneVerified+(int)$identitySubmitted+(int)$locationConfirmed+(int)($spaza?$photo:$proofUploaded);
   return [
     'phoneVerified'=>$phoneVerified,
     'phoneVerifiedAt'=>$v['phone']['verifiedAt']??null,
     'identityVerified'=>$identityVerified,
     'identitySubmitted'=>$identitySubmitted,
     'identityStatus'=>$identityStatus,
+    'shopPhotoUploaded'=>$photo,
     'locationConfirmed'=>$locationConfirmed,
     'proofOfAddressUploaded'=>$proofUploaded,
     'proofAddressMatchVerified'=>$proofAddressMatchVerified,
@@ -226,7 +229,9 @@ if($action==='seller-subscription') {
     if(($input['publicListingConsent']??false)!==true)
       respond(422,['ok'=>false,'error'=>'Confirm that your shop name, photo and approximate business location may appear in the shopper app']);
     // Seller cannot set paid/active, transaction reference, expiry or price.
+    $existing=$workspace['subscription']??[];
     $workspace['subscription']=[
+      'mandateLink'=>$plan==='basic'?($existing['mandateLink']??null):null,
       'plan'=>$plan,
       'status'=>$plan==='basic'?'pending_payment':'quote_requested',
       'monthlyPriceCents'=>$plan==='basic'?9900:null,
@@ -243,6 +248,49 @@ if($action==='seller-subscription') {
   }
   respond(200,['ok'=>true,'subscription'=>$current,
     'paymentEnabled'=>false,'message'=>'Request saved. A listing is not activated until payment is independently verified by Teyza.']);
+}
+/* Debit-order account details must never pass through Teyza form or JSON.
+   Each seller gets a unique payment-provider-hosted HTTPS mandate link from an
+   authorised administrator. This link is NOT payment or activation evidence. */
+function validMandateUrl(string $url): bool {
+  $parts=parse_url($url);
+  if(!$parts||strtolower((string)($parts['scheme']??''))!=='https'
+     ||empty($parts['host'])||isset($parts['user'])||isset($parts['pass']))return false;
+  $host=strtolower((string)$parts['host']);
+  $hosts=array_filter(array_map('trim',explode(',',strtolower((string)(getenv('TEYZA_MANDATE_ALLOWED_HOSTS')?:'')))));
+  return count($hosts)>0&&in_array($host,$hosts,true);
+}
+if($action==='seller-debit-order'){
+  if(sellerCategory($workspace)!=='spaza')respond(403,['ok'=>false,'error'=>'Spaza subscription setup only']);
+  $sub=$workspace['subscription']??[];
+  $url=(string)($sub['mandateLink']??'');
+  $ready=($sub['plan']??'')==='basic'&&($sub['status']??'')!=='active'
+    &&$url!==''&&validMandateUrl($url);
+  respond(200,['ok'=>true,'amountCents'=>9900,'currency'=>'ZAR','cadence'=>'monthly',
+    'mandateReady'=>$ready,'mandateUrl'=>$ready?$url:null,
+    'subscriptionStatus'=>$sub['status']??'not_selected',
+    'message'=>$ready?'Open the secure provider page to authorise R99 per month.':
+      'Your debit-order link is being prepared. Do not enter bank details on Teyza.']);
+}
+if($action==='admin-debit-order-link') {
+  if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
+  if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'POST required']);
+  $input=json_decode((string)file_get_contents('php://input'),true)?:[];
+  $uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));
+  $url=trim((string)($input['url']??''));
+  if(!$uid||!validMandateUrl($url))respond(422,['ok'=>false,'error'=>'Use a unique HTTPS checkout URL from a configured approved mandate provider (TEYZA_MANDATE_ALLOWED_HOSTS)']);
+  $path=pathFor($uid);
+  if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);
+  $target=json_decode((string)file_get_contents($path),true);
+  if(sellerCategory($target)!=='spaza'||($target['subscription']['plan']??'')!=='basic')
+    respond(422,['ok'=>false,'error'=>'Seller must request the R99 Spaza plan first']);
+  if(($target['subscription']['status']??'')==='active')
+    respond(409,['ok'=>false,'error'=>'Subscription already active']);
+  $target['subscription']['mandateLink']=$url;
+  $target['subscription']['mandateLinkedAt']=gmdate('c');
+  $target['subscription']['mandateLinkedBy']=$user['email']??'admin';
+  file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);
+  respond(200,['ok'=>true,'message'=>'Seller-specific hosted mandate link saved. No payment status was changed.']);
 }
 if($action==='admin-seller-subscription') {
   if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);
@@ -314,8 +362,13 @@ if($status==='approved'){
   if(empty($v['phoneVerified']))respond(422,['ok'=>false,'error'=>'Verify the seller phone before approval']);
   if(empty($v['identityVerified']))respond(422,['ok'=>false,'error'=>'Approve the seller identity before company approval']);
   if(empty($v['locationConfirmed']))respond(422,['ok'=>false,'error'=>'The seller must confirm the business location on the map']);
-  if(empty($v['proofOfAddressUploaded']))respond(422,['ok'=>false,'error'=>'The seller must upload proof of address']);
-  if(empty($v['proofAddressMatchVerified']))respond(422,['ok'=>false,'error'=>'Confirm that the proof of address matches the map address before approval']);
+  if(sellerCategory($target)==='spaza') {
+    if(empty($v['shopPhotoUploaded']))
+      respond(422,['ok'=>false,'error'=>'Spaza owner must upload a shop photograph']);
+  } else {
+    if(empty($v['proofOfAddressUploaded']))respond(422,['ok'=>false,'error'=>'The seller must upload proof of address']);
+    if(empty($v['proofAddressMatchVerified']))respond(422,['ok'=>false,'error'=>'Confirm that the proof of address matches the map address before approval']);
+  }
 }
 $target['companyApproval']=['status'=>$status,'submittedAt'=>$target['companyApproval']['submittedAt']??null,'reviewedAt'=>gmdate('c'),'reviewedBy'=>$user['email']??'admin','note'=>trim((string)($input['note']??''))];file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true,'companyApproval'=>companyApproval($target)]);}
 if ($action==='seller-readiness') {
@@ -327,7 +380,12 @@ if ($action==='seller-readiness') {
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(array_key_exists('deliveryComplete',$input))$workspace['setupFlow']['deliveryComplete']=!empty($input['deliveryComplete']);if(array_key_exists('paymentComplete',$input))$workspace['setupFlow']['paymentComplete']=!empty($input['paymentComplete']);if(array_key_exists('sellerSetupComplete',$input))$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);$settings=$workspace['settings']??[];}
   // A confirmed map location may fill the address after the profile was last saved.
   // Derive readiness from the saved fields and checks, not a stale client flag.
-  $businessComplete=!categorySelectionRequired($workspace)&&empty($missing)&&((int)($verification['completed']??0)>=4)&&retailDetailsReady($workspace);
+  $businessComplete=!categorySelectionRequired($workspace)&&empty($missing)
+    &&!empty($verification['phoneVerified'])&&!empty($verification['identitySubmitted'])
+    &&!empty($verification['locationConfirmed'])
+    &&(sellerCategory($workspace)==='spaza'
+      ?!empty($verification['shopPhotoUploaded'])
+      :(!empty($verification['proofOfAddressUploaded'])&&retailDetailsReady($workspace)));
   $deliveryComplete=in_array(($settings['delivery']['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)
     &&isset($settings['delivery']['baseDeliveryFee'])&&is_numeric($settings['delivery']['baseDeliveryFee'])&&(float)$settings['delivery']['baseDeliveryFee']>=0
     &&!empty($verification['locationConfirmed'])&&sameAddress((string)($settings['delivery']['pickupAddress']??''),(string)($verification['location']['address']??''));
@@ -361,8 +419,15 @@ if ($action==='section') {
 }
 if ($action==='business' && $_SERVER['REQUEST_METHOD']==='POST') {
   $input=json_decode((string)file_get_contents('php://input'),true)?:[];
-  $allowed=['businessName','businessType','industry','country','phone','address','about','profileComplete','setupProgress'];
-  foreach($allowed as $key) if(array_key_exists($key,$input)) $workspace['business'][$key]=$input[$key];
+  $allowed=['businessName','businessType','industry','country','phone','address','about','profileComplete','setupProgress','registrationNumber'];
+  foreach($allowed as $key) if(array_key_exists($key,$input)) {
+    if(!is_string($input[$key])&&!is_numeric($input[$key])&&!is_bool($input[$key]))
+      respond(422,['ok'=>false,'error'=>'Invalid business field: '.$key]);
+    $workspace['business'][$key]=is_string($input[$key])?trim($input[$key]):$input[$key];
+  }
+  if(isset($workspace['business']['registrationNumber']) &&
+     strlen((string)$workspace['business']['registrationNumber'])>36)
+    respond(422,['ok'=>false,'error'=>'Company registration number too long']);
   $workspace['business']['updatedAt']=gmdate('c'); saveWorkspace($user,$workspace);
   respond(200,['ok'=>true,'business'=>$workspace['business']]);
 }
