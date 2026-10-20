@@ -72,6 +72,7 @@ async function load(){if(!currentUser||busy)return;button.disabled=true;retry.hi
   form.elements.about.value=business.about||'Local Spaza Shop';
   form.elements['industry'].required=false;
   form.elements['company-registration'].value=business.registrationNumber||'';
+  form.elements['company-name'].value=business.companyName||'';
 }
 hydrateBusiness(context,currentUser);updateSummary(business);renderLogo(business.logoUrl||'');initMap();await refreshVerification();status.hidden=!!context.business;if(!context.business)show('Finish your business details to create your workspace.','info');button.disabled=false;button.textContent='Save changes';}catch(error){context=null;show(workspaceError(error,'load your business profile'));retry.hidden=false;button.textContent='Save changes';}}
 form.addEventListener('submit',async e=>{e.preventDefault();if(busy)return;if(!context||!currentUser){show('Your profile has not loaded yet. Select Retry loading before saving.');retry.hidden=false;return;}if(!form.reportValidity())return;const payload={};for(const [field,key] of Object.entries(fields))payload[key]=form.elements[field].value.trim();if(!payload.businessName||(!spazaSetup&&!payload.industry)){show('Enter your shop name'+(spazaSetup?'.':' and industry.'));return;}
@@ -81,6 +82,7 @@ if(spazaSetup){
   payload.country='South Africa';
   payload.about=form.elements.about.value.trim()||'Local Spaza Shop';
   payload.registrationNumber=form.elements['company-registration'].value.trim();
+  payload.companyName=form.elements['company-name'].value.trim();
 }
 payload.profileComplete=completion(payload)===100;payload.setupProgress=completion(payload);busy=true;button.disabled=true;button.textContent='Saving…';show('Saving your business profile…','info');try{const saved=await saveBusinessProfile(currentUser,payload);const shopPayload={};for(const [field,key] of Object.entries(shopFields))shopPayload[key]=form.elements[field]?.value.trim()||'';shopPayload.shopName=payload.businessName;shopPayload.orderNotifications=true;shopPayload.lowStockNotifications=true;await api('section',{method:'POST',headers:{'Content-Type':'application/json','X-Workspace-Section':'shop'},body:JSON.stringify(shopPayload)});context.business=saved.business||{...context.business,...payload};hydrateBusiness(context,currentUser);updateSummary(context.business);await refreshVerification();show(spazaSetup?'Shop details saved. Verify your mobile number, confirm your address, upload your shop picture and submit your ID/passport and selfie.':payload.profileComplete?'Your business information is complete. Finish the verification checks shown on the right.':'Your business profile has been saved. Complete all fields before adding products.','success');}catch(error){show(workspaceError(error,'save your business profile'));}finally{busy=false;button.disabled=false;button.textContent='Save changes';}});
 function phoneError(e){const messages={
