@@ -8,6 +8,7 @@ on:
       - 'api/workspace.php'
       - 'api/teyza-server-health.php'
       - 'api/teyza-firebase-verify.php'
+      - 'scripts/build_teyza_workspace_repair.py'
       - '.github/workflows/teyza-php-workspace-recovery.yml'
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validate PHP syntax and required paths
+      - name: Validate PHP and storage health probe
         run: |
           set -euo pipefail
           php -l api/workspace.php
@@ -30,56 +31,8 @@ jobs:
           grep -q 'DATA_DIR_PERMISSIONS' api/workspace.php
           grep -q 'RECORD_JSON_INVALID' api/workspace.php
           grep -q 'php_at_least_8_1' api/teyza-server-health.php
-      - name: Package targeted public API repair
-        run: |
-          python3 - <<'PY'
-          from zipfile import ZipFile, ZIP_DEFLATED
-          from pathlib import Path
-          release=Path("TEYZA_PHP_WORKSPACE_500_SAFE_REPAIR.zip")
-          instruction="""TEYZA PHP WORKSPACE 500 — TARGETED REPAIR
-BACK UP your website and private_html/teyza-data BEFORE DEPLOYMENT.
-
-1. In cPanel, locate the actual live site directory containing index.html
-   and its api/ subfolder. Do not create an extra nested public_html.
-2. Upload and extract this ZIP in that SAME live website directory.
-   Overwrite api/workspace.php with this updated API code.
-   It will add safe explicit error codes instead of generic HTTP 500
-   and will refuse to overwrite unreadable or corrupted seller records.
-3. Open https://teyza.co.za/api/teyza-server-health.php
-   The checks show PHP version compatibility, presence of the server-side
-   Firebase verifier, and private_html/teyza-data access (no user data).
-4. IF and ONLY IF firebase_verifier_present is false:
-   Copy OPTIONAL_RESTORE_IF_MISSING/teyza-firebase-verify.php into the LIVE
-   api/ folder as api/teyza-firebase-verify.php.
-   Check the Firebase project matches your existing configuration.
-   Do NOT overwrite an existing working auth helper without backup.
-5. If php_at_least_8_1 is false, choose PHP 8.2+ in cPanel PHP Selector
-   / MultiPHP Manager after confirming other site PHP scripts support it.
-6. If private_html or teyza-data checks fail, locate your original records.
-   Restore the original private_html/teyza-data folder and permissions.
-   Do NOT move records under public_html and do NOT make data world-writeable.
-7. Reload the sign-in page (Ctrl+Shift+R), sign in and read the exact
-   PHP workspace code if it still fails. Check cPanel PHP error_log for
-   TEYZA_WORKSPACE_* (do not share Firebase tokens or seller records).
-8. Remove api/teyza-server-health.php when resolved.
-
-This ZIP contains only TWO files installed automatically into api/,
-plus the OPTIONAL Firebase helper that is NOT auto-deployed.
-No database or customer records are included. No payments change.
-"""
-          items={
-            "api/workspace.php":Path("api/workspace.php").read_bytes(),
-            "api/teyza-server-health.php":Path("api/teyza-server-health.php").read_bytes(),
-            "OPTIONAL_RESTORE_IF_MISSING/teyza-firebase-verify.php":Path("api/teyza-firebase-verify.php").read_bytes(),
-            "README_REPAIR_500.txt":instruction.encode(),
-          }
-          with ZipFile(release,"w",ZIP_DEFLATED) as z:
-            for name,data in items.items():z.writestr(name,data)
-          with ZipFile(release) as z:
-            assert z.testzip() is None
-            assert set(z.namelist())==set(items)
-          print("Repair ZIP OK",release.stat().st_size,"bytes")
-          PY
+      - name: Package small, safe API repair
+        run: python3 scripts/build_teyza_workspace_repair.py
       - name: Upload targeted 500 repair
         uses: actions/upload-artifact@v4
         with:
