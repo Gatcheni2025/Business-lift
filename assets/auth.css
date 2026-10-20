@@ -9,3 +9,8 @@
 .tz-type-option input{width:18px;height:18px;min-height:18px;accent-color:#078d63;flex-shrink:0}
 .tz-type-option strong{display:block;font-size:14px;color:#173b30}
 .tz-type-option small{display:block;font-size:11px;color:#5d7368;margin-top:3px}
+
+/* Complete seller classification after Google login without a selected shop type. */
+.auth-backdrop:not(.completing-category) [data-finish-category]{display:none!important}
+.auth-backdrop.completing-category .auth-providers,.auth-backdrop.completing-category .auth-divider,.auth-backdrop.completing-category .auth-switch,.auth-backdrop.completing-category form{display:none!important}
+.auth-backdrop.completing-category [data-finish-category]{display:block;width:100%;margin-top:16px}
