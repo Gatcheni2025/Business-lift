@@ -78,7 +78,7 @@ jobs:
       - name: Package TEYZA simplified Spaza seller onboarding website
         run: |
           mkdir -p deploy/api deploy/js deploy/assets
-          cp api/workspace.php deploy/api/
+          cp api/workspace.php api/business-logo.php api/verification-upload.php deploy/api/
           cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js js/business-profile.js js/spaza-activation.js deploy/js/
           cp index.html dashboard.html business-profile.html seller-activation.html retailer-dashboard.html admin-sellers.html seller-subscriptions.html deploy/
           cp assets/spaza-onboarding.css assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-logo.svg assets/teyza-sprout-wordmark.svg assets/teyza-sprout-wordmark-light.svg assets/teyza-shopper-preview.svg deploy/assets/
