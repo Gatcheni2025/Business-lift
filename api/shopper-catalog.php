@@ -36,10 +36,22 @@ foreach (glob($directory.'/*.json') ?: [] as $file) {
   // Never show an unapproved seller or a seller who has not opted into the app.
   if (($merchant['companyApproval']['status']??'')!=='approved'
       || ($business['shopperEnabled']??false)!==true) continue;
+  $subscription=$merchant['subscription']??null;
+  $subscriptionPlan='legacy';
+  $sponsored=false;
+  $allowProducts=true;
+  if(is_array($subscription)) {
+    $status=(string)($subscription['status']??'not_selected');
+    $expiry=strtotime((string)($subscription['expiresAt']??''));
+    if($status!=='active'||$expiry===false||$expiry<=time())continue;
+    $subscriptionPlan=(string)($subscription['plan']??'basic');
+    $allowProducts=in_array($subscriptionPlan,['plus','sponsored'],true);
+    $sponsored=$subscriptionPlan==='sponsored';
+  }
   $name=label($business['businessName']??'',110);
   if ($name==='') continue;
   $products=[];
-  foreach (($merchant['products']??[]) as $product) {
+  foreach ($allowProducts?($merchant['products']??[]):[] as $product) {
     if (count($products)>=120) break;
     if (!is_array($product)) continue;
     $status=strtolower(label($product['verificationStatus']??'',35));
@@ -57,7 +69,7 @@ foreach (glob($directory.'/*.json') ?: [] as $file) {
     $products[]=['id'=>$id,'name'=>label($product['name']??'',110),
       'category'=>$category,'priceCents'=>(int)round($price*100),'stock'=>$stock,'imageUrl'=>$picture];
   }
-  if (count($products)===0) continue;
+  if (count($products)===0 && $subscriptionPlan==='legacy') continue;
   $settings=$merchant['settings']['delivery']??[];
   $pickupEnabled=(($settings['fulfilmentMode']??'pickup')==='pickup') || !empty($settings['pickupEnabled']);
   $deliveryEnabled=in_array(($settings['fulfilmentMode']??''),['own_driver','courier'],true) || !empty($settings['deliveryEnabled']);
@@ -96,10 +108,11 @@ foreach (glob($directory.'/*.json') ?: [] as $file) {
     'photoUrl'=>publicUrl(label($business['logoUrl']??'',300)),
     'latitude'=>$approxLat,'longitude'=>$approxLng,
     'pickupEnabled'=>$pickupEnabled,'deliveryEnabled'=>$deliveryEnabled,
+    'listingPlan'=>$subscriptionPlan,'sponsored'=>$sponsored,
     'shopCategory'=>$shopperType,'services'=>['cardPayments'=>$cardPayments,'cashback'=>$cashback],
     'deliveryFeeCents'=>$deliveryEnabled?(int)round(max(0,(float)($settings['baseDeliveryFee']??0))*100):0,
     'whatsappPhone'=>$publicPhone,'products'=>$products
   ];
 }
-usort($shops,fn($a,$b)=>strnatcasecmp($a['name'],$b['name']));
+usort($shops,fn($a,$b)=>(int)$b['sponsored']<=>(int)$a['sponsored'] ?: strnatcasecmp($a['name'],$b['name']));
 echo json_encode(['ok'=>true,'version'=>1,'shops'=>$shops,'count'=>count($shops)],JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE);
