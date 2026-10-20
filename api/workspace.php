@@ -34,9 +34,8 @@ function sellerCategory(array $workspace): string {
   $business=$workspace['business']??[];
   $category=(string)($business['sellerCategory']??'');
   if($category==='retail'||$category==='spaza')return $category;
-  // Preserve existing merchants and infer old 'businessType' where clear.
-  $type=strtolower((string)($business['businessType']??''));
-  return preg_match('/wholesale|china mall|china mart|retail|department|variety/i',$type)?'retail':'spaza';
+  // Legacy sellers never get reclassified solely because of freeform text.
+  return 'spaza';
 }
 function retailDetailsReady(array $workspace): bool {
   if(sellerCategory($workspace)!=='retail')return true;
@@ -162,6 +161,13 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bootstrap') {
       $workspace['business']['sellerCategory']=$newCategory;
       $workspace['business']['shopperCategory']=$newCategory==='spaza'?'spaza':'variety';
       $workspace['business']['registrationCategorySelectedAt']=gmdate('c');
+      if($newCategory==='spaza'){
+        // Pre-fill business classification; sellers still verify their phone,
+        // identity, physical location and address before approval.
+        $workspace['business']['businessType']='Retail';
+        $workspace['business']['industry']='Convenience and groceries';
+        $workspace['business']['country']='South Africa';
+      }
       $workspace['companyApproval']['status']='pending';
     }elseif($oldCategory!==$newCategory){
       respond(409,['ok'=>false,'error'=>'This account is already registered as a different shop type. Contact Teyza support to change it.']);
@@ -302,7 +308,10 @@ if($status==='approved'){
 }
 $target['companyApproval']=['status'=>$status,'submittedAt'=>$target['companyApproval']['submittedAt']??null,'reviewedAt'=>gmdate('c'),'reviewedBy'=>$user['email']??'admin','note'=>trim((string)($input['note']??''))];file_put_contents($path,json_encode($target,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);respond(200,['ok'=>true,'companyApproval'=>companyApproval($target)]);}
 if ($action==='seller-readiness') {
-  $business=$workspace['business']??[];$required=['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))===''||($key==='businessName'&&trim((string)($business[$key]??''))==='Your Teyza Store'))$missing[]=$key;
+  $business=$workspace['business']??[];
+  $required=sellerCategory($workspace)==='spaza'
+    ?['businessName','phone','address']
+    :['businessName','businessType','industry','country','phone','address','about'];$missing=[];foreach($required as $key)if(trim((string)($business[$key]??''))===''||($key==='businessName'&&trim((string)($business[$key]??''))==='Your Teyza Store'))$missing[]=$key;
   $settings=$workspace['settings']??[];$verification=verificationState($workspace,$user);
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(array_key_exists('deliveryComplete',$input))$workspace['setupFlow']['deliveryComplete']=!empty($input['deliveryComplete']);if(array_key_exists('paymentComplete',$input))$workspace['setupFlow']['paymentComplete']=!empty($input['paymentComplete']);if(array_key_exists('sellerSetupComplete',$input))$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);$settings=$workspace['settings']??[];}
   // A confirmed map location may fill the address after the profile was last saved.
