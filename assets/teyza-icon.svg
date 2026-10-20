@@ -1,8 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-<title id="title">Teyza</title><desc id="desc">Teyza gradient square logo with white T</desc>
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#19c8f6"/><stop offset=".38" stop-color="#2459ee"/><stop offset=".7" stop-color="#7728e8"/><stop offset="1" stop-color="#ff2e86"/>
-</linearGradient><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#4a43d4" flood-opacity=".18"/></filter></defs>
-<rect x="48" y="48" width="416" height="416" rx="110" fill="url(#g)" filter="url(#s)"/>
-<path d="M174 160h204l-13 58h-69l-31 141h-62l31-141h-73z" fill="#fff"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TEYZA growing Y flower"><defs>
+<linearGradient id="teal" x1="0" y1="0" x2=".28" y2="1"><stop stop-color="#087780"/><stop offset="1" stop-color="#003A46"/></linearGradient>
+<linearGradient id="stem" x1="0" y1="0" x2=".73" y2="1"><stop stop-color="#C2EE37"/><stop offset=".48" stop-color="#62C32D"/><stop offset="1" stop-color="#078553"/></linearGradient>
+<linearGradient id="leaf" x1="0" y1="0" x2="1" y2=".85"><stop stop-color="#ADE929"/><stop offset=".48" stop-color="#55C02B"/><stop offset="1" stop-color="#087D4B"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2=".45" y2="1"><stop stop-color="#FFE136"/><stop offset=".49" stop-color="#FFB31C"/><stop offset="1" stop-color="#F66A1D"/></linearGradient>
+<linearGradient id="square" x1="0" y1="0" x2=".95" y2="1"><stop stop-color="#087B80"/><stop offset="1" stop-color="#00404D"/></linearGradient>
+</defs><rect width="512" height="512" rx="112" fill="url(#square)"/><circle cx="256" cy="238" r="185" fill="#FFFFFF" opacity=".052"/><g transform="translate(-432 73) scale(1.08)"><g aria-label="Growing Y flower and leaves">
+<path d="M485 21C555 24 619 55 632 173C593 164 551 143 524 108C505 80 501 43 485 21Z" fill="url(#leaf)"/>
+<path d="M486 21C548 47 597 111 628 171C581 159 535 122 520 85Z" fill="#BDF02D" opacity=".28"/>
+<path d="M508 34C564 65 604 109 628 164" fill="none" stroke="#136D47" stroke-width="4" stroke-linecap="round" opacity=".3"/>
+<path d="M629 171C633 110 656 66 698 42C730 23 762 18 790 22C753 62 737 117 684 154C661 171 644 197 641 220Z" fill="url(#sun)"/>
+<path d="M655 146C681 86 731 42 790 22C737 59 701 118 648 186Z" fill="#FFE86B" opacity=".3"/>
+<path d="M649 179C678 123 723 61 773 35" stroke="#FFE887" stroke-width="4" fill="none" opacity=".44"/>
+<path d="M558 140C585 158 606 174 625 205C639 224 643 245 644 276V305C644 332 628 346 605 346H586C560 346 545 327 545 303V233C543 194 523 165 495 137C529 145 543 148 558 140Z" fill="url(#stem)"/>
+<path d="M541 164C589 183 619 236 620 329C608 338 594 343 579 343C586 290 569 219 541 164Z" fill="#007B55" opacity=".18"/>
+</g></g></svg>
