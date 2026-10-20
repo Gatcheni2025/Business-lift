@@ -32,3 +32,7 @@
 @media(max-width:660px){.spaza-setup .page-main{padding:18px 12px 40px}.spaza-setup .spaza-setup-hero{padding:18px}.spaza-setup .spaza-setup-hero img{display:none}.spaza-setup .section-card{padding:18px}.spaza-setup .spaza-setup-pills{gap:5px}.spaza-setup .spaza-setup-pills span{font-size:10px}.spaza-setup .business-logo-editor{flex-wrap:wrap}}
 
 .spaza-photo-check{display:none!important}.spaza-setup .spaza-photo-check{display:flex!important}
+
+.spaza-setup details.optional-company{margin:14px 0;padding:13px 16px;background:#f6fbf8;border-radius:14px;border:1px solid #dfebe3}
+.spaza-setup details.optional-company summary{font-size:13px;font-weight:800;color:#006f55;cursor:pointer}
+.spaza-setup details.optional-company .form-grid{margin-top:13px}
