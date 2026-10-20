@@ -274,7 +274,7 @@ class _ShopperHomeState extends State<ShopperHome> {
     }
   }
 
-  void chooseArea(Area choice,{bool persist=true}) {
+  Future<void> chooseArea(Area choice,{bool persist=true}) async {
     setState(() {
       area = choice;
       locationName = choice.label;
@@ -286,35 +286,44 @@ class _ShopperHomeState extends State<ShopperHome> {
       tab = 0;
     });
     if (persist) {
-      SharedPreferences.getInstance().then((prefs)=>
-        prefs.setString('teyza_selected_area',choice.label));
+      final prefs=await SharedPreferences.getInstance();
+      await prefs.setString('teyza_selected_area',choice.label);
     }
-    reloadOnline();
+    await reloadOnline();
   }
   Future<void> areaSheet() async {
-    await showModalBottomSheet<void>(context: context, showDragHandle: true,
-      isScrollControlled: true, builder: (modal) => SafeArea(
-        child: Padding(padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Where are you shopping?', style: TextStyle(fontSize: 23,
-              fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            const Text('Your area helps find nearby shops. Approximate coordinates '
-              'are sent to our directory search only when you select an area or GPS. '
-              'Exact GPS coordinates are not included in the public request.',
-              style: TextStyle(color: muted)),
-            const SizedBox(height: 14),
-            FilledButton.icon(onPressed: () {
-              Navigator.pop(modal);
-              useLocation();
-            }, icon: const Icon(Icons.my_location), label: const Text('Use my current location')),
-            const SizedBox(height: 12),
-            const Text('Or choose an area', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 310, child: ListView(children: areas.map((a) =>
-              ListTile(leading: const Icon(Icons.location_on_outlined, color: green),
-                title: Text(a.label), subtitle: Text(a.city),
-                onTap: () { chooseArea(a); Navigator.pop(modal); })).toList()))
-          ]))));
+    await showModalBottomSheet<void>(
+      context:context, showDragHandle:true, isScrollControlled:true,
+      useSafeArea:true, backgroundColor:pale,
+      builder:(sheetContext)=>FractionallySizedBox(
+        heightFactor:.91,
+        child:_NearbySpazaPicker(
+          initialArea:area, initialOnline:online, initialMerchants:nearbyReal,
+          initialError:onlineWarning, initialLoading:loadingOnline,
+          onLocate:() async {
+            await useLocation();
+            return (area:area, places:online, merchants:nearbyReal,
+              error:locationWarning??onlineWarning);
+          },
+          onChooseArea:(choice) async {
+            await chooseArea(choice);
+            return (area:area, places:online, merchants:nearbyReal,
+              error:onlineWarning);
+          },
+          onRefresh:() async {
+            await reloadOnline();
+            return (area:area, places:online, merchants:nearbyReal,
+              error:onlineWarning);
+          },
+          onOpenOnline:(shop) {
+            Navigator.of(sheetContext).pop();
+            selectDirectory(shop);
+          },
+          onOpenMerchant:(shop) {
+            Navigator.of(sheetContext).pop();
+            openShop(shop);
+          },
+        )));
   }
 
   double? distance(Shop shop) {
@@ -874,4 +883,237 @@ class _ShopperHomeState extends State<ShopperHome> {
     const Text('Shop owners publish verified stock at teyza.co.za.',
       textAlign:TextAlign.center,style:TextStyle(color:muted,fontSize:12)),
   ]);
+}
+
+
+typedef _NearbyPickerResult = ({
+  Area? area,
+  List<OnlineShop> places,
+  List<Shop> merchants,
+  String? error,
+});
+
+/// Shows real nearby shops right inside "Where are you shopping?".
+class _NearbySpazaPicker extends StatefulWidget {
+  final Area? initialArea;
+  final List<OnlineShop> initialOnline;
+  final List<Shop> initialMerchants;
+  final String? initialError;
+  final bool initialLoading;
+  final Future<_NearbyPickerResult> Function() onLocate, onRefresh;
+  final Future<_NearbyPickerResult> Function(Area) onChooseArea;
+  final ValueChanged<OnlineShop> onOpenOnline;
+  final ValueChanged<Shop> onOpenMerchant;
+  const _NearbySpazaPicker({
+    required this.initialArea, required this.initialOnline,
+    required this.initialMerchants, required this.initialError,
+    required this.initialLoading, required this.onLocate,
+    required this.onChooseArea, required this.onRefresh,
+    required this.onOpenOnline, required this.onOpenMerchant
+  });
+  @override
+  State<_NearbySpazaPicker> createState()=>_NearbySpazaPickerState();
+}
+
+class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
+  Area? current;
+  List<OnlineShop> found=[];
+  List<Shop> selling=[];
+  String? error;
+  String query='';
+  bool busy=false;
+  bool showAreas=false;
+
+  @override
+  void initState() {
+    super.initState();
+    current=widget.initialArea;
+    found=widget.initialOnline;
+    selling=widget.initialMerchants;
+    error=widget.initialError;
+    if(current!=null && (widget.initialLoading || found.isEmpty)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if(mounted) _perform(widget.onRefresh);
+      });
+    }
+  }
+
+  Future<void> _perform(Future<_NearbyPickerResult> Function() request) async {
+    if(busy)return;
+    setState(() {busy=true;error=null;});
+    try {
+      final updated=await request();
+      if(!mounted)return;
+      setState(() {
+        current=updated.area;
+        found=updated.places;
+        selling=updated.merchants;
+        error=updated.error;
+        showAreas=false;
+      });
+    } catch (_) {
+      if(mounted)setState(() => error='Unable to find nearby shops. Try another area.');
+    } finally {
+      if(mounted)setState(()=>busy=false);
+    }
+  }
+
+  double? _distance(double? lat,double? lng) {
+    if(current==null||lat==null||lng==null)return null;
+    return km(current!.lat,current!.lng,lat,lng);
+  }
+  String _distanceLabel(double? value) {
+    if(value==null)return '';
+    return ' · '+value.toStringAsFixed(1)+' km away';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final term=query.trim().toLowerCase();
+    final filteredOnline=found.where((shop)=>term.isEmpty||
+      (shop.name+' '+shop.area+' '+shop.address).toLowerCase().contains(term))
+      .toList()
+      ..sort((a,b)=> (_distance(a.lat,a.lng)??double.infinity)
+        .compareTo(_distance(b.lat,b.lng)??double.infinity));
+    final filteredMerchants=selling.where((shop)=>term.isEmpty||
+      (shop.name+' '+shop.area).toLowerCase().contains(term))
+      .toList()
+      ..sort((a,b)=>(_distance(a.latitude,a.longitude)??double.infinity)
+        .compareTo(_distance(b.latitude,b.longitude)??double.infinity));
+    final googleResults=filteredOnline.any((shop)=>shop.origin=='google_places');
+
+    return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Padding(padding:const EdgeInsets.fromLTRB(20,2,20,12),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('Where are you shopping?',style:TextStyle(
+            fontSize:25,fontWeight:FontWeight.w900,color:ink)),
+          const SizedBox(height:4),
+          Text(current==null?'Find a nearby spaza shop by location or suburb.':
+            'Spaza shops near '+current!.label,
+            style:const TextStyle(color:muted,fontSize:13)),
+          const SizedBox(height:14),
+          SizedBox(width:double.infinity,child:FilledButton.icon(
+            onPressed:busy?null:()=>_perform(widget.onLocate),
+            icon:const Icon(Icons.my_location),
+            label:Text(current==null?'Find spaza shops near me':'Update my GPS location'),
+          )),
+          const SizedBox(height:8),
+          OutlinedButton.icon(
+            onPressed:busy?null:()=>setState(()=>showAreas=!showAreas),
+            icon:const Icon(Icons.location_city_outlined),
+            label:Text(current==null?'Choose suburb instead':
+              'Change area: '+current!.label)),
+          if(showAreas)Container(
+            margin:const EdgeInsets.only(top:8),
+            height:170,
+            decoration:BoxDecoration(color:Colors.white,
+              borderRadius:BorderRadius.circular(13)),
+            child:ListView(children:areas.map((a)=>ListTile(
+              dense:true,leading:const Icon(Icons.place_outlined,color:green),
+              title:Text(a.label),subtitle:Text(a.city),
+              onTap:busy?null:()=>_perform(()=>widget.onChooseArea(a))
+            )).toList())),
+          if(current!=null)...[
+            const SizedBox(height:9),
+            TextField(onChanged:(v)=>setState(()=>query=v),
+              decoration:InputDecoration(hintText:'Search nearby spaza shops',
+                prefixIcon:const Icon(Icons.search),isDense:true,
+                filled:true,fillColor:Colors.white,
+                border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),
+                  borderSide:BorderSide.none))),
+          ],
+        ])),
+      Expanded(child:busy
+        ?const Center(child:Column(mainAxisSize:MainAxisSize.min,children:[
+            CircularProgressIndicator(),
+            SizedBox(height:12),
+            Text('Finding spaza shops in your area...',style:TextStyle(color:muted)),
+          ]))
+        :current==null
+          ?const Center(child:Padding(padding:EdgeInsets.all(22),child:
+              Column(mainAxisSize:MainAxisSize.min,children:[
+                Icon(Icons.storefront_outlined,size:52,color:green),
+                SizedBox(height:12),
+                Text('See shops around you',style:TextStyle(
+                  fontSize:21,fontWeight:FontWeight.w900,color:ink)),
+                SizedBox(height:6),
+                Text('Use GPS or select a suburb to find real spaza shops.',
+                  textAlign:TextAlign.center,style:TextStyle(color:muted)),
+              ])))
+          :ListView(padding:const EdgeInsets.fromLTRB(16,0,16,24),children:[
+              if(error!=null)Card(color:const Color(0xFFFFF2E6),
+                child:Padding(padding:const EdgeInsets.all(12),
+                  child:Text(error!,style:const TextStyle(color:ink)))),
+              if(filteredMerchants.isNotEmpty)...[
+                const Padding(padding:EdgeInsets.only(top:12,bottom:8),
+                  child:Text('SHOPS SELLING ON TEYZA',style:TextStyle(
+                    fontSize:13,color:green,fontWeight:FontWeight.w900))),
+                ...filteredMerchants.map((shop)=>Card(color:Colors.white,
+                  child:ListTile(
+                    leading:const CircleAvatar(backgroundColor:Color(0xFFE4F3EA),
+                      child:Icon(Icons.verified_outlined,color:green)),
+                    title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
+                    subtitle:Text(shop.area+_distanceLabel(
+                      _distance(shop.latitude,shop.longitude))+'\n'+
+                      shop.products.length.toString()+' available products',maxLines:3),
+                    isThreeLine:true,
+                    trailing:const Icon(Icons.arrow_forward_ios,color:green,size:17),
+                    onTap:()=>widget.onOpenMerchant(shop)))),
+              ],
+              if(filteredOnline.isNotEmpty)...[
+                Padding(padding:const EdgeInsets.only(top:12,bottom:7),
+                  child:Row(children:[
+                    const Expanded(child:Text('OTHER NEARBY SPAZA SHOPS',
+                      style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink))),
+                    if(googleResults)const Text('Google Maps',
+                      style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))),
+                  ])),
+                ...filteredOnline.map((shop)=>Card(color:Colors.white,
+                  child:ListTile(
+                    contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:4),
+                    leading:const CircleAvatar(backgroundColor:Color(0xFFE4F3EA),
+                      child:Icon(Icons.storefront_outlined,color:green)),
+                    title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
+                    subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                      Text(shop.address.isNotEmpty?shop.address:shop.area,
+                        maxLines:2,overflow:TextOverflow.ellipsis),
+                      Text((shop.origin=='google_places'?'Google Maps listing':'Public directory')+
+                        _distanceLabel(_distance(shop.lat,shop.lng)),
+                        style:const TextStyle(fontSize:11,color:muted)),
+                      const Text('Shop products not yet connected',
+                        style:TextStyle(fontSize:11,color:muted)),
+                    ]),
+                    trailing:const Icon(Icons.chevron_right,color:green),
+                    onTap:()=>widget.onOpenOnline(shop)))),
+              ],
+              if(filteredMerchants.isEmpty&&filteredOnline.isEmpty)
+                Padding(padding:const EdgeInsets.symmetric(vertical:30,horizontal:12),
+                  child:Column(children:[
+                    const Icon(Icons.search_off,size:47,color:green),
+                    const SizedBox(height:10),
+                    Text(term.isNotEmpty?'No matching shop found':
+                      'No nearby spazas found right now',
+                      textAlign:TextAlign.center,style:const TextStyle(
+                        fontWeight:FontWeight.bold,fontSize:17)),
+                    const SizedBox(height:8),
+                    const Text('Try refreshing, using GPS, or selecting another suburb.',
+                      textAlign:TextAlign.center,style:TextStyle(color:muted)),
+                  ])),
+              if(found.isNotEmpty && !googleResults)
+                const Padding(padding:EdgeInsets.only(top:12),
+                  child:Text('Public directory information may be incomplete. '
+                    '© OpenStreetMap contributors (ODbL) for OpenStreetMap results.',
+                    style:TextStyle(color:muted,fontSize:11))),
+            ])),
+      Padding(padding:const EdgeInsets.fromLTRB(18,3,18,13),
+        child:Row(children:[
+          const Expanded(child:Text(
+            'Shop locations are approximate. Prices and stock appear only for registered Teyza shops.',
+            style:TextStyle(fontSize:11,color:muted))),
+          IconButton(tooltip:'Refresh nearby shops',
+            onPressed:busy||current==null?null:()=>_perform(widget.onRefresh),
+            icon:const Icon(Icons.refresh,color:green))
+        ]))
+    ]);
+  }
 }
