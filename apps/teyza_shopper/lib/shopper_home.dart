@@ -576,6 +576,13 @@ class _ShopperHomeState extends State<ShopperHome> {
         if(subtitle!=null) Text(subtitle,style:const TextStyle(color:muted,fontSize:11))])),
       if(action!=null)action]));
 
+  Widget categoryPicker()=>Wrap(spacing:8,runSpacing:6,children:[
+    ChoiceChip(label:const Text('Spaza Shops'),selected:discoveryType=='spaza',
+      onSelected:(_)=>setDiscoveryType('spaza')),
+    ChoiceChip(label:const Text('Variety & Wholesale'),selected:discoveryType=='variety',
+      onSelected:(_)=>setDiscoveryType('variety')),
+  ]);
+
   Widget homePage()=>RefreshIndicator(onRefresh:load,child:ListView(
     padding:const EdgeInsets.fromLTRB(16,15,16,22),children:[
       if(locationWarning!=null) Card(color:const Color(0xFFFFF1D9),
@@ -588,7 +595,10 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(catalogueError!=null) Padding(padding:const EdgeInsets.only(top:8),
         child:Text('Real-shop connection: '+catalogueError!,
           style:const TextStyle(color:muted,fontSize:11))),
-      section('REAL SPAZA SHOPS',subtitle:'Find existing local spazas near you',
+      categoryPicker(),
+      section(discoveryType=='spaza'?'REAL SPAZA SHOPS':'VARIETY & WHOLESALE',
+        subtitle:discoveryType=='spaza'?'Find local spazas near you':
+          'Discover China Malls, China Marts and variety retailers',
         action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
       if(displayedOnline.isNotEmpty)
         SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
@@ -598,7 +608,7 @@ class _ShopperHomeState extends State<ShopperHome> {
           children:displayShops.take(9).map(quickShop).toList()))
       else if(loadingOnline)const Padding(padding:EdgeInsets.all(18),
         child:Center(child:CircularProgressIndicator())),
-      section('SPAZAS FOUND ONLINE',
+      section(discoveryType=='spaza'?'SPAZAS FOUND ONLINE':'VARIETY STORES FOUND ONLINE',
         subtitle:'Named local shops · tap to see shop details',
         action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
       if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
@@ -611,7 +621,7 @@ class _ShopperHomeState extends State<ShopperHome> {
           style:TextStyle(color:muted,fontSize:12)),
       Card(color:const Color(0xFFE5F4ED),
         child:ListTile(leading:const Icon(Icons.add_business_outlined,color:green),
-          title:const Text('Own a spaza? Register with Teyza',
+          title:const Text('Own a shop? Register with Teyza',
             style:TextStyle(fontSize:13,fontWeight:FontWeight.bold)),
           subtitle:const Text('Claim your shop and publish actual product prices.'),
           trailing:const Icon(Icons.open_in_new,size:17),
@@ -656,7 +666,7 @@ class _ShopperHomeState extends State<ShopperHome> {
       if(displayShops.isEmpty)empty('More shop catalogues coming soon',
         'Real shops are listed above. Owners can claim their store and publish confirmed products.'),
       ...displayShops.take(5).map((s)=>shopTile(s)),
-      section('MORE NEIGHBOURHOOD SPAZAS',
+      section(discoveryType=='spaza'?'MORE NEIGHBOURHOOD SPAZAS':'MORE VARIETY & WHOLESALE',
         subtitle:'Found online · product catalogues not connected yet'),
       ...displayedOnline.skip(4).take(14).map(onlineTile),
       if(online.any((x)=>x.origin=='google_places'))
@@ -749,7 +759,8 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   Widget allShopsPage()=>ListView(
     padding:const EdgeInsets.all(16),children:[
-      section('SPAZA SHOPS NEAR YOU',
+      categoryPicker(),
+      section(discoveryType=='spaza'?'SPAZA SHOPS NEAR YOU':'VARIETY & WHOLESALE NEAR YOU',
         subtitle:'Nearby businesses from Google Maps or public directories'),
       if(loadingOnline)const Center(child:CircularProgressIndicator()),
       if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
@@ -760,13 +771,13 @@ class _ShopperHomeState extends State<ShopperHome> {
         subtitle:'Merchant-published stock, pricing and availability'),
       ...displayShops.map(shopTile),
       if(displayShops.isEmpty)empty('Shops joining soon',
-        'Spaza owners can claim their listing and connect a real product catalogue.')
+        'Shop owners can claim their listing and connect a real product catalogue.')
     ]);
 
   Widget directoryPage(OnlineShop shop)=>ListView(
     padding:const EdgeInsets.all(18),children:[
       TextButton.icon(onPressed:()=>setState(()=>directorySelected=null),
-        icon:const Icon(Icons.arrow_back),label:const Text('Browse all spaza shops')),
+        icon:const Icon(Icons.arrow_back),label:const Text('Browse all shops')),
       const SizedBox(height:10),
       SizedBox(width:double.infinity,height:210,
         child:onlinePhoto(shop,width:420,height:210)),
@@ -847,7 +858,7 @@ class _ShopperHomeState extends State<ShopperHome> {
 
   Widget shopPage(Shop shop)=>ListView(padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
-      icon:const Icon(Icons.arrow_back),label:const Text('All spaza shops')),
+      icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(shop.name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
@@ -857,6 +868,15 @@ class _ShopperHomeState extends State<ShopperHome> {
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
     merchantServices(shop),
+    OutlinedButton.icon(onPressed:() async {
+      final destination=shop.latitude!=null && shop.longitude!=null
+        ?shop.latitude.toString()+','+shop.longitude.toString()
+        :shop.name+' '+shop.area;
+      final url=Uri.https('www.google.com','/maps/dir/',
+        {'api':'1','destination':destination});
+      await launchUrl(url,mode:LaunchMode.externalApplication);
+    },icon:const Icon(Icons.directions_outlined),
+       label:const Text('Directions (approximate shop location)')),
     section('Available products',subtitle:'Merchant-published prices and stock'),
     LayoutBuilder(builder:(context,c)=>GridView.builder(
       shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
