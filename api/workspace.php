@@ -118,6 +118,8 @@ if($action==='seller-subscription') {
     $plan=(string)($input['plan']??'');
     if(!in_array($plan,['basic','plus','sponsored'],true))
       respond(422,['ok'=>false,'error'=>'Choose a valid listing plan']);
+    if(($input['publicListingConsent']??false)!==true)
+      respond(422,['ok'=>false,'error'=>'Confirm that your shop name, photo and approximate business location may appear in the shopper app']);
     // Seller cannot set paid/active, transaction reference, expiry or price.
     $workspace['subscription']=[
       'plan'=>$plan,
@@ -127,6 +129,10 @@ if($action==='seller-subscription') {
       'updatedAt'=>gmdate('c'),
       'requestedBy'=>$user['localId'],
     ];
+    // Explicit public listing consent from the seller. Approximate coordinates
+    // are only published if address verification has been confirmed.
+    $workspace['business']['shopperEnabled']=true;
+    $workspace['business']['shopperLocationOptIn']=true;
     saveWorkspace($user,$workspace);
     $current=$workspace['subscription'];
   }
