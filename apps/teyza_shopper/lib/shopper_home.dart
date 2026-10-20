@@ -791,7 +791,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     padding:const EdgeInsets.all(16),children:[
       categoryPicker(),
       section(discoveryType=='spaza'?'SPAZA SHOPS NEAR YOU':'VARIETY & WHOLESALE NEAR YOU',
-        subtitle:'Nearby businesses from Google Maps or public directories'),
+        subtitle:'Discover real shops in your chosen area'),
       if(loadingOnline)const Center(child:CircularProgressIndicator()),
       if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
       ...displayedOnline.map(onlineTile),
@@ -1237,7 +1237,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                   child:Text(error!,style:const TextStyle(color:ink)))),
               if(filteredMerchants.isNotEmpty)...[
                 const Padding(padding:EdgeInsets.only(top:12,bottom:8),
-                  child:Text('SHOPS SELLING ON TEYZA',style:TextStyle(
+                  child:Text('SHOPS ON TEYZA',style:TextStyle(
                     fontSize:13,color:green,fontWeight:FontWeight.w900))),
                 ...filteredMerchants.map((shop)=>Card(color:Colors.white,
                   child:ListTile(
@@ -1257,8 +1257,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     Expanded(child:Text(currentType=='spaza'?
                       'OTHER NEARBY SPAZA SHOPS':'VARIETY MALLS & WHOLESALE',
                       style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink))),
-                    if(googleResults)const Text('Google Maps',
-                      style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))),
+
                   ])),
                 ...filteredOnline.map((shop)=>Card(color:Colors.white,
                   child:ListTile(
