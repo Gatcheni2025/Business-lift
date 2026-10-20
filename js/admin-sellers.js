@@ -38,7 +38,10 @@ function approvalReady(v){
 function render(list){
   box.innerHTML=list.length?list.map(s=>{
     const b=s.business||{},a=s.companyApproval||{},v=s.verification||{},proof=v.proofOfAddress||{};
-    const ready=approvalReady(v);
+    const category=s.sellerCategory==="retail"?"retail":"spaza";
+    const details=s.retailDetails||{};
+    const ready=approvalReady(v) && (category==="spaza"||s.retailDetailsReady===true);
+    const route=category==="spaza"?"PRIORITY · SPAZA":"RETAIL / WHOLESALE";
     const proofMatch=v.proofAddressMatchVerified?'Address matches ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch':'Needs address review';
     const checklist=[
       ['Phone',v.phoneVerified],
@@ -53,15 +56,19 @@ function render(list){
           ${b.logoUrl?`<img class="seller-logo" src="${esc(b.logoUrl)}" alt="">`:'<div class="seller-logo seller-logo-empty">T</div>'}
           <div><h2>${esc(b.businessName||'Unnamed business')}</h2><small>${esc(s.email||'')}</small></div>
         </div>
-        <div class="seller-meta"><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
+        <div class="seller-meta"><span class="pill">${esc(route)}</span><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
         <div class="review-checklist">${checklist}</div>
         <div class="address-review">
           <div><span>Confirmed map address</span><strong>${esc(v.location?.address||b.address||'Not confirmed')}</strong></div>
           <div><span>Proof uploaded for</span><strong>${esc(proof.addressAtUpload||'Not uploaded')}</strong></div>
           <div><span>Address review</span><strong class="${v.proofAddressMatchVerified?'ok':v.proofAddressMatchStatus==='mismatch'?'bad':'wait'}">${esc(proofMatch)}</strong></div>
         </div>
+        ${category==="retail"?
+          `<div class="address-review"><div><span>Retail type</span><strong>${esc(details.retailKind||"Not supplied")}</strong></div><div><span>Business structure</span><strong>${esc(details.legalStructure||"Not supplied")}</strong></div><div><span>Registration</span><strong>${esc(details.registrationNumber||"Sole trader / not supplied")}</strong></div></div>`:''}
         ${b.about?`<p class="seller-about">${esc(b.about)}</p>`:''}
-        ${!ready?'<p class="approval-note">Company approval stays locked until phone, identity, map location and proof-of-address checks are complete.</p>':''}
+        ${!ready?`<p class="approval-note">${category==="retail"?
+          "Retail business details, phone, identity, map address and proof-of-address checks must all be complete.":
+          "Priority review: phone, identity, map location and proof-of-address checks must all be complete before approval."}</p>`:''}
       </div>
       <div class="seller-actions">
         ${v.proofOfAddressUploaded?`<button class="button" data-view-proof data-uid="${esc(s.uid)}">View proof of address</button><button class="button address-ok" data-address-match="true" data-uid="${esc(s.uid)}">✓ Address matches map</button><button class="button" data-address-match="false" data-uid="${esc(s.uid)}">Address mismatch</button>`:''}
