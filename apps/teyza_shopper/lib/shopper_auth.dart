@@ -2,10 +2,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:google_sign_in/google_sign_in.dart';
 
 // Firebase Web API key is public project configuration, NOT a credential.
 // Native Google OAuth is a separate integration and is not implied here.
 const _projectApiKey = 'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U';
+// Public OAuth client ID must belong to the same Firebase Auth project as this API key.
+// Embed at build time; never embed a client secret.
+const _googleWebClientId=String.fromEnvironment('TEYZA_GOOGLE_WEB_CLIENT_ID');
 const _vault = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
 
 String authMessage(Object error) {
@@ -18,6 +22,8 @@ String authMessage(Object error) {
   if (value.contains('WEAK_PASSWORD')) return 'Choose a stronger password (at least six characters).';
   if (value.contains('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many attempts. Please try again later.';
   if (value.contains('OPERATION_NOT_ALLOWED')) return 'Email sign-in is not enabled for this app yet.';
+  if (value.contains('Google sign-in is not configured')) return 'Google sign-in needs the Android OAuth configuration. Please use email login until it is enabled.';
+  if (value.contains('DEVELOPER_ERROR') || value.contains('10:')) return 'Google login setup mismatch. Check the OAuth client and signing certificate.';
   if (value.contains('NETWORK')) return 'Network unavailable. Check your connection and try again.';
   if (value.contains('USER_DISABLED')) return 'This account is disabled. Contact Teyza support.';
   return 'Could not complete sign-in. Please try again.';
@@ -110,6 +116,28 @@ class ShopperSession extends ChangeNotifier {
     await _post(Uri.parse(
       'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$_projectApiKey'),
       {'requestType':'VERIFY_EMAIL','idToken':idToken!});
+  }
+
+  Future<void> signInWithGoogle() async {
+    if(_googleWebClientId.trim().isEmpty) {
+      throw StateError('Google sign-in is not configured for this Android build yet. Contact Teyza support.');
+    }
+    isBusy=true;notifyListeners();
+    try {
+      final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId);
+      final account=await google.signIn();
+      if(account==null)return; // shopper cancelled account selection
+      final tokens=await account.authentication;
+      final googleIdToken=tokens.idToken;
+      if(googleIdToken==null||googleIdToken.isEmpty) {
+        throw StateError('Google did not return an identity token. Check the Android OAuth certificate SHA and web client ID.');
+      }
+      final reply=await _post(
+        Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=$_projectApiKey'),
+        {'postBody':'id_token='+Uri.encodeQueryComponent(googleIdToken)+'&providerId=google.com',
+         'requestUri':'https://teyza.co.za','returnIdpCredential':'false','returnSecureToken':'true'});
+      await _save(reply,account.email,account.displayName??'');
+    } finally {isBusy=false;notifyListeners();}
   }
 
   Future<void> signIn(String emailAddress,String password) async {
