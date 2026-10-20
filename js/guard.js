@@ -10,6 +10,10 @@ onAuthStateChanged(auth, async user => {
  try {
   const context=await getBusinessContext(user);
   hydrateBusiness(context,user);
+  if(context.categorySelectionRequired){
+    location.replace("index.html?auth=login");
+    return;
+  }
   const category=context.sellerCategory||context.business?.sellerCategory||"spaza";
   if(page==="dashboard.html" && category==="retail"){
     location.replace("retailer-dashboard.html"+location.search);return;
