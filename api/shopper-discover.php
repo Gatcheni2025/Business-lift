@@ -20,20 +20,21 @@ $hasPoint=$lat!==false && $lon!==false && $lat>=-35 && $lat<=-22 && $lon>=16 && 
 $lat=$hasPoint?round((float)$lat,2):null;
 $lon=$hasPoint?round((float)$lon,2):null;
 $area=strtolower(v($_GET['area']??'',75));
+$shopCategory=(($_GET['category']??'spaza')==='variety')?'variety':'spaza';
 
 // Google Places (New) is preferred when a server-side key is configured.
 // A live Google response is never cached and is displayed with Google Maps attribution.
 // When not configured/unavailable, existing public-directory/OpenStreetMap fallback works.
 require_once __DIR__.'/shopper-google-places-provider.php';
 if ($hasPoint) {
-  $fromGoogle=teyzaGoogleSpazaEntries((float)$lat,(float)$lon);
+  $fromGoogle=teyzaGoogleSpazaEntries((float)$lat,(float)$lon,$shopCategory);
   if ($fromGoogle!==null && count($fromGoogle)>0) {
     header('Cache-Control: private, no-store, max-age=0');
     respond([
       'ok'=>true,
       'entries'=>$fromGoogle,
       'count'=>count($fromGoogle),
-      'provider'=>'google_places',
+      'provider'=>'google_places','shopCategory'=>$shopCategory,
       'attribution'=>'Google Maps',
       'googleAttributionRequired'=>true,
       'areaSearchKm'=>11,
@@ -72,24 +73,120 @@ $entryFn=static function(array $e): array {
     'claimUrl'=>'https://teyza.co.za/?auth=register'];
 };
 $listed=[];
-if ($area==='') {
+if ($area==='' && $shopCategory==='spaza') {
   foreach ($curated as $e) $listed[]=$entryFn($e);
 } else {
   foreach ($curated as $e) {
     $text=strtolower($e['area'].' '.$e['address']);
-    if (str_contains($text,$area)||str_contains($area,'durban')&&str_contains($text,'durban'))
+    if ($shopCategory==='spaza' &&
+        (str_contains($text,$area)||str_contains($area,'durban')&&str_contains($text,'durban')))
       $listed[]=$entryFn($e);
   }
 }
 $overpassError=false;
 if ($hasPoint) {
-  $key='teyza_discover_'.str_replace('-','m',str_replace('.','_',sprintf('%.2f_%.2f',$lat,$lon)));
+  $key='teyza_discover_'.$shopCategory.'_'.str_replace('-','m',str_replace('.','_',sprintf('%.2f_%.2f',$lat,$lon)));
   $cache=sys_get_temp_dir().'/'.$key.'.json';
   $payload=null;
   if (is_file($cache)&&filemtime($cache)>time()-3600) {
     $payload=json_decode((string)@file_get_contents($cache),true);
   } else {
-    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"^(convenience|general|grocery|kiosk)$"]["name"];);out center 75;';
+    $shopFilter=$shopCategory==='variety'?'^(variety_store|department_store|general|wholesale|mall)
+    $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
+      CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
+      CURLOPT_USERAGENT=>'Teyza-Shopper-Directory/1.0 (https://teyza.co.za)',
+      CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>15]);
+    $raw=curl_exec($ch);
+    $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+    $result=$code===200?json_decode((string)$raw,true):null;
+    if (is_array($result)&&isset($result['elements'])&&is_array($result['elements'])) {
+      $payload=$result;
+      @file_put_contents($cache,json_encode($payload),LOCK_EX);
+    }
+  }
+  if (is_array($payload)) {
+    $seen=[];
+    foreach ($payload['elements'] as $element) {
+      if (count($seen)>=75) break;
+      $tags=$element['tags']??[];
+      $name=v($tags['name']??'',85);
+      if ($name==='') continue;
+      $lat2=$element['lat']??$element['center']['lat']??null;
+      $lon2=$element['lon']??$element['center']['lon']??null;
+      if (!is_numeric($lat2)||!is_numeric($lon2)) continue;
+      $type=v($element['type']??'',10);
+      $id=(int)($element['id']??0);
+      if (!in_array($type,['node','way','relation'],true)||$id<=0) continue;
+      $clean=strtolower(preg_replace('/\s+/',' ',trim($name)));
+      if (isset($seen[$clean])) continue;
+      $seen[$clean]=true;
+      $address=implode(', ',array_filter([
+        v($tags['addr:housenumber']??'',12).' '.v($tags['addr:street']??'',80),
+        v($tags['addr:suburb']??$tags['addr:city']??'',75)
+      ],fn($v)=>trim($v)!==''));
+      $listed[]=[
+        'id'=>'osm-'.$type.'-'.$id,'name'=>$name,
+        'area'=>v($tags['addr:suburb']??$tags['addr:city']??'Public map listing',80),
+        'address'=>$address,'sourceUrl'=>'https://www.openstreetmap.org/'.$type.'/'.$id,
+        'latitude'=>(float)$lat2,'longitude'=>(float)$lon2,
+        'origin'=>'openstreetmap','shopCategory'=>$shopCategory,'claimUrl'=>'https://teyza.co.za/?auth=register'
+      ];
+    }
+  } else $overpassError=true;
+}
+respond(['ok'=>true,'entries'=>$listed,'count'=>count($listed),'shopCategory'=>$shopCategory,
+ 'areaSearchKm'=>$hasPoint?6:null,'openstreetmapTemporarilyUnavailable'=>$overpassError,
+ 'attribution'=>'© OpenStreetMap contributors · ODbL. Third-party online listings; not Teyza merchants.']);
+:'^(convenience|general|grocery|kiosk)
+    $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
+      CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
+      CURLOPT_USERAGENT=>'Teyza-Shopper-Directory/1.0 (https://teyza.co.za)',
+      CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>15]);
+    $raw=curl_exec($ch);
+    $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+    $result=$code===200?json_decode((string)$raw,true):null;
+    if (is_array($result)&&isset($result['elements'])&&is_array($result['elements'])) {
+      $payload=$result;
+      @file_put_contents($cache,json_encode($payload),LOCK_EX);
+    }
+  }
+  if (is_array($payload)) {
+    $seen=[];
+    foreach ($payload['elements'] as $element) {
+      if (count($seen)>=75) break;
+      $tags=$element['tags']??[];
+      $name=v($tags['name']??'',85);
+      if ($name==='') continue;
+      $lat2=$element['lat']??$element['center']['lat']??null;
+      $lon2=$element['lon']??$element['center']['lon']??null;
+      if (!is_numeric($lat2)||!is_numeric($lon2)) continue;
+      $type=v($element['type']??'',10);
+      $id=(int)($element['id']??0);
+      if (!in_array($type,['node','way','relation'],true)||$id<=0) continue;
+      $clean=strtolower(preg_replace('/\s+/',' ',trim($name)));
+      if (isset($seen[$clean])) continue;
+      $seen[$clean]=true;
+      $address=implode(', ',array_filter([
+        v($tags['addr:housenumber']??'',12).' '.v($tags['addr:street']??'',80),
+        v($tags['addr:suburb']??$tags['addr:city']??'',75)
+      ],fn($v)=>trim($v)!==''));
+      $listed[]=[
+        'id'=>'osm-'.$type.'-'.$id,'name'=>$name,
+        'area'=>v($tags['addr:suburb']??$tags['addr:city']??'Public map listing',80),
+        'address'=>$address,'sourceUrl'=>'https://www.openstreetmap.org/'.$type.'/'.$id,
+        'latitude'=>(float)$lat2,'longitude'=>(float)$lon2,
+        'origin'=>'openstreetmap','claimUrl'=>'https://teyza.co.za/?auth=register'
+      ];
+    }
+  } else $overpassError=true;
+}
+respond(['ok'=>true,'entries'=>$listed,'count'=>count($listed),
+ 'areaSearchKm'=>$hasPoint?6:null,'openstreetmapTemporarilyUnavailable'=>$overpassError,
+ 'attribution'=>'© OpenStreetMap contributors · ODbL. Third-party online listings; not Teyza merchants.']);
+;
+    $query='[out:json][timeout:12];(nwr(around:6000,'.$lat.','.$lon.')["shop"~"'.$shopFilter.'"]["name"];);out center 75;';
     $ch=curl_init('https://overpass.kumi.systems/api/interpreter');
     curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'data='.urlencode($query),
       CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
