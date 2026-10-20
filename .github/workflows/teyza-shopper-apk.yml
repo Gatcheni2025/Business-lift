@@ -24,6 +24,13 @@ jobs:
           php -l api/shopper-catalog.php
           php -l api/workspace.php
           php -l api/chat.php
+      - name: Validate category signup JavaScript modules
+        run: |
+          for file in js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js; do
+            node --input-type=module --check < "$file"
+          done
+          test -s retailer-dashboard.html
+          test -s docs/TEYZA_1.0_SELLER_CATEGORIES.md
       - name: Verify required website presentation assets
         run: |
           test -s assets/shop-first.css
@@ -43,21 +50,23 @@ jobs:
                       raise SystemExit(f"{document} references missing asset: {asset}")
           print("Required landing and dashboard assets exist.")
           PY
-      - name: Package 0.9 Teyza website patch
+      - name: Package 1.0 seller category website update
         run: |
           mkdir -p deploy/api deploy/js deploy/assets
-          cp api/workspace.php api/shopper-catalog.php api/chat.php deploy/api/
-          cp index.html dashboard.html seller-subscriptions.html deploy/
-          cp js/seller-subscriptions.js deploy/js/
-          cp assets/shop-first.css assets/auth.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg deploy/assets/
-          cp docs/TEYZA_0.9_RELEASE_AND_SUBSCRIPTIONS.md deploy/SETUP.md
-          (cd deploy && zip -q -r ../TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip api js assets index.html dashboard.html seller-subscriptions.html SETUP.md)
-          unzip -t TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
-      - name: Upload website update
+          cp api/workspace.php deploy/api/
+          cp js/landing-auth.js js/guard.js js/retailer-dashboard.js js/admin-sellers.js js/dashboard-data.js js/onboarding-v2.js deploy/js/
+          cp index.html dashboard.html retailer-dashboard.html admin-sellers.html deploy/
+          cp assets/auth.css assets/shop-first.css assets/landing-popup.css assets/workspace.css assets/teyza-icon.svg assets/teyza-shopper-preview.svg deploy/assets/
+          cp docs/TEYZA_1.0_SELLER_CATEGORIES.md deploy/README-INSTALL.md
+          (cd deploy && zip -q -r ../TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip api js assets index.html dashboard.html retailer-dashboard.html admin-sellers.html README-INSTALL.md)
+          unzip -t TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip
+          unzip -Z1 TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip | grep -qx 'assets/shop-first.css'
+          unzip -Z1 TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip | grep -qx 'retailer-dashboard.html'
+      - name: Upload seller category website ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-shopper-0-9-website-patch
-          path: TEYZA_SHOPPER_0.9_WEBSITE_PATCH.zip
+          name: teyza-1-0-category-signup-website
+          path: TEYZA_1.0_CATEGORY_SIGNUP_WEBSITE.zip
           retention-days: 14
       - name: Package standalone CSS recovery ZIP
         run: |
