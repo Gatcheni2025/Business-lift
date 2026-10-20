@@ -166,7 +166,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if(state==AppLifecycleState.resumed) {
       refreshUnread();
-      _restoreSavedArea();
+      // Don't clear a shop/cart when returning from Google Maps.
+      if(area==null) _restoreSavedArea();
     }
   }
 
@@ -184,11 +185,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final saved=prefs.getString('teyza_selected_area');
     final permission=await Geolocator.checkPermission();
     if (!mounted)return;
-    if(permission==LocationPermission.always ||
-       permission==LocationPermission.whileInUse) {
-      await useLocation(askPermission:false);
-      if(area!=null)return;
-    }
+    // A shopper's explicit suburb selection takes precedence over GPS.
     if(saved!=null&&saved!='gps') {
       for(final entry in areas) {
         if(entry.label==saved) {
@@ -196,6 +193,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           return;
         }
       }
+    }
+    if(permission==LocationPermission.always ||
+       permission==LocationPermission.whileInUse) {
+      await useLocation(askPermission:false);
+      if(area!=null)return;
     }
     if(permission==LocationPermission.denied &&
        !(prefs.getBool('teyza_gps_initial_prompt_done')??false)) {
