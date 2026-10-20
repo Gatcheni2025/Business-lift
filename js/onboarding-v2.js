@@ -110,7 +110,9 @@ async function load(){
       stage(1);
       notice(approval==="rejected"?
         "Teyza could not approve this verification yet. Review the verification note, correct the highlighted item and resubmit.":
-        "Your application is in review. Spaza shops are prioritised when all identity and address checks are complete.");
+        state.sellerCategory==="spaza"
+          ?"Your application is in review. Spaza shops are prioritised when all identity and address checks are complete."
+          :"Your retail / wholesale application is in review. Teyza will check your business details, identity and address.");
       return;
     }
     modal.hidden=true;document.body.classList.remove("ob2-open");
