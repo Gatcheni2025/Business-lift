@@ -3,6 +3,7 @@ import {auth} from "./firebase-config.js";
 const status=document.getElementById("planStatus");
 const buttons=[...document.querySelectorAll("[data-plan]")];
 let seller=null;
+const listingConsent=document.getElementById('listingConsent');
 const labels={basic:"Basic • R99/month",plus:"Plus • Quote requested",sponsored:"Sponsored • Quote requested"};
 function message(value,isError=false){status.textContent=value;status.classList.toggle("error",isError)}
 async function subscription(action,plan){
@@ -10,7 +11,7 @@ async function subscription(action,plan){
   const res=await fetch("api/workspace.php?action="+action,{
     method:plan?"POST":"GET",
     headers:{"Authorization":"Bearer "+token,...(plan?{"Content-Type":"application/json"}:{})},
-    ...(plan?{body:JSON.stringify({plan})}:{})
+    ...(plan?{body:JSON.stringify({plan,publicListingConsent:listingConsent.checked})}:{})
   });
   const data=await res.json().catch(()=>({}));
   if(!res.ok||!data.ok)throw new Error(data.error||"Unable to save your subscription request");
@@ -41,6 +42,7 @@ onAuthStateChanged(auth,async user=>{
 });
 buttons.forEach(button=>button.addEventListener("click",async()=>{
   if(!seller)return;
+  if(!listingConsent.checked){message('Please confirm public shop listing consent before choosing a plan.',true);return;}
   const plan=button.dataset.plan;
   const existing=buttons.map(b=>b.disabled);
   buttons.forEach(b=>b.disabled=true);
