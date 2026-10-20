@@ -11,6 +11,7 @@ import 'shopper_auth.dart';
 import 'shopper_account.dart';
 import 'shopper_discovery.dart';
 import 'shopper_chat.dart';
+import 'shopper_splash.dart';
 
 const ink = Color(0xFF182831);
 const deep = Color(0xFF16332F);
@@ -131,6 +132,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<Shop> live = [];
   String? catalogueError;
   bool loading = true;
+  bool _launchReady=false;
+  bool _usingGps=false;
+  String _currentLocationDetail='';
+  bool showAllShops=false;
   Shop? selected;
   OnlineShop? directorySelected;
   String search = '';
@@ -152,10 +157,39 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
     refreshUnread();
-    load();
-    _restoreSavedArea();
+    _prepareLaunch();
     session.restore();
   }
+  Future<void> _prepareLaunch() async {
+    // Catalogue and area discovery start together. Never trap people forever
+    // on a splash screen when mobile data or location services are slow.
+    try {
+      await Future.wait<void>([load(),_restoreSavedArea()])
+        .timeout(const Duration(seconds:11));
+    } catch (_) {/* Continue with clear offline/permission states. */}
+    if(!mounted)return;
+    final urls=<String>[
+      ...live.where((s)=>s.photo.startsWith('https://')).take(3)
+        .map((s)=>s.photo),
+      ...online.where((s)=>s.origin=='google_places' &&
+        s.photoRef!=null && s.photoRef!.isNotEmpty).take(3)
+        .map((s)=>Uri.https('teyza.co.za','/api/shopper-place-photo.php',
+          {'ref':s.photoRef!}).toString()),
+      for(final name in ['bread','milk','eggs'])
+        photos+name+'.webp',
+    ];
+    try {
+      await Future.wait<void>(urls.map((url) async {
+        try {
+          await precacheImage(NetworkImage(url),context)
+            .timeout(const Duration(seconds:3));
+        } catch (_) {/* Individual photos may be unavailable. */}
+      })).timeout(const Duration(seconds:4));
+    } catch (_) {/* Placeholders remain visible for slow photo providers. */}
+    await Future<void>.delayed(const Duration(milliseconds:380));
+    if(mounted)setState(()=>_launchReady=true);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -217,6 +251,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(discoveryType==type)return;
     setState(() {
       discoveryType=type;
+      showAllShops=false;
       online=[];
       directorySelected=null;
       search='';
@@ -311,6 +346,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       setState(() {
         area = Area(placeName, city, position.latitude, position.longitude);
         locationName = placeName;
+        _usingGps=true;
+        _currentLocationDetail=placeName+(city.isNotEmpty && city!=placeName?', '+city:'');
         selected = null;
         directorySelected = null;
         search='';
@@ -331,6 +368,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     setState(() {
       area = choice;
       locationName = choice.label;
+      _usingGps=false;
+      _currentLocationDetail='';
       locationWarning = null;
       selected = null;
       directorySelected = null;
@@ -519,13 +558,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if (selected?.id != shop.id) cart.clear();
     selected = shop;
     directorySelected = null;
+    showAllShops=true;
     search = '';
     category = 'All';
-    tab = 1;
+    tab = 0;
   });
 
   void selectDirectory(OnlineShop shop)=>setState((){
-    directorySelected=shop;selected=null;search='';tab=1;cart.clear();
+    directorySelected=shop;selected=null;showAllShops=true;search='';tab=0;cart.clear();
   });
 
   Widget photo(String url,{double size=92, IconData icon=Icons.storefront_outlined}) =>
@@ -533,76 +573,203 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(15)),
       child:url.isEmpty ? Icon(icon,size:size*.48,color:aqua) :
         Image.network(url,fit:BoxFit.contain,
+          loadingBuilder:(context,child,progress)=>progress==null?child:
+            Center(child:Icon(icon,color:const Color(0xFF91CABA),size:size*.42)),
           errorBuilder:(_,error,stack)=>Icon(icon,color:aqua,size:size*.42)));
 
-  Widget locationHeader() => Container(color: ink, padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-    child: Column(children: [
-      Row(children: [
-        Expanded(child: InkWell(onTap: areaSheet, child: Row(children: [
-          const Icon(Icons.location_on_outlined,color:aqua,size:23),
-          const SizedBox(width: 5),
-          Flexible(child:Text(locationName,maxLines:1,overflow:TextOverflow.ellipsis,
-            style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold,fontSize:15))),
-          const Icon(Icons.keyboard_arrow_down,color:Colors.white,size:20)
-        ]))),
-        if (geolocating) const SizedBox(width:18,height:18,child:CircularProgressIndicator(
-          color:aqua,strokeWidth:2)),
-        const SizedBox(width: 10),
-        chip('Shop local',Icons.storefront_rounded),
-        const SizedBox(width:8),
-        chip('Collect / Deliver',Icons.local_shipping_outlined)
+  Shop? get nearestRegisteredSpaza {
+    if(area==null)return null;
+    final options=nearbyReal.where((s)=>s.shopCategory=='spaza' &&
+      s.latitude!=null && s.longitude!=null).toList();
+    options.sort((a,b)=>(distance(a)??double.infinity)
+      .compareTo(distance(b)??double.infinity));
+    return options.isEmpty?null:options.first;
+  }
+
+  OnlineShop? get nearestDirectorySpaza {
+    if(area==null||discoveryType!='spaza')return null;
+    final options=online.where((s)=>s.shopCategory=='spaza' &&
+      s.lat!=null && s.lng!=null).toList();
+    options.sort((a,b)=>km(area!.lat,area!.lng,a.lat!,a.lng!)
+      .compareTo(km(area!.lat,area!.lng,b.lat!,b.lng!)));
+    return options.isEmpty?null:options.first;
+  }
+
+  Widget _shopMode(String label,String description,IconData icon,
+      String type,Color activeColor) {
+    final active=discoveryType==type;
+    return Expanded(child:Material(
+      color:active?activeColor:const Color(0xFFF1F5F3),
+      borderRadius:BorderRadius.circular(18),
+      child:InkWell(borderRadius:BorderRadius.circular(18),
+        onTap:()=>setDiscoveryType(type),
+        child:Container(height:89,padding:const EdgeInsets.all(12),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Icon(icon,color:active?Colors.white:deep,size:24),
+            const Spacer(),
+            Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,
+                color:active?Colors.white:ink)),
+            Text(description,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:10,
+                color:active?Colors.white70:muted))
+          ])))));
+  }
+
+  Widget nearestShopCard() {
+    final merchant=nearestRegisteredSpaza, directory=nearestDirectorySpaza;
+    final dMerchant=merchant==null?double.infinity:(distance(merchant)??double.infinity);
+    final dDirectory=directory==null?double.infinity:
+      km(area!.lat,area!.lng,directory.lat!,directory.lng!);
+    final useMerchant=merchant!=null && dMerchant<=dDirectory;
+    final chosenName=useMerchant?merchant.name:directory?.name;
+    final chosenDistance=useMerchant?dMerchant:dDirectory;
+    final hasShop=chosenName!=null;
+    final subtitle=hasShop?'Approx. '+chosenDistance.toStringAsFixed(1)+' km away':
+      area==null?'Allow location or choose an area to find shops':
+      discoveryType=='variety'?'Switch to Spaza Shops to discover nearby spazas':
+        'Looking for nearby spazas around '+locationName;
+    return Material(
+      color:const Color(0xFFF1F8F4),borderRadius:BorderRadius.circular(18),
+      child:InkWell(borderRadius:BorderRadius.circular(18),
+        onTap:hasShop?(){
+          if(useMerchant)openShop(merchant);
+          else selectDirectory(directory!);
+        }:areaSheet,
+        child:Padding(padding:const EdgeInsets.all(13),child:Row(children:[
+          Container(width:46,height:46,decoration:BoxDecoration(
+            color:const Color(0xFFD7EDE2),borderRadius:BorderRadius.circular(14)),
+            child:const Icon(Icons.place_rounded,color:green,size:26)),
+          const SizedBox(width:12),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('NEAREST SPAZA SHOP',style:TextStyle(color:green,
+              fontWeight:FontWeight.w900,letterSpacing:.7,fontSize:10)),
+            const SizedBox(height:3),
+            Text(chosenName??'Find a shop near me',maxLines:1,
+              overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:deep,fontWeight:FontWeight.w900,fontSize:16)),
+            const SizedBox(height:3),
+            Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:muted,fontSize:11))
+          ])),
+          const Icon(Icons.chevron_right_rounded,color:green)
+        ]))));
+  }
+
+  Widget locationHeader() => Container(
+    padding:const EdgeInsets.fromLTRB(16,14,16,14),
+    decoration:const BoxDecoration(color:Colors.white,
+      borderRadius:BorderRadius.vertical(bottom:Radius.circular(24))),
+    child:Column(children:[
+      Row(children:[
+        _shopMode('SPAZA SHOPS','Your local favourites',
+          Icons.storefront_rounded,'spaza',const Color(0xFF087F63)),
+        const SizedBox(width:10),
+        _shopMode('OTHER RETAIL','Stores & wholesale',
+          Icons.store_mall_directory_rounded,'variety',deep),
       ]),
-      const SizedBox(height:15),
-      TextField(onChanged:(v)=>setState(()=>search=v),style:const TextStyle(color:ink),
-        decoration:InputDecoration(hintText:'Search groceries, shops and essentials',
-          filled:true,fillColor:Colors.white,
-          prefixIcon:const Icon(Icons.search,color:muted),suffixIcon:const Icon(Icons.tune,color:muted),
-          contentPadding:const EdgeInsets.symmetric(vertical:13),
-          enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none),
-          focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:aqua,width:2))))
+      const SizedBox(height:13),
+      nearestShopCard(),
+      const SizedBox(height:11),
+      InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(12),
+        child:Padding(padding:const EdgeInsets.symmetric(vertical:4,horizontal:2),
+          child:Row(children:[
+            const Icon(Icons.my_location_rounded,size:17,color:green),
+            const SizedBox(width:7),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(_usingGps?'YOUR CURRENT LOCATION':'YOUR SHOPPING AREA',
+                style:const TextStyle(fontSize:9,fontWeight:FontWeight.w900,
+                  letterSpacing:.7,color:muted)),
+              Text(_usingGps?_currentLocationDetail:locationName,maxLines:1,
+                overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:12,color:ink,fontWeight:FontWeight.w700))
+            ])),
+            if(geolocating)const SizedBox(width:15,height:15,
+              child:CircularProgressIndicator(strokeWidth:2)),
+            const Icon(Icons.keyboard_arrow_down_rounded,color:deep)
+          ]))),
+      if(selected==null && directorySelected==null)...[
+        const SizedBox(height:12),
+        TextField(key:ValueKey(discoveryType),
+          onChanged:(value)=>setState(()=>search=value),
+          decoration:InputDecoration(hintText:discoveryType=='spaza'?
+              'Search spaza shops and groceries':'Search retailers, malls and products',
+            hintStyle:const TextStyle(fontSize:13,color:muted),
+            filled:true,fillColor:const Color(0xFFF3F6F4),
+            prefixIcon:const Icon(Icons.search_rounded,color:green),
+            contentPadding:const EdgeInsets.symmetric(vertical:12),
+            border:OutlineInputBorder(borderRadius:BorderRadius.circular(15),
+              borderSide:BorderSide.none)))
+      ]
     ]));
 
-  Widget chip(String text,IconData icon)=>Container(
-    padding:const EdgeInsets.symmetric(horizontal:9,vertical:8),
-    decoration:BoxDecoration(border:Border.all(color:aqua,width:1),borderRadius:BorderRadius.circular(30)),
-    child:Row(children:[Icon(icon,color:aqua,size:17),const SizedBox(width:5),
-      Text(text,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w700,fontSize:10))]));
+  void openBasket(){
+    Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
+      StatefulBuilder(builder:(routeContext,refresh)=>Scaffold(
+        appBar:AppBar(title:const Text('Your basket'),
+          backgroundColor:deep,foregroundColor:Colors.white),
+        body:basketPage(refresh:()=>refresh((){}))))));
+  }
+
+  void openInbox(){
+    Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
+      ShopperChatPage(session:session)));
+  }
 
   @override
-  Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(toolbarHeight:54,title:Row(children:[
-      Container(width:35,height:35,alignment:Alignment.center,
-        decoration:BoxDecoration(color:green,borderRadius:BorderRadius.circular(9)),
-        child:const Text('T',style:TextStyle(fontWeight:FontWeight.w900,
-          fontSize:24,fontStyle:FontStyle.italic,color:Colors.white))),
-      const SizedBox(width:9),
-      const Text('TEYZA',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:2.2,fontSize:23)),
-      const SizedBox(width:7),
-      const Text('SHOPPER',style:TextStyle(fontSize:11,letterSpacing:1.4,color:aqua))]),
-      actions:[IconButton(tooltip:'Find my area',onPressed:areaSheet,
-        icon:const Icon(Icons.my_location_outlined)),
-        IconButton(tooltip:'Refresh shops',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:tab==4?ShopperAccountPanel(session:session):
-      tab==3?ShopperChatPage(session:session):
-      tab==2?basketPage():
-      Column(children:[locationHeader(),Expanded(child:tab==1?
-        (selected!=null?shopPage(selected!):
-         directorySelected!=null?directoryPage(directorySelected!):allShopsPage())
-        :homePage())]),
-    bottomNavigationBar:NavigationBar(height:75,backgroundColor:Colors.white,
-      selectedIndex:tab,onDestinationSelected:(v) {
-        setState(()=>tab=v);
-        if(v==3)refreshUnread();
-      },
-      destinations:[
-        const NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home,color:green),label:'Home'),
-        const NavigationDestination(icon:Icon(Icons.storefront_outlined),selectedIcon:Icon(Icons.storefront,color:green),label:'Shops'),
-        NavigationDestination(icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
-          child:const Icon(Icons.shopping_basket_outlined)),label:'Basket'),
-        NavigationDestination(icon:Badge(isLabelVisible:unreadChats>0,
-          label:Text(unreadChats>99?'99+':unreadChats.toString()),
-          child:const Icon(Icons.chat_bubble_outline)),label:'Chat'),
-        const NavigationDestination(icon:Icon(Icons.person_outline),label:'Account')]));
+  Widget build(BuildContext context) {
+    if(!_launchReady)return const ShopperLaunchScreen();
+    return Scaffold(
+      appBar:AppBar(
+        backgroundColor:deep,foregroundColor:Colors.white,toolbarHeight:63,
+        titleSpacing:16,
+        title:Row(children:[
+          Container(width:37,height:37,alignment:Alignment.center,
+            decoration:BoxDecoration(color:green,
+              borderRadius:BorderRadius.circular(13)),
+            child:const Text('T',style:TextStyle(color:Colors.white,
+              fontWeight:FontWeight.w900,fontSize:26))),
+          const SizedBox(width:10),
+          const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('TEYZA',style:TextStyle(letterSpacing:2,
+              fontWeight:FontWeight.w900,fontSize:22)),
+            Text('SHOP LOCAL. LIVE BETTER.',style:TextStyle(
+              color:Color(0xFFACDACB),letterSpacing:.6,fontSize:9))
+          ])
+        ]),
+        actions:[
+          IconButton(tooltip:'Messages',onPressed:openInbox,
+            icon:Badge(isLabelVisible:unreadChats>0,
+              label:Text(unreadChats>99?'99+':unreadChats.toString()),
+              child:const Icon(Icons.chat_bubble_outline_rounded))),
+          IconButton(tooltip:'Your basket',onPressed:openBasket,
+            icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
+              child:const Icon(Icons.shopping_bag_outlined))),
+          const SizedBox(width:3)
+        ]),
+      body:tab==3?ShopperAccountPanel(session:session):
+        tab==1?servicesPage():tab==2?deliveryPage():
+        Column(children:[locationHeader(),Expanded(child:
+          selected!=null?shopPage(selected!):
+          directorySelected!=null?directoryPage(directorySelected!):
+          showAllShops?allShopsPage():homePage())]),
+      bottomNavigationBar:NavigationBar(
+        height:72,backgroundColor:Colors.white,
+        indicatorColor:const Color(0xFFDAF3E8),
+        selectedIndex:tab,onDestinationSelected:(index){
+          setState(()=>tab=index);
+        },
+        destinations:const [
+          NavigationDestination(icon:Icon(Icons.storefront_outlined),
+            selectedIcon:Icon(Icons.storefront_rounded,color:green),label:'Shop'),
+          NavigationDestination(icon:Icon(Icons.grid_view_outlined),
+            selectedIcon:Icon(Icons.grid_view_rounded,color:green),label:'Services'),
+          NavigationDestination(icon:Icon(Icons.local_shipping_outlined),
+            selectedIcon:Icon(Icons.local_shipping_rounded,color:green),label:'Delivery'),
+          NavigationDestination(icon:Icon(Icons.person_outline_rounded),
+            selectedIcon:Icon(Icons.person_rounded,color:green),label:'Profile')
+        ]));
+  }
 
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
     padding:const EdgeInsets.fromLTRB(0,15,0,12), child:Row(children:[
@@ -614,103 +781,245 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget categoryPicker()=>Wrap(spacing:8,runSpacing:6,children:[
     ChoiceChip(label:const Text('Spaza Shops'),selected:discoveryType=='spaza',
       onSelected:(_)=>setDiscoveryType('spaza')),
-    ChoiceChip(label:const Text('Variety & Wholesale'),selected:discoveryType=='variety',
+    ChoiceChip(label:const Text('Other Retail'),selected:discoveryType=='variety',
       onSelected:(_)=>setDiscoveryType('variety')),
   ]);
 
-  Widget homePage()=>RefreshIndicator(onRefresh:load,child:ListView(
-    padding:const EdgeInsets.fromLTRB(16,15,16,22),children:[
-      if(locationWarning!=null) Card(color:const Color(0xFFFFF1D9),
+  Widget homePage()=>RefreshIndicator(
+    onRefresh:() async {
+      await Future.wait<void>([load(),reloadOnline()]);
+    },
+    child:ListView(padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
+      if(locationWarning!=null)Card(color:const Color(0xFFFFF2DE),
         child:Padding(padding:const EdgeInsets.all(12),child:Text(locationWarning!))),
-      if(area==null) Material(color:const Color(0xFFDAF1EB),borderRadius:BorderRadius.circular(15),
-        child:ListTile(onTap:areaSheet,leading:const Icon(Icons.my_location,color:green),
-          title:const Text('Choose your area',style:TextStyle(fontWeight:FontWeight.bold)),
-          subtitle:const Text('Find shops close to you with GPS or pick a suburb'),
-          trailing:const Icon(Icons.chevron_right))),
-      if(catalogueError!=null) Padding(padding:const EdgeInsets.only(top:8),
-        child:Text('Real-shop connection: '+catalogueError!,
-          style:const TextStyle(color:muted,fontSize:11))),
-      categoryPicker(),
-      section(discoveryType=='spaza'?'SPAZA SHOPS':'VARIETY & WHOLESALE',
-        subtitle:discoveryType=='spaza'?'Find local spazas near you':
-          'Discover China Malls, China Marts and variety retailers',
-        action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
+      if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
+        child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      section(discoveryType=='spaza'?'Shop your favourite aisles':'Explore other retail',
+        subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
+          'Variety stores, malls, wholesalers and more',
+        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
+          child:const Text('Explore all'))),
+      if(discoveryType=='spaza')...[
+        Wrap(spacing:7,runSpacing:7,children:[
+          'All','Bakery','Dairy','Pantry','Drinks','Snacks','Fresh','Household'
+        ].map((c)=>ChoiceChip(label:Text(c),selected:category==c,
+          onSelected:(_)=>setState(()=>category=c),
+          selectedColor:const Color(0xFFCDF0E1),
+          backgroundColor:Colors.white,
+          side:const BorderSide(color:Color(0xFFE0ECE6)))).toList()),
+        const SizedBox(height:12),
+        if(featured.isNotEmpty)productShelf(featured)else essentialsShelf(),
+      ],
+      const SizedBox(height:4),
+      section(discoveryType=='spaza'?'Spaza shops near you':'Other retail near you',
+        subtitle:area==null?'Choose your area to find nearby shops':
+          'Local shops around '+locationName,
+        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
+          child:const Text('See all'))),
       if(displayedOnline.isNotEmpty)
-        SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:138,child:ListView(scrollDirection:Axis.horizontal,
           children:displayedOnline.take(12).map(directoryCircle).toList()))
       else if(displayShops.isNotEmpty)
-        SizedBox(height:135,child:ListView(scrollDirection:Axis.horizontal,
-          children:displayShops.take(9).map(quickShop).toList()))
-      else if(loadingOnline)const Padding(padding:EdgeInsets.all(18),
-        child:Center(child:CircularProgressIndicator())),
-      section(discoveryType=='spaza'?'NEARBY SPAZAS':'VARIETY STORES FOUND ONLINE',
-        subtitle:'Named local shops · tap to see shop details',
-        action:TextButton(onPressed:reloadOnline,child:const Text('Find shops'))),
-      if(loadingOnline)const Padding(padding:EdgeInsets.all(15),
+        SizedBox(height:138,child:ListView(scrollDirection:Axis.horizontal,
+          children:displayShops.take(10).map(quickShop).toList()))
+      else if(loadingOnline)const SizedBox(height:106,
+        child:Center(child:CircularProgressIndicator()))
+      else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
+        'Use your current location or select a shopping area.')),
+      const SizedBox(height:9),
+      Material(color:deep,borderRadius:BorderRadius.circular(20),
+        child:InkWell(borderRadius:BorderRadius.circular(20),
+          onTap:()=>setState(()=>tab=1),
+          child:Padding(padding:const EdgeInsets.all(18),
+            child:Row(children:[
+              const Icon(Icons.room_service_rounded,color:Color(0xFF79E5C5),size:34),
+              const SizedBox(width:14),
+              const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+                children:[
+                  Text('Services offered',style:TextStyle(color:Colors.white,
+                    fontWeight:FontWeight.w900,fontSize:18)),
+                  SizedBox(height:4),
+                  Text('Delivery, collection, card payments and cashback',
+                    maxLines:2,style:TextStyle(color:Color(0xFFCFE9DE),fontSize:12))
+                ])),
+              const Icon(Icons.arrow_forward_rounded,color:Colors.white)
+            ])))),
+      section('Shops selling on Teyza',
+        subtitle:'Verified participating sellers and published product listings',
+        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
+          child:const Text('View shops'))),
+      if(loading)const Center(child:Padding(padding:EdgeInsets.all(13),
+        child:CircularProgressIndicator())),
+      ...displayShops.take(4).map(shopTile),
+      if(displayShops.isEmpty)
+        empty('More shops joining Teyza',
+          'Local directory listings are shown separately. Only participating shops publish products and services.'),
+      section(discoveryType=='spaza'?'More neighbourhood shops':'More retailers to explore',
+        subtitle:'Public shop listings · confirm products with the owner'),
+      if(loadingOnline)const Padding(padding:EdgeInsets.all(12),
         child:Center(child:CircularProgressIndicator())),
       if(onlineWarning!=null)Text(onlineWarning!,
         style:const TextStyle(color:muted,fontSize:12)),
-      ...displayedOnline.take(4).map(onlineTile),
-      if(displayedOnline.isEmpty && !loadingOnline)
-        const Text('Select your area or refresh to find public shop listings.',
+      ...displayedOnline.take(6).map(onlineTile),
+      if(displayedOnline.isEmpty&&!loadingOnline)
+        const Text('No public shop listings loaded yet. Select another area or refresh.',
           style:TextStyle(color:muted,fontSize:12)),
-      Card(color:const Color(0xFFE5F4ED),
-        child:ListTile(leading:const Icon(Icons.add_business_outlined,color:green),
-          title:const Text('Own a shop? Register with Teyza',
-            style:TextStyle(fontSize:13,fontWeight:FontWeight.bold)),
-          subtitle:const Text('Claim your shop and publish actual product prices.'),
-          trailing:const Icon(Icons.open_in_new,size:17),
+      Card(color:const Color(0xFFE5F4ED),elevation:0,
+        child:ListTile(
+          leading:const Icon(Icons.add_business_outlined,color:green),
+          title:const Text('Own a shop? Join Teyza',style:TextStyle(
+            fontWeight:FontWeight.w800,fontSize:13)),
+          subtitle:const Text('Spaza owners receive priority application review.'),
+          trailing:const Icon(Icons.open_in_new_rounded,size:18),
           onTap:() async {
-            final uri=Uri.parse('https://teyza.co.za/?auth=register');
-            await launchUrl(uri,mode:LaunchMode.externalApplication);
+            await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
+              mode:LaunchMode.externalApplication);
           })),
-      const SizedBox(height:15),
-      Container(height:155,padding:const EdgeInsets.all(21),decoration:BoxDecoration(
-        borderRadius:BorderRadius.circular(21),
-        gradient:const LinearGradient(colors:[Color(0xFF074D47),Color(0xFF2AB69B)])),
-        child:Row(children:[
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('TEYZA LOCAL MARKETS',style:TextStyle(
-              color:Color(0xFFBFECE5),fontSize:11,letterSpacing:1.5,fontWeight:FontWeight.w900)),
-            const SizedBox(height:8),
-            const Text('Groceries around\nyour neighbourhood',
-              style:TextStyle(color:Colors.white,fontSize:23,fontWeight:FontWeight.w900,height:1.1)),
-            const SizedBox(height:12),
-            Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),
-              decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(6)),
-              child:const Text('FIND YOUR LOCAL SPAZA',style:TextStyle(
-                fontSize:10,fontWeight:FontWeight.w900,color:green)))
-          ])),
-          const Icon(Icons.shopping_basket_rounded,color:Colors.white,size:77)
-        ])),
-      section('Shop by category'),
-      Wrap(spacing:7,runSpacing:8,
-        children:['All','Bakery','Dairy','Pantry','Drinks','Snacks','Fresh','Household']
-          .map((c)=>ChoiceChip(label:Text(c),selected:category==c,
-            onSelected:(_)=>setState(()=>category=c),
-            selectedColor:const Color(0xFFC6EDE0),backgroundColor:Colors.white,
-            side:const BorderSide(color:Color(0xFFE1EAE6)))).toList()),
-      section('GROCERIES & ESSENTIALS',
-        subtitle:featured.isEmpty?'Browse common grocery categories':
-          'Available products and prices from participating shops'),
-      if(featured.isEmpty)essentialsShelf()else productShelf(featured),
-      section('SHOPS ON TEYZA',subtitle:area==null?
-        'Choose an area to see local listings':'Sorted by approximate distance where available',
-        action:TextButton(onPressed:()=>setState(()=>tab=1),child:const Text('View all'))),
-      if(loading)const Center(child:Padding(padding:EdgeInsets.all(15),child:CircularProgressIndicator())),
-      if(displayShops.isEmpty)empty('More shops joining Teyza',
-        'Real shops are listed above. Owners can claim their store and publish confirmed products.'),
-      ...displayShops.take(5).map((s)=>shopTile(s)),
-      section(discoveryType=='spaza'?'MORE SHOPS NEAR YOU':'MORE VARIETY & WHOLESALE',
-        subtitle:'Found online · product catalogues not connected yet'),
-      ...displayedOnline.skip(4).take(14).map(onlineTile),
-      if(online.any((x)=>x.origin=='google_places'))
-        const Padding(padding:EdgeInsets.only(top:8,bottom:10),
-          child:Text('Google Maps',style:TextStyle(fontSize:12,color:Color(0xFF5E5E5E))))
-      else const Padding(padding:EdgeInsets.only(top:8,bottom:10),
-        child:Text('Public business listings · Map data © OpenStreetMap contributors (ODbL).',
-          style:TextStyle(fontSize:11,color:muted)))
+      const SizedBox(height:9),
+      if(online.any((shop)=>shop.origin=='google_places'))
+        const Text('Google Maps · Business information supplied by Google.',
+          style:TextStyle(color:muted,fontSize:10))
+      else
+        const Text('Public shop data · © OpenStreetMap contributors (ODbL).',
+          style:TextStyle(color:muted,fontSize:10))
     ]));
+
+  List<Shop> get _deliverySellers =>
+    nearbyReal.where((shop)=>shop.delivery).toList();
+  void _serviceShops(String title,List<Shop> sellers){
+    if(sellers.isEmpty)return;
+    showModalBottomSheet<void>(context:context,showDragHandle:true,
+      backgroundColor:pale,isScrollControlled:true,
+      builder:(sheetContext)=>SafeArea(child:ConstrainedBox(
+        constraints:BoxConstraints(maxHeight:
+          MediaQuery.sizeOf(sheetContext).height*.7),
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          Padding(padding:const EdgeInsets.fromLTRB(18,4,18,12),
+            child:Text(title,style:const TextStyle(fontSize:21,
+              color:ink,fontWeight:FontWeight.w900))),
+          Flexible(child:ListView(shrinkWrap:true,children:sellers.map((shop)=>
+            ListTile(leading:photo(shop.photo,size:51),title:Text(shop.name),
+              subtitle:Text(shop.area),
+              trailing:const Icon(Icons.arrow_forward_ios_rounded,size:15),
+              onTap:(){
+                Navigator.of(sheetContext).pop();
+                openShop(shop);
+              })).toList())),
+          const SizedBox(height:14)
+        ]))));
+  }
+  Widget _serviceCard(String label,String description,IconData icon,
+      List<Shop> shops,{Color accent=green})=>Padding(
+        padding:const EdgeInsets.only(bottom:11),
+        child:Material(color:Colors.white,borderRadius:BorderRadius.circular(18),
+          child:InkWell(borderRadius:BorderRadius.circular(18),
+            onTap:shops.isEmpty?null:()=>_serviceShops(label,shops),
+            child:Padding(padding:const EdgeInsets.all(15),child:Row(children:[
+              Container(width:49,height:49,
+                decoration:BoxDecoration(color:const Color(0xFFE5F6EE),
+                  borderRadius:BorderRadius.circular(16)),
+                child:Icon(icon,size:26,color:accent)),
+              const SizedBox(width:14),
+              Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text(label,style:const TextStyle(fontWeight:FontWeight.w900,
+                  color:ink,fontSize:16)),
+                const SizedBox(height:4),
+                Text(description,style:const TextStyle(color:muted,fontSize:12))
+              ])),
+              Column(children:[
+                Text(shops.isEmpty?'—':shops.length.toString(),
+                  style:const TextStyle(color:green,fontSize:19,
+                    fontWeight:FontWeight.w900)),
+                const Text('shops',style:TextStyle(color:muted,fontSize:10))
+              ]),
+              const SizedBox(width:4),
+              const Icon(Icons.chevron_right_rounded,color:muted)
+            ])))));
+  Widget servicesPage()=>ListView(
+    padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
+      const Text('Services offered',style:TextStyle(color:ink,
+        fontSize:26,fontWeight:FontWeight.w900)),
+      const SizedBox(height:6),
+      const Text('Explore services confirmed by shops registered on Teyza. '
+        'Directory-only businesses have not verified their services.',
+        style:TextStyle(color:muted,fontSize:13)),
+      const SizedBox(height:18),
+      _serviceCard('Home delivery',
+        'Shops that say they can deliver to customers',
+        Icons.local_shipping_rounded,_deliverySellers),
+      _serviceCard('Click & collect',
+        'Order enquiries and collection at the shop',
+        Icons.shopping_bag_rounded,
+        nearbyReal.where((s)=>s.pickup).toList()),
+      _serviceCard('Card payments',
+        'Merchants who have confirmed card acceptance',
+        Icons.credit_card_rounded,
+        nearbyReal.where((s)=>s.acceptsCard==true).toList()),
+      _serviceCard('Cashback',
+        'Merchants who have confirmed cashback availability',
+        Icons.account_balance_wallet_rounded,
+        nearbyReal.where((s)=>s.cashback==true).toList()),
+      const SizedBox(height:12),
+      Material(color:const Color(0xFFE0F2EA),
+        borderRadius:BorderRadius.circular(17),
+        child:ListTile(
+          onTap:areaSheet,
+          leading:const Icon(Icons.place_rounded,color:green),
+          title:const Text('Services in your area',
+            style:TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:Text(area==null?'Choose your location':locationName),
+          trailing:const Icon(Icons.keyboard_arrow_right_rounded)))
+    ]);
+
+  Widget deliveryPage()=>ListView(
+    padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
+      const Text('Delivery services',style:TextStyle(
+        fontSize:26,fontWeight:FontWeight.w900,color:ink)),
+      const SizedBox(height:6),
+      const Text('Find a participating shop offering delivery, check its '
+        'listed products, and ask the shop to confirm an order.',
+        style:TextStyle(color:muted,fontSize:13)),
+      const SizedBox(height:18),
+      Container(padding:const EdgeInsets.all(20),
+        decoration:BoxDecoration(
+          gradient:const LinearGradient(colors:[
+            Color(0xFF0B6E59),Color(0xFF063E37)]),
+          borderRadius:BorderRadius.circular(22)),
+        child:Row(children:[
+          const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+            children:[
+              Text('LOCAL DELIVERY',style:TextStyle(color:Color(0xFFAEF0D7),
+                fontSize:11,fontWeight:FontWeight.w900,letterSpacing:1.1)),
+              SizedBox(height:7),
+              Text('Your neighbourhood, delivered.',
+                style:TextStyle(color:Colors.white,fontSize:23,
+                  fontWeight:FontWeight.w900,height:1.1)),
+              SizedBox(height:12),
+              Text('Delivery availability and fees are confirmed by each shop.',
+                style:TextStyle(color:Color(0xFFD6F3E7),fontSize:12))
+            ])),
+          const Icon(Icons.delivery_dining_rounded,
+            color:Colors.white,size:78)
+        ])),
+      section('Shops offering delivery',
+        subtitle:area==null?'Set your location to see nearby merchants':
+          'Participating shops around '+locationName,
+        action:TextButton(onPressed:areaSheet,child:const Text('Change area'))),
+      if(_deliverySellers.isEmpty)
+        empty('No confirmed delivery shops nearby',
+          'You can still browse Spaza Shops and Other Retail. More delivery partners are joining.')
+      else ..._deliverySellers.map(shopTile),
+      const SizedBox(height:12),
+      Material(color:Colors.white,borderRadius:BorderRadius.circular(16),
+        child:const Padding(padding:EdgeInsets.all(16),
+          child:Row(children:[
+            Icon(Icons.info_outline_rounded,color:green),
+            SizedBox(width:12),
+            Expanded(child:Text('Teyza currently helps you find and contact shops. '
+              'Delivery estimates and payment must be confirmed with the merchant.',
+              style:TextStyle(color:muted,fontSize:12)))
+          ])))
+    ]);
 
   Widget directoryCircle(OnlineShop s)=>InkWell(onTap:()=>selectDirectory(s),
     child:SizedBox(width:112,child:Column(children:[
@@ -737,7 +1046,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             borderRadius:BorderRadius.circular(15)),
           child:Column(children:[
             Expanded(child:Image.network(photos+x.$2+'.webp',
-              fit:BoxFit.contain,errorBuilder:(_,err,stack)=>
+              fit:BoxFit.contain,
+              loadingBuilder:(context,child,progress)=>progress==null?child:
+                const Icon(Icons.shopping_bag_outlined,color:Color(0xFF91CABA),size:44),
+              errorBuilder:(_,err,stack)=>
                 const Icon(Icons.shopping_bag_outlined,color:green,size:44))),
             const SizedBox(height:5),
             Text(x.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
@@ -796,6 +1108,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Widget allShopsPage()=>ListView(
     padding:const EdgeInsets.all(16),children:[
+      TextButton.icon(onPressed:()=>setState(()=>showAllShops=false),
+        icon:const Icon(Icons.arrow_back_rounded),
+        label:const Text('Back to shopping')),
       categoryPicker(),
       section(discoveryType=='spaza'?'SPAZA SHOPS NEAR YOU':'VARIETY & WHOLESALE NEAR YOU',
         subtitle:'Discover real shops in your chosen area'),
@@ -914,7 +1229,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           icon:const Icon(Icons.chat_bubble_outline),
           label:const Text('Chat with this shop'),onPressed:(){
             if(session.idToken==null||!session.emailVerified) {
-              setState(()=>tab=4);
+              setState(()=>tab=3);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content:Text('Sign in and verify your account to chat with this shop.')));
               return;
@@ -994,7 +1309,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       const SnackBar(content:Text('Could not open WhatsApp.')));
   }
 
-  Widget basketPage()=>ListView(padding:const EdgeInsets.all(20),children:[
+  Widget basketPage({VoidCallback? refresh})=>ListView(padding:const EdgeInsets.all(20),children:[
     const Text('MY BASKET',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
     if(selected==null||basketItems.isEmpty)
@@ -1008,9 +1323,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         title:Text(p.name),
         subtitle:Text(rand(p.priceCents*(cart[p.id]??0))),
         trailing:Wrap(crossAxisAlignment:WrapCrossAlignment.center,spacing:2,children:[
-          IconButton(onPressed:()=>quantity(p,-1),icon:const Icon(Icons.remove_circle_outline)),
+          IconButton(onPressed:(){quantity(p,-1);refresh?.call();},
+            icon:const Icon(Icons.remove_circle_outline)),
           Text((cart[p.id]??0).toString()),
-          IconButton(onPressed:()=>quantity(p,1),icon:const Icon(Icons.add_circle_outline))
+          IconButton(onPressed:(){quantity(p,1);refresh?.call();},
+            icon:const Icon(Icons.add_circle_outline))
         ])))),
       const SizedBox(height:15),
       Text('Estimated total: '+rand(total),style:const TextStyle(
@@ -1185,7 +1502,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
             ChoiceChip(label:const Text('Spaza Shops'),
               selected:currentType=='spaza',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('spaza'))),
-            ChoiceChip(label:const Text('Variety & Wholesale'),
+            ChoiceChip(label:const Text('Other Retail'),
               selected:currentType=='variety',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('variety'))),
           ]),
