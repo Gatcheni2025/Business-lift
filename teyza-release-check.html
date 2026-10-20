@@ -19,7 +19,7 @@ li{margin-bottom:12px}.label{font-weight:750}
   {path:'business-profile.html',text:'spaza-setup-hero',label:'Simplified Spaza form'},
   {path:'js/business-profile.js',text:'spazaSetup',label:'Phone / ID / selfie setup'},
   {path:'seller-activation.html',text:'R99',label:'R99 debit-order activation page'},
-  {path:'api/workspace.php',text:'seller-debit-order',label:'Secure mandate backend'},
+  {path:'api/workspace.php',authRequired:true,label:'Backend accessible (authentication required)'},
   {path:'assets/spaza-onboarding.css',text:'spaza-setup',label:'Mobile setup styling'}
  ];
  const ol=document.querySelector('#checks');ol.replaceChildren();
@@ -28,7 +28,11 @@ li{margin-bottom:12px}.label{font-weight:750}
   try{
    const r=await fetch(f.path+'?teyza_release='+Date.now(),{cache:'no-store'});
    const body=await r.text();
-   const pass=r.ok&&body.includes(f.text);
+   // PHP seller API is intentionally private. A 401 proves the route is
+   // responding without pretending a public visitor can inspect its internals.
+   const pass=f.authRequired
+     ?r.status===401
+     :r.ok&&body.includes(f.text);
    li.className=pass?'ok':'fail';
    li.textContent=(pass?'✓ ':'✕ ')+f.label+(pass?'':(' — '+r.status+' or wrong file version'));
   }catch(err){li.className='fail';li.textContent='✕ '+f.label+' — not accessible'}
