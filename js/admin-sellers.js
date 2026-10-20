@@ -40,8 +40,8 @@ function render(list){
     const b=s.business||{},a=s.companyApproval||{},v=s.verification||{},proof=v.proofOfAddress||{};
     const category=s.sellerCategory==="retail"?"retail":"spaza";
     const details=s.retailDetails||{};
-    const ready=approvalReady(v) && (category==="spaza"||s.retailDetailsReady===true);
-    const route=category==="spaza"?"PRIORITY · SPAZA":"RETAIL / WHOLESALE";
+    const ready=!s.categorySelectionRequired && approvalReady(v) && (category==="spaza"||s.retailDetailsReady===true);
+    const route=s.categorySelectionRequired?"AWAITING SHOP TYPE":category==="spaza"?"PRIORITY · SPAZA":"RETAIL / WHOLESALE";
     const proofMatch=v.proofAddressMatchVerified?'Address matches ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch':'Needs address review';
     const checklist=[
       ['Phone',v.phoneVerified],
