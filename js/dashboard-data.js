@@ -67,7 +67,7 @@ function renderReadiness(readiness){
   }else if(!identityDone||!proofDone||!approved){
     nextHref="business-profile.html";
     nextLabel="View verification status →";
-    nextCopy="Your verification is being reviewed. Once approved, finish your delivery and banking preferences and start selling.";
+    nextCopy="Your spaza application is in the priority review queue. Your phone, identity and address checks must still be approved.";
   }else if(!readiness.deliveryComplete){
     nextHref="delivery-settings.html?setup=1";
     nextLabel="Set delivery →";
