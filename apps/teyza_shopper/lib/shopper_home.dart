@@ -259,16 +259,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _restoreGrantedLocation() async {
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.always ||
-          permission == LocationPermission.whileInUse) {
-        await useLocation(askPermission: false);
-      }
-    } catch (_) { /* Manual location remains available. */ }
-  }
-
   Future<void> useLocation({bool askPermission = true}) async {
     setState(() { geolocating = true; locationWarning = null; });
     try {
