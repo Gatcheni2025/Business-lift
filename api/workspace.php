@@ -37,6 +37,13 @@ function sellerCategory(array $workspace): string {
   // Legacy sellers never get reclassified solely because of freeform text.
   return 'spaza';
 }
+function categorySelectionRequired(array $workspace): bool {
+  // New accounts explicitly store a null category. Older accounts without
+  // this field retain their existing spaza dashboard and approval status.
+  $business=$workspace['business']??[];
+  return array_key_exists('sellerCategory',$business)
+    && !in_array($business['sellerCategory'],['spaza','retail'],true);
+}
 function retailDetailsReady(array $workspace): bool {
   if(sellerCategory($workspace)!=='retail')return true;
   $d=$workspace['retailDetails']??[];
@@ -55,13 +62,15 @@ function loadAllSellers(): array {
     $w=json_decode((string)file_get_contents($path),true);
     if(!is_array($w))continue;
     $cat=sellerCategory($w);
+    $needsCategory=categorySelectionRequired($w);
     $approval=companyApproval($w);
     $out[]=[
       'uid'=>$w['uid']??basename($path,'.json'),'email'=>$w['email']??'',
       'business'=>$w['business']??[],'sellerCategory'=>$cat,
+      'categorySelectionRequired'=>$needsCategory,
       'retailDetails'=>$w['retailDetails']??[],
       'retailDetailsReady'=>retailDetailsReady($w),
-      'reviewLane'=>$cat==='spaza'?'priority_spaza':'retail',
+      'reviewLane'=>$needsCategory?'classification_pending':($cat==='spaza'?'priority_spaza':'retail'),
       'verification'=>verificationState($w,[]),
       'companyApproval'=>$approval,
       'createdAt'=>$w['createdAt']??null
@@ -297,6 +306,8 @@ if($action==='admin-address-proof'){
 if($action==='admin-catalog'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);$products=[];$orders=[];foreach(glob(dataDir().'/*.json')?:[] as $path){$w=json_decode((string)file_get_contents($path),true);if(!is_array($w))continue;$seller=['uid'=>$w['uid']??basename($path,'.json'),'businessName'=>$w['business']['businessName']??'Unnamed business','email'=>$w['email']??''];foreach(($w['products']??[]) as $p)$products[]=array_merge($p,['seller'=>$seller]);foreach(($w['orders']??[]) as $o)$orders[]=array_merge($o,['seller'=>$seller]);}respond(200,['ok'=>true,'products'=>$products,'orders'=>$orders]);}
 if($action==='admin-approval'){if(!isAdmin($user))respond(403,['ok'=>false,'error'=>'Admin access required']);if($_SERVER['REQUEST_METHOD']!=='POST')respond(405,['ok'=>false,'error'=>'Method not allowed']);$input=json_decode((string)file_get_contents('php://input'),true)?:[];$uid=preg_replace('/[^A-Za-z0-9_-]/','',(string)($input['uid']??''));$status=(string)($input['status']??'');if(!$uid||!in_array($status,['approved','rejected'],true))respond(422,['ok'=>false,'error'=>'Seller and valid decision are required']);$path=pathFor($uid);if(!is_file($path))respond(404,['ok'=>false,'error'=>'Seller not found']);$target=json_decode((string)file_get_contents($path),true);
 if($status==='approved'){
+  if(categorySelectionRequired($target))
+    respond(422,['ok'=>false,'error'=>'Seller must choose Spaza Shop or Retail / Wholesale before approval']);
   if(!retailDetailsReady($target))
     respond(422,['ok'=>false,'error'=>'Review the additional retail or wholesale company details before approval']);
   $v=verificationState($target,[]);
@@ -316,7 +327,7 @@ if ($action==='seller-readiness') {
   if($_SERVER['REQUEST_METHOD']==='POST'){$input=json_decode((string)file_get_contents('php://input'),true)?:[];if(array_key_exists('deliveryComplete',$input))$workspace['setupFlow']['deliveryComplete']=!empty($input['deliveryComplete']);if(array_key_exists('paymentComplete',$input))$workspace['setupFlow']['paymentComplete']=!empty($input['paymentComplete']);if(array_key_exists('sellerSetupComplete',$input))$workspace['sellerSetupComplete']=!empty($input['sellerSetupComplete']);saveWorkspace($user,$workspace);$settings=$workspace['settings']??[];}
   // A confirmed map location may fill the address after the profile was last saved.
   // Derive readiness from the saved fields and checks, not a stale client flag.
-  $businessComplete=empty($missing)&&((int)($verification['completed']??0)>=4)&&retailDetailsReady($workspace);
+  $businessComplete=!categorySelectionRequired($workspace)&&empty($missing)&&((int)($verification['completed']??0)>=4)&&retailDetailsReady($workspace);
   $deliveryComplete=in_array(($settings['delivery']['fulfilmentMode']??''),['courier','own_driver','pickup','digital'],true)
     &&isset($settings['delivery']['baseDeliveryFee'])&&is_numeric($settings['delivery']['baseDeliveryFee'])&&(float)$settings['delivery']['baseDeliveryFee']>=0
     &&!empty($verification['locationConfirmed'])&&sameAddress((string)($settings['delivery']['pickupAddress']??''),(string)($verification['location']['address']??''));
@@ -329,9 +340,9 @@ if ($action==='seller-readiness') {
   // banking remain independent app tabs so sellers can configure them when needed.
   $productReady=$businessComplete&&(($approval['status']??'pending')==='approved');
   $steps=(int)$businessComplete+(int)$deliveryComplete+(int)$paymentComplete;
-  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing,'sellerCategory'=>sellerCategory($workspace),'retailDetailsReady'=>retailDetailsReady($workspace),'reviewLane'=>sellerCategory($workspace)==='spaza'?'priority_spaza':'retail']);
+  respond(200,['ok'=>true,'businessComplete'=>$businessComplete,'businessVerification'=>$verification,'companyApproval'=>$approval,'deliveryComplete'=>$deliveryComplete,'paymentComplete'=>$paymentComplete,'productReady'=>$productReady,'sellerSetupComplete'=>$productReady,'sellerSetupCompletedSteps'=>$steps,'sellerSetupTotalSteps'=>3,'missingBusinessFields'=>$missing,'sellerCategory'=>sellerCategory($workspace),'categorySelectionRequired'=>categorySelectionRequired($workspace),'retailDetailsReady'=>retailDetailsReady($workspace),'reviewLane'=>sellerCategory($workspace)==='spaza'?'priority_spaza':'retail']);
 }
-if ($action==='summary') respond(200,['ok'=>true,'sellerCategory'=>sellerCategory($workspace),'retailDetails'=>$workspace['retailDetails']??[],'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
+if ($action==='summary') respond(200,['ok'=>true,'sellerCategory'=>sellerCategory($workspace),'categorySelectionRequired'=>categorySelectionRequired($workspace),'retailDetails'=>$workspace['retailDetails']??[],'business'=>$workspace['business'],'firstName'=>$workspace['firstName'],'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[],'settings'=>$workspace['settings']??[]]);
 if ($action==='section') {
   $section=preg_replace('/[^A-Za-z0-9_-]/','',(string)($_GET['section']??($_SERVER['HTTP_X_WORKSPACE_SECTION']??'')));
   if(!$section) respond(422,['ok'=>false,'error'=>'Section is required']);
@@ -421,4 +432,4 @@ if ($action==='orders') {
   }
   respond(200,['ok'=>true,'orders'=>$workspace['orders']??[],'products'=>$workspace['products']??[]]);
 }
-respond(200,['ok'=>true,'businessId'=>$workspace['business']['businessId'],'sellerCategory'=>sellerCategory($workspace),'business'=>$workspace['business'],'userData'=>['firstName'=>$workspace['firstName'],'email'=>$workspace['email']]]);
+respond(200,['ok'=>true,'businessId'=>$workspace['business']['businessId'],'sellerCategory'=>sellerCategory($workspace),'categorySelectionRequired'=>categorySelectionRequired($workspace),'business'=>$workspace['business'],'userData'=>['firstName'=>$workspace['firstName'],'email'=>$workspace['email']]]);
