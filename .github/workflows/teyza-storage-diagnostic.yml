@@ -1,0 +1,45 @@
+name: TEYZA Private Storage Diagnostic
+
+on:
+  push:
+    branches:
+      - fix/teyza-private-storage-diagnostic
+    paths:
+      - 'api/teyza-server-health.php'
+      - 'security/teyza-data-deny.htaccess'
+      - 'scripts/build_teyza_storage_diagnostic.py'
+      - '.github/workflows/teyza-storage-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check safe read-only diagnostics
+        run: |
+          set -euo pipefail
+          php -l api/teyza-server-health.php
+          grep -q 'public_seller_records_detected' api/teyza-server-health.php
+          grep -q 'chat_storage_available' api/teyza-server-health.php
+          grep -q 'Require all denied' security/teyza-data-deny.htaccess
+          python3 -m py_compile scripts/build_teyza_storage_diagnostic.py
+      - name: Build package
+        run: python3 scripts/build_teyza_storage_diagnostic.py
+      - name: Verify contents
+        run: |
+          unzip -t TEYZA_STORAGE_PATH_DIAGNOSTIC_R1.zip
+          unzip -Z1 TEYZA_STORAGE_PATH_DIAGNOSTIC_R1.zip | grep -qx 'api/teyza-server-health.php'
+          unzip -Z1 TEYZA_STORAGE_PATH_DIAGNOSTIC_R1.zip | grep -qx 'OPTIONAL_PUBLIC_FOLDER_PROTECTION/teyza-data/.htaccess'
+          ! unzip -Z1 TEYZA_STORAGE_PATH_DIAGNOSTIC_R1.zip | grep -q 'api/workspace.php'
+      - name: Upload diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-STORAGE-PATH-500-503-DIAGNOSTIC
+          path: TEYZA_STORAGE_PATH_DIAGNOSTIC_R1.zip
+          retention-days: 30
+          if-no-files-found: error
