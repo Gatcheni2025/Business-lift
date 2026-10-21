@@ -26,6 +26,6 @@ def create_favicon(svg_path: Path) -> bytes:
             sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
         )
     ico = output.getvalue()
-    if len(ico) < 300 or ico[:4] != b"\\x00\\x00\\x01\\x00":
+    if len(ico) < 300 or ico[:4] != bytes([0, 0, 1, 0]):
         raise ValueError("Failed to render Windows-compatible TEYZA favicon.ico")
     return ico
