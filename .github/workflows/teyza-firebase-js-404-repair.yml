@@ -1,14 +1,16 @@
-name: TEYZA Firebase JS 404 Repair
+name: TEYZA Firebase and Favicon 404 Fix
 
 on:
   push:
     branches:
-      - fix/teyza-firebase-settings-404
+      - fix/teyza-firebase-404-and-favicon
     paths:
       - 'js/firebase-settings.js'
       - 'js/firebase-config.js'
       - 'js/landing-firebase.js'
       - 'scripts/build_teyza_firebase_404_repair.py'
+      - 'scripts/build_teyza_favicon.py'
+      - 'assets/teyza-icon.svg'
       - 'scripts/build_teyza_full_site.py'
       - '.github/workflows/teyza-firebase-js-404-repair.yml'
   workflow_dispatch:
@@ -22,6 +24,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Install icon rasterizer
+        run: python3 -m pip install --quiet --disable-pip-version-check pillow cairosvg
       - name: Validate required Firebase browser modules
         run: |
           set -euo pipefail
@@ -30,20 +34,31 @@ jobs:
           node --input-type=module --check < js/landing-firebase.js
           grep -q 'firebase-settings.js' js/firebase-config.js
           grep -q 'firebase-settings.js' js/landing-firebase.js
-          python3 -m py_compile scripts/build_teyza_full_site.py scripts/build_teyza_firebase_404_repair.py
+          python3 -m py_compile scripts/build_teyza_full_site.py scripts/build_teyza_firebase_404_repair.py scripts/build_teyza_favicon.py
       - name: Build safe JS repair ZIP
         run: python3 scripts/build_teyza_firebase_404_repair.py
       - name: Verify ZIP and import paths
         run: |
           set -euo pipefail
-          unzip -t dist/TEYZA_FIREBASE_JS_404_REPAIR.zip
-          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/firebase-settings.js'
-          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/firebase-config.js'
-          unzip -Z1 dist/TEYZA_FIREBASE_JS_404_REPAIR.zip | grep -qx 'js/landing-firebase.js'
+          unzip -t dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip
+          unzip -Z1 dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip | grep -qx 'js/firebase-settings.js'
+          unzip -Z1 dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip | grep -qx 'js/firebase-config.js'
+          unzip -Z1 dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip | grep -qx 'js/landing-firebase.js'
+          unzip -Z1 dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip | grep -qx 'favicon.ico'
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from io import BytesIO
+          from PIL import Image
+          with ZipFile('dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip') as z:
+              with Image.open(BytesIO(z.read('favicon.ico'))) as im:
+                  assert im.format == 'ICO'
+                  assert im.size[0] >= 32 and im.size[1] >= 32
+          print('Growing-Y favicon ICO validated.')
+          PY
       - name: Upload targeted Firebase fix
         uses: actions/upload-artifact@v4
         with:
-          name: TEYZA-FIREBASE-JS-404-REPAIR
-          path: dist/TEYZA_FIREBASE_JS_404_REPAIR.zip
+          name: TEYZA-FIREBASE-AND-FAVICON-404-FIX
+          path: dist/TEYZA_FIREBASE_AND_FAVICON_404_FIX.zip
           retention-days: 30
           if-no-files-found: error
