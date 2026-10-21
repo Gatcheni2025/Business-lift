@@ -1,0 +1,9 @@
+# Emergency HTTP deny rule for legacy public_html/teyza-data.
+# Place ONLY inside /teyza-data/.htaccess; NEVER in public_html/.htaccess!
+# Block all direct web requests to seller records on Apache/LiteSpeed.
+<IfModule mod_authz_core.c>
+Require all denied
+</IfModule>
+<IfModule mod_access_compat.c>
+Deny from all
+</IfModule>
