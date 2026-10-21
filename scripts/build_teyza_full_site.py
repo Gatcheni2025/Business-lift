@@ -12,6 +12,7 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from zipfile import ZipFile, ZIP_DEFLATED
 import json
 import re
+from build_teyza_favicon import create_favicon
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
@@ -28,6 +29,7 @@ MANAGED = (
     "Every top-level .html page",
     "All assets/* shared CSS, SVG and frontend assets",
     "All js/*.js including required public Firebase client configuration",
+    "A classic favicon.ico generated from the same growing-Y SVG",
     "All api/*.php except existing server authentication helper",
     "Public top-level PHP endpoints, robots.txt, and sitemap.xml",
 )
@@ -67,6 +69,7 @@ def checked_pages(entries: dict[str,bytes]) -> None:
       "js/firebase-settings.js","js/firebase-config.js","js/landing-firebase.js",
       "js/dashboard-data.js","js/spaza-activation.js","api/workspace.php",
     ]
+    required.append("favicon.ico")
     missing = [n for n in required if not entries.get(n)]
     if missing: raise SystemExit("Missing release files: " + ", ".join(missing))
     dash = entries["dashboard.html"].decode()
@@ -103,6 +106,7 @@ def main() -> None:
             html = bust_local_assets(html)
             raw = html.encode("utf-8")
         entries[name] = raw
+    entries["favicon.ico"] = create_favicon(ROOT / "assets" / "teyza-icon.svg")
     checked_pages(entries)
     installed = {
       "release":RELEASE,
@@ -119,9 +123,9 @@ def main() -> None:
       "2. Extract THIS ZIP directly into the folder holding the live index.html and dashboard.html.\n"
       "   Do not upload without extracting; do not extract into another nested folder.\n"
       "3. Overwrite matching public HTML, JS, CSS and PHP files. Do not delete other files.\n"
-      "4. Preserve the existing js/firebase-config.js, js/firebase-settings.js,\n"
-      "   api/teyza-firebase-verify.php, uploads/, private_html/ and the existing .htaccess.\n"
-      "   These are intentionally omitted from the ZIP.\n"
+      "4. Public Firebase JS config and favicon are included. If your Firebase settings\n"
+      "   differ on the live domain, back them up and reconcile the project before replacing.\n"
+      "   Preserve api/teyza-firebase-verify.php, private_html/, uploads/ and .htaccess.\n"
       "5. Visit https://teyza.co.za/teyza-release-check.html and confirm every check is green.\n"
       "6. If the old nested verification popup remains, ensure the dashboard.html you are viewing\n"
       "   contains the R3 marker in View Source, and clear hosting/CDN/browser caches.\n"
