@@ -106,6 +106,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
     if(busy)return;
     final name=TextEditingController(text:existing?.name??'');
     final category=TextEditingController(text:existing?.category??'Groceries');
+    final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
     final stock=TextEditingController(text:existing?.stock.toString()??'');
     final key=GlobalKey<FormState>();
@@ -129,6 +130,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
               decoration:const InputDecoration(labelText:'Category',border:OutlineInputBorder()),
               validator:(v)=>v==null||v.trim().isEmpty?'Enter a category':null),
             const SizedBox(height:8),
+            TextFormField(controller:description,maxLength:500,maxLines:2,
+              decoration:const InputDecoration(labelText:'Description (optional)',border:OutlineInputBorder())),
+            const SizedBox(height:8),
             TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),
               decoration:const InputDecoration(labelText:'Price (R)',border:OutlineInputBorder()),
               validator:(v){final amount=double.tryParse((v??'').replaceAll(',','.'));
@@ -146,12 +150,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
                     id:existing?.id??'p'+DateTime.now().microsecondsSinceEpoch.toString()+
                       Random.secure().nextInt(100000).toString(),
                     name:name.text.trim(),category:category.text.trim(),
+                    description:description.text.trim(),createdAt:existing?.createdAt,
                     priceCents:(double.parse(price.text.replaceAll(',','.'))*100).round(),
                     stock:int.parse(stock.text.trim())));
                 }
               }),
           ])))));
-    name.dispose();category.dispose();price.dispose();stock.dispose();
+    name.dispose();category.dispose();description.dispose();price.dispose();stock.dispose();
     if(result!=null)await _save(result);
   }
   Widget _card(Widget child)=>Card(color:Colors.white,child:Padding(
