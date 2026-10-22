@@ -27,17 +27,24 @@ void main(){
  });
  test('Owner creates only a private draft and does not publish to shopper catalogue',() async{
   final client=MockClient((req) async{
-    expect(req.method,'PATCH');
-    expect(req.url.path,contains('teyzaDraftProducts/sellerTEST123/items/test-item1'));
+    expect(req.method,'POST');
+    expect(req.url.path,contains('documents:commit'));
+    expect(req.body,contains('teyzaDraftProducts/sellerTEST123/items/test-item1'));
     expect(req.headers['Authorization'],'Bearer mock-id-token');
     final body=jsonDecode(req.body) as Map;
-    final fields=body['fields'] as Map;
+    final write=(body['writes'] as List).first as Map;
+    final fields=(write['update'] as Map)['fields'] as Map;
+    expect((write['currentDocument'] as Map)['exists'],false);
+    final transforms=write['updateTransforms'] as List;
+    expect(transforms.length,2);
     expect((fields['status'] as Map)['stringValue'],'draft');
     expect((fields['ownerUid'] as Map)['stringValue'],owner);
     expect(body.toString(),isNot(contains('approvalStatus')));
     expect(body.toString(),isNot(contains('listingStatus')));
     expect(body.toString(),isNot(contains('teyzaPublicShops')));
-    return http.Response(jsonEncode({'fields':fields}),200);
+    expect((fields['stockQty'] as Map)['integerValue'],'8');
+    expect((fields['description'] as Map)['stringValue'],'');
+    return http.Response(jsonEncode({'writeResults':[]}),200);
   });
   await SellerFirestore(uid:owner,token:'mock-id-token',client:client).save(
     const SellerDraft(id:'test-item1',name:'Bread',category:'Groceries',
@@ -48,13 +55,30 @@ void main(){
     {'name':'projects/demo/documents/teyzaDraftProducts/$owner/items/item1',
       'fields':{'ownerUid':{'stringValue':owner},'status':{'stringValue':'draft'},
         'name':{'stringValue':'Milk'},'category':{'stringValue':'Groceries'},
-        'priceCents':{'integerValue':'1999'},'stock':{'integerValue':'4'}}},
+        'priceCents':{'integerValue':'1999'},'stockQty':{'integerValue':'4'},
+        'createdAt':{'timestampValue':'2026-10-21T10:00:00Z'}}},
     {'name':'projects/demo/documents/teyzaDraftProducts/$owner/items/item2',
       'fields':{'ownerUid':{'stringValue':'another'},'status':{'stringValue':'draft'}}}
   ]}),200));
   final items=await SellerFirestore(uid:owner,token:'t',client:client).drafts();
   expect(items.length,1);
   expect(items.single.priceCents,1999);
+ });
+ test('Editing a draft preserves its server-set createdAt',() async{
+  final client=MockClient((req) async{
+    final body=jsonDecode(req.body) as Map;
+    final write=(body['writes'] as List).single as Map;
+    expect(write.containsKey('currentDocument'),false);
+    final fields=(write['update'] as Map)['fields'] as Map;
+    expect((fields['createdAt'] as Map)['timestampValue'],'2026-10-21T10:00:00Z');
+    expect((write['updateTransforms'] as List).length,1);
+    expect((write['updateTransforms'] as List).single['fieldPath'],'updatedAt');
+    return http.Response('{"writeResults":[]}',200);
+  });
+  await SellerFirestore(uid:owner,token:'t',client:client).save(
+    const SellerDraft(id:'existing1',name:'Bread',category:'Groceries',
+      description:'500g',priceCents:2000,stock:5,
+      createdAt:'2026-10-21T10:00:00Z'));
  });
  test('Unsafe product IDs and invalid prices are rejected before network access',(){
   expect(()=>SellerFirestore.validateDraft(
