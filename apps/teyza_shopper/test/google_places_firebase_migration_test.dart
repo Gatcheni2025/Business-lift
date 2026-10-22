@@ -5,17 +5,17 @@ import 'package:http/testing.dart';
 import 'package:teyza_shopper/shopper_discovery.dart';
 
 void main(){
-  test('Google search and photo endpoints use dedicated HTTPS PHP backend',(){
+  test('Google search and photo endpoints use Firebase Cloud Function with Google-managed HTTPS',(){
     final search=teyzaPlacesUrl('shopper-discover.php',{'category':'spaza'});
     expect(search.scheme,'https');
-    expect(search.host,'discover.teyza.co.za');
-    expect(search.path,'/api/shopper-discover.php');
+    expect(search.host,'us-central1-business-lift-3c19c.cloudfunctions.net');
+    expect(search.path,'/teyzaPlaces/shopper-discover.php');
     expect(teyzaGooglePhotoUrl('places/test12345/photos/samplephoto123')
-      .path,'/api/shopper-place-photo.php');
+      .path,'/teyzaPlaces/shopper-place-photo.php');
   });
   test('Live Places response retains Google photo reference and attributions',() async {
     final client=MockClient((req) async {
-      expect(req.url.host,'discover.teyza.co.za');
+      expect(req.url.host,'us-central1-business-lift-3c19c.cloudfunctions.net');
       return http.Response(jsonEncode({'ok':true,'provider':'google_places','entries':[{
         'id':'google-ChIJ0123456789','name':'Real Spaza',
         'origin':'google_places','latitude':-29.74,'longitude':30.99,
@@ -30,9 +30,9 @@ void main(){
     expect(shops.single.photoRef,contains('/photos/'));
     expect(shops.single.photoAttributions.single['name'],'Shop photographer');
   });
-  test('Unavailable Google/PHP feed falls back to attributed live OSM map data',() async {
+  test('Unavailable Firebase Places feed falls back to attributed live OSM map data',() async {
     final client=MockClient((req) async {
-      if(req.url.host=='discover.teyza.co.za'){
+      if(req.url.host=='us-central1-business-lift-3c19c.cloudfunctions.net'){
         return http.Response('Missing endpoint',404);
       }
       expect(req.url.host,'overpass-api.de');

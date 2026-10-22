@@ -1,15 +1,22 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-// Firebase Hosting cannot run PHP. Google Places requires a separate HTTPS
-// backend with a server-side API key; never embed that key in the Flutter app.
-const teyzaPlacesBackend = String.fromEnvironment('TEYZA_PLACES_BACKEND_URL',defaultValue:'https://discover.teyza.co.za');
+// Firebase-only Google Places: 2nd-gen HTTPS Cloud Function with managed TLS.
+// The Google Places API key stays in Firebase Secret Manager, never in APKs.
+const teyzaPlacesBackend = String.fromEnvironment(
+  'TEYZA_PLACES_FUNCTION_URL',
+  defaultValue:'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces');
 Uri teyzaPlacesUrl(String path,[Map<String,String> params=const {}]) {
   final base=Uri.tryParse(teyzaPlacesBackend.trim());
-  if(base==null || base.scheme!='https' || base.host.isEmpty || base.userInfo.isNotEmpty || base.hasQuery || base.hasFragment || (base.path.isNotEmpty && base.path!='/')){
-    throw const FormatException('Secure shop search endpoint is invalid.');
+  if(base==null || base.scheme!='https' ||
+      base.host!='us-central1-business-lift-3c19c.cloudfunctions.net' ||
+      base.path!='/teyzaPlaces' || base.userInfo.isNotEmpty ||
+      base.hasQuery || base.hasFragment ||
+      !['shopper-discover.php','shopper-place-photo.php'].contains(path)) {
+    throw const FormatException('Teyza Google Places Function URL is invalid.');
   }
-  return base.replace(path:'/api/$path',queryParameters:params.isEmpty?null:params);
+  return base.replace(path:'/teyzaPlaces/$path',
+    queryParameters:params.isEmpty?null:params);
 }
 Uri teyzaGooglePhotoUrl(String ref)=>teyzaPlacesUrl('shopper-place-photo.php',{'ref':ref});
 
