@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 // Firebase Web API key is public project configuration, NOT a credential.
 // Native Google OAuth is a separate integration and is not implied here.
 const _projectApiKey = 'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U';
+const teyzaFirebaseApiKey = _projectApiKey;
 // Public OAuth client ID must belong to the same Firebase Auth project as this API key.
 // Embed at build time; never embed a client secret.
 const _googleWebClientId=String.fromEnvironment('TEYZA_GOOGLE_WEB_CLIENT_ID');
