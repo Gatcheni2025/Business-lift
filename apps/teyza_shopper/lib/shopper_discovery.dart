@@ -77,11 +77,11 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   if(shop.origin != 'google_places') return true;
   final name = shop.name.toLowerCase();
   if(category == 'variety') {
-    if(RegExp(r'spaza|tuck\\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
-    return RegExp(r'china\\s?mall|shopping|mall|wholesale|cash\\s?(and|&)\\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
+    if(RegExp(r'spaza|tuck\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
+    return RegExp(r'china\s?mall|shopping|mall|wholesale|cash\s?(and|&)\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
   }
   if(category == 'spaza') {
-    return RegExp(r'spaza|tuck\\s?shop|convenience|mini\\s?market|supermarket|grocer|general dealer|corner shop|food store').hasMatch(name);
+    return RegExp(r'spaza|tuck\s?shop|convenience|mini\s?market|supermarket|grocer|general dealer|corner shop|food store').hasMatch(name);
   }
   return true;
 }
