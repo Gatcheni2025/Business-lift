@@ -1,0 +1,13 @@
+{
+  "name": "teyza-places-v34",
+  "version": "3.4.0",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "firebase-functions": "^6.3.2"
+  }
+}
