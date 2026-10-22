@@ -34,7 +34,7 @@ class ShopperSession extends ChangeNotifier {
   bool isReady = false;
   bool isBusy = false;
   bool emailVerified = false;
-  String? email, name, idToken;
+  String? email, name, idToken, userId;
   String? _refreshToken;
 
   Future<Map<String,dynamic>> _post(Uri uri, Map<String,String> params) async {
@@ -63,11 +63,12 @@ class ShopperSession extends ChangeNotifier {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String,dynamic>;
           idToken = data['id_token'] as String?;
+          userId = data['user_id'] as String?;
           _refreshToken = data['refresh_token'] as String? ?? _refreshToken;
           await _vault.write(key:'teyza_refresh',value:_refreshToken);
           await refreshEmailStatus();
         } else {
-          idToken=null; _refreshToken=null; email=null; name=null;
+          idToken=null; _refreshToken=null; email=null; name=null;userId=null;
           await _vault.delete(key:'teyza_refresh');
           await _vault.delete(key:'teyza_email');
           await _vault.delete(key:'teyza_name');
@@ -75,7 +76,7 @@ class ShopperSession extends ChangeNotifier {
       }
     } catch (_) {
       // Preserve no assumed session when refresh cannot be verified.
-      idToken = null;
+      idToken = null; userId = null;
       emailVerified = false;
     } finally {
       isReady=true;
@@ -85,6 +86,7 @@ class ShopperSession extends ChangeNotifier {
 
   Future<void> _save(Map<String,dynamic> payload,String fallbackEmail,String fallbackName) async {
     idToken=payload['idToken'] as String?;
+    userId=payload['localId'] as String?;
     _refreshToken=payload['refreshToken'] as String?;
     email=payload['email']?.toString() ?? fallbackEmail;
     name=fallbackName;
@@ -105,11 +107,36 @@ class ShopperSession extends ChangeNotifier {
       final profiles=result['users'];
       emailVerified=profiles is List && profiles.isNotEmpty &&
         profiles.first is Map && (profiles.first as Map)['emailVerified']==true;
+      if(profiles is List && profiles.isNotEmpty && profiles.first is Map) {
+        userId=(profiles.first as Map)['localId']?.toString()??userId;
+      }
       notifyListeners();
     } catch (_) {
       emailVerified=false;
       notifyListeners();
     }
+  }
+
+  // Refresh before each seller write. The app never sends a stale ID token
+  // or an admin credential to Firestore.
+  Future<String> freshIdToken() async {
+    if(_refreshToken==null)throw StateError('Sign in to manage your shop.');
+    final response=await http.post(
+      Uri.parse('https://securetoken.googleapis.com/v1/token?key=$_projectApiKey'),
+      headers:const {'Content-Type':'application/x-www-form-urlencoded'},
+      body:{'grant_type':'refresh_token','refresh_token':_refreshToken!})
+      .timeout(const Duration(seconds:15));
+    if(response.statusCode!=200)throw StateError('Session expired. Sign in again.');
+    final data=jsonDecode(response.body) as Map<String,dynamic>;
+    final token=(data['id_token']??'').toString();
+    final uid=(data['user_id']??'').toString();
+    if(token.isEmpty||uid.isEmpty)throw StateError('Session expired. Sign in again.');
+    idToken=token;
+    userId=uid;
+    _refreshToken=data['refresh_token']?.toString()??_refreshToken;
+    await _vault.write(key:'teyza_refresh',value:_refreshToken);
+    notifyListeners();
+    return token;
   }
 
   Future<void> sendEmailVerification() async {
@@ -175,7 +202,7 @@ class ShopperSession extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    idToken=null;email=null;name=null;_refreshToken=null;emailVerified=false;
+    idToken=null;email=null;name=null;userId=null;_refreshToken=null;emailVerified=false;
     await _vault.delete(key:'teyza_refresh');
     await _vault.delete(key:'teyza_email');
     await _vault.delete(key:'teyza_name');
