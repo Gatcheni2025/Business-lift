@@ -30,6 +30,38 @@ void main(){
     expect(shops.single.photoRef,contains('/photos/'));
     expect(shops.single.photoAttributions.single['name'],'Shop photographer');
   });
+  test('R3.4 Cloud Function photo URL and contributor credit survive parsing',(){
+    final shop=OnlineShop.fromJson({
+      'id':'google-ChIJ9876','name':'China Mall','origin':'google_places',
+      'shopCategory':'variety',
+      'photoUrl':'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-photo.php?name=places%2FChIJ9876%2Fphotos%2FATabc',
+      'photoAttributions':[{'name':'Store photo owner','url':''}]
+    });
+    expect(shop.hasPhoto,isTrue);
+    expect(shop.displayPhotoUrl,contains('shopper-place-photo.php'));
+    expect(shop.photoAttributions.single['name'],'Store photo owner');
+    expect(teyzaMatchesShopCategory(shop,'variety'),isTrue);
+  });
+  test('A fake photo host is rejected and old Google reference is supported',(){
+    final external=OnlineShop.fromJson({
+      'id':'google-1','name':'Spaza Shop','photoUrl':'https://untrusted.example/photo'
+    });
+    expect(external.displayPhotoUrl,isNull);
+    final legacy=OnlineShop.fromJson({
+      'id':'google-2','name':'Real Spaza','photoRef':'places/ChIJabc/photos/ATabc'
+    });
+    expect(legacy.displayPhotoUrl,contains('ref='));
+  });
+  test('Spaza and variety search do not mix unrelated businesses',(){
+    OnlineShop example(String name)=>OnlineShop.fromJson({
+      'id':'google-'+name,'name':name,'origin':'google_places'
+    });
+    expect(teyzaMatchesShopCategory(example('China Mall'),'variety'),isTrue);
+    expect(teyzaMatchesShopCategory(example('Qolo Tuckshop'),'variety'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Las G Tyres'),'variety'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Phoenix Group of Companies'),'spaza'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Shalom Spaza'),'spaza'),isTrue);
+  });
   test('Unavailable Firebase Places feed falls back to attributed live OSM map data',() async {
     final client=MockClient((req) async {
       if(req.url.host=='us-central1-business-lift-3c19c.cloudfunctions.net'){
