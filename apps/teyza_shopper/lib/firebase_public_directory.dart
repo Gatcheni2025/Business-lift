@@ -41,7 +41,12 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
     output.add(<String,dynamic>{
       'id':id,'name':data['name'],'area':data['area']??'',
       'address':data['address']??'','shopCategory':data['shopCategory']=='retail'?'variety':'spaza',
-      'photoUrl':'','whatsappPhone':'',
+      'photoUrl':data['photoUrl'] is String &&
+        (data['photoUrl'] as String).startsWith('https://')
+        ? data['photoUrl'] : '',
+      'latitude': data['latitude'] is num ? data['latitude'] : null,
+      'longitude': data['longitude'] is num ? data['longitude'] : null,
+      'whatsappPhone':'',
       'pickupEnabled':data['pickupEnabled']==true,
       'deliveryEnabled':data['deliveryEnabled']==true,
       'products':data['products'] is List?data['products']:<dynamic>[],
