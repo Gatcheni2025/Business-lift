@@ -15,12 +15,12 @@ import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
 
-const ink = Color(0xFF173943);
-const deep = Color(0xFF003F4A);
-const green = Color(0xFF079B65);
-const aqua = Color(0xFF6ADBAB);
-const pale = Color(0xFFF3FAF6);
-const muted = Color(0xFF6A7C82);
+const ink = Color(0xFF0B1C2C);
+const deep = Color(0xFF010F1C);
+const green = Color(0xFF28B67B);
+const aqua = Color(0xFFB8EDD3);
+const pale = Color(0xFFF7F8FA);
+const muted = Color(0xFF6C7880);
 const catalogUrl = 'https://teyza.co.za/api/shopper-catalog.php';
 const photos = 'https://teyza.co.za/assets/catalog-real/';
 String rand(int cents) => 'R' + (cents / 100).toStringAsFixed(2);
@@ -104,11 +104,18 @@ class TeyzaShopper extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Teyza Shopper', debugShowCheckedModeBanner: false,
-    theme: ThemeData(useMaterial3: true, scaffoldBackgroundColor: pale,
-      colorScheme: ColorScheme.fromSeed(seedColor: green),
-      appBarTheme: const AppBarTheme(backgroundColor: ink, foregroundColor: Colors.white),
-      filledButtonTheme: FilledButtonThemeData(style:
-        FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.white))),
+    theme: ThemeData(useMaterial3:true, scaffoldBackgroundColor:pale,
+      colorScheme:ColorScheme.fromSeed(seedColor:green,surface:Colors.white),
+      textTheme:const TextTheme(
+        titleLarge:TextStyle(color:ink,fontSize:21,fontWeight:FontWeight.w800),
+        titleMedium:TextStyle(color:ink,fontSize:16,fontWeight:FontWeight.w800),
+        bodyMedium:TextStyle(color:ink,fontSize:14)),
+      appBarTheme:const AppBarTheme(backgroundColor:deep,
+        foregroundColor:Colors.white,elevation:0),
+      filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(
+        backgroundColor:green,foregroundColor:Colors.white,
+        padding:const EdgeInsets.symmetric(horizontal:20,vertical:13),
+        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16))))),
     home: const ShopperHome());
 }
 class ShopperHome extends StatefulWidget {
@@ -163,11 +170,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final urls=<String>[
       ...live.where((s)=>s.photo.startsWith('https://')).take(3)
         .map((s)=>s.photo),
-      ...online.where((s)=>s.origin=='google_places' &&
-        s.photoRef!=null && s.photoRef!.isNotEmpty).take(3)
-        .map((s)=>teyzaGooglePhotoUrl(s.photoRef!).toString()),
-      for(final name in ['bread','milk','eggs'])
-        photos+name+'.webp',
+      ...online.map((s)=>s.displayPhotoUrl).whereType<String>().take(3),
     ];
     try {
       await Future.wait<void>(urls.map((url) async {
@@ -456,16 +459,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   Widget onlinePhoto(OnlineShop shop,{double width=86,double height=86}) {
-    final ref=shop.photoRef;
-    final placeholder=Container(width:width,height:height,
-      alignment:Alignment.center,color:const Color(0xFFE4F3EA),
-      child:Icon(shop.shopCategory=='variety'?Icons.store_mall_directory_outlined:
-        Icons.storefront_outlined,color:green,size:width*.42));
-    if(shop.origin!='google_places'||ref==null||ref.isEmpty)return
-      ClipRRect(borderRadius:BorderRadius.circular(14),child:placeholder);
-    final url=teyzaGooglePhotoUrl(ref).toString();
-    return ClipRRect(borderRadius:BorderRadius.circular(14),
-      child:Image.network(url,width:width,height:height,fit:BoxFit.cover,
+    final placeholder=SizedBox(width:width,height:height,
+      child:SvgPicture.asset('assets/illustrations/shop-front.svg',
+        width:width,height:height,fit:BoxFit.cover));
+    final src=shop.displayPhotoUrl;
+    return ClipRRect(borderRadius:BorderRadius.circular(17),
+      child:src==null?placeholder:Image.network(src,width:width,height:height,
+        fit:BoxFit.cover,gaplessPlayback:true,
         errorBuilder:(_,__,___)=>placeholder,
         loadingBuilder:(context,child,progress)=>progress==null?child:placeholder));
   }
@@ -502,18 +502,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
-    margin:const EdgeInsets.only(bottom:9),
-    child:ListTile(onTap:()=>selectDirectory(place),
-      leading:onlinePhoto(place,width:66,height:68),
-      title:Text(place.name,style:const TextStyle(fontWeight:FontWeight.w800)),
-      subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(place.address.isNotEmpty?place.address:place.area,
-          maxLines:2,overflow:TextOverflow.ellipsis),
-        const Text('Catalogue not yet available',style:TextStyle(
-          fontSize:11,color:muted)),
-      ]),
-      isThreeLine:true,
-      trailing:const Icon(Icons.chevron_right,color:green,size:20)));
+    shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
+    margin:const EdgeInsets.only(bottom:10),
+    child:InkWell(borderRadius:BorderRadius.circular(20),
+      onTap:()=>selectDirectory(place),
+      child:Padding(padding:const EdgeInsets.all(11),child:Row(children:[
+        onlinePhoto(place,width:94,height:91),
+        const SizedBox(width:13),
+        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(place.name,maxLines:1,overflow:TextOverflow.ellipsis,
+            style:const TextStyle(fontSize:15,fontWeight:FontWeight.w900,color:ink)),
+          const SizedBox(height:4),
+          Text(place.address.isNotEmpty?place.address:place.area,maxLines:2,
+            overflow:TextOverflow.ellipsis,
+            style:const TextStyle(fontSize:11,color:muted)),
+          const SizedBox(height:7),
+          Row(children:[
+            const Icon(Icons.place_outlined,color:green,size:14),
+            const SizedBox(width:3),
+            Text(area!=null&&place.lat!=null&&place.lng!=null
+              ? km(area!.lat,area!.lng,place.lat!,place.lng!).toStringAsFixed(1)+' km away'
+              : 'Public map listing',
+              style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
+          ])
+        ])),
+        const Icon(Icons.chevron_right_rounded,color:green,size:23)
+      ]))));
 
   List<Shop> get displayShops {
     final q=search.toLowerCase().trim();
@@ -559,15 +573,22 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     directorySelected=shop;selected=null;showAllShops=true;search='';tab=0;cart.clear();
   });
 
-  Widget photo(String url,{double size=92, IconData icon=Icons.storefront_outlined}) =>
-    Container(width:size,height:size,clipBehavior:Clip.antiAlias,
-      decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(15)),
-      child:url.isEmpty ? Icon(icon,size:size*.48,color:aqua) :
-        Image.network(url,fit:BoxFit.contain,
-          loadingBuilder:(context,child,progress)=>progress==null?child:
-            Center(child:Icon(icon,color:const Color(0xFF91CABA),size:size*.42)),
-          errorBuilder:(_,error,stack)=>Icon(icon,color:aqua,size:size*.42)));
-
+  Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
+    final isProduct=icon==Icons.shopping_bag||icon==Icons.shopping_bag_outlined;
+    final placeholder=SvgPicture.asset(
+      isProduct?'assets/illustrations/grocery-basket.svg':
+        'assets/illustrations/shop-front.svg',
+      width:size,height:size,fit:BoxFit.cover);
+    return Container(width:size,height:size,clipBehavior:Clip.antiAlias,
+      decoration:BoxDecoration(color:const Color(0xFFF1F6F3),
+        borderRadius:BorderRadius.circular(17)),
+      child:url.startsWith('https://')?Image.network(url,
+        width:size,height:size,fit:isProduct?BoxFit.contain:BoxFit.cover,
+        errorBuilder:(_,__,___)=>placeholder,
+        loadingBuilder:(context,child,progress)=>progress==null?child:placeholder)
+        :placeholder);
+  }
+  
   Shop? get nearestRegisteredSpaza {
     if(area==null)return null;
     final options=nearbyReal.where((s)=>s.shopCategory=='spaza' &&
@@ -1033,12 +1054,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           decoration:BoxDecoration(color:Colors.white,
             borderRadius:BorderRadius.circular(15)),
           child:Column(children:[
-            Expanded(child:Image.network(photos+x.$2+'.webp',
-              fit:BoxFit.contain,
-              loadingBuilder:(context,child,progress)=>progress==null?child:
-                const Icon(Icons.shopping_bag_outlined,color:Color(0xFF91CABA),size:44),
-              errorBuilder:(_,err,stack)=>
-                const Icon(Icons.shopping_bag_outlined,color:green,size:44))),
+            Expanded(child:SvgPicture.asset(
+              'assets/illustrations/'+x.$2+'.svg',fit:BoxFit.contain)),
             const SizedBox(height:5),
             Text(x.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
             const Text('Shop category',style:TextStyle(color:muted,fontSize:10))
@@ -1121,7 +1138,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       const SizedBox(height:10),
       SizedBox(width:double.infinity,height:210,
         child:onlinePhoto(shop,width:420,height:210)),
-      if(shop.photoRef!=null)...[
+      if(shop.hasPhoto)...[
         const SizedBox(height:6),
         const Text('Photo · Google Maps',style:TextStyle(color:muted,fontSize:11)),
         for(final credit in shop.photoAttributions)
@@ -1439,15 +1456,12 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
   }
 
   Widget _shopThumb(OnlineShop shop) {
-    final missing=const CircleAvatar(radius:29,
-      backgroundColor:Color(0xFFE4F3EA),
-      child:Icon(Icons.storefront_outlined,color:green));
-    final ref=shop.photoRef;
-    if(shop.origin!='google_places'||ref==null||ref.isEmpty)return missing;
-    final src=teyzaGooglePhotoUrl(ref).toString();
-    return ClipRRect(borderRadius:BorderRadius.circular(12),
-      child:Image.network(src,width:62,height:62,fit:BoxFit.cover,
-        errorBuilder:(_,__,___)=>missing));
+    final placeholder=SvgPicture.asset('assets/illustrations/shop-front.svg',
+      width:62,height:62,fit:BoxFit.cover);
+    final src=shop.displayPhotoUrl;
+    return ClipRRect(borderRadius:BorderRadius.circular(15),
+      child:src==null?placeholder:Image.network(src,width:62,height:62,
+        fit:BoxFit.cover,errorBuilder:(_,__,___)=>placeholder));
   }
 
   double? _distance(double? lat,double? lng) {
