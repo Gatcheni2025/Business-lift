@@ -1,0 +1,44 @@
+// TEYZA R3.2 - owner-only seller draft management from the Android app.
+// MERGE INSIDE service cloud.firestore { match /databases/{database}/documents { ... } }
+// Keep existing users, teyzaSellerAccounts, teyzaPublicShops, admin, etc.
+// Do not paste as a second service block. Check for an existing identical
+// match path in your rules: replace/merge carefully, because overlapping
+// allow grants are OR'ed and could weaken access.
+//
+// Only the owner may see or edit private drafts; a client may NEVER turn
+// one into a public listing or set status to 'published'.
+match /teyzaDraftProducts/{uid}/items/{productId} {
+  function isOwner() {
+    return request.auth != null && request.auth.uid == uid;
+  }
+  function validDraft() {
+    return request.resource.data.keys().hasOnly([
+        'ownerUid','name','category','priceCents','stock','status'
+      ])
+      && request.resource.data.keys().hasAll([
+        'ownerUid','name','category','priceCents','stock','status'
+      ])
+      && request.resource.data.ownerUid == uid
+      && request.resource.data.status == 'draft'
+      && request.resource.data.name is string
+      && request.resource.data.name.size() >= 2
+      && request.resource.data.name.size() <= 120
+      && request.resource.data.category is string
+      && request.resource.data.category.size() >= 1
+      && request.resource.data.category.size() <= 60
+      && request.resource.data.priceCents is int
+      && request.resource.data.priceCents > 0
+      && request.resource.data.priceCents <= 100000000
+      && request.resource.data.stock is int
+      && request.resource.data.stock >= 0
+      && request.resource.data.stock <= 1000000;
+  }
+  allow get, list: if isOwner();
+  allow create, update: if isOwner() && validDraft();
+  allow delete: if isOwner() && resource.data.ownerUid == uid
+                 && resource.data.status == 'draft';
+}
+
+// Public shop documents must remain administrator/server controlled.
+// Do NOT grant create/update/delete to any seller or signed-in user here.
+// Keep the R3.0 teyzaPublicShops rules in force.
