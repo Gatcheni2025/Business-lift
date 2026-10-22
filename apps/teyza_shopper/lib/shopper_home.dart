@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'shopper_auth.dart';
 import 'shopper_account.dart';
 import 'shopper_discovery.dart';
+import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
 
@@ -66,22 +67,12 @@ class Shop {
     sponsored:x['sponsored']==true);
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
-  final remote = client ?? http.Client();
-  try {
-    final res = await remote.get(Uri.parse(catalogUrl),
-      headers: const {'Accept': 'application/json'}).timeout(const Duration(seconds: 12));
-    if (res.statusCode != 200) throw Exception('HTTP ' + res.statusCode.toString());
-    final data = jsonDecode(utf8.decode(res.bodyBytes));
-    if (data is! Map || data['ok'] != true || data['shops'] is! List) {
-      throw const FormatException('Invalid public shop catalogue.');
-    }
-    return (data['shops'] as List).whereType<Map>()
-      .map((s) => Shop.fromJson(Map<String, dynamic>.from(s)))
-      .where((s) => s.id.isNotEmpty && s.name.isNotEmpty).toList();
-  } finally {
-    if (client == null) remote.close();
-  }
+  // Only administrator-published, approved and activated public shops.
+  // Firebase Hosting does not execute the legacy PHP catalogue endpoint.
+  final rows=await fetchTeyzaPublicDirectory(client:client);
+  return rows.map(Shop.fromJson).toList();
 }
+
 class Area {
   final String label, city;
   final double lat, lng;
