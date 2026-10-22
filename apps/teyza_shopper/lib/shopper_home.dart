@@ -9,6 +9,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'shopper_auth.dart';
 import 'shopper_account.dart';
+import 'seller_workspace.dart';
 import 'shopper_discovery.dart';
 import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
@@ -730,7 +731,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               child:const Icon(Icons.shopping_bag_outlined))),
           const SizedBox(width:3)
         ]),
-      body:tab==3?ShopperAccountPanel(session:session):
+      body:tab==4?SellerWorkspacePage(session:session,
+        openLogin:()=>setState(()=>tab=3)):
+        tab==3?ShopperAccountPanel(session:session):
         tab==1?servicesPage():tab==2?deliveryPage():
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
@@ -750,7 +753,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           NavigationDestination(icon:Icon(Icons.local_shipping_outlined),
             selectedIcon:Icon(Icons.local_shipping_rounded,color:green),label:'Delivery'),
           NavigationDestination(icon:Icon(Icons.person_outline_rounded),
-            selectedIcon:Icon(Icons.person_rounded,color:green),label:'Profile')
+            selectedIcon:Icon(Icons.person_rounded,color:green),label:'Profile'),
+          NavigationDestination(icon:Icon(Icons.inventory_2_outlined),
+            selectedIcon:Icon(Icons.inventory_2_rounded,color:green),label:'Sell')
         ]));
   }
 

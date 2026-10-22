@@ -1,0 +1,34 @@
+TEYZA R3.2 — FIRESTORE RULES COMPATIBILITY NOTE
+
+The R2.7 seller website already ships a scoped rule at:
+  /teyzaDraftProducts/{sellerId}/items/{itemId}
+
+Do not paste a second, looser match for the same path.
+Overlapping Firestore allow statements are OR'd; one permissive rule could
+weaken private seller-product protection.
+
+The R3.2 Android app now uses EXACTLY the R2.7 website schema:
+  ownerUid: string        (signed-in seller UID)
+  name: string            (2–120)
+  category: string        (up to 60)
+  description: string     (up to 500, empty allowed)
+  priceCents: integer     (1–99,999,900)
+  stockQty: integer       (0–100,000)
+  status: "draft"         (fixed, never public)
+  createdAt: timestamp    (serverTimestamp on create, immutable on update)
+  updatedAt: timestamp    (serverTimestamp on each write)
+
+The mobile client commits server timestamp transforms via Firestore REST so it
+passes the R2.7 rule requiring timestamp == request.time.
+
+ACTION
+1. Open the already-used package TEYZA_FIREBASE_R2_7_SHOP_WORKSPACE.zip.
+2. Extract TEYZA_R27_DRAFT_PRODUCTS_FIRESTORE_RULES_ADD.txt.
+3. Confirm those exact rules are merged into the existing Firebase project
+   business-lift-3c19c and have been published.
+4. Do not replace the full Firestore rules file. Preserve user, seller,
+   admin and public shop collections.
+5. Verify authenticated seller can manage ONLY their own draft products,
+   and cannot change approvalStatus, listingStatus, or teyzaPublicShops.
+
+No new Firestore rule block is needed when R2.7 rules are already active.
