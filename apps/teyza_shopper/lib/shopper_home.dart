@@ -1083,7 +1083,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ?km(area!.lat,area!.lng,s.lat!,s.lng!).toStringAsFixed(1)+' km away'
             :'Nearby shop',maxLines:1,overflow:TextOverflow.ellipsis,
               style:const TextStyle(color:muted,fontSize:11))),
-          const Text('Google Maps',style:TextStyle(fontSize:9,color:muted))
+          Text(s.origin=='google_places'?'Google Maps':'OpenStreetMap',
+            style:const TextStyle(fontSize:9,color:muted))
         ])
       ])));
 
