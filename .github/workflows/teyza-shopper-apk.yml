@@ -116,6 +116,23 @@ jobs:
           name: teyza-1-1-style-brand-recovery
           path: TEYZA_1.1_STYLE_AND_BRAND_RECOVERY.zip
           retention-days: 14
+      - name: Validate R3.4 premium shop images and Google Places backend syntax
+        run: |
+          node --check services/teyza-places-v34/index.js
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree
+          directory=Path("apps/teyza_shopper/assets/illustrations")
+          expected={"shop-front.svg","grocery-basket.svg",
+            "bread.svg","milk.svg","eggs.svg","rice.svg",
+            "maize.svg","oil.svg","snacks.svg","soap.svg"}
+          missing=expected-{p.name for p in directory.glob("*.svg")}
+          assert not missing, f"Missing shopper art: {sorted(missing)}"
+          for filename in expected:
+              ElementTree.parse(directory/filename)
+          print("Premium SVG illustrations: valid")
+          PY
+          grep -q 'assets/illustrations/' apps/teyza_shopper/pubspec.yaml
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
