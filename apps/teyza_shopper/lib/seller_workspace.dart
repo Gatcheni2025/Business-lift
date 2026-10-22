@@ -140,15 +140,16 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
                 return n==null||n<0||n>1000000?'Enter a valid stock quantity':null;}),
             const SizedBox(height:14),
             FilledButton.icon(icon:const Icon(Icons.save_outlined),label:const Text('Save draft'),
-              onPressed:()=>{
-                if(key.currentState!.validate())
+              onPressed:(){
+                if(key.currentState!.validate()) {
                   Navigator.of(ctx).pop(SellerDraft(
                     id:existing?.id??'p'+DateTime.now().microsecondsSinceEpoch.toString()+
                       Random.secure().nextInt(100000).toString(),
                     name:name.text.trim(),category:category.text.trim(),
                     priceCents:(double.parse(price.text.replaceAll(',','.'))*100).round(),
-                    stock:int.parse(stock.text.trim())))
-              }),
+                    stock:int.parse(stock.text.trim())));
+                }
+              },
           ])))));
     name.dispose();category.dispose();price.dispose();stock.dispose();
     if(result!=null)await _save(result);
