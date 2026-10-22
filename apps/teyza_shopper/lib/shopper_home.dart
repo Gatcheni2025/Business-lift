@@ -164,8 +164,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         .map((s)=>s.photo),
       ...online.where((s)=>s.origin=='google_places' &&
         s.photoRef!=null && s.photoRef!.isNotEmpty).take(3)
-        .map((s)=>Uri.https('teyza.co.za','/api/shopper-place-photo.php',
-          {'ref':s.photoRef!}).toString()),
+        .map((s)=>teyzaGooglePhotoUrl(s.photoRef!).toString()),
       for(final name in ['bread','milk','eggs'])
         photos+name+'.webp',
     ];
@@ -463,7 +462,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         Icons.storefront_outlined,color:green,size:width*.42));
     if(shop.origin!='google_places'||ref==null||ref.isEmpty)return
       ClipRRect(borderRadius:BorderRadius.circular(14),child:placeholder);
-    final url=Uri.https('teyza.co.za','/api/shopper-place-photo.php',{'ref':ref}).toString();
+    final url=teyzaGooglePhotoUrl(ref).toString();
     return ClipRRect(borderRadius:BorderRadius.circular(14),
       child:Image.network(url,width:width,height:height,fit:BoxFit.cover,
         errorBuilder:(_,__,___)=>placeholder,
@@ -1440,8 +1439,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
       child:Icon(Icons.storefront_outlined,color:green));
     final ref=shop.photoRef;
     if(shop.origin!='google_places'||ref==null||ref.isEmpty)return missing;
-    final src=Uri.https('teyza.co.za','/api/shopper-place-photo.php',
-      {'ref':ref}).toString();
+    final src=teyzaGooglePhotoUrl(ref).toString();
     return ClipRRect(borderRadius:BorderRadius.circular(12),
       child:Image.network(src,width:62,height:62,fit:BoxFit.cover,
         errorBuilder:(_,__,___)=>missing));
