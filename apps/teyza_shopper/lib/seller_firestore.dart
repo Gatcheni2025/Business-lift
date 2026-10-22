@@ -15,14 +15,17 @@ class SellerShop {
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
 }
 class SellerDraft {
-  final String id,name,category;
+  final String id,name,category,description;
+  final String? createdAt;
   final int priceCents,stock;
   const SellerDraft({required this.id,required this.name,required this.category,
-    required this.priceCents,required this.stock});
+    required this.priceCents,required this.stock,this.description='',this.createdAt});
   factory SellerDraft.fromFields(String id,Map<String,dynamic> d)=>SellerDraft(
     id:id,name:(d['name']??'').toString(),category:(d['category']??'Other').toString(),
+    description:(d['description']??'').toString(),
+    createdAt:d['createdAt']?.toString(),
     priceCents:(d['priceCents'] is num)?(d['priceCents'] as num).toInt():0,
-    stock:(d['stock'] is num)?(d['stock'] as num).toInt():0);
+    stock:(d['stockQty'] is num)?(d['stockQty'] as num).toInt():0);
 }
 Map<String,dynamic> sellerDecodeFields(dynamic fields){
   if(fields is! Map)return {};
@@ -33,6 +36,7 @@ Map<String,dynamic> sellerDecodeFields(dynamic fields){
     if(data.containsKey('stringValue'))out[entry.key as String]=data['stringValue'];
     else if(data.containsKey('integerValue'))out[entry.key as String]=int.tryParse(data['integerValue'].toString())??0;
     else if(data.containsKey('booleanValue'))out[entry.key as String]=data['booleanValue']==true;
+    else if(data.containsKey('timestampValue'))out[entry.key as String]=data['timestampValue'];
   }
   return out;
 }
@@ -91,25 +95,43 @@ class SellerFirestore {
     }
     return output;
   }
-  static Map<String,dynamic> _fields(SellerDraft p,String uid)=>{'fields':{
+  static Map<String,dynamic> _fields(SellerDraft p,String uid)=>{
     'ownerUid':{'stringValue':uid},
     'name':{'stringValue':p.name.trim()},
     'category':{'stringValue':p.category.trim()},
+    'description':{'stringValue':p.description.trim()},
     'priceCents':{'integerValue':p.priceCents.toString()},
-    'stock':{'integerValue':p.stock.toString()},
+    'stockQty':{'integerValue':p.stock.toString()},
     'status':{'stringValue':'draft'},
-  }};
+    if(p.createdAt!=null)'createdAt':{'timestampValue':p.createdAt!}
+  };
   static void validateDraft(SellerDraft p){
     if(!validDocumentId(p.id))throw const FormatException('Invalid product ID.');
     if(p.name.trim().length<2||p.name.length>120)throw const FormatException('Enter a product name (2–120 characters).');
     if(p.category.trim().isEmpty||p.category.length>60)throw const FormatException('Enter a product category.');
-    if(p.priceCents<=0||p.priceCents>100000000)throw const FormatException('Enter a valid price.');
-    if(p.stock<0||p.stock>1000000)throw const FormatException('Enter valid stock.');
+    if(p.description.length>500)throw const FormatException('Description is too long.');
+    if(p.priceCents<=0||p.priceCents>99999900)throw const FormatException('Enter a valid price.');
+    if(p.stock<0||p.stock>100000)throw const FormatException('Enter valid stock.');
   }
   Future<void> save(SellerDraft draft) async{
     validateDraft(draft);
-    final response=await _request('PATCH',_document(
-      'teyzaDraftProducts/'+uid+'/items/'+draft.id),body:_fields(draft,uid));
+    // Match the existing R2.7 web seller schema and strict Firestore rules:
+    // server timestamp transforms, immutable createdAt on update, draft only.
+    final isNew=draft.createdAt==null;
+    final name='projects/'+teyzaSellerProject+
+      '/databases/(default)/documents/teyzaDraftProducts/'+uid+'/items/'+draft.id;
+    final data={'writes':[{
+      'update':{'name':name,'fields':_fields(draft,uid)},
+      if(isNew)'currentDocument':{'exists':false},
+      'updateTransforms':[
+        if(isNew){'fieldPath':'createdAt','setToServerValue':'REQUEST_TIME'},
+        {'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}
+      ]
+    }]};
+    final response=await _request('POST',
+      Uri.https('firestore.googleapis.com',
+        '/v1/projects/'+teyzaSellerProject+'/databases/(default)/documents:commit'),
+      body:data);
     _parse(response);
   }
   Future<void> delete(String id) async{
