@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 
 // Firebase-only Google Places: 2nd-gen HTTPS Cloud Function with managed TLS.
@@ -26,12 +27,27 @@ class OnlineShop {
   final List<Map<String,String>> providerAttributions;
   final List<Map<String,String>> photoAttributions;
   final String? photoRef;
+  // R3.4 backend returns a short-lived photo proxy URL; older releases send photoRef.
+  final String? photoUrl;
   final String shopCategory;
+  bool get hasPhoto => (photoUrl?.isNotEmpty ?? false) || (photoRef?.isNotEmpty ?? false);
+  String? get displayPhotoUrl {
+    final direct = photoUrl;
+    final uri = direct == null ? null : Uri.tryParse(direct);
+    if(uri != null && uri.scheme == 'https' &&
+      uri.host == 'us-central1-business-lift-3c19c.cloudfunctions.net' &&
+      uri.path == '/teyzaPlaces/shopper-place-photo.php') return direct;
+    if(photoRef != null && photoRef!.isNotEmpty) {
+      return teyzaGooglePhotoUrl(photoRef!).toString();
+    }
+    return null;
+  }
   const OnlineShop(this.id,this.name,this.area,this.address,this.source,
     this.origin,this.claimUrl,this.lat,this.lng,{
       this.providerAttributions=const [],
       this.photoAttributions=const [],
       this.photoRef,
+      this.photoUrl,
       this.shopCategory='spaza',
     });
   factory OnlineShop.fromJson(Map<String,dynamic> p) => OnlineShop(
@@ -41,17 +57,33 @@ class OnlineShop {
     (p['claimUrl']??'').toString(),
     (p['latitude'] as num?)?.toDouble(),(p['longitude'] as num?)?.toDouble(),
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
+    photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
     shopCategory:p['shopCategory']=='variety'?'variety':'spaza',
     photoAttributions:((p['photoAttributions'] as List?)??const [])
       .whereType<Map>()
       .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
-      .where((v)=>v['name']!.isNotEmpty && v['url']!.startsWith('https://'))
+      .where((v)=>v['name']!.isNotEmpty)
       .toList(),
     providerAttributions:((p['attributions'] as List?)??const [])
       .whereType<Map>()
       .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
       .where((v)=>v['name']!.isNotEmpty && v['url']!.startsWith('https://'))
       .toList());
+}
+
+/// Keep categories honest even when older deployed Places functions return
+/// mixed search results. Google results are not verified Teyza merchants.
+bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
+  if(shop.origin != 'google_places') return true;
+  final name = shop.name.toLowerCase();
+  if(category == 'variety') {
+    if(RegExp(r'spaza|tuck\\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
+    return RegExp(r'china\\s?mall|shopping|mall|wholesale|cash\\s?(and|&)\\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
+  }
+  if(category == 'spaza') {
+    return RegExp(r'spaza|tuck\\s?shop|convenience|mini\\s?market|supermarket|grocer|general dealer|corner shop|food store').hasMatch(name);
+  }
+  return true;
 }
 
 // Rate-limited in-memory OSM fallback for nearby public map businesses.
@@ -109,7 +141,7 @@ Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
   final uri=teyzaPlacesUrl('shopper-discover.php',{
     if(area.isNotEmpty)'area':area,'category':kind,
     if(latitude!=null && longitude!=null)...{
-      'lat':latitude.toStringAsFixed(2),'lon':longitude.toStringAsFixed(2),
+      'lat':latitude.toStringAsFixed(4),'lon':longitude.toStringAsFixed(4),
     },
   });
   final httpClient=client??http.Client();
@@ -129,9 +161,26 @@ Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
         if(row is! Map)continue;
         final s=OnlineShop.fromJson(Map<String,dynamic>.from(row));
         if(s.name.trim().isEmpty||s.id.trim().isEmpty)continue;
-        unique.putIfAbsent(s.name.toLowerCase().trim(),()=>s);
+        if(!teyzaMatchesShopCategory(s,kind))continue;
+        unique.putIfAbsent(s.id,()=>s);
       }
-      if(unique.isNotEmpty)return unique.values.toList();
+      if(unique.isNotEmpty){
+        final sorted=unique.values.toList();
+        if(latitude != null && longitude != null) {
+          double distance(OnlineShop s) {
+            if(s.lat == null || s.lng == null) return double.infinity;
+            const radius=6371.0;
+            final a=(s.lat!-latitude)*math.pi/180;
+            final b=(s.lng!-longitude)*math.pi/180;
+            final v=math.sin(a/2)*math.sin(a/2)+
+              math.cos(latitude*math.pi/180)*math.cos(s.lat!*math.pi/180)*
+              math.sin(b/2)*math.sin(b/2);
+            return radius*2*math.asin(math.sqrt(v.clamp(0.0,1.0)));
+          }
+          sorted.sort((a,b)=>distance(a).compareTo(distance(b)));
+        }
+        return sorted;
+      }
     }catch(_){
       // Never claim third-party fallback entries are sourced from Google.
     }
