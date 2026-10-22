@@ -780,10 +780,42 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ]));
   }
 
+  Widget premiumGroceryHero()=>Container(
+    margin:const EdgeInsets.only(bottom:4,top:7),
+    decoration:BoxDecoration(color:deep,borderRadius:BorderRadius.circular(25),
+      boxShadow:const [BoxShadow(color:Color(0x14010F1C),
+        offset:Offset(0,9),blurRadius:22)]),
+    clipBehavior:Clip.antiAlias,
+    child:Row(children:[
+      Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(19,22,0,22),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('FRESH • LOCAL • CONVENIENT',
+            style:TextStyle(color:Color(0xFFA9EBC8),fontSize:9,
+              fontWeight:FontWeight.w900,letterSpacing:1.1)),
+          const SizedBox(height:9),
+          const Text('Shop local.\nLive better.',
+            style:TextStyle(color:Colors.white,fontSize:25,
+              fontWeight:FontWeight.w900,height:1.14)),
+          const SizedBox(height:7),
+          const Text('Discover shops and everyday essentials around you.',
+            style:TextStyle(color:Color(0xFFE6F4EF),fontSize:11,height:1.45)),
+          const SizedBox(height:13),
+          FilledButton.icon(onPressed:()=>setState(()=>showAllShops=true),
+            icon:const Icon(Icons.arrow_forward_rounded,size:16),
+            label:const Text('Explore nearby'),
+            style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(
+              horizontal:14,vertical:11),textStyle:const TextStyle(
+              fontWeight:FontWeight.w800,fontSize:12)))
+        ]))),
+      Padding(padding:const EdgeInsets.only(right:7),
+        child:SizedBox(width:124,height:171,child:SvgPicture.asset(
+          'assets/illustrations/grocery-basket.svg',fit:BoxFit.contain)))
+    ]));
+
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
-    padding:const EdgeInsets.fromLTRB(0,15,0,12), child:Row(children:[
+    padding:const EdgeInsets.fromLTRB(0,20,0,12), child:Row(children:[
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:21,color:ink)),
+        Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:19,color:ink)),
         if(subtitle!=null) Text(subtitle,style:const TextStyle(color:muted,fontSize:11))])),
       if(action!=null)action]));
 
@@ -803,6 +835,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Padding(padding:const EdgeInsets.all(12),child:Text(locationWarning!))),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      premiumGroceryHero(),
       section(discoveryType=='spaza'?'Shop your favourite aisles':'Explore other retail',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
           'Variety stores, malls, wholesalers and more',
@@ -826,10 +859,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('See all'))),
       if(displayedOnline.isNotEmpty)
-        SizedBox(height:138,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
           children:displayedOnline.take(12).map(directoryCircle).toList()))
       else if(displayShops.isNotEmpty)
-        SizedBox(height:138,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
           children:displayShops.take(10).map(quickShop).toList()))
       else if(loadingOnline)const SizedBox(height:106,
         child:Center(child:CircularProgressIndicator()))
@@ -1031,14 +1064,28 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   Widget directoryCircle(OnlineShop s)=>InkWell(onTap:()=>selectDirectory(s),
-    child:SizedBox(width:112,child:Column(children:[
-      onlinePhoto(s,width:82,height:82),
-      const SizedBox(height:7),
-      Text(s.name,maxLines:2,textAlign:TextAlign.center,
-        overflow:TextOverflow.ellipsis,
-        style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
-
-    ])));
+    borderRadius:BorderRadius.circular(20),
+    child:Container(width:194,margin:const EdgeInsets.only(right:12,bottom:8),
+      padding:const EdgeInsets.all(9),
+      decoration:BoxDecoration(color:Colors.white,
+        borderRadius:BorderRadius.circular(20),
+        boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
+          offset:Offset(0,4),blurRadius:11)]),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        onlinePhoto(s,width:176,height:109),
+        const SizedBox(height:7),
+        Text(s.name,maxLines:1,overflow:TextOverflow.ellipsis,
+          style:const TextStyle(color:ink,fontSize:13,fontWeight:FontWeight.w900)),
+        const SizedBox(height:4),
+        Row(children:[
+          const Icon(Icons.location_on_outlined,color:green,size:13),
+          Expanded(child:Text(area!=null&&s.lat!=null&&s.lng!=null
+            ?km(area!.lat,area!.lng,s.lat!,s.lng!).toStringAsFixed(1)+' km away'
+            :'Nearby shop',maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:muted,fontSize:11))),
+          const Text('Google Maps',style:TextStyle(fontSize:9,color:muted))
+        ])
+      ])));
 
   Widget essentialsShelf(){
     const items=<(String,String,String)>[
@@ -1047,12 +1094,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ('Maize meal','maize','Pantry'),('Cooking oil','oil','Pantry'),
       ('Snacks','snacks','Snacks'),('Cleaning','soap','Household')
     ];
-    return SizedBox(height:164,child:ListView(scrollDirection:Axis.horizontal,
+    return SizedBox(height:169,child:ListView(scrollDirection:Axis.horizontal,
       children:items.where((x)=>category=='All'||x.$3==category).map((x)=>
-        Container(width:126,margin:const EdgeInsets.only(right:9),
+        Container(width:132,margin:const EdgeInsets.only(right:11),
           padding:const EdgeInsets.all(10),
           decoration:BoxDecoration(color:Colors.white,
-            borderRadius:BorderRadius.circular(15)),
+            borderRadius:BorderRadius.circular(20),
+            boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
+              blurRadius:9,offset:Offset(0,3))]),
           child:Column(children:[
             Expanded(child:SvgPicture.asset(
               'assets/illustrations/'+x.$2+'.svg',fit:BoxFit.contain)),
@@ -1062,16 +1111,25 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           ]))).toList()));
   }
 
-  Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),child:SizedBox(width:111,
-    child:Column(children:[
-      Stack(children:[Container(width:83,height:83,decoration:BoxDecoration(
-        shape:BoxShape.circle,color:const Color(0xFFD1EEDB)),
-        child:ClipOval(child:photo(s.photo,size:83,icon:Icons.store))),
-]),
-      const SizedBox(height:8),
-      Text(s.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
-        style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:ink))
-    ])));
+  Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),
+    borderRadius:BorderRadius.circular(20),
+    child:Container(width:194,margin:const EdgeInsets.only(right:12,bottom:8),
+      padding:const EdgeInsets.all(9),
+      decoration:BoxDecoration(color:Colors.white,
+        borderRadius:BorderRadius.circular(20),
+        boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
+          offset:Offset(0,4),blurRadius:11)]),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        SizedBox(height:109,width:176,
+          child:photo(s.photo,size:176,icon:Icons.store)),
+        const SizedBox(height:7),
+        Text(s.name,maxLines:1,overflow:TextOverflow.ellipsis,
+          style:const TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink)),
+        const SizedBox(height:4),
+        Text(s.products.isEmpty?'Registered Teyza shop':
+          s.products.length.toString()+' published products',
+          style:const TextStyle(fontSize:10,color:green,fontWeight:FontWeight.w700))
+      ])));
 
   Widget productShelf(List<Product> items) {
     if(items.isEmpty)return empty('No groceries to display','Choose another category or area.');
