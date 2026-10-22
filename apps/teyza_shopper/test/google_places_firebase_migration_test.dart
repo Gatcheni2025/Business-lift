@@ -36,7 +36,7 @@ void main(){
         return http.Response('Missing endpoint',404);
       }
       expect(req.url.host,'overpass-api.de');
-      expect(req.body,contains('around:4500'));
+      expect(req.bodyFields['data'],contains('around:4500'));
       return http.Response(jsonEncode({'elements':[{
         'type':'node','id':12345,'lat':-29.80,'lon':30.97,
         'tags':{'name':'Observed Tuckshop','shop':'convenience'}
