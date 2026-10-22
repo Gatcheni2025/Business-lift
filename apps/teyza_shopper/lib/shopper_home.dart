@@ -1324,7 +1324,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       itemBuilder:(context,i){
         final p=shop.products[i];
         return Container(padding:const EdgeInsets.all(10),
-          decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),
+          decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20),
+             boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
+               blurRadius:10,offset:Offset(0,3))]),
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Expanded(child:Center(child:photo(p.picture,size:136,icon:Icons.shopping_bag_outlined))),
             const SizedBox(height:6),
@@ -1373,39 +1375,124 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       const SnackBar(content:Text('Could not open WhatsApp.')));
   }
 
-  Widget basketPage({VoidCallback? refresh})=>ListView(padding:const EdgeInsets.all(20),children:[
-    const Text('MY BASKET',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
-    const SizedBox(height:8),
-    if(selected==null||basketItems.isEmpty)
-      empty('Your basket is empty','Choose a spaza shop and add some groceries.')
-    else ...[
-      Text(selected!.name,style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
-      const SizedBox(height:8),
-
-      ...basketItems.map((p)=>Card(color:Colors.white,child:ListTile(
-        leading:photo(p.picture,size:55,icon:Icons.shopping_bag),
-        title:Text(p.name),
-        subtitle:Text(rand(p.priceCents*(cart[p.id]??0))),
-        trailing:Wrap(crossAxisAlignment:WrapCrossAlignment.center,spacing:2,children:[
-          IconButton(onPressed:(){quantity(p,-1);refresh?.call();},
-            icon:const Icon(Icons.remove_circle_outline)),
-          Text((cart[p.id]??0).toString()),
-          IconButton(onPressed:(){quantity(p,1);refresh?.call();},
-            icon:const Icon(Icons.add_circle_outline))
-        ])))),
-      const SizedBox(height:15),
-      Text('Estimated total: '+rand(total),style:const TextStyle(
-        fontSize:24,fontWeight:FontWeight.w900)),
-      const SizedBox(height:13),
-      FilledButton(onPressed: selected!.phone.isEmpty?null:sendWhatsApp,
-        child:const Text('Ask shop to confirm via WhatsApp')),
-      if(selected!.phone.isEmpty)
-        const Text('The shop has not enabled ordering yet.',textAlign:TextAlign.center),
-      const SizedBox(height:9),
-      const Text('No payment is taken inside Teyza Shopper.',
-        style:TextStyle(color:muted,fontSize:12))
-    ]
-  ]);
+  Widget basketPage({VoidCallback? refresh})=>ListView(
+    padding:const EdgeInsets.fromLTRB(17,22,17,30),children:[
+      const Text('Your basket',style:TextStyle(
+        fontSize:25,color:ink,fontWeight:FontWeight.w900)),
+      const SizedBox(height:5),
+      Text(selected==null?'Discover a participating shop to get started':
+        'Items from '+selected!.name,
+        style:const TextStyle(color:muted,fontSize:13)),
+      const SizedBox(height:16),
+      if(selected==null||basketItems.isEmpty)
+        Container(padding:const EdgeInsets.all(24),
+          decoration:BoxDecoration(color:Colors.white,
+            borderRadius:BorderRadius.circular(22)),
+          child:Column(children:[
+            SvgPicture.asset('assets/illustrations/grocery-basket.svg',
+              width:190,height:150,fit:BoxFit.contain),
+            const SizedBox(height:14),
+            const Text('Your basket is empty',style:TextStyle(
+              color:ink,fontSize:18,fontWeight:FontWeight.w800)),
+            const SizedBox(height:5),
+            const Text('Select a participating Teyza shop and add items.',
+              textAlign:TextAlign.center,
+              style:TextStyle(color:muted,fontSize:12))
+          ]))
+      else ...[
+        ...basketItems.map((p)=>Container(
+          margin:const EdgeInsets.only(bottom:11),
+          padding:const EdgeInsets.all(11),
+          decoration:BoxDecoration(color:Colors.white,
+            borderRadius:BorderRadius.circular(20),
+            boxShadow:const [BoxShadow(color:Color(0x0B010F1C),
+              blurRadius:10,offset:Offset(0,3))]),
+          child:Row(children:[
+            photo(p.picture,size:77,icon:Icons.shopping_bag),
+            const SizedBox(width:12),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(p.name,maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:ink,fontSize:14,
+                  fontWeight:FontWeight.w800)),
+              const SizedBox(height:4),
+              Text('Unit '+rand(p.priceCents),
+                style:const TextStyle(color:muted,fontSize:11)),
+              const SizedBox(height:7),
+              Text(rand(p.priceCents*(cart[p.id]??0)),
+                style:const TextStyle(color:deep,fontSize:15,
+                  fontWeight:FontWeight.w900))
+            ])),
+            Container(decoration:BoxDecoration(
+              color:const Color(0xFFF4F8F6),
+              borderRadius:BorderRadius.circular(16)),
+              child:Row(mainAxisSize:MainAxisSize.min,children:[
+                IconButton(tooltip:'Remove one '+p.name,
+                  onPressed:(){quantity(p,-1);refresh?.call();},
+                  icon:const Icon(Icons.remove_rounded,color:ink,size:16),
+                  constraints:const BoxConstraints(minHeight:35,minWidth:34),
+                  padding:EdgeInsets.zero),
+                Text((cart[p.id]??0).toString(),
+                  style:const TextStyle(color:ink,fontSize:13,
+                    fontWeight:FontWeight.w800)),
+                IconButton(tooltip:'Add one '+p.name,
+                  onPressed:(cart[p.id]??0)>=p.stock?null:(){
+                    quantity(p,1);refresh?.call();
+                  },
+                  icon:const Icon(Icons.add_rounded,color:green,size:16),
+                  constraints:const BoxConstraints(minHeight:35,minWidth:34),
+                  padding:EdgeInsets.zero)
+              ]))
+          ]))),
+        const SizedBox(height:7),
+        Container(
+          padding:const EdgeInsets.all(18),
+          decoration:BoxDecoration(color:Colors.white,
+            borderRadius:BorderRadius.circular(20)),
+          child:Column(children:[
+            const Row(children:[
+              Expanded(child:Text('Order summary',
+                style:TextStyle(fontSize:17,color:ink,fontWeight:FontWeight.w900)))
+            ]),
+            const SizedBox(height:14),
+            Row(children:[
+              const Text('Item subtotal',style:TextStyle(color:muted)),
+              const Spacer(),
+              Text(rand(total),style:const TextStyle(
+                color:ink,fontWeight:FontWeight.w800))
+            ]),
+            const SizedBox(height:10),
+            const Row(children:[
+              Expanded(child:Text('Delivery or collection',
+                style:TextStyle(color:muted))),
+              Text('Confirm with shop',style:TextStyle(
+                color:muted,fontSize:12))
+            ]),
+            const Divider(height:27),
+            Row(children:[
+              const Text('Estimated total',
+                style:TextStyle(color:ink,fontSize:16,fontWeight:FontWeight.w900)),
+              const Spacer(),
+              Text(rand(total),style:const TextStyle(
+                color:deep,fontSize:23,fontWeight:FontWeight.w900))
+            ])
+          ])),
+        const SizedBox(height:15),
+        SizedBox(width:double.infinity,child:FilledButton.icon(
+          onPressed:selected!.phone.isEmpty?null:sendWhatsApp,
+          icon:const Icon(Icons.chat_bubble_outline_rounded,size:19),
+          label:const Text('Request order confirmation'))),
+        if(selected!.phone.isEmpty)
+          const Padding(padding:EdgeInsets.only(top:12),
+            child:Text('This shop has not enabled ordering yet.',
+              textAlign:TextAlign.center,
+              style:TextStyle(color:muted,fontSize:12))),
+        const SizedBox(height:13),
+        const Text('Prices and stock must be confirmed by the shop. '
+          'No payment is taken inside Teyza Shopper.',
+          textAlign:TextAlign.center,
+          style:TextStyle(color:muted,fontSize:12,height:1.4))
+      ]
+    ]);
   Widget infoPage()=>ListView(padding:const EdgeInsets.all(22),children:[
     const Icon(Icons.storefront_rounded,size:66,color:green),
     const SizedBox(height:12),
