@@ -149,7 +149,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
                     priceCents:(double.parse(price.text.replaceAll(',','.'))*100).round(),
                     stock:int.parse(stock.text.trim())));
                 }
-              },
+              }),
           ])))));
     name.dispose();category.dispose();price.dispose();stock.dispose();
     if(result!=null)await _save(result);
