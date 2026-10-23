@@ -524,7 +524,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               ? km(area!.lat,area!.lng,place.lat!,place.lng!).toStringAsFixed(1)+' km away'
               : 'Public map listing',
               style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
-          ])
+          ]),
+          if(place.hasPhoto && place.photoAttributions.isNotEmpty)
+            Text('Photo: '+(place.photoAttributions.first['name']??'Google contributor'),
+              maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:10,color:muted))
         ])),
         const Icon(Icons.chevron_right_rounded,color:green,size:23)
       ]))));
@@ -1163,7 +1167,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               style:const TextStyle(color:muted,fontSize:11))),
           Text(s.origin=='google_places'?'Google Maps':'OpenStreetMap',
             style:const TextStyle(fontSize:9,color:muted))
-        ])
+        ]),
+        if(s.hasPhoto && s.photoAttributions.isNotEmpty)
+          Text('Photo: '+(s.photoAttributions.first['name']??'Google contributor'),
+            maxLines:1,overflow:TextOverflow.ellipsis,
+            style:const TextStyle(fontSize:9,color:muted))
       ])));
 
   Widget essentialsShelf(){
