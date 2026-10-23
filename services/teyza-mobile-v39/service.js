@@ -18,10 +18,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     });
   }
   async function syncSettings(uid,values) {
-    const account=await owner(uid);
     const ref=doc('teyzaPublicShops/'+uid);
     await db.runTransaction(async tx => {
-      const snap=await tx.get(ref);
+      const [snap,accountSnap]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid))]);
+      const account=D.seller(accountSnap.exists?accountSnap.data():null,uid);
       if (!snap.exists || snap.data().status!=='active' || snap.data().sellerUid!==uid ||
           account.approvalStatus!=='approved' || account.listingStatus!=='active') return;
       const update={};
@@ -44,7 +44,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       await owner(uid);
       const [config,verification,finance,catalogue,photos]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
-        db.collection('teyzaCreditEnquiries').where('ownerUid','==',uid).limit(30).get(),
+        db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(100).get()]);
       return {settings:config||{},verification:verification?{status:verification.status,submittedAt:verification.submittedAt}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
@@ -59,7 +59,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     }
     if(action==='credit_enquiry') {
       await owner(uid);const values=D.credit(data);await rate(uid,'credit',3,86400000);
-      const ref=db.collection('teyzaCreditEnquiries').doc();
+      const ref=db.collection('teyzaCreditEnquiries/'+uid+'/requests').doc();
       await ref.set({...values,ownerUid:uid,ownerEmail:auth.email||'',createdAt:clock()});
       return {id:ref.id,status:values.status};
     }
@@ -112,21 +112,38 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       });
       if(!products.length)D.fail(422,'Add at least one product before submitting your catalogue.');
       // Validate stored drafts again. A client cannot publish a pending shop or enable priced listings.
-      for(const p of products)D.orderItems([{id:p.id,quantity:1}],[{...p,stock:Math.max(1,p.stock)}]);
+      for(const p of products){
+        if(!Number.isInteger(p.stock)||p.stock<0||p.stock>100000)D.fail(422,'Check the available stock on each product.');
+        D.text(p.category,'product category',60);
+        D.orderItems([{id:p.id,quantity:1}],[{...p,stock:Math.max(1,p.stock)}]);
+      }
       await doc('teyzaCatalogueSubmissions/'+uid).set({ownerUid:uid,status:'pending_review',products,submittedAt:clock()});
       return {status:'pending_review'};
     }
     if(action==='catalogue_review') {
       if(auth.teyzaAdmin!==true)D.fail(403,'Teyza administrator access is required.');
       const sellerUid=D.id(data.sellerUid);
-      const [account,shop,submission]=await Promise.all([owner(sellerUid),active(sellerUid),read('teyzaCatalogueSubmissions/'+sellerUid)]);
-      if(account.approvalStatus!=='approved'||account.listingStatus!=='active'||shop.catalogueEnabled!==true)
-        D.fail(409,'Approve and activate an eligible priced listing before publishing a catalogue.');
-      if(submission?.status!=='pending_review')D.fail(409,'There is no pending catalogue to review.');
-      const batch=db.batch();
-      batch.update(doc('teyzaPublicShops/'+sellerUid),{products:submission.products});
-      batch.update(doc('teyzaCatalogueSubmissions/'+sellerUid),{status:'published',reviewedBy:uid,reviewedAt:clock()});
-      await batch.commit();return {status:'published'};
+      return db.runTransaction(async tx=>{
+        const accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid),submissionRef=doc('teyzaCatalogueSubmissions/'+sellerUid);
+        const [accountSnap,shopSnap,submissionSnap]=await Promise.all([tx.get(accountRef),tx.get(shopRef),tx.get(submissionRef)]);
+        const account=D.seller(accountSnap.exists?accountSnap.data():null,sellerUid);
+        const shop=D.published(shopSnap.exists?shopSnap.data():null,sellerUid);
+        const submission=submissionSnap.exists?submissionSnap.data():null;
+        if(account.approvalStatus!=='approved'||account.listingStatus!=='active'||shop.catalogueEnabled!==true)
+          D.fail(409,'Approve and activate an eligible priced listing before publishing a catalogue.');
+        if(submission?.status!=='pending_review'||!Array.isArray(submission.products)||submission.products.length>100)
+          D.fail(409,'There is no pending catalogue to review.');
+        const drafts=await Promise.all(submission.products.map(p=>tx.get(doc('teyzaDraftProducts/'+sellerUid+'/items/'+D.id(p.id)))));
+        const products=submission.products.map((p,index)=>{
+          const current=drafts[index].exists?drafts[index].data():null;
+          if(!current||current.ownerUid!==sellerUid||current.status!=='draft'||!Number.isInteger(current.stockQty)||current.stockQty<0)
+            D.fail(409,'The product drafts changed. Ask the shop to resubmit its catalogue.');
+          return {...p,stock:current.stockQty};
+        });
+        tx.update(shopRef,{products});
+        tx.update(submissionRef,{status:'published',reviewedBy:uid,reviewedAt:clock()});
+        return {status:'published'};
+      });
     }
     if(action==='chat_open') {
       const sellerUid=D.id(data.shopId);
@@ -136,15 +153,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       await rate(uid,'chatopen',20,60000);
       const ref=doc('teyzaMobileChats/'+D.threadId(sellerUid,uid));
       await db.runTransaction(async tx=>{
-        const snap=await tx.get(ref);if(snap.exists){D.member(snap.data(),uid);return;}
+        const snap=await tx.get(ref);
+        if(snap.exists)D.member(snap.data(),uid);
+        for(const member of [sellerUid,uid])tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),{updatedAt:snap.exists?snap.data().updatedAt:clock()});
+        if(snap.exists)return;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,members:[sellerUid,uid],shopName:shop.name,
-          shopperName:auth.name||auth.email||'Shopper',lastMessage:'',updatedAt:clock(),ownerUnread:0,shopperUnread:0});
+          shopperName:auth.name||auth.email||'Shopper',lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
       });
       return {threadId:ref.id};
     }
     if(action==='chat_list') {
-      const rows=await db.collection('teyzaMobileChats').where('members','array-contains',uid).limit(100).get();
-      return {threads:rows.docs.map(x=>{
+      const index=await db.collection('teyzaMobileChatIndex/'+uid+'/threads').orderBy('updatedAt','desc').limit(100).get();
+      const rows=await Promise.all(index.docs.map(x=>doc('teyzaMobileChats/'+x.id).get()));
+      return {threads:rows.filter(x=>x.exists).map(x=>{
         const t=D.member(x.data(),uid);return {id:x.id,name:t.ownerUid===uid?t.shopperName:t.shopName,
           lastMessage:t.lastMessage,updatedAt:t.updatedAt,unread:t.ownerUid===uid?t.ownerUnread:t.shopperUnread};
       }).sort((a,b)=>b.updatedAt-a.updatedAt)};
@@ -164,15 +185,16 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
           const t=D.member(snapshot.exists?snapshot.data():null,uid);
           if(existing.exists)return;
           const ownerMessage=t.ownerUid===uid;
-          tx.set(entry,{senderUid:uid,sender:ownerMessage?'owner':'shopper',text:message,createdAt:clock()});
-          tx.update(ref,{lastMessage:message,updatedAt:clock(),
+          tx.set(entry,{senderUid:uid,sender:ownerMessage?'owner':'shopper',text:message,createdAt:clock(),sequence:(t.messageCount||0)+1});
+          for(const member of [t.ownerUid,t.shopperUid])tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),{updatedAt:clock()});
+          tx.update(ref,{lastMessage:message,lastMessageId:messageId,messageCount:(t.messageCount||0)+1,updatedAt:clock(),
             [ownerMessage?'shopperUnread':'ownerUnread']:(t[ownerMessage?'shopperUnread':'ownerUnread']||0)+1});
         });
       }
-      const messages=await ref.collection('messages').orderBy('createdAt','desc').limit(60).get();
+      const messages=await ref.collection('messages').orderBy('sequence','desc').limit(60).get();
       await db.runTransaction(async tx=>{
         const current=await tx.get(ref),t=D.member(current.exists?current.data():null,uid);
-        if(t.updatedAt===thread.updatedAt)tx.update(ref,{[t.ownerUid===uid?'ownerUnread':'shopperUnread']:0});
+        if((t.lastMessageId||null)===(thread.lastMessageId||null))tx.update(ref,{[t.ownerUid===uid?'ownerUnread':'shopperUnread']:0});
       });
       return {messages:messages.docs.map(x=>({id:x.id,...x.data()})).reverse()};
     }
@@ -181,15 +203,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       if(!order||![order.ownerUid,order.shopperUid].includes(uid))D.fail(403,'Order access denied.');
       const ref=doc('teyzaMobileChats/'+D.threadId(order.ownerUid,order.shopperUid));
       await db.runTransaction(async tx=>{
-        const snap=await tx.get(ref);if(snap.exists){D.member(snap.data(),uid);return;}
+        const snap=await tx.get(ref);
+        if(snap.exists)D.member(snap.data(),uid);
+        for(const member of [order.ownerUid,order.shopperUid])tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),{updatedAt:snap.exists?snap.data().updatedAt:clock()});
+        if(snap.exists)return;
         tx.set(ref,{ownerUid:order.ownerUid,shopperUid:order.shopperUid,members:[order.ownerUid,order.shopperUid],
-          shopName:order.shopName,shopperName:order.shopperName,lastMessage:'',updatedAt:clock(),ownerUnread:0,shopperUnread:0});
+          shopName:order.shopName,shopperName:order.shopperName,lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
       });return {threadId:ref.id};
     }
     if(action==='order_list') {
       const ownerMode=data.asOwner===true;if(ownerMode)await owner(uid);
-      const rows=await db.collection('teyzaMobileOrders').where(ownerMode?'ownerUid':'shopperUid','==',uid).limit(100).get();
-      return {orders:rows.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt)};
+      const index=await db.collection('teyzaMobileOrderIndex/'+uid+'/'+(ownerMode?'ownerOrders':'shopperOrders')).orderBy('createdAt','desc').limit(100).get();
+      const rows=await Promise.all(index.docs.map(x=>doc('teyzaMobileOrders/'+x.id).get()));
+      return {orders:rows.filter(x=>x.exists&&x.data()[ownerMode?'ownerUid':'shopperUid']===uid).map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt)};
     }
     if(action==='order_request') {
       const sellerUid=D.id(data.shopId),requestId=D.id(data.requestId);
@@ -210,6 +236,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
           mode:data.mode,address,phone,items,subtotalCents:subtotal,deliveryFeeCents:fee,totalCents:subtotal+fee,
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});
+        tx.set(doc('teyzaMobileOrderIndex/'+uid+'/shopperOrders/'+ref.id),{createdAt:clock()});
+        tx.set(doc('teyzaMobileOrderIndex/'+sellerUid+'/ownerOrders/'+ref.id),{createdAt:clock()});
         return {id:ref.id,status:'requested'};
       });
     }
@@ -223,13 +251,25 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         const next=D.transition(order,data.status,isOwner);
         if(next==='confirmed'||(next==='cancelled'&&order.reserved)) {
           const ref=doc('teyzaPublicShops/'+order.ownerUid),shopSnap=await tx.get(ref);
-          const shop=D.published(shopSnap.exists?shopSnap.data():null,order.ownerUid);
-          if(next==='confirmed')D.orderItems(order.items,shop.products||[]);
-          const quantities=Object.fromEntries(order.items.map(x=>[x.id,x.quantity]));
-          const products=(shop.products||[]).map(p=>quantities[p.id]?{...p,stock:p.stock+(next==='confirmed'?-quantities[p.id]:quantities[p.id])}:p);
-          tx.update(ref,{products});
+          const shop=shopSnap.exists?shopSnap.data():null;
+          if(next==='confirmed'){D.published(shop,order.ownerUid);D.orderItems(order.items,shop.products||[]);}
+          const draftRefs=order.items.map(p=>doc('teyzaDraftProducts/'+order.ownerUid+'/items/'+p.id));
+          const drafts=await Promise.all(draftRefs.map(ref=>tx.get(ref)));
+          const delta=next==='confirmed'?-1:1;
+          if(shop){
+            const quantities=Object.fromEntries(order.items.map(x=>[x.id,x.quantity]));
+            const products=(shop.products||[]).map(p=>quantities[p.id]?{...p,stock:p.stock+delta*quantities[p.id]}:p);
+            tx.update(ref,{products});
+          }
+          for(let i=0;i<drafts.length;i++){
+            const draft=drafts[i].exists?drafts[i].data():null;
+            if(draft?.ownerUid===order.ownerUid&&draft.status==='draft'&&Number.isInteger(draft.stockQty)){
+              if(next==='confirmed'&&draft.stockQty<order.items[i].quantity)D.fail(409,'Available shop stock changed. Check your products before confirming.');
+              tx.update(draftRefs[i],{stockQty:draft.stockQty+delta*order.items[i].quantity,updatedAt:new Date(clock())});
+            }
+          }
         }
-        tx.update(orderRef,{status:next,updatedAt:clock(),reserved:next==='confirmed'?true:next==='cancelled'?false:order.reserved});
+        tx.update(orderRef,{status:next,updatedAt:clock(),reserved:next==='confirmed'?true:['cancelled','completed'].includes(next)?false:order.reserved});
         return {status:next};
       });
     }

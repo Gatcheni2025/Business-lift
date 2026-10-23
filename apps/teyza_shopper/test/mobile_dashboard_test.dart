@@ -76,14 +76,13 @@ void main(){
     expect(session.name,'Apple Shopper');session.dispose();client.close();
   });
   testWidgets('iPhone shopper login offers Google and Apple with email',(tester) async{
-    debugDefaultTargetPlatformOverride=TargetPlatform.iOS;addTearDown(()=>debugDefaultTargetPlatformOverride=null);
     final session=ShopperSession(store:TestStore())..isReady=true;
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
     await tester.tap(find.text('Continue as Shopper'));await tester.pumpAndSettle();
     expect(find.text('Continue with Google'),findsOneWidget);expect(find.text('Continue with Apple'),findsOneWidget);
     expect(find.text('Sign in as shopper'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
-  });
+  },variant:TargetPlatformVariant.only(TargetPlatform.iOS));
   testWidgets('Owner dashboard exposes all requested tools on a narrow screen',(tester) async{
     await tester.binding.setSurfaceSize(const Size(320,740));addTearDown(()=>tester.binding.setSurfaceSize(null));
     final selected=<SellerTool>[];var products=false,chat=false,orders=false;

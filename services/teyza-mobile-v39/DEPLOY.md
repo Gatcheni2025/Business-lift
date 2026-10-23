@@ -25,13 +25,13 @@ No app client writes approvals, public catalogues, credit decisions or identity-
 
 ## Collections and reviewer actions
 
-Private server-managed collections: `teyzaShopSettings`, `teyzaCreditEnquiries`, `teyzaMobileVerification`, `teyzaProductPhotos/{ownerUid}/items`, `teyzaCatalogueSubmissions`, `teyzaMobileChats/{id}/messages`, `teyzaMobileOrders`, `teyzaMobileLimits`.
+Private server-managed collections: `teyzaShopSettings`, `teyzaCreditEnquiries/{ownerUid}/requests`, `teyzaMobileVerification`, `teyzaProductPhotos/{ownerUid}/items`, `teyzaCatalogueSubmissions`, `teyzaMobileChats/{id}/messages`, `teyzaMobileOrders`, `teyzaMobileOrderIndex`, `teyzaMobileChatIndex`, `teyzaMobileLimits`.
 
 Product drafts remain in the existing R2.7 path/schema. Owners can submit a catalogue for review. Only an account with the trusted custom claim `teyzaAdmin: true` can call `catalogue_review` with `sellerUid`. The server also requires the seller account to be approved, its listing active, and the existing public shop to have trusted `catalogueEnabled: true`. Set that flag only for a listing plan entitled to show prices. Base listing or pending shops cannot self-enable a priced catalogue.
 
 A trusted reviewer can call `verification_read` for a seller UID only after signing in within the last five minutes; the response is the decrypted photo, which must not be logged or stored in public assets. `verification_review` accepts `approved` or `needs_new_photo`. This reviews the selfie only; it does not approve or activate the seller account, subscription or public shop. Configure the reviewer claim through an existing authorised Admin SDK environment and preserve its other claims. Never place Admin SDK credentials in Flutter or a public website.
 
-The new collections need no client write permissions: the function uses Admin SDK and performs its own authorization. Existing strict owner-only rules still govern seller profile/draft edits. Approval status and immutable shop category remain protected.
+Owner-scoped chronological chat/order/credit indexes avoid cross-account composite indexes. The new collections need no client write permissions: the function uses Admin SDK and performs its own authorization. Existing strict owner-only rules still govern seller profile/draft edits. Approval status and immutable shop category remain protected.
 
 ## Provider setup before device sign-in tests
 

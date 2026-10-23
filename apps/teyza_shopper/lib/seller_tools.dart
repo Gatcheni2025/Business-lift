@@ -36,14 +36,14 @@ class SellerDashboard extends StatelessWidget {
         style:const TextStyle(color:Color(0xFF6C7880),height:1.4)),
       const SizedBox(height:16),
       LayoutBuilder(builder:(context,constraints)=>GridView.count(
-        crossAxisCount:constraints.maxWidth>650?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
+        crossAxisCount:constraints.maxWidth<360||MediaQuery.textScalerOf(context).scale(14)>18?1:constraints.maxWidth>650?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
         mainAxisSpacing:12,crossAxisSpacing:12,mainAxisExtent:155+(MediaQuery.textScalerOf(context).scale(14)-14)*5,
         children:[for(final tile in tiles)Material(color:Colors.white,borderRadius:BorderRadius.circular(22),
           child:InkWell(onTap:tile.tap,borderRadius:BorderRadius.circular(22),child:Padding(
             padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:const Color(0xFFE1F6EB),
                 borderRadius:BorderRadius.circular(13)),child:Icon(tile.icon,color:ownerGreen,size:24)),
-              const Spacer(),Text(tile.title,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:ownerInk)),
+              const Spacer(),Text(tile.title,maxLines:2,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:ownerInk)),
               const SizedBox(height:4),Text(tile.detail,maxLines:2,style:const TextStyle(fontSize:11,color:Color(0xFF6C7880),height:1.3))
             ]))))])),
       const SizedBox(height:12),OutlinedButton.icon(onPressed:onProfile,icon:const Icon(Icons.edit_outlined),
@@ -135,8 +135,9 @@ class _SellerToolState extends State<SellerToolPage> {
       await prefs.remove('teyza_selfie_capture');if(file!=null)await useCapture(file);
     }catch(_){if(mounted)setState(()=>error='Could not open the camera. Allow camera access in your device settings and try again.');}
   }
-  Widget card(Widget child)=>Container(margin:const EdgeInsets.only(bottom:14),padding:const EdgeInsets.all(18),
-    decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(22)),child:child);
+  Widget card(Widget child)=>Padding(padding:const EdgeInsets.only(bottom:14),
+    child:Material(color:Colors.white,borderRadius:BorderRadius.circular(22),
+      child:Padding(padding:const EdgeInsets.all(18),child:child)));
   Widget field(TextEditingController controller,String label,{bool number=false,int lines=1})=>Padding(
     padding:const EdgeInsets.only(bottom:14),child:TextField(controller:controller,maxLines:lines,
       keyboardType:number?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,

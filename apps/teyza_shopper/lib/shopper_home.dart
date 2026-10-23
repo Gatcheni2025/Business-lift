@@ -772,6 +772,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   void openBasket()=>navigateToTab(2);
   void openInbox(){
+    if(session.idToken==null||!session.emailVerified){
+      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in and verify your email to open Live chat.')));return;
+    }
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
   }

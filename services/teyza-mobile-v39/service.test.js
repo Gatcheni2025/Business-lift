@@ -63,7 +63,7 @@ test('Credit requires consent and remains an enquiry, never an approved loan',as
  await rejects(service.execute(owner,'credit_enquiry',data),422);
  const result=await service.execute(owner,'credit_enquiry',{...data,consent:true,status:'approved',ownerUid:'attacker'});
  assert.equal(result.status,'enquiry_received');
- const record=db.records.get('teyzaCreditEnquiries/'+result.id);assert.equal(record.ownerUid,'seller1');assert.equal(record.status,'enquiry_received');
+ const record=db.records.get('teyzaCreditEnquiries/seller1/requests/'+result.id);assert.equal(record.ownerUid,'seller1');assert.equal(record.status,'enquiry_received');
 });
 test('Firebase UID shops open authenticated conversations, with isolation and idempotent sends',async()=>{
  const {service,db}=fixture();const opened=await service.execute(buyer,'chat_open',{shopId:'seller1'});
@@ -72,6 +72,7 @@ test('Firebase UID shops open authenticated conversations, with isolation and id
  assert.equal((await service.execute(owner,'chat_read',{threadId:opened.threadId})).messages.length,1);
  await rejects(service.execute({...buyer,uid:'outsider'},'chat_read',{threadId:opened.threadId}),403);
  assert.equal(db.records.get('teyzaMobileChats/'+opened.threadId).ownerUid,'seller1');
+ assert.equal((await service.execute(owner,'chat_list')).threads.length,1);
 });
 test('Disabled chat and inactive shop listings reject new conversations',async()=>{
  const disabled=fixture({'teyzaShopSettings/seller1':{liveChatEnabled:false}});
@@ -85,6 +86,8 @@ test('Order request ignores client pricing and binds the authenticated buyer and
  const result=await service.execute(buyer,'order_request',data),order=db.records.get('teyzaMobileOrders/'+result.id);
  assert.equal(order.shopperUid,'buyer1');assert.equal(order.totalCents,5100);assert.equal(order.status,'requested');assert.equal(order.reserved,false);
  assert.equal((await service.execute(buyer,'order_request',data)).id,result.id);
+ assert.equal((await service.execute(owner,'order_list',{asOwner:true})).orders[0].id,result.id);
+ assert.equal((await service.execute(buyer,'order_list')).orders[0].id,result.id);
  await rejects(service.execute({...buyer,uid:'outsider'},'order_update',{orderId:result.id,status:'cancelled'}),403);
 });
 test('Only owner confirmation reserves stock once; cancellation releases the reservation',async()=>{
@@ -119,7 +122,8 @@ test('Encryption detects tampering; keys and image validation fail closed',()=>{
 });
 test('Only trusted admins can publish an approved, active, eligible catalogue',async()=>{
  const submission={ownerUid:'seller1',status:'pending_review',products:shop.products};
- const {service,db}=fixture({'teyzaCatalogueSubmissions/seller1':submission});
+ const {service,db}=fixture({'teyzaCatalogueSubmissions/seller1':submission,
+  'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',stockQty:5}});
  await rejects(service.execute(owner,'catalogue_review',{sellerUid:'seller1'}),403);
  const admin={...buyer,teyzaAdmin:true};await service.execute(admin,'catalogue_review',{sellerUid:'seller1'});
  assert.equal(db.records.get('teyzaCatalogueSubmissions/seller1').status,'published');
@@ -130,4 +134,14 @@ test('Closing times and duplicate products do not silently become invalid orders
  assert.throws(()=>D.hours(Array(7).fill({closed:false,open:'08:00',close:'08:00'})));
  assert.throws(()=>D.orderItems([{id:'bread1',quantity:1},{id:'bread1',quantity:1}],shop.products));
  assert.notEqual(D.threadId('ab','c'),D.threadId('a','bc'));
+});
+
+test('Publishing a reviewed catalogue cannot restore stock already reserved by an order',async()=>{
+ const {service,db}=fixture({'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',name:'Bread',category:'Groceries',priceCents:1800,stockQty:5}});
+ await service.execute(owner,'catalogue_submit');
+ const order=await service.execute(buyer,'order_request',{shopId:'seller1',requestId:'reservation',mode:'collection',phone:'0712345678',items:[{id:'bread1',quantity:2}]});
+ await service.execute(owner,'order_update',{orderId:order.id,status:'confirmed'});
+ await service.execute({...buyer,teyzaAdmin:true},'catalogue_review',{sellerUid:'seller1'});
+ assert.equal(db.records.get('teyzaPublicShops/seller1').products[0].stock,3);
+ assert.equal(db.records.get('teyzaDraftProducts/seller1/items/bread1').stockQty,3);
 });
