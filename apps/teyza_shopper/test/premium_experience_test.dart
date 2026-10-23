@@ -85,8 +85,14 @@ void main(){
     await tester.scrollUntilVisible(store,180,scrollable:find.byType(Scrollable).first);
     await tester.tap(store);await tester.pumpAndSettle();
     final add=find.text('+ Add');
-    await tester.scrollUntilVisible(add,180,scrollable:find.byType(Scrollable).first);
-    await tester.tap(add);
+    // The product grid is intentionally non-scrollable inside the shop list.
+    // Use the shopper's outer-list gesture until the actual button can be hit.
+    for(var attempts=0;attempts<12&&add.hitTestable().evaluate().isEmpty;attempts++){
+      await tester.drag(find.byType(ListView).first,const Offset(0,-220));
+      await tester.pumpAndSettle();
+    }
+    expect(add.hitTestable(),findsOneWidget);
+    await tester.tap(add.hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));await tester.pumpAndSettle();
     await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
