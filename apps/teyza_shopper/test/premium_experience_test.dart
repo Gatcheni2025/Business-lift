@@ -98,6 +98,8 @@ void main(){
     final fonts=FontLoader('PT Sans')..addFont(rootBundle.load('assets/fonts/PTSans-Regular.ttf'))
       ..addFont(rootBundle.load('assets/fonts/PTSans-Bold.ttf'));
     await fonts.load();
+    final icons=FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+    await icons.load();
     final boundary=GlobalKey();
     await tester.pumpWidget(MaterialApp(theme:ThemeData(fontFamily:'PT Sans',useMaterial3:true,
       scaffoldBackgroundColor:pale,colorScheme:ColorScheme.fromSeed(seedColor:green)),
@@ -110,6 +112,9 @@ void main(){
           'ratingCount':23,'openNow':true
         }))))));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    await tester.runAsync(()=>precacheImage(const AssetImage('assets/images/grocery-basket.png'),
+      tester.element(find.byType(ShopperHome))));
+    await tester.pumpAndSettle();
     expect(find.text('Nearby shops'),findsOneWidget);expect(tester.takeException(),isNull);
     Future<void> capture(String name) async {
       if(Platform.environment['TEYZA_CAPTURE_UI']!='1')return;

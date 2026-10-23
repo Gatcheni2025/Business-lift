@@ -687,7 +687,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       child:InkWell(
         borderRadius:BorderRadius.circular(18),
         onTap:()=>setDiscoveryType(type),
-        child:Container(height:47,padding:const EdgeInsets.symmetric(horizontal:12),
+        child:Container(height:38,padding:const EdgeInsets.symmetric(horizontal:12),
           alignment:Alignment.center,child:Row(mainAxisAlignment:MainAxisAlignment.center,
             children:[
               Icon(icon,color:active?green:muted,size:17),
@@ -792,7 +792,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(!_launchReady)return const ShopperLaunchScreen();
     return Scaffold(
       appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,
-        elevation:0,toolbarHeight:60,titleSpacing:14,
+        elevation:0,toolbarHeight:56,titleSpacing:14,
         title:Row(children:[
           Semantics(label:'Teyza',child:SvgPicture.asset(
             'assets/brand/teyza-sprout-wordmark.svg',width:98,height:36,fit:BoxFit.contain)),
@@ -873,7 +873,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           trailing:const Icon(Icons.chevron_right_rounded,color:green)))
     ]);
 
-  Widget groceryAisles()=>SizedBox(height:76,child:Row(
+  Widget groceryAisles()=>SizedBox(height:70,child:Row(
     mainAxisAlignment:MainAxisAlignment.spaceBetween,
     children:<(String,String,IconData)>[
       ('All','All',Icons.grid_view_rounded),('Veg & Fruit','Fresh',Icons.eco_outlined),
@@ -896,7 +896,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     decoration:BoxDecoration(color:const Color(0xFFEDE9E0),borderRadius:BorderRadius.circular(21)),
     clipBehavior:Clip.antiAlias,
     child:Row(children:[
-      Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(16,18,0,18),
+      Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(16,14,0,14),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(discoveryType=='spaza'?'Fresh groceries\nfrom your local\nspaza shops':'More choice.\nCloser to home.',
             style:const TextStyle(color:deep,fontSize:21,fontWeight:FontWeight.w700,height:1.1)),
@@ -907,11 +907,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           FilledButton(onPressed:()=>navigateToTab(1),
             style:FilledButton.styleFrom(minimumSize:Size.zero,
               padding:const EdgeInsets.symmetric(horizontal:14,vertical:9),
-              textStyle:const TextStyle(fontWeight:FontWeight.w700,fontSize:11)),
+              textStyle:const TextStyle(fontFamily:'PT Sans',fontWeight:FontWeight.w700,fontSize:11)),
             child:const Row(mainAxisSize:MainAxisSize.min,children:[
               Text('Explore shops'),SizedBox(width:7),Icon(Icons.arrow_forward_rounded,size:15)]))
         ]))),
-      SizedBox(width:128,height:165,child:Image.asset('assets/images/grocery-basket.png',fit:BoxFit.contain))
+      SizedBox(width:128,height:154,child:Image.asset('assets/images/grocery-basket.png',fit:BoxFit.contain))
     ]));
 
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
