@@ -30,6 +30,7 @@ class OnlineShop {
   // R3.4 backend returns a short-lived photo proxy URL; older releases send photoRef.
   final String? photoUrl;
   final String shopCategory;
+  final bool categorizationVerified;
   bool get hasPhoto => (photoUrl?.isNotEmpty ?? false) || (photoRef?.isNotEmpty ?? false);
   String? get displayPhotoUrl {
     final direct = photoUrl;
@@ -49,6 +50,7 @@ class OnlineShop {
       this.photoRef,
       this.photoUrl,
       this.shopCategory='spaza',
+      this.categorizationVerified=false,
     });
   factory OnlineShop.fromJson(Map<String,dynamic> p) => OnlineShop(
     (p['id']??'').toString(),(p['name']??'').toString(),
@@ -59,6 +61,7 @@ class OnlineShop {
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
     shopCategory:p['shopCategory']=='variety'?'variety':'spaza',
+    categorizationVerified:p['categorizationVerified']==true,
     photoAttributions:((p['photoAttributions'] as List?)??const [])
       .whereType<Map>()
       .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
@@ -75,6 +78,9 @@ class OnlineShop {
 /// mixed search results. Google results are not verified Teyza merchants.
 bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   if(shop.origin != 'google_places') return true;
+  // A vetted R3.4 Google Places result also checks Google primary types.
+  // Old R3.3 responses without this flag still receive client name filtering.
+  if(shop.categorizationVerified && shop.shopCategory==category) return true;
   final name = shop.name.toLowerCase();
   if(category == 'variety') {
     if(RegExp(r'spaza|tuck\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
