@@ -1,8 +1,13 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 # Metadata only: never print the key or rotate an existing encryption key.
-$metadata = & firebase functions:secrets:get TEYZA_VERIFICATION_ENCRYPTION_KEY --project business-lift-3c19c 2>&1
-if ($LASTEXITCODE -eq 0) {
+$previousPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = 'Continue'
+  $metadata = & firebase functions:secrets:get TEYZA_VERIFICATION_ENCRYPTION_KEY --project business-lift-3c19c 2>&1
+  $probeExitCode = $LASTEXITCODE
+} finally { $ErrorActionPreference = $previousPreference }
+if ($probeExitCode -eq 0) {
   Write-Host 'The verification encryption secret already exists. Keeping it unchanged.'
   exit 0
 }

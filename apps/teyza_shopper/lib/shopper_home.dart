@@ -42,6 +42,7 @@ class Shop {
   final bool pickup, delivery;
   final double? latitude, longitude;
   final List<Product> products;
+  final List<Product> highlights;
   final String shopCategory;
   final bool? acceptsCard, cashback;
   final bool sponsored;
@@ -50,7 +51,7 @@ class Shop {
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
-    this.acceptsCard,this.cashback,this.sponsored=false,this.hours=const [],this.deliveryFeeCents=0});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -70,7 +71,8 @@ class Shop {
       (x['services'] as Map)['cashback'] is bool
         ?(x['services'] as Map)['cashback'] as bool:null,
     sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
-    deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0);
+    deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
+    highlights:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   // Only administrator-published, approved and activated public shops.
@@ -1402,6 +1404,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:TextStyle(color:muted,fontSize:11))
     ]);
 
+  void chatWithShop(Shop shop,{String? message}){
+    if(session.idToken==null||!session.emailVerified){
+      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in and verify your account to chat with this shop.')));return;
+    }
+    Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session,
+      initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
+  }
+
   Widget shopPage(Shop shop)=>ListView(padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
       icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
@@ -1417,16 +1428,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       Padding(padding:const EdgeInsets.only(top:12),child:SizedBox(
         width:double.infinity,child:FilledButton.icon(
           icon:const Icon(Icons.chat_bubble_outline),
-          label:const Text('Live chat with this shop'),onPressed:(){
-            if(session.idToken==null||!session.emailVerified) {
-              setState(()=>tab=4);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content:Text('Sign in and verify your account to chat with this shop.')));
-              return;
-            }
-            Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ShopperChatPage(
-              session:session,initialShop:ShopperConversation(shop.id,shop.name))));
-          }))),
+          label:const Text('Live chat with this shop'),onPressed:()=>chatWithShop(shop)))),
     Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(shopHoursLabel(shop.hours),
       style:const TextStyle(color:green,fontWeight:FontWeight.w700))),
     merchantServices(shop),
@@ -1439,8 +1441,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       await launchUrl(url,mode:LaunchMode.externalApplication);
     },icon:const Icon(Icons.directions_outlined),
        label:const Text('Directions (approximate shop location)')),
-    if(shop.products.isEmpty)
-      empty('Shop details available', 'This shop has not published a priced catalogue yet. You can contact the merchant once chat is enabled.'),
+    if(shop.products.isEmpty&&shop.highlights.isEmpty)
+      empty('Products coming soon', 'Ask this shop about its range in Live chat.'),
+    if(shop.products.isEmpty&&shop.highlights.isNotEmpty)...[
+      section('Sold here',subtitle:'Ask the shop for today’s price and availability'),
+      for(final product in shop.highlights)Card(color:Colors.white,elevation:0,child:ListTile(
+        leading:photo(product.picture,size:58,icon:Icons.shopping_bag_outlined),
+        title:Text(product.name),subtitle:Text(product.category),
+        onTap:()=>chatWithShop(shop,message:'Hi, is '+product.name+' available?'),
+        trailing:const Icon(Icons.chat_bubble_outline,color:green)))
+    ],
     if(shop.products.isNotEmpty) section('Available products',
       subtitle:'Merchant-published prices and stock'),
     LayoutBuilder(builder:(context,c)=>GridView.builder(

@@ -129,8 +129,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         const account=D.seller(accountSnap.exists?accountSnap.data():null,sellerUid);
         const shop=D.published(shopSnap.exists?shopSnap.data():null,sellerUid);
         const submission=submissionSnap.exists?submissionSnap.data():null;
-        if(account.approvalStatus!=='approved'||account.listingStatus!=='active'||shop.catalogueEnabled!==true)
-          D.fail(409,'Approve and activate an eligible priced listing before publishing a catalogue.');
+        if(account.approvalStatus!=='approved'||account.listingStatus!=='active')
+          D.fail(409,'Approve and activate the shop before publishing a catalogue.');
         if(submission?.status!=='pending_review'||!Array.isArray(submission.products)||submission.products.length>100)
           D.fail(409,'There is no pending catalogue to review.');
         const drafts=await Promise.all(submission.products.map(p=>tx.get(doc('teyzaDraftProducts/'+sellerUid+'/items/'+D.id(p.id)))));
@@ -140,7 +140,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
             D.fail(409,'The product drafts changed. Ask the shop to resubmit its catalogue.');
           return {...p,stock:current.stockQty};
         });
-        tx.update(shopRef,{products});
+        const productHighlights=products.map(({id,name,category,imageUrl})=>({id,name,category,imageUrl}));
+        tx.update(shopRef,{products:shop.catalogueEnabled===true?products:[],productHighlights});
         tx.update(submissionRef,{status:'published',reviewedBy:uid,reviewedAt:clock()});
         return {status:'published'};
       });

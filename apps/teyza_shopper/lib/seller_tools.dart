@@ -158,7 +158,7 @@ class _SellerToolState extends State<SellerToolPage> {
     const SizedBox(height:12),button('Save shop services',(){
       final price=double.tryParse(fee.text.replaceAll(',','.'));
       final distance=int.tryParse(radius.text);
-      if(delivery&&(price==null||price<0||distance==null||distance<1||distance>100)){
+      if(delivery&&(price==null||!price.isFinite||price<0||price>1000||distance==null||distance<1||distance>100)){
         setState(()=>error='Enter a delivery fee and a radius from 1 to 100 km.');return;
       }
       save('save_services',{'deliveryEnabled':delivery,'pickupEnabled':pickup,'cashback':cashback,'cardPayments':cards,
@@ -189,7 +189,7 @@ class _SellerToolState extends State<SellerToolPage> {
         onChanged:(v)=>setState(()=>consent=v==true),title:const Text('Teyza may contact me about this finance enquiry.')),
       button('Request finance follow-up',() async {
         final value=double.tryParse(amount.text.replaceAll(',','.'));
-        if(value==null||value<100||value>500000||purpose.text.trim().isEmpty||phone.text.trim().length<9||!consent){
+        if(value==null||!value.isFinite||value<100||value>500000||purpose.text.trim().isEmpty||phone.text.trim().length<9||!consent){
           setState(()=>error='Enter an amount from R100 to R500,000, a purpose and contact number, then agree to be contacted.');return;}
         await save('credit_enquiry',{'amountCents':(value*100).round(),'purpose':purpose.text.trim(),
           'phone':phone.text.trim(),'consent':consent},'Enquiry received. Credit has not been approved.');

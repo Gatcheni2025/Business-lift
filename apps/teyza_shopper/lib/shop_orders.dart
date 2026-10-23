@@ -83,7 +83,7 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
               Icon(order['mode']=='delivery'?Icons.local_shipping_outlined:Icons.shopping_bag_outlined,color:const Color(0xFF3BB77E))]),
             const SizedBox(height:10),Chip(label:Text(orderLabels[order['status']]??'Awaiting confirmation')),
             Text(order['mode']=='delivery'?'Delivery':'Pay & collect',style:const TextStyle(fontWeight:FontWeight.w700)),
-            if(widget.asOwner&&order['mode']=='delivery')Text(order['address']?.toString()??''),
+            if(order['mode']=='delivery')Text(order['address']?.toString()??''),
             if(widget.asOwner)Text('Contact: '+(order['phone']?.toString()??'')),
             const Divider(height:24),
             for(final item in mobileRows(order['items']))Padding(padding:const EdgeInsets.only(bottom:6),child:Row(children:[

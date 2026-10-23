@@ -120,14 +120,20 @@ test('Encryption detects tampering; keys and image validation fail closed',()=>{
  const encrypted=C.encrypt(bytes,key);encrypted[encrypted.length-1]^=1;assert.throws(()=>C.decrypt(encrypted,key));
  assert.throws(()=>C.encrypt(bytes,''));assert.throws(()=>D.imageBytes('not an image'));
 });
-test('Only trusted admins can publish an approved, active, eligible catalogue',async()=>{
+test('Only trusted admins publish approved active shops and priced plans keep their entitlement',async()=>{
  const submission={ownerUid:'seller1',status:'pending_review',products:shop.products};
  const {service,db}=fixture({'teyzaCatalogueSubmissions/seller1':submission,
   'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',stockQty:5}});
  await rejects(service.execute(owner,'catalogue_review',{sellerUid:'seller1'}),403);
  const admin={...buyer,teyzaAdmin:true};await service.execute(admin,'catalogue_review',{sellerUid:'seller1'});
  assert.equal(db.records.get('teyzaCatalogueSubmissions/seller1').status,'published');
- const pending=fixture({'teyzaCatalogueSubmissions/seller1':submission,'teyzaPublicShops/seller1':{...shop,catalogueEnabled:false}});
+ const basic=fixture({'teyzaCatalogueSubmissions/seller1':submission,'teyzaPublicShops/seller1':{...shop,catalogueEnabled:false},
+   'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',stockQty:5}});
+ await basic.service.execute(admin,'catalogue_review',{sellerUid:'seller1'});
+ assert.deepEqual(basic.db.records.get('teyzaPublicShops/seller1').products,[]);
+ const highlight=basic.db.records.get('teyzaPublicShops/seller1').productHighlights[0];
+ assert.equal(highlight.name,'Bread');assert.equal('priceCents' in highlight,false);
+ const pending=fixture({'teyzaCatalogueSubmissions/seller1':submission,'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending'}});
  await rejects(pending.service.execute(admin,'catalogue_review',{sellerUid:'seller1'}),409);
 });
 test('Closing times and duplicate products do not silently become invalid orders',()=>{

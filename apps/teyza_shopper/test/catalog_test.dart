@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/main.dart';
 
 void main() {
+  test('Basic shops can display reviewed product names without exposing prices',(){
+    final shop=Shop.fromJson({'id':'basic-shop','name':'Local Shop','products':[],
+      'productHighlights':[{'id':'bread','name':'Bread','category':'Groceries','imageUrl':'https://example.test/bread.jpg'}]});
+    expect(shop.products,isEmpty);expect(shop.highlights.single.name,'Bread');
+    expect(shop.highlights.single.priceCents,0);
+  });
   test('Rand prices are formatted from cents', () {
     expect(rand(1250), 'R12.50');
     expect(rand(0), 'R0.00');

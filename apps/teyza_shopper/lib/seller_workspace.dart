@@ -202,7 +202,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             TextFormField(controller:stock,keyboardType:TextInputType.number,
               decoration:const InputDecoration(labelText:'Quantity in stock',border:OutlineInputBorder()),
               validator:(v){final n=int.tryParse((v??'').trim());
-                return n==null||n<0||n>1000000?'Enter a valid stock quantity':null;}),
+                return n==null||n<0||n>100000?'Enter a valid stock quantity':null;}),
             const SizedBox(height:14),
             FilledButton.icon(icon:const Icon(Icons.save_outlined),label:const Text('Save draft'),
               onPressed:(){
@@ -337,7 +337,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             OutlinedButton.icon(onPressed:editProfile,icon:const Icon(Icons.edit_outlined),label:const Text('Edit shop profile')),
             FilledButton.icon(onPressed:busy||drafts.isEmpty?null:submitCatalogue,icon:const Icon(Icons.publish_outlined),
               label:const Text('Submit catalogue for review')),
-            const Padding(padding:EdgeInsets.all(12),child:Text('Only reviewed catalogues from approved, active shops with an eligible listing can appear to shoppers.',
+            const Padding(padding:EdgeInsets.all(12),child:Text('Reviewed products appear after shop approval and activation. Public prices depend on your listing plan.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ],
         ]

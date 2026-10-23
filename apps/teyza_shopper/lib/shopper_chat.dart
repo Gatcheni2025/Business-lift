@@ -22,8 +22,8 @@ class ShopperChatPage extends StatefulWidget {
   final ShopperSession session;
   final ShopperConversation? initialShop;
   final TeyzaMobileApi? api;
-  final String? initialThreadId,initialTitle;
-  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle});
+  final String? initialThreadId,initialTitle,initialMessage;
+  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle,this.initialMessage});
   @override State<ShopperChatPage> createState()=>_ChatState();
 }
 class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
@@ -38,7 +38,7 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
   @override void initState(){
     super.initState();uid=widget.session.userId;
     WidgetsBinding.instance.addObserver(this);widget.session.addListener(accountChanged);
-    title=widget.initialTitle??widget.initialShop?.name;threadId=widget.initialThreadId;
+    title=widget.initialTitle??widget.initialShop?.name;threadId=widget.initialThreadId;input.text=widget.initialMessage??'';
     refresh();poll=Timer.periodic(const Duration(seconds:5),(_){if(active&&!sending)refresh(quiet:true);});
   }
   void accountChanged(){if(uid!=widget.session.userId&&mounted){poll?.cancel();setState((){

@@ -67,6 +67,7 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
       'deliveryEnabled':data['deliveryEnabled']==true,
       'services':data['services'] is Map?data['services']:<String,dynamic>{},
       'products':data['products'] is List?data['products']:<dynamic>[],
+      'productHighlights':data['productHighlights'] is List?data['productHighlights']:<dynamic>[],
       'hours':data['hours'] is List?data['hours']:<dynamic>[],
       'deliveryFeeCents':data['deliveryFeeCents'] is num?data['deliveryFeeCents']:0,
       'sponsored':false,

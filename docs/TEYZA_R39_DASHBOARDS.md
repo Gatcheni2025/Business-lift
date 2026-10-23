@@ -6,7 +6,7 @@ App version: **1.0.7 (17)**. This continues PR #78 and preserves photographic es
 
 Spaza and Other Retail / Wholesale owners keep their saved Firebase identity and category. The dashboard exposes Shop setup, Live chat, Customer orders, Delivery & collect, Trading hours, Finance & credit, Order stock and Verify owner.
 
-Shop setup edits the existing profile, creates/edits/deletes private product drafts, uploads real product photos and submits a catalogue for review. The account's category, approval and listing plan remain protected. Public priced catalogues require an approved active seller, trusted `catalogueEnabled` eligibility and administrator review. No sample products or invented live stock are published.
+Shop setup edits the existing profile, creates/edits/deletes private product drafts, uploads real product photos and submits a catalogue for review. The account's category, approval and listing plan remain protected. Public priced catalogues require an approved active seller, trusted `catalogueEnabled` eligibility and administrator review. Basic active listings can display reviewed product names/photos without public prices. No sample products or invented live stock are published.
 
 The service editor saves delivery fees/radius/notes, collection, cash back, card-payment and chat availability. Approved live listings receive the corresponding public fields. Opening hours cover all seven days, support overnight trading and use South African time.
 
