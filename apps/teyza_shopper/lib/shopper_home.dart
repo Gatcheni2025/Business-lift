@@ -175,6 +175,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String _currentLocationDetail='';
   bool showAllShops=false;
   Shop? selected;
+  Shop? basketShop;
   OnlineShop? directorySelected;
   String search = '';
   String category = 'All';
@@ -303,9 +304,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> reloadOnline() async {
     if (!mounted) return;
+    final requestSerial=++_onlineRequestSerial;
     setState(() { loadingOnline=true; onlineWarning=null; });
     try {
-      final requestSerial=++_onlineRequestSerial;
       if(area==null) {
         if(mounted)setState(() {loadingOnline=false;online=[];});
         return;
@@ -319,7 +320,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() { online=places;loadingOnline=false; });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestSerial!=_onlineRequestSerial) return;
       setState(() {
         loadingOnline=false;
         onlineWarning='Online shop search is temporarily unavailable. Try again shortly.';
@@ -395,7 +396,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         selected = null;
         directorySelected = null;
         search='';
-        cart.clear();
       });
       final prefs=await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area','gps');
@@ -419,7 +419,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       selected = null;
       directorySelected = null;
       search = '';
-      cart.clear();
       tab = 0;
     });
     if (persist) {
@@ -607,17 +606,31 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
     return result;
   }
-  List<Product> get basketItems => selected?.products.where((p) =>
+  List<Product> get basketItems => basketShop?.products.where((p) =>
     (cart[p.id] ?? 0)>0).toList() ?? [];
   int get count => cart.values.fold(0, (a,b)=>a+b);
   int get total => basketItems.fold(0,(v,p)=>v+p.priceCents*(cart[p.id]??0));
-  void quantity(Product p, int delta) => setState(() {
-    final next = (cart[p.id]??0)+delta;
-    if (next<=0) cart.remove(p.id);
-    else if (next<=p.stock) cart[p.id]=next;
-  });
+  Future<void> quantity(Product p,int delta) async {
+    final source=selected?.products.contains(p)==true?selected:basketShop;
+    if(source==null)return;
+    if(delta>0&&basketShop?.id!=source.id&&cart.isNotEmpty){
+      final replace=await showDialog<bool>(context:context,builder:(dialogContext)=>AlertDialog(
+        title:const Text('Start a new basket?'),
+        content:Text('Your basket has items from '+basketShop!.name+
+          '. Start a new basket with '+source.name+'?'),
+        actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext,false),child:const Text('Keep basket')),
+          FilledButton(onPressed:()=>Navigator.pop(dialogContext,true),child:const Text('Start new basket'))]));
+      if(replace!=true||!mounted)return;
+    }
+    if(!mounted)return;
+    setState((){
+      if(delta>0&&basketShop?.id!=source.id){cart.clear();basketShop=source;}
+      final next=(cart[p.id]??0)+delta;
+      if(next<=0)cart.remove(p.id);
+      else if(next<=p.stock)cart[p.id]=next;
+    });
+  }
   void openShop(Shop shop) => setState(() {
-    if (selected?.id != shop.id) cart.clear();
     selected = shop;
     directorySelected = null;
     showAllShops=true;
@@ -627,7 +640,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   });
 
   void selectDirectory(OnlineShop shop)=>setState((){
-    directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;cart.clear();
+    directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;
   });
 
   Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
@@ -1375,8 +1388,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           Text('LOCAL SHOP · NOT YET ON TEYZA',style:TextStyle(
             fontWeight:FontWeight.w900,fontSize:11,color:green)),
           SizedBox(height:5),
-          Text('This shop has been found online. Products, prices, current opening '
-            'hours and trading status still need confirmation by its owner.',
+          Text('This shop has been found on public maps. Confirm products, prices '
+            'and services with its owner before visiting.',
             style:TextStyle(fontSize:12,color:ink))
         ])),
       const SizedBox(height:14),
@@ -1464,6 +1477,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         childAspectRatio:.7),
       itemBuilder:(context,i){
         final p=shop.products[i];
+        final added=basketShop?.id==shop.id?(cart[p.id]??0):0;
         return Container(padding:const EdgeInsets.all(10),
           decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20),
              boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
@@ -1481,7 +1495,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               onPressed:()=>quantity(p,1),
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(5),
                 visualDensity:VisualDensity.compact),
-              child:Text((cart[p.id]??0)==0?'+ Add':'Add more ('+(cart[p.id]??0).toString()+')',
+              child:Text(added==0?'+ Add':'Add more ('+added.toString()+')',
                 maxLines:1,style:const TextStyle(fontSize:12))))
           ]));
       }))
@@ -1494,7 +1508,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ])));
 
   Future<void> sendWhatsApp() async {
-    final shop=selected;
+    final shop=basketShop;
     if(shop==null||shop.phone.isEmpty||basketItems.isEmpty)return;
     await session.refreshEmailStatus();
     if(session.idToken==null||!session.emailVerified) {
@@ -1521,11 +1535,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       const Text('Your basket',style:TextStyle(
         fontSize:25,color:ink,fontWeight:FontWeight.w900)),
       const SizedBox(height:5),
-      Text(selected==null?'Discover a participating shop to get started':
-        'Items from '+selected!.name,
+      Text(basketShop==null?'Discover a participating shop to get started':
+        'Items from '+basketShop!.name,
         style:const TextStyle(color:muted,fontSize:13)),
       const SizedBox(height:16),
-      if(selected==null||basketItems.isEmpty)
+      if(basketShop==null||basketItems.isEmpty)
         Container(padding:const EdgeInsets.all(24),
           decoration:BoxDecoration(color:Colors.white,
             borderRadius:BorderRadius.circular(22)),
@@ -1619,10 +1633,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           ])),
         const SizedBox(height:15),
         SizedBox(width:double.infinity,child:FilledButton.icon(
-          onPressed:selected!.phone.isEmpty?null:sendWhatsApp,
+          onPressed:basketShop!.phone.isEmpty?null:sendWhatsApp,
           icon:const Icon(Icons.chat_bubble_outline_rounded,size:19),
           label:const Text('Request order confirmation'))),
-        if(selected!.phone.isEmpty)
+        if(basketShop!.phone.isEmpty)
           const Padding(padding:EdgeInsets.only(top:12),
             child:Text('This shop has not enabled ordering yet.',
               textAlign:TextAlign.center,
@@ -1640,7 +1654,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     const Text('TEYZA Shopper',style:TextStyle(
       fontWeight:FontWeight.w900,fontSize:28),textAlign:TextAlign.center),
     const SizedBox(height:10),
-    const Text('Discover spaza shops near your selected area and shop their listed groceries.',
+    const Text('Discover spaza shops near your basketShop area and shop their listed groceries.',
       textAlign:TextAlign.center),
     const SizedBox(height:18),
     Card(child:ListTile(leading:const Icon(Icons.location_on_outlined),

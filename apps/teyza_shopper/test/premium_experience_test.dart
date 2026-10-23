@@ -70,6 +70,27 @@ void main(){
       await tester.pumpWidget(const SizedBox.shrink());session.dispose();
     });
   }
+  testWidgets('Cart survives Home and Shops navigation',(tester) async {
+    final merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
+      'latitude':-29.8587,'longitude':31.0218,'products':[
+        {'id':'bread','name':'Fresh bread','priceCents':1800,'stock':10}
+      ]});
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:() async=>[merchant],
+      directoryLoader:(area,type,radius) async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    await tester.tap(find.text('Corner Grocer').first);await tester.pumpAndSettle();
+    final add=find.text('+ Add');await tester.ensureVisible(add);await tester.tap(add);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));await tester.pumpAndSettle();
+    await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
+    await tester.tap(find.text('Cart'));await tester.pumpAndSettle();
+    expect(find.text('Items from Corner Grocer'),findsOneWidget);
+    expect(find.text('Fresh bread'),findsOneWidget);
+    expect(find.text('Unit R18.00'),findsOneWidget);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('Premium screens render with offline fixtures without overflow',(tester) async {
     // UI fixtures are never bundled as actual merchant records or product stock.
     await tester.binding.setSurfaceSize(const Size(390,844));
