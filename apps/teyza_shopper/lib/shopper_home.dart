@@ -426,7 +426,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final filtered = live.where((shop) {
       if (area == null) return true;
       final d = distance(shop);
-      if (d != null) return d <= 25;
+      if (d != null) return d <= 35;
       final text = (shop.area + ' ' + shop.name).toLowerCase();
       return text.contains(area!.label.toLowerCase()) ||
           (area!.city.isNotEmpty && text.contains(area!.city.toLowerCase()));
@@ -812,9 +812,52 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     );
   }
 
+
+  Widget ordersPage()=>ListView(
+    padding:const EdgeInsets.fromLTRB(18,24,18,30),children:[
+      const Text('Your orders',style:TextStyle(
+        color:ink,fontSize:25,fontWeight:FontWeight.w900)),
+      const SizedBox(height:7),
+      const Text('Follow up on enquiries with participating local shops.',
+        style:TextStyle(color:muted,fontSize:13)),
+      const SizedBox(height:24),
+      Container(
+        padding:const EdgeInsets.fromLTRB(22,24,22,26),
+        decoration:BoxDecoration(color:Colors.white,
+          borderRadius:BorderRadius.circular(24)),
+        child:Column(children:[
+          SvgPicture.asset('assets/illustrations/grocery-basket.svg',
+            width:200,height:163,fit:BoxFit.contain),
+          const SizedBox(height:13),
+          const Text('Your shopping journey starts here',
+            textAlign:TextAlign.center,
+            style:TextStyle(color:ink,fontSize:19,fontWeight:FontWeight.w900)),
+          const SizedBox(height:9),
+          const Text('Online order tracking is not yet active. Shop enquiries '
+            'are confirmed directly by participating merchants.',
+            textAlign:TextAlign.center,
+            style:TextStyle(color:muted,fontSize:13,height:1.45)),
+          const SizedBox(height:20),
+          SizedBox(width:double.infinity,child:FilledButton.icon(
+            onPressed:()=>navigateToTab(1),
+            icon:const Icon(Icons.storefront_outlined),
+            label:const Text('Discover nearby shops')))
+        ])),
+      const SizedBox(height:16),
+      Card(elevation:0,color:const Color(0xFFEAF7F0),
+        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(18)),
+        child:ListTile(
+          onTap:openInbox,
+          leading:const Icon(Icons.chat_bubble_outline_rounded,color:green),
+          title:const Text('Your shop conversations',
+            style:TextStyle(color:ink,fontSize:14,fontWeight:FontWeight.w800)),
+          subtitle:const Text('View messages with Teyza merchants.'),
+          trailing:const Icon(Icons.chevron_right_rounded,color:green)))
+    ]);
+
   Widget premiumGroceryHero()=>Container(
     margin:const EdgeInsets.only(bottom:4,top:7),
-    decoration:BoxDecoration(color:deep,borderRadius:BorderRadius.circular(25),
+    decoration:BoxDecoration(color:const Color(0xFFEDE9E0),borderRadius:BorderRadius.circular(25),
       boxShadow:const [BoxShadow(color:Color(0x14010F1C),
         offset:Offset(0,9),blurRadius:22)]),
     clipBehavior:Clip.antiAlias,
@@ -822,15 +865,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(19,22,0,22),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('FRESH • LOCAL • CONVENIENT',
-            style:TextStyle(color:Color(0xFFA9EBC8),fontSize:9,
+            style:TextStyle(color:Color(0xFF208E61),fontSize:9,
               fontWeight:FontWeight.w900,letterSpacing:1.1)),
           const SizedBox(height:9),
-          const Text('Shop local.\nLive better.',
-            style:TextStyle(color:Colors.white,fontSize:25,
+          const Text('Fresh groceries\nfrom local shops.',
+            style:TextStyle(color:deep,fontSize:23,
               fontWeight:FontWeight.w900,height:1.14)),
           const SizedBox(height:7),
           const Text('Discover shops and everyday essentials around you.',
-            style:TextStyle(color:Color(0xFFE6F4EF),fontSize:11,height:1.45)),
+            style:TextStyle(color:Color(0xFF566660),fontSize:11,height:1.45)),
           const SizedBox(height:13),
           FilledButton.icon(onPressed:()=>setState(()=>showAllShops=true),
             icon:const Icon(Icons.arrow_forward_rounded,size:16),
@@ -868,6 +911,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
       premiumGroceryHero(),
+      const SizedBox(height:4),
+      section(discoveryType=='spaza'?'Spaza shops near you':'Other retail near you',
+        subtitle:area==null?'Choose your area to find nearby shops':
+          'Local shops around '+locationName,
+        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
+          child:const Text('See all'))),
+      if(displayedOnline.isNotEmpty||displayShops.isNotEmpty)
+        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
+          children:[
+            ...displayShops.take(8).map(quickShop),
+            ...displayedOnline.take(24).map(directoryCircle),
+          ]))
+      else if(loadingOnline)const SizedBox(height:106,
+        child:Center(child:CircularProgressIndicator()))
+      else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
+        'Use your current location or select a shopping area.')),
+      const SizedBox(height:9),
       section(discoveryType=='spaza'?'Shop your favourite aisles':'Explore other retail',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
           'Variety stores, malls, wholesalers and more',
@@ -884,23 +944,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         const SizedBox(height:12),
         if(featured.isNotEmpty)productShelf(featured)else essentialsShelf(),
       ],
-      const SizedBox(height:4),
-      section(discoveryType=='spaza'?'Spaza shops near you':'Other retail near you',
-        subtitle:area==null?'Choose your area to find nearby shops':
-          'Local shops around '+locationName,
-        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
-          child:const Text('See all'))),
-      if(displayedOnline.isNotEmpty)
-        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
-          children:displayedOnline.take(12).map(directoryCircle).toList()))
-      else if(displayShops.isNotEmpty)
-        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
-          children:displayShops.take(10).map(quickShop).toList()))
-      else if(loadingOnline)const SizedBox(height:106,
-        child:Center(child:CircularProgressIndicator()))
-      else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
-        'Use your current location or select a shopping area.')),
-      const SizedBox(height:9),
       Material(color:deep,borderRadius:BorderRadius.circular(20),
         child:InkWell(borderRadius:BorderRadius.circular(20),
           onTap:()=>Navigator.of(context).push(MaterialPageRoute(
@@ -927,7 +970,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           child:const Text('View shops'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(13),
         child:CircularProgressIndicator())),
-      ...displayShops.take(4).map(shopTile),
+      ...displayShops.take(8).map(shopTile),
       if(displayShops.isEmpty)
         empty('More shops joining Teyza',
           'Local directory listings are shown separately. Only participating shops publish products and services.'),
@@ -937,7 +980,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Center(child:CircularProgressIndicator())),
       if(onlineWarning!=null)Text(onlineWarning!,
         style:const TextStyle(color:muted,fontSize:12)),
-      ...displayedOnline.take(6).map(onlineTile),
+      ...displayedOnline.take(18).map(onlineTile),
       if(displayedOnline.isEmpty&&!loadingOnline)
         const Text('No public shop listings loaded yet. Select another area or refresh.',
           style:TextStyle(color:muted,fontSize:12)),
