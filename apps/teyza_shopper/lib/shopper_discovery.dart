@@ -99,17 +99,18 @@ Future<List<OnlineShop>> _osmFallback({
   required double latitude,required double longitude,
   required String category,required http.Client client}) async {
   if(latitude < -35 || latitude > -22 || longitude < 16 || longitude > 34)return [];
-  final lat=latitude.toStringAsFixed(2),lon=longitude.toStringAsFixed(2);
+  final lat=latitude.toStringAsFixed(4),lon=longitude.toStringAsFixed(4);
   final key='$lat:$lon:$category';
   final cached=_osmCache[key];
   if(cached!=null && DateTime.now().difference(cached.fetched)<const Duration(minutes:10))return cached.shops;
   final types=category=='variety'
     ?r'^(variety_store|department_store|wholesale|mall|general)$'
     :r'^(convenience|grocery|kiosk|general|supermarket)$';
-  final query='[out:json][timeout:8];(nwr(around:4500,$lat,$lon)["shop"~"$types"]["name"];);out center 35;';
+  final radius=category=='variety'?15000:12000;
+  final query='[out:json][timeout:16];(nwr(around:$radius,$lat,$lon)["shop"~"$types"]["name"];);out center 70;';
   final res=await client.post(Uri.https('overpass-api.de','/api/interpreter'),
     body:{'data':query},headers:const{'Accept':'application/json'})
-    .timeout(const Duration(seconds:12));
+    .timeout(const Duration(seconds:20));
   if(res.statusCode!=200)throw StateError('Nearby map directory unavailable.');
   final data=jsonDecode(utf8.decode(res.bodyBytes));
   if(data is! Map || data['elements'] is! List)throw const FormatException('Invalid map directory response.');
@@ -135,7 +136,7 @@ Future<List<OnlineShop>> _osmFallback({
       providerAttributions:const[
         {'name':'© OpenStreetMap contributors','url':'https://www.openstreetmap.org/copyright'}
       ]));
-    if(result.length>=35)break;
+    if(result.length>=70)break;
   }
   _osmCache[key]=(fetched:DateTime.now(),shops:result);
   return result;
@@ -148,6 +149,7 @@ Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
     if(area.isNotEmpty)'area':area,'category':kind,
     if(latitude!=null && longitude!=null)...{
       'lat':latitude.toStringAsFixed(4),'lon':longitude.toStringAsFixed(4),
+      'radius':kind=='variety'?'40000':'22000',
     },
   });
   final httpClient=client??http.Client();
