@@ -1,17 +1,28 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 
-// Firebase Web API key is public project configuration, NOT a credential.
-// Native Google OAuth is a separate integration and is not implied here.
-const _projectApiKey = 'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U';
-const teyzaFirebaseApiKey = _projectApiKey;
-// Public OAuth client ID must belong to the same Firebase Auth project as this API key.
-// Embed at build time; never embed a client secret.
-const _googleWebClientId=String.fromEnvironment('TEYZA_GOOGLE_WEB_CLIENT_ID');
-const _vault = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+// Public Firebase configuration. All three account types use the same project;
+// choosing a login purpose never grants seller permissions or approval.
+const teyzaFirebaseApiKey = 'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U';
+const _googleWebClientId = String.fromEnvironment('TEYZA_GOOGLE_WEB_CLIENT_ID');
+
+abstract class SessionStore {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+}
+
+class SecureSessionStore implements SessionStore {
+  static const _vault = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true));
+  @override Future<String?> read(String key) => _vault.read(key:key);
+  @override Future<void> write(String key,String value) => _vault.write(key:key,value:value);
+  @override Future<void> delete(String key) => _vault.delete(key:key);
+}
 
 String authMessage(Object error) {
   final value = error.toString();
@@ -20,192 +31,229 @@ String authMessage(Object error) {
       value.contains('EMAIL_NOT_FOUND') || value.contains('INVALID_PASSWORD')) {
     return 'Incorrect email or password. Try again or reset your password.';
   }
+  if (value.contains('INVALID_EMAIL')) return 'Enter a valid email address.';
   if (value.contains('WEAK_PASSWORD')) return 'Choose a stronger password (at least six characters).';
   if (value.contains('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many attempts. Please try again later.';
-  if (value.contains('OPERATION_NOT_ALLOWED')) return 'Email sign-in is not enabled for this app yet.';
-  if (value.contains('Google sign-in is not configured')) return 'Google sign-in needs the Android OAuth configuration. Please use email login until it is enabled.';
-  if (value.contains('DEVELOPER_ERROR') || value.contains('10:')) return 'Google login setup mismatch. Check the OAuth client and signing certificate.';
-  if (value.contains('NETWORK')) return 'Network unavailable. Check your connection and try again.';
+  if (value.contains('OPERATION_NOT_ALLOWED')) return 'This sign-in method is not enabled yet. Try email login or contact Teyza support.';
+  if (value.contains('Google sign-in is not configured')) return 'Use email and password to sign in on this device.';
+  if (value.contains('DEVELOPER_ERROR') || value.contains('10:')) return 'Google login setup mismatch. Please use email login and contact Teyza support.';
+  if (value.contains('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')) return 'This email uses another sign-in method. Use your original method or reset your password.';
   if (value.contains('USER_DISABLED')) return 'This account is disabled. Contact Teyza support.';
+  if (value.contains('TOKEN_EXPIRED') || value.contains('INVALID_REFRESH_TOKEN') ||
+      value.contains('USER_NOT_FOUND') || value.contains('Session expired')) {
+    return 'Your session has expired. Sign in again.';
+  }
+  if (error is TimeoutException || error is http.ClientException ||
+      value.contains('NETWORK') || value.contains('SocketException')) {
+    return 'Connection unavailable. Check your internet and try again.';
+  }
   return 'Could not complete sign-in. Please try again.';
 }
 
 class ShopperSession extends ChangeNotifier {
-  bool isReady = false;
-  bool isBusy = false;
-  bool emailVerified = false;
+  ShopperSession({http.Client? client,SessionStore? store})
+    : _client=client??http.Client(), _ownsClient=client==null,
+      _store=store??SecureSessionStore();
+  final http.Client _client;
+  final bool _ownsClient;
+  final SessionStore _store;
+  bool isReady = false, isBusy = false, emailVerified = false;
   String? email, name, idToken, userId;
   String? _refreshToken;
+  int _version=0;
+  bool _disposed=false;
+  Future<String>? _refreshing;
 
-  Future<Map<String,dynamic>> _post(Uri uri, Map<String,String> params) async {
-    final response = await http.post(uri,
-      headers: const {'Content-Type':'application/json'},
-      body: jsonEncode(params)).timeout(const Duration(seconds: 16));
-    final data = jsonDecode(response.body) as Map<String,dynamic>;
-    if (response.statusCode >= 400) {
-      final failure = data['error'] as Map<String,dynamic>?;
-      throw StateError((failure?['message'] ?? 'NETWORK_ERROR').toString());
-    }
-    return data;
+  // The initial iOS release uses Teyza email/password login. Enable social
+  // login there only after native OAuth and an equivalent private login exist.
+  bool get googleSignInAvailable => !kIsWeb &&
+    defaultTargetPlatform==TargetPlatform.android && _googleWebClientId.trim().isNotEmpty;
+
+  void _changed(){if(!_disposed)notifyListeners();}
+  @override void dispose(){
+    _disposed=true;
+    if(_ownsClient)_client.close();
+    super.dispose();
   }
+  Uri _auth(String action)=>Uri.https('identitytoolkit.googleapis.com',
+    '/v1/accounts:'+action,{'key':teyzaFirebaseApiKey});
+  Map<String,dynamic> _decode(http.Response response){
+    final decoded=jsonDecode(response.body);
+    if(decoded is! Map<String,dynamic>)throw const FormatException('Invalid authentication response.');
+    if(response.statusCode<200||response.statusCode>=300){
+      final error=decoded['error'];
+      throw StateError(error is Map?(error['message']??'NETWORK_ERROR').toString():'NETWORK_ERROR');
+    }
+    return decoded;
+  }
+  Future<Map<String,dynamic>> _post(String action,Map<String,Object> params) async=>_decode(
+    await _client.post(_auth(action),headers:const {'Content-Type':'application/json'},
+      body:jsonEncode(params)).timeout(const Duration(seconds:16)));
+  Future<Map<String,dynamic>> _refresh(String refreshToken) async=>_decode(
+    await _client.post(Uri.https('securetoken.googleapis.com','/v1/token',
+      {'key':teyzaFirebaseApiKey}),
+      headers:const {'Content-Type':'application/x-www-form-urlencoded'},
+      body:{'grant_type':'refresh_token','refresh_token':refreshToken})
+      .timeout(const Duration(seconds:16)));
+  Future<void> _persist() async {
+    await _store.write('teyza_refresh',_refreshToken!);
+    await _store.write('teyza_email',email??'');
+    await _store.write('teyza_name',name??'');
+  }
+  Future<void> _clear() async {
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;
+    for(final key in ['teyza_refresh','teyza_email','teyza_name']){
+      await _store.delete(key);
+    }
+  }
+  bool _expired(Object error)=>RegExp(
+    'INVALID_REFRESH_TOKEN|TOKEN_EXPIRED|USER_DISABLED|USER_NOT_FOUND|INVALID_ID_TOKEN')
+    .hasMatch(error.toString());
 
   Future<void> restore() async {
+    final version=++_version;
+    isReady=false;isBusy=true;_changed();
     try {
-      _refreshToken = await _vault.read(key:'teyza_refresh');
-      email = await _vault.read(key:'teyza_email');
-      name = await _vault.read(key:'teyza_name');
-      if (_refreshToken != null) {
-        final response = await http.post(
-          Uri.parse('https://securetoken.googleapis.com/v1/token?key=$_projectApiKey'),
-          headers:const {'Content-Type':'application/x-www-form-urlencoded'},
-          body:{'grant_type':'refresh_token','refresh_token':_refreshToken!})
-          .timeout(const Duration(seconds:16));
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String,dynamic>;
-          idToken = data['id_token'] as String?;
-          userId = data['user_id'] as String?;
-          _refreshToken = data['refresh_token'] as String? ?? _refreshToken;
-          await _vault.write(key:'teyza_refresh',value:_refreshToken);
-          await refreshEmailStatus();
-        } else {
-          idToken=null; _refreshToken=null; email=null; name=null;userId=null;
-          await _vault.delete(key:'teyza_refresh');
-          await _vault.delete(key:'teyza_email');
-          await _vault.delete(key:'teyza_name');
-        }
+      final refresh=await _store.read('teyza_refresh');
+      if(refresh!=null&&refresh.isNotEmpty){
+        final data=await _refresh(refresh);
+        if(version!=_version||_disposed)return;
+        final token=data['id_token']?.toString()??'';
+        final uid=data['user_id']?.toString()??'';
+        if(token.isEmpty||uid.isEmpty)throw StateError('INVALID_REFRESH_TOKEN');
+        idToken=token;userId=uid;
+        _refreshToken=data['refresh_token']?.toString()??refresh;
+        email=await _store.read('teyza_email');
+        name=await _store.read('teyza_name');
+        await _persist();
+        await refreshEmailStatus();
       }
-    } catch (_) {
-      // Preserve no assumed session when refresh cannot be verified.
-      idToken = null; userId = null;
-      emailVerified = false;
+    } catch(error) {
+      if(version==_version){
+        idToken=null;userId=null;emailVerified=false;
+        // Retain a securely stored refresh token during a temporary outage.
+        if(_expired(error))await _clear();
+      }
     } finally {
-      isReady=true;
-      notifyListeners();
+      if(version==_version){isReady=true;isBusy=false;_changed();}
     }
   }
 
-  Future<void> _save(Map<String,dynamic> payload,String fallbackEmail,String fallbackName) async {
-    idToken=payload['idToken'] as String?;
-    userId=payload['localId'] as String?;
-    _refreshToken=payload['refreshToken'] as String?;
-    email=payload['email']?.toString() ?? fallbackEmail;
-    name=fallbackName;
-    if (idToken == null || _refreshToken == null) throw StateError('NETWORK_ERROR');
-    await _vault.write(key:'teyza_refresh',value:_refreshToken);
-    await _vault.write(key:'teyza_email',value:email);
-    await _vault.write(key:'teyza_name',value:name);
+  Future<void> _save(Map<String,dynamic> data,String fallbackEmail,String fallbackName,int version) async {
+    if(version!=_version||_disposed)return;
+    final token=data['idToken']?.toString()??'';
+    final refresh=data['refreshToken']?.toString()??'';
+    final uid=data['localId']?.toString()??'';
+    if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
+    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;
+    email=data['email']?.toString()??fallbackEmail;
+    name=data['displayName']?.toString()??fallbackName;
+    try{await _persist();}catch(_){await _clear();rethrow;}
     await refreshEmailStatus();
-    notifyListeners();
+    _changed();
   }
 
   Future<void> refreshEmailStatus() async {
-    if (idToken == null) { emailVerified=false;notifyListeners();return; }
-    try {
-      final result = await _post(Uri.parse(
-        'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=$_projectApiKey'),
-        {'idToken':idToken!});
+    final token=idToken;
+    if(token==null){emailVerified=false;_changed();return;}
+    try{
+      final result=await _post('lookup',{'idToken':token});
+      if(token!=idToken||_disposed)return;
       final profiles=result['users'];
-      emailVerified=profiles is List && profiles.isNotEmpty &&
-        profiles.first is Map && (profiles.first as Map)['emailVerified']==true;
-      if(profiles is List && profiles.isNotEmpty && profiles.first is Map) {
-        userId=(profiles.first as Map)['localId']?.toString()??userId;
+      if(profiles is! List||profiles.isEmpty||profiles.first is! Map){
+        throw StateError('INVALID_ID_TOKEN');
       }
-      notifyListeners();
-    } catch (_) {
+      final profile=profiles.first as Map;
+      if(profile['localId']!=userId)throw StateError('INVALID_ID_TOKEN');
+      emailVerified=profile['emailVerified']==true;
+      email=profile['email']?.toString()??email;
+      name=profile['displayName']?.toString()??name;
+      await _persist();
+    }catch(error){
+      if(token!=idToken)return;
       emailVerified=false;
-      notifyListeners();
+      if(_expired(error)){await _clear();rethrow;}
+    }finally{_changed();}
+  }
+
+  // All merchant requests refresh and use the authenticated UID. Never use a
+  // selected role as authorization, or keep an expired account visible.
+  Future<String> freshIdToken(){
+    if(_refreshing!=null)return _refreshing!;
+    final task=_freshIdToken();
+    _refreshing=task;
+    return task.whenComplete((){if(identical(_refreshing,task))_refreshing=null;});
+  }
+  Future<String> _freshIdToken() async {
+    final refresh=_refreshToken;
+    final version=_version;
+    if(refresh==null)throw StateError('Session expired. Sign in again.');
+    try{
+      final data=await _refresh(refresh);
+      if(version!=_version||_disposed)throw StateError('Session expired. Sign in again.');
+      final token=data['id_token']?.toString()??'';
+      final uid=data['user_id']?.toString()??'';
+      if(token.isEmpty||uid.isEmpty||uid!=userId)throw StateError('INVALID_REFRESH_TOKEN');
+      idToken=token;_refreshToken=data['refresh_token']?.toString()??refresh;
+      await _persist();_changed();
+      return token;
+    }catch(error){
+      if(version==_version&&_expired(error)){await _clear();_changed();}
+      rethrow;
     }
   }
-
-  // Refresh before each seller write. The app never sends a stale ID token
-  // or an admin credential to Firestore.
-  Future<String> freshIdToken() async {
-    if(_refreshToken==null)throw StateError('Sign in to manage your shop.');
-    final response=await http.post(
-      Uri.parse('https://securetoken.googleapis.com/v1/token?key=$_projectApiKey'),
-      headers:const {'Content-Type':'application/x-www-form-urlencoded'},
-      body:{'grant_type':'refresh_token','refresh_token':_refreshToken!})
-      .timeout(const Duration(seconds:15));
-    if(response.statusCode!=200)throw StateError('Session expired. Sign in again.');
-    final data=jsonDecode(response.body) as Map<String,dynamic>;
-    final token=(data['id_token']??'').toString();
-    final uid=(data['user_id']??'').toString();
-    if(token.isEmpty||uid.isEmpty)throw StateError('Session expired. Sign in again.');
-    idToken=token;
-    userId=uid;
-    _refreshToken=data['refresh_token']?.toString()??_refreshToken;
-    await _vault.write(key:'teyza_refresh',value:_refreshToken);
-    notifyListeners();
-    return token;
-  }
-
   Future<void> sendEmailVerification() async {
-    if (idToken==null) throw StateError('Sign in first.');
-    await _post(Uri.parse(
-      'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$_projectApiKey'),
-      {'requestType':'VERIFY_EMAIL','idToken':idToken!});
+    final token=await freshIdToken();
+    await _post('sendOobCode',{'requestType':'VERIFY_EMAIL','idToken':token});
   }
-
   Future<void> signInWithGoogle() async {
-    if(_googleWebClientId.trim().isEmpty) {
-      throw StateError('Google sign-in is not configured for this Android build yet. Contact Teyza support.');
-    }
-    isBusy=true;notifyListeners();
-    try {
+    if(!googleSignInAvailable)throw StateError('Google sign-in is not configured');
+    final version=++_version;
+    isBusy=true;_changed();
+    try{
       final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId);
       final account=await google.signIn();
-      if(account==null)return; // shopper cancelled account selection
+      if(account==null)return;
       final tokens=await account.authentication;
-      final googleIdToken=tokens.idToken;
-      if(googleIdToken==null||googleIdToken.isEmpty) {
-        throw StateError('Google did not return an identity token. Check the Android OAuth certificate SHA and web client ID.');
-      }
-      final reply=await _post(
-        Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=$_projectApiKey'),
-        {'postBody':'id_token='+Uri.encodeQueryComponent(googleIdToken)+'&providerId=google.com',
-         'requestUri':'https://teyza.co.za','returnIdpCredential':'false','returnSecureToken':'true'});
-      await _save(reply,account.email,account.displayName??'');
-    } finally {isBusy=false;notifyListeners();}
+      final token=tokens.idToken;
+      if(token==null||token.isEmpty)throw StateError('Google sign-in is not configured');
+      final reply=await _post('signInWithIdp',{
+        'postBody':'id_token='+Uri.encodeQueryComponent(token)+'&providerId=google.com',
+        'requestUri':'https://teyza.co.za','returnIdpCredential':false,'returnSecureToken':true});
+      await _save(reply,account.email,account.displayName??'',version);
+    }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
-
   Future<void> signIn(String emailAddress,String password) async {
-    isBusy=true;notifyListeners();
-    try {
-      final data=await _post(
-        Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$_projectApiKey'),
-        {'email':emailAddress.trim(),'password':password,'returnSecureToken':'true'});
-      final display=data['displayName']?.toString() ?? '';
-      await _save(data,emailAddress.trim(),display);
-    } finally { isBusy=false;notifyListeners(); }
+    final version=++_version;
+    isBusy=true;_changed();
+    try{
+      final data=await _post('signInWithPassword',{
+        'email':emailAddress.trim(),'password':password,'returnSecureToken':true});
+      await _save(data,emailAddress.trim(),'',version);
+    }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
-
   Future<void> register(String displayName,String emailAddress,String password) async {
-    if (displayName.trim().isEmpty) throw StateError('Enter your name.');
-    isBusy=true;notifyListeners();
-    try {
-      final data=await _post(
-        Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_projectApiKey'),
-        {'email':emailAddress.trim(),'password':password,'returnSecureToken':'true'});
-      await _save(data,emailAddress.trim(),displayName.trim());
-      try {
-        await _post(Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:update?key=$_projectApiKey'),
-          {'idToken':idToken!,'displayName':displayName.trim(),'returnSecureToken':'true'});
-      } catch (_) { /* Account exists; the name is retained locally. */ }
-    } finally { isBusy=false;notifyListeners(); }
+    if(displayName.trim().isEmpty)throw StateError('Enter your name.');
+    final version=++_version;
+    isBusy=true;_changed();
+    try{
+      final data=await _post('signUp',{
+        'email':emailAddress.trim(),'password':password,'returnSecureToken':true});
+      await _save(data,emailAddress.trim(),displayName.trim(),version);
+      if(version!=_version||idToken==null)return;
+      try{
+        await _post('update',{'idToken':idToken!,'displayName':displayName.trim(),
+          'returnSecureToken':false});
+        name=displayName.trim();await _persist();
+      }catch(_){/* Account is valid even if updating the display name fails. */}
+    }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
-
   Future<void> resetPassword(String emailAddress) async {
-    if (!emailAddress.contains('@')) throw StateError('Enter your email address.');
-    await _post(Uri.parse(
-      'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$_projectApiKey'),
-      {'requestType':'PASSWORD_RESET','email':emailAddress.trim()});
+    if(!emailAddress.trim().contains('@'))throw StateError('INVALID_EMAIL');
+    await _post('sendOobCode',{'requestType':'PASSWORD_RESET','email':emailAddress.trim()});
   }
-
   Future<void> signOut() async {
-    idToken=null;email=null;name=null;userId=null;_refreshToken=null;emailVerified=false;
-    await _vault.delete(key:'teyza_refresh');
-    await _vault.delete(key:'teyza_email');
-    await _vault.delete(key:'teyza_name');
-    notifyListeners();
+    ++_version;_refreshing=null;isBusy=false;
+    await _clear();_changed();
   }
 }

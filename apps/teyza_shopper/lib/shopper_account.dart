@@ -162,7 +162,7 @@ class _AccountState extends State<ShopperAccountPanel> {
           const SizedBox(height:13),
           accountRoleTile(value:'owner',icon:Icons.storefront_rounded,
             title:'Continue as Shop Owner',
-            description:'Sign in to your merchant workspace and manage your shop.'),
+            description:'Spaza shops, other retail and wholesale owners. Open your saved shop workspace.'),
           const SizedBox(height:18),
           const Text('You can browse nearby shops without an account.',
             textAlign:TextAlign.center,style:TextStyle(
@@ -179,8 +179,8 @@ class _AccountState extends State<ShopperAccountPanel> {
                 color:widget.session.emailVerified?const Color(0xFF078E66):null),
               title:Text(widget.session.emailVerified?'Email verified':'Verify your email'),
               subtitle:Text(widget.session.emailVerified?
-                'Your shopper email has been confirmed.' :
-                'Required before sending a real order enquiry.'),
+                'Your Teyza email has been confirmed.' :
+                'Required for shop management and order enquiries.'),
             ),
             if (!widget.session.emailVerified) ...[
               FilledButton.icon(
@@ -263,11 +263,13 @@ class _AccountState extends State<ShopperAccountPanel> {
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
               child:Text(working?'Please wait…':registering?'Create shopper account':
                 ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
+            if(widget.session.googleSignInAvailable)...[
             const SizedBox(height:12),
             SizedBox(width:double.infinity,child:OutlinedButton.icon(
               onPressed:working?null:googleLogin,
               icon:const Icon(Icons.account_circle_outlined),
               label:const Text('Continue with Google'))),
+            ],
             const SizedBox(height:7),
             if(ownerMode)
               TextButton.icon(onPressed:working?null:registerShopOwner,

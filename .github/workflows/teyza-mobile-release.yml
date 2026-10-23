@@ -1,0 +1,194 @@
+name: Teyza Android and iOS Release
+
+on:
+  pull_request:
+    paths:
+      - 'apps/teyza_shopper/**'
+      - '.github/workflows/teyza-mobile-release.yml'
+  workflow_dispatch:
+    inputs:
+      signed_release:
+        description: 'Use the existing Android upload key and Apple distribution credentials'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teyza-mobile-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP: apps/teyza_shopper
+  TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+  TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
+  SIGNING_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'signed' || 'unsigned' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve packages
+        working-directory: apps/teyza_shopper
+        run: flutter pub get
+      - name: Analyze authentication and app
+        working-directory: apps/teyza_shopper
+        run: flutter analyze --no-fatal-infos
+      - name: Test shopper, Spaza and retail access
+        working-directory: apps/teyza_shopper
+        run: flutter test
+
+  android:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TEYZA_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/teyza-upload.jks
+      TEYZA_ANDROID_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_KEYSTORE_BASE64 }}
+      TEYZA_ANDROID_STORE_PASSWORD: ${{ secrets.TEYZA_ANDROID_STORE_PASSWORD }}
+      TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
+      TEYZA_ANDROID_KEY_PASSWORD: ${{ secrets.TEYZA_ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform
+        working-directory: apps/teyza_shopper
+        run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Load existing upload key for a requested signed release
+        if: env.SIGNING_MODE == 'signed'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          required=['TEYZA_ANDROID_KEYSTORE_BASE64','TEYZA_ANDROID_STORE_PASSWORD',
+                    'TEYZA_ANDROID_KEY_ALIAS','TEYZA_ANDROID_KEY_PASSWORD']
+          missing=[key for key in required if not os.environ.get(key)]
+          if missing: raise SystemExit('Missing release secrets: '+', '.join(missing))
+          path=Path(os.environ['TEYZA_ANDROID_KEYSTORE_PATH'])
+          path.write_bytes(base64.b64decode(os.environ['TEYZA_ANDROID_KEYSTORE_BASE64'],validate=True))
+          path.chmod(0o600)
+          PY
+      - name: Configure identity, permissions and explicit release signing
+        working-directory: apps/teyza_shopper
+        run: |
+          python3 scripts/prepare_mobile_release.py android --signing "$SIGNING_MODE"
+          python3 -m pip install --quiet pillow cairosvg
+          python3 scripts/make_launcher_icon.py
+      - name: Build Android App Bundle
+        working-directory: apps/teyza_shopper
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+      - name: Verify bundle signature and package release evidence
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          python3 scripts/package_mobile_release.py android
+          if [ "$SIGNING_MODE" = signed ]; then
+            jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab > build/release/signature.txt
+            grep -q 'jar verified' build/release/signature.txt
+          fi
+      - name: Upload Android bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-aab-${{ env.SIGNING_MODE }}
+          path: apps/teyza_shopper/build/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f "$TEYZA_ANDROID_KEYSTORE_PATH"
+
+  ios:
+    needs: checks
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      TEYZA_APPLE_TEAM_ID: ${{ vars.TEYZA_APPLE_TEAM_ID }}
+      TEYZA_IOS_CERTIFICATE_BASE64: ${{ secrets.TEYZA_IOS_CERTIFICATE_BASE64 }}
+      TEYZA_IOS_CERTIFICATE_PASSWORD: ${{ secrets.TEYZA_IOS_CERTIFICATE_PASSWORD }}
+      TEYZA_IOS_PROFILE_BASE64: ${{ secrets.TEYZA_IOS_PROFILE_BASE64 }}
+      TEYZA_IOS_KEYCHAIN_PASSWORD: ${{ secrets.TEYZA_IOS_KEYCHAIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate iOS platform
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter create --platforms=ios --org za.co.teyza --project-name teyza_shopper .
+          flutter pub get
+          python3 scripts/prepare_mobile_release.py ios
+          python3 -m venv "$RUNNER_TEMP/teyza-icons"
+          "$RUNNER_TEMP/teyza-icons/bin/pip" install --quiet pillow cairosvg
+          brew list cairo >/dev/null 2>&1 || brew install cairo
+          export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib"
+          "$RUNNER_TEMP/teyza-icons/bin/python" scripts/make_launcher_icon.py
+          xcodebuild -version
+      - name: Install Apple distribution signing for a requested signed release
+        if: env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          required=['TEYZA_IOS_CERTIFICATE_BASE64','TEYZA_IOS_CERTIFICATE_PASSWORD',
+                    'TEYZA_IOS_PROFILE_BASE64','TEYZA_IOS_KEYCHAIN_PASSWORD','TEYZA_APPLE_TEAM_ID']
+          missing=[key for key in required if not os.environ.get(key)]
+          if missing: raise SystemExit('Missing Apple signing settings: '+', '.join(missing))
+          for key,name in [('TEYZA_IOS_CERTIFICATE_BASE64','teyza.p12'),
+                           ('TEYZA_IOS_PROFILE_BASE64','teyza.mobileprovision')]:
+            path=Path(os.environ['RUNNER_TEMP'])/name
+            path.write_bytes(base64.b64decode(os.environ[key],validate=True)); path.chmod(0o600)
+          PY
+          keychain="$RUNNER_TEMP/teyza-signing.keychain-db"
+          security create-keychain -p "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security import "$RUNNER_TEMP/teyza.p12" -P "$TEYZA_IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/teyza.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/teyza.mobileprovision" > "$RUNNER_TEMP/teyza-profile.plist"
+          export TEYZA_IOS_PROFILE_PLIST="$RUNNER_TEMP/teyza-profile.plist"
+          ruby scripts/configure_ios_signing.rb
+      - name: Build iOS release archive or signed IPA
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          if [ "$SIGNING_MODE" = signed ]; then
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+            test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
+          else
+            flutter build ipa --release --no-codesign
+          fi
+          python3 scripts/package_mobile_release.py ios
+      - name: Upload iOS release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-ios-release-${{ env.SIGNING_MODE }}
+          path: apps/teyza_shopper/build/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove Apple signing material
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/teyza-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/teyza.p12" "$RUNNER_TEMP/teyza.mobileprovision" "$RUNNER_TEMP/teyza-profile.plist"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"

@@ -7,7 +7,8 @@ import 'seller_firestore.dart';
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
   final VoidCallback openLogin;
-  const SellerWorkspacePage({super.key,required this.session,required this.openLogin});
+  final SellerFirestore Function(String uid,String token)? apiFactory;
+  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory});
   @override State<SellerWorkspacePage> createState()=>_SellerWorkspaceState();
 }
 class _SellerWorkspaceState extends State<SellerWorkspacePage>{
@@ -27,6 +28,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   }
   void _sessionChanged(){
     final uid=widget.session.userId;
+    if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
+      loadedUid=null;api=null;shop=null;drafts=[];error=null;
+    });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
         loadedUid=null;api=null;shop=null;drafts=[];error=null;
@@ -40,19 +44,28 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   Future<void> load() async{
     if(loading || !mounted)return;
     setState((){loading=true;error=null;});
+    final requestedUid=widget.session.userId;
     try{
       final token=await widget.session.freshIdToken();
       final uid=widget.session.userId;
       if(uid==null)throw StateError('Sign in again.');
-      final nextApi=SellerFirestore(uid:uid,token:token);
+      if(uid!=requestedUid)return;
+      final nextApi=widget.apiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token);
       final nextShop=await nextApi.shop();
-      final nextDrafts=nextShop!=null?await nextApi.drafts():<SellerDraft>[];
-      if(mounted)setState((){
+      final nextDrafts=nextShop?.hasRegisteredCategory==true?await nextApi.drafts():<SellerDraft>[];
+      if(mounted&&widget.session.userId==uid&&widget.session.idToken!=null)setState((){
         api=nextApi;shop=nextShop;drafts=nextDrafts;loadedUid=uid;
       });
     }catch(e){
-      if(mounted)setState((){error=e.toString().replaceFirst('Bad state: ','');loadedUid=widget.session.userId;});
-    }finally{if(mounted)setState(()=>loading=false);}
+      if(mounted&&widget.session.userId==requestedUid)setState((){
+        error=e.toString().replaceFirst('Bad state: ','');loadedUid=requestedUid;
+      });
+    }finally{
+      if(mounted){
+        setState(()=>loading=false);
+        if(widget.session.userId!=requestedUid)_sessionChanged();
+      }
+    }
   }
   Future<void> _verify() async{
     try{
@@ -105,7 +118,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   Future<void> _edit([SellerDraft? existing]) async{
     if(busy)return;
     final name=TextEditingController(text:existing?.name??'');
-    final category=TextEditingController(text:existing?.category??'Groceries');
+    final category=TextEditingController(text:existing?.category??(shop?.category=='retail'?'General retail':'Groceries'));
     final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
     final stock=TextEditingController(text:existing?.stock.toString()??'');
@@ -163,7 +176,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
     padding:const EdgeInsets.all(16),child:child));
   @override Widget build(BuildContext context){
     final session=widget.session;
-    return AnimatedBuilder(animation:session,builder:(ctx,child){
+    return Scaffold(
+      appBar:AppBar(title:const Text('Shop owner workspace')),
+      body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Icon(Icons.storefront_outlined,size:44,color:Color(0xFF008D64)),
@@ -197,19 +212,22 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
           Text(error!,style:const TextStyle(color:Colors.red)),
           TextButton(onPressed:load,child:const Text('Retry'))
         ])),
-        if(shop==null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        if(error==null&&(shop==null||!shop!.hasRegisteredCategory))_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('No registered shop found',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
           const SizedBox(height:9),
-          const Text('Register your shop on the Teyza website first. Your same account will then work here.'),
+          const Text('Register a Spaza Shop or Other Retail / Wholesale shop on the Teyza website. Use the same account here afterwards.'),
           const SizedBox(height:14),
-          FilledButton(onPressed:()=>launchUrl(Uri.parse('https://teyza.co.za/register.html'),
+          FilledButton(onPressed:()=>launchUrl(Uri.parse('https://teyza.co.za/setup.html'),
             mode:LaunchMode.externalApplication),child:const Text('Register a shop')),
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
         ]))
-        else ...[
+        else if(shop?.hasRegisteredCategory==true) ...[
           _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(shop!.name.isEmpty?'My Teyza shop':shop!.name,
               style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
+            const SizedBox(height:4),
+            Text(shop!.categoryLabel,key:const ValueKey('saved-shop-category'),
+              style:const TextStyle(color:Color(0xFF078E66),fontWeight:FontWeight.w700)),
             const SizedBox(height:4),
             Text(shop!.address),
             const SizedBox(height:8),
@@ -256,6 +274,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
           ])),
         ]
       ]));
-    });
+    })));
   }
 }

@@ -9,10 +9,13 @@ class SellerShop {
   final String name,category,address,approvalStatus,listingStatus;
   const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus);
   factory SellerShop.fromFields(Map<String,dynamic> d)=>SellerShop(
-    (d['shopName']??'').toString(),(d['category']??'spaza').toString(),
+    (d['shopName']??'').toString(),(d['category']??'').toString(),
     (d['address']??'').toString(),(d['approvalStatus']??'pending').toString(),
     (d['listingStatus']??'not_listed').toString());
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
+  bool get hasRegisteredCategory=>category=='spaza'||category=='retail';
+  String get categoryLabel=>category=='spaza'?'Spaza Shop':
+    category=='retail'?'Other Retail / Wholesale':'Shop setup required';
 }
 class SellerDraft {
   final String id,name,category,description;
