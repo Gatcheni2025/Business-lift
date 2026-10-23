@@ -28,4 +28,5 @@ flutter:
   assets:
     - assets/brand/teyza-sprout-wordmark-light.svg
     - assets/brand/teyza-sprout-icon.svg
+    - assets/brand/teyza-sprout-wordmark.svg
     - assets/illustrations/
