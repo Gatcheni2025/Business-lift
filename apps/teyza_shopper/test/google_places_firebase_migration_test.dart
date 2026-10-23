@@ -52,6 +52,15 @@ void main(){
     });
     expect(legacy.displayPhotoUrl,contains('ref='));
   });
+  test('Verified Google type matches stay visible even with generic place names',(){
+    final shop=OnlineShop.fromJson({
+      'id':'google-ChIJx01','name':'Village Corner 7',
+      'shopCategory':'spaza','categorizationVerified':true,
+      'origin':'google_places'
+    });
+    expect(teyzaMatchesShopCategory(shop,'spaza'),isTrue);
+    expect(shop.photoRef,isNull);
+  });
   test('Spaza and variety search do not mix unrelated businesses',(){
     OnlineShop example(String name)=>OnlineShop.fromJson({
       'id':'google-'+name,'name':name,'origin':'google_places'
@@ -68,7 +77,7 @@ void main(){
         return http.Response('Missing endpoint',404);
       }
       expect(req.url.host,'overpass-api.de');
-      expect(req.bodyFields['data'],contains('around:4500'));
+      expect(req.bodyFields['data'],contains('around:12000'));
       return http.Response(jsonEncode({'elements':[{
         'type':'node','id':12345,'lat':-29.80,'lon':30.97,
         'tags':{'name':'Observed Tuckshop','shop':'convenience'}
