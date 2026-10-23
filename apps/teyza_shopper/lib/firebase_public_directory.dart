@@ -27,6 +27,22 @@ Map<String,dynamic> decodeFields(dynamic fields) {
   return result;
 }
 
+String publishedMerchantPhoto(Map<String,dynamic> data) {
+  // Admin-approved seller listings may use any of these standard image keys.
+  // External images must be secure; empty images receive a bundled local image.
+  for(final field in [
+    'photoUrl','shopPhotoUrl','shopImageUrl','coverImageUrl','logoUrl','imageUrl'
+  ]){
+    final value=data[field];
+    if(value is! String)continue;
+    final uri=Uri.tryParse(value.trim());
+    if(uri!=null && uri.scheme=='https' && uri.host.isNotEmpty) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
 List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
   if(response is! List)throw const FormatException('Invalid Teyza public directory response.');
   final output=<Map<String,dynamic>>[];
@@ -41,9 +57,7 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
     output.add(<String,dynamic>{
       'id':id,'name':data['name'],'area':data['area']??'',
       'address':data['address']??'','shopCategory':data['shopCategory']=='retail'?'variety':'spaza',
-      'photoUrl':data['photoUrl'] is String &&
-        (data['photoUrl'] as String).startsWith('https://')
-        ? data['photoUrl'] : '',
+      'photoUrl':publishedMerchantPhoto(data),
       'latitude': data['latitude'] is num ? data['latitude'] : null,
       'longitude': data['longitude'] is num ? data['longitude'] : null,
       'whatsappPhone':'',
