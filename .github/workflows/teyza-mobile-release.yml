@@ -132,6 +132,7 @@ jobs:
           flutter create --platforms=ios --org za.co.teyza --project-name teyza_shopper .
           flutter pub get
           python3 scripts/prepare_mobile_release.py ios
+          ruby -c scripts/configure_ios_signing.rb
           python3 -m venv "$RUNNER_TEMP/teyza-icons"
           "$RUNNER_TEMP/teyza-icons/bin/pip" install --quiet pillow cairosvg
           brew list cairo >/dev/null 2>&1 || brew install cairo
@@ -166,6 +167,7 @@ jobs:
           cp "$RUNNER_TEMP/teyza.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
           security cms -D -i "$RUNNER_TEMP/teyza.mobileprovision" > "$RUNNER_TEMP/teyza-profile.plist"
           export TEYZA_IOS_PROFILE_PLIST="$RUNNER_TEMP/teyza-profile.plist"
+          gem install --user-install xcodeproj --no-document
           ruby scripts/configure_ios_signing.rb
       - name: Build iOS release archive or signed IPA
         working-directory: apps/teyza_shopper

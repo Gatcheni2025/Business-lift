@@ -201,13 +201,16 @@ class _AccountState extends State<ShopperAccountPanel> {
               TextButton.icon(
                 onPressed:working?null:() async {
                   setState(()=>working=true);
-                  await widget.session.refreshEmailStatus();
-                  if(mounted)setState(() {
-                    working=false;
-                    status=widget.session.emailVerified?
-                      'Your email has been verified.':'Not verified yet. Open the email link first.';
-                    failure=!widget.session.emailVerified;
-                  });
+                  try{
+                    await widget.session.refreshEmailStatus();
+                    if(mounted)setState(() {
+                      status=widget.session.emailVerified?
+                        'Your email has been verified.':'Not verified yet. Open the email link first.';
+                      failure=!widget.session.emailVerified;
+                    });
+                  }catch(error){
+                    if(mounted)setState((){status=authMessage(error);failure=true;});
+                  }finally{if(mounted)setState(()=>working=false);}
                 },
                 icon:const Icon(Icons.refresh),
                 label:const Text('Check verification status')),

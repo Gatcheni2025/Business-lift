@@ -63,6 +63,7 @@ class ShopperSession extends ChangeNotifier {
   int _version=0;
   bool _disposed=false;
   Future<String>? _refreshing;
+  Future<void> _storageQueue=Future<void>.value();
 
   // The initial iOS release uses Teyza email/password login. Enable social
   // login there only after native OAuth and an equivalent private login exist.
@@ -96,15 +97,28 @@ class ShopperSession extends ChangeNotifier {
       body:{'grant_type':'refresh_token','refresh_token':refreshToken})
       .timeout(const Duration(seconds:16)));
   Future<void> _persist() async {
-    await _store.write('teyza_refresh',_refreshToken!);
-    await _store.write('teyza_email',email??'');
-    await _store.write('teyza_name',name??'');
+    final refresh=_refreshToken;
+    if(refresh==null)return;
+    final version=_version;
+    final values={'teyza_refresh':refresh,'teyza_email':email??'','teyza_name':name??''};
+    final operation=_storageQueue.catchError((Object _){}).then((_) async {
+      for(final entry in values.entries){
+        if(version!=_version||_disposed)return;
+        await _store.write(entry.key,entry.value);
+      }
+    });
+    _storageQueue=operation;
+    await operation;
   }
   Future<void> _clear() async {
     idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;
-    for(final key in ['teyza_refresh','teyza_email','teyza_name']){
-      await _store.delete(key);
-    }
+    final operation=_storageQueue.catchError((Object _){}).then((_) async {
+      for(final key in ['teyza_refresh','teyza_email','teyza_name']){
+        await _store.delete(key);
+      }
+    });
+    _storageQueue=operation;
+    await operation;
   }
   bool _expired(Object error)=>RegExp(
     'INVALID_REFRESH_TOKEN|TOKEN_EXPIRED|USER_DISABLED|USER_NOT_FOUND|INVALID_ID_TOKEN')
@@ -116,6 +130,8 @@ class ShopperSession extends ChangeNotifier {
     try {
       final refresh=await _store.read('teyza_refresh');
       if(refresh!=null&&refresh.isNotEmpty){
+        final savedEmail=await _store.read('teyza_email');
+        final savedName=await _store.read('teyza_name');
         final data=await _refresh(refresh);
         if(version!=_version||_disposed)return;
         final token=data['id_token']?.toString()??'';
@@ -123,9 +139,9 @@ class ShopperSession extends ChangeNotifier {
         if(token.isEmpty||uid.isEmpty)throw StateError('INVALID_REFRESH_TOKEN');
         idToken=token;userId=uid;
         _refreshToken=data['refresh_token']?.toString()??refresh;
-        email=await _store.read('teyza_email');
-        name=await _store.read('teyza_name');
+        email=savedEmail;name=savedName;
         await _persist();
+        if(version!=_version||_disposed)return;
         await refreshEmailStatus();
       }
     } catch(error) {
@@ -148,7 +164,8 @@ class ShopperSession extends ChangeNotifier {
     idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;
     email=data['email']?.toString()??fallbackEmail;
     name=data['displayName']?.toString()??fallbackName;
-    try{await _persist();}catch(_){await _clear();rethrow;}
+    try{await _persist();}catch(_){if(version==_version)await _clear();rethrow;}
+    if(version!=_version||_disposed)return;
     await refreshEmailStatus();
     _changed();
   }
@@ -195,7 +212,9 @@ class ShopperSession extends ChangeNotifier {
       final uid=data['user_id']?.toString()??'';
       if(token.isEmpty||uid.isEmpty||uid!=userId)throw StateError('INVALID_REFRESH_TOKEN');
       idToken=token;_refreshToken=data['refresh_token']?.toString()??refresh;
-      await _persist();_changed();
+      await _persist();
+      if(version!=_version||_disposed)throw StateError('Session expired. Sign in again.');
+      _changed();
       return token;
     }catch(error){
       if(version==_version&&_expired(error)){await _clear();_changed();}
@@ -253,7 +272,7 @@ class ShopperSession extends ChangeNotifier {
     await _post('sendOobCode',{'requestType':'PASSWORD_RESET','email':emailAddress.trim()});
   }
   Future<void> signOut() async {
-    ++_version;_refreshing=null;isBusy=false;
+    ++_version;_refreshing=null;isBusy=false;isReady=true;
     await _clear();_changed();
   }
 }

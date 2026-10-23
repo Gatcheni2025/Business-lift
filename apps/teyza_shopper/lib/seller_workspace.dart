@@ -199,8 +199,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
           Text(session.email??''),
           const SizedBox(height:15),
           FilledButton(onPressed:_verify,child:const Text('Send verification email')),
-          OutlinedButton(onPressed:() async {await session.refreshEmailStatus();
-            if(session.emailVerified)load();},child:const Text('I have verified my email')),
+          OutlinedButton(onPressed:() async {
+            try{await session.refreshEmailStatus();if(session.emailVerified)load();}
+            catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content:Text(authMessage(error))));}
+          },child:const Text('I have verified my email')),
         ]))
       ]);
       if(loading)return const Center(child:CircularProgressIndicator());

@@ -11,6 +11,14 @@ class MemoryStore implements SessionStore {
   @override Future<void> write(String key,String value) async{values[key]=value;}
   @override Future<void> delete(String key) async{values.remove(key);}
 }
+class SlowStore extends MemoryStore {
+  final started=Completer<void>(),finish=Completer<void>();
+  bool first=true;
+  @override Future<void> write(String key,String value) async{
+    if(first){first=false;started.complete();await finish.future;}
+    await super.write(key,value);
+  }
+}
 http.Response jsonReply(Object data,[int status=200])=>http.Response(jsonEncode(data),status);
 const login={'idToken':'id-token','refreshToken':'refresh-token','localId':'user1','email':'user@example.test'};
 http.Response profile()=>jsonReply({'users':[{'localId':'user1','email':'user@example.test',
@@ -113,6 +121,19 @@ void main(){
     await session.signIn('user@example.test','password123');
     await expectLater(session.freshIdToken(),throwsStateError);
     expect(session.idToken,isNull);expect(session.userId,isNull);expect(store.values,isEmpty);
+    expect(session.isReady,isTrue);
+    session.dispose();client.close();
+  });
+  test('Signing out during secure persistence cannot save an old login afterwards',() async{
+    final store=SlowStore();
+    final client=MockClient((r) async=>r.url.path.endsWith('lookup')?profile():jsonReply(login));
+    final session=ShopperSession(client:client,store:store);
+    final signingIn=session.signIn('user@example.test','password123');
+    await store.started.future;
+    final signingOut=session.signOut();
+    store.finish.complete();await signingIn;await signingOut;
+    expect(session.idToken,isNull);expect(session.userId,isNull);
+    expect(session.isReady,isTrue);expect(store.values,isEmpty);
     session.dispose();client.close();
   });
   test('Signing out while restoration is pending cannot restore the old account',() async{
