@@ -1,11 +1,13 @@
-# Teyza Shopper 1.0.6 (16)
+# Teyza Shopper & Shop Owner 1.0.7 (17)
 
-Premium local-shop discovery with photographic Everyday Essentials and Home, Shops, Cart, Orders and Account navigation.
+Premium local-shop discovery, photographic Everyday Essentials and separate seller/shopper dashboards. Shopper navigation remains Home, Shops, Cart, Orders and Account.
 
-Choose **Shopper** or **Shop Owner** to sign in with the existing Teyza Firebase account. Spaza and Other Retail / Wholesale owners use their saved shop category; shopper registration does not create a merchant account. New shop registration stays on the Teyza website. Owners can prepare private product drafts while approval and public activation remain server controlled.
+Owners manage their profile and private product/photo drafts, submit a catalogue for review, chat with shoppers, manage order requests, set delivery/collection/cash-back services and trading hours, save a stock shopping list, open supermarket ordering websites, request a finance follow-up and submit a private camera selfie for owner review.
 
-Email/password works on Android and iOS. Google appears on Android only when native OAuth is configured for the build. iOS initially uses email/password; native social login is not enabled. Browsing and manual area selection do not require sign-in. GPS is optional and requested only when choosing the location feature.
+Shoppers browse actual published merchant stock, chat with registered shops and request delivery or collection. Server-priced requests are confirmed and fulfilled by owners. Payment is arranged with the shop. Map-directory listings do not imply merchant registration, verified stock or ordering capability.
 
-Approved published merchants come from Firestore, while nearby Google Places data and photos use the isolated `teyzaPlaces` Firebase function. Public map listings do not imply verified affiliation, available stock or checkout. Private drafts remain separate from the public directory. Branded shop fallbacks are used when photos are unavailable; essentials photos are bundled offline.
+Google login is implemented for Android and iPhone, and Apple login for iPhone. Provider and signing configuration must be supplied in the existing Firebase project and CI variables. Email/password remains available. New merchant registration stays on the Teyza website, and selecting Shop Owner never grants approval.
 
-See [release configuration and acceptance](../../docs/TEYZA_R38_MOBILE_RELEASE.md) for Android `.aab`, iOS archive/IPA, signing settings and device login verification. GitHub Actions **Teyza Android and iOS Release** builds both platforms. Automatic PR artifacts are explicitly unsigned; store signing uses existing credentials through a manual signed run. **Teyza Shopper APK** still produces Android test installs.
+The isolated R3.9 mobile backend must be deployed for the new shared services. See [dashboard and provider setup](../../docs/TEYZA_R39_DASHBOARDS.md) and [service deployment](../../services/teyza-mobile-v39/DEPLOY.md). Real credit approval/disbursement, supplier APIs, booked couriers, online payments and automated face/liveness matching are not implemented. Credit is an enquiry, supplier ordering happens on their sites, and selfies await manual review.
+
+**Teyza Shopper APK** builds test installs. **Teyza Android and iOS Release** builds an unsigned AAB and iOS archive, or signed store files when explicitly run with the existing signing credentials. The app is not submitted to either store automatically.

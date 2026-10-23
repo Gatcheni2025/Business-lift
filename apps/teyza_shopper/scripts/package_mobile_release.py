@@ -20,7 +20,10 @@ version = next(line.split(':', 1)[1].strip() for line in
 manifest = {'platform': platform, 'version': version, 'signing': mode,
             'commit': os.environ.get('GITHUB_SHA', ''),
             'emailPasswordLogin': True,
-            'googleLogin': platform == 'android' and bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')),
+            'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
+               (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
+            'appleLoginImplemented': platform == 'ios',
+            'mobileBackendVersionRequired': '3.9.0',
             'storeSubmitted': False, 'deviceLoginVerified': False}
 if platform == 'android':
     source = root/'build/app/outputs/bundle/release/app-release.aab'

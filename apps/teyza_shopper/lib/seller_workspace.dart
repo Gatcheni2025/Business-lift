@@ -1,8 +1,15 @@
 import 'dart:math';
+import 'dart:convert';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'seller_firestore.dart';
+import 'seller_tools.dart';
+import 'shopper_chat.dart';
+import 'shop_orders.dart';
+import 'teyza_mobile_api.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -16,7 +23,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   List<SellerDraft> drafts=[];
   SellerFirestore? api;
   String? loadedUid,error;
-  bool loading=false,busy=false;
+  bool loading=false,busy=false,productsView=false;
+  Map<String,String> productPhotos={};
   @override void initState(){
     super.initState();
     widget.session.addListener(_sessionChanged);
@@ -29,11 +37,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];error=null;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
-        loadedUid=null;api=null;shop=null;drafts=[];error=null;
+        loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;
       });
       return;
     }
@@ -66,6 +74,46 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
         if(widget.session.userId!=requestedUid)_sessionChanged();
       }
     }
+  }
+  Future<void> openProducts() async {
+    setState(()=>productsView=true);
+    try{final result=await TeyzaMobileApi(widget.session).call('seller_summary');
+      if(mounted)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
+    }catch(_){/* Product drafting remains available when optional services are offline. */}
+  }
+  Future<void> productPhoto(SellerDraft product) async {
+    if(busy)return;
+    final source=await showModalBottomSheet<ImageSource>(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      ListTile(leading:const Icon(Icons.camera_alt_outlined),title:const Text('Take a product photo'),onTap:()=>Navigator.pop(ctx,ImageSource.camera)),
+      ListTile(leading:const Icon(Icons.photo_library_outlined),title:const Text('Choose a product photo'),onTap:()=>Navigator.pop(ctx,ImageSource.gallery))
+    ])));
+    if(source==null||!mounted)return;
+    final uid=widget.session.userId;setState(()=>busy=true);
+    try{
+      final file=await ImagePicker().pickImage(source:source,maxWidth:1400,maxHeight:1400,imageQuality:80,requestFullMetadata:false);
+      if(file==null)return;
+      final bytes=await file.readAsBytes();
+      if(bytes.length>2000000)throw StateError('Choose a photo smaller than 2 MB.');
+      if(uid!=widget.session.userId)return;
+      final result=await TeyzaMobileApi(widget.session).call('product_photo',{
+        'productId':product.id,'imageBase64':base64Encode(bytes),'consent':true});
+      if(mounted&&uid==widget.session.userId)setState(()=>productPhotos[product.id]=result['url'].toString());
+      try{await File(file.path).delete();}catch(_){}
+    }catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(error))));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  Future<void> submitCatalogue() async {
+    if(busy)return;setState(()=>busy=true);
+    try{await TeyzaMobileApi(widget.session).call('catalogue_submit');
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Catalogue submitted for review. Your drafts are not public yet.')));
+    }catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(error))));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  void openTool(SellerTool tool)=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:tool)));
+  Future<void> editProfile() async {
+    if(shop==null)return;
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(session:widget.session,shop:shop!)));
+    if(changed==true&&mounted)load();
   }
   Future<void> _verify() async{
     try{
@@ -177,7 +225,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   @override Widget build(BuildContext context){
     final session=widget.session;
     return Scaffold(
-      appBar:AppBar(title:const Text('Shop owner workspace')),
+      backgroundColor:const Color(0xFFF7F9F7),
+      appBar:AppBar(title:Text(productsView?'Shop setup & products':'Shop owner workspace'),
+        leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null),
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -236,13 +286,22 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             const SizedBox(height:8),
             Chip(label:Text(shop!.isLive?'Shop is live':'Shop is not live yet'),
               avatar:Icon(shop!.isLive?Icons.check_circle_outline:Icons.lock_outline,size:19)),
-            Text('Verification: '+shop!.approvalStatus),
-            Text('Listing: '+shop!.listingStatus),
             const SizedBox(height:6),
-            const Text('You can prepare your products now. Only Teyza administrators can approve and activate a public listing.'),
+            Text(shop!.isLive?'Customers can browse your published shop.':
+              'Set up your products and services while your shop awaits approval.'),
           ])),
           const SizedBox(height:12),
-          _card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          if(!productsView)...[
+            FilledButton.icon(onPressed:busy?null:()=>_edit(),
+              icon:const Icon(Icons.add),label:const Text('Add a product')),
+            const SizedBox(height:16),
+            SellerDashboard(productCount:drafts.length,onProducts:openProducts,
+              onChat:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session))),
+              onOrders:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(
+                appBar:AppBar(title:const Text('Shop orders')),body:ShopOrdersPanel(session:session,asOwner:true)))),
+              onProfile:editProfile,onTool:openTool),
+          ],
+          if(productsView)_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             Row(children:[
               const Expanded(child:Text('My products',style:TextStyle(fontSize:20,
                 fontWeight:FontWeight.bold))),
@@ -256,25 +315,31 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
               Column(children:[
                 const Divider(),
                 ListTile(contentPadding:EdgeInsets.zero,
+                  leading:productPhotos[item.id]!=null?ClipRRect(borderRadius:BorderRadius.circular(10),child:Image.network(
+                    productPhotos[item.id]!,width:48,height:48,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.photo_outlined))):null,
                   title:Text(item.name),
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
                     '  ·  Private draft'),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
                   onTap:busy?null:()=>_edit(item)),
-                Row(mainAxisAlignment:MainAxisAlignment.end,children:[
+                Wrap(alignment:WrapAlignment.end,children:[
                   TextButton.icon(onPressed:busy?null:()=>_edit(item),
                     icon:const Icon(Icons.edit_outlined),label:const Text('Edit')),
+                  TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
+                    icon:const Icon(Icons.add_a_photo_outlined),label:const Text('Photo')),
                   TextButton.icon(onPressed:busy?null:()=>_delete(item),
                     icon:const Icon(Icons.delete_outline),label:const Text('Delete'))
                 ])
               ])
           ])),
           const SizedBox(height:12),
-          _card(const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text('Orders and selling',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-            SizedBox(height:8),
-            Text('Online orders and live selling will be enabled once Teyza merchant approval, subscription activation and order processing are connected. Product drafts are not visible to customers.')
-          ])),
+          if(productsView)...[
+            OutlinedButton.icon(onPressed:editProfile,icon:const Icon(Icons.edit_outlined),label:const Text('Edit shop profile')),
+            FilledButton.icon(onPressed:busy||drafts.isEmpty?null:submitCatalogue,icon:const Icon(Icons.publish_outlined),
+              label:const Text('Submit catalogue for review')),
+            const Padding(padding:EdgeInsets.all(12),child:Text('Only reviewed catalogues from approved, active shops with an eligible listing can appear to shoppers.',
+              style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
+          ],
         ]
       ]));
     })));

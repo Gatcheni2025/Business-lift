@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/teyza_shopper/**'
+      - 'services/teyza-mobile-v39/**'
       - 'services/teyza-places-v34/**'
       - 'firebase.teyza-places-v34.json'
       - '.github/workflows/teyza-shopper-apk.yml'
@@ -162,10 +163,7 @@ jobs:
       - name: Enable release internet access
         working-directory: apps/teyza_shopper
         run: |
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          grep INTERNET android/app/src/main/AndroidManifest.xml
+          python3 scripts/prepare_mobile_release.py android --signing test
       - name: Packages
         working-directory: apps/teyza_shopper
         run: flutter pub get

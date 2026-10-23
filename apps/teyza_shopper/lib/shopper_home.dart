@@ -15,6 +15,8 @@ import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
 import 'premium_navigation.dart';
+import 'teyza_mobile_api.dart';
+import 'shop_orders.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -43,10 +45,12 @@ class Shop {
   final String shopCategory;
   final bool? acceptsCard, cashback;
   final bool sponsored;
+  final List<TradingDay> hours;
+  final int deliveryFeeCents;
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
-    this.acceptsCard,this.cashback,this.sponsored=false});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.hours=const [],this.deliveryFeeCents=0});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -65,7 +69,8 @@ class Shop {
     cashback:x['services'] is Map &&
       (x['services'] as Map)['cashback'] is bool
         ?(x['services'] as Map)['cashback'] as bool:null,
-    sponsored:x['sponsored']==true);
+    sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
+    deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0);
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   // Only administrator-published, approved and activated public shops.
@@ -247,7 +252,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> refreshUnread() async {
     try {
-      final unread=await ShopperChatApi.unreadTotal();
+      final unread=await ShopperChatApi.unreadTotal(session);
       if(mounted)setState(()=>unreadChats=unread);
     }catch(_){/* Unread service unavailable; do not block shopping. */}
   }
@@ -819,8 +824,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(width:3)
         ]),
       body:tab==4?ShopperAccountPanel(session:session,
-          onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0)):
-        tab==3?ordersPage():
+          onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
+          onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:()=>navigateToTab(1)):
+        tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
@@ -830,48 +836,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     );
   }
 
-
-  Widget ordersPage()=>ListView(
-    padding:const EdgeInsets.fromLTRB(18,24,18,30),children:[
-      const Text('Your orders',style:TextStyle(
-        color:ink,fontSize:25,fontWeight:FontWeight.w900)),
-      const SizedBox(height:7),
-      const Text('Follow up on enquiries with participating local shops.',
-        style:TextStyle(color:muted,fontSize:13)),
-      const SizedBox(height:24),
-      Container(
-        padding:const EdgeInsets.fromLTRB(22,24,22,26),
-        decoration:BoxDecoration(color:Colors.white,
-          borderRadius:BorderRadius.circular(24)),
-        child:Column(children:[
-          SvgPicture.asset('assets/illustrations/grocery-basket.svg',
-            width:200,height:163,fit:BoxFit.contain),
-          const SizedBox(height:13),
-          const Text('Your shopping journey starts here',
-            textAlign:TextAlign.center,
-            style:TextStyle(color:ink,fontSize:19,fontWeight:FontWeight.w900)),
-          const SizedBox(height:9),
-          const Text('Online order tracking is not yet active. Shop enquiries '
-            'are confirmed directly by participating merchants.',
-            textAlign:TextAlign.center,
-            style:TextStyle(color:muted,fontSize:13,height:1.45)),
-          const SizedBox(height:20),
-          SizedBox(width:double.infinity,child:FilledButton.icon(
-            onPressed:()=>navigateToTab(1),
-            icon:const Icon(Icons.storefront_outlined),
-            label:const Text('Discover nearby shops')))
-        ])),
-      const SizedBox(height:16),
-      Card(elevation:0,color:const Color(0xFFEAF7F0),
-        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(18)),
-        child:ListTile(
-          onTap:openInbox,
-          leading:const Icon(Icons.chat_bubble_outline_rounded,color:green),
-          title:const Text('Your shop conversations',
-            style:TextStyle(color:ink,fontSize:14,fontWeight:FontWeight.w800)),
-          subtitle:const Text('View messages with Teyza merchants.'),
-          trailing:const Icon(Icons.chevron_right_rounded,color:green)))
-    ]);
 
   Widget groceryAisles()=>SizedBox(height:70,child:Row(
     mainAxisAlignment:MainAxisAlignment.spaceBetween,
@@ -1449,7 +1413,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       Padding(padding:const EdgeInsets.only(top:12),child:SizedBox(
         width:double.infinity,child:FilledButton.icon(
           icon:const Icon(Icons.chat_bubble_outline),
-          label:const Text('Chat with this shop'),onPressed:(){
+          label:const Text('Live chat with this shop'),onPressed:(){
             if(session.idToken==null||!session.emailVerified) {
               setState(()=>tab=4);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1459,6 +1423,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ShopperChatPage(
               session:session,initialShop:ShopperConversation(shop.id,shop.name))));
           }))),
+    Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(shopHoursLabel(shop.hours),
+      style:const TextStyle(color:green,fontWeight:FontWeight.w700))),
     merchantServices(shop),
     OutlinedButton.icon(onPressed:() async {
       final destination=shop.latitude!=null && shop.longitude!=null
@@ -1511,27 +1477,17 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       Text(message,style:const TextStyle(color:muted),textAlign:TextAlign.center)
     ])));
 
-  Future<void> sendWhatsApp() async {
-    final shop=basketShop;
-    if(shop==null||shop.phone.isEmpty||basketItems.isEmpty)return;
-    await session.refreshEmailStatus();
-    if(session.idToken==null||!session.emailVerified) {
-      if(!mounted)return;
-      setState(()=>tab=4);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Please verify your shopper email before requesting an order.')));
-      return;
+  Future<void> requestOrder() async {
+    final shop=basketShop;if(shop==null||basketItems.isEmpty)return;
+    if(session.idToken==null||!session.emailVerified){
+      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in and verify your email to send an order request.')));return;
     }
-    final lines=basketItems.map((p)=>'- '+p.name+' ×'+(cart[p.id]??0).toString()+
-      ' '+rand(p.priceCents*(cart[p.id]??0))).join('\n');
-    final message='Hi '+shop.name+', I found your shop on Teyza. Please confirm:\n'+
-      lines+'\nEstimated subtotal: '+rand(total)+
-      '\nPlease confirm stock, total and collection/delivery. No payment has been made.';
-    final uri=Uri.parse('https://wa.me/'+shop.phone+
-      '?text='+Uri.encodeComponent(message));
-    final launched=await launchUrl(uri,mode:LaunchMode.externalApplication);
-    if(!launched&&mounted)ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content:Text('Could not open WhatsApp.')));
+    final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
+      session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
+      deliveryFeeCents:shop.deliveryFeeCents,items:basketItems.map((p)=>{
+        'id':p.id,'name':p.name,'quantity':cart[p.id]??0,'priceCents':p.priceCents}).toList())));
+    if(done==true&&mounted){setState((){cart.clear();basketShop=null;});navigateToTab(3);}
   }
 
   Widget basketPage({VoidCallback? refresh})=>ListView(
@@ -1638,12 +1594,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           ])),
         const SizedBox(height:15),
         SizedBox(width:double.infinity,child:FilledButton.icon(
-          onPressed:basketShop!.phone.isEmpty?null:sendWhatsApp,
+          onPressed:(!basketShop!.pickup&&!basketShop!.delivery)?null:requestOrder,
           icon:const Icon(Icons.chat_bubble_outline_rounded,size:19),
-          label:const Text('Request order confirmation'))),
-        if(basketShop!.phone.isEmpty)
+          label:const Text('Choose delivery or collection'))),
+        if(!basketShop!.pickup&&!basketShop!.delivery)
           const Padding(padding:EdgeInsets.only(top:12),
-            child:Text('This shop has not enabled ordering yet.',
+            child:Text('This shop has not enabled delivery or collection yet. Ask the shop in Live chat.',
               textAlign:TextAlign.center,
               style:TextStyle(color:muted,fontSize:12))),
         const SizedBox(height:13),

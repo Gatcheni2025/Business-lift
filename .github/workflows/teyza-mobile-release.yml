@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/teyza_shopper/**'
+      - 'services/teyza-mobile-v39/**'
+      - 'firebase.teyza-mobile-v39.json'
       - '.github/workflows/teyza-mobile-release.yml'
   workflow_dispatch:
     inputs:
@@ -22,6 +24,7 @@ concurrency:
 env:
   APP: apps/teyza_shopper
   TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+  TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
   SIGNING_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'signed' || 'unsigned' }}
 
@@ -31,6 +34,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Check mobile service authorization and validation
+        if: runner.os == 'Linux'
+        run: node --test services/teyza-mobile-v39/*.test.js
+      - name: Package mobile service deployment kit
+        run: python3 scripts/package_teyza_mobile.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-mobile-r39-deploy-kit
+          path: TEYZA_MOBILE_R39_DEPLOY_KIT.zip
+          retention-days: 30
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -174,10 +187,10 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
-            flutter build ipa --release --no-codesign
+            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
           fi
           python3 scripts/package_mobile_release.py ios
       - name: Upload iOS release archive

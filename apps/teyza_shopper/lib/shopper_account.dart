@@ -6,7 +6,8 @@ class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
   final VoidCallback? onOpenOwner;
   final VoidCallback? onShopperSignedIn;
-  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn});
+  final VoidCallback? onMessages,onOrders,onBrowse;
+  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse});
   @override
   State<ShopperAccountPanel> createState()=>_AccountState();
 }
@@ -81,6 +82,18 @@ class _AccountState extends State<ShopperAccountPanel> {
         status=authMessage(e);failure=true;
       });
     } finally {if(mounted)setState(()=>working=false);}
+  }
+
+  Future<void> appleLogin() async {
+    setState((){working=true;status=null;failure=false;});
+    try{
+      await widget.session.signInWithApple();
+      if(!mounted)return;
+      if(widget.session.idToken!=null){
+        if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}
+      }else{setState(()=>status='Apple sign-in cancelled.');}
+    }catch(error){if(mounted)setState((){status=authMessage(error);failure=true;});}
+    finally{if(mounted)setState(()=>working=false);}
   }
 
   Future<void> reset() async {
@@ -169,6 +182,17 @@ class _AccountState extends State<ShopperAccountPanel> {
               fontSize:12,color:Color(0xFF737C82))),
         ]
         else if(logged) ...[
+          Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xFF010F1C),borderRadius:BorderRadius.circular(23)),
+            child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text('Your local shopping, made easy',style:TextStyle(color:Colors.white,fontSize:23,fontWeight:FontWeight.w800)),
+              SizedBox(height:8),Text('Browse shops, message an owner, and choose delivery or collection.',style:TextStyle(color:Color(0xFFCAE9D9),height:1.4))])),
+          const SizedBox(height:14),
+          Wrap(spacing:8,runSpacing:8,children:[
+            if(widget.onBrowse!=null)ActionChip(avatar:const Icon(Icons.storefront_outlined),label:const Text('Browse shops'),onPressed:widget.onBrowse),
+            if(widget.onMessages!=null)ActionChip(avatar:const Icon(Icons.chat_bubble_outline),label:const Text('Live chat'),onPressed:widget.onMessages),
+            if(widget.onOrders!=null)ActionChip(avatar:const Icon(Icons.receipt_long_outlined),label:const Text('My orders'),onPressed:widget.onOrders),
+          ]),
+          const SizedBox(height:14),
           Card(color:Colors.white,child:Column(children:[
             ListTile(leading:const Icon(Icons.email_outlined),
               title:const Text('Email'),subtitle:Text(widget.session.email??'')),
@@ -220,9 +244,9 @@ class _AccountState extends State<ShopperAccountPanel> {
               title:Text('Your shopping area'),
               subtitle:Text('Use the location selector on the Home tab.')),
             const Divider(height:1),
-            const ListTile(leading:Icon(Icons.shopping_bag_outlined),
-              title:Text('Orders'),
-              subtitle:Text('Shopping enquiries and orders will appear here as this service goes live.'))
+            ListTile(leading:const Icon(Icons.shopping_bag_outlined),
+              title:const Text('Delivery & collection orders'),onTap:widget.onOrders,
+              subtitle:const Text('View shop confirmations and fulfilment status.'))
           ])),
           const SizedBox(height:16),
           if(widget.onOpenOwner!=null)
@@ -272,6 +296,11 @@ class _AccountState extends State<ShopperAccountPanel> {
               onPressed:working?null:googleLogin,
               icon:const Icon(Icons.account_circle_outlined),
               label:const Text('Continue with Google'))),
+            ],
+            if(widget.session.appleSignInAvailable)...[
+              const SizedBox(height:12),SizedBox(width:double.infinity,child:FilledButton.icon(
+                style:FilledButton.styleFrom(backgroundColor:Colors.black,foregroundColor:Colors.white),
+                onPressed:working?null:appleLogin,icon:const Icon(Icons.apple),label:const Text('Continue with Apple'))),
             ],
             const SizedBox(height:7),
             if(ownerMode)

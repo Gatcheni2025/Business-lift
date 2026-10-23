@@ -6,12 +6,12 @@ import 'package:http/http.dart' as http;
 const teyzaSellerProject='business-lift-3c19c';
 
 class SellerShop {
-  final String name,category,address,approvalStatus,listingStatus;
-  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus);
+  final String name,category,address,approvalStatus,listingStatus,phone;
+  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone=''});
   factory SellerShop.fromFields(Map<String,dynamic> d)=>SellerShop(
     (d['shopName']??'').toString(),(d['category']??'').toString(),
     (d['address']??'').toString(),(d['approvalStatus']??'pending').toString(),
-    (d['listingStatus']??'not_listed').toString());
+    (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString());
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
   bool get hasRegisteredCategory=>category=='spaza'||category=='retail';
   String get categoryLabel=>category=='spaza'?'Spaza Shop':
@@ -79,6 +79,20 @@ class SellerFirestore {
     if(response.statusCode==404)return null;
     final data=_parse(response);
     return SellerShop.fromFields(sellerDecodeFields(data['fields']));
+  }
+  Future<void> saveProfile(String name,String address,String phone) async {
+    if(name.trim().length<2||name.trim().length>120||address.trim().isEmpty||address.length>250||phone.length>25){
+      throw const FormatException('Enter a valid shop name, address and contact number.');
+    }
+    final path='projects/'+teyzaSellerProject+'/databases/(default)/documents/teyzaSellerAccounts/'+uid;
+    final response=await _request('POST',Uri.https('firestore.googleapis.com',
+      '/v1/projects/'+teyzaSellerProject+'/databases/(default)/documents:commit'),body:{'writes':[{
+        'update':{'name':path,'fields':{'shopName':{'stringValue':name.trim()},
+          'address':{'stringValue':address.trim()},'phone':{'stringValue':phone.trim()}}},
+        'updateMask':{'fieldPaths':['shopName','address','phone']},'currentDocument':{'exists':true},
+        'updateTransforms':[{'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}]
+      }]});
+    _parse(response);
   }
   Future<List<SellerDraft>> drafts() async{
     final response=await _request('GET',_document(

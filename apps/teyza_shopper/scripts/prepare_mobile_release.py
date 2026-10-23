@@ -1,6 +1,5 @@
 """Configure generated Flutter wrappers without committing signing credentials."""
 import argparse
-import json
 import os
 from pathlib import Path
 import plistlib
@@ -28,6 +27,7 @@ def android(signing):
     source = gradle.read_text()
     if 'applicationId = "' + ANDROID_ID + '"' not in source:
         raise SystemExit("Unexpected Android application ID; preserve the existing Play identity.")
+    source = source.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(24, flutter.minSdkVersion)")
     if signing != "test":
         replacement = "signingConfig = null // Unsigned preparation bundle; never a debug upload key."
         if signing == "signed":
@@ -51,7 +51,7 @@ def android(signing):
                                 replacement, source)
         if count != 1:
             raise SystemExit("Expected one Flutter template signing entry; refusing an ambiguous release.")
-        gradle.write_text(source)
+    gradle.write_text(source)
     print("Android identity:", ANDROID_ID, "| signing:", signing)
 
 
@@ -64,15 +64,31 @@ def ios():
     info.update({
         "CFBundleDisplayName": "Teyza",
         "CFBundleName": "Teyza",
+        "NSCameraUsageDescription": "Take a selfie to verify your shop-owner account, or photograph your shop products.",
+        "NSPhotoLibraryUsageDescription": "Choose a product photo for your shop catalogue.",
         "NSLocationWhenInUseUsageDescription": "Find shops near you when you choose Use my location. You can also select an area manually.",
     })
+    ios_client = os.environ.get("TEYZA_GOOGLE_IOS_CLIENT_ID", "").strip()
+    web_client = os.environ.get("TEYZA_GOOGLE_WEB_CLIENT_ID", "").strip()
+    if ios_client and web_client:
+        if not ios_client.endswith(".apps.googleusercontent.com"):
+            raise SystemExit("Use the registered iOS Google OAuth client ID.")
+        info["GIDClientID"] = ios_client
+        info["GIDServerClientID"] = web_client
+        info["CFBundleURLTypes"] = [{"CFBundleTypeRole":"Editor", "CFBundleURLSchemes":[
+            "com.googleusercontent.apps."+ios_client.split(".apps.googleusercontent.com")[0]]}]
     with path.open("wb") as file:
         plistlib.dump(info, file, sort_keys=False)
+    entitlements = ROOT / "ios/Runner/Runner.entitlements"
+    with entitlements.open("wb") as file:
+        plistlib.dump({"com.apple.developer.applesignin":["Default"]}, file)
     project = ROOT / "ios/Runner.xcodeproj/project.pbxproj"
     source = project.read_text()
     source = re.sub(r"PRODUCT_BUNDLE_IDENTIFIER = [^;]+;",
                     lambda m: "PRODUCT_BUNDLE_IDENTIFIER = " + IOS_ID +
                     (".RunnerTests" if "RunnerTests" in m.group() else "") + ";", source)
+    source = source.replace("INFOPLIST_FILE = Runner/Info.plist;",
+        "INFOPLIST_FILE = Runner/Info.plist;\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;")
     project.write_text(source)
     podfile = ROOT / "ios/Podfile"
     if podfile.exists():
@@ -85,7 +101,7 @@ def ios():
     end'''
         source = source.replace(marker, marker + bypass, 1)
         podfile.write_text(source)
-    print("iOS bundle:", IOS_ID, "| email/password login | location only when requested")
+    print("iOS bundle:", IOS_ID, "| Apple capability, Google OAuth configuration and owner camera access")
 
 
 if __name__ == "__main__":
