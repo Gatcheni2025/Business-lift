@@ -77,6 +77,7 @@ function mapResult(p,kind,lat,lon){
     distanceKm:+dist(lat,lon,la,lo).toFixed(2),
     origin:'google_places',
     shopCategory:kind,
+    categorizationVerified:true,
     sourceUrl:p.googleMapsUri||
       'https://www.google.com/maps/search/?api=1&query_place_id='+encodeURIComponent(p.id),
     claimUrl:'https://teyza.co.za/?auth=register',
