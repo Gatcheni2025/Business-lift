@@ -140,6 +140,17 @@ void main(){
       });
     }
     await capture('home');
+    await tester.runAsync(()=>Future.wait([
+      'bread','milk','eggs','rice','maize','oil','snacks','soap'
+    ].map((item)=>precacheImage(AssetImage('assets/images/essentials/'+item+'.webp'),
+      tester.element(find.byType(ShopperHome))))));
+    for(var attempts=0;attempts<8&&find.text('Bread').hitTestable().evaluate().isEmpty;attempts++){
+      await tester.drag(find.byType(ListView).first,const Offset(0,-200));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Bread').hitTestable(),findsOneWidget);
+    expect(tester.takeException(),isNull);
+    await capture('essentials');
     await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
     expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
     await capture('shops');

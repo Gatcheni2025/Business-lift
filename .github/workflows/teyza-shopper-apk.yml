@@ -134,8 +134,14 @@ jobs:
           for filename in expected:
               ElementTree.parse(directory/filename)
           print("Premium SVG illustrations: valid")
+          photos=Path("apps/teyza_shopper/assets/images/essentials")
+          for item in ["bread","milk","eggs","rice","maize","oil","snacks","soap"]:
+              data=(photos/(item+".webp")).read_bytes()
+              assert data[:4] == b"RIFF" and data[8:12] == b"WEBP", f"Invalid essential photo: {item}"
+          print("Eight bundled essentials photographs: valid WebP assets")
           PY
           grep -q 'assets/illustrations/' apps/teyza_shopper/pubspec.yaml
+          grep -q 'assets/images/essentials/' apps/teyza_shopper/pubspec.yaml
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:

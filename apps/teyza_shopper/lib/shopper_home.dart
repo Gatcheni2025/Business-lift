@@ -1245,7 +1245,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final matching=items.where((x)=>category=='All'||x.$3==category).toList();
     if(matching.isEmpty)return empty('Find '+category.toLowerCase()+' nearby',
       'Open a participating shop to view its published products.');
-    return SizedBox(height:169,child:ListView(scrollDirection:Axis.horizontal,
+    return SizedBox(height:178,child:ListView(scrollDirection:Axis.horizontal,
       children:matching.map((x)=>
         Container(width:132,margin:const EdgeInsets.only(right:11),
           padding:const EdgeInsets.all(10),
@@ -1254,8 +1254,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
               blurRadius:9,offset:Offset(0,3))]),
           child:Column(children:[
-            Expanded(child:SvgPicture.asset(
-              'assets/illustrations/'+x.$2+'.svg',fit:BoxFit.contain)),
+            Expanded(child:Image.asset(
+              'assets/images/essentials/'+x.$2+'.webp',fit:BoxFit.contain,
+              semanticLabel:x.$1+' category photograph')),
             const SizedBox(height:5),
             Text(x.$1,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
             const Text('Shop category',style:TextStyle(color:muted,fontSize:10))
