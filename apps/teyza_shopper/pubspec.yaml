@@ -1,7 +1,7 @@
 name: teyza_shopper
 description: Teyza Shopper - discover spaza shops, variety stores and verified local stock.
 publish_to: none
-version: 1.0.3+13
+version: 1.0.4+14
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -30,3 +30,10 @@ flutter:
     - assets/brand/teyza-sprout-icon.svg
     - assets/brand/teyza-sprout-wordmark.svg
     - assets/illustrations/
+    - assets/images/
+  fonts:
+    - family: PT Sans
+      fonts:
+        - asset: assets/fonts/PTSans-Regular.ttf
+        - asset: assets/fonts/PTSans-Bold.ttf
+          weight: 700

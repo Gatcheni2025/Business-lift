@@ -31,13 +31,19 @@ class OnlineShop {
   final String? photoUrl;
   final String shopCategory;
   final bool categorizationVerified;
-  bool get hasPhoto => (photoUrl?.isNotEmpty ?? false) || (photoRef?.isNotEmpty ?? false);
+  final List<String> types;
+  final double? rating;
+  final int? ratingCount;
+  final bool? openNow;
+  bool get hasPhoto => displayPhotoUrl != null;
   String? get displayPhotoUrl {
     final direct = photoUrl;
     final uri = direct == null ? null : Uri.tryParse(direct);
     if(uri != null && uri.scheme == 'https' &&
       uri.host == 'us-central1-business-lift-3c19c.cloudfunctions.net' &&
-      uri.path == '/teyzaPlaces/shopper-place-photo.php') return direct;
+      uri.path == '/teyzaPlaces/shopper-place-photo.php' &&
+      uri.userInfo.isEmpty && !uri.hasFragment &&
+      (!uri.hasPort || uri.port == 443)) return direct;
     if(photoRef != null && photoRef!.isNotEmpty) {
       return teyzaGooglePhotoUrl(photoRef!).toString();
     }
@@ -51,6 +57,7 @@ class OnlineShop {
       this.photoUrl,
       this.shopCategory='spaza',
       this.categorizationVerified=false,
+      this.types=const [],this.rating,this.ratingCount,this.openNow,
     });
   factory OnlineShop.fromJson(Map<String,dynamic> p) => OnlineShop(
     (p['id']??'').toString(),(p['name']??'').toString(),
@@ -62,6 +69,11 @@ class OnlineShop {
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
     shopCategory:p['shopCategory']=='variety'?'variety':'spaza',
     categorizationVerified:p['categorizationVerified']==true,
+    types:[if(p['primaryType'] is String) p['primaryType'] as String,
+      ...((p['types'] as List?)??const []).whereType<String>()],
+    rating:(p['rating'] as num?)?.toDouble(),
+    ratingCount:(p['ratingCount'] as num?)?.toInt(),
+    openNow:p['openNow'] is bool?p['openNow'] as bool:null,
     photoAttributions:((p['photoAttributions'] as List?)??const [])
       .whereType<Map>()
       .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
@@ -80,14 +92,17 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   if(shop.origin != 'google_places') return true;
   // A vetted R3.4 Google Places result also checks Google primary types.
   // Old R3.3 responses without this flag still receive client name filtering.
-  if(shop.categorizationVerified && shop.shopCategory==category) return true;
+  if(shop.categorizationVerified) return shop.shopCategory==category;
   final name = shop.name.toLowerCase();
   if(category == 'variety') {
     if(RegExp(r'spaza|tuck\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
+    if(shop.types.any(const {'shopping_mall','department_store','supermarket',
+      'clothing_store','home_goods_store','wholesaler'}.contains))return true;
     return RegExp(r'china\s?mall|shopping|mall|wholesale|cash\s?(and|&)\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
   }
   if(category == 'spaza') {
-    return RegExp(r'spaza|tuck\s?shop|convenience|mini\s?market|supermarket|grocer|general dealer|corner shop|food store').hasMatch(name);
+    return shop.types.any(const {'convenience_store','grocery_store','supermarket','food_store'}.contains)||
+      RegExp(r'spaza|tuck\s?shop|convenience|mini\s?market|supermarket|superette|grocer|general dealer|corner shop|food store').hasMatch(name);
   }
   return true;
 }
@@ -143,20 +158,20 @@ Future<List<OnlineShop>> _osmFallback({
 }
 
 Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
-  double? longitude,String category='spaza',http.Client? client}) async {
+  double? longitude,String category='spaza',int? radiusKm,http.Client? client}) async {
   final kind=category=='variety'?'variety':'spaza';
   final uri=teyzaPlacesUrl('shopper-discover.php',{
     if(area.isNotEmpty)'area':area,'category':kind,
     if(latitude!=null && longitude!=null)...{
       'lat':latitude.toStringAsFixed(4),'lon':longitude.toStringAsFixed(4),
-      'radius':kind=='variety'?'40000':'22000',
+      'radius':((radiusKm??(kind=='variety'?40:22)).clamp(1,50)*1000).toString(),
     },
   });
   final httpClient=client??http.Client();
   try{
     try{
       final response=await httpClient.get(uri,headers:const{'Accept':'application/json'})
-        .timeout(const Duration(seconds:13));
+        .timeout(const Duration(seconds:25));
       if(response.statusCode!=200){
         throw StateError('Shop discovery unavailable (HTTP '+response.statusCode.toString()+').');
       }
@@ -170,7 +185,8 @@ Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
         final s=OnlineShop.fromJson(Map<String,dynamic>.from(row));
         if(s.name.trim().isEmpty||s.id.trim().isEmpty)continue;
         if(!teyzaMatchesShopCategory(s,kind))continue;
-        unique.putIfAbsent(s.id,()=>s);
+        final previous=unique[s.id];
+        if(previous==null||(!previous.hasPhoto&&s.hasPhoto))unique[s.id]=s;
       }
       if(unique.isNotEmpty){
         final sorted=unique.values.toList();

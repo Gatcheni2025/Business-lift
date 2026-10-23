@@ -14,12 +14,13 @@ import 'shopper_discovery.dart';
 import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
+import 'premium_navigation.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
-const green = Color(0xFF28B67B);
+const green = Color(0xFF3BB77E);
 const aqua = Color(0xFFB8EDD3);
-const pale = Color(0xFFF7F8FA);
+const pale = Color(0xFFFAFBFA);
 const muted = Color(0xFF6C7880);
 const catalogUrl = 'https://teyza.co.za/api/shopper-catalog.php';
 const photos = 'https://teyza.co.za/assets/catalog-real/';
@@ -73,6 +74,38 @@ Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   return rows.map(Shop.fromJson).toList();
 }
 
+/// A nearby shop can have both an approved Teyza catalogue and a map listing.
+class NearbyListing {
+  final Shop? merchant;
+  final OnlineShop? directory;
+  const NearbyListing({this.merchant,this.directory});
+  String get name=>merchant?.name??directory!.name;
+  double? get lat=>merchant?.latitude??directory?.lat;
+  double? get lng=>merchant?.longitude??directory?.lng;
+  bool get hasPhoto=>(merchant?.photo.isNotEmpty??false)||(directory?.hasPhoto??false);
+}
+List<NearbyListing> mergeNearbyListings(List<Shop> merchants,List<OnlineShop> directory,{Area? area}) {
+  final entries=merchants.map((s)=>NearbyListing(merchant:s)).toList();
+  String normal(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
+  for(final shop in directory){
+    final match=entries.indexWhere((entry)=>entry.merchant!=null&&
+      normal(entry.name)==normal(shop.name)&&entry.lat!=null&&entry.lng!=null&&
+      shop.lat!=null&&shop.lng!=null&&km(entry.lat!,entry.lng!,shop.lat!,shop.lng!)<.15);
+    if(match>=0){entries[match]=NearbyListing(merchant:entries[match].merchant,directory:shop);}
+    else{entries.add(NearbyListing(directory:shop));}
+  }
+  double d(NearbyListing s)=>area==null||s.lat==null||s.lng==null?double.infinity:
+    km(area.lat,area.lng,s.lat!,s.lng!);
+  entries.sort((a,b){
+    final delta=d(a).compareTo(d(b));
+    if(delta!=0)return delta;
+    if(a.hasPhoto!=b.hasPhoto)return a.hasPhoto?-1:1;
+    if((a.merchant!=null)!=(b.merchant!=null))return a.merchant!=null?-1:1;
+    return a.name.compareTo(b.name);
+  });
+  return entries;
+}
+
 class Area {
   final String label, city;
   final double lat, lng;
@@ -105,6 +138,7 @@ class TeyzaShopper extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Teyza Shopper', debugShowCheckedModeBanner: false,
     theme: ThemeData(useMaterial3:true, scaffoldBackgroundColor:pale,
+      fontFamily:'PT Sans',
       colorScheme:ColorScheme.fromSeed(seedColor:green,surface:Colors.white),
       textTheme:const TextTheme(
         titleLarge:TextStyle(color:ink,fontSize:21,fontWeight:FontWeight.w800),
@@ -119,7 +153,12 @@ class TeyzaShopper extends StatelessWidget {
     home: const ShopperHome());
 }
 class ShopperHome extends StatefulWidget {
-  const ShopperHome({super.key});
+  final Future<List<Shop>> Function()? catalogueLoader;
+  final Future<List<OnlineShop>> Function(Area,String,int)? directoryLoader;
+  final Area? initialArea;
+  final bool enableBackgroundServices;
+  const ShopperHome({super.key,this.catalogueLoader,this.directoryLoader,
+    this.initialArea,this.enableBackgroundServices=true});
   @override
   State<ShopperHome> createState() => _ShopperHomeState();
 }
@@ -146,6 +185,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String? onlineWarning;
   bool loadingOnline = false;
   String discoveryType='spaza';
+  bool widerSearch=false;
+  int get searchRadiusKm=>discoveryType=='variety'?(widerSearch?50:40):(widerSearch?40:22);
   int _onlineRequestSerial=0;
   int unreadChats=0;
   Timer? chatWatch;
@@ -154,10 +195,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
-    refreshUnread();
+    if(widget.enableBackgroundServices){
+      chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
+      refreshUnread();
+      session.restore();
+    }else{session.isReady=true;}
     _prepareLaunch();
-    session.restore();
   }
   Future<void> _prepareLaunch() async {
     // Catalogue and area discovery start together. Never trap people forever
@@ -209,6 +252,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> _restoreSavedArea() async {
+    if(widget.initialArea!=null){
+      await chooseArea(widget.initialArea!,persist:false);
+      return;
+    }
     // Never require the shopper to tap refresh after reopening the app.
     // Recheck permission at startup, respecting Android privacy settings.
     final prefs=await SharedPreferences.getInstance();
@@ -245,6 +292,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(discoveryType==type)return;
     setState(() {
       discoveryType=type;
+      widerSearch=false;
       showAllShops=false;
       online=[];
       directorySelected=null;
@@ -263,8 +311,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         return;
       }
       final chosenType=discoveryType;
-      final places=await findOnlineShops(area:area?.label??'',
-        latitude:area?.lat,longitude:area?.lng,category:chosenType);
+      final places=widget.directoryLoader!=null
+        ?await widget.directoryLoader!(area!,chosenType,searchRadiusKm)
+        :await findOnlineShops(area:area?.label??'',
+          latitude:area?.lat,longitude:area?.lng,category:chosenType,radiusKm:searchRadiusKm);
       if(requestSerial!=_onlineRequestSerial)return;
       if (!mounted) return;
       setState(() { online=places;loadingOnline=false; });
@@ -281,7 +331,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Future<void> load() async {
     setState(() { loading = true; catalogueError = null; });
     try {
-      final next = await fetchCatalogue();
+      final next = widget.catalogueLoader!=null?await widget.catalogueLoader!():await fetchCatalogue();
       if (!mounted) return;
       setState(() { live = next; loading = false; });
     } catch (_) {
@@ -365,6 +415,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _usingGps=false;
       _currentLocationDetail='';
       locationWarning = null;
+      widerSearch=false;
       selected = null;
       directorySelected = null;
       search = '';
@@ -513,6 +564,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           Text(place.name,maxLines:1,overflow:TextOverflow.ellipsis,
             style:const TextStyle(fontSize:15,fontWeight:FontWeight.w900,color:ink)),
           const SizedBox(height:4),
+          if(place.rating!=null)Padding(padding:const EdgeInsets.only(bottom:4),
+            child:shopFacts(place)),
           Text(place.address.isNotEmpty?place.address:place.area,maxLines:2,
             overflow:TextOverflow.ellipsis,
             style:const TextStyle(fontSize:11,color:muted)),
@@ -673,47 +726,27 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
 
-  Widget locationHeader()=>Container(
-    color:Colors.white,
-    padding:const EdgeInsets.fromLTRB(16,2,16,14),
+  Widget locationHeader()=>Container(color:Colors.white,
+    padding:const EdgeInsets.fromLTRB(16,2,16,10),
     child:Column(children:[
-      InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(17),
-        child:Padding(padding:const EdgeInsets.fromLTRB(4,8,4,10),child:Row(children:[
-          Container(width:34,height:34,
-            decoration:BoxDecoration(color:const Color(0xFFE5F8EE),
-              borderRadius:BorderRadius.circular(12)),
-            child:const Icon(Icons.location_on_rounded,color:green,size:21)),
-          const SizedBox(width:10),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('SHOPPING NEAR',style:TextStyle(
-              color:muted,fontSize:9,fontWeight:FontWeight.w900,letterSpacing:1)),
-            Text(_usingGps?_currentLocationDetail:locationName,
-              maxLines:1,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:ink,fontSize:13,fontWeight:FontWeight.w800))
-          ])),
-          if(geolocating)const SizedBox(width:17,height:17,
-            child:CircularProgressIndicator(strokeWidth:2)),
-          const Icon(Icons.keyboard_arrow_down_rounded,color:green)
-        ]))),
       if(selected==null&&directorySelected==null)...[
         TextField(key:ValueKey(discoveryType),
           onChanged:(value)=>setState(()=>search=value),
-          decoration:InputDecoration(hintText:discoveryType=='spaza'
-            ?'Search nearby shops and groceries'
-            :'Search malls, China Mall and retail shops',
-            hintStyle:const TextStyle(color:muted,fontSize:13),
-            filled:true,fillColor:const Color(0xFFF5F7F7),
-            prefixIcon:const Icon(Icons.search_rounded,color:green,size:22),
-            contentPadding:const EdgeInsets.symmetric(vertical:12),
+          decoration:InputDecoration(
+            hintText:discoveryType=='spaza'?'Search for products, shops…':'Search malls, wholesalers, shops…',
+            hintStyle:const TextStyle(color:muted,fontSize:12),
+            filled:true,fillColor:const Color(0xFFF7F8F7),
+            prefixIcon:const Icon(Icons.search_rounded,color:ink,size:21),
+            contentPadding:const EdgeInsets.symmetric(vertical:11),
             border:OutlineInputBorder(borderRadius:BorderRadius.circular(18),
-              borderSide:BorderSide.none))),
-        const SizedBox(height:10),
+              borderSide:const BorderSide(color:Color(0xFFEDF0EE))),
+            enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(18),
+              borderSide:const BorderSide(color:Color(0xFFEDF0EE))))),
+        const SizedBox(height:8),
         Row(children:[
-          _shopMode('SPAZA SHOPS','Discover local shops',Icons.storefront_rounded,
-            'spaza',green),
-          const SizedBox(width:10),
-          _shopMode('OTHER RETAIL','China Mall & wholesalers',
-            Icons.store_mall_directory_rounded,'variety',deep),
+          _shopMode('SPAZA SHOPS','Discover local shops',Icons.storefront_rounded,'spaza',green),
+          const SizedBox(width:8),
+          _shopMode('OTHER RETAIL','China Mall & wholesalers',Icons.store_mall_directory_rounded,'variety',deep)
         ])
       ]
     ]));
@@ -738,49 +771,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(index==1){selected=null;directorySelected=null;showAllShops=true;}
     });
   }
-  Widget _navItem(int index,String title,IconData active,IconData idle){
-    final chosen=tab==index;
-    return Expanded(child:InkWell(
-      onTap:()=>navigateToTab(index),borderRadius:BorderRadius.circular(15),
-      child:Semantics(button:true,selected:chosen,label:title,
-        child:Padding(padding:const EdgeInsets.symmetric(vertical:5),
-          child:Column(mainAxisSize:MainAxisSize.min,children:[
-            Icon(chosen?active:idle,color:chosen?green:muted,size:23),
-            const SizedBox(height:3),
-            Text(title,style:TextStyle(fontSize:10,fontWeight:chosen?
-              FontWeight.w900:FontWeight.w600,
-              color:chosen?green:muted))
-          ])))));
-  }
-  Widget premiumNavigation()=>Container(
-    decoration:const BoxDecoration(color:Colors.white,
-      boxShadow:[BoxShadow(color:Color(0x10010F1C),
-        blurRadius:20,offset:Offset(0,-3))]),
-    child:SafeArea(top:false,child:Padding(
-      padding:const EdgeInsets.fromLTRB(10,7,10,7),
-      child:Row(children:[
-        _navItem(0,'Home',Icons.home_rounded,Icons.home_outlined),
-        _navItem(1,'Shops',Icons.storefront_rounded,Icons.storefront_outlined),
-        Expanded(child:Center(child:InkWell(
-          onTap:openBasket,borderRadius:BorderRadius.circular(50),
-          child:Semantics(button:true,label:'Cart',child:Column(
-            mainAxisSize:MainAxisSize.min,children:[
-              Container(width:50,height:45,
-                decoration:BoxDecoration(color:green,
-                  borderRadius:BorderRadius.circular(18),
-                  boxShadow:const [BoxShadow(color:Color(0x353BB77E),
-                    blurRadius:13,offset:Offset(0,5))]),
-                child:Badge(isLabelVisible:count>0,
-                  label:Text(count>99?'99+':count.toString()),
-                  child:Icon(Icons.shopping_cart_rounded,color:Colors.white,size:24))),
-              const SizedBox(height:2),
-              Text('Cart',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900,
-                color:tab==2?green:ink))
-            ]))))),
-        _navItem(3,'Orders',Icons.receipt_long_rounded,Icons.receipt_long_outlined),
-        _navItem(4,'Account',Icons.person_rounded,Icons.person_outline_rounded)
-      ]))));
-
+  Widget premiumNavigation()=>PremiumShopperNavigation(
+    selectedIndex:tab,cartCount:count,onSelect:navigateToTab);
 
   @override
   Widget build(BuildContext context) {
@@ -788,24 +780,33 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return Scaffold(
       appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,
         elevation:0,toolbarHeight:60,titleSpacing:14,
-        title:Semantics(
-          label:'TEYZA, your neighbourhood shopping marketplace',
-          child:SvgPicture.asset(
-            'assets/brand/teyza-sprout-wordmark.svg',
-            width:142,height:42,fit:BoxFit.contain,
-            alignment:Alignment.centerLeft)),
+        title:Row(children:[
+          Semantics(label:'Teyza',child:SvgPicture.asset(
+            'assets/brand/teyza-sprout-wordmark.svg',width:98,height:36,fit:BoxFit.contain)),
+          const SizedBox(width:14),
+          Expanded(child:InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(12),
+            child:Padding(padding:const EdgeInsets.symmetric(vertical:9),child:Row(children:[
+              const Icon(Icons.location_on_outlined,color:ink,size:19),
+              const SizedBox(width:5),
+              Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                const Text('Shopping near',style:TextStyle(color:muted,fontSize:10)),
+                Text(_usingGps?_currentLocationDetail:locationName,maxLines:1,
+                  overflow:TextOverflow.ellipsis,
+                  style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w700))
+              ])),
+              if(geolocating)const SizedBox(width:12,height:12,child:CircularProgressIndicator(strokeWidth:2))
+              else const Icon(Icons.keyboard_arrow_down_rounded,size:16,color:muted)
+            ]))))
+        ]),
         actions:[
           IconButton(tooltip:'Messages',onPressed:openInbox,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
               child:const Icon(Icons.notifications_none_rounded,size:25))),
-          IconButton(tooltip:'Your cart',onPressed:openBasket,
-            icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
-              child:const Icon(Icons.shopping_bag_outlined,size:24))),
           const SizedBox(width:3)
         ]),
       body:tab==4?ShopperAccountPanel(session:session,
-          onOpenOwner:openOwnerWorkspace):
+          onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0)):
         tab==3?ordersPage():
         tab==2?basketPage():
         Column(children:[locationHeader(),Expanded(child:
@@ -859,37 +860,93 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           trailing:const Icon(Icons.chevron_right_rounded,color:green)))
     ]);
 
+  Widget groceryAisles()=>SizedBox(height:76,child:Row(
+    mainAxisAlignment:MainAxisAlignment.spaceBetween,
+    children:<(String,String,IconData)>[
+      ('All','All',Icons.grid_view_rounded),('Veg & Fruit','Fresh',Icons.eco_outlined),
+      ('Meat','Meat',Icons.kebab_dining_outlined),('Pantry','Pantry',Icons.kitchen_outlined),
+      ('Drinks','Drinks',Icons.local_drink_outlined)
+    ].map((item)=>Expanded(child:InkWell(
+      onTap:()=>setState(()=>category=item.$2),borderRadius:BorderRadius.circular(14),
+      child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+        Container(width:42,height:42,decoration:BoxDecoration(shape:BoxShape.circle,
+          color:category==item.$2?green:const Color(0xFFF0F4F1),
+          border:Border.all(color:category==item.$2?green:const Color(0xFFE8EEEA))),
+          child:Icon(item.$3,color:category==item.$2?Colors.white:green,size:21)),
+        const SizedBox(height:5),
+        Text(item.$1,maxLines:1,style:TextStyle(fontSize:10,color:ink,
+          fontWeight:category==item.$2?FontWeight.w700:FontWeight.w400))
+      ])))).toList()));
+
   Widget premiumGroceryHero()=>Container(
-    margin:const EdgeInsets.only(bottom:4,top:7),
-    decoration:BoxDecoration(color:const Color(0xFFEDE9E0),borderRadius:BorderRadius.circular(25),
-      boxShadow:const [BoxShadow(color:Color(0x14010F1C),
-        offset:Offset(0,9),blurRadius:22)]),
+    margin:const EdgeInsets.only(bottom:3,top:7),
+    decoration:BoxDecoration(color:const Color(0xFFEDE9E0),borderRadius:BorderRadius.circular(21)),
     clipBehavior:Clip.antiAlias,
     child:Row(children:[
-      Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(19,22,0,22),
+      Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(16,18,0,18),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          const Text('FRESH • LOCAL • CONVENIENT',
-            style:TextStyle(color:Color(0xFF208E61),fontSize:9,
-              fontWeight:FontWeight.w900,letterSpacing:1.1)),
-          const SizedBox(height:9),
-          const Text('Fresh groceries\nfrom local shops.',
-            style:TextStyle(color:deep,fontSize:23,
-              fontWeight:FontWeight.w900,height:1.14)),
+          Text(discoveryType=='spaza'?'Fresh groceries\nfrom your local\nspaza shops':'More choice.\nCloser to home.',
+            style:const TextStyle(color:deep,fontSize:21,fontWeight:FontWeight.w700,height:1.1)),
           const SizedBox(height:7),
-          const Text('Discover shops and everyday essentials around you.',
-            style:TextStyle(color:Color(0xFF566660),fontSize:11,height:1.45)),
-          const SizedBox(height:13),
-          FilledButton.icon(onPressed:()=>setState(()=>showAllShops=true),
-            icon:const Icon(Icons.arrow_forward_rounded,size:16),
-            label:const Text('Explore nearby'),
-            style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(
-              horizontal:14,vertical:11),textStyle:const TextStyle(
-              fontWeight:FontWeight.w800,fontSize:12)))
+          const Text('Good food. Stronger communities.',
+            style:TextStyle(color:Color(0xFF566660),fontSize:10,height:1.3)),
+          const SizedBox(height:10),
+          FilledButton(onPressed:()=>navigateToTab(1),
+            style:FilledButton.styleFrom(minimumSize:Size.zero,
+              padding:const EdgeInsets.symmetric(horizontal:14,vertical:9),
+              textStyle:const TextStyle(fontWeight:FontWeight.w700,fontSize:11)),
+            child:const Row(mainAxisSize:MainAxisSize.min,children:[
+              Text('Explore shops'),SizedBox(width:7),Icon(Icons.arrow_forward_rounded,size:15)]))
         ]))),
-      Padding(padding:const EdgeInsets.only(right:7),
-        child:SizedBox(width:124,height:171,child:SvgPicture.asset(
-          'assets/illustrations/grocery-basket.svg',fit:BoxFit.contain)))
+      SizedBox(width:128,height:165,child:Image.asset('assets/images/grocery-basket.png',fit:BoxFit.contain))
     ]));
+
+  List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
+  Widget shopFacts(OnlineShop shop)=>Row(children:[
+    if(shop.rating!=null)...[
+      const Icon(Icons.star_rounded,color:Color(0xFFF3B929),size:13),
+      const SizedBox(width:3),
+      Flexible(child:Text(shop.rating!.toStringAsFixed(1)+
+        (shop.ratingCount!=null?' ('+shop.ratingCount.toString()+')':''),
+        overflow:TextOverflow.ellipsis,style:const TextStyle(color:ink,fontSize:10)))
+    ],
+    if(shop.openNow!=null)...[
+      const SizedBox(width:7),
+      Container(padding:const EdgeInsets.symmetric(horizontal:5,vertical:2),
+        decoration:BoxDecoration(color:shop.openNow!?const Color(0xFFE2F8EB):const Color(0xFFF3F3F3),
+          borderRadius:BorderRadius.circular(7)),
+        child:Text(shop.openNow!?'Open now':'Closed',style:TextStyle(fontSize:9,
+          color:shop.openNow!?const Color(0xFF168A54):muted)))
+    ]
+  ]);
+  Widget nearbyCard(NearbyListing entry){
+    final merchant=entry.merchant,directory=entry.directory;
+    final d=area==null||entry.lat==null||entry.lng==null?null:km(area!.lat,area!.lng,entry.lat!,entry.lng!);
+    return InkWell(onTap:(){if(merchant!=null)openShop(merchant);else selectDirectory(directory!);},
+      borderRadius:BorderRadius.circular(18),
+      child:Container(width:176,margin:const EdgeInsets.only(right:11,bottom:6),
+        decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(18),
+          border:Border.all(color:const Color(0xFFEBEFEC))),clipBehavior:Clip.antiAlias,
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          SizedBox(width:176,height:102,child:merchant?.photo.isNotEmpty==true
+            ?photo(merchant!.photo,size:176):directory!=null?onlinePhoto(directory,width:176,height:102)
+            :photo('',size:176)),
+          Padding(padding:const EdgeInsets.fromLTRB(9,8,9,7),child:Column(
+            crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(entry.name,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w700)),
+              const SizedBox(height:4),
+              if(directory!=null&&(directory.rating!=null||directory.openNow!=null))shopFacts(directory),
+              const SizedBox(height:3),
+              Text((d==null?'Nearby':d.toStringAsFixed(1)+' km')+
+                (merchant!=null?' · On Teyza':directory?.origin=='google_places'?' · Google Maps':' · OpenStreetMap'),
+                maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:10)),
+              if(directory?.photoAttributions.isNotEmpty==true)
+                Text('Photo: '+(directory!.photoAttributions.first['name']??''),maxLines:1,
+                  overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:9))
+            ]))
+        ])));
+  }
 
   Widget section(String title,{String? subtitle,Widget? action})=> Padding(
     padding:const EdgeInsets.fromLTRB(0,20,0,12), child:Row(children:[
@@ -914,38 +971,28 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Padding(padding:const EdgeInsets.all(12),child:Text(locationWarning!))),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      if(discoveryType=='spaza')groceryAisles(),
       premiumGroceryHero(),
       const SizedBox(height:4),
-      section(discoveryType=='spaza'?'Spaza shops near you':'Other retail near you',
+      section('Nearby shops',
         subtitle:area==null?'Choose your area to find nearby shops':
           'Local shops around '+locationName,
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('See all'))),
       if(displayedOnline.isNotEmpty||displayShops.isNotEmpty)
-        SizedBox(height:204,child:ListView(scrollDirection:Axis.horizontal,
-          children:[
-            ...displayShops.take(8).map(quickShop),
-            ...displayedOnline.take(24).map(directoryCircle),
-          ]))
+        SizedBox(height:213,child:ListView(scrollDirection:Axis.horizontal,
+          children:nearbyListings.take(30).map(nearbyCard).toList()))
       else if(loadingOnline)const SizedBox(height:106,
         child:Center(child:CircularProgressIndicator()))
       else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
         'Use your current location or select a shopping area.')),
       const SizedBox(height:9),
-      section(discoveryType=='spaza'?'Shop your favourite aisles':'Explore other retail',
+      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):'Explore other retail',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
           'Variety stores, malls, wholesalers and more',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
       if(discoveryType=='spaza')...[
-        Wrap(spacing:7,runSpacing:7,children:[
-          'All','Bakery','Dairy','Pantry','Drinks','Snacks','Fresh','Household'
-        ].map((c)=>ChoiceChip(label:Text(c),selected:category==c,
-          onSelected:(_)=>setState(()=>category=c),
-          selectedColor:const Color(0xFFCDF0E1),
-          backgroundColor:Colors.white,
-          side:const BorderSide(color:Color(0xFFE0ECE6)))).toList()),
-        const SizedBox(height:12),
         if(featured.isNotEmpty)productShelf(featured)else essentialsShelf(),
       ],
       Material(color:deep,borderRadius:BorderRadius.circular(20),
@@ -1181,8 +1228,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ('Maize meal','maize','Pantry'),('Cooking oil','oil','Pantry'),
       ('Snacks','snacks','Snacks'),('Cleaning','soap','Household')
     ];
+    final matching=items.where((x)=>category=='All'||x.$3==category).toList();
+    if(matching.isEmpty)return empty('Find '+category.toLowerCase()+' nearby',
+      'Open a participating shop to view its published products.');
     return SizedBox(height:169,child:ListView(scrollDirection:Axis.horizontal,
-      children:items.where((x)=>category=='All'||x.$3==category).map((x)=>
+      children:matching.map((x)=>
         Container(width:132,margin:const EdgeInsets.only(right:11),
           padding:const EdgeInsets.all(10),
           decoration:BoxDecoration(color:Colors.white,
@@ -1256,25 +1306,28 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ]))));
 
 
-  Widget allShopsPage()=>ListView(
-    padding:const EdgeInsets.all(16),children:[
-      TextButton.icon(onPressed:()=>setState(()=>showAllShops=false),
-        icon:const Icon(Icons.arrow_back_rounded),
-        label:const Text('Back to shopping')),
-      categoryPicker(),
-      section(discoveryType=='spaza'?'SPAZA SHOPS NEAR YOU':'VARIETY & WHOLESALE NEAR YOU',
-        subtitle:'Discover real shops in your chosen area'),
-      if(loadingOnline)const Center(child:CircularProgressIndicator()),
-      if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
-      ...displayedOnline.map(onlineTile),
-      if(displayedOnline.isEmpty&&!loadingOnline)
-        empty('No online listings nearby','Try GPS or choose another area.'),
-      section('SHOPS ON TEYZA',
-        subtitle:'Merchant-published stock, pricing and availability'),
-      ...displayShops.map(shopTile),
-      if(displayShops.isEmpty)empty('More shops joining Teyza',
-        'Shop owners can claim their listing and connect a real product catalogue.')
-    ]);
+  Widget allShopsPage()=>RefreshIndicator(onRefresh:reloadOnline,
+    child:ListView.builder(padding:const EdgeInsets.all(16),
+      itemCount:nearbyListings.length+1,itemBuilder:(context,index){
+        if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          section(discoveryType=='spaza'?'Nearby spaza shops':'Other retail nearby',
+            subtitle:nearbyListings.length.toString()+' shops · within '+searchRadiusKm.toString()+' km'),
+          Row(children:[
+            Expanded(child:Text('Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
+            TextButton.icon(onPressed:loadingOnline||area==null?null:() async {
+              setState(()=>widerSearch=!widerSearch);await reloadOnline();
+            },icon:const Icon(Icons.radar_rounded,size:17),
+              label:Text(widerSearch?'Search closer':'Search wider'))
+          ]),
+          if(loadingOnline)const Padding(padding:EdgeInsets.all(14),child:Center(child:CircularProgressIndicator())),
+          if(onlineWarning!=null)Text(onlineWarning!,style:const TextStyle(color:muted)),
+          if(nearbyListings.isEmpty&&!loadingOnline)empty('Find your neighbourhood shops',
+            'Choose an area or search wider to discover more shops.'),
+          const SizedBox(height:8)
+        ]);
+        final entry=nearbyListings[index-1];
+        return entry.merchant!=null?shopTile(entry.merchant!):onlineTile(entry.directory!);
+      }));
 
   Widget directoryPage(OnlineShop shop)=>ListView(
     padding:const EdgeInsets.all(18),children:[
@@ -1296,6 +1349,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             label:Text('Photo by '+(credit['name']??''))),
       ],
       const SizedBox(height:16),
+      if(shop.rating!=null||shop.openNow!=null)Padding(
+        padding:const EdgeInsets.only(bottom:10),child:shopFacts(shop)),
       Text(shop.name,style:const TextStyle(
         fontSize:25,fontWeight:FontWeight.w900,color:ink)),
       const SizedBox(height:6),

@@ -16,6 +16,8 @@ Map<String,dynamic> decodeFields(dynamic fields) {
     else if(typed.containsKey('booleanValue'))result[entry.key as String]=typed['booleanValue'];
     else if(typed.containsKey('integerValue'))result[entry.key as String]=int.tryParse(typed['integerValue'].toString())??0;
     else if(typed.containsKey('doubleValue'))result[entry.key as String]=(typed['doubleValue'] as num?)?.toDouble()??0.0;
+    else if(typed['mapValue'] is Map)result[entry.key as String]=decodeFields((typed['mapValue'] as Map)['fields']);
+    else if(typed['geoPointValue'] is Map)result[entry.key as String]=Map<String,dynamic>.from(typed['geoPointValue'] as Map);
     else if(typed.containsKey('arrayValue')) {
       final values=(typed['arrayValue'] is Map)?(typed['arrayValue'] as Map)['values']:null;
       result[entry.key as String]=values is List ? values.map((p) {
@@ -56,13 +58,14 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
     if(!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id))continue;
     output.add(<String,dynamic>{
       'id':id,'name':data['name'],'area':data['area']??'',
-      'address':data['address']??'','shopCategory':data['shopCategory']=='retail'?'variety':'spaza',
+      'address':data['address']??'','shopCategory':['retail','variety','other-retail'].contains(data['shopCategory'])?'variety':'spaza',
       'photoUrl':publishedMerchantPhoto(data),
       'latitude': data['latitude'] is num ? data['latitude'] : null,
       'longitude': data['longitude'] is num ? data['longitude'] : null,
       'whatsappPhone':'',
       'pickupEnabled':data['pickupEnabled']==true,
       'deliveryEnabled':data['deliveryEnabled']==true,
+      'services':data['services'] is Map?data['services']:<String,dynamic>{},
       'products':data['products'] is List?data['products']:<dynamic>[],
       'sponsored':false,
     });

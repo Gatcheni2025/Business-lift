@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/teyza_shopper/**'
+      - 'services/teyza-places-v34/**'
+      - 'firebase.teyza-places-v34.json'
       - '.github/workflows/teyza-shopper-apk.yml'
   workflow_dispatch:
 
@@ -119,6 +121,7 @@ jobs:
       - name: Validate R3.4 premium shop images and Google Places backend syntax
         run: |
           node --check services/teyza-places-v34/index.js
+          node --test services/teyza-places-v34/places.test.js
           python3 - <<'PY'
           from pathlib import Path
           from xml.etree import ElementTree
@@ -163,9 +166,28 @@ jobs:
       - name: Static analysis
         working-directory: apps/teyza_shopper
         run: flutter analyze --no-fatal-infos
-      - name: Unit tests
+      - name: Unit tests and premium screen rendering
         working-directory: apps/teyza_shopper
+        env:
+          TEYZA_CAPTURE_UI: '1'
         run: flutter test
+      - name: Upload rendered premium screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-premium-ui-preview
+          path: apps/teyza_shopper/build/ui-preview/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Package current Places backend
+        run: |
+          python3 scripts/package_teyza_places.py
+      - name: Upload current Places backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-places-r36-deploy-kit
+          path: TEYZA_PLACES_R36_DEPLOY_KIT.zip
+          retention-days: 14
       - name: Build shopper debug APK
         working-directory: apps/teyza_shopper
         env:

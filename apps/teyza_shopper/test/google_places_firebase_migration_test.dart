@@ -71,6 +71,26 @@ void main(){
     expect(teyzaMatchesShopCategory(example('Phoenix Group of Companies'),'spaza'),isFalse);
     expect(teyzaMatchesShopCategory(example('Shalom Spaza'),'spaza'),isTrue);
   });
+  test('Store types, wider radius and best duplicate photo remain available',() async {
+    final client=MockClient((request) async {
+      expect(request.url.queryParameters['radius'],'40000');
+      return http.Response(jsonEncode({'ok':true,'entries':[
+        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
+          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99},
+        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
+          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99,
+          'photoRef':'places/ChIJ1234/photos/Photo_1234'},
+        {'id':'google-superette','name':'Penzance Superette','origin':'google_places'}
+      ]}),200);
+    });
+    final shops=await findOnlineShops(latitude:-29.74,longitude:30.99,radiusKm:40,client:client);
+    expect(shops,hasLength(2));expect(shops.first.hasPhoto,isTrue);
+  });
+  test('Verified category does not leak into another category',(){
+    final shop=OnlineShop.fromJson({'id':'g','name':'Supermarket','origin':'google_places',
+      'categorizationVerified':true,'shopCategory':'variety'});
+    expect(teyzaMatchesShopCategory(shop,'spaza'),isFalse);
+  });
   test('Unavailable Firebase Places feed falls back to attributed live OSM map data',() async {
     final client=MockClient((req) async {
       if(req.url.host=='us-central1-business-lift-3c19c.cloudfunctions.net'){

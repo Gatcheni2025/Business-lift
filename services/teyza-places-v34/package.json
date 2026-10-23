@@ -1,8 +1,9 @@
 {
   "name": "teyza-places-v34",
-  "version": "3.4.0",
+  "version": "3.6.0",
   "private": true,
   "main": "index.js",
+  "scripts": {"test": "node --test places.test.js"},
   "engines": {
     "node": "22"
   },

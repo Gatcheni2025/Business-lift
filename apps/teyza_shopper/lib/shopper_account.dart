@@ -5,7 +5,8 @@ import 'shopper_auth.dart';
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
   final VoidCallback? onOpenOwner;
-  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner});
+  final VoidCallback? onShopperSignedIn;
+  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn});
   @override
   State<ShopperAccountPanel> createState()=>_AccountState();
 }
@@ -48,6 +49,10 @@ class _AccountState extends State<ShopperAccountPanel> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if(mounted)widget.onOpenOwner!();
           });
+        }else if(!ownerMode&&widget.onShopperSignedIn!=null){
+          WidgetsBinding.instance.addPostFrameCallback((_){
+            if(mounted)widget.onShopperSignedIn!();
+          });
         }
       }
     } catch (error) {
@@ -65,6 +70,10 @@ class _AccountState extends State<ShopperAccountPanel> {
       if(mounted&&ownerMode&&widget.session.idToken!=null&&widget.onOpenOwner!=null){
         WidgetsBinding.instance.addPostFrameCallback((_){
           if(mounted)widget.onOpenOwner!();
+        });
+      }else if(mounted&&!ownerMode&&widget.session.idToken!=null&&widget.onShopperSignedIn!=null){
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted)widget.onShopperSignedIn!();
         });
       }
     } catch(e) {
