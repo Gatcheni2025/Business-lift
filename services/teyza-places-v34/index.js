@@ -97,11 +97,11 @@ app.get(['/shopper-discover.php','/shopper-discover'],async(req,res)=>{
   const lat=num(req.query.lat,-90,90),lon=num(req.query.lon,-180,180);
   if(lat===null||lon===null)return res.status(400).json({ok:false,error:'lat and lon required'});
   const kind=category(req.query.category);
-  const radius=num(req.query.radius,500,50000)??(kind==='spaza'?14000:30000);
+  const radius=num(req.query.radius,500,50000)??(kind==='spaza'?22000:40000);
   const q=String(req.query.q||'').trim().slice(0,70);
   const queries=q?[q]:(kind==='spaza'
-    ?['spaza shop','tuck shop','convenience store']
-    :['China Mall','shopping mall','wholesale cash and carry','retail stores']);
+    ?['spaza shop','tuck shop','mini market','general dealer','convenience store','corner grocery']
+    :['China Mall','shopping centre','wholesale cash and carry','variety store','retail shopping mall','supermarket']);
   try{
     const key=API_KEY.value();
     if(!key)return res.status(503).json({ok:false,error:'Places not configured'});
@@ -118,8 +118,10 @@ app.get(['/shopper-discover.php','/shopper-discover'],async(req,res)=>{
       if(!out||out.distanceKm>radius/1000)continue;
       if(!unique.has(p.id)||!unique.get(p.id).photoRef&&out.photoRef)unique.set(p.id,out);
     }
-    const entries=[...unique.values()].sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,40);
+    const entries=[...unique.values()].sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,80);
+    const photosAvailable=entries.filter(x=>x.photoRef).length;
     res.json({ok:true,provider:'google_places',category:kind,entries,
+      photoCount:photosAvailable,returned:entries.length,searchRadiusKm:radius/1000,
       attributions:[{name:'Google Maps',url:'https://maps.google.com/'}],
       warning:successful.length===responses.length?null:'Partial Google Places results',
       message:entries.length?null:'No matching places found. Select another area or expand the search.'});
