@@ -935,7 +935,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget nearbyCard(NearbyListing entry){
     final merchant=entry.merchant,directory=entry.directory;
     final d=area==null||entry.lat==null||entry.lng==null?null:km(area!.lat,area!.lng,entry.lat!,entry.lng!);
-    return InkWell(onTap:(){if(merchant!=null)openShop(merchant);else selectDirectory(directory!);},
+    return InkWell(key:ValueKey('nearby-'+(merchant?.id??directory!.id)),
+      onTap:(){if(merchant!=null)openShop(merchant);else selectDirectory(directory!);},
       borderRadius:BorderRadius.circular(18),
       child:Container(width:176,margin:const EdgeInsets.only(right:11,bottom:6),
         decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(18),

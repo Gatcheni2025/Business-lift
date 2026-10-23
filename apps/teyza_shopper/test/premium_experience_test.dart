@@ -71,6 +71,8 @@ void main(){
     });
   }
   testWidgets('Cart survives Home and Shops navigation',(tester) async {
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
     final merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
       'latitude':-29.8587,'longitude':31.0218,'products':[
         {'id':'bread','name':'Fresh bread','priceCents':1800,'stock':10}
@@ -79,8 +81,12 @@ void main(){
       enableBackgroundServices:false,catalogueLoader:() async=>[merchant],
       directoryLoader:(area,type,radius) async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-    await tester.tap(find.text('Corner Grocer').first);await tester.pumpAndSettle();
-    final add=find.text('+ Add');await tester.ensureVisible(add);await tester.tap(add);
+    final store=find.byKey(const ValueKey('nearby-test-store'));
+    await tester.scrollUntilVisible(store,180,scrollable:find.byType(Scrollable).first);
+    await tester.tap(store);await tester.pumpAndSettle();
+    final add=find.text('+ Add');
+    await tester.scrollUntilVisible(add,180,scrollable:find.byType(Scrollable).first);
+    await tester.tap(add);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));await tester.pumpAndSettle();
     await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
