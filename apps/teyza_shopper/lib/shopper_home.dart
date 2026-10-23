@@ -566,11 +566,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     showAllShops=true;
     search = '';
     category = 'All';
-    tab = 0;
+    tab = tab==1?1:0;
   });
 
   void selectDirectory(OnlineShop shop)=>setState((){
-    directorySelected=shop;selected=null;showAllShops=true;search='';tab=0;cart.clear();
+    directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;cart.clear();
   });
 
   Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
@@ -607,25 +607,25 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return options.isEmpty?null:options.first;
   }
 
+
   Widget _shopMode(String label,String description,IconData icon,
       String type,Color activeColor) {
     final active=discoveryType==type;
     return Expanded(child:Material(
-      color:active?activeColor:const Color(0xFFF1F5F3),
+      color:active?const Color(0xFFE3F7EB):const Color(0xFFF6F7F7),
       borderRadius:BorderRadius.circular(18),
-      child:InkWell(borderRadius:BorderRadius.circular(18),
+      child:InkWell(
+        borderRadius:BorderRadius.circular(18),
         onTap:()=>setDiscoveryType(type),
-        child:Container(height:89,padding:const EdgeInsets.all(12),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Icon(icon,color:active?Colors.white:deep,size:24),
-            const Spacer(),
-            Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
-              style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,
-                color:active?Colors.white:ink)),
-            Text(description,maxLines:1,overflow:TextOverflow.ellipsis,
-              style:TextStyle(fontSize:10,
-                color:active?Colors.white70:muted))
-          ])))));
+        child:Container(height:47,padding:const EdgeInsets.symmetric(horizontal:12),
+          alignment:Alignment.center,child:Row(mainAxisAlignment:MainAxisAlignment.center,
+            children:[
+              Icon(icon,color:active?green:muted,size:17),
+              const SizedBox(width:6),
+              Flexible(child:Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:11,fontWeight:FontWeight.w800,
+                  color:active?deep:muted)))
+            ])))));
   }
 
   Widget nearestShopCard() {
@@ -668,116 +668,148 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ]))));
   }
 
-  Widget locationHeader() => Container(
-    padding:const EdgeInsets.fromLTRB(16,14,16,14),
-    decoration:const BoxDecoration(color:Colors.white,
-      borderRadius:BorderRadius.vertical(bottom:Radius.circular(24))),
+
+  Widget locationHeader()=>Container(
+    color:Colors.white,
+    padding:const EdgeInsets.fromLTRB(16,2,16,14),
     child:Column(children:[
-      Row(children:[
-        _shopMode('SPAZA SHOPS','Your local favourites',
-          Icons.storefront_rounded,'spaza',const Color(0xFF05895F)),
-        const SizedBox(width:10),
-        _shopMode('OTHER RETAIL','Stores & wholesale',
-          Icons.store_mall_directory_rounded,'variety',deep),
-      ]),
-      const SizedBox(height:13),
-      nearestShopCard(),
-      const SizedBox(height:11),
-      InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(12),
-        child:Padding(padding:const EdgeInsets.symmetric(vertical:4,horizontal:2),
-          child:Row(children:[
-            const Icon(Icons.my_location_rounded,size:17,color:green),
-            const SizedBox(width:7),
-            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Text(_usingGps?'YOUR CURRENT LOCATION':'YOUR SHOPPING AREA',
-                style:const TextStyle(fontSize:9,fontWeight:FontWeight.w900,
-                  letterSpacing:.7,color:muted)),
-              Text(_usingGps?_currentLocationDetail:locationName,maxLines:1,
-                overflow:TextOverflow.ellipsis,
-                style:const TextStyle(fontSize:12,color:ink,fontWeight:FontWeight.w700))
-            ])),
-            if(geolocating)const SizedBox(width:15,height:15,
-              child:CircularProgressIndicator(strokeWidth:2)),
-            const Icon(Icons.keyboard_arrow_down_rounded,color:deep)
-          ]))),
-      if(selected==null && directorySelected==null)...[
-        const SizedBox(height:12),
+      InkWell(onTap:areaSheet,borderRadius:BorderRadius.circular(17),
+        child:Padding(padding:const EdgeInsets.fromLTRB(4,8,4,10),child:Row(children:[
+          Container(width:34,height:34,
+            decoration:BoxDecoration(color:const Color(0xFFE5F8EE),
+              borderRadius:BorderRadius.circular(12)),
+            child:const Icon(Icons.location_on_rounded,color:green,size:21)),
+          const SizedBox(width:10),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('SHOPPING NEAR',style:TextStyle(
+              color:muted,fontSize:9,fontWeight:FontWeight.w900,letterSpacing:1)),
+            Text(_usingGps?_currentLocationDetail:locationName,
+              maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:ink,fontSize:13,fontWeight:FontWeight.w800))
+          ])),
+          if(geolocating)const SizedBox(width:17,height:17,
+            child:CircularProgressIndicator(strokeWidth:2)),
+          const Icon(Icons.keyboard_arrow_down_rounded,color:green)
+        ]))),
+      if(selected==null&&directorySelected==null)...[
         TextField(key:ValueKey(discoveryType),
           onChanged:(value)=>setState(()=>search=value),
-          decoration:InputDecoration(hintText:discoveryType=='spaza'?
-              'Search spaza shops and groceries':'Search retailers, malls and products',
-            hintStyle:const TextStyle(fontSize:13,color:muted),
-            filled:true,fillColor:const Color(0xFFF3F6F4),
-            prefixIcon:const Icon(Icons.search_rounded,color:green),
+          decoration:InputDecoration(hintText:discoveryType=='spaza'
+            ?'Search nearby shops and groceries'
+            :'Search malls, China Mall and retail shops',
+            hintStyle:const TextStyle(color:muted,fontSize:13),
+            filled:true,fillColor:const Color(0xFFF5F7F7),
+            prefixIcon:const Icon(Icons.search_rounded,color:green,size:22),
             contentPadding:const EdgeInsets.symmetric(vertical:12),
-            border:OutlineInputBorder(borderRadius:BorderRadius.circular(15),
-              borderSide:BorderSide.none)))
+            border:OutlineInputBorder(borderRadius:BorderRadius.circular(18),
+              borderSide:BorderSide.none))),
+        const SizedBox(height:10),
+        Row(children:[
+          _shopMode('SPAZA SHOPS','Discover local shops',Icons.storefront_rounded,
+            'spaza',green),
+          const SizedBox(width:10),
+          _shopMode('OTHER RETAIL','China Mall & wholesalers',
+            Icons.store_mall_directory_rounded,'variety',deep),
+        ])
       ]
     ]));
 
-  void openBasket(){
-    Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
-      StatefulBuilder(builder:(routeContext,refresh)=>Scaffold(
-        appBar:AppBar(title:const Text('Your basket'),
-          backgroundColor:deep,foregroundColor:Colors.white),
-        body:basketPage(refresh:()=>refresh((){}))))));
-  }
 
+  void openBasket()=>navigateToTab(2);
   void openInbox(){
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
   }
+  void openOwnerWorkspace(){
+    Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
+      SellerWorkspacePage(session:session,openLogin:(){
+        Navigator.of(routeContext).pop();
+        if(mounted)setState(()=>tab=4);
+      })));
+  }
+  void navigateToTab(int index){
+    setState(() {
+      tab=index;
+      if(index==0){selected=null;directorySelected=null;showAllShops=false;}
+      if(index==1){selected=null;directorySelected=null;showAllShops=true;}
+    });
+  }
+  Widget _navItem(int index,String title,IconData active,IconData idle){
+    final chosen=tab==index;
+    return Expanded(child:InkWell(
+      onTap:()=>navigateToTab(index),borderRadius:BorderRadius.circular(15),
+      child:Semantics(button:true,selected:chosen,label:title,
+        child:Padding(padding:const EdgeInsets.symmetric(vertical:5),
+          child:Column(mainAxisSize:MainAxisSize.min,children:[
+            Icon(chosen?active:idle,color:chosen?green:muted,size:23),
+            const SizedBox(height:3),
+            Text(title,style:TextStyle(fontSize:10,fontWeight:chosen?
+              FontWeight.w900:FontWeight.w600,
+              color:chosen?green:muted))
+          ])))));
+  }
+  Widget premiumNavigation()=>Container(
+    decoration:const BoxDecoration(color:Colors.white,
+      boxShadow:[BoxShadow(color:Color(0x10010F1C),
+        blurRadius:20,offset:Offset(0,-3))]),
+    child:SafeArea(top:false,child:Padding(
+      padding:const EdgeInsets.fromLTRB(10,7,10,7),
+      child:Row(children:[
+        _navItem(0,'Home',Icons.home_rounded,Icons.home_outlined),
+        _navItem(1,'Shops',Icons.storefront_rounded,Icons.storefront_outlined),
+        Expanded(child:Center(child:InkWell(
+          onTap:openBasket,borderRadius:BorderRadius.circular(50),
+          child:Semantics(button:true,label:'Cart',child:Column(
+            mainAxisSize:MainAxisSize.min,children:[
+              Container(width:50,height:45,
+                decoration:BoxDecoration(color:green,
+                  borderRadius:BorderRadius.circular(18),
+                  boxShadow:const [BoxShadow(color:Color(0x353BB77E),
+                    blurRadius:13,offset:Offset(0,5))]),
+                child:Badge(isLabelVisible:count>0,
+                  label:Text(count>99?'99+':count.toString()),
+                  child:Icon(Icons.shopping_cart_rounded,color:Colors.white,size:24))),
+              const SizedBox(height:2),
+              Text('Cart',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900,
+                color:tab==2?green:ink))
+            ]))))),
+        _navItem(3,'Orders',Icons.receipt_long_rounded,Icons.receipt_long_outlined),
+        _navItem(4,'Account',Icons.person_rounded,Icons.person_outline_rounded)
+      ]))));
+
 
   @override
   Widget build(BuildContext context) {
     if(!_launchReady)return const ShopperLaunchScreen();
     return Scaffold(
-      appBar:AppBar(
-        backgroundColor:deep,foregroundColor:Colors.white,toolbarHeight:63,
-        titleSpacing:16,
+      appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,
+        elevation:0,toolbarHeight:60,titleSpacing:14,
         title:Semantics(
           label:'TEYZA, your neighbourhood shopping marketplace',
           child:SvgPicture.asset(
-            'assets/brand/teyza-sprout-wordmark-light.svg',
-            width:156,height:45,fit:BoxFit.contain,
-            alignment:Alignment.centerLeft),
-        ),
+            'assets/brand/teyza-sprout-wordmark.svg',
+            width:142,height:42,fit:BoxFit.contain,
+            alignment:Alignment.centerLeft)),
         actions:[
           IconButton(tooltip:'Messages',onPressed:openInbox,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
-              child:const Icon(Icons.chat_bubble_outline_rounded))),
-          IconButton(tooltip:'Your basket',onPressed:openBasket,
+              child:const Icon(Icons.notifications_none_rounded,size:25))),
+          IconButton(tooltip:'Your cart',onPressed:openBasket,
             icon:Badge(isLabelVisible:count>0,label:Text(count.toString()),
-              child:const Icon(Icons.shopping_bag_outlined))),
+              child:const Icon(Icons.shopping_bag_outlined,size:24))),
           const SizedBox(width:3)
         ]),
-      body:tab==4?SellerWorkspacePage(session:session,
-        openLogin:()=>setState(()=>tab=3)):
-        tab==3?ShopperAccountPanel(session:session):
-        tab==1?servicesPage():tab==2?deliveryPage():
+      body:tab==4?ShopperAccountPanel(session:session,
+          onOpenOwner:openOwnerWorkspace):
+        tab==3?ordersPage():
+        tab==2?basketPage():
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
           directorySelected!=null?directoryPage(directorySelected!):
-          showAllShops?allShopsPage():homePage())]),
-      bottomNavigationBar:NavigationBar(
-        height:72,backgroundColor:Colors.white,
-        indicatorColor:const Color(0xFFE1F6E7),
-        selectedIndex:tab,onDestinationSelected:(index){
-          setState(()=>tab=index);
-        },
-        destinations:const [
-          NavigationDestination(icon:Icon(Icons.storefront_outlined),
-            selectedIcon:Icon(Icons.storefront_rounded,color:green),label:'Shop'),
-          NavigationDestination(icon:Icon(Icons.grid_view_outlined),
-            selectedIcon:Icon(Icons.grid_view_rounded,color:green),label:'Services'),
-          NavigationDestination(icon:Icon(Icons.local_shipping_outlined),
-            selectedIcon:Icon(Icons.local_shipping_rounded,color:green),label:'Delivery'),
-          NavigationDestination(icon:Icon(Icons.person_outline_rounded),
-            selectedIcon:Icon(Icons.person_rounded,color:green),label:'Profile'),
-          NavigationDestination(icon:Icon(Icons.inventory_2_outlined),
-            selectedIcon:Icon(Icons.inventory_2_rounded,color:green),label:'Sell')
-        ]));
+          tab==1||showAllShops?allShopsPage():homePage())]),
+      bottomNavigationBar:premiumNavigation(),
+    );
   }
 
   Widget premiumGroceryHero()=>Container(
@@ -871,7 +903,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       const SizedBox(height:9),
       Material(color:deep,borderRadius:BorderRadius.circular(20),
         child:InkWell(borderRadius:BorderRadius.circular(20),
-          onTap:()=>setState(()=>tab=1),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute(
+            builder:(_)=>Scaffold(
+              appBar:AppBar(title:const Text('Shop services')),
+              body:servicesPage()))),
           child:Padding(padding:const EdgeInsets.all(18),
             child:Row(children:[
               const Icon(Icons.room_service_rounded,color:Color(0xFF79E5C5),size:34),
@@ -1293,7 +1328,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           icon:const Icon(Icons.chat_bubble_outline),
           label:const Text('Chat with this shop'),onPressed:(){
             if(session.idToken==null||!session.emailVerified) {
-              setState(()=>tab=3);
+              setState(()=>tab=4);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content:Text('Sign in and verify your account to chat with this shop.')));
               return;
@@ -1358,7 +1393,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     await session.refreshEmailStatus();
     if(session.idToken==null||!session.emailVerified) {
       if(!mounted)return;
-      setState(()=>tab=3);
+      setState(()=>tab=4);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:Text('Please verify your shopper email before requesting an order.')));
       return;
