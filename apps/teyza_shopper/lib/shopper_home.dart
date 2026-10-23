@@ -1625,11 +1625,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ]),
             const Divider(height:27),
             Row(children:[
-              const Text('Estimated total',
-                style:TextStyle(color:ink,fontSize:16,fontWeight:FontWeight.w900)),
-              const Spacer(),
-              Text(rand(total),style:const TextStyle(
-                color:deep,fontSize:23,fontWeight:FontWeight.w900))
+              const Expanded(child:Text('Estimated total',
+                style:TextStyle(color:ink,fontSize:16,fontWeight:FontWeight.w900))),
+              const SizedBox(width:12),
+              Flexible(child:FittedBox(fit:BoxFit.scaleDown,alignment:Alignment.centerRight,
+                child:Text(rand(total),style:const TextStyle(
+                  color:deep,fontSize:23,fontWeight:FontWeight.w900))))
             ])
           ])),
         const SizedBox(height:15),
@@ -1655,7 +1656,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     const Text('TEYZA Shopper',style:TextStyle(
       fontWeight:FontWeight.w900,fontSize:28),textAlign:TextAlign.center),
     const SizedBox(height:10),
-    const Text('Discover spaza shops near your basketShop area and shop their listed groceries.',
+    const Text('Discover spaza shops in your area and shop their listed groceries.',
       textAlign:TextAlign.center),
     const SizedBox(height:18),
     Card(child:ListTile(leading:const Icon(Icons.location_on_outlined),
