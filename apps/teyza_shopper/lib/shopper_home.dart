@@ -980,7 +980,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     onRefresh:() async {
       await Future.wait<void>([load(),reloadOnline()]);
     },
-    child:ListView(padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
+    child:ListView(key:const PageStorageKey<String>('shopper-home'),
+      padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
       if(locationWarning!=null)Card(color:const Color(0xFFFFF2DE),
         child:Padding(padding:const EdgeInsets.all(12),child:Text(locationWarning!))),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
@@ -1322,7 +1323,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   Widget allShopsPage()=>RefreshIndicator(onRefresh:reloadOnline,
-    child:ListView.builder(padding:const EdgeInsets.all(16),
+    child:ListView.builder(key:PageStorageKey<String>('shopper-shops-'+discoveryType),
+      padding:const EdgeInsets.all(16),
       itemCount:nearbyListings.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           section(discoveryType=='spaza'?'Nearby spaza shops':'Other retail nearby',
