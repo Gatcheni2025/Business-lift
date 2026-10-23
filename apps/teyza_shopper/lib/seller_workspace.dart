@@ -22,7 +22,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   SellerShop? shop;
   List<SellerDraft> drafts=[];
   SellerFirestore? api;
-  String? loadedUid,error;
+  String? loadedUid,error,draftError,accessReference;
   bool loading=false,busy=false,productsView=false;
   Map<String,String> productPhotos={};
   @override void initState(){
@@ -37,11 +37,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
-        loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;
+        loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
       });
       return;
     }
@@ -51,7 +51,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   }
   Future<void> load() async{
     if(loading || !mounted)return;
-    setState((){loading=true;error=null;});
+    setState((){loading=true;error=null;draftError=null;accessReference=null;});
     final requestedUid=widget.session.userId;
     try{
       final token=await widget.session.freshIdToken();
@@ -60,13 +60,25 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
       if(uid!=requestedUid)return;
       final nextApi=widget.apiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token);
       final nextShop=await nextApi.shop();
-      final nextDrafts=nextShop?.hasRegisteredCategory==true?await nextApi.drafts():<SellerDraft>[];
+      var nextDrafts=<SellerDraft>[];
+      String? nextDraftError,nextReference;
+      if(nextShop?.hasRegisteredCategory==true){
+        try{nextDrafts=await nextApi.drafts();}
+        catch(e){
+          nextDraftError=e is SellerAccessException?e.toString():
+            'Your products could not be loaded. Please retry.';
+          if(e is SellerAccessException)nextReference=e.reference;
+        }
+      }
       if(mounted&&widget.session.userId==uid&&widget.session.idToken!=null)setState((){
         api=nextApi;shop=nextShop;drafts=nextDrafts;loadedUid=uid;
+        draftError=nextDraftError;accessReference=nextReference;
       });
     }catch(e){
       if(mounted&&widget.session.userId==requestedUid)setState((){
         error=e.toString().replaceFirst('Bad state: ','');loadedUid=requestedUid;
+        api=null;shop=null;drafts=[];productPhotos={};draftError=null;
+        accessReference=e is SellerAccessException?e.reference:null;
       });
     }finally{
       if(mounted){
@@ -139,10 +151,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> loadAfterSave() async{
+    final uid=widget.session.userId;
     final token=await widget.session.freshIdToken();
-    final current=SellerFirestore(uid:widget.session.userId!,token:token);
+    if(uid==null||widget.session.userId!=uid)return;
+    final current=widget.apiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token);
     final items=await current.drafts();
-    if(mounted)setState((){drafts=items;api=current;});
+    if(mounted&&widget.session.userId==uid)setState((){drafts=items;api=current;draftError=null;accessReference=null;});
   }
   Future<void> _delete(SellerDraft item) async{
     if(busy)return;
@@ -263,7 +277,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
         const SizedBox(height:10),
         if(error!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(error!,style:const TextStyle(color:Colors.red)),
-          TextButton(onPressed:load,child:const Text('Retry'))
+          if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
+          TextButton(onPressed:load,child:const Text('Retry')),
+          TextButton(onPressed:() async{
+            await session.signOut();if(mounted)widget.openLogin();
+          },child:const Text('Sign in with another account'))
         ])),
         if(error==null&&(shop==null||!shop!.hasRegisteredCategory))_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('No registered shop found',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
@@ -290,12 +308,17 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             Text(shop!.isLive?'Customers can browse your published shop.':
               'Set up your products and services while your shop awaits approval.'),
           ])),
+          if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
+            if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
+            TextButton(onPressed:load,child:const Text('Retry products'))
+          ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy?null:()=>_edit(),
+            FilledButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
-            SellerDashboard(productCount:drafts.length,onProducts:openProducts,
+            SellerDashboard(productCount:draftError==null?drafts.length:null,onProducts:openProducts,
               onChat:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session))),
               onOrders:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(
                 appBar:AppBar(title:const Text('Shop orders')),body:ShopOrdersPanel(session:session,asOwner:true)))),
@@ -307,9 +330,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
                 fontWeight:FontWeight.bold))),
               IconButton(onPressed:busy?null:load,icon:const Icon(Icons.refresh))
             ]),
-            Text(drafts.isEmpty?'No products saved yet.':'Private drafts: '+drafts.length.toString()),
+            Text(draftError!=null?'Products are temporarily unavailable.':
+              drafts.isEmpty?'No products saved yet.':'Private drafts: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy?null:()=>_edit(),
+            FilledButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             for(final item in drafts)
               Column(children:[

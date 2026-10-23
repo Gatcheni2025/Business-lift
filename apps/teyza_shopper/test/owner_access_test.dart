@@ -71,6 +71,50 @@ void main(){
     expect(find.text('Saved Shop'),findsNothing);expect(find.text('Shop owner sign in'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
   });
+  testWidgets('Product permission failure preserves the dashboard and retry restores products',(tester) async{
+    final session=OwnerSession();var blocked=true;
+    final client=MockClient((r) async=>r.url.path.contains('teyzaSellerAccounts')?
+      account('spaza'):http.Response('{}',blocked?403:200));
+    await tester.pumpWidget(MaterialApp(home:SellerWorkspacePage(session:session,openLogin:(){},
+      apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client))));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved Shop'),findsOneWidget);
+    expect(find.text('Retry products'),findsOneWidget);
+    expect(find.text('Support reference: SELLER_PRODUCTS_ACCESS'),findsOneWidget);
+    expect(find.text('No registered shop found'),findsNothing);
+    expect(find.textContaining('0 product drafts'),findsNothing);
+    final add=find.widgetWithText(FilledButton,'Add a product');
+    expect(tester.widget<FilledButton>(add).onPressed,isNull);
+    blocked=false;await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();
+    expect(find.text('Retry products'),findsNothing);
+    expect(tester.widget<FilledButton>(add).onPressed,isNotNull);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
+  });
+  testWidgets('Signing out during a denied product read clears owner details',(tester) async{
+    final session=OwnerSession();final reply=Completer<http.Response>();
+    final client=MockClient((r) async=>r.url.path.contains('teyzaSellerAccounts')?
+      account('retail'):reply.future);
+    await tester.pumpWidget(MaterialApp(home:SellerWorkspacePage(session:session,openLogin:(){},
+      apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client))));
+    await tester.pump();await tester.pump();
+    await session.signOut();reply.complete(http.Response('{}',403));await tester.pumpAndSettle();
+    expect(find.text('Saved Shop'),findsNothing);
+    expect(find.text('Retry products'),findsNothing);
+    expect(find.text('Shop owner sign in'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
+  });
+  testWidgets('Profile access failure can return to login with a different account',(tester) async{
+    final session=OwnerSession();var opened=false;
+    final client=MockClient((_) async=>http.Response('{}',403));
+    await tester.pumpWidget(MaterialApp(home:SellerWorkspacePage(session:session,openLogin:(){opened=true;},
+      apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client))));
+    await tester.pumpAndSettle();
+    expect(find.text('Support reference: SELLER_PROFILE_ACCESS'),findsOneWidget);
+    await tester.tap(find.text('Sign in with another account'));await tester.pumpAndSettle();
+    expect(opened,isTrue);expect(session.userId,isNull);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
+  });
   test('Unknown saved category is never silently classified as a Spaza',(){
     final shop=SellerShop.fromFields({'shopName':'Unknown'});
     expect(shop.hasRegisteredCategory,isFalse);expect(shop.categoryLabel,'Shop setup required');

@@ -5,6 +5,17 @@ import 'package:http/http.dart' as http;
 // and public listing are intentionally NOT writable by this client.
 const teyzaSellerProject='business-lift-3c19c';
 
+class SellerAccessException implements Exception {
+  final String operation;
+  const SellerAccessException(this.operation);
+  String get reference=>operation=='shop'?'SELLER_PROFILE_ACCESS':
+    operation=='drafts'?'SELLER_PRODUCTS_ACCESS':'SELLER_SAVE_ACCESS';
+  @override String toString()=>operation=='shop'?
+    'Your shop details could not be opened. Retry or sign in with the account used to register your shop.':
+    operation=='drafts'?'Your products could not be loaded. The rest of your shop dashboard is still available.':
+    'Your changes could not be saved. Please retry or contact Teyza support.';
+}
+
 class SellerShop {
   final String name,category,address,approvalStatus,listingStatus,phone;
   const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone=''});
@@ -64,9 +75,9 @@ class SellerFirestore {
       return await http.Response.fromStream(stream);
     }finally{if(client==null)httpClient.close();}
   }
-  Map<String,dynamic> _parse(http.Response response){
+  Map<String,dynamic> _parse(http.Response response,{String operation='save'}){
     if(response.statusCode==401)throw StateError('Session expired. Sign in again.');
-    if(response.statusCode==403)throw StateError('Permission denied. Check private shop rules.');
+    if(response.statusCode==403)throw SellerAccessException(operation);
     if(response.statusCode<200||response.statusCode>=300){
       throw StateError('Shop service unavailable (HTTP '+response.statusCode.toString()+').');
     }
@@ -77,7 +88,7 @@ class SellerFirestore {
   Future<SellerShop?> shop() async{
     final response=await _request('GET',_document('teyzaSellerAccounts/'+uid));
     if(response.statusCode==404)return null;
-    final data=_parse(response);
+    final data=_parse(response,operation:'shop');
     return SellerShop.fromFields(sellerDecodeFields(data['fields']));
   }
   Future<void> saveProfile(String name,String address,String phone) async {
@@ -98,7 +109,7 @@ class SellerFirestore {
     final response=await _request('GET',_document(
       'teyzaDraftProducts/'+uid+'/items',{'pageSize':'100'}));
     if(response.statusCode==404)return [];
-    final data=_parse(response);
+    final data=_parse(response,operation:'drafts');
     final docs=data['documents'];
     if(docs is! List)return [];
     final output=<SellerDraft>[];

@@ -25,6 +25,15 @@ void main(){
   final client=MockClient((_) async=>http.Response('{}',404));
   expect(await SellerFirestore(uid:owner,token:'t',client:client).shop(),isNull);
  });
+ test('Shop and product access failures identify the blocked operation',() async{
+  final client=MockClient((_) async=>http.Response('{}',403));
+  final api=SellerFirestore(uid:owner,token:'t',client:client);
+  await expectLater(api.shop(),throwsA(isA<SellerAccessException>()
+    .having((e)=>e.reference,'reference','SELLER_PROFILE_ACCESS')));
+  await expectLater(api.drafts(),throwsA(isA<SellerAccessException>()
+    .having((e)=>e.reference,'reference','SELLER_PRODUCTS_ACCESS')));
+  client.close();
+ });
  test('Owner creates only a private draft and does not publish to shopper catalogue',() async{
   final client=MockClient((req) async{
     expect(req.method,'POST');

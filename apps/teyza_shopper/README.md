@@ -1,6 +1,8 @@
-# Teyza Shopper & Shop Owner 1.0.7 (17)
+# Teyza Shopper & Shop Owner 1.0.8 (18)
 
 Premium local-shop discovery, photographic Everyday Essentials and separate seller/shopper dashboards. Shopper navigation remains Home, Shops, Cart, Orders and Account.
+
+Seller read failures now distinguish profile access from private product access. A product-list error leaves the authenticated owner's dashboard available without claiming there are zero products. See [seller access repair](../../tools/seller-access/README-START-HERE.md) to merge scoped rules into the current published rules; the app update alone does not deploy Firestore rules.
 
 Owners manage their profile and private product/photo drafts, submit a catalogue for review, chat with shoppers, manage order requests, set delivery/collection/cash-back services and trading hours, save a stock shopping list, open supermarket ordering websites, request a finance follow-up and submit a private camera selfie for owner review.
 

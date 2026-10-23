@@ -6,6 +6,8 @@ on:
       - 'apps/teyza_shopper/**'
       - 'services/teyza-mobile-v39/**'
       - 'firebase.teyza-mobile-v39.json'
+      - 'tools/seller-access/**'
+      - 'scripts/package_teyza_seller_access.py'
       - '.github/workflows/teyza-mobile-release.yml'
   workflow_dispatch:
     inputs:
@@ -34,6 +36,26 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test seller rules repair and private owner access in Firestore emulator
+        working-directory: tools/seller-access
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run test:rules
+      - name: Package scoped seller access repair
+        run: python3 scripts/package_teyza_seller_access.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-seller-access-r310-repair
+          path: TEYZA_SELLER_ACCESS_R310_REPAIR.zip
+          retention-days: 30
       - name: Check mobile service authorization and validation
         if: runner.os == 'Linux'
         run: node --test services/teyza-mobile-v39/*.test.js

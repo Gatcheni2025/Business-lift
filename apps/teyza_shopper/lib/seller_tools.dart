@@ -14,7 +14,7 @@ enum SellerTool {services,hours,finance,stock,verification}
 const sellerToolNames={SellerTool.services:'Delivery & shop services',SellerTool.hours:'Opening & closing times',
   SellerTool.finance:'Finance & stock credit',SellerTool.stock:'Order stock',SellerTool.verification:'Owner verification'};
 class SellerDashboard extends StatelessWidget {
-  final int productCount;
+  final int? productCount;
   final VoidCallback onProducts,onChat,onOrders,onProfile;
   final ValueChanged<SellerTool> onTool;
   const SellerDashboard({super.key,required this.productCount,required this.onProducts,
@@ -32,7 +32,8 @@ class SellerDashboard extends StatelessWidget {
     ];
     return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       const Text('Your shop dashboard',style:TextStyle(fontSize:24,color:ownerInk,fontWeight:FontWeight.w800)),
-      const SizedBox(height:5),Text('$productCount product drafts · everything you need to manage your shop',
+      const SizedBox(height:5),Text(productCount==null?'Everything you need to manage your shop':
+        '$productCount product drafts · everything you need to manage your shop',
         style:const TextStyle(color:Color(0xFF6C7880),height:1.4)),
       const SizedBox(height:16),
       LayoutBuilder(builder:(context,constraints)=>GridView.count(
