@@ -203,8 +203,9 @@ class _AccountState extends State<ShopperAccountPanel> {
               title:Text(widget.session.emailVerified?'Email verified':'Verify your email'),
               subtitle:Text(widget.session.emailVerified?
                 'Your Teyza email has been confirmed.' :
-                'Required for shop management and order enquiries.'),
+                'Confirm your email for account updates. Sellers also verify their mobile during setup.'),
             ),
+            if(widget.session.phoneVerified)ListTile(leading:const Icon(Icons.verified_outlined,color:Color(0xFF078E66)),title:const Text('Mobile number verified'),subtitle:Text(widget.session.phoneNumber??'')),
             if (!widget.session.emailVerified) ...[
               FilledButton.icon(
                 onPressed:working?null:() async {

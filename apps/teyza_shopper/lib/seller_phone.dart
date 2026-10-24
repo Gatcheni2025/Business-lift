@@ -15,6 +15,7 @@ String normalizeMobile(String value){
 String phoneError(Object error){
   if(error is FirebaseAuthException){
     switch(error.code){
+      case 'credential-already-in-use':case 'account-exists-with-different-credential':return 'This mobile number belongs to another account. Sign in to that account or contact Teyza support.';
       case 'invalid-phone-number':return 'Check your mobile number and country code.';
       case 'too-many-requests':case 'quota-exceeded':return 'SMS verification is temporarily limited. Please try again later.';
       case 'operation-not-allowed':case 'app-not-authorized':case 'invalid-app-credential':case 'missing-client-identifier':case 'captcha-check-failed':
