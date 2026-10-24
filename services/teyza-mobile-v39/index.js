@@ -4,6 +4,7 @@ const {onSchedule}=require('firebase-functions/v2/scheduler');
 const {onDocumentWritten,onDocumentCreated}=require('firebase-functions/v2/firestore');
 const {createNotifications,notificationFor}=require('./notifications');
 const catalogue=require('./catalogue');
+const {expiredIdentity}=require('./verification-cleanup');
 const {productPhoto}=require('./catalogue-photos');
 const admin=require('firebase-admin');
 const sharp=require('sharp');
@@ -113,8 +114,8 @@ exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:
     if(!data.objectPath?.startsWith('teyza-private/mobile-verification/'+record.id+'/'))continue;
     await bucket.file(data.objectPath).delete({ignoreNotFound:true});
     await db.runTransaction(async tx=>{const current=await tx.get(record.ref);
-      if(current.exists&&current.data().evidenceId===data.evidenceId&&current.data().expiresAt<=Date.now())
-        tx.update(record.ref,{objectPath:admin.firestore.FieldValue.delete(),detailsEncrypted:admin.firestore.FieldValue.delete(),photoRemovedAt:Date.now()});
+      const update=expiredIdentity(current.exists?current.data():null,data,Date.now(),admin.firestore.FieldValue.delete());
+      if(update)tx.update(record.ref,update);
     });
   }
   const devices=await db.collection('teyzaMobileDevices').where('expiresAt','<=',Date.now()).limit(500).get();
