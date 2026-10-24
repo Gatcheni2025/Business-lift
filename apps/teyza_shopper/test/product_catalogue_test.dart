@@ -80,6 +80,7 @@ void main(){
     await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(320,700),textScaler:TextScaler.linear(1.5)),
       child:SellerProductPickerPage(session:session,existingIds:{}))));
     await tester.pumpAndSettle();await tester.enterText(find.byType(TextField).first,'Milk');await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Full cream milk · 500 ml'),120,scrollable:find.byType(Scrollable).first);
     expect(find.text('Full cream milk · 500 ml'),findsOneWidget);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });

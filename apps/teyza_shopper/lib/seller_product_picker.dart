@@ -90,6 +90,11 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F9F7),
     appBar:AppBar(title:Text(reviewing?'Set your prices & stock':'Choose products'),
       leading:reviewing?BackButton(onPressed:saving?null:()=>setState(()=>reviewing=false)):null),
+    bottomNavigationBar:accountChanged?null:SafeArea(top:false,child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,12),
+      child:FilledButton.icon(onPressed:saving||selected.isEmpty?null:reviewing?save:()=>setState(()=>reviewing=true),
+        icon:saving?const SizedBox.square(dimension:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):
+          Icon(reviewing?Icons.check:Icons.arrow_forward),
+        label:Text(saving?'Saving…':reviewing?'Add ${selected.length} to my shop':'Review ${selected.length} selected')))),
     body:accountChanged?const Center(child:Padding(padding:EdgeInsets.all(24),child:Text('Your account changed. Close this page and sign in again.'))):
       FutureBuilder<List<CatalogueProduct>>(future:future,builder:(context,snapshot){
         if(snapshot.hasError)return const Center(child:Text('Product catalogue could not be opened. Please reopen this page.'));
@@ -97,40 +102,36 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
         final all=snapshot.data!;
         final categories=['All',...all.map((p)=>p.category).toSet()];
         final rows=all.where((p)=>p.matches(query,category)).toList();
-        return Column(children:[
-          Padding(padding:const EdgeInsets.fromLTRB(16,14,16,8),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(reviewing?'Make this range yours':'${all.length} everyday products',style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
-            const SizedBox(height:5),Text(reviewing?
-              'Enter the price per pack and the number of packs your shop has. Active, approved shops publish their selected range.':
-              'Choose what your shop sells. Reference photos show the product type; brands and packaging may differ.',
-              style:const TextStyle(color:Color(0xFF6C7880),height:1.35)),
-            if(error!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text(error!,style:const TextStyle(color:Colors.red))),
-            if(!reviewing)...[
-              const SizedBox(height:14),TextField(onChanged:(value)=>setState(()=>query=value),
-                decoration:const InputDecoration(hintText:'Search bread, milk, rice, soap…',prefixIcon:Icon(Icons.search),border:OutlineInputBorder())),
-              const SizedBox(height:10),SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
-                for(final group in categories)Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(group),
-                  selected:category==group,onSelected:(_)=>setState(()=>category=group)))
-              ]))
-            ]
-          ])),
-          Expanded(child:reviewing?ListView(padding:const EdgeInsets.fromLTRB(12,0,12,12),children:[
+        final compact=MediaQuery.sizeOf(context).width<340||MediaQuery.textScalerOf(context).scale(14)>18;
+        return CustomScrollView(slivers:[
+          SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,14,16,8),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(reviewing?'Make this range yours':'${all.length} everyday products',style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
+              const SizedBox(height:5),Text(reviewing?
+                'Enter the price per pack and the number of packs your shop has. Active, approved shops publish their selected range.':
+                'Choose what your shop sells. Reference photos show the product type; brands and packaging may differ.',
+                style:const TextStyle(color:Color(0xFF6C7880),height:1.35)),
+              if(error!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text(error!,style:const TextStyle(color:Colors.red))),
+              if(!reviewing)...[
+                const SizedBox(height:14),TextField(onChanged:(value)=>setState(()=>query=value),
+                  decoration:const InputDecoration(hintText:'Search bread, milk, rice, soap…',prefixIcon:Icon(Icons.search),border:OutlineInputBorder())),
+                const SizedBox(height:10),SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
+                  for(final group in categories)Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(group),
+                    selected:category==group,onSelected:(_)=>setState(()=>category=group)))
+                ]))
+              ]
+            ]))),
+          if(reviewing)SliverPadding(padding:const EdgeInsets.fromLTRB(12,0,12,12),sliver:SliverList.list(children:[
             for(final entry in selected.values)reviewEntry(entry),
             const Padding(padding:EdgeInsets.all(12),child:Text('Public prices appear on eligible listing plans. Custom products and uploaded photos continue through catalogue review.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
-          ]):rows.isEmpty?const Center(child:Text('No matching products. Try another search.')):
-            LayoutBuilder(builder:(context,constraints){
-              final compact=constraints.maxWidth<340||MediaQuery.textScalerOf(context).scale(14)>18;
-              if(compact)return ListView(padding:const EdgeInsets.all(12),children:rows.map((p)=>productCard(p,true)).toList());
-              return GridView.builder(padding:const EdgeInsets.all(16),itemCount:rows.length,
-                gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:constraints.maxWidth>700?4:2,
-                  mainAxisExtent:225,mainAxisSpacing:12,crossAxisSpacing:12),
-                itemBuilder:(_,index)=>productCard(rows[index],false));
-            })),
-          SafeArea(top:false,child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,12),child:SizedBox(width:double.infinity,
-            child:FilledButton.icon(onPressed:saving||selected.isEmpty?null:reviewing?save:()=>setState(()=>reviewing=true),
-              icon:saving?const SizedBox.square(dimension:18,child:CircularProgressIndicator(strokeWidth:2)):Icon(reviewing?Icons.check:Icons.arrow_forward),
-              label:Text(saving?'Saving…':reviewing?'Add ${selected.length} to my shop':'Review ${selected.length} selected')))))
+          ]))
+          else if(rows.isEmpty)const SliverFillRemaining(hasScrollBody:false,child:Center(child:Text('No matching products. Try another search.')))
+          else if(compact)SliverPadding(padding:const EdgeInsets.all(12),sliver:SliverList.list(children:rows.map((p)=>productCard(p,true)).toList()))
+          else SliverPadding(padding:const EdgeInsets.all(16),sliver:SliverLayoutBuilder(builder:(context,constraints)=>SliverGrid(
+            gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:constraints.crossAxisExtent>700?4:2,
+              mainAxisExtent:225,mainAxisSpacing:12,crossAxisSpacing:12),
+            delegate:SliverChildBuilderDelegate((_,index)=>productCard(rows[index],false),childCount:rows.length))))
         ]);
       }));
 }

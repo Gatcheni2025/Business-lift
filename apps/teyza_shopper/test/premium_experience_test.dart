@@ -73,7 +73,7 @@ void main(){
   testWidgets('Cart survives Home and Shops navigation',(tester) async {
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
-    final merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
+    var merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
       'latitude':-29.8587,'longitude':31.0218,'products':[
         {'id':'bread','name':'Fresh bread','priceCents':1800,'stock':10}
       ]});
@@ -100,6 +100,15 @@ void main(){
     expect(find.text('Items from Corner Grocer'),findsOneWidget);
     expect(find.text('Fresh bread'),findsOneWidget);
     expect(find.text('Unit R18.00'),findsOneWidget);
+    merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
+      'latitude':-29.8587,'longitude':31.0218,'products':[
+        {'id':'bread','name':'Fresh bread','priceCents':1900,'stock':8}
+      ]});
+    await tester.tap(find.text('Home'));await tester.pumpAndSettle();
+    final refreshed=tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator).first).show();
+    await tester.pumpAndSettle();await refreshed;
+    await tester.tap(find.text('Cart'));await tester.pumpAndSettle();
+    expect(find.text('Unit R19.00'),findsOneWidget);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

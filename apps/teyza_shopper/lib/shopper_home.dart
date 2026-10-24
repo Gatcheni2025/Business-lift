@@ -379,10 +379,26 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     try {
       final next = widget.catalogueLoader!=null?await widget.catalogueLoader!():await fetchCatalogue();
       if (!mounted||request!=_catalogueRequest) return;
+      var basketChanged=false;
       setState(() {
         live = next; loading = false;
         if(selected!=null){final matches=next.where((s)=>s.id==selected!.id);selected=matches.isEmpty?null:matches.first;}
+        if(basketShop!=null){
+          final matches=next.where((s)=>s.id==basketShop!.id);
+          final current=matches.isEmpty?null:matches.first;
+          for(final id in cart.keys.toList()){
+            final updated=current?.products.where((p)=>p.id==id).toList()??<Product>[];
+            final previous=basketShop!.products.where((p)=>p.id==id).toList();
+            if(updated.isEmpty||!updated.first.inStock||updated.first.stock==0){cart.remove(id);basketChanged=true;}
+            else{
+              if((cart[id]??0)>updated.first.stock){cart[id]=updated.first.stock;basketChanged=true;}
+              if(previous.isNotEmpty&&previous.first.priceCents!=updated.first.priceCents)basketChanged=true;
+            }
+          }
+          basketShop=current;
+        }
       });
+      if(basketChanged)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your basket was updated to the shop’s current prices and availability.')));
     } catch (_) {
       if (!mounted||request!=_catalogueRequest) return;
       setState(() { loading = false; catalogueError = 'Live shops are temporarily unavailable.'; });
@@ -661,7 +677,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
     if(!mounted)return;
     setState((){
-      if(delta>0&&basketShop?.id!=source.id){cart.clear();basketShop=source;}
+      if(delta>0){if(basketShop?.id!=source.id)cart.clear();basketShop=source;}
       final next=(cart[p.id]??0)+delta;
       if(next<=0)cart.remove(p.id);
       else if(next<=p.stock)cart[p.id]=next;
