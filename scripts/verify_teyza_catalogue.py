@@ -1,5 +1,5 @@
 from pathlib import Path
-import json,struct
+import json,struct,re
 root=Path(__file__).resolve().parents[1]
 backend=root/'services/teyza-mobile-v39'
 app=root/'apps/teyza_shopper/assets/catalogue'
@@ -10,6 +10,12 @@ assert len({p['id'] for p in catalogue['products']})==184
 for product in catalogue['products']:
     assert product['photo'] in catalogue['photos']
     assert not any(key in product for key in ['priceCents','stockQty','ownerUid'])
+native=(root/'apps/teyza_shopper/lib/product_photo_bounds.dart').read_text()
+native_bounds={name:[int(x) for x in values.split(',')] for name,values in re.findall(r"'([^']+)': \[([0-9, ]+)\]",native)}
+assert native_bounds=={key:frame['bounds'] for key,frame in catalogue['photos'].items()}
+for frame in catalogue['photos'].values():
+    left,top,width,height=frame['bounds']
+    assert left>=0 and top>=0 and width>0 and height>0 and left+width<=1024 and top+height<=1536
 for name in ['fresh-pantry.png','pantry-household.png']:
     image=(app/name).read_bytes()
     assert image==(backend/'catalogue-images'/name).read_bytes()

@@ -7,242 +7,530 @@
     "tomatoes": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        3,
+        23,
+        253,
+        217
+      ]
     },
     "potatoes": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        256,
+        20,
+        252,
+        213
+      ]
     },
     "onions": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        512,
+        2,
+        251,
+        233
+      ]
     },
     "bananas": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        769,
+        10,
+        254,
+        229
+      ]
     },
     "apples": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        5,
+        242,
+        251,
+        224
+      ]
     },
     "oranges": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        256,
+        236,
+        255,
+        234
+      ]
     },
     "cabbage": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        521,
+        235,
+        239,
+        234
+      ]
     },
     "carrots": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        768,
+        263,
+        256,
+        204
+      ]
     },
     "spinach": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        1,
+        466,
+        255,
+        252
+      ]
     },
     "eggs": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        257,
+        470,
+        255,
+        245
+      ]
     },
     "milk": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        537,
+        469,
+        183,
+        252
+      ]
     },
     "yogurt": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        783,
+        477,
+        241,
+        241
+      ]
     },
     "white-bread": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        0,
+        718,
+        256,
+        231
+      ]
     },
     "brown-bread": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        256,
+        727,
+        254,
+        216
+      ]
     },
     "rolls": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        512,
+        735,
+        256,
+        194
+      ]
     },
     "chicken": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        768,
+        726,
+        256,
+        212
+      ]
     },
     "beef": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        0,
+        963,
+        256,
+        223
+      ]
     },
     "boerewors": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        256,
+        961,
+        256,
+        223
+      ]
     },
     "rice": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        512,
+        930,
+        255,
+        270
+      ]
     },
     "maize": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        771,
+        938,
+        251,
+        263
+      ]
     },
     "flour": {
       "atlas": "fresh-pantry.png",
       "column": 0,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        0,
+        1187,
+        256,
+        314
+      ]
     },
     "sugar": {
       "atlas": "fresh-pantry.png",
       "column": 1,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        257,
+        1194,
+        245,
+        288
+      ]
     },
     "oats": {
       "atlas": "fresh-pantry.png",
       "column": 2,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        512,
+        1200,
+        241,
+        284
+      ]
     },
     "pasta": {
       "atlas": "fresh-pantry.png",
       "column": 3,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        768,
+        1201,
+        245,
+        288
+      ]
     },
     "beans": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        43,
+        0,
+        204,
+        252
+      ]
     },
     "peanut-butter": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        300,
+        2,
+        196,
+        248
+      ]
     },
     "oil": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        585,
+        0,
+        136,
+        248
+      ]
     },
     "tea": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 0
+      "row": 0,
+      "bounds": [
+        778,
+        40,
+        242,
+        207
+      ]
     },
     "coffee": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        46,
+        253,
+        193,
+        258
+      ]
     },
     "water": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        332,
+        250,
+        124,
+        257
+      ]
     },
     "soft-drink": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        585,
+        248,
+        135,
+        261
+      ]
     },
     "crisps": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 1
+      "row": 1,
+      "bounds": [
+        768,
+        281,
+        256,
+        226
+      ]
     },
     "soap": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        7,
+        535,
+        249,
+        216
+      ]
     },
     "washing-powder": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        263,
+        510,
+        249,
+        251
+      ]
     },
     "dishwashing": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        512,
+        509,
+        219,
+        260
+      ]
     },
     "toilet-paper": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 2
+      "row": 2,
+      "bounds": [
+        776,
+        518,
+        246,
+        239
+      ]
     },
     "biscuits": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        7,
+        770,
+        249,
+        231
+      ]
     },
     "sweets": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        278,
+        771,
+        228,
+        227
+      ]
     },
     "pilchards": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        512,
+        774,
+        256,
+        220
+      ]
     },
     "tomato-sauce": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 3
+      "row": 3,
+      "bounds": [
+        768,
+        757,
+        216,
+        248
+      ]
     },
     "lotion": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        60,
+        1007,
+        157,
+        237
+      ]
     },
     "toothpaste": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        260,
+        1069,
+        252,
+        171
+      ]
     },
     "shampoo": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        571,
+        1003,
+        158,
+        241
+      ]
     },
     "nappies": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 4
+      "row": 4,
+      "bounds": [
+        770,
+        1005,
+        250,
+        237
+      ]
     },
     "pads": {
       "atlas": "pantry-household.png",
       "column": 0,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        6,
+        1244,
+        250,
+        269
+      ]
     },
     "batteries": {
       "atlas": "pantry-household.png",
       "column": 1,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        309,
+        1287,
+        198,
+        183
+      ]
     },
     "notebook": {
       "atlas": "pantry-household.png",
       "column": 2,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        519,
+        1244,
+        249,
+        266
+      ]
     },
     "pens": {
       "atlas": "pantry-household.png",
       "column": 3,
-      "row": 5
+      "row": 5,
+      "bounds": [
+        774,
+        1273,
+        249,
+        229
+      ]
     }
   },
   "products": [

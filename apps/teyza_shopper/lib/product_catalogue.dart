@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'product_photo_bounds.dart';
 
 const cataloguePhotoKeys=<String>[
   'tomatoes','potatoes','onions','bananas','apples','oranges','cabbage','carrots',
@@ -31,14 +32,17 @@ class CataloguePhoto extends StatelessWidget {
   @override Widget build(BuildContext context){
     final index=cataloguePhotoKeys.indexOf(photoKey);
     if(index<0)return SizedBox.square(dimension:size,child:const Icon(Icons.photo_outlined));
-    final local=index%24,column=local%4,row=local~/4;
+    final bounds=cataloguePhotoBounds[photoKey]!;
+    final scale=size/bounds[2]<size/bounds[3]?size/bounds[2]:size/bounds[3];
     final atlas=index<24?'fresh-pantry.png':'pantry-household.png';
-    return Semantics(label:'Illustrative product photo',image:true,child:ClipRect(
-      child:SizedBox.square(dimension:size,child:OverflowBox(alignment:Alignment.topLeft,
-        minWidth:size*4,maxWidth:size*4,minHeight:size*6,maxHeight:size*6,
-        child:Transform.translate(offset:Offset(-column*size,-row*size),
-          child:Image.asset('assets/catalogue/$atlas',width:size*4,height:size*6,
-            fit:BoxFit.fill,excludeFromSemantics:true))))));
+    return Semantics(label:'Illustrative product photo',image:true,
+      child:SizedBox.square(dimension:size,child:Center(child:ClipRect(
+        child:SizedBox(width:bounds[2]*scale,height:bounds[3]*scale,
+          child:OverflowBox(alignment:Alignment.topLeft,
+            minWidth:1024*scale,maxWidth:1024*scale,minHeight:1536*scale,maxHeight:1536*scale,
+            child:Transform.translate(offset:Offset(-bounds[0]*scale,-bounds[1]*scale),
+              child:Image.asset('assets/catalogue/$atlas',width:1024*scale,height:1536*scale,
+                fit:BoxFit.fill,excludeFromSemantics:true))))))));
   }
 }
 class CatalogueProduct {
