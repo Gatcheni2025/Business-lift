@@ -125,4 +125,14 @@ void main(){
    ])))));await tester.pumpAndSettle();expect(tester.takeException(),isNull);
   await tester.pumpWidget(const SizedBox.shrink());
  });
+ testWidgets('Owner approval cannot label a paused public listing as live',(tester) async{
+  for(final status in ['suspended','active']){
+   await tester.pumpWidget(MaterialApp(home:Scaffold(body:SellerShopHero(
+    shop:const SellerShop('Corner Shop','spaza','Durban','approved','active'),publicationStatus:status,
+    productCount:5,onNotifications:(){}))));await tester.pumpAndSettle();
+   expect(find.text('Shop is live'),status=='active'?findsOneWidget:findsNothing);
+   expect(find.text('Listing is paused'),status=='suspended'?findsOneWidget:findsNothing);
+  }
+  await tester.pumpWidget(const SizedBox.shrink());
+ });
 }

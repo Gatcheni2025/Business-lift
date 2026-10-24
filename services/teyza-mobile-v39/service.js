@@ -84,11 +84,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     }
     if (action==='seller_summary') {
       await owner(uid);
-      const [config,verification,finance,catalogue,photos]=await Promise.all([
+      const [config,verification,finance,catalogue,photos,publicShop]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
-        read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get()]);
-      return {settings:config||{},verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
+        read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),read('teyzaPublicShops/'+uid)]);
+      return {settings:config||{},publicationStatus:publicShop?.sellerUid===uid?publicShop.status:'not_listed',verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         catalogueStatus:catalogue?.status||'not_submitted',photos:photos.docs.map(x=>({id:x.id,url:x.data().url}))};
     }
