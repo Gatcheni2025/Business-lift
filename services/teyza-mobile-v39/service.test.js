@@ -224,3 +224,18 @@ test('Invalid selections and forged draft contents cannot publish a made-up cata
  await service.synchronizeCatalogue('seller1');
  assert(!db.records.get('teyzaPublicShops/seller1').products.some(p=>p.id==='catalog_milk-2-l'));
 });
+test('Reviewed replacement photos persist and catalogue review uses the current template price and stock',async()=>{
+ const {service,db}=fixture();
+ await service.execute(owner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ const url='https://example.test/reviewed-owner-photo.jpg';
+ db.records.set('teyzaProductPhotos/seller1/items/catalog_milk-2-l',{ownerUid:'seller1',url});
+ await service.execute(owner,'catalogue_submit');
+ const key='teyzaDraftProducts/seller1/items/catalog_milk-2-l';
+ db.records.set(key,{...db.records.get(key),priceCents:3200,stockQty:2});
+ await service.execute({...owner,uid:'admin',teyzaAdmin:true},'catalogue_review',{sellerUid:'seller1'});
+ await service.synchronizeCatalogue('seller1');
+ const published=db.records.get('teyzaPublicShops/seller1');
+ assert.equal(published.products[0].imageUrl,url);assert.equal(published.products[0].priceCents,3200);assert.equal(published.products[0].stock,2);
+ assert.equal(published.productHighlights[0].imageUrl,url);
+ await service.synchronizeCatalogue('seller1');assert.deepEqual(db.records.get('teyzaPublicShops/seller1'),published);
+});

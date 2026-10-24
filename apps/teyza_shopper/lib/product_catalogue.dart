@@ -53,12 +53,14 @@ class CatalogueProduct {
     (group=='All'||category==group)&&('$name $category $keywords').toLowerCase().contains(query.toLowerCase().trim());
 }
 class ProductCatalogue {
-  static Future<List<CatalogueProduct>>? _cache;
-  static Future<List<CatalogueProduct>> load()=>_cache??=rootBundle.loadString(
-    'assets/catalogue/product-catalogue.json').then((text){
-      final data=jsonDecode(text) as Map<String,dynamic>;
-      return (data['products'] as List).map((row)=>CatalogueProduct.fromJson(Map<String,dynamic>.from(row as Map))).toList();
-    });
+  static List<CatalogueProduct>? _cache;
+  static Future<List<CatalogueProduct>> load() async {
+    if(_cache!=null)return _cache!;
+    final text=await rootBundle.loadString('assets/catalogue/product-catalogue.json');
+    final data=jsonDecode(text) as Map<String,dynamic>;
+    return _cache=List<CatalogueProduct>.unmodifiable((data['products'] as List)
+      .map((row)=>CatalogueProduct.fromJson(Map<String,dynamic>.from(row as Map))));
+  }
   static CatalogueProduct? findDraft(List<CatalogueProduct> products,String id){
     for(final product in products){if(product.draftId==id)return product;}return null;
   }

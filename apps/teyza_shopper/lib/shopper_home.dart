@@ -38,7 +38,8 @@ class Product {
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['category'] ?? 'Other').toString(), (x['imageUrl'] ?? '').toString(),
     (x['priceCents'] as num?)?.toInt() ?? 0, (x['stock'] as num?)?.toInt() ?? 0,
-    inStock:x.containsKey('inStock')?x['inStock']==true:x.containsKey('stock')?((x['stock'] as num?)??0)>0:true);
+    inStock:x.containsKey('inStock')?x['inStock']==true:x.containsKey('stock')?((x['stock'] as num?)??0)>0:
+      ((x['priceCents'] as num?)??0)<=0);
 }
 class Shop {
   final String id, name, area, photo, phone;
