@@ -451,3 +451,12 @@ test('Replacing evidence invalidates stale administrator decisions and expired d
  const id=db.records.get('teyzaSellerIdentity/buyer1');db.records.set('teyzaSellerIdentity/buyer1',{...id,expiresAt:1});
  await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
 });
+test('Instant phone bootstrap is owner-bound, grants no OTP status and cannot renew administrator review access',async()=>{
+ const issued=[];const f=fixture({}, {getAuthUser:async uid=>({uid}),createPhoneToken:async uid=>{issued.push(uid);return 'native-link-token';}});
+ await f.service.execute(newOwner,'seller_register',registration);
+ const result=await f.service.execute(newOwner,'seller_phone_session',{uid:'seller1',phoneVerified:true});
+ assert.equal(result.uid,'buyer1');assert.equal(result.token,'native-link-token');assert.deepEqual(issued,['buyer1']);
+ assert.equal(f.db.records.get('teyzaSellerOnboarding/buyer1').sellingStatus,'not_started');
+ await rejects(f.service.execute({...owner,teyzaAdmin:true,teyzaPhoneBootstrap:true,auth_time:1000},'admin_seller_queue'),401);
+ await rejects(f.service.execute({...newOwner,uid:'unregistered'},'seller_phone_session'),403);
+});

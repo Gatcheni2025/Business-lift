@@ -90,8 +90,9 @@ class _OnboardingState extends State<SellerOnboardingPage> {
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  Widget card(Widget child)=>Container(margin:const EdgeInsets.only(bottom:18),padding:const EdgeInsets.all(20),
-    decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),border:Border.all(color:const Color(0xFFE4EADF))),child:child);
+  Widget card(Widget child)=>Padding(padding:const EdgeInsets.only(bottom:18),child:Material(color:Colors.white,
+    shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24),side:const BorderSide(color:Color(0xFFE4EADF))),
+    child:Padding(padding:const EdgeInsets.all(20),child:child)));
   Widget heading(String step,String title,bool done)=>Row(children:[Container(width:34,height:34,decoration:BoxDecoration(
     color:done?const Color(0xFFE3F5EB):const Color(0xFFF1F2EA),borderRadius:BorderRadius.circular(12)),
     child:Center(child:done?const Icon(Icons.check,size:19,color:Color(0xFF168657)):Text(step,style:const TextStyle(fontWeight:FontWeight.w800)))),

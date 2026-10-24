@@ -251,6 +251,13 @@ class ShopperSession extends ChangeNotifier {
       rethrow;
     }
   }
+  Future<void> confirmLinkedPhone(String expectedPhone) async {
+    final uid=userId,version=_version;
+    await freshIdToken();await refreshEmailStatus();
+    if(version!=_version||uid==null||uid!=userId||!phoneVerified||phoneNumber!=expectedPhone){
+      throw StateError('Phone verification could not be confirmed. Refresh and try again.');
+    }
+  }
   Future<void> linkPhone(String verificationId,String smsCode,String expectedPhone) async {
     final uid=userId,version=_version;
     if(uid==null)throw StateError('Session expired. Sign in again.');

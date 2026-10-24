@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'native_firebase.dart';
 import 'shopper_auth.dart';
+import 'teyza_mobile_api.dart';
 
 String normalizeMobile(String value){
   var number=value.replaceAll(RegExp(r'[\s()-]'),'');
@@ -28,20 +29,41 @@ String phoneError(Object error){
 }
 abstract class PhoneCodeSender {
   Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
-    required void Function(Object) onError,required void Function(String,String) onAutomatic});
+    required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant});
 }
 class FirebasePhoneCodeSender implements PhoneCodeSender {
+  final ShopperSession session;
+  FirebasePhoneCodeSender(this.session);
   @override Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
-    required void Function(Object) onError,required void Function(String,String) onAutomatic}) async {
+    required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant}) async {
     await NativeFirebase.ensure();
+    String? sentId,retrievedCode;
+    void forward(){if(sentId!=null&&retrievedCode!=null)onAutomatic(sentId!,retrievedCode!);}
     await FirebaseAuth.instance.verifyPhoneNumber(phoneNumber:phone,timeout:const Duration(seconds:60),forceResendingToken:resendToken,
-      codeSent:onSent,verificationFailed:onError,codeAutoRetrievalTimeout:(_){},
+      codeSent:(id,token){sentId=id;onSent(id,token);forward();},verificationFailed:onError,codeAutoRetrievalTimeout:(_){},
       verificationCompleted:(credential){
-        final id=credential.verificationId,code=credential.smsCode;
-        if(id!=null&&code!=null)onAutomatic(id,code);
+        final code=credential.smsCode;
+        if(code!=null){retrievedCode=code;forward();}
+        else if(onInstant!=null){onInstant(()=>linkInstant(phone,credential));}
+        else{onError(StateError('Please request an SMS code to finish mobile verification.'));}
       });
-    // SMS is linked through the existing REST session; native sign-in must never
-    // replace the UID that owns this shop.
+    // Manual SMS links through REST. Android instant proof links to the exact
+    // same UID through a short-lived, server-authorized native session.
+  }
+  Future<void> linkInstant(String phone,PhoneAuthCredential credential) async {
+    final uid=session.userId;
+    if(uid==null)throw StateError('Sign in again.');
+    final result=await TeyzaMobileApi(session).call('seller_phone_session');
+    if(uid!=session.userId||result['uid']!=uid)throw StateError('Your account changed. Close this page.');
+    final native=FirebaseAuth.instance;
+    try{
+      final signed=await native.signInWithCustomToken(result['token'] as String);
+      final user=signed.user;
+      if(user==null||user.uid!=uid||session.userId!=uid)throw StateError('Your account changed. Close this page.');
+      final linked=user.phoneNumber==phone?await user.reauthenticateWithCredential(credential):await user.linkWithCredential(credential);
+      if(linked.user?.uid!=uid||session.userId!=uid)throw StateError('Your account changed. Close this page.');
+      await session.confirmLinkedPhone(phone);
+    }finally{if(native.currentUser?.uid==uid)await native.signOut();}
   }
 }
 class SellerPhonePage extends StatefulWidget {
@@ -76,11 +98,19 @@ class _SellerPhoneState extends State<SellerPhonePage> {
       generation++;setState((){sending=false;error='The SMS request timed out. Please try again.';});
     }});
     try{
-      await (widget.sender??FirebasePhoneCodeSender()).send(normalizeMobile(widget.phone),resendToken:resendToken,
+      await (widget.sender??FirebasePhoneCodeSender(widget.session)).send(normalizeMobile(widget.phone),resendToken:resendToken,
         onSent:(id,token){if(!current(request))return;sendTimeout?.cancel();setState((){sending=false;verificationId=id;resendToken=token;startCooldown();});},
         onError:(e){if(!current(request))return;sendTimeout?.cancel();setState((){sending=false;error=phoneError(e);});},
-        onAutomatic:(id,value){if(!current(request)||confirming)return;sendTimeout?.cancel();setState((){sending=false;verificationId=id;code.text=value;});confirm();});
+        onAutomatic:(id,value){if(!current(request)||confirming)return;sendTimeout?.cancel();setState((){sending=false;verificationId=id;code.text=value;});confirm();},
+        onInstant:(verify){if(!current(request)||confirming)return;sendTimeout?.cancel();instant(request,verify);});
     }catch(e){if(current(request)){sendTimeout?.cancel();setState((){sending=false;error=phoneError(e);});}}
+  }
+  Future<void> instant(int request,Future<void> Function() verify) async {
+    setState((){sending=false;confirming=true;error=null;});
+    try{await verify();if(!widget.session.phoneVerified||widget.session.phoneNumber!=normalizeMobile(widget.phone))throw StateError('Phone verification could not be confirmed. Please try again.');
+      if(current(request))Navigator.pop(context,true);}
+    catch(e){if(current(request))setState(()=>error=phoneError(e));}
+    finally{if(current(request))setState(()=>confirming=false);}
   }
   Future<void> confirm() async {
     if(changed||confirming||verificationId==null)return;
@@ -104,6 +134,7 @@ class _SellerPhoneState extends State<SellerPhonePage> {
         title:const Text('Send me a verification SMS'),subtitle:const Text('Google processes your number for authentication and spam prevention. Standard SMS rates may apply.')),
       FilledButton(onPressed:changed||!consent||sending||confirming||seconds>0?null:send,
         child:Text(sending?'Requesting code…':seconds>0?'Resend in ${seconds}s':verificationId==null?'Send SMS code':'Resend SMS code')),
+      if(confirming&&verificationId==null)const Padding(padding:EdgeInsets.all(16),child:Text('Confirming your mobile number…')),
       if(verificationId!=null)...[
         const SizedBox(height:24),TextField(controller:code,enabled:!confirming&&!changed,keyboardType:TextInputType.number,
           autofillHints:const [AutofillHints.oneTimeCode],inputFormatters:[FilteringTextInputFormatter.digitsOnly,LengthLimitingTextInputFormatter(6)],

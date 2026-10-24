@@ -5,6 +5,7 @@ const actions=new Set(['seller_register','admin_access','admin_seller_queue','ad
 const defaults={orders:true,messages:true,stock:true,reviews:true};
 function recentAdmin(auth,clock){
   if(auth.teyzaAdmin!==true||auth.email_verified!==true)D.fail(403,'Teyza administrator access is required.');
+  if(auth.teyzaPhoneBootstrap===true)D.fail(401,'Sign in again before reviewing sellers.');
   const age=clock()/1000-auth.auth_time;
   if(!Number.isFinite(age)||age< -60||age>300)D.fail(401,'Sign in again before reviewing sellers. Your review session lasts five minutes.');
 }

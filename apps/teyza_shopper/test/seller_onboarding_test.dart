@@ -30,7 +30,12 @@ class PhoneSession extends fixtures.Session {
 class FakeSender implements PhoneCodeSender {
  int sends=0;
  @override Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
-  required void Function(Object) onError,required void Function(String,String) onAutomatic}) async {sends++;onSent('real-verification-session',7);}
+  required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant}) async {sends++;onSent('real-verification-session',7);}
+}
+class InstantSender implements PhoneCodeSender {
+ late void Function(Future<void> Function()) completion;
+ @override Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
+  required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant}) async {completion=onInstant!;}
 }
 void main(){
  const shop=SellerShop('Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678');
@@ -55,7 +60,7 @@ void main(){
   await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
   expect(captured,true);expect(find.byType(Image),findsOneWidget);
   final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');
-  await tester.ensureVisible(finish);await tester.pumpAndSettle();expect(tester.widget<FilledButton>(finish).onPressed,isNull);
+  await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(tester.widget<FilledButton>(finish).onPressed,isNull);
   expect(api.calls.contains('seller_onboarding_complete'),false);
   session.switchAccount();await tester.pump();expect(find.byType(Image),findsNothing);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -63,7 +68,7 @@ void main(){
  testWidgets('All three server-confirmed steps enable completion while pending manual review',(tester) async{
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
-  final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');await tester.ensureVisible(finish);await tester.pumpAndSettle();
+  final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
@@ -109,4 +114,13 @@ void main(){
    const SellerDraft(id:'milk',name:'Milk',category:'Dairy',priceCents:3000,stock:4)]);
   expect(commits,2);expect(result,['milk']);client.close();
  });
+ testWidgets('A late Android instant-verification callback cannot link a changed account',(tester) async{
+  final session=PhoneSession(),sender=InstantSender();var linked=false;
+  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender)));await tester.pumpAndSettle();
+  await fixtures.visibleTap(tester,find.text('Send me a verification SMS'));
+  await fixtures.visibleTap(tester,find.text('Send SMS code'));
+  session.switchAccount();await tester.pump();sender.completion(() async{linked=true;});await tester.pump();expect(linked,false);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+
 }

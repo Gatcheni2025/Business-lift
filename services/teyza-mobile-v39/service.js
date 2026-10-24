@@ -5,7 +5,7 @@ const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock=Date.now}) {
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
@@ -63,7 +63,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser});
-  const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate});
+  const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
     await db.runTransaction(async tx => {
@@ -135,11 +135,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         await doc('teyzaVerificationPhotos/'+submissionId).set({ownerUid:uid,objectPath:path,expiresAt:stamp+90*86400000});
         await bucket.file(path).save(encrypted,{contentType:'application/octet-stream',resumable:false,
           metadata:{cacheControl:'private,no-store'}});
-        await doc('teyzaMobileVerification/'+uid).set({ownerUid:uid,status:'pending_review',submissionId,
-          method:'selfie_manual_review',objectPath:path,submittedAt:stamp,expiresAt:stamp+90*86400000,
-          consentVersion:'selfie-review-v1',consentAt:stamp});
-        await db.runTransaction(async tx=>{const ref=doc('teyzaPublicShops/'+uid),snap=await tx.get(ref);
-          if(snap.exists&&snap.data().sellerUid===uid)tx.update(ref,{identityVerified:false,verificationStatus:'pending_review'});});
+        await db.runTransaction(async tx=>{
+          const ref=doc('teyzaPublicShops/'+uid),snap=await tx.get(ref);
+          tx.set(doc('teyzaMobileVerification/'+uid),{ownerUid:uid,status:'pending_review',submissionId,
+            method:'selfie_manual_review',objectPath:path,submittedAt:stamp,expiresAt:stamp+90*86400000,
+            consentVersion:'selfie-review-v1',consentAt:stamp});
+          if(snap.exists&&snap.data().sellerUid===uid)tx.update(ref,{identityVerified:false,verificationStatus:'pending_review'});
+        });
         return {status:'pending_review'};
       }
       const productId=D.id(data.productId);

@@ -16,6 +16,7 @@ const db=admin.firestore();
 const notifications=createNotifications({db,messaging:admin.messaging()});
 const bucket=admin.storage().bucket('business-lift-3c19c.firebasestorage.app');
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
+  createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})

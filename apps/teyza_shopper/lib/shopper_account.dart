@@ -159,7 +159,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             Text(logged?(widget.session.name?.isNotEmpty==true?
               widget.session.name!:widget.session.email??'') :
               audience==null?'How would you like to continue?':
-              ownerMode?(registering?'Create an account, verify your email, then register your shop in the app.':'Sign in with the account registered for your shop.') :
+              ownerMode?(registering?'Create an account, register your shop, then complete your documents, selfie and mobile verification.':'Sign in with the account registered for your shop.') :
               'Sign in to manage your profile and shop enquiries.',
               textAlign:TextAlign.center,
               style:const TextStyle(color:Color(0xFF60746B))),

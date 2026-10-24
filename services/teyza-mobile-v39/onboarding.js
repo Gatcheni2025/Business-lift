@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),catalogue=require('./catalogue');
-const actions=new Set(['seller_onboarding','seller_identity_submit','seller_onboarding_complete','seller_identity_read']);
+const actions=new Set(['seller_onboarding','seller_identity_submit','seller_onboarding_complete','seller_identity_read','seller_phone_session']);
 function phone(value){
  let n=String(value||'').replace(/[\s()-]/g,'');
  if(/^0\d{9}$/.test(n))n='+27'+n.slice(1);
@@ -25,7 +25,7 @@ function identity(data){
 }
 function current(record,uid,clock){return record?.ownerUid===uid&&record.expiresAt>clock()&&
  typeof record.objectPath==='string'&&record.objectPath.startsWith('teyza-private/mobile-verification/'+uid+'/');}
-function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate}){
+function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  async function execute(auth,action,data={}){
   const uid=D.id(auth.uid);
@@ -41,6 +41,15 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    return {imageBase64:(await decryptSelfie(bytes)).toString('base64'),details};
   }
   const account=D.seller(await read('teyzaSellerAccounts/'+uid),uid);
+  if(action==='seller_phone_session'){
+   await rate(uid,'phone-session',5,3600000);
+   const user=await getAuthUser(uid);
+   if(!user||user.disabled)D.fail(401,'Sign in again to verify your mobile.');
+   if(!createPhoneToken)D.fail(503,'Phone verification needs Teyza support to finish device setup.');
+   // Used only to link Android instant-verification credentials to this SAME UID.
+   // This token grants no OTP proof and cannot renew administrator review access.
+   return {uid,token:await createPhoneToken(uid)};
+  }
   if(action==='seller_onboarding'){
    const [saved,id,selfie,shop,user]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
     read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid)]);

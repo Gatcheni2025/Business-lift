@@ -95,7 +95,15 @@ The server reads the actual Firebase Auth user record and requires the shop
 number to match its linked phone provider. SMS linking supplies the existing
 session’s ID token; a conflicting phone account, different UID, new-user response
 or temporary proof cannot silently create a second seller. Sign-out/account
-changes clear pending proof. There is no test OTP bypass in application code.
+changes clear pending proof. There is no test OTP bypass in application code. Android instant verification
+uses a server-minted native session for the same UID, links the actual native
+phone credential, then checks the original REST session’s current phone provider.
+The temporary native session signs out after linking. A phone-bootstrap token
+cannot renew administrator review access. Its Cloud Functions runtime service
+account needs IAM Service Account Credentials API / signBlob permission for
+Admin SDK custom-token signing; grant only the required service-account signing
+permission if the installed project does not already provide it. Manual SMS
+code linking does not require custom-token signing.
 
 A trusted reviewer needs `teyzaAdmin: true`, verified email and authentication
 within five minutes. The server requires recent view receipts for BOTH current

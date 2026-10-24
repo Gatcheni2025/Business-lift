@@ -105,7 +105,7 @@ void main(){
   await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
-  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('ID or passport'),findsOneWidget);expect(find.text('Mobile number & OTP'),findsOneWidget);
+  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{
