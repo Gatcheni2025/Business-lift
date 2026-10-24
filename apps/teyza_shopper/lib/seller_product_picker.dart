@@ -20,12 +20,12 @@ class SellerProductPickerPage extends StatefulWidget {
 }
 class _SellerProductPickerState extends State<SellerProductPickerPage> {
   final selected=<String,_ProductEntry>{};
-  late final uid=widget.session.userId;
+  late final String? uid;
   late final future=ProductCatalogue.load();
   String query='',category='All';
   String? error;
   bool reviewing=false,saving=false,accountChanged=false;
-  @override void initState(){super.initState();widget.session.addListener(accountListener);}
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountListener);}
   void accountListener(){if(widget.session.userId!=uid&&mounted)setState(()=>accountChanged=true);}
   @override void dispose(){widget.session.removeListener(accountListener);
     for(final entry in selected.values){entry.dispose();}super.dispose();}

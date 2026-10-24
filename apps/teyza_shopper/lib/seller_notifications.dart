@@ -11,11 +11,12 @@ class SellerNotificationsPage extends StatefulWidget{
   @override State<SellerNotificationsPage> createState()=>_NotificationsState();
 }
 class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBindingObserver{
-  late final api=widget.api??TeyzaMobileApi(widget.session),uid=widget.session.userId;
+  late final String? uid;
+  late final api=widget.api??TeyzaMobileApi(widget.session);
   List<Map<String,dynamic>> rows=[];
   Map<String,bool> preferences={'orders':true,'messages':true,'stock':true,'reviews':true};
   String? error,status;bool loading=false,working=false;Timer? watch;StreamSubscription<void>? subscription;
-  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);widget.session.addListener(changed);load();start();
+  @override void initState(){super.initState();uid=widget.session.userId;WidgetsBinding.instance.addObserver(this);widget.session.addListener(changed);load();start();
     subscription=SellerPush(widget.session).updates.stream.listen((_)=>load());}
   void start(){watch?.cancel();watch=Timer.periodic(const Duration(seconds:25),(_)=>load());}
   @override void didChangeAppLifecycleState(AppLifecycleState s){if(s==AppLifecycleState.resumed){load();start();}else{watch?.cancel();}}

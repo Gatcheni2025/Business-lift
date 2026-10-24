@@ -20,7 +20,8 @@ class SellerOnboardingPage extends StatefulWidget {
   @override State<SellerOnboardingPage> createState()=>_OnboardingState();
 }
 class _OnboardingState extends State<SellerOnboardingPage> {
-  late final uid=widget.session.userId,api=widget.api??TeyzaMobileApi(widget.session);
+  late final String? uid;
+  late final api=widget.api??TeyzaMobileApi(widget.session);
   late String legalType=widget.legalType??(widget.shop.companyName.isNotEmpty&&widget.shop.registrationNumber.isNotEmpty?'company':'individual');
   late final company=TextEditingController(text:widget.shop.companyName),registration=TextEditingController(text:widget.shop.registrationNumber);
   final number=TextEditingController();
@@ -28,7 +29,7 @@ class _OnboardingState extends State<SellerOnboardingPage> {
   Uint8List? document;
   Map<String,dynamic> progress={};
   bool loading=false,busy=false,consent=false,changed=false;
-  @override void initState(){super.initState();widget.session.addListener(accountChanged);load();}
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();}
   void accountChanged(){if(mounted&&uid!=widget.session.userId){document=null;number.clear();company.clear();registration.clear();
     setState((){changed=true;consent=false;progress={};error='Your account changed. Close this page and sign in again.';});}}
   @override void dispose(){widget.session.removeListener(accountChanged);document=null;number.dispose();company.dispose();registration.dispose();super.dispose();}

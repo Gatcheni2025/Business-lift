@@ -64,7 +64,7 @@ class SellerToolPage extends StatefulWidget {
 }
 class _SellerToolState extends State<SellerToolPage> {
   late final api=widget.api??TeyzaMobileApi(widget.session);
-  late final uid=widget.session.userId;
+  late final String? uid;
   final fee=TextEditingController(),radius=TextEditingController(),notes=TextEditingController();
   final amount=TextEditingController(),purpose=TextEditingController(),phone=TextEditingController();
   final stockName=TextEditingController(),stockQuantity=TextEditingController();
@@ -74,7 +74,7 @@ class _SellerToolState extends State<SellerToolPage> {
   bool loading=true,working=false,ready=false,delivery=false,pickup=false,cashback=false,cards=false,liveChat=true,consent=false;
   String? error,status;
   Uint8List? selfie;
-  @override void initState(){super.initState();widget.session.addListener(accountChanged);load();
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();
     if(widget.tool==SellerTool.verification&&widget.captureSelfie==null)recoverCamera();}
   void accountChanged(){if(uid!=widget.session.userId&&mounted)setState((){
     selfie=null;summary={};ready=false;error='Your account changed. Close this page and sign in again.';

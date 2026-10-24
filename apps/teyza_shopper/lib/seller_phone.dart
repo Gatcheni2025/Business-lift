@@ -75,13 +75,13 @@ class SellerPhonePage extends StatefulWidget {
 }
 class _SellerPhoneState extends State<SellerPhonePage> {
   final code=TextEditingController();
-  late final uid=widget.session.userId;
+  late final String? uid;
   String? verificationId,error;
   int? resendToken;
   int seconds=0,generation=0;
   bool consent=false,sending=false,confirming=false,changed=false;
   Timer? cooldown,sendTimeout;
-  @override void initState(){super.initState();widget.session.addListener(accountChanged);}
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);}
   void accountChanged(){if(mounted&&uid!=widget.session.userId){generation++;cooldown?.cancel();sendTimeout?.cancel();code.clear();
     setState((){changed=true;verificationId=null;error='Your account changed. Close this page and sign in again.';});}}
   @override void dispose(){generation++;cooldown?.cancel();sendTimeout?.cancel();widget.session.removeListener(accountChanged);code.dispose();super.dispose();}

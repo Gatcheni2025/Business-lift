@@ -11,12 +11,12 @@ class SellerReviewPage extends StatefulWidget{
 }
 class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
   late final api=widget.api??TeyzaMobileApi(widget.session);
-  late final uid=widget.session.userId;
+  late final String? uid;
   List<Map<String,dynamic>> sellers=[];
   Map<String,dynamic>? selected,identityDetails;Uint8List? photo,document;
   final note=TextEditingController();
   String? error,next;bool busy=false,reviewed=false;int generation=0;
-  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);widget.session.addListener(changed);load();}
+  @override void initState(){super.initState();uid=widget.session.userId;WidgetsBinding.instance.addObserver(this);widget.session.addListener(changed);load();}
   @override void dispose(){generation++;photo=null;document=null;identityDetails=null;note.dispose();widget.session.removeListener(changed);WidgetsBinding.instance.removeObserver(this);super.dispose();}
   void changed(){if(mounted&&uid!=widget.session.userId)setState((){generation++;photo=null;document=null;identityDetails=null;sellers=[];selected=null;error='Your account changed. Close this page.';});}
   @override void didChangeAppLifecycleState(AppLifecycleState state){if(state!=AppLifecycleState.resumed&&mounted)setState((){generation++;photo=null;document=null;identityDetails=null;reviewed=false;});}

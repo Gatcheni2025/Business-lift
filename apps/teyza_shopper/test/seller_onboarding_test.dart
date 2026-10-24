@@ -58,7 +58,7 @@ void main(){
   final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();var captured=false;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api,captureDocument:(_) async{captured=true;return bytes;})));
   await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
-  expect(captured,true);expect(find.byType(Image),findsOneWidget);
+  expect(captured,true);await tester.scrollUntilVisible(find.byType(Image),-150,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.byType(Image),findsOneWidget);
   final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');
   await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(tester.widget<FilledButton>(finish).onPressed,isNull);
   expect(api.calls.contains('seller_onboarding_complete'),false);

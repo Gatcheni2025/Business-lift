@@ -15,9 +15,9 @@ class SellerRegistrationPage extends StatefulWidget {
 class _RegistrationState extends State<SellerRegistrationPage>{
   final form=GlobalKey<FormState>();
   final name=TextEditingController(),phone=TextEditingController(),address=TextEditingController(),company=TextEditingController(),number=TextEditingController();
-  late final uid=widget.session.userId;
+  late final String? uid;
   String category='spaza',legalType='individual';String? error;bool busy=false,consent=false,saved=false;
-  @override void initState(){super.initState();widget.session.addListener(changed);}
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(changed);}
   void changed(){if(mounted&&uid!=widget.session.userId)setState(()=>error='Your account changed. Close this page and sign in again.');}
   @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,address,company,number]){c.dispose();}super.dispose();}
   Future<void> save() async{
