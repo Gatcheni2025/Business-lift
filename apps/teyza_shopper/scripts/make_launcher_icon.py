@@ -56,3 +56,22 @@ adaptive.mkdir(parents=True, exist_ok=True)
     '</adaptive-icon>\n', encoding="utf-8"
 )
 print("TEYZA Y-sprout launcher: five densities and adaptive icon ready")
+
+# Apple supplies its own mask. Every iOS icon is square, RGB and opaque.
+ios_icons = root / "ios/Runner/Assets.xcassets/AppIcon.appiconset"
+contents = ios_icons / "Contents.json"
+if contents.exists():
+    import json
+    metadata = json.loads(contents.read_text())
+    for item in metadata["images"]:
+        points = float(item["size"].split("x")[0])
+        scale = float(item["scale"].rstrip("x"))
+        pixels = round(points * scale)
+        image = vector_image(content, pixels)
+        opaque = Image.new("RGB", (pixels, pixels), "#003F4A")
+        opaque.paste(image, mask=image.getchannel("A"))
+        filename = item.get("filename") or f"Icon-{pixels}.png"
+        item["filename"] = filename
+        opaque.save(ios_icons / filename, optimize=True)
+    contents.write_text(json.dumps(metadata, indent=2) + "\n")
+    print("TEYZA iOS AppIcon: all required sizes, no alpha channel")

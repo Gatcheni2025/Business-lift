@@ -1,0 +1,2010 @@
+{
+  "version": 1,
+  "photoNote": "Illustrative product photos. Brands and packaging may differ.",
+  "columns": 4,
+  "rows": 6,
+  "photos": {
+    "tomatoes": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 0,
+      "bounds": [
+        3,
+        23,
+        253,
+        217
+      ]
+    },
+    "potatoes": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 0,
+      "bounds": [
+        256,
+        20,
+        252,
+        213
+      ]
+    },
+    "onions": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 0,
+      "bounds": [
+        512,
+        2,
+        251,
+        233
+      ]
+    },
+    "bananas": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 0,
+      "bounds": [
+        769,
+        10,
+        254,
+        229
+      ]
+    },
+    "apples": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 1,
+      "bounds": [
+        5,
+        242,
+        251,
+        224
+      ]
+    },
+    "oranges": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 1,
+      "bounds": [
+        256,
+        236,
+        255,
+        234
+      ]
+    },
+    "cabbage": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 1,
+      "bounds": [
+        521,
+        235,
+        239,
+        234
+      ]
+    },
+    "carrots": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 1,
+      "bounds": [
+        768,
+        263,
+        256,
+        204
+      ]
+    },
+    "spinach": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 2,
+      "bounds": [
+        1,
+        466,
+        255,
+        252
+      ]
+    },
+    "eggs": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 2,
+      "bounds": [
+        257,
+        470,
+        255,
+        245
+      ]
+    },
+    "milk": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 2,
+      "bounds": [
+        537,
+        469,
+        183,
+        252
+      ]
+    },
+    "yogurt": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 2,
+      "bounds": [
+        783,
+        477,
+        241,
+        241
+      ]
+    },
+    "white-bread": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 3,
+      "bounds": [
+        0,
+        718,
+        256,
+        231
+      ]
+    },
+    "brown-bread": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 3,
+      "bounds": [
+        256,
+        727,
+        254,
+        216
+      ]
+    },
+    "rolls": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 3,
+      "bounds": [
+        512,
+        735,
+        256,
+        194
+      ]
+    },
+    "chicken": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 3,
+      "bounds": [
+        768,
+        726,
+        256,
+        212
+      ]
+    },
+    "beef": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 4,
+      "bounds": [
+        0,
+        963,
+        256,
+        223
+      ]
+    },
+    "boerewors": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 4,
+      "bounds": [
+        256,
+        961,
+        256,
+        223
+      ]
+    },
+    "rice": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 4,
+      "bounds": [
+        512,
+        930,
+        255,
+        270
+      ]
+    },
+    "maize": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 4,
+      "bounds": [
+        771,
+        938,
+        251,
+        263
+      ]
+    },
+    "flour": {
+      "atlas": "fresh-pantry.png",
+      "column": 0,
+      "row": 5,
+      "bounds": [
+        0,
+        1187,
+        256,
+        314
+      ]
+    },
+    "sugar": {
+      "atlas": "fresh-pantry.png",
+      "column": 1,
+      "row": 5,
+      "bounds": [
+        257,
+        1194,
+        245,
+        288
+      ]
+    },
+    "oats": {
+      "atlas": "fresh-pantry.png",
+      "column": 2,
+      "row": 5,
+      "bounds": [
+        512,
+        1200,
+        241,
+        284
+      ]
+    },
+    "pasta": {
+      "atlas": "fresh-pantry.png",
+      "column": 3,
+      "row": 5,
+      "bounds": [
+        768,
+        1201,
+        245,
+        288
+      ]
+    },
+    "beans": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 0,
+      "bounds": [
+        43,
+        0,
+        204,
+        252
+      ]
+    },
+    "peanut-butter": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 0,
+      "bounds": [
+        300,
+        2,
+        196,
+        248
+      ]
+    },
+    "oil": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 0,
+      "bounds": [
+        585,
+        0,
+        136,
+        248
+      ]
+    },
+    "tea": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 0,
+      "bounds": [
+        778,
+        40,
+        242,
+        207
+      ]
+    },
+    "coffee": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 1,
+      "bounds": [
+        46,
+        253,
+        193,
+        258
+      ]
+    },
+    "water": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 1,
+      "bounds": [
+        332,
+        250,
+        124,
+        257
+      ]
+    },
+    "soft-drink": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 1,
+      "bounds": [
+        585,
+        248,
+        135,
+        261
+      ]
+    },
+    "crisps": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 1,
+      "bounds": [
+        768,
+        281,
+        256,
+        226
+      ]
+    },
+    "soap": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 2,
+      "bounds": [
+        7,
+        535,
+        249,
+        216
+      ]
+    },
+    "washing-powder": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 2,
+      "bounds": [
+        263,
+        510,
+        249,
+        251
+      ]
+    },
+    "dishwashing": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 2,
+      "bounds": [
+        512,
+        509,
+        219,
+        260
+      ]
+    },
+    "toilet-paper": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 2,
+      "bounds": [
+        776,
+        518,
+        246,
+        239
+      ]
+    },
+    "biscuits": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 3,
+      "bounds": [
+        7,
+        770,
+        249,
+        231
+      ]
+    },
+    "sweets": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 3,
+      "bounds": [
+        278,
+        771,
+        228,
+        227
+      ]
+    },
+    "pilchards": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 3,
+      "bounds": [
+        512,
+        774,
+        256,
+        220
+      ]
+    },
+    "tomato-sauce": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 3,
+      "bounds": [
+        768,
+        757,
+        216,
+        248
+      ]
+    },
+    "lotion": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 4,
+      "bounds": [
+        60,
+        1007,
+        157,
+        237
+      ]
+    },
+    "toothpaste": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 4,
+      "bounds": [
+        260,
+        1069,
+        252,
+        171
+      ]
+    },
+    "shampoo": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 4,
+      "bounds": [
+        571,
+        1003,
+        158,
+        241
+      ]
+    },
+    "nappies": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 4,
+      "bounds": [
+        770,
+        1005,
+        250,
+        237
+      ]
+    },
+    "pads": {
+      "atlas": "pantry-household.png",
+      "column": 0,
+      "row": 5,
+      "bounds": [
+        6,
+        1244,
+        250,
+        269
+      ]
+    },
+    "batteries": {
+      "atlas": "pantry-household.png",
+      "column": 1,
+      "row": 5,
+      "bounds": [
+        309,
+        1287,
+        198,
+        183
+      ]
+    },
+    "notebook": {
+      "atlas": "pantry-household.png",
+      "column": 2,
+      "row": 5,
+      "bounds": [
+        519,
+        1244,
+        249,
+        266
+      ]
+    },
+    "pens": {
+      "atlas": "pantry-household.png",
+      "column": 3,
+      "row": 5,
+      "bounds": [
+        774,
+        1273,
+        249,
+        229
+      ]
+    }
+  },
+  "products": [
+    {
+      "id": "tomatoes-500-g",
+      "name": "Tomatoes · 500 g",
+      "category": "Fruit & Veg",
+      "unit": "500 g",
+      "photo": "tomatoes",
+      "keywords": ""
+    },
+    {
+      "id": "tomatoes-1-kg",
+      "name": "Tomatoes · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "tomatoes",
+      "keywords": ""
+    },
+    {
+      "id": "tomatoes-2-kg",
+      "name": "Tomatoes · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "tomatoes",
+      "keywords": ""
+    },
+    {
+      "id": "potatoes-1-kg",
+      "name": "Potatoes · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "potatoes",
+      "keywords": ""
+    },
+    {
+      "id": "potatoes-2-kg",
+      "name": "Potatoes · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "potatoes",
+      "keywords": ""
+    },
+    {
+      "id": "potatoes-5-kg",
+      "name": "Potatoes · 5 kg",
+      "category": "Fruit & Veg",
+      "unit": "5 kg",
+      "photo": "potatoes",
+      "keywords": ""
+    },
+    {
+      "id": "potatoes-10-kg",
+      "name": "Potatoes · 10 kg",
+      "category": "Fruit & Veg",
+      "unit": "10 kg",
+      "photo": "potatoes",
+      "keywords": ""
+    },
+    {
+      "id": "onions-500-g",
+      "name": "Onions · 500 g",
+      "category": "Fruit & Veg",
+      "unit": "500 g",
+      "photo": "onions",
+      "keywords": ""
+    },
+    {
+      "id": "onions-1-kg",
+      "name": "Onions · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "onions",
+      "keywords": ""
+    },
+    {
+      "id": "onions-2-kg",
+      "name": "Onions · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "onions",
+      "keywords": ""
+    },
+    {
+      "id": "onions-5-kg",
+      "name": "Onions · 5 kg",
+      "category": "Fruit & Veg",
+      "unit": "5 kg",
+      "photo": "onions",
+      "keywords": ""
+    },
+    {
+      "id": "bananas-500-g",
+      "name": "Bananas · 500 g",
+      "category": "Fruit & Veg",
+      "unit": "500 g",
+      "photo": "bananas",
+      "keywords": ""
+    },
+    {
+      "id": "bananas-1-kg",
+      "name": "Bananas · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "bananas",
+      "keywords": ""
+    },
+    {
+      "id": "bananas-2-kg",
+      "name": "Bananas · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "bananas",
+      "keywords": ""
+    },
+    {
+      "id": "apples-4-pack",
+      "name": "Red apples · 4 pack",
+      "category": "Fruit & Veg",
+      "unit": "4 pack",
+      "photo": "apples",
+      "keywords": ""
+    },
+    {
+      "id": "apples-6-pack",
+      "name": "Red apples · 6 pack",
+      "category": "Fruit & Veg",
+      "unit": "6 pack",
+      "photo": "apples",
+      "keywords": ""
+    },
+    {
+      "id": "apples-1-kg",
+      "name": "Red apples · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "apples",
+      "keywords": ""
+    },
+    {
+      "id": "apples-2-kg",
+      "name": "Red apples · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "apples",
+      "keywords": ""
+    },
+    {
+      "id": "oranges-4-pack",
+      "name": "Oranges · 4 pack",
+      "category": "Fruit & Veg",
+      "unit": "4 pack",
+      "photo": "oranges",
+      "keywords": ""
+    },
+    {
+      "id": "oranges-6-pack",
+      "name": "Oranges · 6 pack",
+      "category": "Fruit & Veg",
+      "unit": "6 pack",
+      "photo": "oranges",
+      "keywords": ""
+    },
+    {
+      "id": "oranges-1-kg",
+      "name": "Oranges · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "oranges",
+      "keywords": ""
+    },
+    {
+      "id": "oranges-2-kg",
+      "name": "Oranges · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "oranges",
+      "keywords": ""
+    },
+    {
+      "id": "cabbage-each",
+      "name": "Cabbage · Each",
+      "category": "Fruit & Veg",
+      "unit": "Each",
+      "photo": "cabbage",
+      "keywords": ""
+    },
+    {
+      "id": "cabbage-2-pack",
+      "name": "Cabbage · 2 pack",
+      "category": "Fruit & Veg",
+      "unit": "2 pack",
+      "photo": "cabbage",
+      "keywords": ""
+    },
+    {
+      "id": "carrots-500-g",
+      "name": "Carrots · 500 g",
+      "category": "Fruit & Veg",
+      "unit": "500 g",
+      "photo": "carrots",
+      "keywords": ""
+    },
+    {
+      "id": "carrots-1-kg",
+      "name": "Carrots · 1 kg",
+      "category": "Fruit & Veg",
+      "unit": "1 kg",
+      "photo": "carrots",
+      "keywords": ""
+    },
+    {
+      "id": "carrots-2-kg",
+      "name": "Carrots · 2 kg",
+      "category": "Fruit & Veg",
+      "unit": "2 kg",
+      "photo": "carrots",
+      "keywords": ""
+    },
+    {
+      "id": "carrots-5-kg",
+      "name": "Carrots · 5 kg",
+      "category": "Fruit & Veg",
+      "unit": "5 kg",
+      "photo": "carrots",
+      "keywords": ""
+    },
+    {
+      "id": "spinach-1-bunch",
+      "name": "Spinach · 1 bunch",
+      "category": "Fruit & Veg",
+      "unit": "1 bunch",
+      "photo": "spinach",
+      "keywords": ""
+    },
+    {
+      "id": "spinach-2-bunches",
+      "name": "Spinach · 2 bunches",
+      "category": "Fruit & Veg",
+      "unit": "2 bunches",
+      "photo": "spinach",
+      "keywords": ""
+    },
+    {
+      "id": "eggs-6-pack",
+      "name": "Eggs · 6 pack",
+      "category": "Dairy & Eggs",
+      "unit": "6 pack",
+      "photo": "eggs",
+      "keywords": ""
+    },
+    {
+      "id": "eggs-12-pack",
+      "name": "Eggs · 12 pack",
+      "category": "Dairy & Eggs",
+      "unit": "12 pack",
+      "photo": "eggs",
+      "keywords": ""
+    },
+    {
+      "id": "eggs-18-pack",
+      "name": "Eggs · 18 pack",
+      "category": "Dairy & Eggs",
+      "unit": "18 pack",
+      "photo": "eggs",
+      "keywords": ""
+    },
+    {
+      "id": "eggs-30-pack",
+      "name": "Eggs · 30 pack",
+      "category": "Dairy & Eggs",
+      "unit": "30 pack",
+      "photo": "eggs",
+      "keywords": ""
+    },
+    {
+      "id": "eggs-60-pack",
+      "name": "Eggs · 60 pack",
+      "category": "Dairy & Eggs",
+      "unit": "60 pack",
+      "photo": "eggs",
+      "keywords": ""
+    },
+    {
+      "id": "milk-500-ml",
+      "name": "Full cream milk · 500 ml",
+      "category": "Dairy & Eggs",
+      "unit": "500 ml",
+      "photo": "milk",
+      "keywords": ""
+    },
+    {
+      "id": "milk-1-l",
+      "name": "Full cream milk · 1 L",
+      "category": "Dairy & Eggs",
+      "unit": "1 L",
+      "photo": "milk",
+      "keywords": ""
+    },
+    {
+      "id": "milk-2-l",
+      "name": "Full cream milk · 2 L",
+      "category": "Dairy & Eggs",
+      "unit": "2 L",
+      "photo": "milk",
+      "keywords": ""
+    },
+    {
+      "id": "milk-6-x-1-l",
+      "name": "Full cream milk · 6 x 1 L",
+      "category": "Dairy & Eggs",
+      "unit": "6 x 1 L",
+      "photo": "milk",
+      "keywords": ""
+    },
+    {
+      "id": "milk-12-x-1-l",
+      "name": "Full cream milk · 12 x 1 L",
+      "category": "Dairy & Eggs",
+      "unit": "12 x 1 L",
+      "photo": "milk",
+      "keywords": ""
+    },
+    {
+      "id": "yogurt-175-g",
+      "name": "Plain yogurt · 175 g",
+      "category": "Dairy & Eggs",
+      "unit": "175 g",
+      "photo": "yogurt",
+      "keywords": ""
+    },
+    {
+      "id": "yogurt-500-g",
+      "name": "Plain yogurt · 500 g",
+      "category": "Dairy & Eggs",
+      "unit": "500 g",
+      "photo": "yogurt",
+      "keywords": ""
+    },
+    {
+      "id": "yogurt-1-kg",
+      "name": "Plain yogurt · 1 kg",
+      "category": "Dairy & Eggs",
+      "unit": "1 kg",
+      "photo": "yogurt",
+      "keywords": ""
+    },
+    {
+      "id": "white-bread-400-g",
+      "name": "White bread · 400 g",
+      "category": "Bakery",
+      "unit": "400 g",
+      "photo": "white-bread",
+      "keywords": ""
+    },
+    {
+      "id": "white-bread-700-g",
+      "name": "White bread · 700 g",
+      "category": "Bakery",
+      "unit": "700 g",
+      "photo": "white-bread",
+      "keywords": ""
+    },
+    {
+      "id": "white-bread-6-x-700-g",
+      "name": "White bread · 6 x 700 g",
+      "category": "Bakery",
+      "unit": "6 x 700 g",
+      "photo": "white-bread",
+      "keywords": ""
+    },
+    {
+      "id": "brown-bread-400-g",
+      "name": "Brown bread · 400 g",
+      "category": "Bakery",
+      "unit": "400 g",
+      "photo": "brown-bread",
+      "keywords": ""
+    },
+    {
+      "id": "brown-bread-700-g",
+      "name": "Brown bread · 700 g",
+      "category": "Bakery",
+      "unit": "700 g",
+      "photo": "brown-bread",
+      "keywords": ""
+    },
+    {
+      "id": "brown-bread-6-x-700-g",
+      "name": "Brown bread · 6 x 700 g",
+      "category": "Bakery",
+      "unit": "6 x 700 g",
+      "photo": "brown-bread",
+      "keywords": ""
+    },
+    {
+      "id": "rolls-4-pack",
+      "name": "Bread rolls · 4 pack",
+      "category": "Bakery",
+      "unit": "4 pack",
+      "photo": "rolls",
+      "keywords": ""
+    },
+    {
+      "id": "rolls-6-pack",
+      "name": "Bread rolls · 6 pack",
+      "category": "Bakery",
+      "unit": "6 pack",
+      "photo": "rolls",
+      "keywords": ""
+    },
+    {
+      "id": "rolls-12-pack",
+      "name": "Bread rolls · 12 pack",
+      "category": "Bakery",
+      "unit": "12 pack",
+      "photo": "rolls",
+      "keywords": ""
+    },
+    {
+      "id": "chicken-500-g",
+      "name": "Chicken pieces · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "chicken",
+      "keywords": ""
+    },
+    {
+      "id": "chicken-1-kg",
+      "name": "Chicken pieces · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "chicken",
+      "keywords": ""
+    },
+    {
+      "id": "chicken-2-kg",
+      "name": "Chicken pieces · 2 kg",
+      "category": "Meat",
+      "unit": "2 kg",
+      "photo": "chicken",
+      "keywords": ""
+    },
+    {
+      "id": "chicken-5-kg",
+      "name": "Chicken pieces · 5 kg",
+      "category": "Meat",
+      "unit": "5 kg",
+      "photo": "chicken",
+      "keywords": ""
+    },
+    {
+      "id": "beef-500-g",
+      "name": "Stewing beef · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "beef",
+      "keywords": ""
+    },
+    {
+      "id": "beef-1-kg",
+      "name": "Stewing beef · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "beef",
+      "keywords": ""
+    },
+    {
+      "id": "beef-2-kg",
+      "name": "Stewing beef · 2 kg",
+      "category": "Meat",
+      "unit": "2 kg",
+      "photo": "beef",
+      "keywords": ""
+    },
+    {
+      "id": "boerewors-500-g",
+      "name": "Boerewors · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "boerewors",
+      "keywords": ""
+    },
+    {
+      "id": "boerewors-1-kg",
+      "name": "Boerewors · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "boerewors",
+      "keywords": ""
+    },
+    {
+      "id": "boerewors-2-kg",
+      "name": "Boerewors · 2 kg",
+      "category": "Meat",
+      "unit": "2 kg",
+      "photo": "boerewors",
+      "keywords": ""
+    },
+    {
+      "id": "boerewors-5-kg",
+      "name": "Boerewors · 5 kg",
+      "category": "Meat",
+      "unit": "5 kg",
+      "photo": "boerewors",
+      "keywords": ""
+    },
+    {
+      "id": "rice-500-g",
+      "name": "White rice · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "rice-1-kg",
+      "name": "White rice · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "rice-2-kg",
+      "name": "White rice · 2 kg",
+      "category": "Pantry",
+      "unit": "2 kg",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "rice-5-kg",
+      "name": "White rice · 5 kg",
+      "category": "Pantry",
+      "unit": "5 kg",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "rice-10-kg",
+      "name": "White rice · 10 kg",
+      "category": "Pantry",
+      "unit": "10 kg",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "rice-25-kg",
+      "name": "White rice · 25 kg",
+      "category": "Pantry",
+      "unit": "25 kg",
+      "photo": "rice",
+      "keywords": ""
+    },
+    {
+      "id": "maize-1-kg",
+      "name": "Maize meal · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "maize-2-5-kg",
+      "name": "Maize meal · 2.5 kg",
+      "category": "Pantry",
+      "unit": "2.5 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "maize-5-kg",
+      "name": "Maize meal · 5 kg",
+      "category": "Pantry",
+      "unit": "5 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "maize-10-kg",
+      "name": "Maize meal · 10 kg",
+      "category": "Pantry",
+      "unit": "10 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "maize-12-5-kg",
+      "name": "Maize meal · 12.5 kg",
+      "category": "Pantry",
+      "unit": "12.5 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "maize-25-kg",
+      "name": "Maize meal · 25 kg",
+      "category": "Pantry",
+      "unit": "25 kg",
+      "photo": "maize",
+      "keywords": "pap mielie meal"
+    },
+    {
+      "id": "flour-500-g",
+      "name": "Wheat flour · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "flour-1-kg",
+      "name": "Wheat flour · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "flour-2-5-kg",
+      "name": "Wheat flour · 2.5 kg",
+      "category": "Pantry",
+      "unit": "2.5 kg",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "flour-5-kg",
+      "name": "Wheat flour · 5 kg",
+      "category": "Pantry",
+      "unit": "5 kg",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "flour-10-kg",
+      "name": "Wheat flour · 10 kg",
+      "category": "Pantry",
+      "unit": "10 kg",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "flour-12-5-kg",
+      "name": "Wheat flour · 12.5 kg",
+      "category": "Pantry",
+      "unit": "12.5 kg",
+      "photo": "flour",
+      "keywords": ""
+    },
+    {
+      "id": "sugar-500-g",
+      "name": "White sugar · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "sugar",
+      "keywords": ""
+    },
+    {
+      "id": "sugar-1-kg",
+      "name": "White sugar · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "sugar",
+      "keywords": ""
+    },
+    {
+      "id": "sugar-2-5-kg",
+      "name": "White sugar · 2.5 kg",
+      "category": "Pantry",
+      "unit": "2.5 kg",
+      "photo": "sugar",
+      "keywords": ""
+    },
+    {
+      "id": "sugar-5-kg",
+      "name": "White sugar · 5 kg",
+      "category": "Pantry",
+      "unit": "5 kg",
+      "photo": "sugar",
+      "keywords": ""
+    },
+    {
+      "id": "sugar-10-kg",
+      "name": "White sugar · 10 kg",
+      "category": "Pantry",
+      "unit": "10 kg",
+      "photo": "sugar",
+      "keywords": ""
+    },
+    {
+      "id": "oats-500-g",
+      "name": "Rolled oats · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "oats",
+      "keywords": ""
+    },
+    {
+      "id": "oats-1-kg",
+      "name": "Rolled oats · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "oats",
+      "keywords": ""
+    },
+    {
+      "id": "oats-2-kg",
+      "name": "Rolled oats · 2 kg",
+      "category": "Pantry",
+      "unit": "2 kg",
+      "photo": "oats",
+      "keywords": ""
+    },
+    {
+      "id": "pasta-250-g",
+      "name": "Penne pasta · 250 g",
+      "category": "Pantry",
+      "unit": "250 g",
+      "photo": "pasta",
+      "keywords": ""
+    },
+    {
+      "id": "pasta-500-g",
+      "name": "Penne pasta · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "pasta",
+      "keywords": ""
+    },
+    {
+      "id": "pasta-1-kg",
+      "name": "Penne pasta · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "pasta",
+      "keywords": ""
+    },
+    {
+      "id": "pasta-3-kg",
+      "name": "Penne pasta · 3 kg",
+      "category": "Pantry",
+      "unit": "3 kg",
+      "photo": "pasta",
+      "keywords": ""
+    },
+    {
+      "id": "pasta-5-kg",
+      "name": "Penne pasta · 5 kg",
+      "category": "Pantry",
+      "unit": "5 kg",
+      "photo": "pasta",
+      "keywords": ""
+    },
+    {
+      "id": "beans-410-g",
+      "name": "Baked beans · 410 g",
+      "category": "Pantry",
+      "unit": "410 g",
+      "photo": "beans",
+      "keywords": ""
+    },
+    {
+      "id": "beans-6-x-410-g",
+      "name": "Baked beans · 6 x 410 g",
+      "category": "Pantry",
+      "unit": "6 x 410 g",
+      "photo": "beans",
+      "keywords": ""
+    },
+    {
+      "id": "beans-12-x-410-g",
+      "name": "Baked beans · 12 x 410 g",
+      "category": "Pantry",
+      "unit": "12 x 410 g",
+      "photo": "beans",
+      "keywords": ""
+    },
+    {
+      "id": "peanut-butter-400-g",
+      "name": "Peanut butter · 400 g",
+      "category": "Pantry",
+      "unit": "400 g",
+      "photo": "peanut-butter",
+      "keywords": ""
+    },
+    {
+      "id": "peanut-butter-800-g",
+      "name": "Peanut butter · 800 g",
+      "category": "Pantry",
+      "unit": "800 g",
+      "photo": "peanut-butter",
+      "keywords": ""
+    },
+    {
+      "id": "peanut-butter-1-kg",
+      "name": "Peanut butter · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "peanut-butter",
+      "keywords": ""
+    },
+    {
+      "id": "oil-500-ml",
+      "name": "Sunflower oil · 500 ml",
+      "category": "Pantry",
+      "unit": "500 ml",
+      "photo": "oil",
+      "keywords": ""
+    },
+    {
+      "id": "oil-750-ml",
+      "name": "Sunflower oil · 750 ml",
+      "category": "Pantry",
+      "unit": "750 ml",
+      "photo": "oil",
+      "keywords": ""
+    },
+    {
+      "id": "oil-1-l",
+      "name": "Sunflower oil · 1 L",
+      "category": "Pantry",
+      "unit": "1 L",
+      "photo": "oil",
+      "keywords": ""
+    },
+    {
+      "id": "oil-2-l",
+      "name": "Sunflower oil · 2 L",
+      "category": "Pantry",
+      "unit": "2 L",
+      "photo": "oil",
+      "keywords": ""
+    },
+    {
+      "id": "oil-5-l",
+      "name": "Sunflower oil · 5 L",
+      "category": "Pantry",
+      "unit": "5 L",
+      "photo": "oil",
+      "keywords": ""
+    },
+    {
+      "id": "tea-20-bags",
+      "name": "Black tea · 20 bags",
+      "category": "Tea & Coffee",
+      "unit": "20 bags",
+      "photo": "tea",
+      "keywords": ""
+    },
+    {
+      "id": "tea-40-bags",
+      "name": "Black tea · 40 bags",
+      "category": "Tea & Coffee",
+      "unit": "40 bags",
+      "photo": "tea",
+      "keywords": ""
+    },
+    {
+      "id": "tea-80-bags",
+      "name": "Black tea · 80 bags",
+      "category": "Tea & Coffee",
+      "unit": "80 bags",
+      "photo": "tea",
+      "keywords": ""
+    },
+    {
+      "id": "tea-160-bags",
+      "name": "Black tea · 160 bags",
+      "category": "Tea & Coffee",
+      "unit": "160 bags",
+      "photo": "tea",
+      "keywords": ""
+    },
+    {
+      "id": "coffee-50-g",
+      "name": "Instant coffee · 50 g",
+      "category": "Tea & Coffee",
+      "unit": "50 g",
+      "photo": "coffee",
+      "keywords": ""
+    },
+    {
+      "id": "coffee-100-g",
+      "name": "Instant coffee · 100 g",
+      "category": "Tea & Coffee",
+      "unit": "100 g",
+      "photo": "coffee",
+      "keywords": ""
+    },
+    {
+      "id": "coffee-200-g",
+      "name": "Instant coffee · 200 g",
+      "category": "Tea & Coffee",
+      "unit": "200 g",
+      "photo": "coffee",
+      "keywords": ""
+    },
+    {
+      "id": "water-500-ml",
+      "name": "Still water · 500 ml",
+      "category": "Drinks",
+      "unit": "500 ml",
+      "photo": "water",
+      "keywords": ""
+    },
+    {
+      "id": "water-750-ml",
+      "name": "Still water · 750 ml",
+      "category": "Drinks",
+      "unit": "750 ml",
+      "photo": "water",
+      "keywords": ""
+    },
+    {
+      "id": "water-1-5-l",
+      "name": "Still water · 1.5 L",
+      "category": "Drinks",
+      "unit": "1.5 L",
+      "photo": "water",
+      "keywords": ""
+    },
+    {
+      "id": "water-5-l",
+      "name": "Still water · 5 L",
+      "category": "Drinks",
+      "unit": "5 L",
+      "photo": "water",
+      "keywords": ""
+    },
+    {
+      "id": "water-6-x-1-5-l",
+      "name": "Still water · 6 x 1.5 L",
+      "category": "Drinks",
+      "unit": "6 x 1.5 L",
+      "photo": "water",
+      "keywords": ""
+    },
+    {
+      "id": "soft-drink-300-ml",
+      "name": "Orange soft drink · 300 ml",
+      "category": "Drinks",
+      "unit": "300 ml",
+      "photo": "soft-drink",
+      "keywords": ""
+    },
+    {
+      "id": "soft-drink-500-ml",
+      "name": "Orange soft drink · 500 ml",
+      "category": "Drinks",
+      "unit": "500 ml",
+      "photo": "soft-drink",
+      "keywords": ""
+    },
+    {
+      "id": "soft-drink-1-l",
+      "name": "Orange soft drink · 1 L",
+      "category": "Drinks",
+      "unit": "1 L",
+      "photo": "soft-drink",
+      "keywords": ""
+    },
+    {
+      "id": "soft-drink-2-l",
+      "name": "Orange soft drink · 2 L",
+      "category": "Drinks",
+      "unit": "2 L",
+      "photo": "soft-drink",
+      "keywords": ""
+    },
+    {
+      "id": "soft-drink-6-x-2-l",
+      "name": "Orange soft drink · 6 x 2 L",
+      "category": "Drinks",
+      "unit": "6 x 2 L",
+      "photo": "soft-drink",
+      "keywords": ""
+    },
+    {
+      "id": "crisps-36-g",
+      "name": "Potato crisps · 36 g",
+      "category": "Snacks",
+      "unit": "36 g",
+      "photo": "crisps",
+      "keywords": ""
+    },
+    {
+      "id": "crisps-125-g",
+      "name": "Potato crisps · 125 g",
+      "category": "Snacks",
+      "unit": "125 g",
+      "photo": "crisps",
+      "keywords": ""
+    },
+    {
+      "id": "crisps-200-g",
+      "name": "Potato crisps · 200 g",
+      "category": "Snacks",
+      "unit": "200 g",
+      "photo": "crisps",
+      "keywords": ""
+    },
+    {
+      "id": "crisps-12-x-36-g",
+      "name": "Potato crisps · 12 x 36 g",
+      "category": "Snacks",
+      "unit": "12 x 36 g",
+      "photo": "crisps",
+      "keywords": ""
+    },
+    {
+      "id": "soap-100-g",
+      "name": "Bath soap · 100 g",
+      "category": "Personal Care",
+      "unit": "100 g",
+      "photo": "soap",
+      "keywords": ""
+    },
+    {
+      "id": "soap-175-g",
+      "name": "Bath soap · 175 g",
+      "category": "Personal Care",
+      "unit": "175 g",
+      "photo": "soap",
+      "keywords": ""
+    },
+    {
+      "id": "soap-250-g",
+      "name": "Bath soap · 250 g",
+      "category": "Personal Care",
+      "unit": "250 g",
+      "photo": "soap",
+      "keywords": ""
+    },
+    {
+      "id": "soap-6-x-175-g",
+      "name": "Bath soap · 6 x 175 g",
+      "category": "Personal Care",
+      "unit": "6 x 175 g",
+      "photo": "soap",
+      "keywords": ""
+    },
+    {
+      "id": "washing-powder-500-g",
+      "name": "Washing powder · 500 g",
+      "category": "Household",
+      "unit": "500 g",
+      "photo": "washing-powder",
+      "keywords": ""
+    },
+    {
+      "id": "washing-powder-1-kg",
+      "name": "Washing powder · 1 kg",
+      "category": "Household",
+      "unit": "1 kg",
+      "photo": "washing-powder",
+      "keywords": ""
+    },
+    {
+      "id": "washing-powder-2-kg",
+      "name": "Washing powder · 2 kg",
+      "category": "Household",
+      "unit": "2 kg",
+      "photo": "washing-powder",
+      "keywords": ""
+    },
+    {
+      "id": "washing-powder-3-kg",
+      "name": "Washing powder · 3 kg",
+      "category": "Household",
+      "unit": "3 kg",
+      "photo": "washing-powder",
+      "keywords": ""
+    },
+    {
+      "id": "washing-powder-5-kg",
+      "name": "Washing powder · 5 kg",
+      "category": "Household",
+      "unit": "5 kg",
+      "photo": "washing-powder",
+      "keywords": ""
+    },
+    {
+      "id": "dishwashing-400-ml",
+      "name": "Dishwashing liquid · 400 ml",
+      "category": "Household",
+      "unit": "400 ml",
+      "photo": "dishwashing",
+      "keywords": ""
+    },
+    {
+      "id": "dishwashing-750-ml",
+      "name": "Dishwashing liquid · 750 ml",
+      "category": "Household",
+      "unit": "750 ml",
+      "photo": "dishwashing",
+      "keywords": ""
+    },
+    {
+      "id": "dishwashing-1-l",
+      "name": "Dishwashing liquid · 1 L",
+      "category": "Household",
+      "unit": "1 L",
+      "photo": "dishwashing",
+      "keywords": ""
+    },
+    {
+      "id": "dishwashing-5-l",
+      "name": "Dishwashing liquid · 5 L",
+      "category": "Household",
+      "unit": "5 L",
+      "photo": "dishwashing",
+      "keywords": ""
+    },
+    {
+      "id": "toilet-paper-4-rolls",
+      "name": "Toilet paper · 4 rolls",
+      "category": "Household",
+      "unit": "4 rolls",
+      "photo": "toilet-paper",
+      "keywords": ""
+    },
+    {
+      "id": "toilet-paper-9-rolls",
+      "name": "Toilet paper · 9 rolls",
+      "category": "Household",
+      "unit": "9 rolls",
+      "photo": "toilet-paper",
+      "keywords": ""
+    },
+    {
+      "id": "toilet-paper-18-rolls",
+      "name": "Toilet paper · 18 rolls",
+      "category": "Household",
+      "unit": "18 rolls",
+      "photo": "toilet-paper",
+      "keywords": ""
+    },
+    {
+      "id": "toilet-paper-24-rolls",
+      "name": "Toilet paper · 24 rolls",
+      "category": "Household",
+      "unit": "24 rolls",
+      "photo": "toilet-paper",
+      "keywords": ""
+    },
+    {
+      "id": "toilet-paper-48-rolls",
+      "name": "Toilet paper · 48 rolls",
+      "category": "Household",
+      "unit": "48 rolls",
+      "photo": "toilet-paper",
+      "keywords": ""
+    },
+    {
+      "id": "biscuits-100-g",
+      "name": "Plain biscuits · 100 g",
+      "category": "Snacks",
+      "unit": "100 g",
+      "photo": "biscuits",
+      "keywords": ""
+    },
+    {
+      "id": "biscuits-200-g",
+      "name": "Plain biscuits · 200 g",
+      "category": "Snacks",
+      "unit": "200 g",
+      "photo": "biscuits",
+      "keywords": ""
+    },
+    {
+      "id": "biscuits-500-g",
+      "name": "Plain biscuits · 500 g",
+      "category": "Snacks",
+      "unit": "500 g",
+      "photo": "biscuits",
+      "keywords": ""
+    },
+    {
+      "id": "sweets-50-g",
+      "name": "Wrapped sweets · 50 g",
+      "category": "Snacks",
+      "unit": "50 g",
+      "photo": "sweets",
+      "keywords": ""
+    },
+    {
+      "id": "sweets-100-g",
+      "name": "Wrapped sweets · 100 g",
+      "category": "Snacks",
+      "unit": "100 g",
+      "photo": "sweets",
+      "keywords": ""
+    },
+    {
+      "id": "sweets-250-g",
+      "name": "Wrapped sweets · 250 g",
+      "category": "Snacks",
+      "unit": "250 g",
+      "photo": "sweets",
+      "keywords": ""
+    },
+    {
+      "id": "sweets-500-g",
+      "name": "Wrapped sweets · 500 g",
+      "category": "Snacks",
+      "unit": "500 g",
+      "photo": "sweets",
+      "keywords": ""
+    },
+    {
+      "id": "sweets-1-kg",
+      "name": "Wrapped sweets · 1 kg",
+      "category": "Snacks",
+      "unit": "1 kg",
+      "photo": "sweets",
+      "keywords": ""
+    },
+    {
+      "id": "pilchards-155-g",
+      "name": "Pilchards in tomato sauce · 155 g",
+      "category": "Pantry",
+      "unit": "155 g",
+      "photo": "pilchards",
+      "keywords": ""
+    },
+    {
+      "id": "pilchards-400-g",
+      "name": "Pilchards in tomato sauce · 400 g",
+      "category": "Pantry",
+      "unit": "400 g",
+      "photo": "pilchards",
+      "keywords": ""
+    },
+    {
+      "id": "pilchards-6-x-400-g",
+      "name": "Pilchards in tomato sauce · 6 x 400 g",
+      "category": "Pantry",
+      "unit": "6 x 400 g",
+      "photo": "pilchards",
+      "keywords": ""
+    },
+    {
+      "id": "pilchards-12-x-400-g",
+      "name": "Pilchards in tomato sauce · 12 x 400 g",
+      "category": "Pantry",
+      "unit": "12 x 400 g",
+      "photo": "pilchards",
+      "keywords": ""
+    },
+    {
+      "id": "tomato-sauce-350-ml",
+      "name": "Tomato sauce · 350 ml",
+      "category": "Pantry",
+      "unit": "350 ml",
+      "photo": "tomato-sauce",
+      "keywords": ""
+    },
+    {
+      "id": "tomato-sauce-700-ml",
+      "name": "Tomato sauce · 700 ml",
+      "category": "Pantry",
+      "unit": "700 ml",
+      "photo": "tomato-sauce",
+      "keywords": ""
+    },
+    {
+      "id": "tomato-sauce-2-l",
+      "name": "Tomato sauce · 2 L",
+      "category": "Pantry",
+      "unit": "2 L",
+      "photo": "tomato-sauce",
+      "keywords": ""
+    },
+    {
+      "id": "lotion-200-ml",
+      "name": "Body lotion · 200 ml",
+      "category": "Personal Care",
+      "unit": "200 ml",
+      "photo": "lotion",
+      "keywords": ""
+    },
+    {
+      "id": "lotion-400-ml",
+      "name": "Body lotion · 400 ml",
+      "category": "Personal Care",
+      "unit": "400 ml",
+      "photo": "lotion",
+      "keywords": ""
+    },
+    {
+      "id": "lotion-750-ml",
+      "name": "Body lotion · 750 ml",
+      "category": "Personal Care",
+      "unit": "750 ml",
+      "photo": "lotion",
+      "keywords": ""
+    },
+    {
+      "id": "toothpaste-50-ml",
+      "name": "Toothpaste · 50 ml",
+      "category": "Personal Care",
+      "unit": "50 ml",
+      "photo": "toothpaste",
+      "keywords": ""
+    },
+    {
+      "id": "toothpaste-100-ml",
+      "name": "Toothpaste · 100 ml",
+      "category": "Personal Care",
+      "unit": "100 ml",
+      "photo": "toothpaste",
+      "keywords": ""
+    },
+    {
+      "id": "toothpaste-150-ml",
+      "name": "Toothpaste · 150 ml",
+      "category": "Personal Care",
+      "unit": "150 ml",
+      "photo": "toothpaste",
+      "keywords": ""
+    },
+    {
+      "id": "shampoo-200-ml",
+      "name": "Shampoo · 200 ml",
+      "category": "Personal Care",
+      "unit": "200 ml",
+      "photo": "shampoo",
+      "keywords": ""
+    },
+    {
+      "id": "shampoo-400-ml",
+      "name": "Shampoo · 400 ml",
+      "category": "Personal Care",
+      "unit": "400 ml",
+      "photo": "shampoo",
+      "keywords": ""
+    },
+    {
+      "id": "shampoo-750-ml",
+      "name": "Shampoo · 750 ml",
+      "category": "Personal Care",
+      "unit": "750 ml",
+      "photo": "shampoo",
+      "keywords": ""
+    },
+    {
+      "id": "nappies-size-2-20-pack",
+      "name": "Disposable nappies · Size 2 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 2 - 20 pack",
+      "photo": "nappies",
+      "keywords": "nappies diapers"
+    },
+    {
+      "id": "nappies-size-3-20-pack",
+      "name": "Disposable nappies · Size 3 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 3 - 20 pack",
+      "photo": "nappies",
+      "keywords": "nappies diapers"
+    },
+    {
+      "id": "nappies-size-4-20-pack",
+      "name": "Disposable nappies · Size 4 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 4 - 20 pack",
+      "photo": "nappies",
+      "keywords": "nappies diapers"
+    },
+    {
+      "id": "nappies-size-5-20-pack",
+      "name": "Disposable nappies · Size 5 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 5 - 20 pack",
+      "photo": "nappies",
+      "keywords": "nappies diapers"
+    },
+    {
+      "id": "pads-8-pack",
+      "name": "Sanitary pads · 8 pack",
+      "category": "Personal Care",
+      "unit": "8 pack",
+      "photo": "pads",
+      "keywords": ""
+    },
+    {
+      "id": "pads-10-pack",
+      "name": "Sanitary pads · 10 pack",
+      "category": "Personal Care",
+      "unit": "10 pack",
+      "photo": "pads",
+      "keywords": ""
+    },
+    {
+      "id": "pads-20-pack",
+      "name": "Sanitary pads · 20 pack",
+      "category": "Personal Care",
+      "unit": "20 pack",
+      "photo": "pads",
+      "keywords": ""
+    },
+    {
+      "id": "batteries-2-pack",
+      "name": "AA batteries · 2 pack",
+      "category": "General Goods",
+      "unit": "2 pack",
+      "photo": "batteries",
+      "keywords": ""
+    },
+    {
+      "id": "batteries-4-pack",
+      "name": "AA batteries · 4 pack",
+      "category": "General Goods",
+      "unit": "4 pack",
+      "photo": "batteries",
+      "keywords": ""
+    },
+    {
+      "id": "batteries-8-pack",
+      "name": "AA batteries · 8 pack",
+      "category": "General Goods",
+      "unit": "8 pack",
+      "photo": "batteries",
+      "keywords": ""
+    },
+    {
+      "id": "notebook-32-pages",
+      "name": "Exercise notebook · 32 pages",
+      "category": "Stationery",
+      "unit": "32 pages",
+      "photo": "notebook",
+      "keywords": ""
+    },
+    {
+      "id": "notebook-72-pages",
+      "name": "Exercise notebook · 72 pages",
+      "category": "Stationery",
+      "unit": "72 pages",
+      "photo": "notebook",
+      "keywords": ""
+    },
+    {
+      "id": "notebook-96-pages",
+      "name": "Exercise notebook · 96 pages",
+      "category": "Stationery",
+      "unit": "96 pages",
+      "photo": "notebook",
+      "keywords": ""
+    },
+    {
+      "id": "pens-single",
+      "name": "Ballpoint pens · Single",
+      "category": "Stationery",
+      "unit": "Single",
+      "photo": "pens",
+      "keywords": ""
+    },
+    {
+      "id": "pens-3-pack",
+      "name": "Ballpoint pens · 3 pack",
+      "category": "Stationery",
+      "unit": "3 pack",
+      "photo": "pens",
+      "keywords": ""
+    },
+    {
+      "id": "pens-10-pack",
+      "name": "Ballpoint pens · 10 pack",
+      "category": "Stationery",
+      "unit": "10 pack",
+      "photo": "pens",
+      "keywords": ""
+    }
+  ]
+}

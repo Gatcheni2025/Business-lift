@@ -30,13 +30,74 @@ void main(){
     expect(shops.single.photoRef,contains('/photos/'));
     expect(shops.single.photoAttributions.single['name'],'Shop photographer');
   });
+  test('R3.4 Cloud Function photo URL and contributor credit survive parsing',(){
+    final shop=OnlineShop.fromJson({
+      'id':'google-ChIJ9876','name':'China Mall','origin':'google_places',
+      'shopCategory':'variety',
+      'photoUrl':'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-photo.php?name=places%2FChIJ9876%2Fphotos%2FATabc',
+      'photoAttributions':[{'name':'Store photo owner','url':''}]
+    });
+    expect(shop.hasPhoto,isTrue);
+    expect(shop.displayPhotoUrl,contains('shopper-place-photo.php'));
+    expect(shop.photoAttributions.single['name'],'Store photo owner');
+    expect(teyzaMatchesShopCategory(shop,'variety'),isTrue);
+  });
+  test('A fake photo host is rejected and old Google reference is supported',(){
+    final external=OnlineShop.fromJson({
+      'id':'google-1','name':'Spaza Shop','photoUrl':'https://untrusted.example/photo'
+    });
+    expect(external.displayPhotoUrl,isNull);
+    final legacy=OnlineShop.fromJson({
+      'id':'google-2','name':'Real Spaza','photoRef':'places/ChIJabc/photos/ATabc'
+    });
+    expect(legacy.displayPhotoUrl,contains('ref='));
+  });
+  test('Verified Google type matches stay visible even with generic place names',(){
+    final shop=OnlineShop.fromJson({
+      'id':'google-ChIJx01','name':'Village Corner 7',
+      'shopCategory':'spaza','categorizationVerified':true,
+      'origin':'google_places'
+    });
+    expect(teyzaMatchesShopCategory(shop,'spaza'),isTrue);
+    expect(shop.photoRef,isNull);
+  });
+  test('Spaza and variety search do not mix unrelated businesses',(){
+    OnlineShop example(String name)=>OnlineShop.fromJson({
+      'id':'google-'+name,'name':name,'origin':'google_places'
+    });
+    expect(teyzaMatchesShopCategory(example('China Mall'),'variety'),isTrue);
+    expect(teyzaMatchesShopCategory(example('Qolo Tuckshop'),'variety'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Las G Tyres'),'variety'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Phoenix Group of Companies'),'spaza'),isFalse);
+    expect(teyzaMatchesShopCategory(example('Shalom Spaza'),'spaza'),isTrue);
+  });
+  test('Store types, wider radius and best duplicate photo remain available',() async {
+    final client=MockClient((request) async {
+      expect(request.url.queryParameters['radius'],'40000');
+      return http.Response(jsonEncode({'ok':true,'entries':[
+        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
+          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99},
+        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
+          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99,
+          'photoRef':'places/ChIJ1234/photos/Photo_1234'},
+        {'id':'google-superette','name':'Penzance Superette','origin':'google_places'}
+      ]}),200);
+    });
+    final shops=await findOnlineShops(latitude:-29.74,longitude:30.99,radiusKm:40,client:client);
+    expect(shops,hasLength(2));expect(shops.first.hasPhoto,isTrue);
+  });
+  test('Verified category does not leak into another category',(){
+    final shop=OnlineShop.fromJson({'id':'g','name':'Supermarket','origin':'google_places',
+      'categorizationVerified':true,'shopCategory':'variety'});
+    expect(teyzaMatchesShopCategory(shop,'spaza'),isFalse);
+  });
   test('Unavailable Firebase Places feed falls back to attributed live OSM map data',() async {
     final client=MockClient((req) async {
       if(req.url.host=='us-central1-business-lift-3c19c.cloudfunctions.net'){
         return http.Response('Missing endpoint',404);
       }
       expect(req.url.host,'overpass-api.de');
-      expect(req.bodyFields['data'],contains('around:4500'));
+      expect(req.bodyFields['data'],contains('around:12000'));
       return http.Response(jsonEncode({'elements':[{
         'type':'node','id':12345,'lat':-29.80,'lon':30.97,
         'tags':{'name':'Observed Tuckshop','shop':'convenience'}

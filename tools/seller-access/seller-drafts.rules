@@ -1,0 +1,53 @@
+// TEYZA R2.7 — ADD this scoped match block to the existing
+// service cloud.firestore { match /databases/{database}/documents { ... } }
+// Do not replace or delete the existing rules for other collections.
+// Sellers can create/read/edit/delete PRIVATE product drafts only.
+// This rule grants NO public browsing, listing activation, or order permissions.
+match /teyzaDraftProducts/{sellerId}/items/{itemId} {
+  function draftOwner() {
+    return request.auth != null
+      && request.auth.uid == sellerId
+      && exists(/databases/$(database)/documents/teyzaSellerAccounts/$(sellerId));
+  }
+  function validProduct() {
+    return request.resource.data.keys().hasAll([
+      'ownerUid','name','category','description','priceCents',
+      'stockQty','status','createdAt','updatedAt'
+    ])
+    && request.resource.data.keys().hasOnly([
+      'ownerUid','name','category','description','priceCents',
+      'stockQty','status','createdAt','updatedAt'
+    ])
+    && request.resource.data.ownerUid == sellerId
+    && request.resource.data.status == 'draft'
+    && request.resource.data.name is string
+    && request.resource.data.name.size() >= 2
+    && request.resource.data.name.size() <= 120
+    && request.resource.data.category is string
+    && request.resource.data.category.size() <= 60
+    && request.resource.data.description is string
+    && request.resource.data.description.size() <= 500
+    && request.resource.data.priceCents is int
+    && request.resource.data.priceCents >= 1
+    && request.resource.data.priceCents <= 99999900
+    && request.resource.data.stockQty is int
+    && request.resource.data.stockQty >= 0
+    && request.resource.data.stockQty <= 100000
+    && request.resource.data.createdAt is timestamp
+    && request.resource.data.updatedAt is timestamp;
+  }
+  allow get, list: if draftOwner();
+  allow create: if draftOwner() && validProduct()
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.updatedAt == request.time;
+  allow update: if draftOwner() && validProduct()
+    && resource.data.ownerUid == sellerId
+    && resource.data.status == 'draft'
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'name','category','description','priceCents','stockQty','updatedAt'
+    ]);
+  allow delete: if draftOwner() && resource.data.ownerUid == sellerId
+    && resource.data.status == 'draft';
+}
