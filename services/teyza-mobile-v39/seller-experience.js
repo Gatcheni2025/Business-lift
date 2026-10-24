@@ -4,11 +4,11 @@ const actions=new Set(['seller_register','admin_access','admin_seller_queue','ad
   'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
 function recentAdmin(auth,clock){
-  if(auth.teyzaAdmin!==true)D.fail(403,'Teyza administrator access is required.');
+  if(auth.teyzaAdmin!==true||auth.email_verified!==true)D.fail(403,'Teyza administrator access is required.');
   const age=clock()/1000-auth.auth_time;
   if(!Number.isFinite(age)||age< -60||age>300)D.fail(401,'Sign in again before reviewing sellers. Your review session lasts five minutes.');
 }
-function createSellerExperience({db,clock=Date.now,rate}){
+function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>null}){
  const doc=p=>db.doc(p);
  const owner=async uid=>{const s=await doc('teyzaSellerAccounts/'+uid).get();return D.seller(s.exists?s.data():null,uid);};
  async function execute(auth,action,data={}){
@@ -17,15 +17,18 @@ function createSellerExperience({db,clock=Date.now,rate}){
    await rate(uid,'register',5,3600000);
    if(!['spaza','retail'].includes(data.category))D.fail(422,'Choose Spaza Shop or Other Retail / Wholesale.');
    if(data.consent!==true)D.fail(422,'Confirm that these shop details are yours.');
+   const legalType=data.legalType||'individual';
+   if(!['individual','company'].includes(legalType))D.fail(422,'Choose Individual or Registered company.');
+   if(legalType==='company'&&(!data.companyName?.trim()||!data.registrationNumber?.trim()))D.fail(422,'Enter the registered company name and registration number.');
    const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
-    ownerEmail:auth.email||'',phone:D.text(data.phone,'contact number',25),address:D.text(data.address,'shop address',250),
+    ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),address:D.text(data.address,'shop address',250),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
     approvalStatus:'pending',listingStatus:'not_listed',createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
     if(snap.exists){D.seller(snap.data(),uid);return {registered:true,alreadyRegistered:true};}
-    tx.set(ref,values);return {registered:true,approvalStatus:'pending'};
+    tx.set(ref,values);tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
@@ -35,8 +38,9 @@ function createSellerExperience({db,clock=Date.now,rate}){
    if(data.after)query=query.startAfter(D.id(data.after));
    const result=await query.get(),rows=result.docs.slice(0,30);
    const shops=await Promise.all(rows.map(r=>doc('teyzaSellerAccounts/'+r.id).get()));
+   const identities=await Promise.all(rows.map(r=>doc('teyzaSellerIdentity/'+r.id).get()));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};return {
-    sellerUid:r.id,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
+    sellerUid:r.id,evidenceId:identities[i].exists?identities[i].data().evidenceId:null,evidenceKind:identities[i].exists?identities[i].data().kind:null,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
     phone:a.phone||'',ownerEmail:a.ownerEmail||'',companyName:a.companyName||'',registrationNumber:a.registrationNumber||'',
     approvalStatus:a.approvalStatus||'pending',listingStatus:a.listingStatus||'not_listed',
     submissionId:v.submissionId||'legacy_'+v.submittedAt,submittedAt:v.submittedAt,expired:!v.objectPath||v.expiresAt<=clock()};}),
@@ -48,10 +52,22 @@ function createSellerExperience({db,clock=Date.now,rate}){
    if(uid===sellerUid)D.fail(403,'Another administrator must review your own shop.');
    if(!['approved','needs_new_photo','rejected'].includes(data.status))D.fail(422,'Choose a review decision.');
    const reason=D.text(data.reason||'','review note',400,data.status!=='approved');
+   const authUser=await getAuthUser(sellerUid);
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaMobileVerification/'+sellerUid),accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid);
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
-    const [v,a,s,view]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef)]);
+    const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
+    const [v,a,s,view,o,i]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef)]);
+    const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
+    const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
+    if(setup.requiredVersion===2){
+      if(!identity||data.evidenceId!==identity.evidenceId)D.fail(409,'View the current identity document and refresh this review.');
+      if(data.status==='approved'){
+        require('./onboarding').checkedPhone(authUser,a.exists?a.data().phone:'');
+        if(!require('./onboarding').current(identity,sellerUid,clock)||!identityView?.exists||identityView.data().sellerUid!==sellerUid||clock()-identityView.data().viewedAt>300000)
+          D.fail(409,'View the current private identity document before approving this seller.');
+      }
+    }
     const record=v.exists?v.data():null;D.seller(a.exists?a.data():null,sellerUid);
     if(!record||record.ownerUid!==sellerUid||record.status!=='pending_review'||(record.submissionId||'legacy_'+record.submittedAt)!==submissionId)
      D.fail(409,'This submission changed or was reviewed already. Refresh the review queue.');
@@ -60,8 +76,13 @@ function createSellerExperience({db,clock=Date.now,rate}){
      D.fail(409,'View the current private selfie before approving this seller.');
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:data.status==='needs_new_photo'?'pending':data.status,updatedAt:new Date(clock())});
-    // Identity approval never changes paid activation or price-plan entitlement.
-    if(data.status!=='approved'&&s.exists)tx.update(shopRef,{status:'suspended'});
+    // Completion enables selling; manual approval only grants the identity badge.
+    if(data.status!=='approved'&&s.exists)tx.update(shopRef,{status:'suspended',sellingEnabled:false,identityVerified:false,verificationStatus:data.status,moderationSource:'owner_review'});
+    if(setup.requiredVersion===2){
+      tx.set(setupRef,{moderationBlocked:data.status!=='approved',sellingStatus:data.status==='approved'&&setup.completedAt?'active':'paused',updatedAt:clock()},{merge:true});
+      if(data.status==='approved'&&s.exists)tx.update(shopRef,{identityVerified:true,verificationStatus:'approved',
+        ...(setup.completedAt&&s.data().moderationSource==='owner_review'?{status:'active',sellingEnabled:true}: {})});
+    }
     tx.set(doc('teyzaSellerReviewAudit/'+submissionId),{sellerUid,submissionId,status:data.status,reason,reviewedBy:uid,reviewedAt:clock()});
     return {status:data.status};
    });

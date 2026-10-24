@@ -68,12 +68,15 @@ jobs:
         run: |
           python3 scripts/verify_teyza_catalogue.py
           python3 apps/teyza_shopper/scripts/test_prepare_mobile_release.py
+      - name: Test activation helper without live credentials
+        shell: pwsh
+        run: ./scripts/test_teyza_activation.ps1
       - name: Package mobile service deployment kit
         run: python3 scripts/package_teyza_mobile.py
       - uses: actions/upload-artifact@v4
         with:
-          name: teyza-mobile-r312-deploy-kit
-          path: TEYZA_MOBILE_R312_DEPLOY_KIT.zip
+          name: teyza-mobile-r313-deploy-kit
+          path: TEYZA_MOBILE_R313_DEPLOY_KIT.zip
           retention-days: 30
       - uses: subosito/flutter-action@v2
         with:

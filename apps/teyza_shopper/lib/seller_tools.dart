@@ -28,7 +28,7 @@ class SellerDashboard extends StatelessWidget {
       (title:'Trading hours',detail:'Set when your shop is open',icon:Icons.schedule_rounded,tap:()=>onTool(SellerTool.hours)),
       (title:'Finance & credit',detail:'Request a funding follow-up',icon:Icons.account_balance_outlined,tap:()=>onTool(SellerTool.finance)),
       (title:'Order stock',detail:'Stock list & supermarket links',icon:Icons.inventory_2_outlined,tap:()=>onTool(SellerTool.stock)),
-      (title:'Verify owner',detail:'Take & submit your selfie',icon:Icons.face_retouching_natural,tap:()=>onTool(SellerTool.verification)),
+      (title:'Verify owner',detail:'Documents, selfie & mobile OTP',icon:Icons.face_retouching_natural,tap:()=>onTool(SellerTool.verification)),
     ];
     return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       const Text('Your shop dashboard',style:TextStyle(fontSize:24,color:ownerInk,fontWeight:FontWeight.w800)),
@@ -148,7 +148,7 @@ class _SellerToolState extends State<SellerToolPage> {
       keyboardType:number?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,
       decoration:InputDecoration(labelText:label,border:const OutlineInputBorder())));
   Widget button(String label,VoidCallback action)=>SizedBox(width:double.infinity,
-    child:FilledButton(onPressed:working||!ready?null:action,child:Text(working?'Please wait…':label)));
+    child:FilledButton(onPressed:working||uid!=widget.session.userId||(!ready&&widget.tool!=SellerTool.verification)?null:action,child:Text(working?'Please wait…':label)));
   Widget services()=>card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     const Text('Choose what your shop offers',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),
     const SizedBox(height:10),
@@ -257,12 +257,12 @@ class _SellerToolState extends State<SellerToolPage> {
     })
   ]));
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F9F7),
-    appBar:AppBar(backgroundColor:const Color(0xFFF7F9F7),foregroundColor:ownerInk,title:Text(sellerToolNames[widget.tool]!)),body:SafeArea(child:loading?const Center(child:CircularProgressIndicator()):
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F9F7),foregroundColor:ownerInk,title:Text(sellerToolNames[widget.tool]!)),body:SafeArea(child:loading&&widget.tool!=SellerTool.verification?const Center(child:CircularProgressIndicator()):
       ListView(padding:const EdgeInsets.all(18),children:[
         if(error!=null)card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(error!,style:const TextStyle(color:Color(0xFF9A3412))),if(!ready)TextButton(onPressed:load,child:const Text('Retry'))])),
         if(status!=null)card(Text(status!,style:const TextStyle(color:Color(0xFF087D5E),fontWeight:FontWeight.w700))),
-        if(ready)switch(widget.tool){SellerTool.services=>services(),SellerTool.hours=>hours(),SellerTool.finance=>finance(),
+        if(uid==widget.session.userId&&(ready||widget.tool==SellerTool.verification))switch(widget.tool){SellerTool.services=>services(),SellerTool.hours=>hours(),SellerTool.finance=>finance(),
           SellerTool.stock=>restock(),SellerTool.verification=>verification()},
         if(!ready&&widget.tool==SellerTool.stock)restock(),
       ])));

@@ -6,6 +6,11 @@ import 'shopper_auth.dart';
 const teyzaMobileEndpoint=String.fromEnvironment('TEYZA_MOBILE_ENDPOINT',
   defaultValue:'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile');
 
+class ShopServiceUnavailable implements Exception {
+  const ShopServiceUnavailable();
+  @override String toString()=> 'Teyza’s shop service needs activation. Contact Teyza support with reference SHOP_SERVICE_UNAVAILABLE. Camera capture and private product drafts are still available.';
+}
+
 class TeyzaMobileApi {
   final ShopperSession session;
   final http.Client? client;
@@ -21,7 +26,7 @@ class TeyzaMobileApi {
         headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
         body:jsonEncode({'action':action,'data':data})).timeout(const Duration(seconds:35));
       if(uid!=session.userId||session.idToken==null)throw StateError('Your account changed. Please reopen this page.');
-      if(response.statusCode==404)throw StateError('Shop services are not connected yet. Please try again later.');
+      if(response.statusCode==404)throw const ShopServiceUnavailable();
       Map<String,dynamic> result;
       try{result=jsonDecode(response.body) as Map<String,dynamic>;}
       catch(_){throw StateError('Shop services are temporarily unavailable. Please try again.');}

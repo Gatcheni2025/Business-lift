@@ -76,7 +76,7 @@ void main(){
  testWidgets('Seller registration is native and cannot continue without required shop details',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
-  final button=find.text('Continue to camera verification');await visibleTap(tester,button);
+  final button=find.text('Continue to seller verification');await visibleTap(tester,button);
   expect(api.calls,isEmpty);expect(find.text('Enter shop name'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
@@ -94,7 +94,7 @@ void main(){
   expect(submission.data.containsKey('status'),false);expect(find.text('Selfie awaiting review'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
- testWidgets('A completed native registration continues directly to owner camera verification',(tester) async{
+ testWidgets('A native registration opens the resumable document, selfie and OTP checklist',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
@@ -102,10 +102,10 @@ void main(){
   await tester.enterText(find.byType(TextFormField).at(2),'KwaMashu, Durban');
   tester.testTextInput.hide();await tester.pumpAndSettle();
   await visibleTap(tester,find.text('I confirm that these are my shop’s details.'));
-  await visibleTap(tester,find.text('Continue to camera verification'));
+  await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
-  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('Open selfie camera'),findsOneWidget);
+  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('ID or passport'),findsOneWidget);expect(find.text('Mobile number & OTP'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{

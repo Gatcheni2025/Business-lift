@@ -165,4 +165,46 @@ void main(){
     expect(session.idToken,isNull);expect(session.emailVerified,isFalse);expect(store.values,isEmpty);
     session.dispose();client.close();
   });
+  test('OTP links the current Firebase UID and verifies the phone provider without creating a second owner',() async{
+    var linked=false;final store=MemoryStore();
+    final client=MockClient((r) async{
+      if(r.url.host=='securetoken.googleapis.com')return refreshed();
+      if(r.url.path.endsWith('signInWithPhoneNumber')){
+        expect(jsonDecode(r.body),{'idToken':'new-token','sessionInfo':'verification-session','code':'123456'});linked=true;
+        return jsonReply({...login,'idToken':'phone-token','refreshToken':'phone-refresh','phoneNumber':'+27712345678','isNewUser':false});
+      }
+      if(r.url.path.endsWith('lookup'))return jsonReply({'users':[{'localId':'user1','emailVerified':false,
+        'email':'user@example.test',if(linked)'phoneNumber':'+27712345678',if(linked)'providerUserInfo':[{'providerId':'phone','phoneNumber':'+27712345678'}]}]});
+      return jsonReply(login);
+    });
+    final session=ShopperSession(client:client,store:store);await session.signIn('user@example.test','password123');
+    await session.linkPhone('verification-session','123456','+27712345678');
+    expect(session.userId,'user1');expect(session.phoneVerified,true);expect(session.emailVerified,false);expect(session.contactVerified,true);
+    expect(store.values['teyza_refresh'],'phone-refresh');await session.signOut();expect(session.phoneVerified,false);expect(session.phoneNumber,isNull);
+    session.dispose();client.close();
+  });
+  test('A phone belonging to another UID cannot replace the existing owner session',() async{
+    final client=MockClient((r) async{
+      if(r.url.host=='securetoken.googleapis.com')return refreshed();
+      if(r.url.path.endsWith('signInWithPhoneNumber'))return jsonReply({'temporaryProof':'proof-for-other-account','phoneNumber':'+27712345678'});
+      return r.url.path.endsWith('lookup')?profile():jsonReply(login);
+    });
+    final session=ShopperSession(client:client,store:MemoryStore());await session.signIn('user@example.test','password123');
+    await expectLater(session.linkPhone('v','123456','+27712345678'),throwsStateError);
+    expect(session.userId,'user1');expect(session.phoneVerified,false);session.dispose();client.close();
+  });
+  test('Signing out while an SMS link is pending cannot restore the owner or phone proof',() async{
+    final requested=Completer<void>(),reply=Completer<http.Response>();
+    final client=MockClient((r) async{
+      if(r.url.host=='securetoken.googleapis.com')return refreshed();
+      if(r.url.path.endsWith('signInWithPhoneNumber')){requested.complete();return reply.future;}
+      return r.url.path.endsWith('lookup')?profile():jsonReply(login);
+    });
+    final session=ShopperSession(client:client,store:MemoryStore());await session.signIn('user@example.test','password123');
+    final pending=session.linkPhone('v','123456','+27712345678');
+    final expected=expectLater(pending,throwsStateError);await requested.future;await session.signOut();
+    reply.complete(jsonReply({...login,'phoneNumber':'+27712345678'}));await expected;
+    expect(session.userId,isNull);expect(session.phoneVerified,false);session.dispose();client.close();
+  });
+
 }

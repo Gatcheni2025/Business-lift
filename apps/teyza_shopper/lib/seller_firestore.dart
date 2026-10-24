@@ -17,12 +17,12 @@ class SellerAccessException implements Exception {
 }
 
 class SellerShop {
-  final String name,category,address,approvalStatus,listingStatus,phone;
-  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone=''});
+  final String name,category,address,approvalStatus,listingStatus,phone,companyName,registrationNumber;
+  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone='',this.companyName='',this.registrationNumber=''});
   factory SellerShop.fromFields(Map<String,dynamic> d)=>SellerShop(
     (d['shopName']??'').toString(),(d['category']??'').toString(),
     (d['address']??'').toString(),(d['approvalStatus']??'pending').toString(),
-    (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString());
+    (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString(),companyName:(d['companyName']??'').toString(),registrationNumber:(d['registrationNumber']??'').toString());
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
   bool get hasRegisteredCategory=>category=='spaza'||category=='retail';
   String get categoryLabel=>category=='spaza'?'Spaza Shop':
@@ -91,6 +91,41 @@ class SellerFirestore {
     if(response.statusCode==404)return null;
     final data=_parse(response,operation:'shop');
     return SellerShop.fromFields(sellerDecodeFields(data['fields']));
+  }
+  Future<void> registerShop({required String category,required String shopName,required String phone,required String address,
+    required String ownerEmail,String companyName='',String registrationNumber=''}) async {
+    if(!['spaza','retail'].contains(category)||shopName.trim().length<2||shopName.length>120||address.trim().isEmpty||address.length>250||
+      phone.length<9||phone.length>25||companyName.length>160||registrationNumber.length>50)throw const FormatException('Check your shop details.');
+    final values={'uid':uid,'category':category,'shopName':shopName.trim(),'ownerEmail':ownerEmail,'phone':phone,
+      'address':address.trim(),'companyName':companyName.trim(),'registrationNumber':registrationNumber.trim(),
+      'approvalStatus':'pending','listingStatus':'not_listed'};
+    final response=await _request('POST',Uri.https('firestore.googleapis.com',
+      '/v1/projects/$teyzaSellerProject/databases/(default)/documents:commit'),body:{'writes':[{
+      'update':{'name':'projects/$teyzaSellerProject/databases/(default)/documents/teyzaSellerAccounts/$uid',
+        'fields':{for(final entry in values.entries)entry.key:{'stringValue':entry.value}}},
+      'currentDocument':{'exists':false},'updateTransforms':[
+        {'fieldPath':'createdAt','setToServerValue':'REQUEST_TIME'},{'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}]}]});
+    if(response.statusCode==409||response.statusCode==412){if((await shop())?.hasRegisteredCategory==true)return;}
+    _parse(response);
+  }
+  Future<List<String>> saveNewDrafts(List<SellerDraft> items) async {
+    if(items.isEmpty||items.length>30)throw const FormatException('Choose between 1 and 30 products.');
+    for(final item in items){validateDraft(item);}
+    var remaining=items;
+    for(var attempt=0;attempt<2;attempt++){
+      if(remaining.isEmpty)return [];
+      final response=await _request('POST',Uri.https('firestore.googleapis.com',
+        '/v1/projects/$teyzaSellerProject/databases/(default)/documents:commit'),body:{'writes':[
+        for(final p in remaining){'update':{'name':'projects/$teyzaSellerProject/databases/(default)/documents/teyzaDraftProducts/$uid/items/${p.id}',
+          'fields':_fields(p,uid)},'currentDocument':{'exists':false},'updateTransforms':[
+          {'fieldPath':'createdAt','setToServerValue':'REQUEST_TIME'},{'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}]}
+      ]});
+      if((response.statusCode==409||response.statusCode==412)&&attempt==0){
+        final existing=(await drafts()).map((p)=>p.id).toSet();remaining=remaining.where((p)=>!existing.contains(p.id)).toList();continue;
+      }
+      _parse(response);return remaining.map((p)=>p.id).toList();
+    }
+    throw StateError('Refresh your products and try again.');
   }
   Future<void> saveProfile(String name,String address,String phone) async {
     if(name.trim().length<2||name.trim().length>120||address.trim().isEmpty||address.length>250||phone.length>25){

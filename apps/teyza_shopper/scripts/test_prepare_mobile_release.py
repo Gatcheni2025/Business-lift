@@ -36,6 +36,7 @@ class NativePermissionTests(unittest.TestCase):
             project=prepare.ROOT/'ios/Runner.xcodeproj/project.pbxproj';project.parent.mkdir();project.write_text('PRODUCT_BUNDLE_IDENTIFIER = za.co.teyza.shopper;\nINFOPLIST_FILE = Runner/Info.plist;\nIPHONEOS_DEPLOYMENT_TARGET = 13.0;')
             (prepare.ROOT/'ios/Podfile').write_text("# platform :ios, '13.0'\nflutter_additional_ios_build_settings(target)")
             prepare.ios();info=plistlib.loads((runner/'Info.plist').read_bytes())
+            self.assertIn('app-1-983479810697-ios-aabbcc', [s for v in info['CFBundleURLTypes'] for s in v['CFBundleURLSchemes']]);
             self.assertIn('NSCameraUsageDescription',info);self.assertIn('remote-notification',info['UIBackgroundModes'])
             self.assertFalse(info['FirebaseMessagingAutoInitEnabled']);self.assertEqual(info['TeyzaFirebaseAppId'],'1:983479810697:ios:aabbcc')
             self.assertEqual(plistlib.loads((runner/'Runner.entitlements').read_bytes())['aps-environment'],'production')

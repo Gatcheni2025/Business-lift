@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'native_firebase.dart';
 
 // Push uses native Firebase installation identity. Account authorization always
 // uses the existing REST-authenticated session at the private mobile API.
@@ -19,19 +19,9 @@ class SellerPush {
   StreamSubscription<RemoteMessage>? foreground,opened;
   void Function()? onOpen;
   String? token,owner;bool starting=false,disposed=false,stopping=false;
-  bool get configured=>!kIsWeb&&(defaultTargetPlatform==TargetPlatform.android||defaultTargetPlatform==TargetPlatform.iOS)&&
-    RegExp('^1:983479810697:${defaultTargetPlatform==TargetPlatform.iOS?'ios':'android'}:[a-fA-F0-9]+\$').hasMatch(
-      defaultTargetPlatform==TargetPlatform.iOS?const String.fromEnvironment('TEYZA_FIREBASE_IOS_APP_ID'):
-      const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID'));
-  Future<void> initialize() async{
-    if(!configured)throw StateError('Phone alerts are awaiting Teyza’s Firebase device setup. Your in-app inbox is still available.');
-    if(Firebase.apps.isEmpty)await Firebase.initializeApp(options:FirebaseOptions(apiKey:teyzaFirebaseApiKey,
-      appId:Platform.isIOS?const String.fromEnvironment('TEYZA_FIREBASE_IOS_APP_ID'):const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID'),
-      messagingSenderId:'983479810697',projectId:'business-lift-3c19c',storageBucket:'business-lift-3c19c.firebasestorage.app',
-      iosBundleId:Platform.isIOS?const String.fromEnvironment('TEYZA_IOS_BUNDLE_ID',defaultValue:'za.co.teyza.shopper'):null));
-  }
+  Future<void> initialize() async{await NativeFirebase.ensure();}
   Future<void> restore() async{
-    if(disposed||starting||stopping||owner!=null||session.userId==null||!session.emailVerified)return;
+    if(disposed||starting||stopping||owner!=null||session.userId==null||!session.contactVerified)return;
     starting=true;
     try{final prefs=await SharedPreferences.getInstance();if(prefs.getString('teyza_seller_push_uid')==session.userId)await enable(request:false);}
     catch(_){/* Inbox works independently of push or its device configuration. */}
@@ -43,7 +33,7 @@ class SellerPush {
     if(!disposed)unawaited(restore());
   }
   Future<void> enable({bool request=true}) async{
-    final uid=session.userId;if(uid==null||!session.emailVerified)throw StateError('Sign in and verify your email first.');
+    final uid=session.userId;if(uid==null||!session.contactVerified)throw StateError('Sign in and verify your email or mobile number first.');
     await initialize();
     final messaging=FirebaseMessaging.instance;
     final settings=request?await messaging.requestPermission(alert:true,badge:true,sound:true):await messaging.getNotificationSettings();

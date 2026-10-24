@@ -13,6 +13,7 @@ import 'teyza_mobile_api.dart';
 import 'product_catalogue.dart';
 import 'seller_product_picker.dart';
 import 'seller_registration.dart';
+import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
 import 'seller_premium.dart';
 
@@ -34,7 +35,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
-  String? publicationStatus;
+  String? publicationStatus;bool sellingEnabled=false;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
   @override void initState(){
@@ -53,11 +54,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   void startActivity(){activityWatch?.cancel();if(liveUpdates)activityWatch=Timer.periodic(const Duration(seconds:25),(_)=>refreshActivity());}
   Future<void> refreshActivity() async{
-    if(!liveUpdates||activityLoading||shop==null||loadedUid!=widget.session.userId||!widget.session.emailVerified)return;
+    if(!liveUpdates||activityLoading||shop==null||loadedUid!=widget.session.userId)return;
     final uid=widget.session.userId;activityLoading=true;
-    try{final results=await Future.wait([mobile.call('seller_summary'),mobile.call('notification_list')]);
+    try{final results=await Future.wait([mobile.call('seller_summary'),widget.session.contactVerified?mobile.call('notification_list'):Future.value(<String,dynamic>{'unread':0})]);
       if(mounted&&uid==widget.session.userId)setState((){unread=(results[1]['unread'] as num? ??0).toInt();
-        publicationStatus=results[0]['publicationStatus']?.toString();
+        publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
     }catch(_){/* Account and private products remain usable during service outages. */}
     finally{activityLoading=false;}
@@ -84,7 +85,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -92,7 +93,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       });
       return;
     }
-    if(widget.session.emailVerified && loadedUid!=uid && !loading){
+    if(loadedUid!=uid && !loading){
       load();
     }
   }
@@ -147,11 +148,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(busy||draftError!=null)return;
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
-      session:widget.session,existingIds:drafts.map((p)=>p.id).toSet())));
+      session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
     if(result==null||!mounted||widget.session.userId!=requestedUid)return;
     await load();
     if(mounted){setState(()=>rangeStatus=result['publication']=='live'?
-      'Your selected range is visible to shoppers.':'Products saved privately. They appear after shop approval and activation.');
+      'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
@@ -159,7 +160,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
       if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        'Shopper range updated. Public prices follow your listing plan.':'Products stay private until your shop is approved and active.');
+        'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
     }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
   }
   Future<void> productPhoto(SellerDraft product) async {
@@ -192,6 +193,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> openTool(SellerTool tool) async{
+    if(tool==SellerTool.verification&&shop!=null){
+      await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,shop:shop!,api:widget.mobileApi)));
+      if(mounted){load();refreshActivity();}return;
+    }
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:tool,api:widget.mobileApi)));
     if(mounted){refreshActivity();load();}
   }
@@ -199,16 +204,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(shop==null)return;
     final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(session:widget.session,shop:shop!)));
     if(changed==true&&mounted)load();
-  }
-  Future<void> _verify() async{
-    try{
-      await widget.session.sendEmailVerification();
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content:Text('Verification email sent. Check your inbox.')));
-    }catch(_){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content:Text('Could not send a verification email.')));
-    }
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
@@ -338,21 +333,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           FilledButton(onPressed:widget.openLogin,child:const Text('Shop owner sign in'))
         ]))
       ]);
-      if(!session.emailVerified)return ListView(padding:const EdgeInsets.all(18),children:[
-        _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          const Text('Verify your email to manage your shop',
-            style:TextStyle(fontSize:20,fontWeight:FontWeight.w700)),
-          const SizedBox(height:10),
-          Text(session.email??''),
-          const SizedBox(height:15),
-          FilledButton(onPressed:_verify,child:const Text('Send verification email')),
-          OutlinedButton(onPressed:() async {
-            try{await session.refreshEmailStatus();if(session.emailVerified)load();}
-            catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content:Text(authMessage(error))));}
-          },child:const Text('I have verified my email')),
-        ]))
-      ]);
       if(loading)return const Center(child:CircularProgressIndicator());
       return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(16),children:[
         if(error!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -372,8 +352,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          SellerShopHero(shop:shop!,publicationStatus:publicationStatus,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          SellerShopHero(shop:shop!,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
           const SizedBox(height:16),
+          if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
             if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
@@ -435,7 +416,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             OutlinedButton.icon(onPressed:editProfile,icon:const Icon(Icons.edit_outlined),label:const Text('Edit shop profile')),
             FilledButton.icon(onPressed:busy||drafts.isEmpty?null:submitCatalogue,icon:const Icon(Icons.publish_outlined),
               label:const Text('Submit catalogue for review')),
-            const Padding(padding:EdgeInsets.all(12),child:Text('Reviewed products appear after shop approval and activation. Public prices depend on your listing plan.',
+            const Padding(padding:EdgeInsets.all(12),child:Text('Complete seller registration to publish your selected range. Custom products and replacement product photos are reviewed separately.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ],
         ]

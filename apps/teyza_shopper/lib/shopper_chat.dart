@@ -13,7 +13,7 @@ class ShopperChatApi {
   static bool isTeyzaShop(String id)=>RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)&&
     !id.startsWith('google-')&&!id.startsWith('osm-')&&!id.startsWith('listed-');
   static Future<int> unreadTotal(ShopperSession session) async {
-    if(session.idToken==null||!session.emailVerified)return 0;
+    if(session.idToken==null||!session.contactVerified)return 0;
     final result=await TeyzaMobileApi(session).call('chat_list');
     return mobileRows(result['threads']).fold<int>(0,(n,t)=>n+((t['unread'] as num?)?.toInt()??0));
   }

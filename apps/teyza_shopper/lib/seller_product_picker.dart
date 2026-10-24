@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'product_catalogue.dart';
+import 'seller_firestore.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -13,7 +14,8 @@ class SellerProductPickerPage extends StatefulWidget {
   final ShopperSession session;
   final Set<String> existingIds;
   final TeyzaMobileApi? api;
-  const SellerProductPickerPage({super.key,required this.session,required this.existingIds,this.api});
+  final SellerFirestore Function(String,String)? draftApiFactory;
+  const SellerProductPickerPage({super.key,required this.session,required this.existingIds,this.api,this.draftApiFactory});
   @override State<SellerProductPickerPage> createState()=>_SellerProductPickerState();
 }
 class _SellerProductPickerState extends State<SellerProductPickerPage> {
@@ -49,7 +51,18 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
     }
     setState((){saving=true;error=null;});
     try{
-      final result=await (widget.api??TeyzaMobileApi(widget.session)).call('catalogue_add',{'products':rows});
+      Map<String,dynamic> result;
+      try{result=await (widget.api??TeyzaMobileApi(widget.session)).call('catalogue_add',{'products':rows});}
+      on ShopServiceUnavailable {
+        final owner=uid;if(owner==null||owner!=widget.session.userId)return;
+        final token=await widget.session.freshIdToken();if(owner!=widget.session.userId)return;
+        final drafts=widget.draftApiFactory?.call(owner,token)??SellerFirestore(uid:owner,token:token);
+        final added=await drafts.saveNewDrafts([for(final row in rows)SellerDraft(
+          id:selected[row['templateId']]!.product.draftId,name:selected[row['templateId']]!.product.name,
+          category:selected[row['templateId']]!.product.category,description:'Pack size: ${selected[row['templateId']]!.product.unit}',
+          priceCents:row['priceCents'] as int,stock:row['stockQty'] as int)]);
+        result={'publication':'private','serviceUnavailable':true,'addedIds':added};
+      }
       if(mounted&&widget.session.userId==uid)Navigator.pop(context,result);
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>saving=false);}
@@ -108,7 +121,7 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text(reviewing?'Make this range yours':'${all.length} everyday products',style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
               const SizedBox(height:5),Text(reviewing?
-                'Enter the price per pack and the number of packs your shop has. Active, approved shops publish their selected range.':
+                'Enter the price per pack and the number of packs your shop has. Complete registration to publish your selected range.':
                 'Choose what your shop sells. Reference photos show the product type; brands and packaging may differ.',
                 style:const TextStyle(color:Color(0xFF6C7880),height:1.35)),
               if(error!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text(error!,style:const TextStyle(color:Colors.red))),
@@ -123,7 +136,7 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
             ]))),
           if(reviewing)SliverPadding(padding:const EdgeInsets.fromLTRB(12,0,12,12),sliver:SliverList.list(children:[
             for(final entry in selected.values)reviewEntry(entry),
-            const Padding(padding:EdgeInsets.all(12),child:Text('Public prices appear on eligible listing plans. Custom products and uploaded photos continue through catalogue review.',
+            const Padding(padding:EdgeInsets.all(12),child:Text('Completed seller registrations can publish their selected range. Custom products and uploaded photos continue through catalogue review.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ]))
           else if(rows.isEmpty)const SliverFillRemaining(hasScrollBody:false,child:Center(child:Text('No matching products. Try another search.')))

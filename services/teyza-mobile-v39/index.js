@@ -15,7 +15,7 @@ if(!admin.apps.length)admin.initializeApp();
 const db=admin.firestore();
 const notifications=createNotifications({db,messaging:admin.messaging()});
 const bucket=admin.storage().bucket('business-lift-3c19c.firebasestorage.app');
-const service=createService({db,bucket,
+const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})
@@ -23,6 +23,10 @@ const service=createService({db,bucket,
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.method==='GET'){
+    if(req.query.nativeConfig!==undefined){
+      const config=require('./native-config.json');
+      res.json({projectId:'business-lift-3c19c',androidAppId:config.androidAppId||'',iosAppId:config.iosAppId||'',iosUrlScheme:config.iosUrlScheme||''});return;
+    }
     const key=req.query.cataloguePhoto;
     if(key!==undefined){
       try{
@@ -32,7 +36,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       }catch(_){res.status(503).json({error:'Product photo is temporarily unavailable.'});}
       return;
     }
-    res.json({ok:true,version:'3.12.0',catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
+    res.json({ok:true,version:'3.13.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -59,13 +63,13 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaPublicShops/{sellerUid}'},async event=>{
   if(!event.data?.after.exists)return;
   const before=event.data.before.data()||{},after=event.data.after.data();
-  if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled)return;
+  if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled&&before.sellingEnabled===after.sellingEnabled)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
 exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
   const before=event.data?.before.data()||{},after=event.data?.after.data()||{};
-  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus)return;
+  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
 for(const [name,kind,document] of [
@@ -101,6 +105,15 @@ exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:
     await db.runTransaction(async tx=>{const current=await tx.get(record.ref);
       if(current.exists&&current.data().objectPath===data.objectPath&&current.data().expiresAt<=Date.now())
         tx.update(record.ref,{objectPath:admin.firestore.FieldValue.delete(),expiresAt:admin.firestore.FieldValue.delete(),photoRemovedAt:Date.now()});
+    });
+  }
+  const identities=await db.collection('teyzaSellerIdentity').where('expiresAt','<=',Date.now()).limit(200).get();
+  for(const record of identities.docs){const data=record.data();
+    if(!data.objectPath?.startsWith('teyza-private/mobile-verification/'+record.id+'/'))continue;
+    await bucket.file(data.objectPath).delete({ignoreNotFound:true});
+    await db.runTransaction(async tx=>{const current=await tx.get(record.ref);
+      if(current.exists&&current.data().evidenceId===data.evidenceId&&current.data().expiresAt<=Date.now())
+        tx.update(record.ref,{objectPath:admin.firestore.FieldValue.delete(),detailsEncrypted:admin.firestore.FieldValue.delete(),photoRemovedAt:Date.now()});
     });
   }
   const devices=await db.collection('teyzaMobileDevices').where('expiresAt','<=',Date.now()).limit(500).get();

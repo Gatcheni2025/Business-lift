@@ -6,8 +6,9 @@ class SellerShopHero extends StatelessWidget{
   final SellerShop shop;final int? productCount;final int unread;
   final VoidCallback onNotifications;
   final String? publicationStatus;
-  bool get live=>shop.isLive&&publicationStatus=='active';
-  const SellerShopHero({super.key,required this.shop,required this.productCount,required this.onNotifications,this.unread=0,this.publicationStatus});
+  final bool sellingEnabled;
+  bool get live=>(shop.isLive||sellingEnabled)&&publicationStatus=='active';
+  const SellerShopHero({super.key,required this.shop,required this.productCount,required this.onNotifications,this.unread=0,this.publicationStatus,this.sellingEnabled=false});
   @override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(23),
     decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
       colors:[Color(0xFF010F1C),Color(0xFF123E31)]),borderRadius:BorderRadius.circular(28),
@@ -29,8 +30,8 @@ class SellerShopHero extends StatelessWidget{
           live?Icons.check_circle_outline:Icons.shield_outlined),
         _pill(productCount==null?'Products unavailable':'$productCount products',Icons.inventory_2_outlined)
       ]),
-      const SizedBox(height:14),Text(live?'Ready for your next local customer.':
-        shop.approvalStatus=='approved'?'Your owner review is approved. Listing activation is handled separately.':'Prepare your range while Teyza reviews your registration.',
+      const SizedBox(height:14),Text(live?(sellingEnabled&&shop.approvalStatus!='approved'?'Your shop is ready to sell. Identity review is pending.':'Ready for your next local customer.'):
+        shop.approvalStatus=='approved'?'Your owner review is approved. Listing activation is handled separately.':'Complete your documents, selfie and mobile verification. You can prepare products now.',
         style:const TextStyle(color:Color(0xFFBACFC3),height:1.45,fontSize:12))
     ]));
   Widget _pill(String label,IconData icon)=>Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:9),

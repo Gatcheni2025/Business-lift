@@ -36,6 +36,9 @@ class SecureSessionStore implements SessionStore {
 
 String authMessage(Object error) {
   final value = error.toString();
+  if(value.contains('INVALID_CODE')||value.contains('INVALID_VERIFICATION_CODE'))return 'That SMS code is incorrect. Check the six digits and try again.';
+  if(value.contains('SESSION_EXPIRED')||value.contains('CODE_EXPIRED'))return 'This SMS code expired. Request a new code.';
+  if(value.contains('PHONE_NUMBER_EXISTS')||value.contains('PHONE_ALREADY_LINKED'))return 'This number belongs to another account. Sign in to that account or contact Teyza support.';
   if (value.contains('EMAIL_EXISTS')) return 'This email is already registered. Sign in instead.';
   if (value.contains('INVALID_LOGIN_CREDENTIALS') ||
       value.contains('EMAIL_NOT_FOUND') || value.contains('INVALID_PASSWORD')) {
@@ -71,7 +74,9 @@ class ShopperSession extends ChangeNotifier {
   final bool _ownsClient;
   final SessionStore _store;
   bool isReady = false, isBusy = false, emailVerified = false;
-  String? email, name, idToken, userId;
+  String? email, name, idToken, userId, phoneNumber;
+  bool phoneVerified=false;
+  bool get contactVerified=>emailVerified||phoneVerified;
   Future<void> Function()? beforeSignOut;
   bool get hasAdminClaim {
     try{final parts=idToken?.split('.');if(parts==null||parts.length!=3)return false;
@@ -132,7 +137,7 @@ class ShopperSession extends ChangeNotifier {
     await operation;
   }
   Future<void> _clear() async {
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name']){
         await _store.delete(key);
@@ -167,7 +172,7 @@ class ShopperSession extends ChangeNotifier {
       }
     } catch(error) {
       if(version==_version){
-        idToken=null;userId=null;emailVerified=false;
+        idToken=null;userId=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
         // Retain a securely stored refresh token during a temporary outage.
         if(_expired(error))await _clear();
       }
@@ -182,7 +187,7 @@ class ShopperSession extends ChangeNotifier {
     final refresh=data['refreshToken']?.toString()??'';
     final uid=data['localId']?.toString()??'';
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
-    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;
+    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;
     email=data['email']?.toString()??fallbackEmail;
     name=data['displayName']?.toString()??fallbackName;
     try{await _persist();}catch(_){if(version==_version)await _clear();rethrow;}
@@ -193,7 +198,7 @@ class ShopperSession extends ChangeNotifier {
 
   Future<void> refreshEmailStatus() async {
     final token=idToken;
-    if(token==null){emailVerified=false;_changed();return;}
+    if(token==null){emailVerified=false;phoneVerified=false;phoneNumber=null;_changed();return;}
     try{
       final result=await _post('lookup',{'idToken':token});
       if(token!=idToken||_disposed)return;
@@ -204,12 +209,16 @@ class ShopperSession extends ChangeNotifier {
       final profile=profiles.first as Map;
       if(profile['localId']!=userId)throw StateError('INVALID_ID_TOKEN');
       emailVerified=profile['emailVerified']==true;
+      phoneNumber=profile['phoneNumber']?.toString();
+      final providers=profile['providerUserInfo'];
+      phoneVerified=phoneNumber!=null&&phoneNumber!.isNotEmpty&&providers is List&&providers.whereType<Map>().any((p)=>
+        p['providerId']=='phone'&&(p['phoneNumber']==phoneNumber||p['federatedId']==phoneNumber));
       email=profile['email']?.toString()??email;
       name=profile['displayName']?.toString()??name;
       await _persist();
     }catch(error){
       if(token!=idToken)return;
-      emailVerified=false;
+      emailVerified=false;phoneVerified=false;phoneNumber=null;
       if(_expired(error)){await _clear();rethrow;}
     }finally{_changed();}
   }
@@ -240,6 +249,23 @@ class ShopperSession extends ChangeNotifier {
     }catch(error){
       if(version==_version&&_expired(error)){await _clear();_changed();}
       rethrow;
+    }
+  }
+  Future<void> linkPhone(String verificationId,String smsCode,String expectedPhone) async {
+    final uid=userId,version=_version;
+    if(uid==null)throw StateError('Session expired. Sign in again.');
+    final token=await freshIdToken();
+    if(version!=_version||uid!=userId)throw StateError('Session expired. Sign in again.');
+    final result=await _post('signInWithPhoneNumber',{'idToken':token,'sessionInfo':verificationId,'code':smsCode});
+    if(version!=_version||uid!=userId||_disposed)throw StateError('Session expired. Sign in again.');
+    // Never switch to a second Firebase user, create a new owner, or accept a
+    // temporary proof for a phone that belongs to another account.
+    if(result['temporaryProof']!=null||result['localId']!=uid||result['isNewUser']==true||result['phoneNumber']!=expectedPhone){
+      throw StateError('PHONE_ALREADY_LINKED');
+    }
+    await _save(result,email??'',name??'',version);
+    if(version!=_version||uid!=userId||!phoneVerified||phoneNumber!=expectedPhone){
+      throw StateError('Phone verification could not be confirmed. Refresh and try again.');
     }
   }
   Future<void> sendEmailVerification() async {

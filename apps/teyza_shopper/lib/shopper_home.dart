@@ -50,7 +50,7 @@ class Shop {
   final List<Product> highlights;
   final String shopCategory;
   final bool? acceptsCard, cashback;
-  final bool sponsored;
+  final bool sponsored,identityVerified;
   final List<TradingDay> hours;
   final int deliveryFeeCents;
   List<Product> get rangeProducts=>{
@@ -59,7 +59,7 @@ class Shop {
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
-    this.acceptsCard,this.cashback,this.sponsored=false,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -78,7 +78,7 @@ class Shop {
     cashback:x['services'] is Map &&
       (x['services'] as Map)['cashback'] is bool
         ?(x['services'] as Map)['cashback'] as bool:null,
-    sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
+    identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     highlights:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
 }
@@ -828,9 +828,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   void openBasket()=>navigateToTab(2);
   void openInbox(){
-    if(session.idToken==null||!session.emailVerified){
+    if(session.idToken==null||!session.contactVerified){
       navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Sign in and verify your email to open Live chat.')));return;
+        content:Text('Sign in and verify your email or mobile number to open Live chat.')));return;
     }
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
@@ -1054,7 +1054,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               const Icon(Icons.arrow_forward_rounded,color:Colors.white)
             ])))),
       section('Shops selling on Teyza',
-        subtitle:'Verified participating sellers and published product listings',
+        subtitle:'Participating local sellers and published product listings',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('View shops'))),
       if(loading)const Center(child:Padding(padding:EdgeInsets.all(13),
@@ -1461,7 +1461,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   void chatWithShop(Shop shop,{String? message}){
-    if(session.idToken==null||!session.emailVerified){
+    if(session.idToken==null||!session.contactVerified){
       navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:Text('Sign in and verify your account to chat with this shop.')));return;
     }
@@ -1547,9 +1547,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> requestOrder() async {
     final shop=basketShop;if(shop==null||basketItems.isEmpty)return;
-    if(session.idToken==null||!session.emailVerified){
+    if(session.idToken==null||!session.contactVerified){
       navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Sign in and verify your email to send an order request.')));return;
+        content:Text('Sign in and verify your email or mobile number to send an order request.')));return;
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
@@ -1896,8 +1896,8 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     fontSize:13,color:green,fontWeight:FontWeight.w900))),
                 ...filteredMerchants.map((shop)=>Card(color:Colors.white,
                   child:ListTile(
-                    leading:const CircleAvatar(backgroundColor:Color(0xFFE4F3EA),
-                      child:Icon(Icons.verified_outlined,color:green)),
+                    leading:CircleAvatar(backgroundColor:const Color(0xFFE4F3EA),
+                      child:Icon(shop.identityVerified?Icons.verified_outlined:Icons.storefront_outlined,color:green)),
                     title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
                     subtitle:Text(shop.area+_distanceLabel(
                       _distance(shop.latitude,shop.longitude))+'\n'+

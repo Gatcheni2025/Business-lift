@@ -9,7 +9,7 @@ try {
 } finally { $ErrorActionPreference = $previousPreference }
 if ($probeExitCode -eq 0) {
   Write-Host 'The verification encryption secret already exists. Keeping it unchanged.'
-  exit 0
+  return
 }
 if (($metadata | Out-String) -notmatch 'NOT_FOUND|not found|does not exist|404') {
   throw 'Could not confirm whether the encryption secret exists. Check Firebase login and project permissions before continuing.'

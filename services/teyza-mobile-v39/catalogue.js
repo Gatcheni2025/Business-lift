@@ -44,7 +44,7 @@ function range(uid,shop,entries,{enabled=true,removedProductId=null}={}){
   const reviewedPhotos=new Map([...(shop.products||[]),...(shop.productHighlights||[])].filter(p=>p.customPhotoApproved===true).map(p=>[p.id,p.imageUrl]));
   const selected=enabled?entries.map(p=>canonical(uid,p)).filter(Boolean).map(p=>reviewedPhotos.has(p.id)?
     {...p,imageUrl:reviewedPhotos.get(p.id),customPhotoApproved:true}:p).sort((a,b)=>a.id.localeCompare(b.id)):[];
-  return {products:shop.catalogueEnabled===true?[...customProducts,...selected]:[],
+  return {products:shop.catalogueEnabled===true||shop.sellingEnabled===true?[...customProducts,...selected]:[],
     productHighlights:[...customHighlights,...selected.map(({priceCents,stock,...p})=>({...p,inStock:stock>0}))]};
 }
 module.exports={data,templates,prefix,photoUrl,templateFor,selection,canonical,range};

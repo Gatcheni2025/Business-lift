@@ -8,6 +8,9 @@ import 'package:teyza_shopper/seller_notifications.dart';
 import 'package:teyza_shopper/seller_registration.dart';
 import 'package:teyza_shopper/seller_review.dart';
 import 'package:teyza_shopper/seller_tools.dart';
+import 'package:teyza_shopper/seller_onboarding.dart';
+import 'package:teyza_shopper/seller_phone.dart';
+import 'package:teyza_shopper/seller_firestore.dart';
 import 'seller_experience_test.dart' as fixtures;
 
 void main(){
@@ -18,6 +21,8 @@ void main(){
   await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   final session=fixtures.Session(),api=fixtures.ExperienceApi(fixtures.Session());
   final pages=<String,Widget>{
+   'seller-onboarding':SellerOnboardingPage(session:session,shop:const SellerShop('KwaMashu Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678'),api:api),
+   'seller-phone-otp':SellerPhonePage(session:session,phone:'+27712345678'),
    'seller-notifications':SellerNotificationsPage(session:session,api:api),
    'seller-registration':SellerRegistrationPage(session:session,api:api),
    'seller-review-desk':SellerReviewPage(session:session,api:api),

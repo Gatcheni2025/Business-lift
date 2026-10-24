@@ -1,3 +1,10 @@
+# Activate Teyza mobile 3.13.0
+
+Start with `ACTIVATE-TEYZA.ps1` in the extracted deployment-kit root. See
+`docs/TEYZA_R313_SELLER_ONBOARDING.md` for native Firebase registration, real SMS
+OTP, certificate fingerprints and physical-device acceptance. A successful app
+build does not activate the missing backend.
+
 # Teyza mobile services R3.12
 
 This isolated Firebase codebase connects the Flutter seller and shopper dashboards. It does not replace the website, Places function, existing Firebase project, seller rules or subscription approval flow.
@@ -8,7 +15,7 @@ Use Node.js 22 and an authorised Firebase CLI login. The existing project is `bu
 
 1. Run `SETUP-VERIFICATION-KEY.ps1` once from this kit. It creates a random encryption key in Secret Manager and keeps an existing key. Never replace the key while encrypted selfie records still exist.
 2. Run `DEPLOY-MOBILE.ps1`. It installs locked dependencies, runs service tests and deploys only codebase `teyza-mobile` with `teyzaMobile`, `teyzaMobilePurgeSelfies` the three catalogue synchronization triggers and six seller notification triggers. The kit includes both product-photo atlases and `catalogue.json`.
-3. Open `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile`. Expect `ok: true`, `version: 3.12.0`. A POST without a Firebase bearer token must return 401.
+3. Open `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile`. Expect `ok: true`, `version: 3.13.0`. A POST without a Firebase bearer token must return 401.
 4. Check that anonymous and unrelated authenticated users cannot directly read any new private collections or the `teyza-private/mobile-verification` Storage prefix. Keep the existing deny-by-default rules. Do not replace the full Firestore/Storage rulesets, and do not add broad authenticated-user access.
 5. Install the new APK and test with separate verified shopper, Spaza owner and Retail owner accounts. Configure shop services and hours, submit products/photos for review, exchange messages, request collection/delivery, then confirm and complete from the seller dashboard.
 
@@ -22,7 +29,7 @@ The `teyzaCatalogueDraftChanged`, `teyzaCatalogueShopChanged` and `teyzaCatalogu
 
 GET `teyzaMobile?cataloguePhoto=milk&v=1` serves a public reference JPEG from a fixed local allowlist. It does not fetch arbitrary URLs or expose uploaded seller/customer evidence. Native apps display the same photos from their bundled atlases.
 
-After deployment check health version **3.12.0** and **catalogueProducts: 184**. In two separate shop accounts choose different items and prices, view each shop with a shopper account, then edit stock, mark an item sold out and remove it. Refresh the shop or wait for its foreground 30-second catalogue refresh. Pending shops must remain private. Existing direct private collection permissions still need the R3.10 owner-access rules if not already published. Do not replace the full deployed ruleset.
+After deployment check health version **3.13.0** and **catalogueProducts: 184**. In two separate shop accounts choose different items and prices, view each shop with a shopper account, then edit stock, mark an item sold out and remove it. Refresh the shop or wait for its foreground 30-second catalogue refresh. Pending shops must remain private. Existing direct private collection permissions still need the R3.10 owner-access rules if not already published. Do not replace the full deployed ruleset.
 
 ## What is connected
 

@@ -88,8 +88,8 @@ def ios():
     info.update({
         "CFBundleDisplayName": "Teyza",
         "CFBundleName": "Teyza",
-        "NSCameraUsageDescription": "Take a selfie to verify your shop-owner account, or photograph your shop products.",
-        "NSPhotoLibraryUsageDescription": "Choose a product photo for your shop catalogue.",
+        "NSCameraUsageDescription": "Photograph your ID, passport or company registration, take an owner selfie, or photograph your shop products.",
+        "NSPhotoLibraryUsageDescription": "Choose a private seller registration document photo or a product photo for your shop catalogue.",
         "NSLocationWhenInUseUsageDescription": "Find shops near you when you choose Use my location. You can also select an area manually.",
         "UIBackgroundModes": ["fetch", "remote-notification"],
         "FirebaseMessagingAutoInitEnabled": False,
@@ -98,6 +98,9 @@ def ios():
     app_id = native_app_id("ios")
     if app_id:
         info["TeyzaFirebaseAppId"] = app_id
+        # Same encoded scheme used by Firebase iOS PhoneAuthProvider.swift.
+        info.setdefault("CFBundleURLTypes", []).append({"CFBundleTypeRole":"Editor",
+            "CFBundleURLSchemes":["app-" + app_id.replace(":", "-")]})
         delegate = ROOT / "ios/Runner/AppDelegate.swift"
         source = delegate.read_text()
         marker = "return super.application(application, didFinishLaunchingWithOptions: launchOptions)"
@@ -120,8 +123,8 @@ def ios():
             raise SystemExit("Use the registered iOS Google OAuth client ID.")
         info["GIDClientID"] = ios_client
         info["GIDServerClientID"] = web_client
-        info["CFBundleURLTypes"] = [{"CFBundleTypeRole":"Editor", "CFBundleURLSchemes":[
-            "com.googleusercontent.apps."+ios_client.split(".apps.googleusercontent.com")[0]]}]
+        info.setdefault("CFBundleURLTypes", []).append({"CFBundleTypeRole":"Editor", "CFBundleURLSchemes":[
+            "com.googleusercontent.apps."+ios_client.split(".apps.googleusercontent.com")[0]]})
     with path.open("wb") as file:
         plistlib.dump(info, file, sort_keys=False)
     entitlements = ROOT / "ios/Runner/Runner.entitlements"

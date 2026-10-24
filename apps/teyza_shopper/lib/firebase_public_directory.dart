@@ -62,7 +62,7 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
       'photoUrl':publishedMerchantPhoto(data),
       'latitude': data['latitude'] is num ? data['latitude'] : null,
       'longitude': data['longitude'] is num ? data['longitude'] : null,
-      'whatsappPhone':'',
+      'whatsappPhone':'','identityVerified':data['identityVerified']==true,
       'pickupEnabled':data['pickupEnabled']==true,
       'deliveryEnabled':data['deliveryEnabled']==true,
       'services':data['services'] is Map?data['services']:<String,dynamic>{},

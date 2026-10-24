@@ -30,11 +30,11 @@ const shop={sellerUid:'seller1',status:'active',name:'Corner Shop',pickupEnabled
   catalogueEnabled:true,products:[{id:'bread1',name:'Bread',priceCents:1800,stock:5}]};
 const buyer={uid:'buyer1',email_verified:true,email:'buyer@example.test',name:'Buyer'};
 const owner={uid:'seller1',email_verified:true,email:'owner@example.test'};
-function fixture(extra={}){const db=new FakeDB({'teyzaSellerAccounts/seller1':seller,'teyzaPublicShops/seller1':shop,...extra});
+function fixture(extra={},options={}){const db=new FakeDB({'teyzaSellerAccounts/seller1':seller,'teyzaPublicShops/seller1':shop,...extra});
  const files=new Map(),secret=Buffer.alloc(32,7).toString('base64');
  const bucket={name:'test-bucket',file:path=>({save:async bytes=>files.set(path,bytes),download:async()=>[files.get(path)]})};
  return {db,files,service:createService({db,bucket,clock:()=>1000000,sanitizeImage:async bytes=>bytes,
-   encryptSelfie:bytes=>C.encrypt(bytes,secret),decryptSelfie:bytes=>C.decrypt(bytes,secret)})};}
+   encryptSelfie:bytes=>C.encrypt(bytes,secret),decryptSelfie:bytes=>C.decrypt(bytes,secret),...options})};}
 const rejects=(promise,status)=>assert.rejects(promise,error=>error.status===status);
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
 
@@ -336,4 +336,118 @@ test('Reviewed replacement photos persist and catalogue review uses the current 
  assert.equal(published.products[0].imageUrl,url);assert.equal(published.products[0].priceCents,3200);assert.equal(published.products[0].stock,2);
  assert.equal(published.productHighlights[0].imageUrl,url);
  await service.synchronizeCatalogue('seller1');assert.deepEqual(db.records.get('teyzaPublicShops/seller1'),published);
+});
+
+const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]).toString('base64');
+const mobile='+27712345678';
+const phoneUser={uid:'buyer1',phoneNumber:mobile,providerData:[{providerId:'phone',phoneNumber:mobile}]};
+const newOwner={...buyer,email_verified:false};
+const registration={legalType:'individual',category:'spaza',shopName:'New Local Shop',phone:'0712345678',address:'KwaMashu, Durban',consent:true};
+const personal={legalType:'individual',kind:'passport',documentNumber:'PRIVATE-PASSPORT-123',imageBase64:jpeg,consent:true};
+const onboardFixture=(user=phoneUser)=>fixture({}, {getAuthUser:async()=>user});
+async function ready(service,{company=false}={}){
+ const details=company?{...registration,legalType:'company',companyName:'Local Trading Pty Ltd',registrationNumber:'2026/123456/07'}:registration;
+ await service.execute(newOwner,'seller_register',details);
+ await service.execute(newOwner,'seller_identity_submit',company?{...details,imageBase64:jpeg}:personal);
+ await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+}
+test('A new seller registers and prepares private products before email or mobile verification',async()=>{
+ const {service,db}=onboardFixture(null);
+ await service.execute(newOwner,'seller_register',registration);
+ const saved=await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ assert.equal(saved.publication,'private');assert(!db.records.has('teyzaPublicShops/buyer1'));
+ await rejects(service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true,status:'active'}),409);
+});
+test('Completion requires real linked phone, document and selfie; forged completion fields grant nothing',async()=>{
+ const {service,db}=onboardFixture();await service.execute(newOwner,'seller_register',registration);
+ await rejects(service.execute(newOwner,'seller_onboarding_complete',{identityVerified:true,selfie:true}),409);
+ await service.execute(newOwner,'seller_identity_submit',personal);
+ await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
+ assert(!db.records.has('teyzaPublicShops/buyer1'));
+ for(const user of [null,{...phoneUser,phoneNumber:'+27829999999'},{...phoneUser,providerData:[]},{...phoneUser,disabled:true}]){
+  const f=onboardFixture(user);await ready(f.service);await rejects(f.service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true}),409);
+  assert(!f.db.records.has('teyzaPublicShops/buyer1'));
+ }
+});
+test('Document + selfie + OTP enables the actual selected range without claiming manual identity approval or a paid plan',async()=>{
+ const {service,db}=onboardFixture();await ready(service);
+ await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ const result=await service.execute(newOwner,'seller_onboarding_complete',{ownerUid:'seller1',catalogueEnabled:true,approvalStatus:'approved'});
+ const shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(result.sellingStatus,'active');assert.equal(shop.sellerUid,'buyer1');
+ assert.equal(shop.identityVerified,false);assert.equal(shop.verificationStatus,'pending_review');assert.equal(shop.catalogueEnabled,false);
+ assert.equal(shop.status,'active');assert.equal(shop.products[0].priceCents,3000);assert.equal(shop.products.length,1);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'pending');
+ assert(!JSON.stringify(shop).includes('PRIVATE-PASSPORT'));assert(!('phone' in shop));
+ assert(!('objectPath' in shop));assert(!('detailsEncrypted' in shop));
+ const again=await service.execute(newOwner,'seller_onboarding_complete');assert.equal(again.sellingStatus,'active');
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').products.length,1);
+});
+test('Company sellers must provide company registration details and the matching certificate type',async()=>{
+ const {service,db}=onboardFixture();
+ await rejects(service.execute(newOwner,'seller_register',{...registration,legalType:'company'}),422);
+ await service.execute(newOwner,'seller_register',{...registration,legalType:'company',companyName:'Local Trading Pty Ltd',registrationNumber:'2026/123456/07'});
+ await rejects(service.execute(newOwner,'seller_identity_submit',personal),409);
+ await rejects(service.execute(newOwner,'seller_identity_submit',{legalType:'company',imageBase64:jpeg,consent:true}),422);
+ await service.execute(newOwner,'seller_identity_submit',{legalType:'company',companyName:'Local Trading Pty Ltd',registrationNumber:'2026/123456/07',imageBase64:jpeg,consent:true});
+ await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await service.execute(newOwner,'seller_onboarding_complete');
+ assert.equal(db.records.get('teyzaSellerIdentity/buyer1').kind,'company');assert.equal(db.records.get('teyzaPublicShops/buyer1').sellingEnabled,true);
+});
+test('Identity numbers and document images are encrypted, private, consented and bound to the actor',async()=>{
+ const {service,db,files}=onboardFixture();await service.execute(newOwner,'seller_register',registration);
+ await rejects(service.execute(newOwner,'seller_identity_submit',{...personal,consent:false}),422);
+ await service.execute(newOwner,'seller_identity_submit',{...personal,sellerUid:'seller1',status:'approved'});
+ const record=db.records.get('teyzaSellerIdentity/buyer1');
+ assert(!JSON.stringify(record).includes(personal.documentNumber));assert(!files.get(record.objectPath).includes(Buffer.from(jpeg,'base64')));
+ assert.equal(db.records.has('teyzaSellerIdentity/seller1'),false);assert(record.objectPath.startsWith('teyza-private/mobile-verification/buyer1/'));
+ await rejects(service.execute(owner,'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId}),403);
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const opened=await service.execute(reviewer,'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId});
+ assert.equal(opened.details.documentNumber,personal.documentNumber);assert.equal(opened.imageBase64,jpeg);
+ await rejects(service.execute({...newOwner,teyzaAdmin:true,auth_time:1000},'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId}),403);
+});
+test('Version 2 admin approval requires both current private views and actual OTP, then adds the badge',async()=>{
+ const {service,db}=onboardFixture();await ready(service);await service.execute(newOwner,'seller_onboarding_complete');
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const selfie=db.records.get('teyzaMobileVerification/buyer1'),id=db.records.get('teyzaSellerIdentity/buyer1');
+ const decision={sellerUid:'buyer1',submissionId:selfie.submissionId,evidenceId:id.evidenceId,status:'approved'};
+ await service.execute(reviewer,'verification_read',decision);
+ await rejects(service.execute(reviewer,'admin_seller_review',decision),409);
+ await service.execute(reviewer,'seller_identity_read',decision);await service.execute(reviewer,'admin_seller_review',decision);
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').identityVerified,true);
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').catalogueEnabled,false);
+});
+test('Moderation cannot be bypassed by completing again, uploading replacement files or claiming approval',async()=>{
+ const {service,db}=onboardFixture();await ready(service);await service.execute(newOwner,'seller_onboarding_complete');
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const decision={sellerUid:'buyer1',submissionId:db.records.get('teyzaMobileVerification/buyer1').submissionId,
+  evidenceId:db.records.get('teyzaSellerIdentity/buyer1').evidenceId,status:'needs_new_photo',reason:'Please take a clearer selfie.'};
+ await service.execute(reviewer,'admin_seller_review',decision);
+ await service.execute(newOwner,'seller_identity_submit',personal);await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await rejects(service.execute(newOwner,'seller_onboarding_complete',{approvalStatus:'approved'}),409);
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').status,'suspended');
+});
+test('Phone edits pause selling and synchronization cannot turn the listing back on',async()=>{
+ const {service,db}=onboardFixture();await ready(service);await service.execute(newOwner,'seller_onboarding_complete');
+ const account=db.records.get('teyzaSellerAccounts/buyer1');db.records.set('teyzaSellerAccounts/buyer1',{...account,phone:'+27829999999'});
+ await service.synchronizeCatalogue('buyer1');assert.equal(db.records.get('teyzaPublicShops/buyer1').status,'suspended');
+ await service.synchronizeCatalogue('buyer1');assert.equal(db.records.get('teyzaPublicShops/buyer1').status,'suspended');
+ await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
+});
+test('Phone proof is checked against the account read inside the completion transaction',async()=>{
+ const {service,db}=onboardFixture();await ready(service);
+ const other=createService({db,clock:()=>1000000,getAuthUser:async()=>{
+  db.records.set('teyzaSellerAccounts/buyer1',{...db.records.get('teyzaSellerAccounts/buyer1'),phone:'+27829999999'});return phoneUser;
+ }});
+ await rejects(other.execute(newOwner,'seller_onboarding_complete'),409);assert(!db.records.has('teyzaPublicShops/buyer1'));
+});
+test('Replacing evidence invalidates stale administrator decisions and expired documents cannot start selling',async()=>{
+ const {service,db}=onboardFixture();await ready(service);
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000},old=db.records.get('teyzaSellerIdentity/buyer1');
+ const decision={sellerUid:'buyer1',submissionId:db.records.get('teyzaMobileVerification/buyer1').submissionId,evidenceId:old.evidenceId,status:'approved'};
+ await service.execute(reviewer,'seller_identity_read',decision);await service.execute(reviewer,'verification_read',decision);
+ await service.execute(newOwner,'seller_identity_submit',personal);
+ await rejects(service.execute(reviewer,'admin_seller_review',decision),409);
+ const id=db.records.get('teyzaSellerIdentity/buyer1');db.records.set('teyzaSellerIdentity/buyer1',{...id,expiresAt:1});
+ await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
 });

@@ -60,3 +60,13 @@ test('A missing own account returns a missing document; drafts still require reg
   await assertSucceeds(setDoc(doc(own,'teyzaSellerAccounts','newowner'),{...account('newowner'),createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
   await assertSucceeds(getDocs(collection(own,'teyzaDraftProducts','newowner','items')));
 });
+
+test('Unverified email accounts can register and prepare privately while identity evidence and completion stay server-only',async()=>{
+  const own=env.authenticatedContext('phoneowner',{email:'phoneowner@example.test',email_verified:false}).firestore();
+  await assertSucceeds(setDoc(doc(own,'teyzaSellerAccounts','phoneowner'),{...account('phoneowner'),createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(doc(own,'teyzaDraftProducts','phoneowner','items','bread'),product('phoneowner')));
+  for(const name of ['teyzaSellerIdentity','teyzaSellerOnboarding','teyzaMobileVerification']){
+    await assertFails(getDoc(doc(own,name,'phoneowner')));
+    await assertFails(setDoc(doc(own,name,'phoneowner'),{sellingStatus:'active',phoneVerified:true,status:'approved'}));
+  }
+});

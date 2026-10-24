@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 import 'seller_tools.dart';
+import 'seller_onboarding.dart';
+import 'seller_firestore.dart';
+import 'seller_phone.dart';
 
 class SellerRegistrationPage extends StatefulWidget {
   final ShopperSession session;
@@ -13,7 +16,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   final form=GlobalKey<FormState>();
   final name=TextEditingController(),phone=TextEditingController(),address=TextEditingController(),company=TextEditingController(),number=TextEditingController();
   late final uid=widget.session.userId;
-  String category='spaza';String? error;bool busy=false,consent=false,saved=false;
+  String category='spaza',legalType='individual';String? error;bool busy=false,consent=false,saved=false;
   @override void initState(){super.initState();widget.session.addListener(changed);}
   void changed(){if(mounted&&uid!=widget.session.userId)setState(()=>error='Your account changed. Close this page and sign in again.');}
   @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,address,company,number]){c.dispose();}super.dispose();}
@@ -22,11 +25,21 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     if(!consent){setState(()=>error='Confirm that these shop details are yours.');return;}
     setState((){busy=true;error=null;});
     try{
-      await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',{'category':category,'shopName':name.text.trim(),
-        'phone':phone.text.trim(),'address':address.text.trim(),'companyName':company.text.trim(),'registrationNumber':number.text.trim(),'consent':true});
+      final data={'category':category,'legalType':legalType,'shopName':name.text.trim(),
+        'phone':normalizeMobile(phone.text),'address':address.text.trim(),'companyName':legalType=='company'?company.text.trim():'',
+        'registrationNumber':legalType=='company'?number.text.trim():'','consent':true};
+      try{await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);}
+      on ShopServiceUnavailable {
+        final owner=uid;if(owner==null||owner!=widget.session.userId)return;
+        final token=await widget.session.freshIdToken();if(owner!=widget.session.userId)return;
+        await SellerFirestore(uid:owner,token:token).registerShop(category:category,shopName:name.text.trim(),phone:normalizeMobile(phone.text),
+          address:address.text.trim(),ownerEmail:widget.session.email??'',companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String);
+      }
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
-      await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:SellerTool.verification,api:widget.api)));
+      await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,api:widget.api,legalType:legalType,
+        shop:SellerShop(name.text.trim(),category,address.text.trim(),'pending','not_listed',phone:normalizeMobile(phone.text),
+          companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String))));
       if(mounted&&uid==widget.session.userId)Navigator.pop(context,true);
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
@@ -41,7 +54,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           Wrap(spacing:12,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
             Text('1  Shop details',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
             Icon(Icons.arrow_forward_rounded,color:Color(0xFF83D9AE),size:17),
-            Text('2  Camera verification',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
+            Text('2  Documents, selfie & mobile',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -51,8 +64,11 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop')),DropdownMenuItem(value:'retail',child:Text('Other Retail / Wholesale'))],
           onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
         const SizedBox(height:16),
+        DropdownButtonFormField<String>(initialValue:legalType,isExpanded:true,decoration:const InputDecoration(labelText:'Register as',border:OutlineInputBorder()),
+          items:const [DropdownMenuItem(value:'individual',child:Text('Individual seller')),DropdownMenuItem(value:'company',child:Text('Registered company'))],
+          onChanged:busy?null:(v)=>setState(()=>legalType=v??'individual')),const SizedBox(height:16),
         for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),(address,'Shop address',250,true),
-          (company,'Company name (optional)',160,false),(number,'Registration number (optional)',50,false)])Padding(padding:const EdgeInsets.only(bottom:16),
+          if(legalType=='company')(company,'Registered company name',160,true),if(legalType=='company')(number,'Company registration number',50,true)])Padding(padding:const EdgeInsets.only(bottom:16),
           child:TextFormField(controller:f.$1,maxLength:f.$3,enabled:!busy,keyboardType:f.$1==phone?TextInputType.phone:TextInputType.text,
             decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
               border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
@@ -60,8 +76,8 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:busy?null:(v)=>setState(()=>consent=v==true),
           title:const Text('I confirm that these are my shop’s details.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
-          label:Text(busy?'Saving shop…':'Continue to camera verification')),
-        const SizedBox(height:12),const Text('Your shop stays private while an admin reviews your registration. You can resume verification from your dashboard.',
+          label:Text(busy?'Saving shop…':'Continue to seller verification')),
+        const SizedBox(height:12),const Text('Complete your document, selfie and SMS verification to start selling. Your verified badge follows a separate admin review. Resume setup from your dashboard at any time.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));
