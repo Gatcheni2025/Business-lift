@@ -23,7 +23,11 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
                (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
             'appleLoginImplemented': platform == 'ios',
-            'mobileBackendVersionRequired': '3.11.0',
+            'mobileBackendVersionRequired': '3.12.0',
+            'sellerNotificationsImplemented': True, 'adminSellerReviewImplemented': True,
+            'nativeSellerRegistration': True,
+            'pushAppConfigured': bool(os.environ.get('TEYZA_FIREBASE_ANDROID_APP_ID' if platform == 'android' else 'TEYZA_FIREBASE_IOS_APP_ID')),
+            'devicePushVerified': False,
             'catalogueProducts': 184, 'catalogueReferencePhotos': 48,
             'storeSubmitted': False, 'deviceLoginVerified': False}
 if platform == 'android':

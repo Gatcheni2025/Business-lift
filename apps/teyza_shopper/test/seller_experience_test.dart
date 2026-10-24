@@ -35,12 +35,16 @@ class ExperienceApi extends TeyzaMobileApi{
   };
  }
 }
+Future<void> visibleTap(WidgetTester tester,Finder finder) async{
+ await tester.ensureVisible(finder);await tester.pumpAndSettle();
+ expect(finder.hitTestable(),findsOneWidget);await tester.tap(finder);await tester.pumpAndSettle();
+}
 void main(){
  testWidgets('Notifications mark only the selected item and clear private rows on account switch',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerNotificationsPage(session:session,api:api)));
   await tester.pumpAndSettle();expect(find.text('New order request'),findsOneWidget);
-  await tester.ensureVisible(find.text('New order request'));await tester.tap(find.text('New order request'));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('New order request'));
   expect(api.calls.last.data,{'ids':['notice']});
   session.switchAccount();await tester.pump();expect(find.text('New order request'),findsNothing);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -57,12 +61,13 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerReviewPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.tap(find.text('Durban Corner Shop'));await tester.pumpAndSettle();
   var approve=find.widgetWithText(FilledButton,'Approve seller');
+  await tester.scrollUntilVisible(approve,200);await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(approve).onPressed,isNull);
-  await tester.ensureVisible(find.text('View private selfie'));await tester.tap(find.text('View private selfie'));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('View private selfie'));
   expect(api.calls.last.data,{'sellerUid':'seller1','submissionId':'submission1'});
   final confirmed=find.text('I have reviewed this selfie and the shop registration.');
-  await tester.ensureVisible(confirmed);await tester.tap(confirmed);await tester.pumpAndSettle();
-  await tester.ensureVisible(approve);await tester.tap(approve);await tester.pumpAndSettle();
+  await visibleTap(tester,confirmed);
+  await visibleTap(tester,approve);
   await tester.tap(find.text('Confirm review'));await tester.pumpAndSettle();
   final call=api.calls.firstWhere((r)=>r.action=='admin_seller_review');expect(call.data['status'],'approved');
   expect(call.data['submissionId'],'submission1');expect(call.data.containsKey('listingStatus'),isFalse);
@@ -71,7 +76,7 @@ void main(){
  testWidgets('Seller registration is native and cannot continue without required shop details',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
-  final button=find.text('Continue to camera verification');await tester.ensureVisible(button);await tester.tap(button);await tester.pumpAndSettle();
+  final button=find.text('Continue to camera verification');await visibleTap(tester,button);
   expect(api.calls,isEmpty);expect(find.text('Enter shop name'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
@@ -79,12 +84,12 @@ void main(){
   final session=Session(),api=ExperienceApi(Session());
   final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();
   await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,tool:SellerTool.verification,api:api,captureSelfie:() async=>bytes)));
-  await tester.pumpAndSettle();await tester.ensureVisible(find.text('Open selfie camera'));await tester.tap(find.text('Open selfie camera'));await tester.pumpAndSettle();
+  await tester.pumpAndSettle();await visibleTap(tester,find.text('Open selfie camera'));
   expect(find.text('Retake selfie'),findsOneWidget);
-  await tester.ensureVisible(find.text('Submit selfie for review'));await tester.tap(find.text('Submit selfie for review'));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('Submit selfie for review'));
   expect(api.calls.where((r)=>r.action=='verification_selfie'),isEmpty);
-  final consent=find.text('I agree to submit my selfie for Teyza shop-owner verification.');await tester.ensureVisible(consent);await tester.tap(consent);await tester.pumpAndSettle();
-  await tester.ensureVisible(find.text('Submit selfie for review'));await tester.tap(find.text('Submit selfie for review'));await tester.pumpAndSettle();
+  final consent=find.text('I agree to submit my selfie for Teyza shop-owner verification.');await visibleTap(tester,consent);
+  await visibleTap(tester,find.text('Submit selfie for review'));
   final submission=api.calls.firstWhere((r)=>r.action=='verification_selfie');expect(submission.data['consent'],true);
   expect(submission.data.containsKey('status'),false);expect(find.text('Selfie awaiting review'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -93,7 +98,7 @@ void main(){
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,tool:SellerTool.verification,api:api,
    captureSelfie:() async=>throw StateError('Camera denied'))));await tester.pumpAndSettle();
-  await tester.ensureVisible(find.text('Open selfie camera'));await tester.tap(find.text('Open selfie camera'));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('Open selfie camera'));
   expect(find.textContaining('Allow camera access'),findsOneWidget);expect(api.calls.where((r)=>r.action=='verification_selfie'),isEmpty);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });

@@ -153,13 +153,13 @@ class _AccountState extends State<ShopperAccountPanel> {
             const CircleAvatar(radius:32,backgroundColor:Color(0xFFE0F3EA),
               child:Icon(Icons.person_rounded,size:38,color:Color(0xFF078E66))),
             const SizedBox(height:10),
-            Text(logged?'My Teyza account':audience==null?'Welcome to Teyza':ownerMode?'Shop owner sign in':registering?'Join Teyza':'Shopper sign in',
+            Text(logged?'My Teyza account':audience==null?'Welcome to Teyza':ownerMode?(registering?'Create owner account':'Shop owner sign in'):registering?'Join Teyza':'Shopper sign in',
               style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
             const SizedBox(height:6),
             Text(logged?(widget.session.name?.isNotEmpty==true?
               widget.session.name!:widget.session.email??'') :
               audience==null?'How would you like to continue?':
-              ownerMode?'Sign in with the account registered for your shop.' :
+              ownerMode?(registering?'Create an account, verify your email, then register your shop in the app.':'Sign in with the account registered for your shop.') :
               'Sign in to manage your profile and shop enquiries.',
               textAlign:TextAlign.center,
               style:const TextStyle(color:Color(0xFF60746B))),

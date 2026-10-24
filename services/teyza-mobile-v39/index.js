@@ -98,6 +98,12 @@ exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:
     const data=record.data();
     if(!data.objectPath?.startsWith('teyza-private/mobile-verification/'+record.id+'/'))continue;
     await bucket.file(data.objectPath).delete({ignoreNotFound:true});
-    await record.ref.update({objectPath:admin.firestore.FieldValue.delete(),expiresAt:admin.firestore.FieldValue.delete(),photoRemovedAt:Date.now()});
+    await db.runTransaction(async tx=>{const current=await tx.get(record.ref);
+      if(current.exists&&current.data().objectPath===data.objectPath&&current.data().expiresAt<=Date.now())
+        tx.update(record.ref,{objectPath:admin.firestore.FieldValue.delete(),expiresAt:admin.firestore.FieldValue.delete(),photoRemovedAt:Date.now()});
+    });
   }
+  const devices=await db.collection('teyzaMobileDevices').where('expiresAt','<=',Date.now()).limit(500).get();
+  for(const d of devices.docs)await db.runTransaction(async tx=>{const current=await tx.get(d.ref);
+    if(current.exists&&current.data().expiresAt<=Date.now())tx.delete(d.ref);});
 });
