@@ -48,7 +48,7 @@ function createNotifications({db,messaging,clock=Date.now}){
     // Don't invalidate a token that was reassigned/refreshed while the send was in flight.
     await db.runTransaction(async tx=>{const current=await tx.get(devices[i].ref);
      if(current.exists&&current.data().ownerUid===n.ownerUid&&current.data().token===devices[i].data().token)
-      tx.update(devices[i].ref,{token:'',expiresAt:0});});
+      tx.update(devices[i].ref,{ownerUid:'',token:'',expiresAt:0});});
    }else retry=true;
   }
   if(retry)throw new Error('TEYZA_NOTIFICATION_RETRY');

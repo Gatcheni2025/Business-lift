@@ -162,12 +162,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> productPhoto(SellerDraft product) async {
     if(busy)return;
+    final uid=widget.session.userId;
     final source=await showModalBottomSheet<ImageSource>(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
       ListTile(leading:const Icon(Icons.camera_alt_outlined),title:const Text('Take a product photo'),onTap:()=>Navigator.pop(ctx,ImageSource.camera)),
       ListTile(leading:const Icon(Icons.photo_library_outlined),title:const Text('Choose a product photo'),onTap:()=>Navigator.pop(ctx,ImageSource.gallery))
     ])));
-    if(source==null||!mounted)return;
-    final uid=widget.session.userId;setState(()=>busy=true);
+    if(source==null||!mounted||uid==null||uid!=widget.session.userId)return;
+    setState(()=>busy=true);
     try{
       final file=await ImagePicker().pickImage(source:source,maxWidth:1400,maxHeight:1400,imageQuality:80,requestFullMetadata:false);
       if(file==null)return;
@@ -233,6 +234,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _delete(SellerDraft item) async{
     if(busy)return;
+    final uid=widget.session.userId;if(uid==null)return;
     final accept=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
       title:const Text('Delete product draft?'),
       content:Text('Remove '+item.name+' from your private stock list?'),
@@ -240,11 +242,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
         TextButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Delete'))
       ]));
-    if(accept!=true)return;
+    if(accept!=true||!mounted||uid!=widget.session.userId)return;
     setState(()=>busy=true);
     try{
       final token=await widget.session.freshIdToken();
-      await SellerFirestore(uid:widget.session.userId!,token:token).delete(item.id);
+      if(uid!=widget.session.userId)return;
+      await SellerFirestore(uid:uid,token:token).delete(item.id);
       await loadAfterSave();
       await syncRange(removedId:item.id);
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(

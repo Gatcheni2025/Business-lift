@@ -68,7 +68,7 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
       if(error!=null)Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(error!,style:const TextStyle(color:Color(0xFF9A3412))),TextButton(onPressed:load,child:const Text('Retry'))]),
       if(loading)const LinearProgressIndicator(),
       Row(children:[const Expanded(child:Text('Recent updates',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800))),
-        TextButton(onPressed:working||rows.isEmpty?null:()=>mark(rows.map((r)=>r['id'].toString()).toList()),child:const Text('Mark all read'))]),
+        TextButton(onPressed:working||rows.isEmpty?null:()=>mark(rows.map((r)=>r['id'].toString()).toList()),child:const Text('Mark recent read'))]),
       if(!loading&&rows.isEmpty&&error==null)const Padding(padding:EdgeInsets.symmetric(vertical:36),child:Text('You’re all caught up. New shop updates will appear here.')),
       for(final row in rows)Card(color:row['read']==true?Colors.white:const Color(0xFFE7F5ED),elevation:0,
         shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22),side:const BorderSide(color:Color(0xFFDCE8DC))),

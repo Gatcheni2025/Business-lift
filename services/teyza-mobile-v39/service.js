@@ -116,9 +116,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         const submissionId=crypto.randomUUID();
         const path='teyza-private/mobile-verification/'+uid+'/'+submissionId+'.enc';
         const encrypted=await encryptSelfie(jpeg);
+        // Register cleanup first: an interrupted upload must not orphan a private photo.
+        await doc('teyzaVerificationPhotos/'+submissionId).set({ownerUid:uid,objectPath:path,expiresAt:stamp+90*86400000});
         await bucket.file(path).save(encrypted,{contentType:'application/octet-stream',resumable:false,
           metadata:{cacheControl:'private,no-store'}});
-        await doc('teyzaVerificationPhotos/'+submissionId).set({ownerUid:uid,objectPath:path,expiresAt:stamp+90*86400000});
         await doc('teyzaMobileVerification/'+uid).set({ownerUid:uid,status:'pending_review',submissionId,
           method:'selfie_manual_review',objectPath:path,submittedAt:stamp,expiresAt:stamp+90*86400000,
           consentVersion:'selfie-review-v1',consentAt:stamp});

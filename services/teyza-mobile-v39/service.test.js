@@ -118,6 +118,22 @@ test('Notification events deduplicate, respect preferences and deliver generic s
  db.records.set('teyzaSellerNotificationPreferences/seller1',{preferences:{orders:false}});
  await notifications.queue('event2',value);assert.equal([...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/')).length,1);
 });
+test('Repeated device registration rotates the oldest device instead of silently blocking new phone alerts',async()=>{
+ const seed={};for(let i=0;i<20;i++)seed['teyzaMobileDevices/old'+i]={ownerUid:'seller1',token:'old-token-'+i,updatedAt:i,expiresAt:2000000};
+ const {service,db}=fixture(seed);
+ await service.execute(owner,'notification_device_save',{token:'new-device-registration-token',platform:'ios'});
+ const current=[...db.records].filter(([k,v])=>k.startsWith('teyzaMobileDevices/')&&v.ownerUid==='seller1');
+ assert.equal(current.length,20);assert(current.some(([,v])=>v.token==='new-device-registration-token'));
+ assert.equal(db.records.get('teyzaMobileDevices/old0').ownerUid,'');
+});
+test('Selfie retention is recorded before private bytes are uploaded and failed storage never creates a reviewable submission',async()=>{
+ const {db}=fixture();let attempted=false;
+ const service=createService({db,clock:()=>1000000,sanitizeImage:async b=>b,encryptSelfie:async b=>b,
+  bucket:{file:path=>({save:async()=>{attempted=true;assert([...db.records.values()].some(v=>v.objectPath===path&&v.expiresAt===1000000+90*86400000));throw new Error('storage unavailable');}})}});
+ const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]);
+ await assert.rejects(service.execute(owner,'verification_selfie',{consent:true,imageBase64:jpeg.toString('base64')}));
+ assert(attempted);assert.equal(db.records.has('teyzaMobileVerification/seller1'),false);
+});
 
 test('Unverified users and signed-out callers cannot use private services',async()=>{
  const {service}=fixture();await rejects(service.execute(null,'seller_summary'),401);

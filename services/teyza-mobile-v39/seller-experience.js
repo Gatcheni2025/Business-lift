@@ -93,8 +93,17 @@ function createSellerExperience({db,clock=Date.now,rate}){
    await rate(uid,'device',30,60000);
    if(action==='notification_device_save'){
     if(!['android','ios'].includes(data.platform))D.fail(422,'Unsupported notification device.');
-    await ref.set({ownerUid:uid,token,platform:data.platform,expiresAt:clock()+7*86400000,updatedAt:clock()});
-   }else await db.runTransaction(async tx=>{const r=await tx.get(ref);if(r.exists&&r.data().ownerUid===uid)tx.update(ref,{token:'',expiresAt:0});});
+    await db.runTransaction(async tx=>{
+     const rows=await tx.get(db.collection('teyzaMobileDevices').where('ownerUid','==',uid).limit(21));
+     const current=rows.docs.filter(d=>d.ref.path!==ref.path).sort((a,b)=>(b.data().updatedAt||0)-(a.data().updatedAt||0));
+     let kept=0;
+     for(const device of current){const old=device.data();
+      if(old.token&&old.expiresAt>clock()&&kept<19){kept++;continue;}
+      tx.update(device.ref,{ownerUid:'',token:'',expiresAt:0});
+     }
+     tx.set(ref,{ownerUid:uid,token,platform:data.platform,expiresAt:clock()+7*86400000,updatedAt:clock()});
+    });
+   }else await db.runTransaction(async tx=>{const r=await tx.get(ref);if(r.exists&&r.data().ownerUid===uid)tx.update(ref,{ownerUid:'',token:'',expiresAt:0});});
    return {saved:true};
   }
   D.fail(404,'This seller service is not available.');
