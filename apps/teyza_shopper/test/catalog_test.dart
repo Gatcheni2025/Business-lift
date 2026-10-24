@@ -13,7 +13,7 @@ void main() {
     expect(rand(0), 'R0.00');
   });
 
-  test('Shopper only displays products with positive stock and price', () {
+  test('Sold-out products remain visible with availability while invalid prices are excluded', () {
     final shop = Shop.fromJson({
       'id': 'shop1', 'name': 'Spaza One', 'area': 'Durban',
       'products': [
@@ -22,8 +22,9 @@ void main() {
         {'id': 'free', 'name': 'Rice', 'priceCents': 0, 'stock': 3}
       ]
     });
-    expect(shop.products.length, 1);
-    expect(shop.products.single.name, 'Bread');
+    expect(shop.products.length, 2);
+    expect(shop.products.first.name, 'Bread');
+    expect(shop.products.last.inStock,isFalse);
   });
 
   test('Shop privacy defaults opt-in checkout off', () {

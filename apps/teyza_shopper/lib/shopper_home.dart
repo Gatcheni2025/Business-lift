@@ -17,6 +17,7 @@ import 'shopper_splash.dart';
 import 'premium_navigation.dart';
 import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
+import 'product_catalogue.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -31,11 +32,13 @@ String rand(int cents) => 'R' + (cents / 100).toStringAsFixed(2);
 class Product {
   final String id, name, category, picture;
   final int priceCents, stock;
-  const Product(this.id, this.name, this.category, this.picture, this.priceCents, this.stock);
+  final bool inStock;
+  const Product(this.id, this.name, this.category, this.picture, this.priceCents, this.stock,{this.inStock=true});
   factory Product.fromJson(Map<String, dynamic> x) => Product(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['category'] ?? 'Other').toString(), (x['imageUrl'] ?? '').toString(),
-    (x['priceCents'] as num?)?.toInt() ?? 0, (x['stock'] as num?)?.toInt() ?? 0);
+    (x['priceCents'] as num?)?.toInt() ?? 0, (x['stock'] as num?)?.toInt() ?? 0,
+    inStock:x.containsKey('inStock')?x['inStock']==true:x.containsKey('stock')?((x['stock'] as num?)??0)>0:true);
 }
 class Shop {
   final String id, name, area, photo, phone;
@@ -48,6 +51,9 @@ class Shop {
   final bool sponsored;
   final List<TradingDay> hours;
   final int deliveryFeeCents;
+  List<Product> get rangeProducts=>{
+    for(final p in highlights)p.id:p,for(final p in products)p.id:p
+  }.values.toList();
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
@@ -60,7 +66,7 @@ class Shop {
     ((x['products'] as List?) ?? []).whereType<Map>()
       .map((p) => Product.fromJson(Map<String, dynamic>.from(p)))
       .where((p) => p.id.isNotEmpty && p.name.isNotEmpty &&
-        p.priceCents > 0 && p.stock > 0).toList(),
+        p.priceCents > 0 && p.stock >= 0).toList(),
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
     shopCategory:x['shopCategory']=='variety'?'variety':'spaza',
@@ -73,6 +79,23 @@ class Shop {
     sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     highlights:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
+}
+class ShopProduct {
+  final Shop shop;final Product product;
+  const ShopProduct(this.shop,this.product);
+}
+List<ShopProduct> discoverShopProducts(Iterable<Shop> shops,{String type='spaza',String category='All',String query='',int limit=18}){
+  final result=<ShopProduct>[];
+  final seen=<String>{};
+  for(final shop in shops.where((s)=>s.shopCategory==type)){
+    for(final p in shop.rangeProducts){
+      if(p.inStock&&seen.add('${shop.id}/${p.id}')&&(category=='All'||p.category==category)&&
+        (query.trim().isEmpty||p.name.toLowerCase().contains(query.trim().toLowerCase()))){
+        result.add(ShopProduct(shop,p));if(result.length>=limit)return result;
+      }
+    }
+  }
+  return result;
 }
 Future<List<Shop>> fetchCatalogue({http.Client? client}) async {
   // Only administrator-published, approved and activated public shops.
@@ -186,6 +209,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   OnlineShop? directorySelected;
   String search = '';
   String category = 'All';
+  String shopProductSearch='';
   int tab = 0;
   final cart = <String, int>{};
   final session = ShopperSession();
@@ -198,6 +222,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int _onlineRequestSerial=0;
   int unreadChats=0;
   Timer? chatWatch;
+  Timer? catalogueWatch;
+  int _catalogueRequest=0;
 
   @override
   void initState() {
@@ -207,6 +233,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
       refreshUnread();
       session.restore();
+      startCatalogueWatch();
     }else{session.isReady=true;}
     _prepareLaunch();
   }
@@ -239,17 +266,25 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     chatWatch?.cancel();
+    catalogueWatch?.cancel();
     session.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if(!widget.enableBackgroundServices)return;
     if(state==AppLifecycleState.resumed) {
       refreshUnread();
+      load(silent:true);startCatalogueWatch();
       // Don't clear a shop/cart when returning from Google Maps.
       if(area==null) _restoreSavedArea();
-    }
+    }else{catalogueWatch?.cancel();catalogueWatch=null;}
+  }
+  void startCatalogueWatch(){
+    catalogueWatch?.cancel();catalogueWatch=Timer.periodic(const Duration(seconds:30),(_){
+      if(!loading)load(silent:true);
+    });
   }
 
   Future<void> refreshUnread() async {
@@ -336,14 +371,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
 
-  Future<void> load() async {
-    setState(() { loading = true; catalogueError = null; });
+  Future<void> load({bool silent=false}) async {
+    if(!mounted)return;
+    final request=++_catalogueRequest;
+    setState(() { if(!silent)loading = true; catalogueError = null; });
     try {
       final next = widget.catalogueLoader!=null?await widget.catalogueLoader!():await fetchCatalogue();
-      if (!mounted) return;
-      setState(() { live = next; loading = false; });
+      if (!mounted||request!=_catalogueRequest) return;
+      setState(() {
+        live = next; loading = false;
+        if(selected!=null){final matches=next.where((s)=>s.id==selected!.id);selected=matches.isEmpty?null:matches.first;}
+      });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted||request!=_catalogueRequest) return;
       setState(() { loading = false; catalogueError = 'Live shops are temporarily unavailable.'; });
     }
   }
@@ -596,22 +636,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final q=search.toLowerCase().trim();
     return nearbyReal.where((shop)=>(shop.shopCategory==discoveryType)&&
       (q.isEmpty ||
-      (shop.name+' '+shop.area+' '+shop.products.map((p)=>p.name).join(' '))
+      (shop.name+' '+shop.area+' '+shop.rangeProducts.map((p)=>p.name).join(' '))
         .toLowerCase().contains(q))).toList();
   }
-  List<Product> get featured {
-    final result=<Product>[];
-    final seen=<String>{};
-    for(final shop in nearbyReal.where((s)=>s.shopCategory==discoveryType)) {
-      for(final p in shop.products) {
-        if(seen.add(p.id) && (category=='All'||p.category==category) &&
-          (search.isEmpty||p.name.toLowerCase().contains(search.toLowerCase()))) {
-          result.add(p);
-          if(result.length>=18)return result;
-        }
-      }
-    }
-    return result;
+  List<ShopProduct> get featured {
+    return discoverShopProducts(nearbyReal,type:discoveryType,category:category,query:search);
   }
   List<Product> get basketItems => basketShop?.products.where((p) =>
     (cart[p.id] ?? 0)>0).toList() ?? [];
@@ -638,6 +667,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     });
   }
   void openShop(Shop shop) => setState(() {
+    shopProductSearch='';
     selected = shop;
     directorySelected = null;
     showAllShops=true;
@@ -651,6 +681,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   });
 
   Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
+    final catalogueKey=cataloguePhotoKey(url);
+    if(catalogueKey!=null)return ClipRRect(borderRadius:BorderRadius.circular(14),
+      child:ColoredBox(color:Colors.white,child:CataloguePhoto(photoKey:catalogueKey,size:size)));
     final isProduct=icon==Icons.shopping_bag||icon==Icons.shopping_bag_outlined;
     final placeholder=SvgPicture.asset(
       isProduct?'assets/illustrations/grocery-basket.svg':
@@ -781,12 +814,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
   }
-  void openOwnerWorkspace(){
-    Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
+  Future<void> openOwnerWorkspace() async {
+    await Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
       SellerWorkspacePage(session:session,openLogin:(){
         Navigator.of(routeContext).pop();
         if(mounted)setState(()=>tab=4);
       })));
+    if(mounted)await load(silent:true);
   }
   void navigateToTab(int index){
     setState(() {
@@ -977,9 +1011,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           'Variety stores, malls, wholesalers and more',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
-      if(discoveryType=='spaza')...[
-        if(featured.isNotEmpty)productShelf(featured)else essentialsShelf(),
-      ],
+      if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
       Material(color:deep,borderRadius:BorderRadius.circular(20),
         child:InkWell(borderRadius:BorderRadius.circular(20),
           onTap:()=>Navigator.of(context).push(MaterialPageRoute(
@@ -1249,27 +1281,30 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         Text(s.name,maxLines:1,overflow:TextOverflow.ellipsis,
           style:const TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink)),
         const SizedBox(height:4),
-        Text(s.products.isEmpty?'Registered Teyza shop':
-          s.products.length.toString()+' published products',
+        Text(s.rangeProducts.isEmpty?'Registered Teyza shop':
+          s.rangeProducts.length.toString()+' shop products',
           style:const TextStyle(fontSize:10,color:green,fontWeight:FontWeight.w700))
       ])));
 
-  Widget productShelf(List<Product> items) {
-    if(items.isEmpty)return empty('No groceries to display','Choose another category or area.');
-    return SizedBox(height:218,child:ListView(scrollDirection:Axis.horizontal,
-      children:items.take(12).map((p)=>Container(width:155,margin:const EdgeInsets.only(right:10),
-        padding:const EdgeInsets.all(11),decoration:BoxDecoration(color:Colors.white,
-          borderRadius:BorderRadius.circular(17)),child:Column(
-            crossAxisAlignment:CrossAxisAlignment.start,children:[
-          SizedBox(height:111,width:150,child:photo(p.picture,size:110,icon:Icons.shopping_bag)),
-          const SizedBox(height:8),
-          Text(p.name,maxLines:1,overflow:TextOverflow.ellipsis,
-            style:const TextStyle(fontSize:12,fontWeight:FontWeight.w800)),
-          Text(rand(p.priceCents),style:const TextStyle(fontSize:17,
-            fontWeight:FontWeight.w900,color:ink)),
-          const Text('Shop-listed price',
-            style:const TextStyle(color:muted,fontSize:10))
-        ]))).toList()));
+  Widget productShelf(List<ShopProduct> items) {
+    if(items.isEmpty)return empty('No products to display','Choose another category or area.');
+    return SizedBox(height:248,child:ListView(scrollDirection:Axis.horizontal,
+      children:items.take(18).map((entry){
+        final p=entry.product;
+        return Container(width:166,margin:const EdgeInsets.only(right:10),child:Material(
+          color:Colors.white,borderRadius:BorderRadius.circular(18),child:InkWell(
+            borderRadius:BorderRadius.circular(18),onTap:()=>openShop(entry.shop),
+            child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Center(child:photo(p.picture,size:104,icon:Icons.shopping_bag)),
+              const SizedBox(height:8),Text(p.name,maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:12,fontWeight:FontWeight.w800)),
+              Text(entry.shop.name,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700)),
+              const Spacer(),Text(p.priceCents>0?rand(p.priceCents):'Ask shop for price',
+                style:TextStyle(fontSize:p.priceCents>0?17:13,fontWeight:FontWeight.w800,color:ink)),
+              const SizedBox(height:4),const Text('View this shop →',style:TextStyle(color:muted,fontSize:10))
+            ])))));
+      }).toList()));
   }
   Widget shopTile(Shop s)=>Card(color:Colors.white,elevation:0,
     margin:const EdgeInsets.only(bottom:11),child:InkWell(onTap:()=>openShop(s),
@@ -1284,7 +1319,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           Text(s.area,maxLines:2,overflow:TextOverflow.ellipsis,
             style:const TextStyle(color:muted,fontSize:11)),
           const SizedBox(height:7),
-          Text((s.products.isEmpty?'Shop listed on Teyza':s.products.length.toString()+' products')+
+          Text((s.rangeProducts.isEmpty?'Shop listed on Teyza':s.rangeProducts.length.toString()+' products')+
             (distance(s)!=null?' · '+distance(s)!.toStringAsFixed(1)+' km':''),
             style:const TextStyle(color:green,fontSize:12,fontWeight:FontWeight.bold))
         ])),
@@ -1413,7 +1448,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
   }
 
-  Widget shopPage(Shop shop)=>ListView(padding:const EdgeInsets.all(16),children:[
+  Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
       icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
@@ -1441,49 +1476,47 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       await launchUrl(url,mode:LaunchMode.externalApplication);
     },icon:const Icon(Icons.directions_outlined),
        label:const Text('Directions (approximate shop location)')),
-    if(shop.products.isEmpty&&shop.highlights.isEmpty)
+    if(shop.rangeProducts.isEmpty)
       empty('Products coming soon', 'Ask this shop about its range in Live chat.'),
-    if(shop.products.isEmpty&&shop.highlights.isNotEmpty)...[
-      section('Sold here',subtitle:'Ask the shop for today’s price and availability'),
-      for(final product in shop.highlights)Card(color:Colors.white,elevation:0,child:ListTile(
-        leading:photo(product.picture,size:58,icon:Icons.shopping_bag_outlined),
-        title:Text(product.name),subtitle:Text(product.category),
-        onTap:()=>chatWithShop(shop,message:'Hi, is '+product.name+' available?'),
-        trailing:const Icon(Icons.chat_bubble_outline,color:green)))
-    ],
-    if(shop.products.isNotEmpty) section('Available products',
-      subtitle:'Merchant-published prices and stock'),
-    LayoutBuilder(builder:(context,c)=>GridView.builder(
-      shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
-      itemCount:shop.products.length,
-      gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount:c.maxWidth>680?4:2,mainAxisSpacing:10,crossAxisSpacing:10,
-        childAspectRatio:.7),
-      itemBuilder:(context,i){
-        final p=shop.products[i];
+    if(shop.rangeProducts.isNotEmpty)...[
+      section(shop.products.isEmpty?'Sold here':'Available products',subtitle:'Selected by '+shop.name),
+      Padding(padding:const EdgeInsets.only(bottom:12),child:TextField(key:ValueKey('search-${shop.id}'),
+        onChanged:(value)=>setState(()=>shopProductSearch=value),
+        decoration:const InputDecoration(hintText:'Search this shop’s products',prefixIcon:Icon(Icons.search),border:OutlineInputBorder()))),
+      if(shop.rangeProducts.any((p)=>cataloguePhotoKey(p.picture)!=null))
+        const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Reference photos show product types. Brands and packaging may differ.',
+          style:TextStyle(fontSize:11,color:muted))),
+      shopRangeGrid(shop)
+    ]
+  ]));
+  Widget shopRangeGrid(Shop shop)=>LayoutBuilder(builder:(context,c){
+    final products=shop.rangeProducts.where((p)=>p.name.toLowerCase().contains(shopProductSearch.toLowerCase().trim())).toList();
+    if(products.isEmpty)return const Padding(padding:EdgeInsets.all(18),child:Text('This shop has no matching products. Try another search.'));
+    final large=MediaQuery.textScalerOf(context).scale(14)>18;
+    return GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:products.length,
+      gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:large?1:c.maxWidth>680?4:2,
+        mainAxisSpacing:12,crossAxisSpacing:12,mainAxisExtent:290+(MediaQuery.textScalerOf(context).scale(14)-14)*6),
+      itemBuilder:(context,index){
+        final p=products[index];
+        final canOrder=p.priceCents>0&&p.stock>0&&p.inStock;
         final added=basketShop?.id==shop.id?(cart[p.id]??0):0;
-        return Container(padding:const EdgeInsets.all(10),
-          decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20),
-             boxShadow:const [BoxShadow(color:Color(0x0A010F1C),
-               blurRadius:10,offset:Offset(0,3))]),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Expanded(child:Center(child:photo(p.picture,size:136,icon:Icons.shopping_bag_outlined))),
-            const SizedBox(height:6),
-            Text(p.name,maxLines:1,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12)),
-            Text(rand(p.priceCents),style:const TextStyle(
-              fontSize:17,color:ink,fontWeight:FontWeight.w900)),
-            Text(p.stock.toString()+' in stock',
-              style:const TextStyle(color:muted,fontSize:10)),
-            SizedBox(width:double.infinity,child:FilledButton(
-              onPressed:()=>quantity(p,1),
-              style:FilledButton.styleFrom(padding:const EdgeInsets.all(5),
-                visualDensity:VisualDensity.compact),
-              child:Text(added==0?'+ Add':'Add more ('+added.toString()+')',
-                maxLines:1,style:const TextStyle(fontSize:12))))
-          ]));
-      }))
-  ]);
+        return Material(color:Colors.white,borderRadius:BorderRadius.circular(20),child:Padding(
+          padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Expanded(child:Center(child:photo(p.picture,size:116,icon:Icons.shopping_bag_outlined))),
+            const SizedBox(height:8),Text(p.name,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontWeight:FontWeight.w800,fontSize:13)),
+            const SizedBox(height:5),Text(p.priceCents>0?rand(p.priceCents):'Ask shop for price',
+              style:TextStyle(fontSize:p.priceCents>0?17:13,color:ink,fontWeight:FontWeight.w800)),
+            Text(!p.inStock?'Out of stock':p.priceCents>0?'${p.stock} in stock':'Ask about availability',
+              style:TextStyle(color:p.inStock?muted:Colors.deepOrange,fontSize:11)),
+            const SizedBox(height:6),SizedBox(width:double.infinity,child:FilledButton(
+              onPressed:canOrder?()=>quantity(p,1):()=>chatWithShop(shop,message:'Hi, is '+p.name+' available?'),
+              style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(horizontal:5,vertical:7)),
+              child:Text(canOrder?(added==0?'+ Add':'Add more ($added)'):'Ask this shop',maxLines:1,
+                style:const TextStyle(fontSize:12))))
+          ])));
+      });
+  });
   Widget empty(String title,String message)=>Card(color:Colors.white,
     child:Padding(padding:const EdgeInsets.all(22),child:Column(children:[
       const Icon(Icons.storefront_outlined,color:green,size:40),

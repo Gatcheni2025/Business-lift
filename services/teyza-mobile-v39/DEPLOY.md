@@ -1,4 +1,4 @@
-# Teyza mobile services R3.9
+# Teyza mobile services R3.11
 
 This isolated Firebase codebase connects the Flutter seller and shopper dashboards. It does not replace the website, Places function, existing Firebase project, seller rules or subscription approval flow.
 
@@ -7,12 +7,22 @@ This isolated Firebase codebase connects the Flutter seller and shopper dashboar
 Use Node.js 22 and an authorised Firebase CLI login. The existing project is `business-lift-3c19c`.
 
 1. Run `SETUP-VERIFICATION-KEY.ps1` once from this kit. It creates a random encryption key in Secret Manager and keeps an existing key. Never replace the key while encrypted selfie records still exist.
-2. Run `DEPLOY-MOBILE.ps1`. It installs locked dependencies, runs service tests and deploys only codebase `teyza-mobile` with `teyzaMobile` and `teyzaMobilePurgeSelfies`.
-3. Open `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile`. Expect `ok: true`, `version: 3.9.0`. A POST without a Firebase bearer token must return 401.
+2. Run `DEPLOY-MOBILE.ps1`. It installs locked dependencies, runs service tests and deploys only codebase `teyza-mobile` with `teyzaMobile`, `teyzaMobilePurgeSelfies` and the three catalogue synchronization triggers. The kit includes both product-photo atlases and `catalogue.json`.
+3. Open `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile`. Expect `ok: true`, `version: 3.11.0`. A POST without a Firebase bearer token must return 401.
 4. Check that anonymous and unrelated authenticated users cannot directly read any new private collections or the `teyza-private/mobile-verification` Storage prefix. Keep the existing deny-by-default rules. Do not replace the full Firestore/Storage rulesets, and do not add broad authenticated-user access.
 5. Install the new APK and test with separate verified shopper, Spaza owner and Retail owner accounts. Configure shop services and hours, submit products/photos for review, exchange messages, request collection/delivery, then confirm and complete from the seller dashboard.
 
 No app client writes approvals, public catalogues, credit decisions or identity-review outcomes. Service requests use verified Firebase identities. Selected screen roles and submitted UID fields are not authorization.
+
+## Curated product selection
+
+The new app includes 184 selectable products, 13 categories and 48 unbranded reference photographs. Sellers choose up to 30 products per batch, enter their own pack price and stock, and may hold up to 200 shop products. No prices or quantities are invented. `catalogue_add` binds the Firebase actor, validates template IDs and values, and creates private drafts plus the active shop range atomically. Repeated submissions preserve existing stock and prices. Pending shops save privately. Public priced products require trusted `catalogueEnabled: true`; basic active shops show selected names/photos and availability without price/quantity data.
+
+The `teyzaCatalogueDraftChanged`, `teyzaCatalogueShopChanged` and `teyzaCatalogueApprovalChanged` Firestore triggers synchronize edits, removals, activation and listing-plan changes. They read current data in transactions rather than replaying old event contents. Curated creation synchronizes in its transaction; public updates do not recursively republish themselves. Custom products and uploaded replacement photographs still require administrator catalogue review. Approved replacement photographs remain attached when stock changes.
+
+GET `teyzaMobile?cataloguePhoto=milk&v=1` serves a public reference JPEG from a fixed local allowlist. It does not fetch arbitrary URLs or expose uploaded seller/customer evidence. Native apps display the same photos from their bundled atlases.
+
+After deployment check health version **3.11.0** and **catalogueProducts: 184**. In two separate shop accounts choose different items and prices, view each shop with a shopper account, then edit stock, mark an item sold out and remove it. Refresh the shop or wait for its foreground 30-second catalogue refresh. Pending shops must remain private. Existing direct private collection permissions still need the R3.10 owner-access rules if not already published. Do not replace the full deployed ruleset.
 
 ## What is connected
 
@@ -27,7 +37,7 @@ No app client writes approvals, public catalogues, credit decisions or identity-
 
 Private server-managed collections: `teyzaShopSettings`, `teyzaCreditEnquiries/{ownerUid}/requests`, `teyzaMobileVerification`, `teyzaProductPhotos/{ownerUid}/items`, `teyzaCatalogueSubmissions`, `teyzaMobileChats/{id}/messages`, `teyzaMobileOrders`, `teyzaMobileOrderIndex`, `teyzaMobileChatIndex`, `teyzaMobileLimits`.
 
-Product drafts remain in the existing R2.7 path/schema. Owners can submit a catalogue for review. Only an account with the trusted custom claim `teyzaAdmin: true` can call `catalogue_review` with `sellerUid`. The server also requires the seller account to be approved and its listing active. Basic active listings may show reviewed product names, categories and photos without prices in `productHighlights`. Public priced/stock catalogues additionally require trusted `catalogueEnabled: true`. Set that flag only for a listing plan entitled to show prices. Base listing or pending shops cannot self-enable a priced catalogue.
+Product drafts remain in the existing R2.7 path/schema. Custom products and uploaded replacement photos are submitted for review. Curated template selections synchronize automatically only for an already approved, active shop. Only an account with the trusted custom claim `teyzaAdmin: true` can call `catalogue_review` with `sellerUid`. The server also requires the seller account to be approved and its listing active. Basic active listings may show reviewed product names, categories and photos without prices in `productHighlights`. Public priced/stock catalogues additionally require trusted `catalogueEnabled: true`. Set that flag only for a listing plan entitled to show prices. Base listing or pending shops cannot self-enable a priced catalogue.
 
 A trusted reviewer can call `verification_read` for a seller UID only after signing in within the last five minutes; the response is the decrypted photo, which must not be logged or stored in public assets. `verification_review` accepts `approved` or `needs_new_photo`. This reviews the selfie only; it does not approve or activate the seller account, subscription or public shop. Configure the reviewer claim through an existing authorised Admin SDK environment and preserve its other claims. Never place Admin SDK credentials in Flutter or a public website.
 

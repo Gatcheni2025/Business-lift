@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const D=require('./domain'),{createService}=require('./service'),C=require('./selfie-crypto');
+const catalogue=require('./catalogue');
 class FakeDB {
   constructor(seed={}){this.records=new Map(Object.entries(structuredClone(seed)));this.serial=0;}
   doc(path){const db=this;return {path,id:path.split('/').pop(),get:async()=>db.snapshot(path),
@@ -150,4 +151,76 @@ test('Publishing a reviewed catalogue cannot restore stock already reserved by a
  await service.execute({...buyer,teyzaAdmin:true},'catalogue_review',{sellerUid:'seller1'});
  assert.equal(db.records.get('teyzaPublicShops/seller1').products[0].stock,3);
  assert.equal(db.records.get('teyzaDraftProducts/seller1/items/bread1').stockQty,3);
+});
+test('The selectable catalogue has 184 products and 48 photo types without invented shop prices or stock',()=>{
+ assert.equal(catalogue.templates.size,184);assert.equal(Object.keys(catalogue.data.photos).length,48);
+ for(const p of catalogue.templates.values()){
+   assert(catalogue.data.photos[p.photo]);assert.equal(p.priceCents,undefined);assert.equal(p.stockQty,undefined);
+   assert(D.id(catalogue.prefix+p.id));
+ }
+});
+test('Catalogue selection binds the actor and ignores submitted names, photos, owner and approval fields',async()=>{
+ const {service,db}=fixture();
+ await rejects(service.execute(buyer,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]}),403);
+ const result=await service.execute(owner,'catalogue_add',{ownerUid:'victim',products:[{
+   templateId:'milk-2-l',priceCents:3000,stockQty:4,name:'Injected',imageUrl:'https://bad.test/x',status:'approved'}]});
+ const id='catalog_milk-2-l',draft=db.records.get('teyzaDraftProducts/seller1/items/'+id);
+ assert.equal(result.publication,'live');assert.equal(draft.name,'Full cream milk · 2 L');assert.equal(draft.ownerUid,'seller1');
+ const publicProduct=db.records.get('teyzaPublicShops/seller1').products.find(p=>p.id===id);
+ assert.equal(publicProduct.priceCents,3000);assert.equal(publicProduct.imageUrl,catalogue.photoUrl('milk'));
+ assert.equal(db.records.has('teyzaDraftProducts/victim/items/'+id),false);
+});
+test('Pending shops save privately and activation publishes only selected names/photos on basic plans',async()=>{
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending'}});
+ const input={products:[{templateId:'white-bread-700-g',priceCents:1800,stockQty:2}]};
+ assert.equal((await service.execute(owner,'catalogue_add',input)).publication,'private');
+ assert(!db.records.get('teyzaPublicShops/seller1').productHighlights.some(p=>p.id==='catalog_white-bread-700-g'));
+ db.records.set('teyzaSellerAccounts/seller1',seller);
+ db.records.set('teyzaPublicShops/seller1',{...shop,catalogueEnabled:false});
+ await service.synchronizeCatalogue('seller1');
+ const publicShop=db.records.get('teyzaPublicShops/seller1');
+ assert.equal(publicShop.products.length,0);
+ const p=publicShop.productHighlights.find(p=>p.id==='catalog_white-bread-700-g');
+ assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
+ assert.equal(publicShop.productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
+});
+test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
+ const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
+ const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop});
+ await service.execute(owner,'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2500,stockQty:8}]});
+ await service.execute({...owner,uid:'seller2'},'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2800,stockQty:3}]});
+ for(const [uid,price,stock] of [['seller1',2500,8],['seller2',2800,3]]){
+   const p=db.records.get('teyzaPublicShops/'+uid).products.find(p=>p.id==='catalog_rice-1-kg');
+   assert.equal(p.priceCents,price);assert.equal(p.stock,stock);
+ }
+});
+test('Retries preserve reserved stock and synchronization correctly exposes sold-out status',async()=>{
+ const {service,db}=fixture();const input={products:[{templateId:'white-bread-700-g',priceCents:1800,stockQty:2}]};
+ await service.execute(owner,'catalogue_add',input);
+ const requested=await service.execute(buyer,'order_request',{shopId:'seller1',requestId:'catalogue-order',mode:'collection',phone:'0711234567',items:[{id:'catalog_white-bread-700-g',quantity:2}]});
+ await service.execute(owner,'order_update',{orderId:requested.id,status:'confirmed'});
+ await service.execute(owner,'catalogue_add',input);await service.synchronizeCatalogue('seller1');
+ const publicShop=db.records.get('teyzaPublicShops/seller1');
+ assert.equal(publicShop.products.find(p=>p.id==='catalog_white-bread-700-g').stock,0);
+ assert.equal(publicShop.productHighlights.find(p=>p.id==='catalog_white-bread-700-g').inStock,false);
+ assert.equal(db.records.get('teyzaDraftProducts/seller1/items/catalog_white-bread-700-g').stockQty,0);
+});
+test('Edits, removals and plan changes update the range without filling it with unselected templates',async()=>{
+ const {service,db}=fixture();await service.execute(owner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ const key='teyzaDraftProducts/seller1/items/catalog_milk-2-l';
+ db.records.set(key,{...db.records.get(key),priceCents:3200,stockQty:1});await service.synchronizeCatalogue('seller1');
+ assert.equal(db.records.get('teyzaPublicShops/seller1').products.find(p=>p.id==='catalog_milk-2-l').priceCents,3200);
+ db.records.set('teyzaPublicShops/seller1',{...db.records.get('teyzaPublicShops/seller1'),catalogueEnabled:false});
+ await service.synchronizeCatalogue('seller1');assert.equal(db.records.get('teyzaPublicShops/seller1').products.length,0);
+ db.records.delete(key);await service.synchronizeCatalogue('seller1',{removedProductId:'catalog_milk-2-l'});
+ assert.equal(db.records.get('teyzaPublicShops/seller1').productHighlights.some(p=>p.id==='catalog_milk-2-l'),false);
+ assert.equal(db.records.get('teyzaPublicShops/seller1').productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
+});
+test('Invalid selections and forged draft contents cannot publish a made-up catalogue item',async()=>{
+ const {service,db}=fixture();
+ for(const products of [[{templateId:'invented',priceCents:100,stockQty:1}],[{templateId:'milk-2-l',stockQty:1}],
+   [{templateId:'milk-2-l',priceCents:100,stockQty:-1}]])await rejects(service.execute(owner,'catalogue_add',{products}),422);
+ db.records.set('teyzaDraftProducts/seller1/items/catalog_milk-2-l',{ownerUid:'another',name:'Injected',category:'Dairy & Eggs',status:'draft',priceCents:100,stockQty:9});
+ await service.synchronizeCatalogue('seller1');
+ assert(!db.records.get('teyzaPublicShops/seller1').products.some(p=>p.id==='catalog_milk-2-l'));
 });

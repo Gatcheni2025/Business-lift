@@ -23,7 +23,8 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
                (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
             'appleLoginImplemented': platform == 'ios',
-            'mobileBackendVersionRequired': '3.9.0',
+            'mobileBackendVersionRequired': '3.11.0',
+            'catalogueProducts': 184, 'catalogueReferencePhotos': 48,
             'storeSubmitted': False, 'deviceLoginVerified': False}
 if platform == 'android':
     source = root/'build/app/outputs/bundle/release/app-release.aab'

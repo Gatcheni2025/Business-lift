@@ -10,6 +10,8 @@ import 'seller_tools.dart';
 import 'shopper_chat.dart';
 import 'shop_orders.dart';
 import 'teyza_mobile_api.dart';
+import 'product_catalogue.dart';
+import 'seller_product_picker.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -25,6 +27,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   String? loadedUid,error,draftError,accessReference;
   bool loading=false,busy=false,productsView=false;
   Map<String,String> productPhotos={};
+  String? rangeStatus;
   @override void initState(){
     super.initState();
     widget.session.addListener(_sessionChanged);
@@ -93,6 +96,25 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
       if(mounted)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
     }catch(_){/* Product drafting remains available when optional services are offline. */}
   }
+  Future<void> chooseProducts() async {
+    if(busy||draftError!=null)return;
+    final requestedUid=widget.session.userId;
+    final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
+      session:widget.session,existingIds:drafts.map((p)=>p.id).toSet())));
+    if(result==null||!mounted||widget.session.userId!=requestedUid)return;
+    await load();
+    if(mounted){setState(()=>rangeStatus=result['publication']=='live'?
+      'Your selected range is visible to shoppers.':'Products saved privately. They appear after shop approval and activation.');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
+  }
+  Future<void> syncRange({String? removedId}) async {
+    try{
+      final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
+        if(removedId!=null)'removedProductId':removedId});
+      if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
+        'Shopper range updated. Public prices follow your listing plan.':'Products stay private until your shop is approved and active.');
+    }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
+  }
   Future<void> productPhoto(SellerDraft product) async {
     if(busy)return;
     final source=await showModalBottomSheet<ImageSource>(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
@@ -139,11 +161,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
+    final uid=loadedUid;if(uid==null||uid!=widget.session.userId)return;
     setState(()=>busy=true);
     try{
       final token=await widget.session.freshIdToken();
-      await SellerFirestore(uid:widget.session.userId!,token:token).save(p);
+      if(uid!=widget.session.userId)return;
+      await SellerFirestore(uid:uid,token:token).save(p);
       await loadAfterSave();
+      await syncRange();
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Product saved as a private draft.')));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
@@ -173,18 +198,21 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
       final token=await widget.session.freshIdToken();
       await SellerFirestore(uid:widget.session.userId!,token:token).delete(item.id);
       await loadAfterSave();
+      await syncRange(removedId:item.id);
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content:Text(e.toString().replaceFirst('Bad state: ',''))));}
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> _edit([SellerDraft? existing]) async{
     if(busy)return;
+    final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
     final category=TextEditingController(text:existing?.category??(shop?.category=='retail'?'General retail':'Groceries'));
     final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
     final stock=TextEditingController(text:existing?.stock.toString()??'');
     final key=GlobalKey<FormState>();
+    final fromCatalogue=existing!=null&&cataloguePhotoForDraft(existing.id)!=null;
     final result=await showModalBottomSheet<SellerDraft>(context:context,isScrollControlled:true,
       useSafeArea:true,showDragHandle:true,
       builder:(ctx)=>Padding(padding:EdgeInsets.only(left:20,right:20,top:10,
@@ -195,13 +223,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             Text(existing==null?'Add a product':'Edit product',
               style:Theme.of(ctx).textTheme.headlineSmall),
             const SizedBox(height:10),
-            const Text('Products are saved privately. Approval and R99 activation are separate.'),
+            Text(fromCatalogue?'Update your price and stock. Your active shop’s range updates for shoppers.':
+              'Custom products are saved privately and submitted for review.'),
             const SizedBox(height:16),
-            TextFormField(controller:name,maxLength:120,
+            TextFormField(controller:name,maxLength:120,readOnly:fromCatalogue,
               decoration:const InputDecoration(labelText:'Product name',border:OutlineInputBorder()),
               validator:(v)=>v==null||v.trim().length<2?'Enter a product name':null),
             const SizedBox(height:8),
-            TextFormField(controller:category,maxLength:60,
+            TextFormField(controller:category,maxLength:60,readOnly:fromCatalogue,
               decoration:const InputDecoration(labelText:'Category',border:OutlineInputBorder()),
               validator:(v)=>v==null||v.trim().isEmpty?'Enter a category':null),
             const SizedBox(height:8),
@@ -225,14 +254,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
                     id:existing?.id??'p'+DateTime.now().microsecondsSinceEpoch.toString()+
                       Random.secure().nextInt(100000).toString(),
                     name:name.text.trim(),category:category.text.trim(),
-                    description:description.text.trim(),createdAt:existing?.createdAt,
+                    description:description.text.trim(),createdAt:existing?.createdAt,updateTime:existing?.updateTime,
                     priceCents:(double.parse(price.text.replaceAll(',','.'))*100).round(),
                     stock:int.parse(stock.text.trim())));
                 }
               }),
           ])))));
     name.dispose();category.dispose();description.dispose();price.dispose();stock.dispose();
-    if(result!=null)await _save(result);
+    if(result!=null&&uid==widget.session.userId)await _save(result);
   }
   Widget _card(Widget child)=>Card(color:Colors.white,child:Padding(
     padding:const EdgeInsets.all(16),child:child));
@@ -315,7 +344,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
             SellerDashboard(productCount:draftError==null?drafts.length:null,onProducts:openProducts,
@@ -331,19 +360,24 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
               IconButton(onPressed:busy?null:load,icon:const Icon(Icons.refresh))
             ]),
             Text(draftError!=null?'Products are temporarily unavailable.':
-              drafts.isEmpty?'No products saved yet.':'Private drafts: '+drafts.length.toString()),
+              drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
+            TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+              icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
+            if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
+            OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:const Text('Refresh shopper range')),
             for(final item in drafts)
               Column(children:[
                 const Divider(),
                 ListTile(contentPadding:EdgeInsets.zero,
                   leading:productPhotos[item.id]!=null?ClipRRect(borderRadius:BorderRadius.circular(10),child:Image.network(
-                    productPhotos[item.id]!,width:48,height:48,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.photo_outlined))):null,
+                    productPhotos[item.id]!,width:48,height:48,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.photo_outlined))):
+                      cataloguePhotoForDraft(item.id)!=null?CataloguePhoto(photoKey:cataloguePhotoForDraft(item.id)!,size:48):null,
                   title:Text(item.name),
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
-                    '  ·  Private draft'),
+                    (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Private draft')),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
                   onTap:busy?null:()=>_edit(item)),
                 Wrap(alignment:WrapAlignment.end,children:[

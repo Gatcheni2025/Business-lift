@@ -1,6 +1,9 @@
 'use strict';
 const {onRequest}=require('firebase-functions/v2/https');
 const {onSchedule}=require('firebase-functions/v2/scheduler');
+const {onDocumentWritten}=require('firebase-functions/v2/firestore');
+const catalogue=require('./catalogue');
+const {productPhoto}=require('./catalogue-photos');
 const admin=require('firebase-admin');
 const sharp=require('sharp');
 const {defineSecret}=require('firebase-functions/params');
@@ -17,7 +20,18 @@ const service=createService({db,bucket,
   .rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).jpeg({quality:82}).toBuffer()});
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(req.method==='GET'){res.json({ok:true,version:'3.9.0',service:'teyza-mobile'});return;}
+  if(req.method==='GET'){
+    const key=req.query.cataloguePhoto;
+    if(key!==undefined){
+      try{
+        const bytes=await productPhoto(key);
+        if(!bytes){res.status(404).json({error:'Product photo not found.'});return;}
+        res.set('Cache-Control','public,max-age=86400').type('image/jpeg').send(bytes);
+      }catch(_){res.status(503).json({error:'Product photo is temporarily unavailable.'});}
+      return;
+    }
+    res.json({ok:true,version:'3.11.0',catalogueProducts:catalogue.data.products.length,service:'teyza-mobile'});return;
+  }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
     const bearer=/^Bearer (\S+)$/.exec(req.get('Authorization')||'');
@@ -30,6 +44,27 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     if(!error.status)console.error('TEYZA_MOBILE_SERVICE_ERROR',error.code||error.name);
     res.status(error.status||503).json({error:error.status?error.message:'Shop services are temporarily unavailable. Please try again.'});
   }
+});
+const catalogueTrigger={region:'us-central1',maxInstances:5,retry:true};
+exports.teyzaCatalogueDraftChanged=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaDraftProducts/{sellerUid}/items/{productId}'},async event=>{
+  // Batch catalogue creation already synchronizes in the same transaction.
+  if(!event.data?.before.exists)return;
+  await service.synchronizeCatalogue(event.params.sellerUid,{
+    removedProductId:event.data.after.exists?null:event.params.productId});
+});
+exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaPublicShops/{sellerUid}'},async event=>{
+  if(!event.data?.after.exists)return;
+  const before=event.data.before.data()||{},after=event.data.after.data();
+  if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled)return;
+  await service.synchronizeCatalogue(event.params.sellerUid);
+});
+exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
+  const before=event.data?.before.data()||{},after=event.data?.after.data()||{};
+  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus)return;
+  await service.synchronizeCatalogue(event.params.sellerUid);
 });
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
   const expired=await db.collection('teyzaMobileVerification').where('expiresAt','<=',Date.now()).limit(200).get();

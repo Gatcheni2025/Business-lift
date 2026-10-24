@@ -7,6 +7,7 @@ apps/teyza_shopper/.dart_tool/
 apps/teyza_shopper/build/
 apps/teyza_shopper/.flutter-plugins*
 **/__pycache__/
+**/node_modules/
 *.jks
 *.keystore
 *.p12

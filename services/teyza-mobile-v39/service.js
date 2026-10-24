@@ -1,12 +1,46 @@
 'use strict';
 const D = require('./domain');
 const crypto = require('node:crypto');
+const catalogue=require('./catalogue');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
   const active = async uid => D.published(await read('teyzaPublicShops/'+uid),uid);
+  async function synchronizeCatalogue(uid,{additions=[],removedProductId=null}={}) {
+    D.id(uid);
+    return db.runTransaction(async tx=>{
+      const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
+      const [accountSnap,shopSnap,draftSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201))]);
+      const account=accountSnap.exists?accountSnap.data():null;
+      const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
+      if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
+      const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
+      const existing=new Map(entries.map(p=>[p.id,p.data]));
+      const added=[];let alreadyAdded=0;
+      for(const row of additions){
+        if(existing.has(row.id)){
+          const old=existing.get(row.id);
+          if(old.ownerUid!==uid||old.status!=='draft')D.fail(409,'This product reference is already in use. Refresh your products.');
+          alreadyAdded++;continue; // A retry must never reset stock already reserved by an order.
+        }
+        const record={...row,ownerUid:uid,createdAt:new Date(clock()),updatedAt:new Date(clock())};
+        entries.push({id:row.id,data:record});added.push({id:row.id,record});
+      }
+      if(additions.length&&entries.length>200)D.fail(422,'A shop can list up to 200 products. Remove an unused product first.');
+      const shop=shopSnap.exists?shopSnap.data():null;
+      const publicShop=shop?.sellerUid===uid&&shop.status==='active';
+      const eligible=registered&&account.approvalStatus==='approved'&&account.listingStatus==='active'&&publicShop;
+      const next=publicShop?catalogue.range(uid,shop,entries,{enabled:eligible,removedProductId}):null;
+      for(const item of added)tx.set(doc('teyzaDraftProducts/'+uid+'/items/'+item.id),item.record);
+      if(next&&(JSON.stringify(next.products)!==JSON.stringify(shop.products||[])||
+          JSON.stringify(next.productHighlights)!==JSON.stringify(shop.productHighlights||[])))tx.update(shopRef,next);
+      return {addedIds:added.map(p=>p.id),alreadyAdded,publication:eligible?'live':'private',
+        publicCount:next?.productHighlights.length||0};
+    });
+  }
   async function rate(uid,kind,max,window) {
     const ref=doc('teyzaMobileLimits/'+uid+'_'+kind);
     await db.runTransaction(async tx => {
@@ -40,12 +74,17 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
     if (!auth.email_verified) D.fail(403,'Verify your email before using shop services or sending requests.');
+    if(action==='catalogue_add'||action==='catalogue_sync'){
+      await owner(uid);await rate(uid,'catalogue-edit',30,60000);
+      return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
+        removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null});
+    }
     if (action==='seller_summary') {
       await owner(uid);
       const [config,verification,finance,catalogue,photos]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
-        read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(100).get()]);
+        read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get()]);
       return {settings:config||{},verification:verification?{status:verification.status,submittedAt:verification.submittedAt}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         catalogueStatus:catalogue?.status||'not_submitted',photos:photos.docs.map(x=>({id:x.id,url:x.data().url}))};
@@ -105,10 +144,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     }
     if(action==='catalogue_submit') {
       await owner(uid);await rate(uid,'catalogue',10,3600000);
-      const [drafts,photos]=await Promise.all([db.collection('teyzaDraftProducts/'+uid+'/items').limit(100).get(),db.collection('teyzaProductPhotos/'+uid+'/items').get()]);
+      const [drafts,photos]=await Promise.all([db.collection('teyzaDraftProducts/'+uid+'/items').limit(200).get(),db.collection('teyzaProductPhotos/'+uid+'/items').get()]);
       const images=Object.fromEntries(photos.docs.map(x=>[x.id,x.data().url]));
       const products=drafts.docs.filter(x=>x.data().ownerUid===uid&&x.data().status==='draft').map(x=>{
-        const p=x.data();return {id:x.id,name:p.name,category:p.category,priceCents:p.priceCents,stock:p.stockQty,imageUrl:images[x.id]||''};
+        const p=x.data(),template=catalogue.templateFor(x.id);return {id:x.id,name:p.name,category:p.category,priceCents:p.priceCents,stock:p.stockQty,
+          imageUrl:images[x.id]||(template?catalogue.photoUrl(template.photo):'')};
       });
       if(!products.length)D.fail(422,'Add at least one product before submitting your catalogue.');
       // Validate stored drafts again. A client cannot publish a pending shop or enable priced listings.
@@ -131,16 +171,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         const submission=submissionSnap.exists?submissionSnap.data():null;
         if(account.approvalStatus!=='approved'||account.listingStatus!=='active')
           D.fail(409,'Approve and activate the shop before publishing a catalogue.');
-        if(submission?.status!=='pending_review'||!Array.isArray(submission.products)||submission.products.length>100)
+        if(submission?.status!=='pending_review'||!Array.isArray(submission.products)||submission.products.length>200)
           D.fail(409,'There is no pending catalogue to review.');
         const drafts=await Promise.all(submission.products.map(p=>tx.get(doc('teyzaDraftProducts/'+sellerUid+'/items/'+D.id(p.id)))));
         const products=submission.products.map((p,index)=>{
           const current=drafts[index].exists?drafts[index].data():null;
           if(!current||current.ownerUid!==sellerUid||current.status!=='draft'||!Number.isInteger(current.stockQty)||current.stockQty<0)
             D.fail(409,'The product drafts changed. Ask the shop to resubmit its catalogue.');
-          return {...p,stock:current.stockQty};
+          const template=catalogue.templateFor(p.id),currentProduct=template?catalogue.canonical(sellerUid,{id:p.id,data:current}):null;
+          if(template&&!currentProduct)D.fail(409,'This catalogue product changed. Use a custom product for a different item.');
+          return currentProduct?{...currentProduct,imageUrl:p.imageUrl||currentProduct.imageUrl,
+            customPhotoApproved:Boolean(p.imageUrl&&p.imageUrl!==currentProduct.imageUrl)}:{...p,stock:current.stockQty};
         });
-        const productHighlights=products.map(({id,name,category,imageUrl})=>({id,name,category,imageUrl}));
+        const productHighlights=products.map(({priceCents,stock,...p})=>({...p,inStock:stock>0}));
         tx.update(shopRef,{products:shop.catalogueEnabled===true?products:[],productHighlights});
         tx.update(submissionRef,{status:'published',reviewedBy:uid,reviewedAt:clock()});
         return {status:'published'};
@@ -276,6 +319,6 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     }
     D.fail(404,'This shop service is not available.');
   }
-  return {execute};
+  return {execute,synchronizeCatalogue};
 }
 module.exports = {createService};

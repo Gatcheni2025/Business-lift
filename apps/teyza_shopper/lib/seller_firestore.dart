@@ -30,14 +30,14 @@ class SellerShop {
 }
 class SellerDraft {
   final String id,name,category,description;
-  final String? createdAt;
+  final String? createdAt,updateTime;
   final int priceCents,stock;
   const SellerDraft({required this.id,required this.name,required this.category,
-    required this.priceCents,required this.stock,this.description='',this.createdAt});
-  factory SellerDraft.fromFields(String id,Map<String,dynamic> d)=>SellerDraft(
+    required this.priceCents,required this.stock,this.description='',this.createdAt,this.updateTime});
+  factory SellerDraft.fromFields(String id,Map<String,dynamic> d,{String? updateTime})=>SellerDraft(
     id:id,name:(d['name']??'').toString(),category:(d['category']??'Other').toString(),
     description:(d['description']??'').toString(),
-    createdAt:d['createdAt']?.toString(),
+    createdAt:d['createdAt']?.toString(),updateTime:updateTime,
     priceCents:(d['priceCents'] is num)?(d['priceCents'] as num).toInt():0,
     stock:(d['stockQty'] is num)?(d['stockQty'] as num).toInt():0);
 }
@@ -78,6 +78,7 @@ class SellerFirestore {
   Map<String,dynamic> _parse(http.Response response,{String operation='save'}){
     if(response.statusCode==401)throw StateError('Session expired. Sign in again.');
     if(response.statusCode==403)throw SellerAccessException(operation);
+    if(response.statusCode==409||response.statusCode==412)throw StateError('This product changed. Refresh your products before saving again.');
     if(response.statusCode<200||response.statusCode>=300){
       throw StateError('Shop service unavailable (HTTP '+response.statusCode.toString()+').');
     }
@@ -106,22 +107,26 @@ class SellerFirestore {
     _parse(response);
   }
   Future<List<SellerDraft>> drafts() async{
-    final response=await _request('GET',_document(
-      'teyzaDraftProducts/'+uid+'/items',{'pageSize':'100'}));
-    if(response.statusCode==404)return [];
-    final data=_parse(response,operation:'drafts');
-    final docs=data['documents'];
-    if(docs is! List)return [];
     final output=<SellerDraft>[];
-    for(final value in docs){
-      if(value is! Map)continue;
-      final id=(value['name']??'').toString().split('/').last;
-      if(!validDocumentId(id))continue;
-      final fields=sellerDecodeFields(value['fields']);
-      if(fields['ownerUid']!=uid||fields['status']!='draft')continue;
-      output.add(SellerDraft.fromFields(id,fields));
+    String? page;
+    for(var request=0;request<5;request++){
+      final response=await _request('GET',_document('teyzaDraftProducts/'+uid+'/items',
+        {'pageSize':'100',if(page!=null)'pageToken':page}));
+      if(response.statusCode==404)return output;
+      final data=_parse(response,operation:'drafts');
+      final docs=data['documents'];
+      if(docs is List)for(final value in docs){
+        if(value is! Map)continue;
+        final id=(value['name']??'').toString().split('/').last;
+        if(!validDocumentId(id))continue;
+        final fields=sellerDecodeFields(value['fields']);
+        if(fields['ownerUid']!=uid||fields['status']!='draft')continue;
+        output.add(SellerDraft.fromFields(id,fields,updateTime:value['updateTime']?.toString()));
+      }
+      page=data['nextPageToken']?.toString();
+      if(page==null||page.isEmpty)return output;
     }
-    return output;
+    throw StateError('This shop has too many drafts to load safely. Contact Teyza support.');
   }
   static Map<String,dynamic> _fields(SellerDraft p,String uid)=>{
     'ownerUid':{'stringValue':uid},
@@ -151,6 +156,7 @@ class SellerFirestore {
     final data={'writes':[{
       'update':{'name':name,'fields':_fields(draft,uid)},
       if(isNew)'currentDocument':{'exists':false},
+      if(!isNew&&draft.updateTime!=null)'currentDocument':{'updateTime':draft.updateTime!},
       'updateTransforms':[
         if(isNew){'fieldPath':'createdAt','setToServerValue':'REQUEST_TIME'},
         {'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}
