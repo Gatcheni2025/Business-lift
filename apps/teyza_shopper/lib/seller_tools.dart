@@ -257,7 +257,7 @@ class _SellerToolState extends State<SellerToolPage> {
     })
   ]));
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F9F7),
-    appBar:AppBar(title:Text(sellerToolNames[widget.tool]!)),body:SafeArea(child:loading?const Center(child:CircularProgressIndicator()):
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F9F7),foregroundColor:ownerInk,title:Text(sellerToolNames[widget.tool]!)),body:SafeArea(child:loading?const Center(child:CircularProgressIndicator()):
       ListView(padding:const EdgeInsets.all(18),children:[
         if(error!=null)card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(error!,style:const TextStyle(color:Color(0xFF9A3412))),if(!ready)TextButton(onPressed:load,child:const Text('Retry'))])),

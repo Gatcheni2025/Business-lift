@@ -61,7 +61,7 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerReviewPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.tap(find.text('Durban Corner Shop'));await tester.pumpAndSettle();
   var approve=find.widgetWithText(FilledButton,'Approve seller');
-  await tester.scrollUntilVisible(approve,200);await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(approve,200,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(approve).onPressed,isNull);
   await visibleTap(tester,find.text('View private selfie'));
   expect(api.calls.last.data,{'sellerUid':'seller1','submissionId':'submission1'});
@@ -92,6 +92,20 @@ void main(){
   await visibleTap(tester,find.text('Submit selfie for review'));
   final submission=api.calls.firstWhere((r)=>r.action=='verification_selfie');expect(submission.data['consent'],true);
   expect(submission.data.containsKey('status'),false);expect(find.text('Selfie awaiting review'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('A completed native registration continues directly to owner camera verification',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
+  await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
+  await tester.enterText(find.byType(TextFormField).at(2),'KwaMashu, Durban');
+  tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I confirm that these are my shop’s details.'));
+  await visibleTap(tester,find.text('Continue to camera verification'));
+  final request=api.calls.firstWhere((r)=>r.action=='seller_register');
+  expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
+  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('Open selfie camera'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{

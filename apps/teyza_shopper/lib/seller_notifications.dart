@@ -55,7 +55,7 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
     catch(e){if(mounted)setState(()=>error=mobileError(e));}finally{if(mounted)setState(()=>working=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(title:const Text('Shop notifications'),actions:[IconButton(tooltip:'Notification preferences',onPressed:working?null:settings,icon:const Icon(Icons.tune_rounded))]),
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:const Color(0xFF010F1C),title:const Text('Shop notifications'),actions:[IconButton(tooltip:'Notification preferences',onPressed:working?null:settings,icon:const Icon(Icons.tune_rounded))]),
     body:SafeArea(child:RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(20),children:[
       Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:const Color(0xFF010F1C),borderRadius:BorderRadius.circular(25)),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -70,7 +70,9 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
       Row(children:[const Expanded(child:Text('Recent updates',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800))),
         TextButton(onPressed:working||rows.isEmpty?null:()=>mark(rows.map((r)=>r['id'].toString()).toList()),child:const Text('Mark all read'))]),
       if(!loading&&rows.isEmpty&&error==null)const Padding(padding:EdgeInsets.symmetric(vertical:36),child:Text('You’re all caught up. New shop updates will appear here.')),
-      for(final row in rows)Card(color:row['read']==true?Colors.white:const Color(0xFFE7F5ED),child:ListTile(contentPadding:const EdgeInsets.all(16),
+      for(final row in rows)Card(color:row['read']==true?Colors.white:const Color(0xFFE7F5ED),elevation:0,
+        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22),side:const BorderSide(color:Color(0xFFDCE8DC))),
+        child:ListTile(contentPadding:const EdgeInsets.all(16),
         leading:Icon(switch(row['target']){'orders'=>Icons.receipt_long_outlined,'chat'=>Icons.chat_bubble_outline,'products'=>Icons.inventory_2_outlined,_=>Icons.verified_user_outlined},color:const Color(0xFF169F68)),
         title:Text(row['title']?.toString()??'Shop update',style:TextStyle(fontWeight:row['read']==true?FontWeight.w600:FontWeight.w800)),
         subtitle:Padding(padding:const EdgeInsets.only(top:7),child:Text(row['body']?.toString()??'',style:const TextStyle(height:1.4))),

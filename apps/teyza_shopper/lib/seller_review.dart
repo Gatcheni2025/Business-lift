@@ -55,7 +55,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
     if(selected==null)await load();
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(title:const Text('Seller review desk'),leading:selected==null?null:BackButton(onPressed:(){
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:const Color(0xFF010F1C),title:const Text('Seller review desk'),leading:selected==null?null:BackButton(onPressed:(){
       if(busy)return;setState((){generation++;selected=null;photo=null;reviewed=false;note.clear();});}),
       actions:[IconButton(tooltip:'Refresh seller queue',onPressed:busy?null:()=>load(),icon:const Icon(Icons.refresh))]),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
@@ -68,7 +68,8 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
       if(busy)const LinearProgressIndicator(),
       if(selected==null)...[
         if(!busy&&sellers.isEmpty&&error==null)const Padding(padding:EdgeInsets.all(30),child:Text('All caught up. There are no selfies awaiting review.')),
-        for(final s in sellers)Card(color:Colors.white,child:ListTile(contentPadding:const EdgeInsets.all(16),
+        for(final s in sellers)Card(color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22),
+          side:const BorderSide(color:Color(0xFFE0E7DD))),child:ListTile(contentPadding:const EdgeInsets.all(16),
           leading:const CircleAvatar(backgroundColor:Color(0xFFE1F6EB),child:Icon(Icons.storefront_outlined,color:Color(0xFF169F68))),
           title:Text(s['shopName'].toString(),style:const TextStyle(fontWeight:FontWeight.w700)),
           subtitle:Text('${s['category']=='spaza'?'Spaza shop':'Retail / wholesale'}\n${s['address']}\n${s['expired']==true?'Photo expired · request another':'Awaiting owner review'}'),

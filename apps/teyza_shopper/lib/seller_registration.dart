@@ -32,25 +32,30 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(title:const Text('Register your shop')),
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:ownerInk,title:const Text('Register your shop')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(22),children:[
       Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:ownerInk,borderRadius:BorderRadius.circular(26)),
         child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text('LET’S BUILD YOUR LOCAL BUSINESS',style:TextStyle(color:Color(0xFF9DDFC0),fontSize:11,letterSpacing:1.5)),SizedBox(height:12),
           Text('Your shop.\nA bigger neighbourhood.',style:TextStyle(color:Colors.white,fontSize:29,fontWeight:FontWeight.w800,height:1.1)),SizedBox(height:14),
-          Text('1  Shop details   →   2  Camera verification',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])),
+          Wrap(spacing:12,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
+            Text('1  Shop details',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
+            Icon(Icons.arrow_forward_rounded,color:Color(0xFF83D9AE),size:17),
+            Text('2  Camera verification',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         const Text('Tell us about your shop',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
-        DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:const InputDecoration(labelText:'Shop type',border:OutlineInputBorder()),
+        DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'Shop type',filled:true,fillColor:Colors.white,
+          border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
           items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop')),DropdownMenuItem(value:'retail',child:Text('Other Retail / Wholesale'))],
           onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
         const SizedBox(height:16),
         for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),(address,'Shop address',250,true),
           (company,'Company name (optional)',160,false),(number,'Registration number (optional)',50,false)])Padding(padding:const EdgeInsets.only(bottom:16),
           child:TextFormField(controller:f.$1,maxLength:f.$3,enabled:!busy,keyboardType:f.$1==phone?TextInputType.phone:TextInputType.text,
-            decoration:InputDecoration(labelText:f.$2,border:const OutlineInputBorder()),
+            decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
+              border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
             validator:(v)=>f.$4&&(v??'').trim().length<(f.$1==phone?9:2)?'Enter ${f.$2.toLowerCase()}':null)),
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:busy?null:(v)=>setState(()=>consent=v==true),
           title:const Text('I confirm that these are my shop’s details.')),

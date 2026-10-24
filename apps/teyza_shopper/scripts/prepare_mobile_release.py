@@ -9,6 +9,14 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID_ID = "za.co.teyza.teyza_shopper"
 IOS_ID = os.environ.get("TEYZA_IOS_BUNDLE_ID") or "za.co.teyza.shopper"
+FIREBASE_API_KEY = "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U"
+
+
+def native_app_id(platform):
+    value = os.environ.get("TEYZA_FIREBASE_" + platform.upper() + "_APP_ID", "").strip()
+    if value and not re.fullmatch(r"1:983479810697:" + platform + r":[a-fA-F0-9]+", value):
+        raise SystemExit("Use the existing project's native " + platform + " Firebase app ID.")
+    return value
 
 
 def android(signing):
@@ -27,6 +35,18 @@ def android(signing):
         ET.SubElement(manifest.find("application"), "meta-data", {key + "name": name, key + "value": value})
     ET.SubElement(manifest, "uses-feature", {key + "name": "android.hardware.camera", key + "required": "false"})
     tree.write(path, encoding="utf-8", xml_declaration=True)
+    app_id = native_app_id("android")
+    if app_id:
+        # FirebaseInitProvider needs resources before Dart starts, including for
+        # OS-displayed notifications when the app process is not running.
+        resources = ET.Element("resources")
+        for name, value in {"google_app_id":app_id, "google_api_key":FIREBASE_API_KEY,
+                            "gcm_defaultSenderId":"983479810697", "project_id":"business-lift-3c19c",
+                            "google_storage_bucket":"business-lift-3c19c.firebasestorage.app"}.items():
+            ET.SubElement(resources, "string", {"name":name, "translatable":"false"}).text = value
+        config = ROOT / "android/app/src/main/res/values/teyza_firebase.xml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        ET.ElementTree(resources).write(config, encoding="utf-8", xml_declaration=True)
     gradle = ROOT / "android/app/build.gradle.kts"
     source = gradle.read_text()
     if 'applicationId = "' + ANDROID_ID + '"' not in source:
@@ -75,6 +95,24 @@ def ios():
         "FirebaseMessagingAutoInitEnabled": False,
         "FirebaseAnalyticsCollectionEnabled": False,
     })
+    app_id = native_app_id("ios")
+    if app_id:
+        info["TeyzaFirebaseAppId"] = app_id
+        delegate = ROOT / "ios/Runner/AppDelegate.swift"
+        source = delegate.read_text()
+        marker = "return super.application(application, didFinishLaunchingWithOptions: launchOptions)"
+        if marker not in source:
+            raise SystemExit("Cannot locate iOS startup to configure background push safely.")
+        bootstrap = '''if FirebaseApp.app() == nil,
+      let appId = Bundle.main.object(forInfoDictionaryKey: "TeyzaFirebaseAppId") as? String {
+      let options = FirebaseOptions(googleAppID: appId, gcmSenderID: "983479810697")
+      options.apiKey = "''' + FIREBASE_API_KEY + '''"
+      options.projectID = "business-lift-3c19c"
+      options.storageBucket = "business-lift-3c19c.firebasestorage.app"
+      FirebaseApp.configure(options: options)
+    }
+    '''
+        delegate.write_text("import FirebaseCore\n" + source.replace(marker, bootstrap + marker, 1))
     ios_client = os.environ.get("TEYZA_GOOGLE_IOS_CLIENT_ID", "").strip()
     web_client = os.environ.get("TEYZA_GOOGLE_WEB_CLIENT_ID", "").strip()
     if ios_client and web_client:

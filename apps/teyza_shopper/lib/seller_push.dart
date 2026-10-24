@@ -20,8 +20,9 @@ class SellerPush {
   void Function()? onOpen;
   String? token,owner;bool starting=false,disposed=false,stopping=false;
   bool get configured=>!kIsWeb&&(defaultTargetPlatform==TargetPlatform.android||defaultTargetPlatform==TargetPlatform.iOS)&&
-    (defaultTargetPlatform==TargetPlatform.iOS?const String.fromEnvironment('TEYZA_FIREBASE_IOS_APP_ID'):
-      const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID')).isNotEmpty;
+    RegExp('^1:983479810697:${defaultTargetPlatform==TargetPlatform.iOS?'ios':'android'}:[a-fA-F0-9]+\$').hasMatch(
+      defaultTargetPlatform==TargetPlatform.iOS?const String.fromEnvironment('TEYZA_FIREBASE_IOS_APP_ID'):
+      const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID'));
   Future<void> initialize() async{
     if(!configured)throw StateError('Phone alerts are awaiting Teyza’s Firebase device setup. Your in-app inbox is still available.');
     if(Firebase.apps.isEmpty)await Firebase.initializeApp(options:FirebaseOptions(apiKey:teyzaFirebaseApiKey,

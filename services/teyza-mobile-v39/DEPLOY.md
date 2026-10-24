@@ -43,7 +43,7 @@ The app now includes an administrator review desk. Only a verified `teyzaAdmin: 
 
 Run `node services/teyza-mobile-v39/set-teyza-admin.js EXACT_FIREBASE_USER_UID --grant` only in your authorised Admin SDK environment; other claims are preserved. Sign out/in after granting. Revoke with --revoke. Never place Admin SDK credentials in Flutter or a public website.
 
-For complete native registration, inbox/push configuration, APNs requirements and acceptance checks, see docs/TEYZA_R312_SELLER_EXPERIENCE.md (also included at this kit's root). Native Firebase app IDs are required build variables; blank IDs leave only the private in-app inbox available.
+For complete native registration, inbox/push configuration, APNs requirements and acceptance checks, see docs/TEYZA_R312_SELLER_EXPERIENCE.md (included in this kit). Native Firebase app IDs are required build variables; blank IDs leave only the private in-app inbox available.
 
 Owner-scoped chronological chat/order/credit indexes avoid cross-account composite indexes. The new collections need no client write permissions: the function uses Admin SDK and performs its own authorization. Existing strict owner-only rules still govern seller profile/draft edits. Approval status and immutable shop category remain protected.
 

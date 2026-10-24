@@ -317,9 +317,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final session=widget.session;
     return Scaffold(
       backgroundColor:sellerCanvas,
-      appBar:AppBar(backgroundColor:sellerCanvas,title:Text(productsView?'Shop setup & products':'My business'),
+      appBar:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,title:Text(productsView?'Shop setup & products':'My business'),
         leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
-        actions:[if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
+        actions:[if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
