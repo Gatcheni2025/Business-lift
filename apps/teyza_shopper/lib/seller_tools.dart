@@ -32,18 +32,19 @@ class SellerDashboard extends StatelessWidget {
     ];
     return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       const Text('Your shop dashboard',style:TextStyle(fontSize:24,color:ownerInk,fontWeight:FontWeight.w800)),
-      const SizedBox(height:5),Text(productCount==null?'Everything you need to manage your shop':
-        '$productCount product drafts · everything you need to manage your shop',
+      const SizedBox(height:5),const Text('A little care. A stronger local business.',
         style:const TextStyle(color:Color(0xFF6C7880),height:1.4)),
       const SizedBox(height:16),
       LayoutBuilder(builder:(context,constraints)=>GridView.count(
         crossAxisCount:constraints.maxWidth<360||MediaQuery.textScalerOf(context).scale(14)>18?1:constraints.maxWidth>650?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
         mainAxisSpacing:12,crossAxisSpacing:12,mainAxisExtent:155+(MediaQuery.textScalerOf(context).scale(14)-14)*5,
-        children:[for(final tile in tiles)Material(color:Colors.white,borderRadius:BorderRadius.circular(22),
+        children:[for(final tile in tiles)Material(color:Colors.white,shape:RoundedRectangleBorder(
+          side:const BorderSide(color:Color(0xFFE5EAE1)),borderRadius:BorderRadius.circular(22)),
           child:InkWell(onTap:tile.tap,borderRadius:BorderRadius.circular(22),child:Padding(
             padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:const Color(0xFFE1F6EB),
-                borderRadius:BorderRadius.circular(13)),child:Icon(tile.icon,color:ownerGreen,size:24)),
+              Row(children:[Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:const Color(0xFFEAF5E8),
+                borderRadius:BorderRadius.circular(13)),child:Icon(tile.icon,color:const Color(0xFF168657),size:24)),
+                const Spacer(),const Icon(Icons.north_east_rounded,size:17,color:Color(0xFF96A691))]),
               const Spacer(),Text(tile.title,maxLines:2,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:ownerInk)),
               const SizedBox(height:4),Text(tile.detail,maxLines:2,style:const TextStyle(fontSize:11,color:Color(0xFF6C7880),height:1.3))
             ]))))])),
@@ -57,7 +58,8 @@ class SellerToolPage extends StatefulWidget {
   final ShopperSession session;
   final SellerTool tool;
   final TeyzaMobileApi? api;
-  const SellerToolPage({super.key,required this.session,required this.tool,this.api});
+  final Future<Uint8List?> Function()? captureSelfie;
+  const SellerToolPage({super.key,required this.session,required this.tool,this.api,this.captureSelfie});
   @override State<SellerToolPage> createState()=>_SellerToolState();
 }
 class _SellerToolState extends State<SellerToolPage> {
@@ -73,7 +75,7 @@ class _SellerToolState extends State<SellerToolPage> {
   String? error,status;
   Uint8List? selfie;
   @override void initState(){super.initState();widget.session.addListener(accountChanged);load();
-    if(widget.tool==SellerTool.verification)recoverCamera();}
+    if(widget.tool==SellerTool.verification&&widget.captureSelfie==null)recoverCamera();}
   void accountChanged(){if(uid!=widget.session.userId&&mounted)setState((){
     selfie=null;summary={};ready=false;error='Your account changed. Close this page and sign in again.';
   });}
@@ -130,6 +132,8 @@ class _SellerToolState extends State<SellerToolPage> {
   Future<void> camera() async {
     setState((){error=null;});
     try{
+      if(widget.captureSelfie!=null){final bytes=await widget.captureSelfie!();
+        if(bytes!=null&&mounted&&uid==widget.session.userId)setState((){selfie=bytes;consent=false;status=null;});return;}
       final prefs=await SharedPreferences.getInstance();await prefs.setString('teyza_selfie_capture',uid??'');
       final file=await ImagePicker().pickImage(source:ImageSource.camera,preferredCameraDevice:CameraDevice.front,
         maxWidth:1400,maxHeight:1400,imageQuality:80,requestFullMetadata:false);
@@ -236,7 +240,9 @@ class _SellerToolState extends State<SellerToolPage> {
     const Text('Verify the shop owner',textAlign:TextAlign.center,style:TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
     const SizedBox(height:12),const Text('Take a clear selfie in good light. Keep your face visible and remove sunglasses. Your photo is private and will be reviewed with your shop registration.'),
     const SizedBox(height:14),
-    if(summary['verification'] is Map)Chip(label:Text(switch((summary['verification'] as Map)['status']){'approved'=>'Owner review approved','needs_new_photo'=>'Please submit a new selfie',_=>'Selfie awaiting review'})),
+    if(summary['verification'] is Map)Chip(label:Text(switch((summary['verification'] as Map)['status']){'approved'=>'Owner review approved','needs_new_photo'=>'Please submit a new selfie','rejected'=>'Registration needs attention',_=>'Selfie awaiting review'})),
+    if(summary['verification'] is Map&&(summary['verification'] as Map)['reviewNote']?.toString().isNotEmpty==true)
+      Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text((summary['verification'] as Map)['reviewNote'].toString())),
     if(selfie!=null)Padding(padding:const EdgeInsets.symmetric(vertical:16),child:ClipRRect(borderRadius:BorderRadius.circular(22),
       child:Image.memory(selfie!,height:260,fit:BoxFit.contain))),
     OutlinedButton.icon(onPressed:working?null:camera,icon:const Icon(Icons.camera_alt_outlined),

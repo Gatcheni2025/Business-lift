@@ -25,6 +25,8 @@ concurrency:
 
 env:
   APP: apps/teyza_shopper
+  TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
+  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
   TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
   TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
@@ -61,15 +63,15 @@ jobs:
         run: |
           npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
           node --test services/teyza-mobile-v39/*.test.js
-          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged']) assert(e[name].__endpoint,name); console.log('Five Firebase function exports load successfully');"
+          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification']) assert(e[name].__endpoint,name); console.log('Eleven Firebase function exports load successfully');"
       - name: Verify shared product catalogue and photo assets
         run: python3 scripts/verify_teyza_catalogue.py
       - name: Package mobile service deployment kit
         run: python3 scripts/package_teyza_mobile.py
       - uses: actions/upload-artifact@v4
         with:
-          name: teyza-mobile-r311-deploy-kit
-          path: TEYZA_MOBILE_R311_DEPLOY_KIT.zip
+          name: teyza-mobile-r312-deploy-kit
+          path: TEYZA_MOBILE_R312_DEPLOY_KIT.zip
           retention-days: 30
       - uses: subosito/flutter-action@v2
         with:
@@ -127,7 +129,7 @@ jobs:
           python3 scripts/make_launcher_icon.py
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
       - name: Verify bundle signature and package release evidence
         working-directory: apps/teyza_shopper
         shell: bash
@@ -214,10 +216,10 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
-            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
+            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
           fi
           python3 scripts/package_mobile_release.py ios
       - name: Upload iOS release archive

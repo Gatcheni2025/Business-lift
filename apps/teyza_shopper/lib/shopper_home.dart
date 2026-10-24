@@ -18,6 +18,7 @@ import 'premium_navigation.dart';
 import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
+import 'seller_push.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -214,6 +215,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int tab = 0;
   final cart = <String, int>{};
   final session = ShopperSession();
+  SellerPush? sellerPush;
   List<OnlineShop> online = [];
   String? onlineWarning;
   bool loadingOnline = false;
@@ -231,6 +233,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if(widget.enableBackgroundServices){
+      sellerPush=SellerPush(session)..onOpen=(){if(mounted)openOwnerWorkspace(notification:true);};
       chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
       refreshUnread();
       session.restore();
@@ -268,6 +271,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     chatWatch?.cancel();
     catalogueWatch?.cancel();
+    sellerPush?.dispose();
     session.dispose();
     super.dispose();
   }
@@ -831,9 +835,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
   }
-  Future<void> openOwnerWorkspace() async {
+  Future<void> openOwnerWorkspace({bool notification=false}) async {
     await Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
-      SellerWorkspacePage(session:session,openLogin:(){
+      SellerWorkspacePage(session:session,initialTarget:notification?'notifications':null,openLogin:(){
         Navigator.of(routeContext).pop();
         if(mounted)setState(()=>tab=4);
       })));

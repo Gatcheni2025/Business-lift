@@ -10,6 +10,10 @@ on:
       - '.github/workflows/teyza-shopper-apk.yml'
   workflow_dispatch:
 
+env:
+  TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
+  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
+
 permissions:
   contents: read
 
@@ -196,12 +200,12 @@ jobs:
         working-directory: apps/teyza_shopper
         env:
           TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
-        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
         env:
           TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
-        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
       - name: Upload smaller APK for testing
         if: success()
         uses: actions/upload-artifact@v4

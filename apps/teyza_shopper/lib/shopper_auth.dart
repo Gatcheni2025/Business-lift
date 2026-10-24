@@ -72,6 +72,13 @@ class ShopperSession extends ChangeNotifier {
   final SessionStore _store;
   bool isReady = false, isBusy = false, emailVerified = false;
   String? email, name, idToken, userId;
+  Future<void> Function()? beforeSignOut;
+  bool get hasAdminClaim {
+    try{final parts=idToken?.split('.');if(parts==null||parts.length!=3)return false;
+      final claims=jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      return claims is Map&&claims['teyzaAdmin']==true;
+    }catch(_){return false;}
+  }
   String? _refreshToken;
   int _version=0;
   bool _disposed=false;
@@ -319,6 +326,7 @@ class ShopperSession extends ChangeNotifier {
   }
   Future<void> signOut() async {
     ++_version;_refreshing=null;isBusy=false;isReady=true;
+    try{await beforeSignOut?.call();}catch(_){/* Always allow local sign out. */}
     await _clear();_changed();
   }
 }

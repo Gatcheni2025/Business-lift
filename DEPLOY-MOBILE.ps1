@@ -6,4 +6,4 @@ npm test --prefix .\services\teyza-mobile-v39
 if ($LASTEXITCODE -ne 0) { throw 'Service tests failed.' }
 firebase deploy --config .\firebase.teyza-mobile-v39.json --only functions:teyza-mobile --project business-lift-3c19c
 if ($LASTEXITCODE -ne 0) { throw 'Mobile service deployment failed.' }
-Write-Host 'Check https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile for version 3.11.0 and catalogueProducts: 184.'
+Write-Host 'Check https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile for version 3.12.0 and catalogueProducts: 184.'

@@ -1,4 +1,4 @@
-# Teyza Shopper & Shop Owner 1.0.9 (19)
+# Teyza Shopper & Shop Owner 1.0.10 (19)
 
 Premium local-shop discovery, photographic Everyday Essentials and separate seller/shopper dashboards. Shopper navigation remains Home, Shops, Cart, Orders and Account.
 
@@ -15,3 +15,5 @@ Google login is implemented for Android and iPhone, and Apple login for iPhone. 
 The isolated R3.9 mobile backend must be deployed for the new shared services. See [dashboard and provider setup](../../docs/TEYZA_R39_DASHBOARDS.md) and [service deployment](../../services/teyza-mobile-v39/DEPLOY.md). Real credit approval/disbursement, supplier APIs, booked couriers, online payments and automated face/liveness matching are not implemented. Credit is an enquiry, supplier ordering happens on their sites, and selfies await manual review.
 
 **Teyza Shopper APK** builds test installs. **Teyza Android and iOS Release** builds an unsigned AAB and iOS archive, or signed store files when explicitly run with the existing signing credentials. The app is not submitted to either store automatically.
+
+R3.12: native seller shop registration and consent-based camera verification, an owner-scoped notification inbox/optional FCM phone alerts, a recent-login admin review desk and a premium business workspace. See ../../docs/TEYZA_R312_SELLER_EXPERIENCE.md for deployment, reviewer claims and native push configuration.

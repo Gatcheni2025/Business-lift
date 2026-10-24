@@ -1,7 +1,8 @@
 'use strict';
 const {onRequest}=require('firebase-functions/v2/https');
 const {onSchedule}=require('firebase-functions/v2/scheduler');
-const {onDocumentWritten}=require('firebase-functions/v2/firestore');
+const {onDocumentWritten,onDocumentCreated}=require('firebase-functions/v2/firestore');
+const {createNotifications,notificationFor}=require('./notifications');
 const catalogue=require('./catalogue');
 const {productPhoto}=require('./catalogue-photos');
 const admin=require('firebase-admin');
@@ -12,6 +13,7 @@ const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const {createService}=require('./service');
 if(!admin.apps.length)admin.initializeApp();
 const db=admin.firestore();
+const notifications=createNotifications({db,messaging:admin.messaging()});
 const bucket=admin.storage().bucket('business-lift-3c19c.firebasestorage.app');
 const service=createService({db,bucket,
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
@@ -30,7 +32,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       }catch(_){res.status(503).json({error:'Product photo is temporarily unavailable.'});}
       return;
     }
-    res.json({ok:true,version:'3.11.0',catalogueProducts:catalogue.data.products.length,service:'teyza-mobile'});return;
+    res.json({ok:true,version:'3.12.0',catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -66,7 +68,31 @@ exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
+for(const [name,kind,document] of [
+ ['teyzaSellerOrderNotification','order','teyzaMobileOrders/{reference}'],
+ ['teyzaSellerStockNotification','stock','teyzaDraftProducts/{sellerUid}/items/{reference}'],
+ ['teyzaSellerVerificationNotification','verification','teyzaMobileVerification/{reference}'],
+ ['teyzaSellerAccountNotification','account','teyzaSellerAccounts/{reference}']]){
+ exports[name]=onDocumentWritten({...catalogueTrigger,document},event=>notifications.queue(event.id,
+  notificationFor(kind,event.data?.before.data(),event.data?.after.data(),event.params.reference)));
+}
+exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
+ document:'teyzaMobileChats/{threadId}/messages/{messageId}'},async event=>{
+ const value=notificationFor('message',null,event.data?.data(),event.params.threadId);if(!value)return;
+ const thread=await db.doc('teyzaMobileChats/'+event.params.threadId).get();
+ if(thread.exists&&event.data.data().senderUid===thread.data().shopperUid)
+  await notifications.queue(event.id,{...value,ownerUid:thread.data().ownerUid});
+});
+exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
+ document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
+  // Tracks every capture, including superseded selfies, so replacements cannot orphan private photos.
+  const photos=await db.collection('teyzaVerificationPhotos').where('expiresAt','<=',Date.now()).limit(500).get();
+  for(const record of photos.docs){const data=record.data();
+    if(data.objectPath?.startsWith('teyza-private/mobile-verification/'+data.ownerUid+'/'))
+      await bucket.file(data.objectPath).delete({ignoreNotFound:true});
+    await record.ref.delete();
+  }
   const expired=await db.collection('teyzaMobileVerification').where('expiresAt','<=',Date.now()).limit(200).get();
   for(const record of expired.docs){
     const data=record.data();

@@ -1,6 +1,7 @@
 'use strict';
 const D = require('./domain');
 const crypto = require('node:crypto');
+const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock=Date.now}) {
@@ -51,6 +52,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
+  const sellerExperience=experience.createSellerExperience({db,clock,rate});
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
     await db.runTransaction(async tx => {
@@ -74,6 +76,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
     if (!auth.email_verified) D.fail(403,'Verify your email before using shop services or sending requests.');
+    if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
       return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
@@ -85,7 +88,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get()]);
-      return {settings:config||{},verification:verification?{status:verification.status,submittedAt:verification.submittedAt}:null,
+      return {settings:config||{},verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         catalogueStatus:catalogue?.status||'not_submitted',photos:photos.docs.map(x=>({id:x.id,url:x.data().url}))};
     }
@@ -110,11 +113,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       let jpeg;try{jpeg=await sanitizeImage(bytes);}catch(_){D.fail(422,'This photo could not be read. Take another photo.');}
       const stamp=clock();
       if(action==='verification_selfie') {
-        const path='teyza-private/mobile-verification/'+uid+'/selfie.enc';
+        const submissionId=crypto.randomUUID();
+        const path='teyza-private/mobile-verification/'+uid+'/'+submissionId+'.enc';
         const encrypted=await encryptSelfie(jpeg);
         await bucket.file(path).save(encrypted,{contentType:'application/octet-stream',resumable:false,
           metadata:{cacheControl:'private,no-store'}});
-        await doc('teyzaMobileVerification/'+uid).set({ownerUid:uid,status:'pending_review',
+        await doc('teyzaVerificationPhotos/'+submissionId).set({ownerUid:uid,objectPath:path,expiresAt:stamp+90*86400000});
+        await doc('teyzaMobileVerification/'+uid).set({ownerUid:uid,status:'pending_review',submissionId,
           method:'selfie_manual_review',objectPath:path,submittedAt:stamp,expiresAt:stamp+90*86400000,
           consentVersion:'selfie-review-v1',consentAt:stamp});
         return {status:'pending_review'};
@@ -129,18 +134,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,cloc
       await doc('teyzaProductPhotos/'+uid+'/items/'+productId).set({ownerUid:uid,url,objectPath:path,updatedAt:stamp});
       return {url};
     }
-    if(action==='verification_read'||action==='verification_review') {
-      if(auth.teyzaAdmin!==true)D.fail(403,'Teyza reviewer access is required.');
+    if(action==='verification_review')D.fail(409,'Use the current seller review screen to review a submission.');
+    if(action==='verification_read') {
+      experience.recentAdmin(auth,clock);
       const target=D.id(data.sellerUid),ref=doc('teyzaMobileVerification/'+target),record=await read(ref.path);
-      if(!record||record.expiresAt<=clock()||!record.objectPath)D.fail(404,'No current selfie submission is available.');
-      if(action==='verification_read') {
-        if(!auth.auth_time||clock()/1000-auth.auth_time>300)D.fail(401,'Sign in again before reviewing private photos.');
-        const [bytes]=await bucket.file(record.objectPath).download();
-        return {imageBase64:(await decryptSelfie(bytes)).toString('base64')};
-      }
-      if(!['approved','needs_new_photo'].includes(data.status))D.fail(422,'Choose a review outcome.');
-      await ref.update({status:data.status,reviewedAt:clock(),reviewedBy:uid});
-      return {status:data.status};
+      if(target===uid)D.fail(403,'Another administrator must review your own shop.');
+      if(!record||record.ownerUid!==target||record.expiresAt<=clock()||!record.objectPath||
+        !record.objectPath.startsWith('teyza-private/mobile-verification/'+target+'/'))D.fail(404,'No current selfie submission is available.');
+      const submissionId=record.submissionId||'legacy_'+record.submittedAt;
+      if(data.submissionId!==submissionId)D.fail(409,'This selfie changed. Refresh the review queue.');
+      const [bytes]=await bucket.file(record.objectPath).download();
+      await doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId).set({sellerUid:target,viewedAt:clock()});
+      return {imageBase64:(await decryptSelfie(bytes)).toString('base64')};
     }
     if(action==='catalogue_submit') {
       await owner(uid);await rate(uid,'catalogue',10,3600000);

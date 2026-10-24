@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
+import 'seller_review.dart';
 
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
@@ -139,8 +139,7 @@ class _AccountState extends State<ShopperAccountPanel> {
     );
 
   Future<void> registerShopOwner() async {
-    final uri=Uri.parse('https://teyza.co.za/?auth=register');
-    await launchUrl(uri,mode:LaunchMode.externalApplication);
+    setState((){registering=true;status=null;});
   }
 
   @override
@@ -254,6 +253,9 @@ class _AccountState extends State<ShopperAccountPanel> {
               icon:const Icon(Icons.storefront_outlined),
               label:const Text('Open shop owner workspace')),
           const SizedBox(height:10),
+          if(widget.session.hasAdminClaim&&widget.session.emailVerified)
+            OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
+              icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('Seller review desk')),
           OutlinedButton.icon(onPressed:working?null:widget.session.signOut,
             icon:const Icon(Icons.logout),label:const Text('Sign out')),
         ] else ...[
@@ -264,7 +266,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             label:const Text('Change account type'))),
           const SizedBox(height:12),
           Form(key:formKey,child:Column(children:[
-            if(registering && !ownerMode)...[
+            if(registering)...[
               TextFormField(controller:name,textCapitalization:TextCapitalization.words,
                 decoration:const InputDecoration(labelText:'Full name',prefixIcon:Icon(Icons.badge_outlined),
                   border:OutlineInputBorder()),
@@ -288,7 +290,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             SizedBox(width:double.infinity,child:FilledButton(
               onPressed:working?null:submit,
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
-              child:Text(working?'Please wait…':registering?'Create shopper account':
+              child:Text(working?'Please wait…':registering?(ownerMode?'Create shop owner account':'Create shopper account'):
                 ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
             if(widget.session.googleSignInAvailable)...[
             const SizedBox(height:12),
@@ -303,9 +305,9 @@ class _AccountState extends State<ShopperAccountPanel> {
                 onPressed:working?null:appleLogin,icon:const Icon(Icons.apple),label:const Text('Continue with Apple'))),
             ],
             const SizedBox(height:7),
-            if(ownerMode)
+            if(ownerMode&&!registering)
               TextButton.icon(onPressed:working?null:registerShopOwner,
-                icon:const Icon(Icons.open_in_new_rounded,size:17),
+                icon:const Icon(Icons.add_business_outlined,size:17),
                 label:const Text('New shop owner? Register your shop'))
             else TextButton(onPressed:working?null:()=>setState(() {
               registering=!registering;status=null;

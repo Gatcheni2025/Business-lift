@@ -1,9 +1,9 @@
 import 'dart:math';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
@@ -12,15 +12,20 @@ import 'shop_orders.dart';
 import 'teyza_mobile_api.dart';
 import 'product_catalogue.dart';
 import 'seller_product_picker.dart';
+import 'seller_registration.dart';
+import 'seller_notifications.dart';
+import 'seller_premium.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
   final VoidCallback openLogin;
   final SellerFirestore Function(String uid,String token)? apiFactory;
-  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory});
+  final TeyzaMobileApi? mobileApi;
+  final String? initialTarget;
+  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory,this.mobileApi,this.initialTarget});
   @override State<SellerWorkspacePage> createState()=>_SellerWorkspaceState();
 }
-class _SellerWorkspaceState extends State<SellerWorkspacePage>{
+class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindingObserver{
   SellerShop? shop;
   List<SellerDraft> drafts=[];
   SellerFirestore? api;
@@ -28,19 +33,56 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   bool loading=false,busy=false,productsView=false;
   Map<String,String> productPhotos={};
   String? rangeStatus;
+  int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
+  bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
+  TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
   @override void initState(){
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_sessionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_sessionChanged();});
   }
   @override void dispose(){
+    activityWatch?.cancel();WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_sessionChanged);
     super.dispose();
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed){refreshActivity();startActivity();}else{activityWatch?.cancel();}
+  }
+  void startActivity(){activityWatch?.cancel();if(liveUpdates)activityWatch=Timer.periodic(const Duration(seconds:25),(_)=>refreshActivity());}
+  Future<void> refreshActivity() async{
+    if(!liveUpdates||activityLoading||shop==null||loadedUid!=widget.session.userId||!widget.session.emailVerified)return;
+    final uid=widget.session.userId;activityLoading=true;
+    try{final results=await Future.wait([mobile.call('seller_summary'),mobile.call('notification_list')]);
+      if(mounted&&uid==widget.session.userId)setState((){unread=(results[1]['unread'] as num? ??0).toInt();
+        final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
+    }catch(_){/* Account and private products remain usable during service outages. */}
+    finally{activityLoading=false;}
+  }
+  Future<void> registerShop() async{
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerRegistrationPage(session:widget.session,api:widget.mobileApi)));
+    if(mounted)load();
+  }
+  void openDestination(String target){
+    if(!mounted||widget.session.userId!=loadedUid)return;
+    switch(target){
+      case 'orders':Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(appBar:AppBar(title:const Text('Shop orders')),
+        body:ShopOrdersPanel(session:widget.session,asOwner:true))));
+      case 'chat':Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:widget.session)));
+      case 'products':openProducts();
+      case 'verification':openTool(SellerTool.verification);
+      default:openNotifications();
+    }
+  }
+  Future<void> openNotifications() async{
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
+    if(mounted){refreshActivity();load();}
   }
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -77,6 +119,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
         api=nextApi;shop=nextShop;drafts=nextDrafts;loadedUid=uid;
         draftError=nextDraftError;accessReference=nextReference;
       });
+      if(mounted&&widget.session.userId==uid){refreshActivity();startActivity();
+        if(widget.initialTarget!=null&&!openedInitial&&nextShop!=null){openedInitial=true;
+          WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)openDestination(widget.initialTarget!);});}}
     }catch(e){
       if(mounted&&widget.session.userId==requestedUid)setState((){
         error=e.toString().replaceFirst('Bad state: ','');loadedUid=requestedUid;
@@ -143,7 +188,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
     }catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(error))));}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  void openTool(SellerTool tool)=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:tool)));
+  Future<void> openTool(SellerTool tool) async{
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:tool,api:widget.mobileApi)));
+    if(mounted){refreshActivity();load();}
+  }
   Future<void> editProfile() async {
     if(shop==null)return;
     final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(session:widget.session,shop:shop!)));
@@ -268,9 +316,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
   @override Widget build(BuildContext context){
     final session=widget.session;
     return Scaffold(
-      backgroundColor:const Color(0xFFF7F9F7),
-      appBar:AppBar(title:Text(productsView?'Shop setup & products':'Shop owner workspace'),
-        leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null),
+      backgroundColor:sellerCanvas,
+      appBar:AppBar(backgroundColor:sellerCanvas,title:Text(productsView?'Shop setup & products':'My business'),
+        leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
+        actions:[if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -301,9 +350,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
       ]);
       if(loading)return const Center(child:CircularProgressIndicator());
       return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(16),children:[
-        Text('My shop',style:Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontWeight:FontWeight.w800,color:const Color(0xFF003F4A))),
-        const SizedBox(height:10),
         if(error!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(error!,style:const TextStyle(color:Colors.red)),
           if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
@@ -315,28 +361,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
         if(error==null&&(shop==null||!shop!.hasRegisteredCategory))_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('No registered shop found',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
           const SizedBox(height:9),
-          const Text('Register a Spaza Shop or Other Retail / Wholesale shop on the Teyza website. Use the same account here afterwards.'),
+          const Text('Create your Spaza Shop or Other Retail / Wholesale profile here, then use the camera to verify the owner.'),
           const SizedBox(height:14),
-          FilledButton(onPressed:()=>launchUrl(Uri.parse('https://teyza.co.za/setup.html'),
-            mode:LaunchMode.externalApplication),child:const Text('Register a shop')),
+          FilledButton(onPressed:registerShop,child:const Text('Register a shop')),
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(shop!.name.isEmpty?'My Teyza shop':shop!.name,
-              style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
-            const SizedBox(height:4),
-            Text(shop!.categoryLabel,key:const ValueKey('saved-shop-category'),
-              style:const TextStyle(color:Color(0xFF078E66),fontWeight:FontWeight.w700)),
-            const SizedBox(height:4),
-            Text(shop!.address),
-            const SizedBox(height:8),
-            Chip(label:Text(shop!.isLive?'Shop is live':'Shop is not live yet'),
-              avatar:Icon(shop!.isLive?Icons.check_circle_outline:Icons.lock_outline,size:19)),
-            const SizedBox(height:6),
-            Text(shop!.isLive?'Customers can browse your published shop.':
-              'Set up your products and services while your shop awaits approval.'),
-          ])),
+          SellerShopHero(shop:shop!,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          const SizedBox(height:16),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
             if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
@@ -347,6 +379,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>{
             FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
+            SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
+              onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
+            const SizedBox(height:24),
             SellerDashboard(productCount:draftError==null?drafts.length:null,onProducts:openProducts,
               onChat:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session))),
               onOrders:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(

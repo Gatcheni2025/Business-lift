@@ -9,13 +9,14 @@ class FakeDB {
     update:async value=>{assert(db.records.has(path));db.records.set(path,{...db.records.get(path),...structuredClone(value)});},
     collection:name=>db.collection(path+'/'+name)};}
   snapshot(path){const data=this.records.get(path);return {exists:data!==undefined,id:path.split('/').pop(),data:()=>structuredClone(data),ref:this.doc(path)};}
-  collection(path){const db=this,filters=[];let sort=null,max=Infinity;const query={
+  collection(path){const db=this,filters=[];let sort=null,max=Infinity,after=null;const query={
     doc:(value)=>db.doc(path+'/'+(value||'generated'+(++db.serial))),
     where:(...filter)=>{filters.push(filter);return query;},orderBy:(...args)=>{sort=args;return query;},
-    limit:value=>{max=value;return query;},get:async()=>{
+    startAfter:value=>{after=value;return query;},limit:value=>{max=value;return query;},get:async()=>{
       let rows=[...db.records].filter(([key,value])=>key.startsWith(path+'/')&&key.slice(path.length+1).indexOf('/')===-1&&
         filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):value[field]<=wanted));
-      if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*((a[1][sort[0]]||0)-(b[1][sort[0]]||0)));
+      if(after)rows=rows.filter(([key])=>key.split('/').pop()>after);
+      if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*(sort[0]==='__name__'?a[0].localeCompare(b[0]):((a[1][sort[0]]||0)-(b[1][sort[0]]||0))));
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
     }};return query;}
   transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},
@@ -36,6 +37,87 @@ function fixture(extra={}){const db=new FakeDB({'teyzaSellerAccounts/seller1':se
    encryptSelfie:bytes=>C.encrypt(bytes,secret),decryptSelfie:bytes=>C.decrypt(bytes,secret)})};}
 const rejects=(promise,status)=>assert.rejects(promise,error=>error.status===status);
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
+
+test('Native seller registration binds the verified actor and cannot approve, activate or replace an existing shop',async()=>{
+ const {service,db}=fixture();const data={category:'retail',shopName:'Local Retail',phone:'0712345678',address:'Durban',consent:true,
+  uid:'seller1',ownerEmail:'forged@test',approvalStatus:'approved',listingStatus:'active'};
+ await rejects(service.execute(buyer,'seller_register',{...data,consent:false}),422);
+ await service.execute(buyer,'seller_register',data);
+ const saved=db.records.get('teyzaSellerAccounts/buyer1');assert.equal(saved.uid,'buyer1');assert.equal(saved.ownerEmail,buyer.email);
+ assert.equal(saved.approvalStatus,'pending');assert.equal(saved.listingStatus,'not_listed');assert.equal(saved.category,'retail');
+ await service.execute(buyer,'seller_register',{...data,shopName:'Replaced'});assert.equal(db.records.get('teyzaSellerAccounts/buyer1').shopName,'Local Retail');
+ assert.equal(db.records.has('teyzaPublicShops/buyer1'),false);
+});
+test('Only recent trusted reviewers can see the queue and approve the exact selfie they viewed',async()=>{
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending',listingStatus:'not_listed'}});
+ const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]);
+ await service.execute(owner,'verification_selfie',{consent:true,imageBase64:jpeg.toString('base64')});
+ const submissionId=db.records.get('teyzaMobileVerification/seller1').submissionId;
+ const admin={...buyer,teyzaAdmin:true,auth_time:1000};
+ await rejects(service.execute(owner,'admin_seller_queue'),403);
+ await rejects(service.execute({...admin,auth_time:600},'admin_seller_queue'),401);
+ await rejects(service.execute({...admin,auth_time:undefined},'admin_seller_queue'),401);
+ assert.equal((await service.execute(admin,'admin_seller_queue')).sellers[0].shopName,'Corner Shop');
+ const decision={sellerUid:'seller1',submissionId,status:'approved'};
+ await rejects(service.execute(admin,'admin_seller_review',decision),409);
+ await rejects(service.execute({...owner,teyzaAdmin:true,auth_time:1000},'admin_seller_review',decision),403);
+ await service.execute(admin,'verification_read',{sellerUid:'seller1',submissionId});
+ await service.execute(admin,'admin_seller_review',decision);
+ const account=db.records.get('teyzaSellerAccounts/seller1');assert.equal(account.approvalStatus,'approved');assert.equal(account.listingStatus,'not_listed');
+ assert.equal(db.records.get('teyzaPublicShops/seller1').catalogueEnabled,true);
+ assert.equal(db.records.get('teyzaSellerReviewAudit/'+submissionId).reviewedBy,'buyer1');
+ await rejects(service.execute(admin,'admin_seller_review',decision),409);
+});
+test('Resubmission invalidates prior review; request-new-photo needs a note and suspends the old public shop',async()=>{
+ const {service,db}=fixture();const admin={...buyer,teyzaAdmin:true,auth_time:1000};
+ const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]);
+ await service.execute(owner,'verification_selfie',{consent:true,imageBase64:jpeg.toString('base64')});
+ const old=db.records.get('teyzaMobileVerification/seller1').submissionId;
+ await service.execute(admin,'verification_read',{sellerUid:'seller1',submissionId:old});
+ await service.execute(owner,'verification_selfie',{consent:true,imageBase64:jpeg.toString('base64')});
+ await rejects(service.execute(admin,'admin_seller_review',{sellerUid:'seller1',submissionId:old,status:'approved'}),409);
+ const submissionId=db.records.get('teyzaMobileVerification/seller1').submissionId;
+ await rejects(service.execute(admin,'admin_seller_review',{sellerUid:'seller1',submissionId,status:'needs_new_photo'}),422);
+ await service.execute(admin,'admin_seller_review',{sellerUid:'seller1',submissionId,status:'needs_new_photo',reason:'Please retake in good light.'});
+ assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');assert.equal(db.records.get('teyzaPublicShops/seller1').status,'suspended');
+ assert.equal(db.records.get('teyzaPublicShops/seller1').catalogueEnabled,true);
+ assert.equal([...db.records.keys()].filter(k=>k.startsWith('teyzaVerificationPhotos/')).length,2);
+});
+test('Seller inbox, read actions, preferences and device tokens stay scoped to the authenticated owner',async()=>{
+ const {service,db}=fixture({'teyzaSellerNotifications/seller1/items/n1':{title:'One',createdAt:10,read:false},
+  'teyzaSellerNotifications/other/items/n2':{title:'Private',createdAt:20,read:false}});
+ await rejects(service.execute(buyer,'notification_list'),403);
+ assert.deepEqual((await service.execute(owner,'notification_list')).notifications.map(r=>r.id),['n1']);
+ await service.execute(owner,'notification_read',{ids:['n1','n2'],ownerUid:'other'});
+ assert.equal(db.records.get('teyzaSellerNotifications/seller1/items/n1').read,true);
+ assert.equal(db.records.get('teyzaSellerNotifications/other/items/n2').read,false);
+ await service.execute(owner,'notification_preferences',{orders:true,messages:true,stock:false,reviews:true});
+ assert.equal((await service.execute(owner,'notification_list')).preferences.stock,false);
+ const token='firebase-device-token-with-enough-entropy';
+ await service.execute(owner,'notification_device_save',{token,platform:'android',ownerUid:'other'});
+ const device=[...db.records].find(([k])=>k.startsWith('teyzaMobileDevices/'))[1];assert.equal(device.ownerUid,'seller1');assert(device.expiresAt>1000000);
+ await service.execute(owner,'notification_device_delete',{token});assert.equal([...db.records].find(([k])=>k.startsWith('teyzaMobileDevices/'))[1].token,'');
+ await rejects(service.execute(owner,'notification_read',{ids:['../other']}),422);
+});
+
+test('Notification events deduplicate, respect preferences and deliver generic seller-only phone alerts',async()=>{
+ const {createNotifications,notificationFor}=require('./notifications');
+ const {db}=fixture({'teyzaMobileDevices/d1':{ownerUid:'seller1',token:'owned-token',expiresAt:2000000},
+  'teyzaMobileDevices/d2':{ownerUid:'other',token:'other-token',expiresAt:2000000},
+  'teyzaMobileDevices/d3':{ownerUid:'seller1',token:'expired-token',expiresAt:1}});
+ const sends=[];const notifications=createNotifications({db,clock:()=>1000000,messaging:{sendEachForMulticast:async value=>{sends.push(value);return {responses:[{success:true}]};}}});
+ const value=notificationFor('order',null,{ownerUid:'seller1',status:'requested',shopperName:'PRIVATE CUSTOMER'},'order1');
+ await notifications.queue('event1',value);await notifications.queue('event1',value);
+ const entries=[...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/'));assert.equal(entries.length,1);
+ await notifications.deliver(db.doc(entries[0]));await notifications.deliver(db.doc(entries[0]));assert.equal(sends.length,1);
+ assert.deepEqual(sends[0].tokens,['owned-token']);assert.equal(sends[0].data.ownerUid,'seller1');assert(!JSON.stringify(sends[0]).includes('PRIVATE CUSTOMER'));
+ assert.equal(notificationFor('stock',{stockQty:5},{ownerUid:'seller1',status:'draft',stockQty:4},'p'),null);
+ assert.equal(notificationFor('stock',{stockQty:6},{ownerUid:'seller1',status:'draft',stockQty:5},'p').category,'stock');
+ assert.equal(notificationFor('stock',{stockQty:1},{ownerUid:'seller1',status:'draft',stockQty:0},'p').title,'Product sold out');
+ assert.equal(notificationFor('message',null,{sender:'owner'},'thread'),null);
+ db.records.set('teyzaSellerNotificationPreferences/seller1',{preferences:{orders:false}});
+ await notifications.queue('event2',value);assert.equal([...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/')).length,1);
+});
 
 test('Unverified users and signed-out callers cannot use private services',async()=>{
  const {service}=fixture();await rejects(service.execute(null,'seller_summary'),401);
@@ -113,7 +195,7 @@ test('Private verification uses authenticated encryption and cannot self-approve
  assert.equal(record.method,'selfie_manual_review');assert(!files.get(record.objectPath).includes(jpeg));
  await rejects(service.execute(owner,'verification_read',{sellerUid:'seller1'}),403);
  const admin={...buyer,teyzaAdmin:true,auth_time:1000};
- const photo=await service.execute(admin,'verification_read',{sellerUid:'seller1'});assert.equal(photo.imageBase64,jpeg.toString('base64'));
+ const photo=await service.execute(admin,'verification_read',{sellerUid:'seller1',submissionId:record.submissionId});assert.equal(photo.imageBase64,jpeg.toString('base64'));
  assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
 });
 test('Encryption detects tampering; keys and image validation fail closed',()=>{

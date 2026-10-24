@@ -17,11 +17,15 @@ def android(signing):
     tree = ET.parse(path)
     manifest = tree.getroot()
     key = "{http://schemas.android.com/apk/res/android}"
-    for permission in ("INTERNET", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"):
+    for permission in ("INTERNET", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "CAMERA", "POST_NOTIFICATIONS"):
         name = "android.permission." + permission
         if not any(p.get(key + "name") == name for p in manifest.findall("uses-permission")):
             ET.SubElement(manifest, "uses-permission", {key + "name": name})
     manifest.find("application").set(key + "label", "Teyza")
+    for name, value in [("firebase_messaging_auto_init_enabled", "false"),
+                        ("firebase_analytics_collection_enabled", "false")]:
+        ET.SubElement(manifest.find("application"), "meta-data", {key + "name": name, key + "value": value})
+    ET.SubElement(manifest, "uses-feature", {key + "name": "android.hardware.camera", key + "required": "false"})
     tree.write(path, encoding="utf-8", xml_declaration=True)
     gradle = ROOT / "android/app/build.gradle.kts"
     source = gradle.read_text()
@@ -67,6 +71,9 @@ def ios():
         "NSCameraUsageDescription": "Take a selfie to verify your shop-owner account, or photograph your shop products.",
         "NSPhotoLibraryUsageDescription": "Choose a product photo for your shop catalogue.",
         "NSLocationWhenInUseUsageDescription": "Find shops near you when you choose Use my location. You can also select an area manually.",
+        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "FirebaseMessagingAutoInitEnabled": False,
+        "FirebaseAnalyticsCollectionEnabled": False,
     })
     ios_client = os.environ.get("TEYZA_GOOGLE_IOS_CLIENT_ID", "").strip()
     web_client = os.environ.get("TEYZA_GOOGLE_WEB_CLIENT_ID", "").strip()
@@ -81,7 +88,7 @@ def ios():
         plistlib.dump(info, file, sort_keys=False)
     entitlements = ROOT / "ios/Runner/Runner.entitlements"
     with entitlements.open("wb") as file:
-        plistlib.dump({"com.apple.developer.applesignin":["Default"]}, file)
+        plistlib.dump({"com.apple.developer.applesignin":["Default"], "aps-environment":"production"}, file)
     project = ROOT / "ios/Runner.xcodeproj/project.pbxproj"
     source = project.read_text()
     source = re.sub(r"PRODUCT_BUNDLE_IDENTIFIER = [^;]+;",
@@ -89,10 +96,12 @@ def ios():
                     (".RunnerTests" if "RunnerTests" in m.group() else "") + ";", source)
     source = source.replace("INFOPLIST_FILE = Runner/Info.plist;",
         "INFOPLIST_FILE = Runner/Info.plist;\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;")
+    source = re.sub(r"IPHONEOS_DEPLOYMENT_TARGET = [^;]+;", "IPHONEOS_DEPLOYMENT_TARGET = 15.0;", source)
     project.write_text(source)
     podfile = ROOT / "ios/Podfile"
     if podfile.exists():
         source = podfile.read_text()
+        source = re.sub(r"#?\s*platform :ios, '[^']+'", "platform :ios, '15.0'", source)
         marker = "flutter_additional_ios_build_settings(target)"
         bypass = '''
     target.build_configurations.each do |config|
