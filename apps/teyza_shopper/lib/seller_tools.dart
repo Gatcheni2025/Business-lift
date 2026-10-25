@@ -1,11 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'seller_firestore.dart';
+import 'seller_selfie_camera.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -71,11 +69,10 @@ class _SellerToolState extends State<SellerToolPage> {
   Map<String,dynamic> summary={};
   List<Map<String,dynamic>> stock=[];
   List<TradingDay> days=List.generate(7,(_)=>const TradingDay());
-  bool loading=true,working=false,ready=false,delivery=false,pickup=false,cashback=false,cards=false,liveChat=true,consent=false;
+  bool loading=true,working=false,capturing=false,ready=false,delivery=false,pickup=false,cashback=false,cards=false,liveChat=true,consent=false;
   String? error,status;
   Uint8List? selfie;
-  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();
-    if(widget.tool==SellerTool.verification&&widget.captureSelfie==null)recoverCamera();}
+  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();}
   void accountChanged(){if(uid!=widget.session.userId&&mounted)setState((){
     selfie=null;summary={};ready=false;error='Your account changed. Close this page and sign in again.';
   });}
@@ -114,31 +111,17 @@ class _SellerToolState extends State<SellerToolPage> {
     final value=time.hour.toString().padLeft(2,'0')+':'+time.minute.toString().padLeft(2,'0');
     setState(()=>days[index]=TradingDay(closed:day.closed,open:opening?value:day.open,close:opening?day.close:value));
   }
-  Future<void> useCapture(XFile file) async {
-    final bytes=await file.readAsBytes();
-    if(bytes.length>2000000)throw StateError('Please take a smaller photo.');
-    if(mounted&&uid==widget.session.userId)setState((){selfie=bytes;consent=false;status=null;});
-    try{await File(file.path).delete();}catch(_){/* The image picker manages its cache. */}
-  }
-  Future<void> recoverCamera() async {
-    try{
-      final prefs=await SharedPreferences.getInstance();
-      if(prefs.getString('teyza_selfie_capture')!=uid)return;
-      final recovered=await ImagePicker().retrieveLostData();
-      await prefs.remove('teyza_selfie_capture');
-      if(recovered.files?.isNotEmpty==true)await useCapture(recovered.files!.first);
-    }catch(_){/* The owner can start the camera again. */}
-  }
   Future<void> camera() async {
-    setState((){error=null;});
+    if(capturing||working||uid!=widget.session.userId)return;
+    setState((){error=null;capturing=true;});
     try{
-      if(widget.captureSelfie!=null){final bytes=await widget.captureSelfie!();
-        if(bytes!=null&&mounted&&uid==widget.session.userId)setState((){selfie=bytes;consent=false;status=null;});return;}
-      final prefs=await SharedPreferences.getInstance();await prefs.setString('teyza_selfie_capture',uid??'');
-      final file=await ImagePicker().pickImage(source:ImageSource.camera,preferredCameraDevice:CameraDevice.front,
-        maxWidth:1400,maxHeight:1400,imageQuality:80,requestFullMetadata:false);
-      await prefs.remove('teyza_selfie_capture');if(file!=null)await useCapture(file);
+      final bytes=widget.captureSelfie!=null?await widget.captureSelfie!():
+        await Navigator.push<Uint8List>(context,MaterialPageRoute(builder:(_)=>SellerSelfieCameraPage(session:widget.session)));
+      if(bytes==null)return;
+      if(bytes.isEmpty||bytes.length>2000000)throw StateError('Please retake a clear selfie smaller than 2 MB.');
+      if(mounted&&uid==widget.session.userId)setState((){selfie=bytes;consent=false;status=null;});
     }catch(_){if(mounted)setState(()=>error='Could not open the camera. Allow camera access in your device settings and try again.');}
+    finally{if(mounted)setState(()=>capturing=false);}
   }
   Widget card(Widget child)=>Padding(padding:const EdgeInsets.only(bottom:14),
     child:Material(color:Colors.white,borderRadius:BorderRadius.circular(22),
@@ -245,7 +228,7 @@ class _SellerToolState extends State<SellerToolPage> {
       Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text((summary['verification'] as Map)['reviewNote'].toString())),
     if(selfie!=null)Padding(padding:const EdgeInsets.symmetric(vertical:16),child:ClipRRect(borderRadius:BorderRadius.circular(22),
       child:Image.memory(selfie!,height:260,fit:BoxFit.contain))),
-    OutlinedButton.icon(onPressed:working?null:camera,icon:const Icon(Icons.camera_alt_outlined),
+    OutlinedButton.icon(onPressed:working||capturing?null:camera,icon:const Icon(Icons.camera_alt_outlined),
       label:Text(selfie==null?'Open selfie camera':'Retake selfie')),
     CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:(v)=>setState(()=>consent=v==true),
       title:const Text('I agree to submit my selfie for Teyza shop-owner verification.'),

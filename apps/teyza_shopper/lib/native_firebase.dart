@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
@@ -20,6 +21,12 @@ class NativeFirebase {
     final ios=defaultTargetPlatform==TargetPlatform.iOS;
     var appId=ios?const String.fromEnvironment('TEYZA_FIREBASE_IOS_APP_ID'):
       const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID');
+    if(appId.trim().isEmpty){
+      final bundled=jsonDecode(await rootBundle.loadString('assets/config/firebase_native.json'));
+      if(bundled is Map&&bundled['projectId']=='business-lift-3c19c'){
+        appId=bundled[ios?'iosAppId':'androidAppId']?.toString()??'';
+      }
+    }
     // Android can receive public app identity after service activation. iOS also
     // requires the matching callback scheme compiled into its native bundle.
     if(!ios&&!validAppId(appId,'android')){

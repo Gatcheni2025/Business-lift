@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from prepare_mobile_release import native_app_id
 
 root = Path(__file__).resolve().parents[1]
 out = root / 'build/release'
@@ -27,7 +28,9 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'sellerNotificationsImplemented': True, 'adminSellerReviewImplemented': True,
             'nativeSellerRegistration': True, 'sellerIdentityDocuments': True, 'sellerPhoneOtpImplemented': True,
             'deviceOtpVerified': False, 'sellingAfterCompletedSetup': True,
-            'pushAppConfigured': bool(os.environ.get('TEYZA_FIREBASE_ANDROID_APP_ID' if platform == 'android' else 'TEYZA_FIREBASE_IOS_APP_ID')),
+            'pushAppConfigured': bool(native_app_id(platform)),
+            'firebaseBrowserReturnConfigured': True, 'inAppFrontCamera': True,
+            'pendingSmsSessionRecovery': True,
             'devicePushVerified': False,
             'catalogueProducts': 184, 'catalogueReferencePhotos': 48,
             'storeSubmitted': False, 'deviceLoginVerified': False}

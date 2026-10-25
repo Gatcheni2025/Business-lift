@@ -1,5 +1,6 @@
 """Configure generated Flutter wrappers without committing signing credentials."""
 import argparse
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -10,10 +11,16 @@ ROOT = Path(__file__).resolve().parents[1]
 ANDROID_ID = "za.co.teyza.teyza_shopper"
 IOS_ID = os.environ.get("TEYZA_IOS_BUNDLE_ID") or "za.co.teyza.shopper"
 FIREBASE_API_KEY = "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U"
+NATIVE_CONFIG = ROOT / "assets/config/firebase_native.json"
 
 
 def native_app_id(platform):
     value = os.environ.get("TEYZA_FIREBASE_" + platform.upper() + "_APP_ID", "").strip()
+    if not value:
+        config = json.loads(NATIVE_CONFIG.read_text())
+        if config.get("projectId") != "business-lift-3c19c":
+            raise SystemExit("Unexpected bundled Firebase project.")
+        value = config.get(platform + "AppId", "")
     if value and not re.fullmatch(r"1:983479810697:" + platform + r":[a-fA-F0-9]+", value):
         raise SystemExit("Use the existing project's native " + platform + " Firebase app ID.")
     return value
@@ -30,6 +37,15 @@ def android(signing):
         if not any(p.get(key + "name") == name for p in manifest.findall("uses-permission")):
             ET.SubElement(manifest, "uses-permission", {key + "name": name})
     manifest.find("application").set(key + "label", "Teyza")
+    main = next((a for a in manifest.find("application").findall("activity")
+                 if a.get(key + "name", "").endswith("MainActivity")), None)
+    if main is None:
+        raise SystemExit("Cannot locate the Android activity for Firebase browser return.")
+    # Flutter's empty task affinity separates the browser callback activity from
+    # the app's task. Firebase's SDK must receive its own reCAPTCHA intent and
+    # return to the same Flutter activity; do not intercept that URI in Dart.
+    if main.get(key + "taskAffinity") == "":
+        del main.attrib[key + "taskAffinity"]
     for name, value in [("firebase_messaging_auto_init_enabled", "false"),
                         ("firebase_analytics_collection_enabled", "false")]:
         ET.SubElement(manifest.find("application"), "meta-data", {key + "name": name, key + "value": value})
