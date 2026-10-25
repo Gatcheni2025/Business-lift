@@ -4,8 +4,16 @@ on:
   pull_request:
     paths:
       - 'apps/teyza_shopper/**'
+      - 'services/teyza-mobile-v39/**'
+      - 'services/teyza-places-v34/**'
+      - 'firebase.teyza-places-v34.json'
       - '.github/workflows/teyza-shopper-apk.yml'
   workflow_dispatch:
+
+env:
+  TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
+  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
+  TEYZA_ANDROID_TEST_KEYSTORE_PATH: ${{ github.workspace }}/.teyza-android-test-signing/debug.keystore
 
 permissions:
   contents: read
@@ -16,6 +24,9 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Test Android certificate registration helper without live credentials
+        shell: pwsh
+        run: ./tools/android-test-registration/test-register.ps1
       - name: Check PHP discovery endpoints
         run: |
           php -l api/shopper-discover.php
@@ -116,6 +127,30 @@ jobs:
           name: teyza-1-1-style-brand-recovery
           path: TEYZA_1.1_STYLE_AND_BRAND_RECOVERY.zip
           retention-days: 14
+      - name: Validate R3.4 premium shop images and Google Places backend syntax
+        run: |
+          node --check services/teyza-places-v34/index.js
+          node --test services/teyza-places-v34/places.test.js
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree
+          directory=Path("apps/teyza_shopper/assets/illustrations")
+          expected={"shop-front.svg","grocery-basket.svg",
+            "bread.svg","milk.svg","eggs.svg","rice.svg",
+            "maize.svg","oil.svg","snacks.svg","soap.svg"}
+          missing=expected-{p.name for p in directory.glob("*.svg")}
+          assert not missing, f"Missing shopper art: {sorted(missing)}"
+          for filename in expected:
+              ElementTree.parse(directory/filename)
+          print("Premium SVG illustrations: valid")
+          photos=Path("apps/teyza_shopper/assets/images/essentials")
+          for item in ["bread","milk","eggs","rice","maize","oil","snacks","soap"]:
+              data=(photos/(item+".webp")).read_bytes()
+              assert data[:4] == b"RIFF" and data[8:12] == b"WEBP", f"Invalid essential photo: {item}"
+          print("Eight bundled essentials photographs: valid WebP assets")
+          PY
+          grep -q 'assets/illustrations/' apps/teyza_shopper/pubspec.yaml
+          grep -q 'assets/images/essentials/' apps/teyza_shopper/pubspec.yaml
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -136,36 +171,92 @@ jobs:
       - name: Enable release internet access
         working-directory: apps/teyza_shopper
         run: |
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          grep INTERNET android/app/src/main/AndroidManifest.xml
+          python3 scripts/prepare_mobile_release.py android --signing test
       - name: Packages
         working-directory: apps/teyza_shopper
         run: flutter pub get
       - name: Static analysis
         working-directory: apps/teyza_shopper
         run: flutter analyze --no-fatal-infos
-      - name: Unit tests
-        working-directory: apps/teyza_shopper
-        run: flutter test
-      - name: Build shopper debug APK
+      - name: Unit tests and premium screen rendering
         working-directory: apps/teyza_shopper
         env:
-          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
-        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+          TEYZA_CAPTURE_UI: '1'
+        run: flutter test
+      - name: Upload rendered premium screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-premium-ui-preview
+          path: apps/teyza_shopper/build/ui-preview/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Package current Places backend
+        run: |
+          python3 scripts/package_teyza_places.py
+      - name: Upload current Places backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-places-r36-deploy-kit
+          path: TEYZA_PLACES_R36_DEPLOY_KIT.zip
+          retention-days: 14
+      - name: Restore the explicit Android test signing key
+        id: test-key
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
+          key: teyza-android-test-signing-v2
+      - name: Configure the same test key for both APKs
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$TEYZA_ANDROID_TEST_KEYSTORE_PATH")"
+          if [ ! -f "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" ]; then
+            keytool -genkeypair -keystore "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" -storepass android -keypass android -alias androiddebug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Teyza Test,C=ZA" -noprompt
+          fi
+          test -s "$TEYZA_ANDROID_TEST_KEYSTORE_PATH"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('apps/teyza_shopper/android/app/build.gradle.kts')
+          with p.open('a') as file:
+              file.write('''
+          android {
+              signingConfigs.getByName("debug") {
+                  storeFile = file(System.getenv("TEYZA_ANDROID_TEST_KEYSTORE_PATH"))
+                  storePassword = "android"
+                  keyAlias = "androiddebug"
+                  keyPassword = "android"
+              }
+          }
+          ''')
+          PY
+      - name: Preserve the key before building so a failed compile cannot rotate it
+        if: steps.test-key.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
+          key: teyza-android-test-signing-v2
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
         env:
           TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
-        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID"
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+      - name: Export verified public Android fingerprints for Firebase Phone Auth
+        working-directory: apps/teyza_shopper
+        run: python3 scripts/apk_fingerprints.py
       - name: Upload smaller APK for testing
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: teyza-shopper-arm64-test-apk
-          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          path: |
+            apps/teyza_shopper/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            apps/teyza_shopper/build/app/outputs/flutter-apk/test-signing-fingerprints.json
           retention-days: 14
+      - name: Build shopper debug APK
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
       - name: Upload APK for real-device testing
         if: success()
         uses: actions/upload-artifact@v4

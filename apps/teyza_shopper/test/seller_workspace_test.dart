@@ -25,6 +25,15 @@ void main(){
   final client=MockClient((_) async=>http.Response('{}',404));
   expect(await SellerFirestore(uid:owner,token:'t',client:client).shop(),isNull);
  });
+ test('Shop and product access failures identify the blocked operation',() async{
+  final client=MockClient((_) async=>http.Response('{}',403));
+  final api=SellerFirestore(uid:owner,token:'t',client:client);
+  await expectLater(api.shop(),throwsA(isA<SellerAccessException>()
+    .having((e)=>e.reference,'reference','SELLER_PROFILE_ACCESS')));
+  await expectLater(api.drafts(),throwsA(isA<SellerAccessException>()
+    .having((e)=>e.reference,'reference','SELLER_PRODUCTS_ACCESS')));
+  client.close();
+ });
  test('Owner creates only a private draft and does not publish to shopper catalogue',() async{
   final client=MockClient((req) async{
     expect(req.method,'POST');
@@ -87,5 +96,27 @@ void main(){
   expect(()=>SellerFirestore.validateDraft(
     const SellerDraft(id:'item1',name:'A bread',category:'Grocery',priceCents:0,stock:2)),
     throwsFormatException);
+ });
+ test('Product drafts follow pagination so a large shop range is not truncated',() async{
+  var calls=0;
+  final client=MockClient((request) async{
+    calls++;expect(request.url.queryParameters['pageToken'],calls==1?isNull:'page-two');
+    return http.Response(jsonEncode({'documents':[{'name':'projects/demo/documents/teyzaDraftProducts/$owner/items/item$calls',
+      'updateTime':'2026-10-24T10:00:00Z','fields':{'ownerUid':{'stringValue':owner},'status':{'stringValue':'draft'},'name':{'stringValue':'Product $calls'}}}],
+      if(calls==1)'nextPageToken':'page-two'}),200);
+  });
+  final rows=await SellerFirestore(uid:owner,token:'t',client:client).drafts();
+  expect(rows,hasLength(2));expect(calls,2);expect(rows.last.updateTime,'2026-10-24T10:00:00Z');client.close();
+ });
+ test('An edit uses the document version so stale stock cannot overwrite a newer reservation',() async{
+  final client=MockClient((request) async{
+    final write=(jsonDecode(request.body)['writes'] as List).single as Map;
+    expect(write['currentDocument'],{'updateTime':'2026-10-24T10:00:00Z'});
+    return http.Response('{}',409);
+  });
+  await expectLater(SellerFirestore(uid:owner,token:'t',client:client).save(const SellerDraft(id:'bread',name:'Bread',category:'Bakery',
+    priceCents:1800,stock:5,createdAt:'2026-10-20T10:00:00Z',updateTime:'2026-10-24T10:00:00Z')),
+    throwsA(isA<StateError>().having((e)=>e.message,'message',contains('Refresh your products'))));
+  client.close();
  });
 }

@@ -32,6 +32,16 @@ void main(){
   expect(shops.single.containsKey('ownerEmail'),false);
   expect(shops.single['products'],isEmpty);
  });
+ test('Approved shops show their published cover or shop logo',(){
+  final listing=row('active','Nearby Spaza');
+  final fields=(listing['document'] as Map)['fields'] as Map;
+  fields['shopPhotoUrl']={'stringValue':'https://firebasestorage.googleapis.com/v0/b/shop-photo'};
+  final shops=parseTeyzaPublicDirectory([listing]);
+  expect(shops.single['photoUrl'],startsWith('https://'));
+  expect(publishedMerchantPhoto({'photoUrl':'http://unsafe.example/shop.jpg'}),'');
+  expect(publishedMerchantPhoto({'logoUrl':'https://example.com/logo.png'}),
+    'https://example.com/logo.png');
+ });
  test('Firestore public query constrains active status',() async {
   final mock=MockClient((request) async {
    expect(request.url.path,isNot(contains('teyzaPublicShops')));
