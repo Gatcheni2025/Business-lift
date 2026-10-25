@@ -137,12 +137,12 @@ class _SelfieCameraState extends State<SellerSelfieCameraPage> with WidgetsBindi
   @override Widget build(BuildContext context)=>Scaffold(
     backgroundColor:const Color(0xFF010F1C),
     appBar:AppBar(backgroundColor:const Color(0xFF010F1C),foregroundColor:Colors.white,title:const Text('Owner selfie')),
-    body:SafeArea(child:ListView(padding:const EdgeInsets.fromLTRB(24,12,24,28),children:[
+    body:LayoutBuilder(builder:(context,constraints)=>SafeArea(child:ListView(padding:const EdgeInsets.fromLTRB(24,12,24,28),children:[
       const Text('A clear photo of you',style:TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w800)),
       const SizedBox(height:10),Text(_photo==null?'Face the front camera in good light. Keep your whole face inside the guide.':'Check your photo. Your face should be clear and fully visible.',
         style:const TextStyle(color:Color(0xFFCBD8D2),height:1.5)),
       const SizedBox(height:22),
-      ClipRRect(borderRadius:BorderRadius.circular(28),child:AspectRatio(aspectRatio:3/4,
+      ClipRRect(borderRadius:BorderRadius.circular(28),child:SizedBox(height:(constraints.maxHeight*0.52).clamp(220.0,450.0),
         child:ColoredBox(color:const Color(0xFF152B33),child:Stack(fit:StackFit.expand,children:[
           if(_photo!=null)Image.memory(_photo!,fit:BoxFit.contain)
           else if(_ready&&_camera!=null)Center(child:_camera!.preview())
@@ -166,5 +166,5 @@ class _SelfieCameraState extends State<SellerSelfieCameraPage> with WidgetsBindi
       else if(!_opening&&!_changed)FilledButton.icon(onPressed:open,icon:const Icon(Icons.refresh_rounded),label:const Text('Try camera again')),
       const SizedBox(height:12),const Text('You choose when to submit. Only authorised Teyza reviewers can view your submitted photo.',
         textAlign:TextAlign.center,style:TextStyle(color:Color(0xFFADBCB5),fontSize:12,height:1.5)),
-    ])));
+    ]))));
 }

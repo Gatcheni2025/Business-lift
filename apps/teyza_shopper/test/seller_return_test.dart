@@ -37,6 +37,11 @@ class TestSelfieCamera implements SelfieCamera {
 
 void main(){
   Future<Uint8List> photo() async=>(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();
+  Future<void> controlTap(WidgetTester tester,String text) async{
+    final finder=find.text(text);
+    await tester.scrollUntilVisible(finder,180,scrollable:find.byType(Scrollable).first);
+    await fixtures.visibleTap(tester,finder);
+  }
   test('Pending SMS restores only the same owner and number, expires and stores no entered code',() async{
     final vault=MemoryVault();var time=DateTime.utc(2026,10,25,8);
     final store=PendingSmsStore(store:vault,now:()=>time);
@@ -65,7 +70,7 @@ void main(){
     await tester.pumpAndSettle();
     expect(sender.sends,0);expect(find.byType(TextField),findsOneWidget);
     await tester.enterText(find.byType(TextField),'123456');tester.testTextInput.hide();await tester.pump();
-    await fixtures.visibleTap(tester,find.text('Verify mobile number'));
+    await controlTap(tester,'Verify mobile number');
     expect(session.links,[['saved-firebase-session','123456','+27712345678']]);
     expect(vault.values,isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
@@ -92,9 +97,9 @@ void main(){
         SellerSelfieCameraPage(session:session,cameraFactory:()=>camera)));},child:const Text('Open camera'))))));
     await fixtures.visibleTap(tester,find.text('Open camera'));
     expect(find.byKey(const Key('front-camera-preview')),findsOneWidget);
-    await fixtures.visibleTap(tester,find.text('Take selfie'));
+    await controlTap(tester,'Take selfie');
     expect(camera.captures,1);expect(camera.disposed,true);expect(find.byType(Image),findsOneWidget);expect(result,isNull);
-    await fixtures.visibleTap(tester,find.text('Use this selfie'));
+    await controlTap(tester,'Use this selfie');
     expect(result,bytes);expect(find.text('Open camera'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
@@ -113,8 +118,10 @@ void main(){
     final session=fixtures.Session(),bytes=await photo();var attempts=0;
     await tester.pumpWidget(MaterialApp(home:SellerSelfieCameraPage(session:session,cameraFactory:()=>
       TestSelfieCamera(bytes,initializationError:attempts++==0?CameraException('CameraAccessDenied','Denied'):null))));
-    await tester.pumpAndSettle();expect(find.textContaining('Allow camera access'),findsOneWidget);
-    await fixtures.visibleTap(tester,find.text('Try camera again'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.textContaining('Allow camera access'),180,scrollable:find.byType(Scrollable).first);
+    expect(find.textContaining('Allow camera access'),findsOneWidget);
+    await controlTap(tester,'Try camera again');
     expect(find.byKey(const Key('front-camera-preview')),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
@@ -123,6 +130,7 @@ void main(){
     final camera=TestSelfieCamera(bytes,pendingCapture:pending);
     await tester.pumpWidget(MaterialApp(home:SellerSelfieCameraPage(session:session,cameraFactory:()=>camera)));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Take selfie'),180,scrollable:find.byType(Scrollable).first);
     await tester.ensureVisible(find.text('Take selfie'));await tester.tap(find.text('Take selfie'));await tester.pump();
     session.switchAccount();pending.complete(bytes);await tester.pumpAndSettle();
     expect(find.byType(Image),findsNothing);expect(find.text('Use this selfie'),findsNothing);

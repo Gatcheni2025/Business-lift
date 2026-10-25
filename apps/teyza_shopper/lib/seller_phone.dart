@@ -130,11 +130,11 @@ class _SellerPhoneState extends State<SellerPhonePage> with WidgetsBindingObserv
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);
     WidgetsBinding.instance.addObserver(this);
     if(uid==null){changed=true;restoring=false;error='Sign in again before verifying your mobile number.';}else{restorePending();}}
-  Future<void> clearPending() async {if(uid!=null){try{await pending.clear(uid!);}catch(_){}}}
+  Future<void> clearPending() async {if(uid!=null){try{await pending.clear(uid!).timeout(const Duration(seconds:2));}catch(_){}}}
   Future<void> restorePending() async {
     final request=generation;
     try{
-      final saved=uid==null?null:await pending.read(uid!,normalizeMobile(widget.phone));
+      final saved=uid==null?null:await pending.read(uid!,normalizeMobile(widget.phone)).timeout(const Duration(seconds:3));
       if(current(request)&&saved!=null&&verificationId==null&&!sending&&!confirming){
         setState((){verificationId=saved.verificationId;consent=true;error=null;
           startCooldown((saved.resendAfter.difference(DateTime.now()).inMilliseconds/1000).ceil());});

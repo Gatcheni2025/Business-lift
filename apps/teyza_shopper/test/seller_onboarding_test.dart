@@ -9,6 +9,7 @@ import 'package:teyza_shopper/seller_firestore.dart';
 import 'package:teyza_shopper/seller_onboarding.dart';
 import 'package:teyza_shopper/seller_phone.dart';
 import 'package:teyza_shopper/seller_tools.dart';
+import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
 import 'seller_experience_test.dart' as fixtures;
 
@@ -26,6 +27,12 @@ class OnboardApi extends TeyzaMobileApi {
 class PhoneSession extends fixtures.Session {
  final links=<List<String>>[];
  @override Future<void> linkPhone(String id,String code,String number) async {links.add([id,code,number]);phoneVerified=true;phoneNumber=number;}
+}
+class TestPhoneStore implements SessionStore {
+ final values=<String,String>{};
+ @override Future<String?> read(String key) async=>values[key];
+ @override Future<void> write(String key,String value) async{values[key]=value;}
+ @override Future<void> delete(String key) async{values.remove(key);}
 }
 class FakeSender implements PhoneCodeSender {
  int sends=0;
@@ -74,10 +81,12 @@ void main(){
  });
  testWidgets('OTP screen sends on consent and links the six digit code to the existing account',(tester) async{
   final session=PhoneSession(),sender=FakeSender();
-  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender,
+    pendingStore:PendingSmsStore(store:TestPhoneStore()))));await tester.pumpAndSettle();
   final send=find.widgetWithText(FilledButton,'Send SMS code');expect(tester.widget<FilledButton>(send).onPressed,isNull);
   await fixtures.visibleTap(tester,find.text('Send me a verification SMS'));await fixtures.visibleTap(tester,send);
   expect(sender.sends,1);await tester.enterText(find.byType(TextField),'123456');tester.testTextInput.hide();await tester.pump();
+  await tester.scrollUntilVisible(find.text('Verify mobile number'),180,scrollable:find.byType(Scrollable).first);
   await fixtures.visibleTap(tester,find.text('Verify mobile number'));
   expect(session.links,[['real-verification-session','123456','+27712345678']]);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
@@ -116,7 +125,8 @@ void main(){
  });
  testWidgets('A late Android instant-verification callback cannot link a changed account',(tester) async{
   final session=PhoneSession(),sender=InstantSender();var linked=false;
-  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender,
+    pendingStore:PendingSmsStore(store:TestPhoneStore()))));await tester.pumpAndSettle();
   await fixtures.visibleTap(tester,find.text('Send me a verification SMS'));
   await fixtures.visibleTap(tester,find.text('Send SMS code'));
   session.switchAccount();await tester.pump();sender.completion(() async{linked=true;});await tester.pump();expect(linked,false);

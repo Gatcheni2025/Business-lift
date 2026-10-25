@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -10,8 +11,17 @@ import 'package:teyza_shopper/seller_review.dart';
 import 'package:teyza_shopper/seller_tools.dart';
 import 'package:teyza_shopper/seller_onboarding.dart';
 import 'package:teyza_shopper/seller_phone.dart';
+import 'package:teyza_shopper/seller_selfie_camera.dart';
 import 'package:teyza_shopper/seller_firestore.dart';
 import 'seller_experience_test.dart' as fixtures;
+import 'seller_onboarding_test.dart' as onboardingFixtures;
+
+class PreviewSelfieCamera implements SelfieCamera {
+ @override Future<void> initialize() async{}
+ @override Widget preview()=>const ColoredBox(color:Color(0xFF253D43),child:Center(child:Icon(Icons.face_outlined,size:150,color:Colors.white38)));
+ @override Future<Uint8List> capture() async=>throw StateError('Offline preview has no device camera.');
+ @override Future<void> dispose() async{}
+}
 
 void main(){
  testWidgets('Premium seller registration, notification and reviewer screens render with offline fixtures',(tester) async{
@@ -22,7 +32,8 @@ void main(){
   final session=fixtures.Session(),api=fixtures.ExperienceApi(fixtures.Session());
   final pages=<String,Widget>{
    'seller-onboarding':SellerOnboardingPage(session:session,shop:const SellerShop('KwaMashu Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678'),api:api),
-   'seller-phone-otp':SellerPhonePage(session:session,phone:'+27712345678'),
+   'seller-phone-otp':SellerPhonePage(session:session,phone:'+27712345678',pendingStore:PendingSmsStore(store:onboardingFixtures.TestPhoneStore())),
+   'seller-in-app-selfie':SellerSelfieCameraPage(session:session,cameraFactory:()=>PreviewSelfieCamera()),
    'seller-notifications':SellerNotificationsPage(session:session,api:api),
    'seller-registration':SellerRegistrationPage(session:session,api:api),
    'seller-review-desk':SellerReviewPage(session:session,api:api),
