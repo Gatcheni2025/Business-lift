@@ -41,7 +41,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 GitHub CLI is already authenticated as `Gatcheni2025`. The helper also needs
 Java `keytool` (a JDK or Android Studio supplies it) and the existing Firebase CLI
 login for `business-lift-3c19c`. If Java is unavailable it stops before creating
-or uploading a key. If Firebase asks for authentication, run `firebase login`
+or uploading a key. Install Java with `winget install Microsoft.OpenJDK.21`,
+then reopen PowerShell and retry the helper. If Firebase asks for authentication, run `firebase login`
 and rerun the same helper.
 
 Choose and confirm your own password when prompted. Nothing is displayed while

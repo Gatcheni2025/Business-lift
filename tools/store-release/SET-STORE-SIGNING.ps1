@@ -9,7 +9,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $TeyzaRepository = 'Gatcheni2025/Business-lift'
-$TeyzaGhCommand = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue
+$TeyzaGhCommand = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $TeyzaGhCommand) { throw 'Install GitHub CLI from https://cli.github.com, reopen PowerShell, then run gh auth login.' }
 if ($GoogleWebClientId -notmatch '^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$') { throw 'Use the Google Web OAuth client ID for the existing Teyza Firebase project.' }
 

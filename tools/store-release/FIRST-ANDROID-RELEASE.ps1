@@ -7,7 +7,7 @@ $script:TeyzaIosApp = '1:983479810697:ios:4aae4823892dd145db2458'
 $script:TeyzaPackage = 'za.co.teyza.teyza_shopper'
 
 function Find-TeyzaKeytool {
-  $command = Get-Command keytool -CommandType Application -ErrorAction SilentlyContinue
+  $command = Get-Command keytool -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($command) { return $command.Source }
   $candidates = @()
   if ($env:JAVA_HOME) { $candidates += Join-Path $env:JAVA_HOME 'bin\keytool.exe' }
@@ -23,7 +23,7 @@ function Find-TeyzaKeytool {
     }
   }
   foreach ($candidate in $candidates) { if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate } }
-  throw 'Java keytool was not found. Install a JDK (or Android Studio), reopen PowerShell and retry. Your signing key was not created or changed.'
+  throw 'Java keytool was not found. Run: winget install Microsoft.OpenJDK.21 ; then reopen PowerShell in this folder and retry. Your signing key was not created or changed.'
 }
 function Read-TeyzaPassword([string]$Prompt) {
   $secure = Read-Host $Prompt -AsSecureString
@@ -38,7 +38,7 @@ function Invoke-TeyzaGhJson([string[]]$Arguments) {
 }
 function Send-TeyzaSecret([string]$Name,[string]$Value) {
   $start = New-Object Diagnostics.ProcessStartInfo
-  $start.FileName = (Get-Command gh -CommandType Application).Source
+  $start.FileName = (Get-Command gh -CommandType Application | Select-Object -First 1).Source
   $start.Arguments = 'secret set ' + $Name + ' --repo ' + $script:TeyzaRepository
   $start.UseShellExecute = $false
   $start.RedirectStandardInput = $true

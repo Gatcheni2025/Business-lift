@@ -13,6 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows_first_release:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify first-key creation and private stdin in Windows PowerShell
+        shell: powershell
+        run: ./tools/store-release/test-first-release.ps1
+
   configuration:
     runs-on: ubuntu-24.04
     outputs:

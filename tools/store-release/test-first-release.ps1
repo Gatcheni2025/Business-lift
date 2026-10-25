@@ -10,6 +10,7 @@ $script:FailSecret = $false
 $script:FixturePassword = 'Test-only P@ssw0rd-42!'
 $script:KeyCommands = New-Object 'Collections.Generic.List[object]'
 $script:OriginalKeytoolFunction = ${function:Invoke-TeyzaKeytool}
+$script:OriginalSecretFunction = ${function:Send-TeyzaSecret}
 
 function Read-TeyzaPassword([string]$Prompt) { return $script:Passwords.Dequeue() }
 function Invoke-TeyzaGhJson([string[]]$Arguments) {
@@ -115,8 +116,41 @@ try {
   try { Connect-TeyzaFirebase $info } catch { $failed = $true }
   Assert-Teyza $failed 'An ambiguous Web OAuth client was guessed.'
   Write-Host 'PASS: unrelated packages and ambiguous OAuth clients are rejected.'
+
+  if ($env:OS -eq 'Windows_NT') {
+    $script:FakeGh = Join-Path $testFolder 'fixture-gh.exe'
+    $env:TEYZA_FIXTURE_STDIN = Join-Path $testFolder 'fixture-stdin.bin'
+    $env:TEYZA_FIXTURE_ARGS = Join-Path $testFolder 'fixture-args.txt'
+    $fixtureCode = @'
+using System;
+using System.IO;
+public class TeyzaStdinFixture {
+  public static void Main(string[] args) {
+    using (var output = File.Create(Environment.GetEnvironmentVariable("TEYZA_FIXTURE_STDIN"))) {
+      Console.OpenStandardInput().CopyTo(output);
+    }
+    File.WriteAllLines(Environment.GetEnvironmentVariable("TEYZA_FIXTURE_ARGS"), args);
+  }
+}
+'@
+    Add-Type -TypeDefinition $fixtureCode -OutputAssembly $script:FakeGh -OutputType ConsoleApplication
+    function Get-Command {
+      param([string]$Name,[string]$CommandType)
+      if ($Name -eq 'gh') { return [pscustomobject]@{Source=$script:FakeGh} }
+      return Microsoft.PowerShell.Core\Get-Command -Name $Name -CommandType $CommandType
+    }
+    $fixtureValue = 'Exact-' + [char]0x00E9 + '-stdin-fixture'
+    & $script:OriginalSecretFunction 'TEYZA_FIXTURE_ONLY' $fixtureValue
+    $actual = [BitConverter]::ToString([IO.File]::ReadAllBytes($env:TEYZA_FIXTURE_STDIN))
+    $expected = [BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes($fixtureValue))
+    Assert-Teyza ($actual -ceq $expected) 'Secret stdin was changed by encoding, BOM or a newline.'
+    Assert-Teyza (-not ([IO.File]::ReadAllText($env:TEYZA_FIXTURE_ARGS)).Contains($fixtureValue)) 'A secret value appeared in process arguments.'
+    Write-Host 'PASS: Windows PowerShell sends exact UTF-8 secret stdin without argument exposure.'
+  }
 } finally {
   Remove-Item -LiteralPath $testFolder -Recurse -Force -ErrorAction SilentlyContinue
   [Environment]::SetEnvironmentVariable('TEYZA_FIRST_RELEASE_PASSWORD',$null,'Process')
   $script:SavedSecrets.Clear(); $script:FixturePassword=$null
+  [Environment]::SetEnvironmentVariable('TEYZA_FIXTURE_STDIN',$null,'Process')
+  [Environment]::SetEnvironmentVariable('TEYZA_FIXTURE_ARGS',$null,'Process')
 }
