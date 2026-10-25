@@ -12,10 +12,16 @@ const {defineSecret}=require('firebase-functions/params');
 const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const {createService}=require('./service');
+const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
 const db=admin.firestore();
 const notifications=createNotifications({db,messaging:admin.messaging()});
 const bucket=admin.storage().bucket('business-lift-3c19c.firebasestorage.app');
+let readinessCache=null,readinessUntil=0;
+async function readiness(){
+ if(!readinessCache||Date.now()>readinessUntil){readinessUntil=Date.now()+30000;readinessCache=uploadReadiness(bucket,verificationKey.value());}
+ return readinessCache;
+}
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
@@ -29,6 +35,10 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       const config=require('./native-config.json');
       res.json({projectId:'business-lift-3c19c',androidAppId:config.androidAppId||'',iosAppId:config.iosAppId||'',iosUrlScheme:config.iosUrlScheme||''});return;
     }
+    if(req.query.shopPhoto!==undefined){
+      try{const bytes=await service.publicShopPhoto(req.query.shopPhoto,req.query.v);res.set('Cache-Control','public,max-age=300').type('image/jpeg').send(bytes);}
+      catch(error){res.status(error.status||503).json({error:'Shop photo is not available.'});}return;
+    }
     const key=req.query.cataloguePhoto;
     if(key!==undefined){
       try{
@@ -38,7 +48,8 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       }catch(_){res.status(503).json({error:'Product photo is temporarily unavailable.'});}
       return;
     }
-    res.json({ok:true,version:'3.13.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
+    const uploads=await readiness();
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{

@@ -15,7 +15,7 @@ function firebase {
   return '{"status":"success","result":{}}'
 }
 function npm { $global:LASTEXITCODE = 0 }
-function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.13.0';sellerOnboarding=$true;catalogueProducts=184} }
+function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.15.0';verificationUploads=$true;shopFrontPhotos=$true;sellerOnboarding=$true;catalogueProducts=184} }
 try {
   foreach ($name in @('ACTIVATE-TEYZA.ps1','DEPLOY-MOBILE.ps1','SETUP-VERIFICATION-KEY.ps1')) {
     $errors = $null

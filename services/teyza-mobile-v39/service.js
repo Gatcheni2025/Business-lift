@@ -1,5 +1,7 @@
 'use strict';
 const D = require('./domain');
+const {saveUpload}=require('./upload-storage');
+const {createShopFront}=require('./shop-front');
 const crypto = require('node:crypto');
 const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
@@ -85,9 +87,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.update(ref,update);
     });
   }
+  const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
@@ -133,7 +137,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const encrypted=await encryptSelfie(jpeg);
         // Register cleanup first: an interrupted upload must not orphan a private photo.
         await doc('teyzaVerificationPhotos/'+submissionId).set({ownerUid:uid,objectPath:path,expiresAt:stamp+90*86400000});
-        await bucket.file(path).save(encrypted,{contentType:'application/octet-stream',resumable:false,
+        await saveUpload(bucket,path,encrypted,{contentType:'application/octet-stream',resumable:false,
           metadata:{cacheControl:'private,no-store'}});
         await db.runTransaction(async tx=>{
           const ref=doc('teyzaPublicShops/'+uid),snap=await tx.get(ref);
@@ -148,7 +152,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const product=await read('teyzaDraftProducts/'+uid+'/items/'+productId);
       if(!product||product.ownerUid!==uid||product.status!=='draft')D.fail(403,'Save your product draft before adding its photo.');
       const token=crypto.randomUUID(),path='teyza/product-photos/'+uid+'/'+productId+'/'+token+'.jpg';
-      await bucket.file(path).save(jpeg,{contentType:'image/jpeg',resumable:false,
+      await saveUpload(bucket,path,jpeg,{contentType:'image/jpeg',resumable:false,
         metadata:{metadata:{firebaseStorageDownloadTokens:token}}});
       const url='https://firebasestorage.googleapis.com/v0/b/'+bucket.name+'/o/'+encodeURIComponent(path)+'?alt=media&token='+token;
       await doc('teyzaProductPhotos/'+uid+'/items/'+productId).set({ownerUid:uid,url,objectPath:path,updatedAt:stamp});
@@ -344,6 +348,6 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     D.fail(404,'This shop service is not available.');
   }
-  return {execute,synchronizeCatalogue};
+  return {execute,synchronizeCatalogue,publicShopPhoto:shopFront.publicPhoto};
 }
 module.exports = {createService};

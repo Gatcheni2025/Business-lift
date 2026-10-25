@@ -460,3 +460,45 @@ test('Instant phone bootstrap is owner-bound, grants no OTP status and cannot re
  await rejects(f.service.execute({...owner,teyzaAdmin:true,teyzaPhoneBootstrap:true,auth_time:1000},'admin_seller_queue'),401);
  await rejects(f.service.execute({...newOwner,uid:'unregistered'},'seller_phone_session'),403);
 });
+
+test('Upload readiness checks the real bucket and encryption configuration',async()=>{
+ const {uploadReadiness}=require('./upload-storage'),secret=Buffer.alloc(32,1).toString('base64');
+ assert.equal((await uploadReadiness({getMetadata:async()=>[{}]},secret)).verificationUploads,true);
+ for(const [code,expected] of [[404,'UPLOAD_STORAGE_MISSING'],[403,'UPLOAD_STORAGE_ACCESS'],[500,'UPLOAD_STORAGE_UNAVAILABLE']]){
+  const result=await uploadReadiness({getMetadata:async()=>{throw Object.assign(new Error('private details'),{code});}},secret);
+  assert.equal(result.verificationUploads,false);assert.equal(result.uploadStatus,expected);assert(!JSON.stringify(result).includes('private details'));
+ }
+ assert.equal((await uploadReadiness({},'bad')).uploadStatus,'VERIFICATION_KEY_NOT_CONFIGURED');
+});
+test('A missing bucket gives an actionable error without accepting private evidence',async()=>{
+ const bucket={file:()=>({save:async()=>{throw Object.assign(new Error('bucket missing'),{code:404});}})};
+ const {service,db}=fixture({}, {bucket});const imageBase64=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]).toString('base64');
+ await assert.rejects(service.execute(owner,'verification_selfie',{imageBase64,consent:true}),e=>e.status===503&&e.code==='UPLOAD_STORAGE_MISSING');
+ assert.equal(db.records.has('teyzaMobileVerification/seller1'),false);
+ await assert.rejects(service.execute(owner,'seller_identity_submit',{legalType:'individual',kind:'id',documentNumber:'test-id',imageBase64,consent:true}),e=>e.code==='UPLOAD_STORAGE_MISSING');
+ assert.equal(db.records.has('teyzaSellerIdentity/seller1'),false);
+});
+test('Shop-front upload binds the owner, requires public-photo consent and preserves stock and plan',async()=>{
+ const {service,db}=fixture();const imageBase64=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]).toString('base64');
+ await rejects(service.execute(owner,'shop_front_submit',{imageBase64}),422);
+ await rejects(service.execute(buyer,'shop_front_submit',{imageBase64,consent:true,ownerUid:'seller1'}),403);
+ const saved=await service.execute(owner,'shop_front_submit',{imageBase64,consent:true,ownerUid:'other'});
+ const record=db.records.get('teyzaShopFrontPhotos/seller1');assert.equal(record.ownerUid,'seller1');assert(record.objectPath.startsWith('teyza/shop-fronts/seller1/'));
+ const published=db.records.get('teyzaPublicShops/seller1');assert(published.photoUrl.includes('shopPhoto=seller1'));
+ assert.deepEqual(published.products,shop.products);assert.equal(published.catalogueEnabled,true);
+ assert.equal((await service.execute(owner,'shop_front_read')).shopFront.imageBase64,imageBase64);
+ assert((await service.publicShopPhoto('seller1',saved.photoId)).length>0);
+ await rejects(service.publicShopPhoto('seller1','wrong-photo'),404);
+ db.records.set('teyzaPublicShops/seller1',{...published,status:'suspended'});
+ await rejects(service.publicShopPhoto('seller1',saved.photoId),404);
+});
+test('A pending shop can prepare its front photo without publishing it or exposing identity images',async()=>{
+ const {service,db}=fixture({'teyzaPublicShops/seller1':{...shop,status:'not_listed'}});
+ const imageBase64=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]).toString('base64');
+ const saved=await service.execute({...owner,email_verified:false},'shop_front_submit',{imageBase64,consent:true});
+ assert.equal(db.records.get('teyzaPublicShops/seller1').photoUrl,undefined);
+ await rejects(service.publicShopPhoto('seller1',saved.photoId),404);
+ db.records.set('teyzaPublicShops/seller1',shop);
+ db.records.set('teyzaShopFrontPhotos/seller1',{ownerUid:'seller1',photoId:saved.photoId,objectPath:'teyza-private/mobile-verification/seller1/private.enc'});
+ await rejects(service.publicShopPhoto('seller1',saved.photoId),404);
+});

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'seller_firestore.dart';
 import 'seller_phone.dart';
 import 'seller_tools.dart';
+import 'seller_shop_photo.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -73,6 +74,10 @@ class _OnboardingState extends State<SellerOnboardingPage> {
   }
   Future<void> selfie() async {
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerToolPage(session:widget.session,tool:SellerTool.verification,api:api,captureSelfie:widget.captureSelfie)));
+    if(mounted&&!changed)load();
+  }
+  Future<void> shopPhoto() async {
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:api)));
     if(mounted&&!changed)load();
   }
   Future<void> phone() async {
@@ -147,6 +152,11 @@ class _OnboardingState extends State<SellerOnboardingPage> {
             Text(progress['phone']?.toString()??widget.shop.phone,style:const TextStyle(fontSize:18,fontWeight:FontWeight.w700)),const SizedBox(height:8),
             const Text('Confirm that you own this number using the SMS code. Your current account and shop stay together.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),const SizedBox(height:14),
             OutlinedButton.icon(onPressed:busy?null:phone,icon:const Icon(Icons.sms_outlined),label:Text(phoneDone?'Verify mobile again':'Verify mobile number'))])),
+          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            heading('+','Shop-front photo',progress['shopFront'] is Map),const SizedBox(height:12),
+            const Text('Help customers recognise your entrance. This photo appears on your published shop listing; your identity documents stay private.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),
+            const SizedBox(height:12),OutlinedButton.icon(onPressed:busy?null:shopPhoto,icon:const Icon(Icons.storefront_outlined),
+              label:Text(progress['shopFront'] is Map?'View or replace shop photo':'Add shop-front photo'))])),
           if(progress['moderationBlocked']==true)const Padding(padding:EdgeInsets.only(bottom:16),child:Text('An administrator needs to review your registration before selling can resume.',style:TextStyle(color:Color(0xFF9A3412)))),
           FilledButton.icon(onPressed:busy||loading||!allDone||progress['moderationBlocked']==true?null:complete,icon:const Icon(Icons.storefront_outlined),label:Text(busy?'Please wait…':'Finish setup & start selling')),
           const SizedBox(height:12),const Text('The verified badge is added after an administrator checks your documents and selfie. You can prepare private products at any time.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF6C7880),fontSize:12,height:1.5))

@@ -11,6 +11,7 @@ import 'package:teyza_shopper/seller_review.dart';
 import 'package:teyza_shopper/seller_tools.dart';
 import 'package:teyza_shopper/seller_onboarding.dart';
 import 'package:teyza_shopper/seller_phone.dart';
+import 'package:teyza_shopper/seller_shop_photo.dart';
 import 'package:teyza_shopper/seller_selfie_camera.dart';
 import 'package:teyza_shopper/seller_firestore.dart';
 import 'seller_experience_test.dart' as fixtures;
@@ -32,6 +33,7 @@ void main(){
   final session=fixtures.Session(),api=fixtures.ExperienceApi(fixtures.Session());
   final pages=<String,Widget>{
    'seller-onboarding':SellerOnboardingPage(session:session,shop:const SellerShop('KwaMashu Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678'),api:api),
+   'seller-shop-front':SellerShopPhotoPage(session:session,api:api),
    'seller-phone-otp':SellerPhonePage(session:session,phone:'+27712345678',pendingStore:PendingSmsStore(store:onboardingFixtures.TestPhoneStore())),
    'seller-in-app-selfie':SellerSelfieCameraPage(session:session,cameraFactory:()=>PreviewSelfieCamera()),
    'seller-notifications':SellerNotificationsPage(session:session,api:api),

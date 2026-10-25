@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),catalogue=require('./catalogue');
+const {saveUpload}=require('./upload-storage');
 const actions=new Set(['seller_onboarding','seller_identity_submit','seller_onboarding_complete','seller_identity_read','seller_phone_session']);
 function phone(value){
  let n=String(value||'').replace(/[\s()-]/g,'');
@@ -51,11 +52,11 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    return {uid,token:await createPhoneToken(uid)};
   }
   if(action==='seller_onboarding'){
-   const [saved,id,selfie,shop,user]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
-    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid)]);
+   const [saved,id,selfie,shop,user,front]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
+    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid)]);
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
-    phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
+    shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
     publicationStatus:shop?.sellerUid===uid?shop.status:'not_listed'};
@@ -69,7 +70,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    const [encrypted,detailsEncrypted]=await Promise.all([encryptSelfie(jpeg),encryptSelfie(Buffer.from(JSON.stringify(values)))]);
    // Track every attempt before upload, including interrupted or replaced evidence.
    await doc('teyzaVerificationPhotos/'+evidenceId).set({ownerUid:uid,objectPath,expiresAt:stamp+90*86400000});
-   await bucket.file(objectPath).save(encrypted,{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
+   await saveUpload(bucket,objectPath,encrypted,{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
    await db.runTransaction(async tx=>{
     const idRef=doc('teyzaSellerIdentity/'+uid),setupRef=doc('teyzaSellerOnboarding/'+uid),shopRef=doc('teyzaPublicShops/'+uid),selfieRef=doc('teyzaMobileVerification/'+uid);
     const [old,setup,shop,selfie]=await Promise.all([tx.get(idRef),tx.get(setupRef),tx.get(shopRef),tx.get(selfieRef)]);
@@ -88,8 +89,8 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    await rate(uid,'complete',12,3600000);
    const user=await getAuthUser(uid);checkedPhone(user,account.phone);
    return db.runTransaction(async tx=>{
-    const refs=['teyzaSellerAccounts/','teyzaSellerIdentity/','teyzaMobileVerification/','teyzaSellerOnboarding/','teyzaPublicShops/','teyzaShopSettings/'].map(p=>doc(p+uid));
-    const [a,i,v,o,s,c,drafts]=await Promise.all([...refs.map(r=>tx.get(r)),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201))]);
+    const refs=['teyzaSellerAccounts/','teyzaSellerIdentity/','teyzaMobileVerification/','teyzaSellerOnboarding/','teyzaPublicShops/','teyzaShopSettings/','teyzaShopFrontPhotos/'].map(p=>doc(p+uid));
+    const [a,i,v,o,s,c,f,drafts]=await Promise.all([...refs.map(r=>tx.get(r)),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201))]);
     const owner=D.seller(a.exists?a.data():null,uid),id=i.exists?i.data():null,selfie=v.exists?v.data():null,setup=o.exists?o.data():{},shop=s.exists?s.data():null,settings=c.exists?c.data():{};
     const verifiedPhone=checkedPhone(user,owner.phone);
     if(setup.moderationBlocked||owner.approvalStatus==='rejected'||['rejected','needs_new_photo'].includes(selfie?.status))D.fail(409,'Your registration needs an administrator’s review before selling can resume.');
@@ -105,6 +106,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
      deliveryFeeCents:settings.deliveryFeeCents||0,deliveryRadiusKm:settings.deliveryRadiusKm||0,
      services:{cashback:settings.cashback===true,cardPayments:settings.cardPayments===true,payAndCollect:settings.pickupEnabled!==false,liveChat:settings.liveChatEnabled!==false},
      ...(settings.hours?{hours:settings.hours}:{}),updatedAt:clock()};
+    if(f.exists&&f.data().ownerUid===uid&&f.data().photoId)next.photoUrl=require('./shop-front').publicUrl(uid,f.data().photoId);
     Object.assign(next,catalogue.range(uid,next,drafts.docs.map(r=>({id:r.id,data:r.data()}))));
     tx.set(refs[4],next);
     tx.set(refs[3],{requiredVersion:2,legalType:id.legalType,sellingStatus:'active',identityEvidenceId:id.evidenceId,
