@@ -13,6 +13,7 @@ on:
 env:
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
+  TEYZA_ANDROID_TEST_KEYSTORE_PATH: ${{ github.workspace }}/.teyza-android-test-signing/debug.keystore
 
 permissions:
   contents: read
@@ -23,6 +24,9 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Test Android certificate registration helper without live credentials
+        shell: pwsh
+        run: ./tools/android-test-registration/test-register.ps1
       - name: Check PHP discovery endpoints
         run: |
           php -l api/shopper-discover.php
@@ -196,16 +200,41 @@ jobs:
           name: teyza-places-r36-deploy-kit
           path: TEYZA_PLACES_R36_DEPLOY_KIT.zip
           retention-days: 14
-      - name: Keep the Android test signing identity stable across test builds
-        uses: actions/cache@v4
+      - name: Restore the explicit Android test signing key
+        id: test-key
+        uses: actions/cache/restore@v4
         with:
-          path: ~/.android/debug.keystore
-          key: teyza-android-test-signing-v1
-      - name: Build shopper debug APK
-        working-directory: apps/teyza_shopper
-        env:
-          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
-        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
+          key: teyza-android-test-signing-v2
+      - name: Configure the same test key for both APKs
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$TEYZA_ANDROID_TEST_KEYSTORE_PATH")"
+          if [ ! -f "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" ]; then
+            keytool -genkeypair -keystore "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" -storepass android -keypass android -alias androiddebug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Teyza Test,C=ZA" -noprompt
+          fi
+          test -s "$TEYZA_ANDROID_TEST_KEYSTORE_PATH"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('apps/teyza_shopper/android/app/build.gradle.kts')
+          with p.open('a') as file:
+              file.write('''
+          android {
+              signingConfigs.getByName("debug") {
+                  storeFile = file(System.getenv("TEYZA_ANDROID_TEST_KEYSTORE_PATH"))
+                  storePassword = "android"
+                  keyAlias = "androiddebug"
+                  keyPassword = "android"
+              }
+          }
+          ''')
+          PY
+      - name: Preserve the key before building so a failed compile cannot rotate it
+        if: steps.test-key.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
+          key: teyza-android-test-signing-v2
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
         env:
@@ -223,6 +252,11 @@ jobs:
             apps/teyza_shopper/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             apps/teyza_shopper/build/app/outputs/flutter-apk/test-signing-fingerprints.json
           retention-days: 14
+      - name: Build shopper debug APK
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+        run: flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
       - name: Upload APK for real-device testing
         if: success()
         uses: actions/upload-artifact@v4

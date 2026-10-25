@@ -52,8 +52,20 @@ deleted after reading. The working ID/passport/company document picker is retain
    selected products as a shopper.
 5. Test background/resume and an account change while camera/OTP work is pending.
 
-The test APK must retain the certificate registered by the activation kit. Verify
-its exported fingerprints against R3.13 before distribution. Store releases need
+The APK inspection found that the old CI cache targeted a nonexistent default
+keystore path, so the R3.13 test key was not retained. The APK workflow now uses
+an explicit test-keystore file for both APKs and saves it before compilation.
+The replacement test certificate must be registered once using the provided
+`REGISTER-TEST-APK.ps1` and its exact public fingerprint JSON. That helper adds
+only the missing SHA-1/SHA-256 values to the activated Android app; it preserves
+existing certificates and changes no services, secrets or rules.
+
+Android cannot install an APK over a build signed with the old test key. Save
+any locally unsubmitted work first, then uninstall the old test APK if Android
+requests it. Submitted documents, products and shop details remain in Firebase;
+sign in with the same account after installing the replacement.
+
+Store releases need
 the actual Play/App Store signing and device checks. iOS native identity and URL
 scheme are configured; APNs, distribution credentials and physical-device OTP
 acceptance are still required.
