@@ -1,0 +1,57 @@
+name: Teyza app seller approval admin
+
+on:
+  pull_request:
+    paths:
+      - 'web/teyza-admin/**'
+      - 'tools/admin-release/**'
+      - 'scripts/package_teyza_admin.py'
+      - 'docs/TEYZA_R316_ADMIN_APPROVALS.md'
+      - '.github/workflows/teyza-admin-approvals.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/admin-release/package-lock.json
+      - name: Install pinned deployment and browser tooling
+        working-directory: tools/admin-release
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate admin modules, Hosting preservation and reviewer role handling
+        working-directory: tools/admin-release
+        run: |
+          npm test
+          node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-app-admin.js
+          node -e "const {Client}=require('firebase-tools/lib/apiv2');const {requireAuth}=require('firebase-tools/lib/requireAuth');const {getGlobalDefaultAccount}=require('firebase-tools/lib/auth');if(typeof Client!=='function'||typeof requireAuth!=='function'||typeof getGlobalDefaultAccount!=='function')throw Error('Firebase CLI adapter changed');"
+      - name: Run browser approval, privacy, session and phone layout scenarios
+        working-directory: tools/admin-release
+        env:
+          TEYZA_ADMIN_TEST_OUTPUT: ${{ github.workspace }}/admin-previews
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser
+      - name: Parse PowerShell activation helpers
+        shell: pwsh
+        run: |
+          foreach ($file in @('DEPLOY-ADMIN.ps1','GRANT-ADMIN.ps1','ROLLBACK-ADMIN.ps1')) {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path "$pwd/tools/admin-release" $file),[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Package scoped admin activation kit
+        run: python3 scripts/package_teyza_admin.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-admin-r316-activation-kit
+          path: TEYZA_ADMIN_R316_ACTIVATION_KIT.zip
+          retention-days: 30
