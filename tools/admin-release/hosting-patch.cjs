@@ -27,7 +27,7 @@ function servingConfig(original){
 }
 async function allFiles(client,version){
  const rows=new Map();let token;
- do{const result=await client.hosting('GET','/'+version+'/files',undefined,{pageSize:1000,...(token?{pageToken:token}:{})});
+ do{const result=await client.hosting('GET','/'+version+'/files',undefined,{status:'ACTIVE',pageSize:1000,...(token?{pageToken:token}:{})});
   for(const f of result.files||[])rows.set(f.path,f.hash);token=result.nextPageToken;
  }while(token);return rows;
 }

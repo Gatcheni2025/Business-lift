@@ -16,6 +16,7 @@ function setup(options={}){
   if(uri.endsWith('/channels/live/releases')){live=query.versionName;return {name:'release/new'};}
   const name=uri.slice(1).replace(/\/files$|:populateFiles$/,'');const version=versions.get(name);assert(version,'Unknown fake route '+uri);
   if(uri.endsWith('/files')){
+   assert.equal(query.status,'ACTIVE','Preservation checks must list uploaded files, not only remaining uploads');
    const files=[...version.files].map(([path,hash])=>({path,hash,status:'ACTIVE'}));
    if(options.dropFile&&name===next)return {files:files.filter(f=>f.path!=='/shops.html')};return {files};
   }
