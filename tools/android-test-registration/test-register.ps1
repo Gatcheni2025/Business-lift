@@ -31,6 +31,7 @@ try {
   $failed = $false
   try { & (Join-Path $fixture 'REGISTER-TEST-APK.ps1') } catch { $failed = $true }
   if (-not $failed) { throw 'Permission failure incorrectly passed.' }
+  $global:LASTEXITCODE = 0
   Write-Host 'Android certificate helper: correct native identity, both fingerprints, idempotent retries and permission failure passed with mocked Firebase commands.'
 } finally {
   Remove-Item $fixture -Recurse -Force
