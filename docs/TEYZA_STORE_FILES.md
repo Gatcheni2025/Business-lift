@@ -28,6 +28,49 @@ Variables: https://github.com/Gatcheni2025/Business-lift/settings/variables/acti
 
 ## Set signing credentials from Windows
 
+### First Teyza release — create the Android upload key
+
+First-release status has been confirmed. Download the updated setup kit, extract
+it, open PowerShell in that folder and run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\FIRST-ANDROID-RELEASE.ps1
+```
+
+GitHub CLI is already authenticated as `Gatcheni2025`. The helper also needs
+Java `keytool` (a JDK or Android Studio supplies it) and the existing Firebase CLI
+login for `business-lift-3c19c`. If Java is unavailable it stops before creating
+or uploading a key. If Firebase asks for authentication, run `firebase login`
+and rerun the same helper.
+
+Choose and confirm your own password when prompted. Nothing is displayed while
+typing. The helper creates **`%USERPROFILE%\Teyza-Signing\teyza-upload.jks`**, alias
+`teyza-upload`, with RSA 4096 and 10,000-day validity. It sends the four Android
+signing settings directly to GitHub Secrets; no production private key is created
+inside ChatGPT or included in this download. Keep a private backup of the local
+keystore and password. A retry opens the existing key and never regenerates it.
+An unrelated pre-existing repository key blocks creation until its backup is
+located. Failed network/configuration steps leave the local keystore available.
+
+The helper registers the public upload-certificate SHA-1/SHA-256 against the
+existing Teyza Android Firebase app and reads its SDK configuration to obtain
+the unique Web OAuth client. It preserves existing certificate hashes, native
+registrations, rules, data, secrets and deployments. It also saves the iOS OAuth
+client when available from the matching existing iOS SDK configuration. If no
+unique Web OAuth client is returned, enable Google in Firebase Authentication's
+Sign-in method and rerun; it does not guess an ID or recreate the Firebase app.
+
+After Android setup it automatically requests a rerun of the latest signed
+store-file workflow. Android can build while Apple signing is still incomplete.
+This is a build request, not a Play Store submission. When the first AAB is
+enrolled in Google Play App Signing, also register the **Google Play app-signing
+certificate's SHA-1 and SHA-256** in the same Firebase Android app. Google Play
+signs distributed installs with that certificate; the upload certificate used
+by the direct APK remains registered as well.
+
+### Existing signing files / Apple setup
+
 The optional `SET-STORE-SIGNING.ps1` helper uses GitHub CLI, asks for passwords
 securely, and sends private values directly to GitHub Secrets through stdin.
 Run it only on your own computer with your existing Teyza signing files. The
