@@ -1,0 +1,18 @@
+{
+  "name": "teyza-admin-release",
+  "version": "3.16.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test hosting.test.cjs reviewer.test.cjs ../../web/teyza-admin/model.test.mjs",
+    "test:browser": "node browser.test.cjs"
+  },
+  "dependencies": {
+    "firebase-tools": "15.30.2"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

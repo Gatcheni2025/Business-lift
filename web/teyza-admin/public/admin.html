@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en-ZA"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#010F1C">
+<meta name="teyza-admin-release" content="R316">
+<title>Seller approvals · Teyza Admin</title>
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R316">
+</head><body>
+<header class="topbar"><a href="/" class="brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="128" height="48"><span>Admin workspace</span></a>
+<div class="account"><span id="accountEmail">Secure seller review</span><button id="signOut" class="button quiet" hidden>Sign out</button></div></header>
+<main class="shell">
+ <div class="page-heading"><div><span class="eyebrow">TEYZA OPERATIONS</span><h1>Good shops. Trusted owners.</h1><p>Review the people behind your local shops.</p></div><span class="secure-tag">Authorised administrators</span></div>
+ <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+ <section id="loginPanel" class="login-panel">
+  <div class="login-intro"><span class="eyebrow">SELLER APPROVALS</span><h2>A little care.<br>A trusted marketplace.</h2><p>Sign in to review seller registrations, inspect private verification photos and give owners a clear next step.</p><div class="intro-foot">Spaza shops &nbsp;·&nbsp; Retail &nbsp;·&nbsp; Wholesale</div></div>
+  <div class="login-form"><h2 id="loginTitle">Welcome back</h2><p id="loginHint">Use your authorised administrator account.</p>
+   <button id="googleLogin" class="button google" type="button"><span aria-hidden="true">G</span> Continue with Google</button><div class="divider">or continue with email</div>
+   <form id="emailLogin"><label>Email address<input id="email" type="email" autocomplete="username" required placeholder="you@teyza.co.za"></label>
+    <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+    <button id="loginButton" class="button primary full" type="submit">Sign in to review sellers <span aria-hidden="true">→</span></button></form>
+   <p class="footnote">Administrator access is assigned by the Teyza project owner. Seller accounts cannot approve shops.</p>
+  </div>
+ </section>
+ <section id="workspace" hidden>
+  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Seller approvals</h2></div><div class="session"><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet">Renew session</button></div></div>
+  <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
+  <div class="review-layout">
+   <section class="panel queue-panel" aria-labelledby="queueTitle"><div class="panel-heading"><div><h3 id="queueTitle">Waiting for your review</h3><p>New and resubmitted owner photos.</p></div><button id="refreshQueue" class="button quiet small">Refresh</button></div>
+    <label class="search-label" for="search">Find a loaded seller<input id="search" type="search" placeholder="Shop, owner, phone or area"></label>
+    <label class="category-label" for="category">Shop category<select id="category"><option value="all">All shop types</option><option value="spaza">Spaza shops</option><option value="retail">Other retail / wholesale</option></select></label>
+    <p id="queueHint" class="footnote"></p><div id="sellerList" class="seller-list" aria-live="polite"></div><button id="loadMore" class="button quiet full" hidden>Load more sellers</button>
+   </section>
+   <section class="panel detail-panel" aria-labelledby="sellerTitle"><div id="emptyDetail" class="empty-detail"><div class="empty-mark" aria-hidden="true">✓</div><h3>Select a seller</h3><p>Open a shop to review its registration<br>and private verification photos.</p></div>
+    <div id="sellerDetail" hidden><div class="detail-heading"><div><span class="eyebrow" id="sellerCategory">SHOP REGISTRATION</span><h2 id="sellerTitle"></h2><p id="submittedAt"></p></div><span class="status-pill" id="sellerStatus">Awaiting review</span></div>
+     <dl class="seller-facts"><div><dt>Owner email</dt><dd id="sellerEmail"></dd></div><div><dt>Mobile number</dt><dd id="sellerPhone"></dd></div><div><dt>Shop address</dt><dd id="sellerAddress"></dd></div><div><dt>Registration</dt><dd id="sellerCompany"></dd></div></dl>
+     <div id="selfReview" class="notice warning" hidden>Another administrator must review your own shop.</div>
+     <div class="section-title"><h3>Owner verification</h3><span>Private evidence</span></div><p class="evidence-note">Open the current document and selfie, then compare the owner's details. Photos are shown only in this review session.</p>
+     <div class="evidence-buttons"><button id="viewIdentity" class="evidence-button"><span class="step">01</span><span><strong id="identityLabel">ID / passport</strong><small id="identityState">Open document</small></span><span aria-hidden="true">↗</span></button><button id="viewSelfie" class="evidence-button"><span class="step">02</span><span><strong>Owner selfie</strong><small id="selfieState">Open photo</small></span><span aria-hidden="true">↗</span></button></div>
+     <div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
+     <dl id="identityDetails" class="identity-details" hidden></dl>
+     <div class="review-decision"><h3>Your review</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
+      <label>Review note<textarea id="reason" rows="3" maxlength="400" placeholder="Explain any changes the seller needs to make."></textarea></label>
+      <p id="decisionHint" class="footnote">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
+      <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
+      <p class="footnote">Approval adds the verified owner badge. Completed registration controls selling access.</p>
+     </div>
+    </div>
+   </section>
+  </div>
+ </section>
+ <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin R3.16</small></footer>
+</main><script type="module" src="/js/teyza-app-admin.js?v=R316"></script></body></html>
