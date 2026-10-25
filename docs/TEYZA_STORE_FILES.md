@@ -45,8 +45,8 @@ or uploading a key. Install Java with `winget install Microsoft.OpenJDK.21`,
 then reopen PowerShell and retry the helper. If Firebase asks for authentication, run `firebase login`
 and rerun the same helper.
 
-Choose and confirm your own password when prompted. Nothing is displayed while
-typing. The helper creates **`%USERPROFILE%\Teyza-Signing\teyza-upload.jks`**, alias
+Choose and confirm your own password when prompted; its text stays hidden. The
+helper creates **`%USERPROFILE%\Teyza-Signing\teyza-upload.jks`**, alias
 `teyza-upload`, with RSA 4096 and 10,000-day validity. It sends the four Android
 signing settings directly to GitHub Secrets; no production private key is created
 inside ChatGPT or included in this download. Keep a private backup of the local

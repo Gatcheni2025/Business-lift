@@ -75,7 +75,7 @@ jobs:
           retention-days: 30
 
   build:
-    needs: configuration
+    needs: [configuration, windows_first_release]
     if: needs.configuration.outputs.platforms != 'none'
     uses: ./.github/workflows/teyza-mobile-release.yml
     with:
