@@ -15,6 +15,19 @@ on:
         description: 'Use the existing Android upload key and Apple distribution credentials'
         type: boolean
         default: false
+      platforms:
+        description: 'Platforms to prepare'
+        type: choice
+        options: [all, android, ios]
+        default: all
+  workflow_call:
+    inputs:
+      signed_release:
+        type: boolean
+        default: false
+      platforms:
+        type: string
+        default: all
 
 permissions:
   contents: read
@@ -30,7 +43,7 @@ env:
   TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
   TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
-  SIGNING_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'signed' || 'unsigned' }}
+  SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
 
 jobs:
   checks:
@@ -78,6 +91,7 @@ jobs:
       - name: Verify shared product catalogue and photo assets
         run: |
           python3 scripts/verify_teyza_catalogue.py
+          python3 scripts/test_teyza_store_files.py
           python3 apps/teyza_shopper/scripts/test_prepare_mobile_release.py
       - name: Test activation helper without live credentials
         shell: pwsh
@@ -104,6 +118,7 @@ jobs:
         run: flutter test
 
   android:
+    if: inputs.platforms != 'ios'
     needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -155,6 +170,12 @@ jobs:
             jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab > build/release/signature.txt
             grep -q 'jar verified' build/release/signature.txt
           fi
+      - name: Build and verify a production-key APK alongside the signed AAB
+        if: env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
         with:
@@ -168,6 +189,7 @@ jobs:
         run: rm -f "$TEYZA_ANDROID_KEYSTORE_PATH"
 
   ios:
+    if: inputs.platforms != 'android'
     needs: checks
     runs-on: macos-latest
     timeout-minutes: 40
