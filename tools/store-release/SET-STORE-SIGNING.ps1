@@ -26,7 +26,12 @@ function Set-TeyzaSecret([string]$Name,[string]$Value) {
   $start.Arguments = 'secret set ' + $Name + ' --repo ' + $TeyzaRepository
   $start.UseShellExecute = $false
   $start.RedirectStandardInput = $true
-  $process = [Diagnostics.Process]::Start($start)
+  $utf8 = New-Object Text.UTF8Encoding($false)
+  $restoreEncoding = $null
+  if ($start.PSObject.Properties['StandardInputEncoding']) { $start.StandardInputEncoding = $utf8 }
+  else { $restoreEncoding = [Console]::InputEncoding; [Console]::InputEncoding = $utf8 }
+  try { $process = [Diagnostics.Process]::Start($start) }
+  finally { if ($restoreEncoding) { [Console]::InputEncoding = $restoreEncoding } }
   try {
     $process.StandardInput.Write($Value)
     $process.StandardInput.Close()

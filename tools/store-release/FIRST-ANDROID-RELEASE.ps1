@@ -42,16 +42,18 @@ function Send-TeyzaSecret([string]$Name,[string]$Value) {
   $start.Arguments = 'secret set ' + $Name + ' --repo ' + $script:TeyzaRepository
   $start.UseShellExecute = $false
   $start.RedirectStandardInput = $true
-  $process = [Diagnostics.Process]::Start($start)
-  $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+  $utf8 = New-Object Text.UTF8Encoding($false)
+  $restoreEncoding = $null
+  if ($start.PSObject.Properties['StandardInputEncoding']) { $start.StandardInputEncoding = $utf8 }
+  else { $restoreEncoding = [Console]::InputEncoding; [Console]::InputEncoding = $utf8 }
+  try { $process = [Diagnostics.Process]::Start($start) }
+  finally { if ($restoreEncoding) { [Console]::InputEncoding = $restoreEncoding } }
   try {
-    $inputStream = $process.StandardInput.BaseStream
-    $inputStream.Write($bytes,0,$bytes.Length)
-    $inputStream.Flush()
-    $inputStream.Close()
+    $process.StandardInput.Write($Value)
+    $process.StandardInput.Close()
     $process.WaitForExit()
     if ($process.ExitCode -ne 0) { throw ('Could not save ' + $Name + '. Your local upload key remains available; rerun this helper to resume.') }
-  } finally { [Array]::Clear($bytes,0,$bytes.Length); $process.Dispose() }
+  } finally { $process.Dispose() }
 }
 function Send-TeyzaVariable([string]$Name,[string]$Value) {
   & gh variable set $Name --repo $script:TeyzaRepository --body $Value

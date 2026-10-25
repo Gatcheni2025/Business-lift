@@ -143,7 +143,7 @@ public class TeyzaStdinFixture {
     & $script:OriginalSecretFunction 'TEYZA_FIXTURE_ONLY' $fixtureValue
     $actual = [BitConverter]::ToString([IO.File]::ReadAllBytes($env:TEYZA_FIXTURE_STDIN))
     $expected = [BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes($fixtureValue))
-    Assert-Teyza ($actual -ceq $expected) 'Secret stdin was changed by encoding, BOM or a newline.'
+    Assert-Teyza ($actual -ceq $expected) ('Synthetic stdin bytes differed; actual='+$actual+' expected='+$expected)
     Assert-Teyza (-not ([IO.File]::ReadAllText($env:TEYZA_FIXTURE_ARGS)).Contains($fixtureValue)) 'A secret value appeared in process arguments.'
     Write-Host 'PASS: Windows PowerShell sends exact UTF-8 secret stdin without argument exposure.'
   }
