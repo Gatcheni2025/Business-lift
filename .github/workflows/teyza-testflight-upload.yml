@@ -1,0 +1,90 @@
+name: Upload signed Teyza IPA to TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Successful signed Teyza store-files run'
+        required: true
+        default: '40283985950'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: teyza-testflight-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.repository == 'Gatcheni2025/Business-lift' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check upload credentials are configured
+        env:
+          ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if any(not os.environ.get(k) for k in ('ASC_KEY_ID','ASC_ISSUER_ID','ASC_PRIVATE_KEY')):
+              raise SystemExit('Run Teyza Apple upload credentials in asiye_app before uploading.')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-signed
+          path: ${{ runner.temp }}/teyza-artifact
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify the IPA belongs to Teyza
+        run: |
+          python3 - <<'PY'
+          import os, plistlib, zipfile
+          from pathlib import Path
+          packages=list((Path(os.environ['RUNNER_TEMP'])/'teyza-artifact').rglob('*.ipa'))
+          if len(packages)!=1: raise SystemExit('Expected exactly one signed IPA.')
+          path=packages[0]
+          with zipfile.ZipFile(path) as z:
+              names=[n for n in z.namelist() if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/')==2]
+              if len(names)!=1: raise SystemExit('Expected one root iOS application.')
+              info=plistlib.loads(z.read(names[0]))
+          if info.get('CFBundleIdentifier')!='za.co.teyza.shopper': raise SystemExit('IPA belongs to a different app; upload stopped.')
+          if '\n' in str(path): raise SystemExit('Unexpected IPA path.')
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('TEYZA_IPA='+str(path)+'\n')
+          print('Verified Teyza IPA:', info['CFBundleShortVersionString'], 'build',info['CFBundleVersion'])
+          PY
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - name: Install Apple uploader
+        run: gem install fastlane --no-document
+      - name: Upload to TestFlight without submitting for review
+        env:
+          ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_OPT_OUT_USAGE: '1'
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'teyza-asc.json'
+          p.write_text(json.dumps({'key_id':os.environ['ASC_KEY_ID'].strip(),
+              'issuer_id':os.environ['ASC_ISSUER_ID'].strip(),
+              'key':os.environ['ASC_PRIVATE_KEY'],'in_house':False}))
+          p.chmod(0o600)
+          PY
+          fastlane pilot upload --api_key_path "$RUNNER_TEMP/teyza-asc.json" --ipa "$TEYZA_IPA" --app_identifier za.co.teyza.shopper --apple_id 6827037733 --skip_waiting_for_build_processing true
+      - name: Remove temporary upload material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/teyza-asc.json"
+          rm -rf "$RUNNER_TEMP/teyza-artifact"
