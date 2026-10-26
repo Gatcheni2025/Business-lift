@@ -1,4 +1,6 @@
 import importlib.util
+import base64
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -29,6 +31,8 @@ class NativePermissionTests(unittest.TestCase):
             activity=root.find('application/activity')
             self.assertNotIn(key+'taskAffinity',activity.attrib)
             self.assertEqual(activity.get(key+'launchMode'),'singleTop')
+            self.assertEqual(activity.get(key+'name'),'za.co.teyza.teyza_shopper.MainActivity')
+            self.assertIn('applicationId = "za.co.teyza.shopper"',gradle.read_text())
             values=ET.parse(prepare.ROOT/'android/app/src/main/res/values/teyza_firebase.xml').getroot()
             self.assertEqual({v.get('name'):v.text for v in values}['google_app_id'],'1:983479810697:android:aabbcc')
     def test_ios_push_and_camera_configuration_precedes_app_launch(self):
@@ -48,6 +52,26 @@ class NativePermissionTests(unittest.TestCase):
         with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':'1:983479810697:web:aabbcc'}):
             with self.assertRaises(SystemExit):prepare.native_app_id('android')
 
+    def test_signed_sdk_requires_matching_project_package_and_app(self):
+        app_id='1:983479810697:android:aabbcc'
+        config={'project_info':{'project_id':'business-lift-3c19c'},'client':[{'client_info':{
+          'mobilesdk_app_id':app_id,'android_client_info':{'package_name':'za.co.teyza.shopper'}}}]}
+        encode=lambda:base64.b64encode(json.dumps(config).encode()).decode()
+        with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':app_id}):
+            self.assertEqual(prepare.validate_android_sdk(encode()),app_id)
+            config['client'][0]['client_info']['android_client_info']['package_name']='za.co.teyza.teyza_shopper'
+            with self.assertRaises(SystemExit):prepare.validate_android_sdk(encode())
+            config['client'][0]['client_info']['android_client_info']['package_name']='za.co.teyza.shopper'
+            config['client'][0]['client_info']['mobilesdk_app_id']='1:983479810697:android:deadbeef'
+            with self.assertRaises(SystemExit):prepare.validate_android_sdk(encode())
+            config['client'][0]['client_info']['mobilesdk_app_id']=app_id
+            config['project_info']['project_id']='another-project'
+            with self.assertRaises(SystemExit):prepare.validate_android_sdk(encode())
+
+    def test_signed_android_without_sdk_stops_before_changing_files(self):
+        with patch.dict(os.environ,{'TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64':''}):
+            with self.assertRaises(SystemExit):prepare.android('signed')
+
     def test_activated_native_identities_are_available_without_ci_variables(self):
         with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':'','TEYZA_FIREBASE_IOS_APP_ID':''}):
             self.assertEqual(prepare.native_app_id('android'),'1:983479810697:android:14f449587f5787f6db2458')
@@ -55,3 +79,4 @@ class NativePermissionTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
