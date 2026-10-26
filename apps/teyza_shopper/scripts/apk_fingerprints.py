@@ -32,7 +32,8 @@ def certificate(data):
     raise SystemExit('No verified v2/v3 signing certificate found')
 cert=certificate(apk.read_bytes())
 values={'sha1':hashlib.sha1(cert).hexdigest().upper(),'sha256':hashlib.sha256(cert).hexdigest().upper()}
-values.update({'applicationId':'za.co.teyza.teyza_shopper','signing':'android-test-only',
+values.update({'applicationId':'za.co.teyza.shopper','signing':'android-test-only',
     'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'sourceCommit':os.environ.get('GITHUB_SHA','')})
 (apk.parent/'test-signing-fingerprints.json').write_text(json.dumps(values,indent=2)+'\n')
 print('Public Android test-certificate fingerprints exported.')
+
