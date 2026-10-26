@@ -13,7 +13,7 @@ ROOT=Path(__file__).resolve().parents[1]/'apps/teyza_shopper'
 def validate(badging,signature,bundle_certificate,version):
     app=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
     name,build=version.split('+')
-    if not app or app.groups()!=('za.co.teyza.teyza_shopper',build,name):raise ValueError('APK identity or version differs from the Teyza release.')
+    if not app or app.groups()!=('za.co.teyza.shopper',build,name):raise ValueError('APK identity or version differs from the Teyza release.')
     target=re.search(r"targetSdkVersion:'(\d+)'",badging)
     if not target or int(target[1])<36:raise ValueError('The store APK must target Android API 36 or higher.')
     # Build Tools 37 names certificates by signature scheme ("V2 Signer:")
@@ -60,3 +60,4 @@ def main():
     print('Verified production APK and AAB: same Teyza version, application ID and upload-key certificate.')
 
 if __name__=='__main__':main()
+
