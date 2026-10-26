@@ -128,6 +128,7 @@ jobs:
       TEYZA_ANDROID_STORE_PASSWORD: ${{ secrets.TEYZA_ANDROID_STORE_PASSWORD }}
       TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
       TEYZA_ANDROID_KEY_PASSWORD: ${{ secrets.TEYZA_ANDROID_KEY_PASSWORD }}
+      TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -274,3 +275,4 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/teyza-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/teyza.p12" "$RUNNER_TEMP/teyza.mobileprovision" "$RUNNER_TEMP/teyza-profile.plist"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
+
