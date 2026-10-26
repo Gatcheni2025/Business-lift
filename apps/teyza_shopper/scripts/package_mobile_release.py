@@ -47,7 +47,7 @@ if platform == 'android':
         if 'Android Debug' in certificate:
             raise SystemExit('A debug certificate cannot be used as a Play upload key.')
         manifest['certificate'] = certificate
-    manifest['applicationId'] = 'za.co.teyza.teyza_shopper'
+    manifest['applicationId'] = 'za.co.teyza.shopper'
     target = out/('teyza-'+version.replace('+','-')+'-'+mode+'.aab')
     shutil.copy2(source, target)
 else:
@@ -73,3 +73,4 @@ manifest['sha256'] = {file.name:hashlib.sha256(file.read_bytes()).hexdigest()
 guide = root/'../../docs/TEYZA_R38_MOBILE_RELEASE.md'
 shutil.copy2(guide, out/'README-RELEASE.md')
 print(platform+' '+version+' '+mode+' release artifact prepared.')
+

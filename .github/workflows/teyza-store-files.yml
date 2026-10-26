@@ -1,0 +1,103 @@
+name: Teyza signed Play Store and App Store files
+
+on:
+  push:
+    branches: ['release/teyza-store-files']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teyza-signed-store-files
+  cancel-in-progress: true
+
+jobs:
+  windows_first_release:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify first-key creation and private stdin in Windows PowerShell
+        shell: powershell
+        run: ./tools/store-release/test-first-release.ps1
+      - name: Test Play package registration without live credentials
+        shell: powershell
+        run: ./tools/store-release/test-play-package.ps1
+
+  configuration:
+    runs-on: ubuntu-24.04
+    outputs:
+      platforms: ${{ steps.settings.outputs.platforms }}
+      complete: ${{ steps.settings.outputs.complete }}
+    env:
+      TEYZA_ANDROID_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_KEYSTORE_BASE64 }}
+      TEYZA_ANDROID_STORE_PASSWORD: ${{ secrets.TEYZA_ANDROID_STORE_PASSWORD }}
+      TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
+      TEYZA_ANDROID_KEY_PASSWORD: ${{ secrets.TEYZA_ANDROID_KEY_PASSWORD }}
+      TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+      TEYZA_IOS_CERTIFICATE_BASE64: ${{ secrets.TEYZA_IOS_CERTIFICATE_BASE64 }}
+      TEYZA_IOS_CERTIFICATE_PASSWORD: ${{ secrets.TEYZA_IOS_CERTIFICATE_PASSWORD }}
+      TEYZA_IOS_PROFILE_BASE64: ${{ secrets.TEYZA_IOS_PROFILE_BASE64 }}
+      TEYZA_IOS_KEYCHAIN_PASSWORD: ${{ secrets.TEYZA_IOS_KEYCHAIN_PASSWORD }}
+      TEYZA_APPLE_TEAM_ID: ${{ vars.TEYZA_APPLE_TEAM_ID }}
+      TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+      TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test production packaging and configuration diagnostics
+        run: python3 scripts/test_teyza_store_files.py
+      - name: Parse local signing-settings helper
+        shell: pwsh
+        run: |
+          $tokens=$null; $errors=$null
+          foreach ($file in @('SET-STORE-SIGNING.ps1','FIRST-ANDROID-RELEASE.ps1','test-first-release.ps1','CONNECT-PLAY-PACKAGE.ps1','test-play-package.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile("$pwd/tools/store-release/$file",[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Test first-release key generation and safe resume without live credentials
+        shell: pwsh
+        run: ./tools/store-release/test-first-release.ps1
+      - name: Test Play package registration without live credentials
+        shell: pwsh
+        run: ./tools/store-release/test-play-package.ps1
+      - name: Check signing and OAuth settings without exposing values
+        id: settings
+        run: python3 scripts/teyza_store_configuration.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-store-signing-configuration
+          path: teyza-store-configuration.json
+          retention-days: 30
+      - name: Package signing setup helper
+        run: python3 scripts/package_teyza_store_setup.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-store-signing-setup
+          path: TEYZA_STORE_SIGNING_SETUP.zip
+          retention-days: 30
+
+  build:
+    needs: [configuration, windows_first_release]
+    if: needs.configuration.outputs.platforms != 'none'
+    uses: ./.github/workflows/teyza-mobile-release.yml
+    with:
+      signed_release: true
+      platforms: ${{ needs.configuration.outputs.platforms }}
+    secrets: inherit
+
+  missing_settings:
+    needs: [configuration, build]
+    if: always() && needs.configuration.result == 'success' && needs.configuration.outputs.complete != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require remaining store configuration
+        run: |
+          echo 'Store files are blocked for one or both platforms. Open the configuration job summary for the exact missing setting names.'
+          echo 'Add them in Settings > Secrets and variables > Actions, then re-run all jobs. Any configured platform can build independently.'
+          exit 1
+

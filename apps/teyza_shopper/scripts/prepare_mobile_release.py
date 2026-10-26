@@ -1,5 +1,6 @@
 """Configure generated Flutter wrappers without committing signing credentials."""
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -8,7 +9,8 @@ import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-ANDROID_ID = "za.co.teyza.teyza_shopper"
+ANDROID_ID = "za.co.teyza.shopper"
+ANDROID_TEMPLATE_ID = "za.co.teyza.teyza_shopper"
 IOS_ID = os.environ.get("TEYZA_IOS_BUNDLE_ID") or "za.co.teyza.shopper"
 FIREBASE_API_KEY = "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U"
 NATIVE_CONFIG = ROOT / "assets/config/firebase_native.json"
@@ -27,6 +29,11 @@ def native_app_id(platform):
 
 
 def android(signing):
+    if signing == 'signed':
+        encoded = os.environ.get('TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64', '')
+        if not encoded:
+            raise SystemExit('Run CONNECT-PLAY-PACKAGE.ps1 before signing: the Play package needs its matching Firebase registration.')
+        validate_android_sdk(encoded)
     path = ROOT / "android/app/src/main/AndroidManifest.xml"
     ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
     tree = ET.parse(path)
@@ -41,6 +48,10 @@ def android(signing):
                  if a.get(key + "name", "").endswith("MainActivity")), None)
     if main is None:
         raise SystemExit("Cannot locate the Android activity for Firebase browser return.")
+    # Keep the generated Kotlin namespace; explicitly address its activity while
+    # the installed applicationId follows the existing Play Console app.
+    if main.get(key + 'name') == '.MainActivity':
+        main.set(key + 'name', ANDROID_TEMPLATE_ID + '.MainActivity')
     # Flutter's empty task affinity separates the browser callback activity from
     # the app's task. Firebase's SDK must receive its own reCAPTCHA intent and
     # return to the same Flutter activity; do not intercept that URI in Dart.
@@ -65,8 +76,10 @@ def android(signing):
         ET.ElementTree(resources).write(config, encoding="utf-8", xml_declaration=True)
     gradle = ROOT / "android/app/build.gradle.kts"
     source = gradle.read_text()
-    if 'applicationId = "' + ANDROID_ID + '"' not in source:
-        raise SystemExit("Unexpected Android application ID; preserve the existing Play identity.")
+    expected = re.findall(r'applicationId\s*=\s*"([^"]+)"', source)
+    if len(expected) != 1 or expected[0] not in (ANDROID_TEMPLATE_ID, ANDROID_ID):
+        raise SystemExit("Unexpected generated Android application ID.")
+    source = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "' + ANDROID_ID + '"', source)
     source = source.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(24, flutter.minSdkVersion)")
     if signing != "test":
         replacement = "signingConfig = null // Unsigned preparation bundle; never a debug upload key."
@@ -93,6 +106,23 @@ def android(signing):
             raise SystemExit("Expected one Flutter template signing entry; refusing an ambiguous release.")
     gradle.write_text(source)
     print("Android identity:", ANDROID_ID, "| signing:", signing)
+
+
+def validate_android_sdk(encoded):
+    try:
+        sdk = json.loads(base64.b64decode(encoded, validate=True))
+    except (ValueError, TypeError):
+        raise SystemExit('Invalid saved Android Firebase SDK configuration.')
+    if sdk.get('project_info', {}).get('project_id') != 'business-lift-3c19c':
+        raise SystemExit('Android Firebase SDK belongs to another project.')
+    clients = [c for c in sdk.get('client', []) if
+               c.get('client_info', {}).get('android_client_info', {}).get('package_name') == ANDROID_ID]
+    if len(clients) != 1:
+        raise SystemExit('Android Firebase SDK does not match za.co.teyza.shopper.')
+    app_id = clients[0]['client_info'].get('mobilesdk_app_id')
+    if not app_id or app_id != native_app_id('android'):
+        raise SystemExit('Android Firebase app ID and saved SDK configuration differ. Run CONNECT-PLAY-PACKAGE.ps1.')
+    return app_id
 
 
 def ios():
@@ -179,3 +209,4 @@ if __name__ == "__main__":
         android(args.signing)
     else:
         ios()
+
