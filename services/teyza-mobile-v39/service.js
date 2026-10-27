@@ -7,6 +7,7 @@ const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
+const mandate=require('./mandate');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,clock=Date.now}) {
   const doc = path => db.doc(path);
@@ -65,6 +66,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
+  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
   const adminOperations=operations.createOperations({db,clock,rate});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
@@ -93,6 +95,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);

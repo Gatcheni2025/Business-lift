@@ -25,7 +25,8 @@ function createOperations({db,clock=Date.now,rate}){
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
    const [billing,books,setup,verification]=await Promise.all([read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),read('teyzaMobileVerification/'+target)]);
-   return {seller:{sellerUid:target,shopName:account.shopName,ownerEmail:account.ownerEmail||'',phone:account.phone||'',address:account.address||'',approvalStatus:account.approvalStatus},billing:billing||{status:'not_started',monthlyCents:PRICE},...books,verification:{status:verification?.status||'not_submitted',phoneVerified:!!setup?.verifiedPhone,completed:!!setup?.completedAt}};
+   const mandate=require('./mandate').publicMandate(await read('teyzaSellerMandates/'+target));
+   return {mandate,seller:{sellerUid:target,shopName:account.shopName,ownerEmail:account.ownerEmail||'',phone:account.phone||'',address:account.address||'',approvalStatus:account.approvalStatus},billing:billing||{status:'not_started',monthlyCents:PRICE},...books,verification:{status:verification?.status||'not_submitted',phoneVerified:!!setup?.verifiedPhone,completed:!!setup?.completedAt}};
   }
   if(action==='ops_invoice'){
    const target=D.id(data.sellerUid),month=period(data.period),consent=D.text(data.consentReference,'seller subscription consent reference',180);

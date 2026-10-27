@@ -16,6 +16,7 @@ import 'seller_registration.dart';
 import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
 import 'seller_premium.dart';
+import 'seller_mandate.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -32,6 +33,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   SellerFirestore? api;
   String? loadedUid,error,draftError,accessReference;
   bool loading=false,busy=false,productsView=false;
+  String? mandatePromptUid;
+  Future<void> openMandate() async {
+    if(shop==null)return;
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerMandatePage(session:widget.session,api:widget.mobileApi,phone:shop!.phone)));
+  }
+  Future<void> promptMandate(String uid) async {
+    if(!liveUpdates||shop==null||mandatePromptUid==uid)return;mandatePromptUid=uid;
+    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();}catch(_){/* The membership form remains available from My business. */}
+  }
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
@@ -85,11 +95,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
+      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
-        loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
+        mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
       });
       return;
     }
@@ -123,6 +133,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         draftError=nextDraftError;accessReference=nextReference;
       });
       if(mounted&&widget.session.userId==uid){refreshActivity();startActivity();
+        if(widget.initialTarget==null&&nextShop?.hasRegisteredCategory==true)WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)promptMandate(uid);});
         if(widget.initialTarget!=null&&!openedInitial&&nextShop!=null){openedInitial=true;
           WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)openDestination(widget.initialTarget!);});}}
     }catch(e){
@@ -354,6 +365,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
           const SizedBox(height:16),
+          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
