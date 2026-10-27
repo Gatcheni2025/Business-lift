@@ -16,6 +16,7 @@ import 'seller_registration.dart';
 import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
 import 'seller_premium.dart';
+import 'seller_mandate.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -32,6 +33,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   SellerFirestore? api;
   String? loadedUid,error,draftError,accessReference;
   bool loading=false,busy=false,productsView=false;
+  String? mandatePromptUid;
+  Future<void> openMandate() async {
+    if(shop==null)return;
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerMandatePage(session:widget.session,api:widget.mobileApi,phone:shop!.phone)));
+  }
+  Future<void> promptMandate(String uid) async {
+    if(!liveUpdates||shop==null||mandatePromptUid==uid)return;mandatePromptUid=uid;
+    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();}catch(_){/* The membership form remains available from My business. */}
+  }
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
@@ -85,11 +95,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
+      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
-        loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
+        mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;
       });
       return;
     }
@@ -123,6 +133,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         draftError=nextDraftError;accessReference=nextReference;
       });
       if(mounted&&widget.session.userId==uid){refreshActivity();startActivity();
+        if(widget.initialTarget==null&&nextShop?.hasRegisteredCategory==true)WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)promptMandate(uid);});
         if(widget.initialTarget!=null&&!openedInitial&&nextShop!=null){openedInitial=true;
           WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)openDestination(widget.initialTarget!);});}}
     }catch(e){
@@ -319,7 +330,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       backgroundColor:sellerCanvas,
       appBar:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,title:Text(productsView?'Shop setup & products':'My business'),
         leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
-        actions:[if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
+        actions:[if(shop!=null)IconButton(tooltip:'Membership & mandate',onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined)),if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -365,6 +376,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
+          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),
