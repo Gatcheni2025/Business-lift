@@ -330,7 +330,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       backgroundColor:sellerCanvas,
       appBar:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,title:Text(productsView?'Shop setup & products':'My business'),
         leading:productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
-        actions:[if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
+        actions:[if(shop!=null)IconButton(tooltip:'Membership & mandate',onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined)),if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -365,7 +365,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
           const SizedBox(height:16),
-          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
@@ -377,6 +376,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
+          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),
