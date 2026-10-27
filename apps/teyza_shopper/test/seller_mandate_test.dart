@@ -13,13 +13,13 @@ class MandateApi extends TeyzaMobileApi {
  }
 }
 Finder field(String label)=>find.byWidgetPredicate((w)=>w is TextField&&w.decoration?.labelText==label);
-Future<void> fill(WidgetTester t,String label,String value) async {final f=field(label);await t.ensureVisible(f);await t.enterText(f,value);await t.pumpAndSettle();}
+Future<void> fill(WidgetTester t,String label,String value) async {final f=field(label);await t.ensureVisible(f);await t.pumpAndSettle();await t.enterText(f,value);await t.pumpAndSettle();}
 void main(){
  testWidgets('Bank selection fills the branch code while the personal account number stays empty',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
   final bank=find.byType(DropdownButtonFormField<String>).at(1);
-  await t.ensureVisible(bank);await t.tap(bank);await t.pumpAndSettle();await t.tap(find.text('FNB').last);await t.pumpAndSettle();
+  await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
   expect(t.widget<TextField>(field('Branch code (filled when bank is selected)')).controller!.text,'250655');
   expect(t.widget<TextField>(field('Account number')).controller!.text,isEmpty);
   await fixtures.visibleTap(t,find.text('Sign & submit R99 mandate'));expect(api.submissions,isEmpty);
@@ -29,7 +29,7 @@ void main(){
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
   for(final entry in {'Name':'Test','Surname':'Owner','Phone number':'0712345678','ID / passport number':'9001015009087','Account holder / authorised signatory':'Test Owner'}.entries){await fill(t,entry.key,entry.value);}
-  final bank=find.byType(DropdownButtonFormField<String>).at(1);await t.ensureVisible(bank);await t.tap(bank);await t.pumpAndSettle();await t.tap(find.text('FNB').last);await t.pumpAndSettle();
+  final bank=find.byType(DropdownButtonFormField<String>).at(1);await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
   await fill(t,'Account number','12345678901');
   await fixtures.visibleTap(t,find.text('Choose first collection date'));await t.pumpAndSettle();await t.tap(find.text('OK'));await t.pumpAndSettle();
   await fixtures.visibleTap(t,find.text('I consent to Teyza processing this private ID/passport for owner verification.'));
