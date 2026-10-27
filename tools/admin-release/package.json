@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test hosting.test.cjs reviewer.test.cjs ../../web/teyza-admin/model.test.mjs",
+    "test": "node --test hosting.test.cjs reviewer.test.cjs ../../web/teyza-admin/model.test.mjs ../../web/teyza-admin/operations.test.mjs",
     "test:browser": "node browser.test.cjs"
   },
   "dependencies": {

@@ -28,7 +28,7 @@ for p in PUBLIC.glob('*.html'):
  assert not any(s in text for s in ['data-open-register','landing-auth.js','<form','auth=register']),p.name
  for u in page.links:
   route=urlsplit(u)
-  if u.startswith('/') and route.path!='/':assert (PUBLIC/route.path.lstrip('/')).exists() or route.path in ['/privacy.html','/terms.html','/data-deletion.html'],(p.name,u)
+  if u.startswith('/') and route.path!='/':assert (PUBLIC/route.path.lstrip('/')).exists() or route.path in ['/privacy.html','/terms.html','/data-deletion.html','/admin'],(p.name,u)
   if 'apps.apple.com' in u:raise AssertionError('Unreleased Apple listing is linked')
  if p.name=='index.html':
   assert page.schemas and 'aggregateRating' not in text

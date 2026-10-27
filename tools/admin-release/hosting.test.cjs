@@ -48,10 +48,10 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,10);
+ const files=overlay(root);assert.equal(files.size,15);
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R316"'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R317"'));
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
 });

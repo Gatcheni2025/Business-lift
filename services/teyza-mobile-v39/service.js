@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
+const operations=require('./operations');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,clock=Date.now}) {
   const doc = path => db.doc(path);
@@ -64,6 +65,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
+  const adminOperations=operations.createOperations({db,clock,rate});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
@@ -91,6 +93,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))

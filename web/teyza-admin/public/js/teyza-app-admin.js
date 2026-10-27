@@ -1,16 +1,19 @@
-import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R316';
-import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R316';
+import {createOperations} from '/js/teyza-operations.js?v=R317';
+import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R317';
+import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R317';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
   reauthenticateWithPopup,reauthenticateWithCredential,signOut,setPersistence,browserSessionPersistence}
   from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 
 const $=id=>document.getElementById(id),state=new ReviewState();
 const api=createApi({user:()=>auth.currentUser});
+const operations=createOperations({api,onError:failed});
 let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false;
 const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto'];
 function notice(message,kind=''){ $('notice').textContent=message;$('notice').className='notice '+kind;$('notice').hidden=false; }
 function set(id,value){$(id).textContent=value||'Not supplied';}
 function clearPhoto(){
+  $('photoDialog').close();$('largePhoto').removeAttribute('src');
   $('evidenceImage').onload=null;$('evidenceImage').onerror=null;
   $('evidenceImage').hidden=true;$('evidenceImage').removeAttribute('src');
   if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;
@@ -20,7 +23,7 @@ function clearPhoto(){
 function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;updateControls();}
 function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('reason').value='';}
 function lock(message,kind='error'){
-  state.clear();busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
+  operations.clear();state.clear();busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
   $('workspace').hidden=true;$('loginPanel').hidden=false;
   renewing=Boolean(activeUser);$('email').value=activeUser?.email||'';$('email').readOnly=renewing;
   set('loginTitle',renewing?'Renew your review session':'Welcome back');
@@ -144,7 +147,7 @@ async function authorise(user){
     if(!Number.isFinite(time)||time>Date.now()+60000||expiresAt<=Date.now()){
       lock('Sign in again before reviewing sellers. Each private review session lasts five minutes.','warning');return;}
     authorised=true;renewing=false;$('loginPanel').hidden=true;$('workspace').hidden=false;
-    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();
+    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();if(authorised)await operations.load();
   }catch(error){if(state.current(ticket))failed(error);}
 }
 async function login(event,google=false){
@@ -166,6 +169,8 @@ async function login(event,google=false){
     'auth/user-mismatch':'Renew with the same administrator account, or sign out to switch accounts.'})[error.code];notice(message||error.message||'Sign-in could not be completed.','error');}
   finally{$('password').value='';$('loginButton').disabled=false;$('googleLogin').disabled=false;}
 }
+$('enlargePhoto').addEventListener('click',()=>{if(!authorised||!objectUrl||$('evidenceImage').hidden)return;$('largePhoto').src=objectUrl;$('photoDialog').showModal();});
+$('closePhoto').addEventListener('click',()=>{$('photoDialog').close();$('largePhoto').removeAttribute('src');});
 $('emailLogin').addEventListener('submit',login);$('googleLogin').addEventListener('click',()=>login(null,true));
 $('signOut').addEventListener('click',async()=>{lock();await signOut(auth).catch(failed);});
 $('renewSession').addEventListener('click',()=>lock('Sign in again to renew your review session.','warning'));
@@ -175,14 +180,15 @@ $('viewIdentity').addEventListener('click',()=>viewEvidence('identity'));$('view
 $('reviewConfirmed').addEventListener('change',updateControls);
 $('approveSeller').addEventListener('click',()=>decide('approved'));$('rejectSeller').addEventListener('click',()=>decide('rejected'));
 $('requestPhoto').addEventListener('click',()=>decide('needs_new_photo'));
-document.addEventListener('visibilitychange',()=>{if(document.hidden){state.generation++;busy=false;clearViews();}});
-window.addEventListener('pagehide',()=>{state.generation++;clearViews();});
+document.addEventListener('teyza-admin-view-change',clearViews);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){state.generation++;busy=false;clearViews();operations.hideSensitive();}});
+window.addEventListener('pagehide',()=>{state.generation++;clearViews();operations.clear();});
 setInterval(()=>{if(!authorised)return;const remaining=Math.max(0,Math.ceil((expiresAt-Date.now())/1000));
   if(!remaining){lock('Your private review session expired. Sign in again to continue.','warning');return;}
   set('sessionTime',`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')} remaining`);updateControls();},1000);
 try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your browser could not save this sign-in session. Allow site storage for teyza.co.za.','warning');}
 onAuthStateChanged(auth,user=>{
-  activeUser=user;state.account(user?.uid||null);busy=false;authorised=false;resetDetails();
+  operations.clear();activeUser=user;state.account(user?.uid||null);busy=false;authorised=false;resetDetails();
   if(user)authorise(user);else{renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
     $('email').readOnly=false;set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator account.');}
 });

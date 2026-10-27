@@ -1,4 +1,4 @@
-name: Teyza app seller approval admin
+name: Teyza operations admin R317
 
 on:
   pull_request:
@@ -6,6 +6,10 @@ on:
       - 'web/teyza-admin/**'
       - 'tools/admin-release/**'
       - 'scripts/package_teyza_admin.py'
+      - 'scripts/package_operations_admin.py'
+      - 'services/teyza-mobile-v39/**'
+      - 'DEPLOY-OPERATIONS.ps1'
+      - 'docs/TEYZA_R317_OPERATIONS.md'
       - 'docs/TEYZA_R316_ADMIN_APPROVALS.md'
       - '.github/workflows/teyza-admin-approvals.yml'
   workflow_dispatch:
@@ -49,9 +53,25 @@ jobs:
             if ($errors.Count -gt 0) { throw ($errors | Out-String) }
           }
       - name: Package scoped admin activation kit
-        run: python3 scripts/package_teyza_admin.py
+        run: python3 scripts/package_operations_admin.py
       - uses: actions/upload-artifact@v4
         with:
-          name: teyza-admin-r316-activation-kit
-          path: TEYZA_ADMIN_R316_ACTIVATION_KIT.zip
+          name: teyza-admin-r317-operations-kit
+          path: TEYZA_ADMIN_R317_OPERATIONS_KIT.zip
           retention-days: 30
+
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix services/teyza-mobile-v39 --no-audit --no-fund
+      - run: npm test --prefix services/teyza-mobile-v39
+      - name: Check operations deployment command
+        shell: pwsh
+        run: |
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-OPERATIONS.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
