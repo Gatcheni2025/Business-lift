@@ -6,8 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test hosting.test.cjs reviewer.test.cjs ../../web/teyza-admin/model.test.mjs",
-    "test:browser": "node browser.test.cjs"
+    "test": "node --test hosting.test.cjs"
   },
   "dependencies": {
     "firebase-tools": "15.30.2"

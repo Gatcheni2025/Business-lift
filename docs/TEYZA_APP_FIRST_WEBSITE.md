@@ -26,4 +26,6 @@ Verify ownership of teyza.co.za in Google Search Console and Bing Webmaster Tool
 
 ## Checks
 
+The legacy full-site package now includes nested image assets, validates root-relative asset URLs and installs its missing favicon dependencies in CI. The existing public Firebase client config remains included, while its server authentication helper remains excluded.
+
 `node --test tools/app-first-release/hosting.test.cjs` covers file preservation, route/config preservation, publication ordering, rollback, upload failure, wrong domain and concurrent-release rejection. `python3 scripts/check_app_first_website.py` checks local links/assets, metadata, JSON-LD, sitemap and app-only registration.
