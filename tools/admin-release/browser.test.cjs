@@ -63,7 +63,7 @@ async function main(){
   });
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
-  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Approvals & images',exact:true});if(await nav.isVisible())await nav.click();}
+  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Approvals & images',exact:true});await nav.waitFor({state:'visible'});await nav.click();}
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
@@ -82,6 +82,7 @@ async function main(){
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-login-phone.png'),fullPage:true});
    await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();
+   await f.page.getByRole('button',{name:'Approvals & images',exact:true}).click();
    await f.page.locator('.seller-row').first().waitFor();assert.equal(await f.page.locator('#password').inputValue(),'');assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Current ID and selfie, explicit confirmation and exact backend approval payload',async()=>{
