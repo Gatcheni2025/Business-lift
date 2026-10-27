@@ -62,6 +62,12 @@ jobs:
           grep -q 'teyza-sprout-wordmark-light.svg' assets/workspace.js
           grep -q 'seller-debit-order' api/workspace.php
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install favicon rendering dependencies
+        run: python3 -m pip install Pillow==11.3.0 CairoSVG==2.8.2
+
       - name: Build verified full public website ZIP
         run: python3 scripts/build_teyza_full_site.py
 
@@ -76,7 +82,7 @@ jobs:
           unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'assets/workspace.js'
           unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'js/guard.js'
           unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'api/workspace.php'
-          ! unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -q '^js/firebase-config.js$'
+          unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -qx 'js/firebase-config.js'
           ! unzip -Z1 dist/TEYZA_FULL_WEBSITE_R3_READY_TO_EXTRACT.zip | grep -q '^api/teyza-firebase-verify.php$'
 
       - name: Upload full site — extract directly in live document root

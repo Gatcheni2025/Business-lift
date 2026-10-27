@@ -1,0 +1,41 @@
+name: Teyza app-first website checks and deployment kit
+on:
+  push:
+    branches: [feature/teyza-app-first-website]
+  pull_request:
+    paths: ['web/app-first/**', 'tools/app-first-release/**', 'scripts/*app_first_website.py', '.github/workflows/teyza-app-first-website.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check_and_package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/check_app_first_website.py
+      - run: node --test tools/app-first-release/hosting.test.cjs
+      - run: node --check tools/app-first-release/run.cjs
+      - run: python3 scripts/package_app_first_website.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-APP-FIRST-WEBSITE
+          path: dist/TEYZA_APP_FIRST_WEBSITE_20261027.zip
+          if-no-files-found: error
+  powershell:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse deployment and rollback commands
+        shell: powershell
+        run: |
+          foreach ($file in @('DEPLOY-WEBSITE.ps1','ROLLBACK-WEBSITE.ps1')) {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile("$pwd/tools/app-first-release/$file",[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }

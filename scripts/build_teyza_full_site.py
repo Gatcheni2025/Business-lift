@@ -27,7 +27,7 @@ EXCLUDE = {
 SKIP = ("uploads/", "private_html/", "node_modules/", ".git/", "apps/", ".github/")
 MANAGED = (
     "Every top-level .html page",
-    "All assets/* shared CSS, SVG and frontend assets",
+    "All assets/** shared CSS, SVG and frontend assets",
     "All js/*.js including required public Firebase client configuration",
     "A classic favicon.ico generated from the same growing-Y SVG",
     "All api/*.php except existing server authentication helper",
@@ -38,7 +38,7 @@ def public_paths() -> list[Path]:
     candidates.extend(ROOT.glob("*.html"))
     candidates.extend(ROOT.glob("*.php"))
     for directory, pattern in [("assets", "*"), ("js", "*.js"), ("api", "*.php")]:
-        candidates.extend(p for p in (ROOT / directory).glob(pattern) if p.is_file())
+        candidates.extend(p for p in ((ROOT / directory).rglob(pattern) if directory == "assets" else (ROOT / directory).glob(pattern)) if p.is_file())
     candidates.extend([ROOT / "robots.txt", ROOT / "sitemap.xml"])
     return sorted({p.relative_to(ROOT) for p in candidates if p.exists()
         and p.relative_to(ROOT).as_posix() not in EXCLUDE
@@ -88,8 +88,8 @@ def checked_pages(entries: dict[str,bytes]) -> None:
     for name, body in entries.items():
         if not name.endswith(".html"): continue
         source = body.decode()
-        for link in re.findall(r'(?:href|src)\s*=\s*["\']((?:assets|js)/[^"\']+)["\']', source):
-            resource = urlsplit(link).path
+        for link in re.findall(r'(?:href|src)\s*=\s*["\'](/?(?:assets|js)/[^"\']+)["\']', source):
+            resource = urlsplit(link).path.lstrip("/")
             if resource in EXCLUDE: continue
             if resource not in entries:
                 raise SystemExit(f"Missing referenced asset in {name}: {resource}")
