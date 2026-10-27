@@ -7,8 +7,8 @@ async function main(){
  if(['grant','revoke'].includes(action)&&!/^[A-Za-z0-9_-]{1,128}$/.test(uid||''))throw new Error('Supply the exact Firebase administrator UID.');
  if(action==='deploy'){
   const r=await fetch('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000)});
-  const health=await r.json();if(!r.ok||health.adminReview!==true||health.verificationUploads!==true||health.sellerOnboarding!==true)
-   throw new Error('The existing mobile seller review and upload service is not ready. Deploy R3.15 first.');
+  const health=await r.json();if(!r.ok||health.adminOperations!==true||health.adminReview!==true||health.verificationUploads!==true||health.sellerOnboarding!==true)
+   throw new Error('The existing mobile seller review and upload service is not ready. Deploy the included R3.17 operations backend first.');
  }
  const client=await connect(),backupPath=path.resolve(__dirname,'../../hosting-backup-R316.json');
  if(action==='deploy')await patch({client,root:path.resolve(__dirname,'../../public'),backupPath});

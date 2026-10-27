@@ -51,6 +51,10 @@ async function main(){
    const body=route.request().postDataJSON();calls.push(body);
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
+   if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
+   if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[]};
+   if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
+   if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
    if(body.action==='admin_seller_queue')result={ok:true,sellers:body.data.after?[{...rows[0],sellerUid:'last',shopName:'Last Page Shop'}]:pending,next:pagination&&!body.data.after?'retail1':null};
    if(body.action==='seller_identity_read')result={ok:true,imageBase64:jpeg,details:{legalType:'individual',kind:'id',documentNumber:'SYNTHETIC-TEST'}};
    if(body.action==='verification_read')result={ok:true,imageBase64:jpeg};
@@ -59,10 +63,19 @@ async function main(){
   });
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
+  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Approvals & images',exact:true});if(await nav.isVisible())await nav.click();}
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   await f.page.getByRole('button',{name:'R99 billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('R99 monthly subscription',{exact:true}).waitFor();
+   assert(await f.page.getByRole('button',{name:'Print / save PDF',exact:true}).isVisible());
+   await f.page.getByRole('button',{name:'Support',exact:true}).click();await f.page.getByText('Log a received support request',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
+   assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
+  });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
    await f.page.screenshot({path:path.join(output,'admin-login-desktop.png'),fullPage:true});

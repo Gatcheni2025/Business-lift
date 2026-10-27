@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {cents,statementRows} from './public/js/teyza-operations-model.mjs';
+test('Rand input is converted exactly and rejects malformed or fractional-cent entries',()=>{assert.equal(cents('99'),9900);assert.equal(cents('99.50'),9950);for(const v of ['0','-2','99.999','1e3','NaN','1,000','<script>'])assert.throws(()=>cents(v));});
+test('Statement descriptions are plain cell values, never interpolated as HTML',()=>{const rows=statementRows([{createdAt:1000,description:'<img onerror=alert(1)>',debitCents:9900,balanceCents:9900}]);assert.equal(rows[0][1],'<img onerror=alert(1)>');assert.equal(rows[0].length,7);});

@@ -2,14 +2,14 @@
 <html lang="en-ZA"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#010F1C">
-<meta name="teyza-admin-release" content="R316">
-<title>Seller approvals · Teyza Admin</title>
-<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R316">
+<meta name="teyza-admin-release" content="R317">
+<title>Operations · Teyza Admin</title>
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R317">
 </head><body>
 <header class="topbar"><a href="/" class="brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="128" height="48"><span>Admin workspace</span></a>
 <div class="account"><span id="accountEmail">Secure seller review</span><button id="signOut" class="button quiet" hidden>Sign out</button></div></header>
 <main class="shell">
- <div class="page-heading"><div><span class="eyebrow">TEYZA OPERATIONS</span><h1>Good shops. Trusted owners.</h1><p>Review the people behind your local shops.</p></div><span class="secure-tag">Authorised administrators</span></div>
+ <div class="page-heading"><div><span class="eyebrow">TEYZA OPERATIONS</span><h1>Your marketplace. Connected.</h1><p>Seller approvals, accounts and support — one operations workspace.</p></div><span class="secure-tag">Authorised administrators</span></div>
  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
  <section id="loginPanel" class="login-panel">
   <div class="login-intro"><span class="eyebrow">SELLER APPROVALS</span><h2>A little care.<br>A trusted marketplace.</h2><p>Sign in to review seller registrations, inspect private verification photos and give owners a clear next step.</p><div class="intro-foot">Spaza shops &nbsp;·&nbsp; Retail &nbsp;·&nbsp; Wholesale</div></div>
@@ -22,6 +22,8 @@
   </div>
  </section>
  <section id="workspace" hidden>
+<nav class="admin-nav" aria-label="Admin workspaces"><button type="button" data-admin-view="overview">Overview</button><button type="button" data-admin-view="sellers">Sellers</button><button type="button" data-admin-view="approvals">Approvals & images</button><button type="button" data-admin-view="billing">R99 billing</button><button type="button" data-admin-view="support">Support</button><button type="button" data-admin-view="finance">Stock finance</button></nav>
+<div id="operationsPanel"></div><div id="approvalView" hidden>
   <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Seller approvals</h2></div><div class="session"><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet">Renew session</button></div></div>
   <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
   <div class="review-layout">
@@ -36,7 +38,7 @@
      <div id="selfReview" class="notice warning" hidden>Another administrator must review your own shop.</div>
      <div class="section-title"><h3>Owner verification</h3><span>Private evidence</span></div><p class="evidence-note">Open the current document and selfie, then compare the owner's details. Photos are shown only in this review session.</p>
      <div class="evidence-buttons"><button id="viewIdentity" class="evidence-button"><span class="step">01</span><span><strong id="identityLabel">ID / passport</strong><small id="identityState">Open document</small></span><span aria-hidden="true">↗</span></button><button id="viewSelfie" class="evidence-button"><span class="step">02</span><span><strong>Owner selfie</strong><small id="selfieState">Open photo</small></span><span aria-hidden="true">↗</span></button></div>
-     <div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
+     <button type="button" id="enlargePhoto" class="button quiet">Enlarge current image</button><div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
      <dl id="identityDetails" class="identity-details" hidden></dl>
      <div class="review-decision"><h3>Your review</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
       <label>Review note<textarea id="reason" rows="3" maxlength="400" placeholder="Explain any changes the seller needs to make."></textarea></label>
@@ -47,6 +49,6 @@
     </div>
    </section>
   </div>
- </section>
- <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin R3.16</small></footer>
-</main><script type="module" src="/js/teyza-app-admin.js?v=R316"></script></body></html>
+ </div></section>
+ <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin R3.17</small></footer>
+</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R317"></script></body></html>

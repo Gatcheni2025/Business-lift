@@ -49,7 +49,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true});return;
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
