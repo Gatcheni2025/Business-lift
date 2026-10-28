@@ -96,6 +96,16 @@ class _AccountState extends State<ShopperAccountPanel> {
     finally{if(mounted)setState(()=>working=false);}
   }
 
+  Future<void> facebookLogin() async {
+    setState((){working=true;status=null;failure=false;});
+    try {
+      await widget.session.signInWithFacebook();if(!mounted)return;
+      if(widget.session.idToken!=null){if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}}
+      else{setState(()=>status='Facebook sign-in cancelled.');}
+    }catch(error){if(mounted)setState((){status=authMessage(error);failure=true;});}
+    finally{if(mounted)setState(()=>working=false);}
+  }
+
   Future<void> reset() async {
     if (!email.text.contains('@')) {
       setState(() {status='Enter your email above first.';failure=true;}); return;
@@ -304,6 +314,10 @@ class _AccountState extends State<ShopperAccountPanel> {
               const SizedBox(height:12),SizedBox(width:double.infinity,child:FilledButton.icon(
                 style:FilledButton.styleFrom(backgroundColor:Colors.black,foregroundColor:Colors.white),
                 onPressed:working?null:appleLogin,icon:const Icon(Icons.apple),label:const Text('Continue with Apple'))),
+            ],
+            if(widget.session.facebookSignInAvailable)...[
+              const SizedBox(height:12),SizedBox(width:double.infinity,child:OutlinedButton.icon(
+                onPressed:working?null:facebookLogin,icon:const Icon(Icons.facebook),label:const Text('Continue with Facebook'))),
             ],
             const SizedBox(height:7),
             if(ownerMode&&!registering)

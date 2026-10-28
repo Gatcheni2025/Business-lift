@@ -11,6 +11,8 @@ on:
   workflow_dispatch:
 
 env:
+  TEYZA_FACEBOOK_APP_ID: ${{ vars.TEYZA_FACEBOOK_APP_ID }}
+  TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
   TEYZA_ANDROID_TEST_KEYSTORE_PATH: ${{ github.workspace }}/.teyza-android-test-signing/debug.keystore
@@ -156,6 +158,10 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate Android wrapper for shopper
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
@@ -240,6 +246,9 @@ jobs:
         env:
           TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+      - name: Check built APK advertising permissions
+        working-directory: apps/teyza_shopper
+        run: python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/*.apk
       - name: Export verified public Android fingerprints for Firebase Phone Auth
         working-directory: apps/teyza_shopper
         run: python3 scripts/apk_fingerprints.py

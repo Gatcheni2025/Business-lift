@@ -26,6 +26,8 @@ class NativePermissionTests(unittest.TestCase):
             permissions={p.get(key+'name') for p in root.findall('uses-permission')}
             self.assertIn('android.permission.CAMERA',permissions);self.assertIn('android.permission.POST_NOTIFICATIONS',permissions)
             self.assertEqual(root.find('uses-feature').get(key+'required'),'false')
+            removed={p.get(key+'name') for p in root.findall('uses-permission') if p.get('{http://schemas.android.com/tools}node')=='remove'}
+            self.assertEqual(removed,{'com.google.android.gms.permission.AD_ID','android.permission.ACCESS_ADSERVICES_AD_ID','android.permission.ACCESS_ADSERVICES_ATTRIBUTION','android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE','android.permission.ACCESS_ADSERVICES_TOPICS'})
             metadata={p.get(key+'name'):p.get(key+'value') for p in root.find('application').findall('meta-data')}
             self.assertEqual(metadata['firebase_messaging_auto_init_enabled'],'false')
             activity=root.find('application/activity')

@@ -11,6 +11,10 @@ on:
       - '.github/workflows/teyza-mobile-release.yml'
   workflow_dispatch:
     inputs:
+      upload_existing_ios_run:
+        description: 'Upload the signed IPA from this successful run to Apple; skip rebuilding'
+        type: string
+        default: ''
       signed_release:
         description: 'Use the existing Android upload key and Apple distribution credentials'
         type: boolean
@@ -37,6 +41,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  TEYZA_FACEBOOK_APP_ID: ${{ vars.TEYZA_FACEBOOK_APP_ID }}
+  TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
   APP: apps/teyza_shopper
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
@@ -46,7 +52,41 @@ env:
   SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
 
 jobs:
+  upload_existing_ios:
+    if: github.event_name == 'workflow_dispatch' && inputs.upload_existing_ios_run != ''
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a successful signed build from this release branch
+        uses: actions/github-script@v7
+        env:
+          SOURCE_RUN: ${{ inputs.upload_existing_ios_run }}
+        with:
+          script: |
+            if (!/^\d+$/.test(process.env.SOURCE_RUN)) throw new Error('Source run must be numeric');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: Number(process.env.SOURCE_RUN)});
+            if (run.event !== 'workflow_dispatch' || run.conclusion !== 'success' || run.head_branch !== context.ref.replace('refs/heads/', '') || run.path !== '.github/workflows/teyza-mobile-release.yml') {
+              throw new Error('Source must be a successful manual mobile release from this branch');
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-signed
+          path: apple-upload
+          run-id: ${{ inputs.upload_existing_ios_run }}
+          github-token: ${{ github.token }}
+      - name: Verify IPA and upload to App Store Connect
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 apps/teyza_shopper/scripts/upload_testflight.py apple-upload
+
   checks:
+    if: inputs.upload_existing_ios_run == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -135,6 +175,10 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate Android platform
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
@@ -162,6 +206,9 @@ jobs:
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
         run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+      - name: Verify merged bundle has no advertising permissions
+        working-directory: apps/teyza_shopper
+        run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
       - name: Verify bundle signature and package release evidence
         working-directory: apps/teyza_shopper
         shell: bash
@@ -176,6 +223,7 @@ jobs:
         working-directory: apps/teyza_shopper
         run: |
           flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
@@ -276,3 +324,35 @@ jobs:
           rm -f "$RUNNER_TEMP/teyza.p12" "$RUNNER_TEMP/teyza.mobileprovision" "$RUNNER_TEMP/teyza-profile.plist"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
 
+
+  facebook_contract:
+    if: inputs.upload_existing_ios_run == ''
+    name: Check optional Meta SDK integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Synthetic values only for compilation/tests. This job publishes no app.
+      TEYZA_FACEBOOK_APP_ID: '123456789'
+      TEYZA_FACEBOOK_CLIENT_TOKEN: 'synthetic-client-token'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate and configure both native wrappers with test-only Meta settings
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter create --platforms=android,ios --org za.co.teyza --project-name teyza_shopper .
+          rm -f test/widget_test.dart
+          python3 scripts/prepare_mobile_release.py android --signing test
+          python3 scripts/prepare_mobile_release.py ios
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test test/session_test.dart test/social_auth_test.dart
+          flutter build apk --debug
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk

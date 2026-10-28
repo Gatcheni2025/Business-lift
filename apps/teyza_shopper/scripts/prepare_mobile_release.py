@@ -43,6 +43,21 @@ def android(signing):
         name = "android.permission." + permission
         if not any(p.get(key + "name") == name for p in manifest.findall("uses-permission")):
             ET.SubElement(manifest, "uses-permission", {key + "name": name})
+    # Teyza uses provider login, not advertising identifiers. Remove permissions
+    # contributed by dependencies from the final merged manifest.
+    tools = "{http://schemas.android.com/tools}"
+    ET.register_namespace("tools", "http://schemas.android.com/tools")
+    for name in (
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.ACCESS_ADSERVICES_AD_ID",
+        "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+        "android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE",
+        "android.permission.ACCESS_ADSERVICES_TOPICS",
+    ):
+        for existing in list(manifest.findall("uses-permission")):
+            if existing.get(key + "name") == name:
+                manifest.remove(existing)
+        ET.SubElement(manifest, "uses-permission", {key + "name": name, tools + "node": "remove"})
     manifest.find("application").set(key + "label", "Teyza")
     main = next((a for a in manifest.find("application").findall("activity")
                  if a.get(key + "name", "").endswith("MainActivity")), None)
@@ -210,3 +225,6 @@ if __name__ == "__main__":
     else:
         ios()
 
+
+    from configure_facebook import configure
+    configure(ROOT,args.platform)
