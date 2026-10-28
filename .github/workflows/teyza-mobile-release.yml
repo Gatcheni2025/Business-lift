@@ -11,6 +11,10 @@ on:
       - '.github/workflows/teyza-mobile-release.yml'
   workflow_dispatch:
     inputs:
+      upload_existing_ios_run:
+        description: 'Upload the signed IPA from this successful run to Apple; skip rebuilding'
+        type: string
+        default: ''
       signed_release:
         description: 'Use the existing Android upload key and Apple distribution credentials'
         type: boolean
@@ -48,7 +52,41 @@ env:
   SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
 
 jobs:
+  upload_existing_ios:
+    if: github.event_name == 'workflow_dispatch' && inputs.upload_existing_ios_run != ''
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a successful signed build from this release branch
+        uses: actions/github-script@v7
+        env:
+          SOURCE_RUN: ${{ inputs.upload_existing_ios_run }}
+        with:
+          script: |
+            if (!/^\d+$/.test(process.env.SOURCE_RUN)) throw new Error('Source run must be numeric');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: Number(process.env.SOURCE_RUN)});
+            if (run.event !== 'workflow_dispatch' || run.conclusion !== 'success' || run.head_branch !== context.ref.replace('refs/heads/', '') || run.path !== '.github/workflows/teyza-mobile-release.yml') {
+              throw new Error('Source must be a successful manual mobile release from this branch');
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-signed
+          path: apple-upload
+          run-id: ${{ inputs.upload_existing_ios_run }}
+          github-token: ${{ github.token }}
+      - name: Verify IPA and upload to App Store Connect
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 apps/teyza_shopper/scripts/upload_testflight.py apple-upload
+
   checks:
+    if: inputs.upload_existing_ios_run == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -288,6 +326,7 @@ jobs:
 
 
   facebook_contract:
+    if: inputs.upload_existing_ios_run == ''
     name: Check optional Meta SDK integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
