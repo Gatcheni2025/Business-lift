@@ -45,7 +45,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
-  String? publicationStatus;bool sellingEnabled=false;
+  String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
+  double? shopRating;int ratingCount=0;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
   @override void initState(){
@@ -68,7 +69,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final uid=widget.session.userId;activityLoading=true;
     try{final results=await Future.wait([mobile.call('seller_summary'),widget.session.contactVerified?mobile.call('notification_list'):Future.value(<String,dynamic>{'unread':0})]);
       if(mounted&&uid==widget.session.userId)setState((){unread=(results[1]['unread'] as num? ??0).toInt();
-        publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;
+        publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
+        shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
     }catch(_){/* Account and private products remain usable during service outages. */}
     finally{activityLoading=false;}
@@ -95,7 +97,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;
+      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -363,7 +365,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          SellerShopHero(shop:shop!,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          Card(child:ListTile(leading:const Icon(Icons.star_rounded,color:Color(0xFFB57800)),
+            title:Text(ratingCount>0&&shopRating!=null?'${shopRating!.toStringAsFixed(1)} from $ratingCount shoppers':'No ratings yet'),
+            subtitle:const Text('Ratings from completed Teyza orders. One current rating per shopper.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[

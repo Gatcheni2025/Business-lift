@@ -51,6 +51,9 @@ class Shop {
   final String shopCategory;
   final bool? acceptsCard, cashback;
   final bool sponsored,identityVerified;
+  final bool liveChat;
+  final double? rating;
+  final int ratingCount;
   final List<TradingDay> hours;
   final int deliveryFeeCents;
   List<Product> get rangeProducts=>{
@@ -59,7 +62,7 @@ class Shop {
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',
-    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -78,6 +81,8 @@ class Shop {
     cashback:x['services'] is Map &&
       (x['services'] as Map)['cashback'] is bool
         ?(x['services'] as Map)['cashback'] as bool:null,
+    liveChat:x['services'] is! Map || (x['services'] as Map)['liveChat']!=false,
+    rating:(x['rating'] as num?)?.toDouble(),ratingCount:(x['ratingCount'] as num?)?.toInt()??0,
     identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     highlights:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
@@ -206,6 +211,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   bool _usingGps=false;
   String _currentLocationDetail='';
   bool showAllShops=false;
+  bool allRegistered=false;
   Shop? selected;
   Shop? basketShop;
   OnlineShop? directorySelected;
@@ -542,7 +548,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   List<Shop> get nearbyReal {
     final filtered = live.where((shop) {
-      if (area == null) return true;
+      if (allRegistered || area == null) return true;
       final d = distance(shop);
       if (d != null) return d <= 35;
       final text = (shop.area + ' ' + shop.name).toLowerCase();
@@ -557,6 +563,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   List<OnlineShop> get displayedOnline {
+    if(allRegistered)return [];
     final q=search.toLowerCase().trim();
     final places=online.where((place)=>q.isEmpty ||
       (place.name+' '+place.area+' '+place.address).toLowerCase().contains(q)).toList();
@@ -617,7 +624,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _serviceRow(Icons.account_balance_wallet_outlined,'Cashback',shop.cashback),
       _serviceRow(Icons.local_shipping_outlined,'Delivery',shop.delivery),
       _serviceRow(Icons.shopping_bag_outlined,'Collection',shop.pickup),
+      _serviceRow(Icons.chat_bubble_outline,'Live chat',shop.liveChat),
     ]);
+
+  Widget merchantTrust(Shop shop)=>Wrap(spacing:8,runSpacing:4,children:[
+    if(shop.identityVerified)const Chip(avatar:Icon(Icons.verified,color:green,size:17),label:Text('Teyza verified'))
+    else const Chip(label:Text('Identity review pending')),
+    Chip(avatar:const Icon(Icons.star_rounded,color:Color(0xFFB57800),size:18),
+      label:Text(shop.ratingCount>0&&shop.rating!=null
+        ?'${shop.rating!.toStringAsFixed(1)} (${shop.ratingCount}) · Teyza orders':'No ratings yet')),
+  ]);
 
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
     shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
@@ -975,7 +991,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               Text(entry.name,maxLines:1,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w700)),
               const SizedBox(height:4),
-              if(directory!=null&&(directory.rating!=null||directory.openNow!=null))shopFacts(directory),
+              if(merchant!=null)Text(
+                '${merchant.identityVerified?'✓ Teyza verified':'Identity review pending'} · ${merchant.ratingCount>0&&merchant.rating!=null?'${merchant.rating!.toStringAsFixed(1)} ★ (${merchant.ratingCount})':'No ratings yet'}',
+                maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:10,color:green))
+              else if(directory!=null&&(directory.rating!=null||directory.openNow!=null))shopFacts(directory),
               const SizedBox(height:3),
               Text((d==null?'Nearby':d.toStringAsFixed(1)+' km')+
                 (merchant!=null?' · On Teyza':directory?.origin=='google_places'?' · Google Maps':' · OpenStreetMap'),
@@ -1339,6 +1358,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           ]),
           Text(s.area,maxLines:2,overflow:TextOverflow.ellipsis,
             style:const TextStyle(color:muted,fontSize:11)),
+          merchantTrust(s),
           const SizedBox(height:7),
           Text((s.rangeProducts.isEmpty?'Shop listed on Teyza':s.rangeProducts.length.toString()+' products')+
             (distance(s)!=null?' · '+distance(s)!.toStringAsFixed(1)+' km':''),
@@ -1353,10 +1373,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       padding:const EdgeInsets.all(16),
       itemCount:nearbyListings.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          section(discoveryType=='spaza'?'Nearby spaza shops':'Other retail nearby',
-            subtitle:nearbyListings.length.toString()+' shops · within '+searchRadiusKm.toString()+' km'),
+          FilterChip(label:const Text('Show all Teyza shops'),selected:allRegistered,
+            onSelected:(value)=>setState(()=>allRegistered=value)),
+          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':'Other retail nearby',
+            subtitle:nearbyListings.length.toString()+(allRegistered?' registered shops':' shops · within '+searchRadiusKm.toString()+' km')),
           Row(children:[
-            Expanded(child:Text('Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
+            Expanded(child:Text(allRegistered?'Across South Africa':'Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
             TextButton.icon(onPressed:loadingOnline||area==null?null:() async {
               setState(()=>widerSearch=!widerSearch);await reloadOnline();
             },icon:const Icon(Icons.radar_rounded,size:17),
@@ -1480,7 +1502,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         if(distance(shop)!=null)Text(distance(shop)!.toStringAsFixed(1)+' km away (approx.)',
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
-    if(ShopperChatApi.isTeyzaShop(shop.id))
+    merchantTrust(shop),
+    if(shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id))
       Padding(padding:const EdgeInsets.only(top:12),child:SizedBox(
         width:double.infinity,child:FilledButton.icon(
           icon:const Icon(Icons.chat_bubble_outline),
@@ -1531,7 +1554,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             Text(!p.inStock?'Out of stock':p.priceCents>0?'${p.stock} in stock':'Ask about availability',
               style:TextStyle(color:p.inStock?muted:Colors.deepOrange,fontSize:11)),
             const SizedBox(height:6),SizedBox(width:double.infinity,child:FilledButton(
-              onPressed:canOrder?()=>quantity(p,1):()=>chatWithShop(shop,message:'Hi, is '+p.name+' available?'),
+              onPressed:canOrder?()=>quantity(p,1):shop.liveChat?()=>chatWithShop(shop,message:'Hi, is '+p.name+' available?'):null,
               style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(horizontal:5,vertical:7)),
               child:Text(canOrder?(added==0?'+ Add':'Add more ($added)'):'Ask this shop',maxLines:1,
                 style:const TextStyle(fontSize:12))))
@@ -1896,12 +1919,14 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     fontSize:13,color:green,fontWeight:FontWeight.w900))),
                 ...filteredMerchants.map((shop)=>Card(color:Colors.white,
                   child:ListTile(
-                    leading:CircleAvatar(backgroundColor:const Color(0xFFE4F3EA),
-                      child:Icon(shop.identityVerified?Icons.verified_outlined:Icons.storefront_outlined,color:green)),
+                    leading:ClipRRect(borderRadius:BorderRadius.circular(12),child:
+                      shop.photo.startsWith('https://')?Image.network(shop.photo,width:56,height:56,fit:BoxFit.cover,
+                        errorBuilder:(_,__,___)=>const Icon(Icons.storefront_outlined,color:green)):
+                        const Icon(Icons.storefront_outlined,color:green)),
                     title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
                     subtitle:Text(shop.area+_distanceLabel(
                       _distance(shop.latitude,shop.longitude))+'\n'+
-                      shop.products.length.toString()+' available products',maxLines:3),
+                      (shop.identityVerified?'Teyza verified · ':'')+shop.products.length.toString()+' available products',maxLines:3),
                     isThreeLine:true,
                     trailing:const Icon(Icons.arrow_forward_ios,color:green,size:17),
                     onTap:()=>widget.onOpenMerchant(shop)))),

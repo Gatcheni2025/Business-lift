@@ -8,6 +8,7 @@ const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
 const mandate=require('./mandate');
+const ratings=require('./ratings');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,clock=Date.now}) {
   const doc = path => db.doc(path);
@@ -67,6 +68,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
+  const shopRatings=ratings.createRatings({db,clock,rate});
   const adminOperations=operations.createOperations({db,clock,rate});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
@@ -95,6 +97,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
@@ -115,6 +118,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),read('teyzaPublicShops/'+uid)]);
       return {settings:config||{},publicationStatus:publicShop?.sellerUid===uid?publicShop.status:'not_listed',sellingEnabled:publicShop?.sellerUid===uid&&publicShop.sellingEnabled===true,identityVerified:publicShop?.identityVerified===true,verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
+        rating:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.rating:null,
+        ratingCount:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.ratingCount:0,
         catalogueStatus:catalogue?.status||'not_submitted',photos:photos.docs.map(x=>({id:x.id,url:x.data().url}))};
     }
     if(action==='save_services'||action==='save_hours'||action==='save_restock') {

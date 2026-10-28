@@ -71,6 +71,8 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
       'hours':data['hours'] is List?data['hours']:<dynamic>[],
       'deliveryFeeCents':data['deliveryFeeCents'] is num?data['deliveryFeeCents']:0,
       'sponsored':false,
+      'rating':data['ratingSource']=='teyza_completed_orders'?data['rating']:null,
+      'ratingCount':data['ratingSource']=='teyza_completed_orders'?data['ratingCount']:0,
     });
   }
   return output;
@@ -82,18 +84,30 @@ Future<List<Map<String,dynamic>>> fetchTeyzaPublicDirectory({http.Client? client
   final url=Uri.https('firestore.googleapis.com',
     '/v1/projects/'+teyzaPublicProject+'/databases/(default)/documents:runQuery',
     {'key':teyzaFirebaseApiKey});
-  final body=jsonEncode({'structuredQuery':{
-    'from':[{'collectionId':teyzaPublicCollection}],
-    'where':{'fieldFilter':{'field':{'fieldPath':'status'},'op':'EQUAL',
-      'value':{'stringValue':'active'}}},
-    'limit':200,
-  }});
   try {
-    final response=await remote.post(url,
-      headers:const {'Content-Type':'application/json'},body:body)
-      .timeout(const Duration(seconds:15));
-    if(response.statusCode!=200)throw StateError(
-      'Teyza verified shop directory unavailable (HTTP '+response.statusCode.toString()+').');
-    return parseTeyzaPublicDirectory(jsonDecode(utf8.decode(response.bodyBytes)));
+    final shops=<Map<String,dynamic>>[];String? cursor;
+    while(true){
+      final body=jsonEncode({'structuredQuery':{
+        'from':[{'collectionId':teyzaPublicCollection}],
+        'where':{'fieldFilter':{'field':{'fieldPath':'status'},'op':'EQUAL',
+          'value':{'stringValue':'active'}}},
+        'orderBy':[{'field':{'fieldPath':'__name__'},'direction':'ASCENDING'}],
+        if(cursor!=null)'startAt':{'values':[{'referenceValue':cursor}],'before':false},
+        'limit':200,
+      }});
+      final response=await remote.post(url,
+        headers:const {'Content-Type':'application/json'},body:body)
+        .timeout(const Duration(seconds:15));
+      if(response.statusCode!=200)throw StateError(
+        'Teyza verified shop directory unavailable (HTTP '+response.statusCode.toString()+').');
+      final data=jsonDecode(utf8.decode(response.bodyBytes));
+      shops.addAll(parseTeyzaPublicDirectory(data));
+      final documents=(data as List).whereType<Map>().where((row)=>row['document'] is Map).toList();
+      if(documents.length<200)break;
+      final next=(documents.last['document'] as Map)['name']?.toString();
+      if(next==null||next==cursor)throw const FormatException('Shop directory pagination did not advance.');
+      cursor=next;
+    }
+    return shops;
   }finally {if(owned)remote.close();}
 }
