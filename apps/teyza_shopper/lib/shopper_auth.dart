@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'facebook_bridge.dart' as facebook;
+import 'facebook_identity.dart';
 
 // Public Firebase configuration. All three account types use the same project;
 // choosing a login purpose never grants seller permissions or approval.
@@ -48,6 +50,8 @@ String authMessage(Object error) {
   if (value.contains('WEAK_PASSWORD')) return 'Choose a stronger password (at least six characters).';
   if (value.contains('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many attempts. Please try again later.';
   if (value.contains('OPERATION_NOT_ALLOWED')) return 'This sign-in method is not enabled yet. Try email login or contact Teyza support.';
+  if(value.contains('Facebook sign-in is not configured'))return 'Facebook login is not enabled for this build yet. Use Google, Apple or email.';
+  if(value.contains('Facebook sign-in failed'))return 'Facebook could not complete sign-in. Please try again or use another method.';
   if (value.contains('Google sign-in is not configured')) return 'Google login setup is not complete for this build. Use email login while Teyza connects it.';
   if (error is SignInWithAppleAuthorizationException) return 'Could not complete Apple sign-in. Please try again or use email login.';
   if (value.contains('Apple sign-in is not configured')) return 'Apple login setup is not complete. Please use email login and contact Teyza support.';
@@ -66,10 +70,12 @@ String authMessage(Object error) {
 }
 
 class ShopperSession extends ChangeNotifier {
-  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest})
+  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest,this.googleRequest,this.facebookRequest})
     : _client=client??http.Client(), _ownsClient=client==null,
       _store=store??SecureSessionStore();
   final Future<AppleIdentity?> Function(String hashedNonce)? appleRequest;
+  final Future<AppleIdentity?> Function()? googleRequest;
+  final Future<FacebookIdentity?> Function(String hashedNonce)? facebookRequest;
   final http.Client _client;
   final bool _ownsClient;
   final SessionStore _store;
@@ -90,6 +96,7 @@ class ShopperSession extends ChangeNotifier {
   Future<String>? _refreshing;
   Future<void> _storageQueue=Future<void>.value();
 
+  bool get facebookSignInAvailable => !kIsWeb && [TargetPlatform.android,TargetPlatform.iOS].contains(defaultTargetPlatform) && (facebook.facebookConfigured||facebookRequest!=null);
   bool get googleSignInAvailable => !kIsWeb &&
     [TargetPlatform.android,TargetPlatform.iOS].contains(defaultTargetPlatform);
   bool get appleSignInAvailable => !kIsWeb && defaultTargetPlatform==TargetPlatform.iOS;
@@ -280,21 +287,27 @@ class ShopperSession extends ChangeNotifier {
     await _post('sendOobCode',{'requestType':'VERIFY_EMAIL','idToken':token});
   }
   Future<void> signInWithGoogle() async {
-    if(!googleSignInAvailable||!googleSignInConfigured)throw StateError('Google sign-in is not configured');
+    if(!googleSignInAvailable||(!googleSignInConfigured&&googleRequest==null))throw StateError('Google sign-in is not configured');
     final version=++_version;
     isBusy=true;_changed();
     try{
-      final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId,
-        clientId:defaultTargetPlatform==TargetPlatform.iOS?_googleIosClientId:null);
-      final account=await google.signIn();
-      if(account==null)return;
-      final tokens=await account.authentication;
-      final token=tokens.idToken;
-      if(token==null||token.isEmpty)throw StateError('Google sign-in is not configured');
+      AppleIdentity? identity;
+      if(googleRequest!=null){identity=await googleRequest!();}
+      else {
+        final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId,
+          clientId:defaultTargetPlatform==TargetPlatform.iOS?_googleIosClientId:null);
+        final account=await google.signIn();if(account==null)return;
+        final tokens=await account.authentication;
+        identity=AppleIdentity(tokens.idToken??'',email:account.email,name:account.displayName??'');
+      }
+      if(identity==null)return;
+      if(version!=_version||_disposed)return;
+      final token=identity.idToken;
+      if(token.isEmpty)throw StateError('Google sign-in is not configured');
       final reply=await _post('signInWithIdp',{
         'postBody':'id_token='+Uri.encodeQueryComponent(token)+'&providerId=google.com',
         'requestUri':'https://teyza.co.za','returnIdpCredential':false,'returnSecureToken':true});
-      await _save(reply,account.email,account.displayName??'',version);
+      await _save(reply,identity.email,identity.name,version);
     }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
   Future<void> signInWithApple() async {
@@ -313,7 +326,7 @@ class ShopperSession extends ChangeNotifier {
         identity=AppleIdentity(credential.identityToken??'',email:credential.email??'',
           name:[credential.givenName,credential.familyName].whereType<String>().join(' ').trim());
       }
-      if(identity==null)return;
+      if(identity==null||version!=_version||_disposed)return;
       if(identity.idToken.isEmpty)throw StateError('Apple sign-in is not configured');
       final response=await _post('signInWithIdp',{
         'postBody':Uri(queryParameters:{'id_token':identity.idToken,'providerId':'apple.com','nonce':nonce}).query,
@@ -326,6 +339,24 @@ class ShopperSession extends ChangeNotifier {
       }
     }on SignInWithAppleAuthorizationException catch(error){
       if(error.code!=AuthorizationErrorCode.canceled)rethrow;
+    }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
+  }
+  Future<void> signInWithFacebook() async {
+    if(!facebookSignInAvailable)throw StateError('Facebook sign-in is not configured');
+    final version=++_version;isBusy=true;_changed();
+    try {
+      final random=Random.secure();
+      final nonce=base64Url.encode(List.generate(32,(_)=>random.nextInt(256))).replaceAll('=','');
+      final hash=sha256.convert(utf8.encode(nonce)).toString();
+      final identity=await (facebookRequest??facebook.requestFacebookIdentity)(hash);
+      if(identity==null||version!=_version||_disposed)return;
+      if(identity.token.isEmpty)throw StateError('Facebook sign-in failed');
+      final reply=await _post('signInWithIdp',{
+        'postBody':Uri(queryParameters:{'providerId':'facebook.com',
+          (identity.limited?'id_token':'access_token'):identity.token,
+          if(identity.limited)'nonce':nonce}).query,
+        'requestUri':'https://teyza.co.za','returnSecureToken':true,'returnIdpCredential':false});
+      await _save(reply,'','',version);
     }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
   Future<void> signIn(String emailAddress,String password) async {
@@ -360,6 +391,8 @@ class ShopperSession extends ChangeNotifier {
   Future<void> signOut() async {
     ++_version;_refreshing=null;isBusy=false;isReady=true;
     try{await beforeSignOut?.call();}catch(_){/* Always allow local sign out. */}
-    await _clear();_changed();
+    await _clear();
+    try{await facebook.clearFacebookSession();}catch(_){/* Local sign out always completes. */}
+    _changed();
   }
 }

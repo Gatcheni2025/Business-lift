@@ -11,6 +11,8 @@ on:
   workflow_dispatch:
 
 env:
+  TEYZA_FACEBOOK_APP_ID: ${{ vars.TEYZA_FACEBOOK_APP_ID }}
+  TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
   TEYZA_ANDROID_TEST_KEYSTORE_PATH: ${{ github.workspace }}/.teyza-android-test-signing/debug.keystore

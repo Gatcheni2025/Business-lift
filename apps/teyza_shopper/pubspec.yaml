@@ -1,7 +1,7 @@
 name: teyza_shopper
 description: Teyza Shopper - discover spaza shops, variety stores and verified local stock.
 publish_to: none
-version: 1.0.14+24
+version: 1.0.15+25
 
 environment:
   sdk: ">=3.6.0 <4.0.0"

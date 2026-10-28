@@ -37,6 +37,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  TEYZA_FACEBOOK_APP_ID: ${{ vars.TEYZA_FACEBOOK_APP_ID }}
+  TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
   APP: apps/teyza_shopper
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
@@ -276,3 +278,28 @@ jobs:
           rm -f "$RUNNER_TEMP/teyza.p12" "$RUNNER_TEMP/teyza.mobileprovision" "$RUNNER_TEMP/teyza-profile.plist"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
 
+
+  facebook_contract:
+    name: Check optional Meta SDK integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Synthetic values only for compilation/tests. This job publishes no app.
+      TEYZA_FACEBOOK_APP_ID: '123456789'
+      TEYZA_FACEBOOK_CLIENT_TOKEN: 'synthetic-client-token'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate and configure both native wrappers with test-only Meta settings
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter create --platforms=android,ios --org za.co.teyza --project-name teyza_shopper .
+          rm -f test/widget_test.dart
+          python3 scripts/prepare_mobile_release.py android --signing test
+          python3 scripts/prepare_mobile_release.py ios
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test test/session_test.dart test/social_auth_test.dart

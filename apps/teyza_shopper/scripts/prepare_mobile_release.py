@@ -210,3 +210,6 @@ if __name__ == "__main__":
     else:
         ios()
 
+
+    from configure_facebook import configure
+    configure(ROOT,args.platform)
