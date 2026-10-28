@@ -53,6 +53,16 @@ test('Only completed-order shoppers rate a shop; edits and repeat orders never i
  db.records.set('teyzaPublicShops/seller1',{...s,status:'suspended'});
  await rejects(service.execute(buyer,'shop_rate',{orderId:'done',stars:5}),409);
 });
+test('Existing approved active shops reconcile old listing flags but suspended shops stay paused',async()=>{
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,listingStatus:'not_listed'},
+  'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved'}});
+ const summary=await service.execute(owner,'seller_summary');
+ assert.equal(summary.publicationStatus,'active');assert.equal(summary.identityVerified,true);
+ assert.equal(db.records.get('teyzaSellerAccounts/seller1').listingStatus,'active');
+ db.records.set('teyzaPublicShops/seller1',{...db.records.get('teyzaPublicShops/seller1'),status:'suspended',identityVerified:false});
+ assert.equal((await service.execute(owner,'seller_summary')).publicationStatus,'suspended');
+ assert.equal(db.records.get('teyzaPublicShops/seller1').identityVerified,false);
+});
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
 
 test('Native seller registration binds the verified actor and cannot approve, activate or replace an existing shop',async()=>{

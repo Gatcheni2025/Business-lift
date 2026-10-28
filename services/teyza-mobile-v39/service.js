@@ -20,8 +20,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
       const setupRef=doc('teyzaSellerOnboarding/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap]=await Promise.all([
-        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef)]);
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid))]);
       const account=accountSnap.exists?accountSnap.data():null;
       const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
@@ -43,13 +43,20 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       let phoneMatches=false;try{phoneMatches=setup.verifiedPhone===onboarding.phone(account?.phone);}catch(_){}
       const completed=setup.sellingStatus==='active'&&!setup.moderationBlocked&&phoneMatches&&shop?.sellingEnabled===true;
       const publicShop=shop?.sellerUid===uid&&shop.status==='active';
+      const verification=verificationSnap.exists?verificationSnap.data():null;
+      const reconcileApproval=registered&&publicShop&&account.approvalStatus==='approved'&&
+        verification?.ownerUid===uid&&verification.status==='approved'&&(completed||setup.requiredVersion!==2);
       const eligible=registered&&account.approvalStatus!=='rejected'&&publicShop&&(completed||
-        (account.approvalStatus==='approved'&&account.listingStatus==='active'&&shop.sellingEnabled!==true));
+        (account.approvalStatus==='approved'&&(account.listingStatus==='active'||reconcileApproval)&&shop.sellingEnabled!==true));
       if(publicShop&&shop.sellingEnabled===true&&!completed){
         tx.update(shopRef,{status:'suspended',sellingEnabled:false,identityVerified:false,moderationSource:'onboarding'});
         tx.set(setupRef,{sellingStatus:'not_started',updatedAt:clock()},{merge:true});
       }
       const next=publicShop?catalogue.range(uid,shop,entries,{enabled:eligible,removedProductId}):null;
+      if(reconcileApproval){
+        if(account.listingStatus!=='active')tx.update(accountRef,{listingStatus:'active',updatedAt:new Date(clock())});
+        if(shop.identityVerified!==true)tx.update(shopRef,{identityVerified:true,verificationStatus:'approved'});
+      }
       for(const item of added)tx.set(doc('teyzaDraftProducts/'+uid+'/items/'+item.id),item.record);
       if(next&&!(publicShop&&shop.sellingEnabled===true&&!completed)&&(JSON.stringify(next.products)!==JSON.stringify(shop.products||[])||
           JSON.stringify(next.productHighlights)!==JSON.stringify(shop.productHighlights||[])))tx.update(shopRef,next);
@@ -111,11 +118,15 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null});
     }
     if (action==='seller_summary') {
-      await owner(uid);
-      const [config,verification,finance,catalogue,photos,publicShop]=await Promise.all([
+      const account=await owner(uid);
+      let [config,verification,finance,catalogue,photos,publicShop]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),read('teyzaPublicShops/'+uid)]);
+      if(account.approvalStatus==='approved'&&publicShop?.status==='active'&&
+          (account.listingStatus!=='active'||publicShop.identityVerified!==true)){
+        await synchronizeCatalogue(uid);publicShop=await read('teyzaPublicShops/'+uid);
+      }
       return {settings:config||{},publicationStatus:publicShop?.sellerUid===uid?publicShop.status:'not_listed',sellingEnabled:publicShop?.sellerUid===uid&&publicShop.sellingEnabled===true,identityVerified:publicShop?.identityVerified===true,verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         rating:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.rating:null,
