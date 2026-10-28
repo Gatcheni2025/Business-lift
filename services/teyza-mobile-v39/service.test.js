@@ -345,8 +345,8 @@ test('Publishing a reviewed catalogue cannot restore stock already reserved by a
  assert.equal(db.records.get('teyzaPublicShops/seller1').products[0].stock,3);
  assert.equal(db.records.get('teyzaDraftProducts/seller1/items/bread1').stockQty,3);
 });
-test('The selectable catalogue has 184 products and 48 photo types without invented shop prices or stock',()=>{
- assert.equal(catalogue.templates.size,184);assert.equal(Object.keys(catalogue.data.photos).length,48);
+test('The expanded catalogue has 378 products and 96 photo types without invented shop prices or stock',()=>{
+ assert.equal(catalogue.templates.size,378);assert.equal(Object.keys(catalogue.data.photos).length,96);
  for(const p of catalogue.templates.values()){
    assert(catalogue.data.photos[p.photo]);assert.equal(p.priceCents,undefined);assert.equal(p.stockQty,undefined);
    assert(D.id(catalogue.prefix+p.id));

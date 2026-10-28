@@ -140,7 +140,8 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ]))
           else if(rows.isEmpty)const SliverFillRemaining(hasScrollBody:false,child:Center(child:Text('No matching products. Try another search.')))
-          else if(compact)SliverPadding(padding:const EdgeInsets.all(12),sliver:SliverList.list(children:rows.map((p)=>productCard(p,true)).toList()))
+          else if(compact)SliverPadding(padding:const EdgeInsets.all(12),sliver:SliverList(
+            delegate:SliverChildBuilderDelegate((_,index)=>productCard(rows[index],true),childCount:rows.length)))
           else SliverPadding(padding:const EdgeInsets.all(16),sliver:SliverLayoutBuilder(builder:(context,constraints)=>SliverGrid(
             gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:constraints.crossAxisExtent>700?4:2,
               mainAxisExtent:225,mainAxisSpacing:12,crossAxisSpacing:12),

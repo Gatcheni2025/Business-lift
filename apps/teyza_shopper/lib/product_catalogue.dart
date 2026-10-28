@@ -2,15 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'product_photo_bounds.dart';
-
-const cataloguePhotoKeys=<String>[
-  'tomatoes','potatoes','onions','bananas','apples','oranges','cabbage','carrots',
-  'spinach','eggs','milk','yogurt','white-bread','brown-bread','rolls','chicken',
-  'beef','boerewors','rice','maize','flour','sugar','oats','pasta',
-  'beans','peanut-butter','oil','tea','coffee','water','soft-drink','crisps',
-  'soap','washing-powder','dishwashing','toilet-paper','biscuits','sweets','pilchards','tomato-sauce',
-  'lotion','toothpaste','shampoo','nappies','pads','batteries','notebook','pens'
-];
+export 'product_photo_bounds.dart' show cataloguePhotoKeys;
 String? cataloguePhotoKey(String image){
   final uri=Uri.tryParse(image);
   final key=uri?.host=='us-central1-business-lift-3c19c.cloudfunctions.net'&&uri?.path=='/teyzaMobile'?
@@ -21,8 +13,7 @@ String catalogueImageUrl(String key)=>
   'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile?cataloguePhoto=$key&v=1';
 String? cataloguePhotoForDraft(String id){
   if(!id.startsWith('catalog_'))return null;
-  final value=id.substring(8);
-  for(final key in cataloguePhotoKeys){if(value.startsWith('$key-'))return key;}return null;
+  return catalogueTemplatePhotos[id.substring(8)];
 }
 
 class CataloguePhoto extends StatelessWidget {
@@ -30,11 +21,9 @@ class CataloguePhoto extends StatelessWidget {
   final double size;
   const CataloguePhoto({super.key,required this.photoKey,this.size=96});
   @override Widget build(BuildContext context){
-    final index=cataloguePhotoKeys.indexOf(photoKey);
-    if(index<0)return SizedBox.square(dimension:size,child:const Icon(Icons.photo_outlined));
-    final bounds=cataloguePhotoBounds[photoKey]!;
+    final bounds=cataloguePhotoBounds[photoKey],atlas=cataloguePhotoAtlases[photoKey];
+    if(bounds==null||atlas==null)return SizedBox.square(dimension:size,child:const Icon(Icons.photo_outlined));
     final scale=size/bounds[2]<size/bounds[3]?size/bounds[2]:size/bounds[3];
-    final atlas=index<24?'fresh-pantry.png':'pantry-household.png';
     return Semantics(label:'Illustrative product photo',image:true,
       child:SizedBox.square(dimension:size,child:Center(child:ClipRect(
         child:SizedBox(width:bounds[2]*scale,height:bounds[3]*scale,
@@ -53,8 +42,13 @@ class CatalogueProduct {
   factory CatalogueProduct.fromJson(Map<String,dynamic> data)=>CatalogueProduct(
     id:data['id'] as String,name:data['name'] as String,category:data['category'] as String,
     unit:data['unit'] as String,photo:data['photo'] as String,keywords:data['keywords'] as String? ??'');
-  bool matches(String query,String group)=>
-    (group=='All'||category==group)&&('$name $category $keywords').toLowerCase().contains(query.toLowerCase().trim());
+  bool matches(String query,String group){
+    if(group!='All'&&category!=group)return false;
+    String normalize(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'),' ')
+      .replaceAllMapped(RegExp(r'(\d)\s*(ml|kg|g|l)\b'),(match)=>'${match[1]} ${match[2]}').trim();
+    final text=normalize('$name $category $unit $keywords');
+    return normalize(query).split(' ').where((word)=>word.isNotEmpty).every(text.contains);
+  }
 }
 class ProductCatalogue {
   static List<CatalogueProduct>? _cache;

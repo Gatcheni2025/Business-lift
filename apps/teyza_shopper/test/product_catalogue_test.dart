@@ -21,13 +21,23 @@ void main(){
   TestWidgetsFlutterBinding.ensureInitialized();
   test('The full offline catalogue has distinct products, valid photos and searchable pack sizes',() async{
     final rows=await ProductCatalogue.load();
-    expect(rows,hasLength(184));expect(rows.map((p)=>p.id).toSet(),hasLength(184));
-    expect(rows.map((p)=>p.photo).toSet(),hasLength(48));
+    expect(rows,hasLength(378));expect(rows.map((p)=>p.id).toSet(),hasLength(378));
+    expect(rows.map((p)=>p.photo).toSet(),hasLength(96));
     expect(rows.where((p)=>p.matches('pap','Pantry')),isNotEmpty);
     final source=jsonDecode(await rootBundle.loadString('assets/catalogue/product-catalogue.json')) as Map;
     expect((source['photos'] as Map).keys.toList(),cataloguePhotoKeys);
     expect(cataloguePhotoKey(catalogueImageUrl('milk')),'milk');
     expect(cataloguePhotoKey('https://untrusted.test/x?cataloguePhoto=milk'),isNull);
+    for(final term in ['Baby lotion','Chocolate','Stock cube','Fresh milk','Plastic bag','Matches','Energy drink','Toothbrush',
+      'Viennas','Popcorn','Baby powder milk','Dishwashing sponges','Jam','Sweets','Cheese','Baby wipes','Soup powder','Candles',
+      'Peanuts','Vaseline','Disposable cups','Fruit juice','Pencils','Baby soap','Chewing gum','Polony','Baby nappies','Cakes',
+      'Margarine','Lollipops','Wet wipes','Yogurt','Baby powder','Eraser','Sausage','Aromat']) {
+      expect(rows.where((p)=>p.matches(term,'All')),isNotEmpty,reason:'The requested product must be searchable: $term');
+    }
+    expect(rows.where((p)=>p.matches('milk 1L fresh','All')),isNotEmpty);
+    expect(cataloguePhotoForDraft('catalog_vaseline-50-ml'),'petroleum-jelly');
+    expect(cataloguePhotoForDraft('catalog_baby-formula-stage-1-400-g'),'baby-formula');
+    expect(cataloguePhotoForDraft('catalog_milk-made-up-pack'),isNull);
   });
   test('Discovery keeps seller identity when shops sell the same template and never invents unselected items',(){
     final a=Shop.fromJson({'id':'a','name':'Shop A','productHighlights':[
@@ -104,6 +114,12 @@ void main(){
       child:SellerProductPickerPage(session:session,existingIds:{}))));await tester.pumpAndSettle();
     await tester.runAsync(()=>precacheImage(const AssetImage('assets/catalogue/fresh-pantry.png'),tester.element(find.byType(SellerProductPickerPage))));
     await tester.pumpAndSettle();expect(tester.takeException(),isNull);await capture('seller-product-catalogue');
+    await tester.enterText(find.byType(TextField).first,'Baby lotion');await tester.pumpAndSettle();
+    await tester.runAsync(()=>precacheImage(const AssetImage('assets/catalogue/care-household-expanded.png'),tester.element(find.byType(SellerProductPickerPage))));
+    await tester.pumpAndSettle();expect(tester.takeException(),isNull);await capture('expanded-baby-care-catalogue');
+    await tester.enterText(find.byType(TextField).first,'Chocolate');await tester.pumpAndSettle();
+    await tester.runAsync(()=>precacheImage(const AssetImage('assets/catalogue/food-drinks-expanded.png'),tester.element(find.byType(SellerProductPickerPage))));
+    await tester.pumpAndSettle();expect(tester.takeException(),isNull);await capture('expanded-food-catalogue');
     final products=(await ProductCatalogue.load()).where((p)=>['white-bread-700-g','milk-2-l','rice-1-kg','eggs-6-pack'].contains(p.id)).toList();
     final shop=Shop.fromJson({'id':'photo-shop','name':'KwaMashu Fresh Market','area':'Durban','latitude':-29.8587,'longitude':31.0218,
       'productHighlights':products.map((p)=>{'id':p.draftId,'name':p.name,'category':p.category,'inStock':true,'imageUrl':catalogueImageUrl(p.photo)}).toList()});
