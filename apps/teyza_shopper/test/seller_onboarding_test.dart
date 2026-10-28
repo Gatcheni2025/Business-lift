@@ -21,7 +21,7 @@ class OnboardApi extends TeyzaMobileApi {
   calls.add(action);if(offline)throw const ShopServiceUnavailable();
   if(action=='seller_onboarding')return {'legalType':'individual','phone':'+27712345678','phoneVerified':complete,
    if(complete)'identity':{'kind':'id'},if(complete)'selfie':{'status':'pending_review'}};
-  return {'settings':{},'sellingStatus':'active'};
+  return {'settings':{},'sellingStatus':'pending_approval','verificationStatus':'pending_review'};
  }
 }
 class PhoneSession extends fixtures.Session {
@@ -46,6 +46,17 @@ class InstantSender implements PhoneCodeSender {
 }
 void main(){
  const shop=SellerShop('Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678');
+ testWidgets('Submitting completed setup returns to the dashboard with an approval-pending message',(tester) async {
+  final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
+  await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:TextButton(
+    onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:session,shop:shop,api:api))),child:const Text('Open setup'))))));
+  await tester.tap(find.text('Open setup'));await tester.pumpAndSettle();
+  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');
+  await tester.scrollUntilVisible(finish,220,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,finish);
+  expect(find.text('Open setup'),findsOneWidget);expect(find.text('Setup submitted. Your shop will be visible after Teyza approves it.'),findsOneWidget);
+  expect(api.calls.where((c)=>c=='seller_onboarding_complete').length,1);
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
  test('South African numbers normalize without changing international numbers or accepting missing country codes',(){
   expect(normalizeMobile('071 234 5678'),'+27712345678');expect(normalizeMobile('+264 81 123 4567'),'+264811234567');
   expect(()=>normalizeMobile('12345'),throwsFormatException);
@@ -66,7 +77,7 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api,captureDocument:(_) async{captured=true;return bytes;})));
   await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
   expect(captured,true);await tester.scrollUntilVisible(find.byType(Image),-150,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.byType(Image),findsOneWidget);
-  final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');
+  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');
   await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(tester.widget<FilledButton>(finish).onPressed,isNull);
   expect(api.calls.contains('seller_onboarding_complete'),false);
   session.switchAccount();await tester.pump();expect(find.byType(Image),findsNothing);
@@ -75,7 +86,7 @@ void main(){
  testWidgets('All three server-confirmed steps enable completion while pending manual review',(tester) async{
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
-  final finish=find.widgetWithText(FilledButton,'Finish setup & start selling');await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
+  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });

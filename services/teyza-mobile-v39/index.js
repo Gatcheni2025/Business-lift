@@ -31,6 +31,10 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.method==='GET'){
+    if(req.query.publicShops!==undefined){
+      try{res.json({ok:true,...await service.publicDirectory(req.query.after||'')});}
+      catch(error){res.status(error.status||503).json({error:'The approved shop directory is temporarily unavailable.'});}return;
+    }
     if(req.query.nativeConfig!==undefined){
       const config=require('./native-config.json');
       res.json({projectId:'business-lift-3c19c',androidAppId:config.androidAppId||'',iosAppId:config.iosAppId||'',iosUrlScheme:config.iosUrlScheme||''});return;
@@ -49,7 +53,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true});return;
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -83,9 +87,13 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
 exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
   const before=event.data?.before.data()||{},after=event.data?.after.data()||{};
-  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone)return;
+  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone&&before.address===after.address&&before.shopName===after.shopName)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
+// One bounded pass repairs historical premature live flags. Once complete this
+// schedule performs a single checkpoint read; normal writes use existing triggers.
+exports.teyzaPublicationRepair=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'512MiB',timeoutSeconds:180},
+  async()=>{const result=await service.reconcilePublicationBatch();if(result.checked)console.log('TEYZA_PUBLICATION_REPAIR',result.checked,result.complete);});
 for(const [name,kind,document] of [
  ['teyzaSellerOrderNotification','order','teyzaMobileOrders/{reference}'],
  ['teyzaSellerStockNotification','stock','teyzaDraftProducts/{sellerUid}/items/{reference}'],

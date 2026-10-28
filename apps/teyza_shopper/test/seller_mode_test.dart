@@ -35,7 +35,7 @@ class SellerApi extends TeyzaMobileApi {
   @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async {
     calls.add((action:action,data:data));
     return switch(action){
-      'seller_summary'=>{'publicationStatus':'active','sellingEnabled':true,'identityVerified':true,'settings':{},'credit':[],'photos':[]},
+      'seller_summary'=>{'publicationStatus':'active','approvalStatus':'approved','hasLocation':true,'sellingEnabled':true,'identityVerified':true,'settings':{},'credit':[],'photos':[]},
       'seller_mandate_status'=>{'required':false},'notification_list'=>{'unread':0,'notifications':[]},
       'order_list'=>{'orders':[]},'chat_list'=>{'scope':'owner','threads':[]},_=>{'ok':true}
     };

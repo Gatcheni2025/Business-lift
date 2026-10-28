@@ -1,5 +1,5 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain');
+const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const actions=new Set(['seller_register','admin_access','admin_seller_queue','admin_seller_review',
   'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
@@ -58,7 +58,9 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     const ref=doc('teyzaMobileVerification/'+sellerUid),accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid);
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
     const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
-    const [v,a,s,view,o,i]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef)]);
+    const [v,a,s,view,o,i,c,f,l,drafts]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
+      tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),
+      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201))]);
     const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
     const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
     if(setup.requiredVersion===2){
@@ -75,22 +77,20 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(data.status==='approved'&&(!record.objectPath||record.expiresAt<=clock()))D.fail(409,'This selfie expired. Request a new photo.');
     if(data.status==='approved'&&(!view.exists||view.data().sellerUid!==sellerUid||clock()-view.data().viewedAt>300000))
      D.fail(409,'View the current private selfie before approving this seller.');
+    const updatedAccount={...a.data(),approvalStatus:data.status==='needs_new_photo'?'pending':data.status};
+    const updatedVerification={...record,status:data.status};
+    const nextSetup={...setup,moderationBlocked:data.status!=='approved',
+      sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
+    const next=P.project(sellerUid,{account:updatedAccount,setup:nextSetup,verification:updatedVerification,
+      shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
+      location:l.exists?l.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()}))});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
-    const publicShop=s.exists?s.data():null;
-    const canList=data.status==='approved'&&publicShop?.sellerUid===sellerUid&&
-      (publicShop.status==='active'||(setup.completedAt&&publicShop.moderationSource==='owner_review'));
-    tx.update(accountRef,{approvalStatus:data.status==='needs_new_photo'?'pending':data.status,
-      ...(canList?{listingStatus:'active'}:data.status!=='approved'?{listingStatus:'not_listed'}:{}),updatedAt:new Date(clock())});
-    // Completion enables selling; manual approval only grants the identity badge.
-    if(data.status!=='approved'&&s.exists)tx.update(shopRef,{status:'suspended',sellingEnabled:false,identityVerified:false,verificationStatus:data.status,moderationSource:'owner_review'});
-    if(setup.requiredVersion===2){
-      tx.set(setupRef,{moderationBlocked:data.status!=='approved',sellingStatus:data.status==='approved'&&setup.completedAt?'active':'paused',updatedAt:clock()},{merge:true});
-    }
-    if(data.status==='approved'&&publicShop?.sellerUid===sellerUid)tx.update(shopRef,{
-      identityVerified:true,verificationStatus:'approved',
-      ...(canList&&setup.completedAt&&publicShop.moderationSource==='owner_review'?{status:'active',sellingEnabled:true}: {})});
+    tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
+    if(next)tx.set(shopRef,{...next,updatedAt:clock()});
+    if(setup.requiredVersion===2)tx.set(setupRef,{...nextSetup,
+      sellingStatus:next?.status==='active'?'active':data.status!=='approved'?'paused':setup.completedAt?'pending_approval':'not_started',updatedAt:clock()});
     tx.set(doc('teyzaSellerReviewAudit/'+submissionId),{sellerUid,submissionId,status:data.status,reason,reviewedBy:uid,reviewedAt:clock()});
-    return {status:data.status};
+    return {status:data.status,publicationStatus:next?.status||'not_listed'};
    });
   }
   await owner(uid);

@@ -45,6 +45,7 @@ class Product {
 }
 class Shop {
   final String id, name, area, photo, phone;
+  final String address,city;
   final bool pickup, delivery;
   final double? latitude, longitude;
   final List<Product> products;
@@ -62,7 +63,7 @@ class Shop {
   }.values.toList();
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
-    {this.latitude, this.longitude,this.shopCategory='spaza',
+    {this.latitude, this.longitude,this.shopCategory='spaza',this.address='',this.city='',
     this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
@@ -75,6 +76,7 @@ class Shop {
         p.priceCents > 0 && p.stock >= 0).toList(),
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
+    address:(x['address']??'').toString(),city:(x['city']??'').toString(),
     shopCategory:x['shopCategory']=='variety'?'variety':'spaza',
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
@@ -148,6 +150,19 @@ class Area {
   final String label, city;
   final double lat, lng;
   const Area(this.label, this.city, this.lat, this.lng);
+}
+String _areaWords(String value)=>value.toLowerCase().replaceAll(RegExp(r'ethekwini(?: metropolitan municipality| municipality)?'),'durban')
+  .replaceAll(RegExp(r'city of tshwane|tshwane'),'pretoria').replaceAll(RegExp(r'[^a-z0-9]+'),' ').trim();
+bool shopMatchesArea(Shop shop,Area? area,{bool allRegistered=false,double radiusKm=35}){
+  if(allRegistered||area==null)return true;
+  final lat=shop.latitude,lng=shop.longitude;
+  if(lat!=null&&lng!=null&&lat.isFinite&&lng.isFinite&&lat.abs()<=90&&lng.abs()<=180&&!(lat==0&&lng==0))
+    return km(area.lat,area.lng,lat,lng)<=radiusKm;
+  final city=_areaWords(shop.city).replaceFirst(RegExp(r'^city of '),'');
+  final targetCity=_areaWords(area.city).replaceFirst(RegExp(r'^city of '),'');
+  if(city.isNotEmpty&&targetCity.isNotEmpty&&city!=targetCity&&city!=_areaWords(area.label))return false;
+  final words=' ${_areaWords('${shop.area} ${shop.city} ${shop.address}')} ';
+  return [area.label,area.city].where((s)=>s.trim().isNotEmpty).any((s)=>words.contains(' ${_areaWords(s)} '));
 }
 const areas = <Area>[
   Area('Durban', 'Durban', -29.8587, 31.0218),
@@ -608,14 +623,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return km(area!.lat, area!.lng, shop.latitude!, shop.longitude!);
   }
   List<Shop> get nearbyReal {
-    final filtered = live.where((shop) {
-      if (allRegistered || area == null) return true;
-      final d = distance(shop);
-      if (d != null) return d <= 35;
-      final text = (shop.area + ' ' + shop.name).toLowerCase();
-      return text.contains(area!.label.toLowerCase()) ||
-          (area!.city.isNotEmpty && text.contains(area!.city.toLowerCase()));
-    }).toList();
+    final filtered = live.where((shop)=>shopMatchesArea(shop,area,allRegistered:allRegistered,radiusKm:searchRadiusKm.toDouble())).toList();
     filtered.sort((a,b) {
       if(a.sponsored!=b.sponsored)return a.sponsored?-1:1;
       return (distance(a)??double.infinity).compareTo(distance(b)??double.infinity);

@@ -29,12 +29,19 @@ class SellerNavigation extends StatelessWidget {
 class SellerSellingDashboard extends StatelessWidget {
   final String shopName;
   final bool live,verified;
+  final String? publicationStatus;
+  final bool hasLocation;
+  final VoidCallback? onLocation;
   final int? productCount;
   final VoidCallback? onAdd;
   final VoidCallback onProducts,onOrders,onChat,onFinance,onAreas,onBusiness,onVerify;
   const SellerSellingDashboard({super.key,required this.shopName,required this.live,required this.verified,
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
-    required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify});
+    required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
+    this.publicationStatus,this.hasLocation=true,this.onLocation});
+  bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
+  bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
+  String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
   @override Widget build(BuildContext context)=>ListView(physics:const AlwaysScrollableScrollPhysics(),
     padding:const EdgeInsets.fromLTRB(18,12,18,28),children:[
       Container(padding:const EdgeInsets.all(21),decoration:BoxDecoration(
@@ -43,7 +50,7 @@ class SellerSellingDashboard extends StatelessWidget {
           const SizedBox(height:9),const Text('Ready for your\nnext customer?',style:TextStyle(
             color:Colors.white,fontSize:28,height:1.13,fontWeight:FontWeight.w800)),
           const SizedBox(height:15),Wrap(spacing:8,runSpacing:7,children:[
-            _pill(live?'Shop is live':'Shop setup needed',live?Icons.check_circle_outline:Icons.info_outline),
+            _pill(statusLabel,approvedLive?Icons.check_circle_outline:Icons.info_outline),
             if(verified)_pill('Teyza verified',Icons.verified_outlined),
           ])])),
       const SizedBox(height:16),SizedBox(width:double.infinity,child:FilledButton.icon(
@@ -52,8 +59,14 @@ class SellerSellingDashboard extends StatelessWidget {
         label:const Text('Add a product',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
       const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
         '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
-      if(!live)Padding(padding:const EdgeInsets.only(top:9),child:OutlinedButton.icon(onPressed:onVerify,
-        icon:const Icon(Icons.task_alt),label:const Text('Finish setup to start selling'))),
+      if(awaitingApproval)...[
+        const SizedBox(height:10),const Text('Setup received. Your shop becomes visible to shoppers after Teyza approves it.',style:TextStyle(color:_muted)),
+        TextButton(onPressed:onVerify,child:const Text('View review status')),
+      ]else if(!approvedLive)Padding(padding:const EdgeInsets.only(top:9),child:OutlinedButton.icon(onPressed:onVerify,
+        icon:const Icon(Icons.task_alt),label:Text(publicationStatus=='suspended'?'View listing review':'Finish setup to start selling'))),
+      if(!hasLocation)Card(color:const Color(0xFFFFF3D8),child:ListTile(leading:const Icon(Icons.location_on_outlined),
+        title:const Text('Help shoppers find your shop'),subtitle:const Text('Save your shop pin and suburb for nearby search.'),
+        onTap:onLocation??onBusiness,trailing:const Icon(Icons.chevron_right))),
       const SizedBox(height:22),const Text('Your selling tools',style:TextStyle(color:_ink,fontSize:21,fontWeight:FontWeight.w800)),
       const SizedBox(height:12),LayoutBuilder(builder:(context,c)=>GridView.count(
         crossAxisCount:c.maxWidth<310||MediaQuery.textScalerOf(context).scale(14)>19?1:c.maxWidth>700?3:2,

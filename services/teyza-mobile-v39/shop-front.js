@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{saveUpload}=require('./upload-storage');
+const P=require('./publication');
 const endpoint='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 function publicUrl(uid,photoId){return endpoint+'?shopPhoto='+encodeURIComponent(uid)+'&v='+encodeURIComponent(photoId);}
 function valid(record,uid){return record?.ownerUid===uid&&typeof record.photoId==='string'&&record.objectPath==='teyza/shop-fronts/'+uid+'/'+record.photoId+'.jpg';}
@@ -23,7 +24,7 @@ function createShopFront({db,bucket,sanitizeImage,clock,rate}){
    const [previous,shop,setup,owner]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(setupRef),tx.get(ownerRef)]);
    D.seller(owner.exists?owner.data():null,uid);old=previous.exists?previous.data():null;
    tx.set(ref,{ownerUid:uid,photoId,objectPath,consentAt:clock(),updatedAt:clock()});
-   if(shop.exists&&shop.data().sellerUid===uid&&shop.data().status==='active'&&owner.data().approvalStatus!=='rejected'&&setup.data()?.moderationBlocked!==true)
+   if(shop.exists&&shop.data().sellerUid===uid&&shop.data().status==='active'&&owner.data().approvalStatus==='approved'&&setup.data()?.moderationBlocked!==true)
     tx.update(shopRef,{photoUrl:publicUrl(uid,photoId),updatedAt:clock()});
   });}catch(error){try{await bucket.file(objectPath).delete({ignoreNotFound:true});}catch(_){}throw error;}
   if(valid(old,uid))try{await bucket.file(old.objectPath).delete({ignoreNotFound:true});}catch(_){}
@@ -31,8 +32,8 @@ function createShopFront({db,bucket,sanitizeImage,clock,rate}){
  }
  async function publicPhoto(uid,photoId){
   D.id(uid);D.id(photoId);
-  const [shop,saved,owner,setup]=await Promise.all(['teyzaPublicShops/','teyzaShopFrontPhotos/','teyzaSellerAccounts/','teyzaSellerOnboarding/'].map(p=>db.doc(p+uid).get()));
-  if(!shop.exists||shop.data().status!=='active'||shop.data().sellerUid!==uid||!owner.exists||owner.data().uid!==uid||owner.data().approvalStatus==='rejected'||setup.data()?.moderationBlocked===true||!saved.exists||!valid(saved.data(),uid)||saved.data().photoId!==photoId)
+  const [shop,saved,owner,setup,v]=await Promise.all(['teyzaPublicShops/','teyzaShopFrontPhotos/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>db.doc(p+uid).get()));
+  if(!shop.exists||shop.data().status!=='active'||!P.state(uid,owner.exists?owner.data():null,setup.exists?setup.data():{},v.exists?v.data():null,shop.data()).live||!saved.exists||!valid(saved.data(),uid)||saved.data().photoId!==photoId)
    D.fail(404,'Shop photo is not published.');
   const [bytes]=await bucket.file(saved.data().objectPath).download();return bytes;
  }

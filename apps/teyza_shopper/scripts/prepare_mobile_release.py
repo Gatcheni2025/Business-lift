@@ -151,7 +151,7 @@ def ios():
         "CFBundleName": "Teyza",
         "NSCameraUsageDescription": "Photograph your ID, passport or company registration, take an owner selfie, or photograph your shop products.",
         "NSPhotoLibraryUsageDescription": "Choose a private seller registration document photo or a product photo for your shop catalogue.",
-        "NSLocationWhenInUseUsageDescription": "Find shops near you when you choose Use my location. You can also select an area manually.",
+        "NSLocationWhenInUseUsageDescription": "Use your location to find nearby shops or, when you are at your shop, save its map pin. You can also enter a location manually.",
         "UIBackgroundModes": ["fetch", "remote-notification"],
         "FirebaseMessagingAutoInitEnabled": False,
         "FirebaseAnalyticsCollectionEnabled": False,

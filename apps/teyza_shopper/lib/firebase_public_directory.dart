@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'shopper_auth.dart' show teyzaFirebaseApiKey;
+
 
 // Public app directory, separate from identity evidence and private seller drafts.
 const teyzaPublicProject='business-lift-3c19c';
@@ -53,12 +53,12 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
     final document=row['document'] as Map;
     final data=decodeFields(document['fields']);
     final id=(document['name']??'').toString().split('/').last;
-    if(data['status']!='active' || data['sellerUid']!=id
+    if(data['status']!='active' || data['approvalStatus']!='approved' || data['identityVerified']!=true || data['sellerUid']!=id
       || data['name'] is! String || (data['name'] as String).trim().length<2)continue;
     if(!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id))continue;
     output.add(<String,dynamic>{
       'id':id,'name':data['name'],'area':data['area']??'',
-      'address':data['address']??'','shopCategory':['retail','variety','other-retail'].contains(data['shopCategory'])?'variety':'spaza',
+      'address':data['address']??'','city':data['city']??'','shopCategory':['retail','variety','other-retail'].contains(data['shopCategory'])?'variety':'spaza',
       'photoUrl':publishedMerchantPhoto(data),
       'latitude': data['latitude'] is num ? data['latitude'] : null,
       'longitude': data['longitude'] is num ? data['longitude'] : null,
@@ -80,34 +80,28 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
 
 Future<List<Map<String,dynamic>>> fetchTeyzaPublicDirectory({http.Client? client}) async {
   final remote=client??http.Client();
-  final owned=client==null;
-  final url=Uri.https('firestore.googleapis.com',
-    '/v1/projects/'+teyzaPublicProject+'/databases/(default)/documents:runQuery',
-    {'key':teyzaFirebaseApiKey});
   try {
     final shops=<Map<String,dynamic>>[];String? cursor;
     while(true){
-      final body=jsonEncode({'structuredQuery':{
-        'from':[{'collectionId':teyzaPublicCollection}],
-        'where':{'fieldFilter':{'field':{'fieldPath':'status'},'op':'EQUAL',
-          'value':{'stringValue':'active'}}},
-        'orderBy':[{'field':{'fieldPath':'__name__'},'direction':'ASCENDING'}],
-        if(cursor!=null)'startAt':{'values':[{'referenceValue':cursor}],'before':false},
-        'limit':200,
-      }});
-      final response=await remote.post(url,
-        headers:const {'Content-Type':'application/json'},body:body)
-        .timeout(const Duration(seconds:15));
-      if(response.statusCode!=200)throw StateError(
-        'Teyza verified shop directory unavailable (HTTP '+response.statusCode.toString()+').');
+      final url=Uri.https('us-central1-business-lift-3c19c.cloudfunctions.net','/teyzaMobile',
+        {'publicShops':'1',if(cursor!=null)'after':cursor});
+      final response=await remote.get(url).timeout(const Duration(seconds:20));
+      if(response.statusCode!=200)throw StateError('The approved shop directory is temporarily unavailable.');
       final data=jsonDecode(utf8.decode(response.bodyBytes));
-      shops.addAll(parseTeyzaPublicDirectory(data));
-      final documents=(data as List).whereType<Map>().where((row)=>row['document'] is Map).toList();
-      if(documents.length<200)break;
-      final next=(documents.last['document'] as Map)['name']?.toString();
-      if(next==null||next==cursor)throw const FormatException('Shop directory pagination did not advance.');
+      if(data is! Map||data['ok']!=true||data['entries'] is! List)throw StateError('The shop directory needs the latest Teyza service update.');
+      for(final value in data['entries'] as List){
+        if(value is! Map)continue;
+        final row=Map<String,dynamic>.from(value),id=row['id'];
+        if(id is! String||!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)||row['sellerUid']!=id||
+          row['status']!='active'||row['approvalStatus']!='approved'||row['identityVerified']!=true||
+          row['name'] is! String||(row['name'] as String).trim().length<2)continue;
+        shops.add({...row,'shopCategory':['retail','variety','other-retail'].contains(row['shopCategory'])?'variety':'spaza',
+          'photoUrl':publishedMerchantPhoto(row),'whatsappPhone':'','sponsored':false});
+      }
+      final next=data['next'];if(next==null||next=='')break;
+      if(next is! String||next==cursor)throw const FormatException('Shop directory pagination did not advance.');
       cursor=next;
     }
     return shops;
-  }finally {if(owned)remote.close();}
+  }finally {if(client==null)remote.close();}
 }

@@ -91,7 +91,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Require working photo storage before a signed store build
+      - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed'
         run: |
           python3 - <<'PY_GATE'
@@ -99,8 +99,8 @@ jobs:
           url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
           with urllib.request.urlopen(url,timeout=30) as response:
               health=json.load(response)
-          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True):
-              raise SystemExit('Activate Firebase Storage and deploy the R3.15 mobile service before signing a store release.')
+          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True and health.get('approvalRequired') is True and health.get('shopLocations') is True):
+              raise SystemExit('Deploy the current mobile service kit with approval-required publication and shop locations before signing this release. Photo storage must also be ready.')
           PY_GATE
       - uses: actions/setup-node@v4
         with:
@@ -127,7 +127,7 @@ jobs:
         run: |
           npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
           node --test services/teyza-mobile-v39/*.test.js
-          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification']) assert(e[name].__endpoint,name); console.log('Eleven Firebase function exports load successfully');"
+          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair']) assert(e[name].__endpoint,name); console.log('Twelve Firebase function exports load successfully');"
       - name: Verify shared product catalogue and photo assets
         run: |
           python3 scripts/verify_teyza_catalogue.py
@@ -141,7 +141,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: teyza-mobile-r315-deploy-kit
-          path: TEYZA_MOBILE_R315_DEPLOY_KIT.zip
+          path: build/teyza-mobile-deploy/
           retention-days: 30
       - uses: subosito/flutter-action@v2
         with:

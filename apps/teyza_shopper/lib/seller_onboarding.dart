@@ -9,6 +9,7 @@ import 'seller_tools.dart';
 import 'seller_shop_photo.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'seller_location.dart';
 
 class SellerOnboardingPage extends StatefulWidget {
   final ShopperSession session;
@@ -84,13 +85,18 @@ class _OnboardingState extends State<SellerOnboardingPage> {
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPhonePage(session:widget.session,phone:progress['phone']?.toString()??widget.shop.phone)));
     if(mounted&&!changed)load();
   }
+  Future<void> location() async {
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerLocationPage(session:widget.session,api:api,shopAddress:widget.shop.address)));
+    if(mounted&&!changed)load();
+  }
   Future<void> complete() async {
     if(busy||changed)return;
     setState((){busy=true;error=null;});
     try{
       final result=await api.call('seller_onboarding_complete');
-      if(mounted&&uid==widget.session.userId&&result['sellingStatus']=='active'){
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your shop is ready to sell. Add the products you stock.')));
+      if(mounted&&uid==widget.session.userId&&['active','pending_approval'].contains(result['sellingStatus'])){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(result['sellingStatus']=='active'&&result['verificationStatus']=='approved'?
+          'Your approved shop is published. Keep your shop location and stock up to date.':'Setup submitted. Your shop will be visible after Teyza approves it.')));
         Navigator.pop(context,true);
       }
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
@@ -113,7 +119,7 @@ class _OnboardingState extends State<SellerOnboardingPage> {
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('YOUR NEXT CHAPTER',style:TextStyle(color:Color(0xFF9DDFC0),fontSize:11,letterSpacing:1.5)),const SizedBox(height:12),
             Text(widget.shop.name,style:const TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w800)),const SizedBox(height:10),
-            const Text('A document, a selfie and your mobile. Complete these steps and start selling to your neighbourhood.',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
+            const Text('Submit your document, selfie and verified mobile. Teyza reviews your registration before your shop is published.',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
             const SizedBox(height:18),LinearProgressIndicator(value:[identityDone,selfieDone,phoneDone].where((v)=>v).length/3,
               color:ownerGreen,backgroundColor:const Color(0xFF35433B),borderRadius:BorderRadius.circular(8)),const SizedBox(height:8),
             Text('${[identityDone,selfieDone,phoneDone].where((v)=>v).length} of 3 complete',style:const TextStyle(color:Colors.white,fontSize:12))])),
@@ -157,8 +163,13 @@ class _OnboardingState extends State<SellerOnboardingPage> {
             const Text('Help customers recognise your entrance. This photo appears on your published shop listing; your identity documents stay private.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),
             const SizedBox(height:12),OutlinedButton.icon(onPressed:busy?null:shopPhoto,icon:const Icon(Icons.storefront_outlined),
               label:Text(progress['shopFront'] is Map?'View or replace shop photo':'Add shop-front photo'))])),
+          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('+','Shop map location',progress['locationSaved']==true),
+            const SizedBox(height:12),const Text('Save your shop pin and suburb so shoppers can find your approved shop in their area.'),
+            const SizedBox(height:12),OutlinedButton.icon(onPressed:busy?null:location,icon:const Icon(Icons.location_on_outlined),
+              label:Text(progress['locationSaved']==true?'View shop location':'Set shop location'))])),
           if(progress['moderationBlocked']==true)const Padding(padding:EdgeInsets.only(bottom:16),child:Text('An administrator needs to review your registration before selling can resume.',style:TextStyle(color:Color(0xFF9A3412)))),
-          FilledButton.icon(onPressed:busy||loading||!allDone||progress['moderationBlocked']==true?null:complete,icon:const Icon(Icons.storefront_outlined),label:Text(busy?'Please wait…':'Finish setup & start selling')),
+          if(progress['sellingStatus']=='pending_approval')const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your setup is complete and awaiting Teyza approval.')),
+          FilledButton.icon(onPressed:busy||loading||!allDone||progress['moderationBlocked']==true?null:complete,icon:const Icon(Icons.storefront_outlined),label:Text(busy?'Please wait…':'Finish setup & submit for review')),
           const SizedBox(height:12),const Text('The verified badge is added after an administrator checks your documents and selfie. You can prepare private products at any time.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF6C7880),fontSize:12,height:1.5))
         ]
       ])));

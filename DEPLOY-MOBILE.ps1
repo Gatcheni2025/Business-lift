@@ -12,4 +12,5 @@ if ($health.ok -ne $true -or $health.version -ne '3.15.0' -or $health.sellerOnbo
 }
 if ($health.verificationUploads -ne $true) { throw ('Photo storage is not ready (' + $health.uploadStatus + '). Open Firebase Storage for business-lift-3c19c, choose Get started, US-CENTRAL1 and production mode, then retry. Keep the existing encryption key.') }
 if ($health.shopFrontPhotos -ne $true) { throw 'Shop-front photo service was not activated.' }
-Write-Host 'Teyza mobile 3.15.0 is responding with seller onboarding and 184 catalogue products.'
+if ($health.approvalRequired -ne $true -or $health.shopLocations -ne $true) { throw 'The current approval and shop-location services were not activated. Deploy this latest kit before building version 1.0.19.' }
+Write-Host 'Teyza is responding with approval-required publication, shop locations and 184 catalogue products.'
