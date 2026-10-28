@@ -2,7 +2,7 @@
 const crypto=require('node:crypto');
 const defaults=require('./seller-experience').defaults;
 function notificationFor(kind,before,after,reference){
- if(kind==='listing'&&after?.status==='active'&&(!before||before.status!=='active'||(!before.identityVerified&&after.identityVerified)))return {
+ if(kind==='listing'&&after?.status==='active'&&after.approvalStatus==='approved'&&after.identityVerified===true&&(!before||before.status!=='active'||before.approvalStatus!=='approved'||!before.identityVerified))return {
   ownerUid:after.sellerUid,category:'reviews',target:'verification',reference,title:after.identityVerified?'Your verified shop is live':'Your shop is live',
   body:'Shoppers can now find your shop on Teyza. Keep your shop photo, services and stock up to date.'};
  if(kind==='order'&&after&&(!before||before.status!==after.status))return {ownerUid:after.ownerUid,category:'orders',target:'orders',reference,

@@ -9,7 +9,7 @@ class SellerShopHero extends StatelessWidget{
   final bool sellingEnabled;
   final bool? identityVerified;
   bool get approved=>identityVerified??shop.approvalStatus=='approved';
-  bool get live=>publicationStatus=='active';
+  bool get live=>publicationStatus=='active'&&approved;
   const SellerShopHero({super.key,required this.shop,required this.productCount,required this.onNotifications,this.unread=0,this.publicationStatus,this.sellingEnabled=false,this.identityVerified});
   @override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(23),
     decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
@@ -27,13 +27,14 @@ class SellerShopHero extends StatelessWidget{
         style:const TextStyle(color:Color(0xFF83D9AE),fontSize:13,fontWeight:FontWeight.w700)),
       if(shop.address.isNotEmpty)...[const SizedBox(height:9),Text(shop.address,style:const TextStyle(color:Color(0xFFBACFC3),height:1.4))],
       const SizedBox(height:20),Wrap(spacing:10,runSpacing:10,children:[
-        _pill(live?'Shop is live':publicationStatus=='suspended'?'Listing is paused':shop.approvalStatus=='approved'?
+        _pill(live?'Shop is live':publicationStatus=='pending_review'||(publicationStatus=='active'&&!approved)?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':shop.approvalStatus=='approved'?
           publicationStatus==null?'Owner approved':'Owner approved · listing pending':'Shop is not live yet',
           live?Icons.check_circle_outline:Icons.shield_outlined),
         _pill(productCount==null?'Products unavailable':'$productCount products',Icons.inventory_2_outlined),
         if(approved)_pill('Teyza verified',Icons.verified_outlined)
       ]),
-      const SizedBox(height:14),Text(live?(!approved?'Your shop is ready to sell. Identity review is pending.':'Your verified shop is visible to shoppers in your area. Keep your services, photo and stock up to date.'):
+      const SizedBox(height:14),Text(live?'Your approved shop is published. Save its map location so shoppers can find it nearby.':
+        publicationStatus=='pending_review'?'Your setup is complete. Your shop will be published after Teyza approves it.':
         approved?'Your review is approved. Complete shop setup to publish, or contact support if your listing is paused.':'Complete your documents, selfie and mobile verification. You can prepare products now.',
         style:const TextStyle(color:Color(0xFFBACFC3),height:1.45,fontSize:12))
     ]));

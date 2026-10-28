@@ -1,5 +1,6 @@
 'use strict';
 const D=require('./domain');
+const P=require('./publication');
 const actions=new Set(['shop_rate']);
 function createRatings({db,clock,rate}){
  async function execute(auth,action,data){
@@ -14,8 +15,9 @@ function createRatings({db,clock,rate}){
    if(order.status!=='completed')D.fail(409,'Rate the shop after your order is completed.');
    const shopRef=db.doc('teyzaPublicShops/'+D.id(order.ownerUid));
    const ratingRef=db.doc('teyzaShopRatings/'+order.ownerUid+'/shoppers/'+uid);
-   const [shopSnap,oldSnap]=await Promise.all([tx.get(shopRef),tx.get(ratingRef)]);
-   const shop=D.published(shopSnap.exists?shopSnap.data():null,order.ownerUid);
+   const [shopSnap,oldSnap,a,o,v]=await Promise.all([tx.get(shopRef),tx.get(ratingRef),
+     ...['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>tx.get(db.doc(p+order.ownerUid)))]);
+   const shop=P.assertLive(order.ownerUid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shopSnap.exists?shopSnap.data():null);
    const old=oldSnap.exists?oldSnap.data():null;
    // One current rating per shopper per shop. Repeat orders cannot inflate count.
    const count=(Number.isInteger(shop.ratingCount)?shop.ratingCount:0)+(old?0:1);

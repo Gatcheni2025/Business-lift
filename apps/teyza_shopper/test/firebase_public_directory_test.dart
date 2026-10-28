@@ -10,6 +10,7 @@ Map<String,dynamic> row(String status,String name,{String id='seller100'}) => {
   'fields':{
    'sellerUid':{'stringValue':id},
    'status':{'stringValue':status},
+   'approvalStatus':{'stringValue':'approved'},'identityVerified':{'booleanValue':true},
    'name':{'stringValue':name},
    'shopCategory':{'stringValue':'spaza'},
    'address':{'stringValue':'123 Main Street, Durban'},
@@ -51,34 +52,26 @@ void main(){
   expect(publishedMerchantPhoto({'logoUrl':'https://example.com/logo.png'}),
     'https://example.com/logo.png');
  });
- test('Firestore public query constrains active status',() async {
+ test('Directory reads the approved server projection and rejects stale active-but-pending entries',() async {
   final mock=MockClient((request) async {
-   expect(request.url.path,isNot(contains('teyzaPublicShops')));
-   expect(request.body,contains('"fieldPath":"status"'));
-   expect(request.body,contains('"stringValue":"active"'));
-   expect(request.body,isNot(contains('teyzaDraftProducts')));
-   return http.Response(jsonEncode([row('active','Verified Spaza')]),200);
+   expect(request.method,'GET');expect(request.url.host,'us-central1-business-lift-3c19c.cloudfunctions.net');
+   expect(request.url.path,'/teyzaMobile');expect(request.url.queryParameters['publicShops'],'1');
+   return http.Response(jsonEncode({'ok':true,'entries':[apiRow('good'),{...apiRow('pending'),'approvalStatus':'pending'}],'next':null}),200);
   });
-  final rows=await fetchTeyzaPublicDirectory(client:mock);
-  expect(rows.length,1);
-  expect(rows.single['id'],'seller100');
+  final shops=await fetchTeyzaPublicDirectory(client:mock);expect(shops.map((s)=>s['id']),['good']);
  });
- test('Active shops after the first 200 are fetched using an exclusive document cursor',() async {
-  var pages=0;
-  final mock=MockClient((request) async {
-   final query=(jsonDecode(request.body) as Map)['structuredQuery'] as Map;
-   pages++;
-   if(pages==1){expect(query.containsKey('startAt'),false);
-    return http.Response(jsonEncode(List.generate(200,(n)=>row('active','Shop $n',id:'seller${n.toString().padLeft(3,'0')}'))),200);}
-   expect((query['startAt'] as Map)['before'],false);
-   expect(query['startAt'].toString(),contains('seller199'));
-   return http.Response(jsonEncode([row('active','Last shop',id:'seller200')]),200);
+ test('Directory follows the server cursor even when a filtered page contains no approved shops',() async {
+  var pages=0;final mock=MockClient((request) async {
+   pages++;if(pages==1)return http.Response(jsonEncode({'ok':true,'entries':[],'next':'seller199'}),200);
+   expect(request.url.queryParameters['after'],'seller199');
+   return http.Response(jsonEncode({'ok':true,'entries':[apiRow('seller200')],'next':null}),200);
   });
-  final shops=await fetchTeyzaPublicDirectory(client:mock);
-  expect(pages,2);expect(shops.length,201);expect(shops.last['id'],'seller200');
+  final shops=await fetchTeyzaPublicDirectory(client:mock);expect(pages,2);expect(shops.single['id'],'seller200');
  });
- test('Denied Firestore query is never replaced with unverified shops',() async {
-  final mock=MockClient((_) async => http.Response('{"error":"PERMISSION_DENIED"}',403));
-  expect(fetchTeyzaPublicDirectory(client:mock),throwsStateError);
+ test('A denied or outdated service never falls back to unapproved Firestore listings',() async {
+  for(final response in [http.Response('{"error":"PERMISSION_DENIED"}',403),http.Response('{"ok":true,"version":"3.15.0"}',200)]){
+   final mock=MockClient((_) async=>response);await expectLater(fetchTeyzaPublicDirectory(client:mock),throwsStateError);
+  }
  });
 }
+Map<String,dynamic> apiRow(String id)=>{'id':id,'sellerUid':id,'name':'Shop '+id,'status':'active','approvalStatus':'approved','identityVerified':true};

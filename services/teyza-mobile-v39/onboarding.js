@@ -1,6 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),catalogue=require('./catalogue');
 const {saveUpload}=require('./upload-storage');
+const P=require('./publication');
 const actions=new Set(['seller_onboarding','seller_identity_submit','seller_onboarding_complete','seller_identity_read','seller_phone_session']);
 function phone(value){
  let n=String(value||'').replace(/[\s()-]/g,'');
@@ -52,14 +53,15 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    return {uid,token:await createPhoneToken(uid)};
   }
   if(action==='seller_onboarding'){
-   const [saved,id,selfie,shop,user,front]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
-    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid)]);
+   const [saved,id,selfie,shop,user,front,location]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
+    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid)]);
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
     shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
-    publicationStatus:shop?.sellerUid===uid?shop.status:'not_listed'};
+    locationSaved:Boolean(P.locationFor(uid,account,location,shop)),
+    publicationStatus:P.state(uid,account,saved||{},selfie,shop).status};
   }
   if(action==='seller_identity_submit'){
    if(data.consent!==true)D.fail(422,'Confirm that you want to submit this private document.');
@@ -73,14 +75,17 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    await saveUpload(bucket,objectPath,encrypted,{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
    await db.runTransaction(async tx=>{
     const idRef=doc('teyzaSellerIdentity/'+uid),setupRef=doc('teyzaSellerOnboarding/'+uid),shopRef=doc('teyzaPublicShops/'+uid),selfieRef=doc('teyzaMobileVerification/'+uid);
-    const [old,setup,shop,selfie]=await Promise.all([tx.get(idRef),tx.get(setupRef),tx.get(shopRef),tx.get(selfieRef)]);
+    const accountRef=doc('teyzaSellerAccounts/'+uid);
+    const [old,setup,shop,selfie,a]=await Promise.all([tx.get(idRef),tx.get(setupRef),tx.get(shopRef),tx.get(selfieRef),tx.get(accountRef)]);
+    D.seller(a.exists?a.data():null,uid);
     const type=setup.exists?setup.data().legalType:(account.companyName&&account.registrationNumber?'company':null);
     if(type&&type!==values.legalType)D.fail(409,'Submit the document type selected for your registration. Contact Teyza support to change the legal account type.');
     tx.set(idRef,{ownerUid:uid,legalType:values.legalType,kind:values.kind,evidenceId,objectPath,
      detailsEncrypted:detailsEncrypted.toString('base64'),submittedAt:stamp,expiresAt:stamp+90*86400000,consentAt:stamp,consentVersion:'seller-identity-v1'});
     tx.set(setupRef,{requiredVersion:2,legalType:values.legalType,identityEvidenceId:evidenceId,
      sellingStatus:'not_started',updatedAt:stamp},{merge:true});
-    if(shop.exists&&shop.data().sellingEnabled===true)tx.update(shopRef,{sellingEnabled:false,status:'suspended',identityVerified:false,verificationStatus:'pending_review',moderationSource:'onboarding'});
+    tx.update(accountRef,{approvalStatus:'pending',listingStatus:'not_listed',updatedAt:new Date(stamp)});
+    if(shop.exists&&shop.data().sellerUid===uid)tx.update(shopRef,{sellingEnabled:false,approvalStatus:'pending',identityVerified:false,verificationStatus:'pending_review',...(!P.held(shop.data())&&setup.data()?.moderationBlocked!==true?{status:'pending_setup',moderationSource:'onboarding'}:{})});
     if(selfie.exists)tx.update(selfieRef,{status:'pending_review',identityEvidenceId:evidenceId});
    });
    return {saved:true,evidenceId,kind:values.kind};
@@ -97,22 +102,19 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
     if(!current(id,uid,clock)||!['id','passport','company'].includes(id.kind)||id.legalType!==setup.legalType)D.fail(409,'Submit your current ID, passport or company registration document first.');
     if(!current(selfie,uid,clock))D.fail(409,'Take and submit your owner selfie first.');
     if(drafts.docs.length>200)D.fail(409,'Remove unused drafts so your shop has no more than 200 products.');
-    if(shop&&(shop.sellerUid!==uid||(shop.status==='suspended'&&!['onboarding','owner_review'].includes(shop.moderationSource))))D.fail(409,'Contact Teyza support to restore this shop listing.');
-    const approved=owner.approvalStatus==='approved'&&selfie.status==='approved';
-    const next={...(shop||{}),sellerUid:uid,name:owner.shopName,address:owner.address,area:owner.address,shopCategory:owner.category,
-     status:'active',sellingEnabled:true,catalogueEnabled:shop?.catalogueEnabled===true,identityVerified:approved,
-     verificationStatus:approved?'approved':'pending_review',moderationSource:'onboarding',
-     pickupEnabled:settings.pickupEnabled!==false,deliveryEnabled:settings.deliveryEnabled===true,
-     deliveryFeeCents:settings.deliveryFeeCents||0,deliveryRadiusKm:settings.deliveryRadiusKm||0,
-     services:{cashback:settings.cashback===true,cardPayments:settings.cardPayments===true,payAndCollect:settings.pickupEnabled!==false,liveChat:settings.liveChatEnabled!==false},
-     ...(settings.hours?{hours:settings.hours}:{}),updatedAt:clock()};
-    if(f.exists&&f.data().ownerUid===uid&&f.data().photoId)next.photoUrl=require('./shop-front').publicUrl(uid,f.data().photoId);
-    Object.assign(next,catalogue.range(uid,next,drafts.docs.map(r=>({id:r.id,data:r.data()}))));
-    tx.set(refs[4],next);
-    if(approved)tx.update(refs[0],{listingStatus:'active',updatedAt:new Date(clock())});
-    tx.set(refs[3],{requiredVersion:2,legalType:id.legalType,sellingStatus:'active',identityEvidenceId:id.evidenceId,
-     selfieSubmissionId:selfie.submissionId,verifiedPhone,phoneVerifiedAt:clock(),completedAt:clock(),updatedAt:clock()},{merge:true});
-    return {sellingStatus:'active',publicationStatus:'active',verificationStatus:next.verificationStatus};
+    if(shop&&(shop.sellerUid!==uid||(shop.status==='suspended'&&!['onboarding','owner_review','approval'].includes(shop.moderationSource))))D.fail(409,'Contact Teyza support to restore this shop listing.');
+    const nextSetup={...setup,requiredVersion:2,legalType:id.legalType,sellingStatus:'pending_approval',
+      identityEvidenceId:id.evidenceId,selfieSubmissionId:selfie.submissionId,verifiedPhone,
+      phoneVerifiedAt:clock(),completedAt:clock(),updatedAt:clock()};
+    const pin=await tx.get(doc('teyzaShopLocations/'+uid));
+    const next=P.project(uid,{account:owner,setup:nextSetup,verification:selfie,shop,settings,
+      front:f.exists?f.data():null,location:pin.exists?pin.data():null,
+      drafts:drafts.docs.map(r=>({id:r.id,data:r.data()}))});
+    nextSetup.sellingStatus=next.status==='active'?'active':'pending_approval';
+    tx.set(refs[4],{...next,updatedAt:clock()});
+    tx.update(refs[0],{listingStatus:next.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
+    tx.set(refs[3],nextSetup);
+    return {sellingStatus:nextSetup.sellingStatus,publicationStatus:next.status,verificationStatus:next.verificationStatus};
    });
   }
   D.fail(404,'This registration service is not available.');

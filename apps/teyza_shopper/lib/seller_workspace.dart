@@ -20,6 +20,7 @@ import 'seller_mandate.dart';
 import 'seller_selling.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
+import 'seller_location.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -51,6 +52,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
+  String approvalStatus='pending';bool hasLocation=false;
   double? shopRating;int ratingCount=0;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
@@ -75,6 +77,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     try{final results=await Future.wait([mobile.call('seller_summary'),widget.session.contactVerified?mobile.call('notification_list'):Future.value(<String,dynamic>{'unread':0})]);
       if(mounted&&uid==widget.session.userId)setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
     }catch(_){/* Account and private products remain usable during service outages. */}
@@ -105,7 +108,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;shopRating=null;ratingCount=0;
+      mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -350,12 +353,18 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerAreasPage(shopAddress:shop?.address??'',
       onDeliverySettings:()=>openTool(SellerTool.services))));
   }
+  Future<void> openLocation() async {
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerLocationPage(
+      session:widget.session,api:widget.mobileApi,shopAddress:shop?.address??'')));
+    if(changed==true&&mounted){await load();refreshActivity();}
+  }
   Widget businessTile(IconData icon,String title,String detail,VoidCallback tap)=>Card(color:Colors.white,
     child:ListTile(leading:Icon(icon,color:ownerGreen),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),
       subtitle:Text(detail),trailing:const Icon(Icons.chevron_right),onTap:tap));
   Widget sellerBusiness()=>ListView(padding:const EdgeInsets.all(18),children:[
     Text(shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
     Text(shop!.address,style:const TextStyle(color:Color(0xFF60736B))),const SizedBox(height:16),
+    businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
     businessTile(Icons.account_balance_outlined,'Apply for stock finance','Send an enquiry and view its progress',()=>openTool(SellerTool.finance)),
     businessTile(Icons.local_shipping_outlined,'Delivery & shop services','Collection, delivery, cards, cashback & chat',()=>openTool(SellerTool.services)),
@@ -396,7 +405,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true),
     4=>sellerBusiness(),
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
-      live:publicationStatus=='active',verified:identityVerified,productCount:draftError==null?drafts.length:null,
+      live:publicationStatus=='active'&&approvalStatus=='approved',verified:identityVerified,publicationStatus:publicationStatus,
+      hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
       onAdd:busy||draftError!=null?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
       onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),

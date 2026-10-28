@@ -41,7 +41,8 @@ function range(uid,shop,entries,{enabled=true,removedProductId=null}={}){
     const draft=draftMap.get(p.id);
     return draft?.ownerUid===uid&&draft.status==='draft'&&Number.isInteger(draft.stockQty)?{...p,inStock:draft.stockQty>0}:p;
   });
-  const reviewedPhotos=new Map([...(shop.products||[]),...(shop.productHighlights||[])].filter(p=>p.customPhotoApproved===true).map(p=>[p.id,p.imageUrl]));
+  const reviewedPhotos=new Map([...Object.entries(shop.reviewedProductPhotos||{}),
+    ...[...(shop.products||[]),...(shop.productHighlights||[])].filter(p=>p.customPhotoApproved===true).map(p=>[p.id,p.imageUrl])]);
   const selected=enabled?entries.map(p=>canonical(uid,p)).filter(Boolean).map(p=>reviewedPhotos.has(p.id)?
     {...p,imageUrl:reviewedPhotos.get(p.id),customPhotoApproved:true}:p).sort((a,b)=>a.id.localeCompare(b.id)):[];
   return {products:shop.catalogueEnabled===true||shop.sellingEnabled===true?[...customProducts,...selected]:[],
