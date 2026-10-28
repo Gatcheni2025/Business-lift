@@ -51,7 +51,7 @@ class SellerSellingDashboard extends StatelessWidget {
         style:FilledButton.styleFrom(backgroundColor:_green,padding:const EdgeInsets.all(16)),
         label:const Text('Add a product',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
       const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
-        '$productCount saved products · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
+        '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
       if(!live)Padding(padding:const EdgeInsets.only(top:9),child:OutlinedButton.icon(onPressed:onVerify,
         icon:const Icon(Icons.task_alt),label:const Text('Finish setup to start selling'))),
       const SizedBox(height:22),const Text('Your selling tools',style:TextStyle(color:_ink,fontSize:21,fontWeight:FontWeight.w800)),
