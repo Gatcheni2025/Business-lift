@@ -168,6 +168,9 @@ jobs:
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
         run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+      - name: Verify merged bundle has no advertising permissions
+        working-directory: apps/teyza_shopper
+        run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
       - name: Verify bundle signature and package release evidence
         working-directory: apps/teyza_shopper
         shell: bash
@@ -182,6 +185,7 @@ jobs:
         working-directory: apps/teyza_shopper
         run: |
           flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
@@ -312,3 +316,4 @@ jobs:
           flutter analyze --no-fatal-infos
           flutter test test/session_test.dart test/social_auth_test.dart
           flutter build apk --debug
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk

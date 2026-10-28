@@ -30,3 +30,7 @@ Primary references:
 - https://firebase.google.com/docs/auth/ios/facebook-login
 - https://facebook.meedu.app/docs/7.x.x/android/
 - https://facebook.meedu.app/docs/7.x.x/ios/
+
+## Android advertising-ID declaration (1.0.16+26)
+
+The signed 1.0.15+25 AAB from run 40649619924 was inspected and includes AD_ID plus AdServices permissions inherited from dependencies, despite the existing disabled advertiser-ID collection settings. The wrapper now explicitly removes those five permissions during manifest merging. CI inspects the actual built AAB/APK manifests and fails if they reappear, for SDK-configured and standard builds. JVM target validation remains enabled. This supports the intended no-advertising-ID implementation; it is not a guarantee that a Play Console form-state problem will disappear. Upload the new higher-version signed AAB and verify all active tracks/artifacts before confirming No. The Contains ads declaration is separate. Google/Apple/Facebook sign-in remains intact; real-device OAuth acceptance still applies.
