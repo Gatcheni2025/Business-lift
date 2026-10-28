@@ -366,9 +366,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
-          Card(child:ListTile(leading:const Icon(Icons.star_rounded,color:Color(0xFFB57800)),
-            title:Text(ratingCount>0&&shopRating!=null?'${shopRating!.toStringAsFixed(1)} from $ratingCount shoppers':'No ratings yet'),
-            subtitle:const Text('Ratings from completed Teyza orders. One current rating per shopper.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -390,6 +387,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               onOrders:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(
                 appBar:AppBar(title:const Text('Shop orders')),body:ShopOrdersPanel(session:session,asOwner:true)))),
               onProfile:editProfile,onTool:openTool),
+          Card(child:ListTile(leading:const Icon(Icons.star_rounded,color:Color(0xFFB57800)),
+            title:Text(ratingCount>0&&shopRating!=null?'${shopRating!.toStringAsFixed(1)} from $ratingCount shoppers':'No ratings yet'),
+            subtitle:const Text('Ratings from completed Teyza orders. One current rating per shopper.'))),
           ],
           if(productsView)_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             Row(children:[

@@ -12,8 +12,7 @@ import 'native_firebase.dart';
 class SellerPush {
   static final _instances=Expando<SellerPush>();
   factory SellerPush(ShopperSession session)=>_instances[session]??=SellerPush._(session);
-  SellerPush._(this.session){session.addListener(changed);session.beforeSignOut=disable;
-    renewal=Timer.periodic(const Duration(hours:1),(_)=>unawaited(restore()));}
+  SellerPush._(this.session){session.addListener(changed);session.beforeSignOut=disable;}
   final ShopperSession session;
   final updates=StreamController<void>.broadcast();
   StreamSubscription<String>? refresh;
@@ -51,6 +50,7 @@ class SellerPush {
     registeredAt=DateTime.now();
     if(disposed||uid!=session.userId){await messaging.deleteToken();return;}
     final prefs=await SharedPreferences.getInstance();await prefs.setString('teyza_seller_push_uid',uid);
+    renewal??=Timer.periodic(const Duration(hours:1),(_)=>unawaited(restore()));
     await refresh?.cancel();refresh=messaging.onTokenRefresh.listen((value) async{
       if(disposed||owner!=session.userId)return;token=value;
       try{await TeyzaMobileApi(session).call('notification_device_save',{'token':value,'platform':Platform.isIOS?'ios':'android'});}catch(_){}
@@ -62,6 +62,7 @@ class SellerPush {
   void open(RemoteMessage message){if(!disposed&&session.userId!=null&&message.data['ownerUid']==session.userId)onOpen?.call();}
   Future<void> disable() async{
     stopping=true;
+    renewal?.cancel();renewal=null;registeredAt=null;
     final value=token;owner=null;token=null;await refresh?.cancel();refresh=null;
     if(value!=null&&session.userId!=null){try{await TeyzaMobileApi(session).call('notification_device_delete',{'token':value}).timeout(const Duration(seconds:4));}catch(_){} }
     try{if(Firebase.apps.isNotEmpty){await FirebaseMessaging.instance.setAutoInitEnabled(false);await FirebaseMessaging.instance.deleteToken().timeout(const Duration(seconds:4));}}catch(_){}
