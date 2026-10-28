@@ -23,7 +23,8 @@ class ShopperChatPage extends StatefulWidget {
   final ShopperConversation? initialShop;
   final TeyzaMobileApi? api;
   final String? initialThreadId,initialTitle,initialMessage;
-  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle,this.initialMessage});
+  final bool asOwner;
+  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle,this.initialMessage,this.asOwner=false});
   @override State<ShopperChatPage> createState()=>_ChatState();
 }
 class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
@@ -57,7 +58,8 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
         threadId=opened['threadId'] as String?;
       }
       final result=await api.call(threadId==null?'chat_list':'chat_read',
-        threadId==null?{}:{'threadId':threadId});
+        threadId==null?{if(widget.asOwner)'asOwner':true}:{'threadId':threadId});
+      if(widget.asOwner&&threadId==null&&result['scope']!='owner')throw StateError('Seller chat needs the latest Teyza service update. Please contact support.');
       if(mounted&&uid==widget.session.userId)setState((){
         if(threadId==null)threads=mobileRows(result['threads']);else messages=mobileRows(result['messages']);error=null;
       });
@@ -75,17 +77,17 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
     finally{if(mounted)setState(()=>sending=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFFAFBFA),
-    appBar:AppBar(title:Text(title??'Live chat'),actions:[IconButton(
+    appBar:AppBar(title:Text(title??(widget.asOwner?'Customer chat':'Live chat')),actions:[IconButton(
       tooltip:'Refresh messages',onPressed:loading?null:refresh,icon:const Icon(Icons.refresh))]),
     body:SafeArea(child:Column(children:[
       if(loading)const LinearProgressIndicator(),
       if(error!=null)Padding(padding:const EdgeInsets.all(16),child:Text(error!,
         style:const TextStyle(color:Color(0xFF9A3412)))),
       Expanded(child:threadId==null?ListView(padding:const EdgeInsets.all(18),children:[
-        const Text('Your conversations',style:TextStyle(fontSize:25,fontWeight:FontWeight.w800)),
-        const SizedBox(height:8),const Text('Ask about products, collection or delivery. Replies appear here.'),
-        if(threads.isEmpty&&!loading)const Padding(padding:EdgeInsets.symmetric(vertical:40),
-          child:Text('No conversations yet. Open a registered shop and tap Live chat.')),
+        Text(widget.asOwner?'Your customers':'Your conversations',style:const TextStyle(fontSize:25,fontWeight:FontWeight.w800)),
+        const SizedBox(height:8),Text(widget.asOwner?'Reply to customer questions about products, collection and delivery.':'Ask about products, collection or delivery. Replies appear here.'),
+        if(threads.isEmpty&&!loading)Padding(padding:const EdgeInsets.symmetric(vertical:20),
+          child:Text(widget.asOwner?'No customer messages yet. New customer conversations will appear here.':'No conversations yet. Open a registered shop and tap Live chat.')),
         for(final item in threads)Card(color:Colors.white,child:ListTile(
           leading:const CircleAvatar(backgroundColor:Color(0xFFE1F6EB),child:Icon(Icons.chat_bubble_outline,color:chatGreen)),
           title:Text(item['name']?.toString()??'Conversation'),
@@ -96,8 +98,8 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
         if(widget.initialShop==null)Align(alignment:Alignment.centerLeft,child:TextButton.icon(
           onPressed:loading?null:(){setState((){threadId=null;title=null;messages=[];});refresh();},
           icon:const Icon(Icons.arrow_back,size:18),label:const Text('All conversations'))),
-        if(messages.isEmpty&&!loading)const Padding(padding:EdgeInsets.symmetric(vertical:30),
-          child:Text('Start a conversation with this shop.')),
+        if(messages.isEmpty&&!loading)Padding(padding:const EdgeInsets.symmetric(vertical:30),
+          child:Text(widget.asOwner?'Send a message to your customer.':'Start a conversation with this shop.')),
         for(final message in messages)Align(
           alignment:message['senderUid']==uid?Alignment.centerRight:Alignment.centerLeft,
           child:Container(constraints:const BoxConstraints(maxWidth:310),

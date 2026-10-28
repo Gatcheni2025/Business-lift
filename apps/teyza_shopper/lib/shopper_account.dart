@@ -31,6 +31,7 @@ class _AccountState extends State<ShopperAccountPanel> {
         await widget.session.signIn(email.text,password.text);
       }
       password.clear();
+      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if (registering) {
         try {
           await widget.session.sendEmailVerification();
@@ -44,8 +45,9 @@ class _AccountState extends State<ShopperAccountPanel> {
             failure=false;
           });
         }
-      } else if (mounted) {
-        setState(() {status='Welcome to Teyza!';failure=false;});
+      }
+      if (mounted) {
+        if(!registering)setState(() {status='Welcome to Teyza!';failure=false;});
         if(ownerMode && widget.onOpenOwner!=null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if(mounted)widget.onOpenOwner!();
@@ -64,6 +66,7 @@ class _AccountState extends State<ShopperAccountPanel> {
     setState(() {working=true;status=null;failure=false;});
     try {
       await widget.session.signInWithGoogle();
+      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(mounted)setState(() {
         status=widget.session.idToken!=null?'Welcome to Teyza!':'Google sign-in cancelled.';
         failure=false;
@@ -88,6 +91,7 @@ class _AccountState extends State<ShopperAccountPanel> {
     setState((){working=true;status=null;failure=false;});
     try{
       await widget.session.signInWithApple();
+      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(!mounted)return;
       if(widget.session.idToken!=null){
         if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}
@@ -99,7 +103,9 @@ class _AccountState extends State<ShopperAccountPanel> {
   Future<void> facebookLogin() async {
     setState((){working=true;status=null;failure=false;});
     try {
-      await widget.session.signInWithFacebook();if(!mounted)return;
+      await widget.session.signInWithFacebook();
+      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
+      if(!mounted)return;
       if(widget.session.idToken!=null){if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}}
       else{setState(()=>status='Facebook sign-in cancelled.');}
     }catch(error){if(mounted)setState((){status=authMessage(error);failure=true;});}

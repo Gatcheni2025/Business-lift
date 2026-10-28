@@ -64,6 +64,19 @@ test('Existing approved active shops reconcile old listing flags but suspended s
  assert.equal(db.records.get('teyzaPublicShops/seller1').identityVerified,false);
 });
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
+test('Seller chat lists customers only and cannot turn a shopper into an owner',async()=>{
+ const {service}=fixture({
+  'teyzaMobileChats/customer':{ownerUid:'seller1',shopperUid:'buyer1',shopperName:'Customer',shopName:'Corner Shop',updatedAt:20,ownerUnread:2},
+  'teyzaMobileChats/purchase':{ownerUid:'otherSeller',shopperUid:'seller1',shopperName:'Owner',shopName:'Other shop',updatedAt:10,shopperUnread:1},
+  'teyzaMobileChatIndex/seller1/threads/customer':{updatedAt:20},
+  'teyzaMobileChatIndex/seller1/threads/purchase':{updatedAt:10},
+ });
+ const inbox=await service.execute(owner,'chat_list',{asOwner:true,ownerUid:'otherSeller'});
+ assert.equal(inbox.scope,'owner');assert.deepEqual(inbox.threads.map(t=>t.id),['customer']);
+ assert.equal(inbox.threads[0].name,'Customer');assert.equal(inbox.threads[0].unread,2);
+ assert.equal((await service.execute(owner,'chat_list')).threads.length,2);
+ await rejects(service.execute(buyer,'chat_list',{asOwner:true}),403);
+});
 
 test('Native seller registration binds the verified actor and cannot approve, activate or replace an existing shop',async()=>{
  const {service,db}=fixture();const data={category:'retail',shopName:'Local Retail',phone:'0712345678',address:'Durban',consent:true,

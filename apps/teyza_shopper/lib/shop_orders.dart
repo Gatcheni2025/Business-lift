@@ -53,7 +53,7 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
   }
   Future<void> chat(Map<String,dynamic> order) async {
     try{final result=await api.call('order_chat',{'orderId':order['id']});
-      if(mounted)Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:widget.session,
+      if(mounted)Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:widget.session,asOwner:widget.asOwner,
         initialThreadId:result['threadId']?.toString(),initialTitle:widget.asOwner?order['shopperName']?.toString():order['shopName']?.toString())));
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   }
