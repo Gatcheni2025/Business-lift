@@ -25,13 +25,15 @@ const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-
  typeof lng==='number'&&Number.isFinite(lng)&&lng>=-180&&lng<=180&&!(lat===0&&lng===0);
 const sameAddress=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
 const locationMatches=(uid,account,location)=>location?.ownerUid===uid&&Boolean(location.consentAt)&&sameAddress(location.address,account?.address);
-const freshCoordinates=(value,now)=>value?.source!=='google_places'&&value?.coordinateSource!=='google_places'||Number.isFinite(value.coordinatesExpireAt)&&value.coordinatesExpireAt>now;
+const freshCoordinates=(value,now)=>(value?.source!=='google_places'&&value?.coordinateSource!=='google_places')||
+ (Number.isFinite(value.coordinatesExpireAt)&&value.coordinatesExpireAt>now);
 function locationFor(uid,account,location,shop,now=Date.now()){
  if(locationMatches(uid,account,location)&&freshCoordinates(location,now)&&coordinates(location.latitude,location.longitude))
   return {latitude:location.latitude,longitude:location.longitude,area:location.area,city:location.city||'',address:account.address,
    ...(location.source==='google_places'?{coordinateSource:'google_places',coordinatesExpireAt:location.coordinatesExpireAt}:{})};
  if(!location&&freshCoordinates(shop,now)&&(!shop?.address||sameAddress(shop.address,account.address))&&coordinates(shop?.latitude,shop?.longitude))
-  return {latitude:shop.latitude,longitude:shop.longitude,area:shop.area||account.address,city:shop.city||'',address:account.address};
+  return {latitude:shop.latitude,longitude:shop.longitude,area:shop.area||account.address,city:shop.city||'',address:account.address,
+   ...(shop.coordinateSource==='google_places'?{coordinateSource:'google_places',coordinatesExpireAt:shop.coordinatesExpireAt}:{})};
  return null;
 }
 function project(uid,{account,setup={},verification,shop,settings={},front,location,drafts=[],removedProductId=null,now=Date.now()}){

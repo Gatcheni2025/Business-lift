@@ -113,9 +113,10 @@ class _ShopAddressPickerState extends State<ShopAddressPicker> {
     if(resolving)const Padding(padding:EdgeInsets.only(top:8),child:Text('Finding the address and map position…')),
     if(suggestions.isNotEmpty)Container(margin:const EdgeInsets.only(top:8),decoration:BoxDecoration(color:Colors.white,
       border:Border.all(color:const Color(0xFFDCE5DD)),borderRadius:BorderRadius.circular(14)),
-      child:Column(children:[for(final suggestion in suggestions)ListTile(
+      child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),clipBehavior:Clip.antiAlias,
+        child:Column(children:[for(final suggestion in suggestions)ListTile(
         leading:const Icon(Icons.location_on_outlined),title:Text(suggestion['label'] as String),
-        onTap:enabled?()=>choose(suggestion):null)])),
+        onTap:enabled?()=>choose(suggestion):null)]))),
     if(selected!=null)Container(margin:const EdgeInsets.only(top:12),padding:const EdgeInsets.all(14),
       decoration:BoxDecoration(color:const Color(0xFFE8F5EC),borderRadius:BorderRadius.circular(14)),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[

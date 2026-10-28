@@ -136,6 +136,13 @@ test('Provider failure clears cached pins and retains the confirmed suburb witho
  assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
  assert.equal((await service.refreshShopLocations()).checked,0);
 });
+test('A missing private Google pin cannot turn its public cached coordinates into a permanent legacy location',async()=>{
+ let now=1000000;const {service,db}=fixture({'teyzaPublicShops/seller1':{...shop,latitude:-29.74,longitude:30.99,
+  coordinateSource:'google_places',coordinatesExpireAt:now+DAY}}, {clock:()=>now});
+ await service.synchronizeCatalogue('seller1');assert.equal(db.records.get('teyzaPublicShops/seller1').coordinateSource,'google_places');
+ now+=2*DAY;assert.equal((await service.publicDirectory()).entries[0].latitude,null);
+ await service.synchronizeCatalogue('seller1');assert(!('latitude' in db.records.get('teyzaPublicShops/seller1')));
+});
 test('Only recent trusted reviewers can see the queue and approve the exact selfie they viewed',async()=>{
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending',listingStatus:'not_listed'}});
  const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]);
