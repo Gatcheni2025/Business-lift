@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "photoNote": "Illustrative product photos. Brands and packaging may differ.",
   "columns": 4,
   "rows": 6,
@@ -531,6 +531,534 @@
         249,
         229
       ]
+    },
+    "chocolate": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 0,
+      "bounds": [
+        11,
+        16,
+        238,
+        226
+      ]
+    },
+    "stock-cubes": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 0,
+      "bounds": [
+        271,
+        20,
+        231,
+        220
+      ]
+    },
+    "fresh-milk": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 0,
+      "bounds": [
+        564,
+        3,
+        157,
+        244
+      ]
+    },
+    "energy-drink": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 0,
+      "bounds": [
+        816,
+        8,
+        134,
+        238
+      ]
+    },
+    "viennas": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 1,
+      "bounds": [
+        18,
+        266,
+        225,
+        236
+      ]
+    },
+    "popcorn": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 1,
+      "bounds": [
+        272,
+        257,
+        230,
+        241
+      ]
+    },
+    "jam": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 1,
+      "bounds": [
+        564,
+        257,
+        151,
+        241
+      ]
+    },
+    "cheese": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 1,
+      "bounds": [
+        776,
+        273,
+        241,
+        226
+      ]
+    },
+    "soup-powder": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 2,
+      "bounds": [
+        10,
+        504,
+        240,
+        238
+      ]
+    },
+    "peanuts": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 2,
+      "bounds": [
+        276,
+        501,
+        238,
+        251
+      ]
+    },
+    "fruit-juice": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 2,
+      "bounds": [
+        536,
+        500,
+        229,
+        252
+      ]
+    },
+    "chewing-gum": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 2,
+      "bounds": [
+        775,
+        537,
+        241,
+        211
+      ]
+    },
+    "polony": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 3,
+      "bounds": [
+        6,
+        749,
+        249,
+        252
+      ]
+    },
+    "cakes": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 3,
+      "bounds": [
+        267,
+        762,
+        242,
+        200
+      ]
+    },
+    "margarine": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 3,
+      "bounds": [
+        516,
+        761,
+        250,
+        207
+      ]
+    },
+    "lollipops": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 3,
+      "bounds": [
+        788,
+        733,
+        232,
+        236
+      ]
+    },
+    "sausages": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 4,
+      "bounds": [
+        0,
+        1004,
+        256,
+        230
+      ]
+    },
+    "aromat": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 4,
+      "bounds": [
+        313,
+        968,
+        148,
+        256
+      ]
+    },
+    "mayonnaise": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 4,
+      "bounds": [
+        557,
+        965,
+        167,
+        263
+      ]
+    },
+    "vinegar": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 4,
+      "bounds": [
+        812,
+        963,
+        143,
+        270
+      ]
+    },
+    "salt": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 0,
+      "row": 5,
+      "bounds": [
+        2,
+        1225,
+        253,
+        299
+      ]
+    },
+    "instant-noodles": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 1,
+      "row": 5,
+      "bounds": [
+        257,
+        1223,
+        252,
+        279
+      ]
+    },
+    "tomato-paste": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 2,
+      "row": 5,
+      "bounds": [
+        533,
+        1262,
+        211,
+        253
+      ]
+    },
+    "condensed-milk": {
+      "atlas": "food-drinks-expanded.png",
+      "column": 3,
+      "row": 5,
+      "bounds": [
+        775,
+        1207,
+        249,
+        309
+      ]
+    },
+    "baby-lotion": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 0,
+      "bounds": [
+        55,
+        16,
+        143,
+        222
+      ]
+    },
+    "plastic-bags": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 0,
+      "bounds": [
+        280,
+        8,
+        216,
+        235
+      ]
+    },
+    "matches": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 0,
+      "bounds": [
+        531,
+        35,
+        235,
+        200
+      ]
+    },
+    "toothbrush": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 0,
+      "bounds": [
+        775,
+        0,
+        249,
+        253
+      ]
+    },
+    "baby-formula": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 1,
+      "bounds": [
+        30,
+        259,
+        224,
+        230
+      ]
+    },
+    "sponges": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 1,
+      "bounds": [
+        266,
+        280,
+        247,
+        182
+      ]
+    },
+    "baby-wipes": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 1,
+      "bounds": [
+        513,
+        293,
+        254,
+        183
+      ]
+    },
+    "candles": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 1,
+      "bounds": [
+        834,
+        260,
+        132,
+        229
+      ]
+    },
+    "petroleum-jelly": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 2,
+      "bounds": [
+        31,
+        511,
+        203,
+        196
+      ]
+    },
+    "disposable-cups": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 2,
+      "bounds": [
+        302,
+        493,
+        169,
+        224
+      ]
+    },
+    "pencils": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 2,
+      "bounds": [
+        514,
+        497,
+        244,
+        222
+      ]
+    },
+    "baby-soap": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 2,
+      "bounds": [
+        770,
+        518,
+        250,
+        199
+      ]
+    },
+    "wet-wipes": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 3,
+      "bounds": [
+        1,
+        751,
+        260,
+        195
+      ]
+    },
+    "baby-powder": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 3,
+      "bounds": [
+        304,
+        713,
+        158,
+        258
+      ]
+    },
+    "erasers": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 3,
+      "bounds": [
+        521,
+        768,
+        234,
+        190
+      ]
+    },
+    "bleach": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 3,
+      "bounds": [
+        816,
+        704,
+        177,
+        267
+      ]
+    },
+    "refuse-bags": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 4,
+      "bounds": [
+        3,
+        999,
+        264,
+        217
+      ]
+    },
+    "deodorant": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 4,
+      "bounds": [
+        313,
+        970,
+        143,
+        242
+      ]
+    },
+    "baby-shampoo": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 4,
+      "bounds": [
+        563,
+        966,
+        151,
+        246
+      ]
+    },
+    "cotton-wool": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 4,
+      "bounds": [
+        777,
+        976,
+        233,
+        236
+      ]
+    },
+    "pantyliners": {
+      "atlas": "care-household-expanded.png",
+      "column": 0,
+      "row": 5,
+      "bounds": [
+        11,
+        1225,
+        244,
+        276
+      ]
+    },
+    "dishcloths": {
+      "atlas": "care-household-expanded.png",
+      "column": 1,
+      "row": 5,
+      "bounds": [
+        261,
+        1218,
+        253,
+        266
+      ]
+    },
+    "dog-food": {
+      "atlas": "care-household-expanded.png",
+      "column": 2,
+      "row": 5,
+      "bounds": [
+        529,
+        1206,
+        222,
+        304
+      ]
+    },
+    "cat-food": {
+      "atlas": "care-household-expanded.png",
+      "column": 3,
+      "row": 5,
+      "bounds": [
+        774,
+        1258,
+        243,
+        221
+      ]
     }
   },
   "products": [
@@ -820,7 +1348,7 @@
       "category": "Dairy & Eggs",
       "unit": "500 ml",
       "photo": "milk",
-      "keywords": ""
+      "keywords": "fresh milk dairy"
     },
     {
       "id": "milk-1-l",
@@ -828,7 +1356,7 @@
       "category": "Dairy & Eggs",
       "unit": "1 L",
       "photo": "milk",
-      "keywords": ""
+      "keywords": "fresh milk dairy"
     },
     {
       "id": "milk-2-l",
@@ -836,7 +1364,7 @@
       "category": "Dairy & Eggs",
       "unit": "2 L",
       "photo": "milk",
-      "keywords": ""
+      "keywords": "fresh milk dairy"
     },
     {
       "id": "milk-6-x-1-l",
@@ -844,7 +1372,7 @@
       "category": "Dairy & Eggs",
       "unit": "6 x 1 L",
       "photo": "milk",
-      "keywords": ""
+      "keywords": "fresh milk dairy"
     },
     {
       "id": "milk-12-x-1-l",
@@ -852,7 +1380,7 @@
       "category": "Dairy & Eggs",
       "unit": "12 x 1 L",
       "photo": "milk",
-      "keywords": ""
+      "keywords": "fresh milk dairy"
     },
     {
       "id": "yogurt-175-g",
@@ -860,7 +1388,7 @@
       "category": "Dairy & Eggs",
       "unit": "175 g",
       "photo": "yogurt",
-      "keywords": ""
+      "keywords": "yoghurt yogurt"
     },
     {
       "id": "yogurt-500-g",
@@ -868,7 +1396,7 @@
       "category": "Dairy & Eggs",
       "unit": "500 g",
       "photo": "yogurt",
-      "keywords": ""
+      "keywords": "yoghurt yogurt"
     },
     {
       "id": "yogurt-1-kg",
@@ -876,7 +1404,7 @@
       "category": "Dairy & Eggs",
       "unit": "1 kg",
       "photo": "yogurt",
-      "keywords": ""
+      "keywords": "yoghurt yogurt"
     },
     {
       "id": "white-bread-400-g",
@@ -1012,7 +1540,7 @@
       "category": "Meat",
       "unit": "500 g",
       "photo": "boerewors",
-      "keywords": ""
+      "keywords": "sausage sausages boerewors"
     },
     {
       "id": "boerewors-1-kg",
@@ -1020,7 +1548,7 @@
       "category": "Meat",
       "unit": "1 kg",
       "photo": "boerewors",
-      "keywords": ""
+      "keywords": "sausage sausages boerewors"
     },
     {
       "id": "boerewors-2-kg",
@@ -1028,7 +1556,7 @@
       "category": "Meat",
       "unit": "2 kg",
       "photo": "boerewors",
-      "keywords": ""
+      "keywords": "sausage sausages boerewors"
     },
     {
       "id": "boerewors-5-kg",
@@ -1036,7 +1564,7 @@
       "category": "Meat",
       "unit": "5 kg",
       "photo": "boerewors",
-      "keywords": ""
+      "keywords": "sausage sausages boerewors"
     },
     {
       "id": "rice-500-g",
@@ -1716,7 +2244,7 @@
       "category": "Snacks",
       "unit": "50 g",
       "photo": "sweets",
-      "keywords": ""
+      "keywords": "sweets candy sweeties"
     },
     {
       "id": "sweets-100-g",
@@ -1724,7 +2252,7 @@
       "category": "Snacks",
       "unit": "100 g",
       "photo": "sweets",
-      "keywords": ""
+      "keywords": "sweets candy sweeties"
     },
     {
       "id": "sweets-250-g",
@@ -1732,7 +2260,7 @@
       "category": "Snacks",
       "unit": "250 g",
       "photo": "sweets",
-      "keywords": ""
+      "keywords": "sweets candy sweeties"
     },
     {
       "id": "sweets-500-g",
@@ -1740,7 +2268,7 @@
       "category": "Snacks",
       "unit": "500 g",
       "photo": "sweets",
-      "keywords": ""
+      "keywords": "sweets candy sweeties"
     },
     {
       "id": "sweets-1-kg",
@@ -1748,7 +2276,7 @@
       "category": "Snacks",
       "unit": "1 kg",
       "photo": "sweets",
-      "keywords": ""
+      "keywords": "sweets candy sweeties"
     },
     {
       "id": "pilchards-155-g",
@@ -1884,7 +2412,7 @@
       "category": "Baby Care",
       "unit": "Size 2 - 20 pack",
       "photo": "nappies",
-      "keywords": "nappies diapers"
+      "keywords": "nappies diapers baby"
     },
     {
       "id": "nappies-size-3-20-pack",
@@ -1892,7 +2420,7 @@
       "category": "Baby Care",
       "unit": "Size 3 - 20 pack",
       "photo": "nappies",
-      "keywords": "nappies diapers"
+      "keywords": "nappies diapers baby"
     },
     {
       "id": "nappies-size-4-20-pack",
@@ -1900,7 +2428,7 @@
       "category": "Baby Care",
       "unit": "Size 4 - 20 pack",
       "photo": "nappies",
-      "keywords": "nappies diapers"
+      "keywords": "nappies diapers baby"
     },
     {
       "id": "nappies-size-5-20-pack",
@@ -1908,7 +2436,7 @@
       "category": "Baby Care",
       "unit": "Size 5 - 20 pack",
       "photo": "nappies",
-      "keywords": "nappies diapers"
+      "keywords": "nappies diapers baby"
     },
     {
       "id": "pads-8-pack",
@@ -2005,6 +2533,1558 @@
       "unit": "10 pack",
       "photo": "pens",
       "keywords": ""
+    },
+    {
+      "id": "chocolate-40-g",
+      "name": "Milk chocolate · 40 g",
+      "category": "Snacks",
+      "unit": "40 g",
+      "photo": "chocolate",
+      "keywords": "chocolate bar slab"
+    },
+    {
+      "id": "chocolate-80-g",
+      "name": "Milk chocolate · 80 g",
+      "category": "Snacks",
+      "unit": "80 g",
+      "photo": "chocolate",
+      "keywords": "chocolate bar slab"
+    },
+    {
+      "id": "chocolate-100-g",
+      "name": "Milk chocolate · 100 g",
+      "category": "Snacks",
+      "unit": "100 g",
+      "photo": "chocolate",
+      "keywords": "chocolate bar slab"
+    },
+    {
+      "id": "chocolate-150-g",
+      "name": "Milk chocolate · 150 g",
+      "category": "Snacks",
+      "unit": "150 g",
+      "photo": "chocolate",
+      "keywords": "chocolate bar slab"
+    },
+    {
+      "id": "chocolate-200-g",
+      "name": "Milk chocolate · 200 g",
+      "category": "Snacks",
+      "unit": "200 g",
+      "photo": "chocolate",
+      "keywords": "chocolate bar slab"
+    },
+    {
+      "id": "stock-cubes-12-cubes",
+      "name": "Stock cubes · 12 cubes",
+      "category": "Pantry",
+      "unit": "12 cubes",
+      "photo": "stock-cubes",
+      "keywords": "stock cube bouillon"
+    },
+    {
+      "id": "stock-cubes-24-cubes",
+      "name": "Stock cubes · 24 cubes",
+      "category": "Pantry",
+      "unit": "24 cubes",
+      "photo": "stock-cubes",
+      "keywords": "stock cube bouillon"
+    },
+    {
+      "id": "stock-cubes-48-cubes",
+      "name": "Stock cubes · 48 cubes",
+      "category": "Pantry",
+      "unit": "48 cubes",
+      "photo": "stock-cubes",
+      "keywords": "stock cube bouillon"
+    },
+    {
+      "id": "chicken-stock-cubes-12-cubes",
+      "name": "Chicken stock cubes · 12 cubes",
+      "category": "Pantry",
+      "unit": "12 cubes",
+      "photo": "stock-cubes",
+      "keywords": "chicken stock cube bouillon"
+    },
+    {
+      "id": "chicken-stock-cubes-24-cubes",
+      "name": "Chicken stock cubes · 24 cubes",
+      "category": "Pantry",
+      "unit": "24 cubes",
+      "photo": "stock-cubes",
+      "keywords": "chicken stock cube bouillon"
+    },
+    {
+      "id": "beef-stock-cubes-12-cubes",
+      "name": "Beef stock cubes · 12 cubes",
+      "category": "Pantry",
+      "unit": "12 cubes",
+      "photo": "stock-cubes",
+      "keywords": "beef stock cube bouillon"
+    },
+    {
+      "id": "beef-stock-cubes-24-cubes",
+      "name": "Beef stock cubes · 24 cubes",
+      "category": "Pantry",
+      "unit": "24 cubes",
+      "photo": "stock-cubes",
+      "keywords": "beef stock cube bouillon"
+    },
+    {
+      "id": "fresh-milk-500-ml",
+      "name": "Fresh full cream milk · 500 ml",
+      "category": "Dairy & Eggs",
+      "unit": "500 ml",
+      "photo": "fresh-milk",
+      "keywords": "fresh milk dairy"
+    },
+    {
+      "id": "fresh-milk-1-l",
+      "name": "Fresh full cream milk · 1 L",
+      "category": "Dairy & Eggs",
+      "unit": "1 L",
+      "photo": "fresh-milk",
+      "keywords": "fresh milk dairy"
+    },
+    {
+      "id": "fresh-milk-2-l",
+      "name": "Fresh full cream milk · 2 L",
+      "category": "Dairy & Eggs",
+      "unit": "2 L",
+      "photo": "fresh-milk",
+      "keywords": "fresh milk dairy"
+    },
+    {
+      "id": "fresh-milk-low-fat-1-l",
+      "name": "Fresh low fat milk · 1 L",
+      "category": "Dairy & Eggs",
+      "unit": "1 L",
+      "photo": "fresh-milk",
+      "keywords": "fresh milk low fat"
+    },
+    {
+      "id": "fresh-milk-low-fat-2-l",
+      "name": "Fresh low fat milk · 2 L",
+      "category": "Dairy & Eggs",
+      "unit": "2 L",
+      "photo": "fresh-milk",
+      "keywords": "fresh milk low fat"
+    },
+    {
+      "id": "energy-drink-250-ml",
+      "name": "Energy drink · 250 ml",
+      "category": "Drinks",
+      "unit": "250 ml",
+      "photo": "energy-drink",
+      "keywords": "energy drink"
+    },
+    {
+      "id": "energy-drink-300-ml",
+      "name": "Energy drink · 300 ml",
+      "category": "Drinks",
+      "unit": "300 ml",
+      "photo": "energy-drink",
+      "keywords": "energy drink"
+    },
+    {
+      "id": "energy-drink-440-ml",
+      "name": "Energy drink · 440 ml",
+      "category": "Drinks",
+      "unit": "440 ml",
+      "photo": "energy-drink",
+      "keywords": "energy drink"
+    },
+    {
+      "id": "energy-drink-500-ml",
+      "name": "Energy drink · 500 ml",
+      "category": "Drinks",
+      "unit": "500 ml",
+      "photo": "energy-drink",
+      "keywords": "energy drink"
+    },
+    {
+      "id": "energy-drink-6-x-500-ml",
+      "name": "Energy drink · 6 x 500 ml",
+      "category": "Drinks",
+      "unit": "6 x 500 ml",
+      "photo": "energy-drink",
+      "keywords": "energy drink"
+    },
+    {
+      "id": "viennas-250-g",
+      "name": "Viennas · 250 g",
+      "category": "Meat",
+      "unit": "250 g",
+      "photo": "viennas",
+      "keywords": "vienna frankfurters hot dog sausage"
+    },
+    {
+      "id": "viennas-500-g",
+      "name": "Viennas · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "viennas",
+      "keywords": "vienna frankfurters hot dog sausage"
+    },
+    {
+      "id": "viennas-1-kg",
+      "name": "Viennas · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "viennas",
+      "keywords": "vienna frankfurters hot dog sausage"
+    },
+    {
+      "id": "popcorn-25-g",
+      "name": "Ready-popped popcorn · 25 g",
+      "category": "Snacks",
+      "unit": "25 g",
+      "photo": "popcorn",
+      "keywords": "popcorn popped corn"
+    },
+    {
+      "id": "popcorn-50-g",
+      "name": "Ready-popped popcorn · 50 g",
+      "category": "Snacks",
+      "unit": "50 g",
+      "photo": "popcorn",
+      "keywords": "popcorn popped corn"
+    },
+    {
+      "id": "popcorn-100-g",
+      "name": "Ready-popped popcorn · 100 g",
+      "category": "Snacks",
+      "unit": "100 g",
+      "photo": "popcorn",
+      "keywords": "popcorn popped corn"
+    },
+    {
+      "id": "jam-225-g",
+      "name": "Strawberry jam · 225 g",
+      "category": "Pantry",
+      "unit": "225 g",
+      "photo": "jam",
+      "keywords": "jam fruit spread"
+    },
+    {
+      "id": "jam-450-g",
+      "name": "Strawberry jam · 450 g",
+      "category": "Pantry",
+      "unit": "450 g",
+      "photo": "jam",
+      "keywords": "jam fruit spread"
+    },
+    {
+      "id": "jam-900-g",
+      "name": "Strawberry jam · 900 g",
+      "category": "Pantry",
+      "unit": "900 g",
+      "photo": "jam",
+      "keywords": "jam fruit spread"
+    },
+    {
+      "id": "apricot-jam-450-g",
+      "name": "Apricot jam · 450 g",
+      "category": "Pantry",
+      "unit": "450 g",
+      "photo": "jam",
+      "keywords": "jam apricot fruit spread"
+    },
+    {
+      "id": "apricot-jam-900-g",
+      "name": "Apricot jam · 900 g",
+      "category": "Pantry",
+      "unit": "900 g",
+      "photo": "jam",
+      "keywords": "jam apricot fruit spread"
+    },
+    {
+      "id": "cheese-100-g",
+      "name": "Cheddar cheese · 100 g",
+      "category": "Dairy & Eggs",
+      "unit": "100 g",
+      "photo": "cheese",
+      "keywords": "cheese cheddar"
+    },
+    {
+      "id": "cheese-250-g",
+      "name": "Cheddar cheese · 250 g",
+      "category": "Dairy & Eggs",
+      "unit": "250 g",
+      "photo": "cheese",
+      "keywords": "cheese cheddar"
+    },
+    {
+      "id": "cheese-500-g",
+      "name": "Cheddar cheese · 500 g",
+      "category": "Dairy & Eggs",
+      "unit": "500 g",
+      "photo": "cheese",
+      "keywords": "cheese cheddar"
+    },
+    {
+      "id": "cheese-1-kg",
+      "name": "Cheddar cheese · 1 kg",
+      "category": "Dairy & Eggs",
+      "unit": "1 kg",
+      "photo": "cheese",
+      "keywords": "cheese cheddar"
+    },
+    {
+      "id": "sliced-cheese-200-g",
+      "name": "Sliced cheese · 200 g",
+      "category": "Dairy & Eggs",
+      "unit": "200 g",
+      "photo": "cheese",
+      "keywords": "cheese slices sliced"
+    },
+    {
+      "id": "sliced-cheese-400-g",
+      "name": "Sliced cheese · 400 g",
+      "category": "Dairy & Eggs",
+      "unit": "400 g",
+      "photo": "cheese",
+      "keywords": "cheese slices sliced"
+    },
+    {
+      "id": "soup-powder-50-g",
+      "name": "Soup powder · 50 g",
+      "category": "Pantry",
+      "unit": "50 g",
+      "photo": "soup-powder",
+      "keywords": "soup powder packet"
+    },
+    {
+      "id": "soup-powder-100-g",
+      "name": "Soup powder · 100 g",
+      "category": "Pantry",
+      "unit": "100 g",
+      "photo": "soup-powder",
+      "keywords": "soup powder packet"
+    },
+    {
+      "id": "soup-powder-200-g",
+      "name": "Soup powder · 200 g",
+      "category": "Pantry",
+      "unit": "200 g",
+      "photo": "soup-powder",
+      "keywords": "soup powder packet"
+    },
+    {
+      "id": "soup-powder-500-g",
+      "name": "Soup powder · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "soup-powder",
+      "keywords": "soup powder packet"
+    },
+    {
+      "id": "peanuts-50-g",
+      "name": "Roasted peanuts · 50 g",
+      "category": "Snacks",
+      "unit": "50 g",
+      "photo": "peanuts",
+      "keywords": "peanuts nuts roasted"
+    },
+    {
+      "id": "peanuts-100-g",
+      "name": "Roasted peanuts · 100 g",
+      "category": "Snacks",
+      "unit": "100 g",
+      "photo": "peanuts",
+      "keywords": "peanuts nuts roasted"
+    },
+    {
+      "id": "peanuts-250-g",
+      "name": "Roasted peanuts · 250 g",
+      "category": "Snacks",
+      "unit": "250 g",
+      "photo": "peanuts",
+      "keywords": "peanuts nuts roasted"
+    },
+    {
+      "id": "peanuts-500-g",
+      "name": "Roasted peanuts · 500 g",
+      "category": "Snacks",
+      "unit": "500 g",
+      "photo": "peanuts",
+      "keywords": "peanuts nuts roasted"
+    },
+    {
+      "id": "peanuts-1-kg",
+      "name": "Roasted peanuts · 1 kg",
+      "category": "Snacks",
+      "unit": "1 kg",
+      "photo": "peanuts",
+      "keywords": "peanuts nuts roasted"
+    },
+    {
+      "id": "fruit-juice-200-ml",
+      "name": "Fruit juice · 200 ml",
+      "category": "Drinks",
+      "unit": "200 ml",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "fruit-juice-250-ml",
+      "name": "Fruit juice · 250 ml",
+      "category": "Drinks",
+      "unit": "250 ml",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "fruit-juice-500-ml",
+      "name": "Fruit juice · 500 ml",
+      "category": "Drinks",
+      "unit": "500 ml",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "fruit-juice-1-l",
+      "name": "Fruit juice · 1 L",
+      "category": "Drinks",
+      "unit": "1 L",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "fruit-juice-2-l",
+      "name": "Fruit juice · 2 L",
+      "category": "Drinks",
+      "unit": "2 L",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "fruit-juice-6-x-200-ml",
+      "name": "Fruit juice · 6 x 200 ml",
+      "category": "Drinks",
+      "unit": "6 x 200 ml",
+      "photo": "fruit-juice",
+      "keywords": "fruit juice box"
+    },
+    {
+      "id": "chewing-gum-10-pieces",
+      "name": "Chewing gum · 10 pieces",
+      "category": "Snacks",
+      "unit": "10 pieces",
+      "photo": "chewing-gum",
+      "keywords": "chewing gum bubble"
+    },
+    {
+      "id": "chewing-gum-20-pieces",
+      "name": "Chewing gum · 20 pieces",
+      "category": "Snacks",
+      "unit": "20 pieces",
+      "photo": "chewing-gum",
+      "keywords": "chewing gum bubble"
+    },
+    {
+      "id": "chewing-gum-50-pieces",
+      "name": "Chewing gum · 50 pieces",
+      "category": "Snacks",
+      "unit": "50 pieces",
+      "photo": "chewing-gum",
+      "keywords": "chewing gum bubble"
+    },
+    {
+      "id": "polony-250-g",
+      "name": "Polony · 250 g",
+      "category": "Meat",
+      "unit": "250 g",
+      "photo": "polony",
+      "keywords": "polony bologna kota"
+    },
+    {
+      "id": "polony-500-g",
+      "name": "Polony · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "polony",
+      "keywords": "polony bologna kota"
+    },
+    {
+      "id": "polony-1-kg",
+      "name": "Polony · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "polony",
+      "keywords": "polony bologna kota"
+    },
+    {
+      "id": "cakes-single",
+      "name": "Cupcakes · Single",
+      "category": "Bakery",
+      "unit": "Single",
+      "photo": "cakes",
+      "keywords": "cakes cupcakes small"
+    },
+    {
+      "id": "cakes-4-pack",
+      "name": "Cupcakes · 4 pack",
+      "category": "Bakery",
+      "unit": "4 pack",
+      "photo": "cakes",
+      "keywords": "cakes cupcakes small"
+    },
+    {
+      "id": "cakes-6-pack",
+      "name": "Cupcakes · 6 pack",
+      "category": "Bakery",
+      "unit": "6 pack",
+      "photo": "cakes",
+      "keywords": "cakes cupcakes small"
+    },
+    {
+      "id": "cakes-12-pack",
+      "name": "Cupcakes · 12 pack",
+      "category": "Bakery",
+      "unit": "12 pack",
+      "photo": "cakes",
+      "keywords": "cakes cupcakes small"
+    },
+    {
+      "id": "cake-slice-single",
+      "name": "Cake slice · Single",
+      "category": "Bakery",
+      "unit": "Single",
+      "photo": "cakes",
+      "keywords": "cakes slice sponge cake"
+    },
+    {
+      "id": "cake-slice-2-pack",
+      "name": "Cake slice · 2 pack",
+      "category": "Bakery",
+      "unit": "2 pack",
+      "photo": "cakes",
+      "keywords": "cakes slice sponge cake"
+    },
+    {
+      "id": "margarine-250-g",
+      "name": "Margarine · 250 g",
+      "category": "Dairy & Eggs",
+      "unit": "250 g",
+      "photo": "margarine",
+      "keywords": "margarine spread"
+    },
+    {
+      "id": "margarine-500-g",
+      "name": "Margarine · 500 g",
+      "category": "Dairy & Eggs",
+      "unit": "500 g",
+      "photo": "margarine",
+      "keywords": "margarine spread"
+    },
+    {
+      "id": "margarine-1-kg",
+      "name": "Margarine · 1 kg",
+      "category": "Dairy & Eggs",
+      "unit": "1 kg",
+      "photo": "margarine",
+      "keywords": "margarine spread"
+    },
+    {
+      "id": "lollipops-single",
+      "name": "Lollipops · Single",
+      "category": "Snacks",
+      "unit": "Single",
+      "photo": "lollipops",
+      "keywords": "lollipop sucker sweets"
+    },
+    {
+      "id": "lollipops-10-pack",
+      "name": "Lollipops · 10 pack",
+      "category": "Snacks",
+      "unit": "10 pack",
+      "photo": "lollipops",
+      "keywords": "lollipop sucker sweets"
+    },
+    {
+      "id": "lollipops-50-pack",
+      "name": "Lollipops · 50 pack",
+      "category": "Snacks",
+      "unit": "50 pack",
+      "photo": "lollipops",
+      "keywords": "lollipop sucker sweets"
+    },
+    {
+      "id": "lollipops-100-pack",
+      "name": "Lollipops · 100 pack",
+      "category": "Snacks",
+      "unit": "100 pack",
+      "photo": "lollipops",
+      "keywords": "lollipop sucker sweets"
+    },
+    {
+      "id": "sausages-250-g",
+      "name": "Fresh sausages · 250 g",
+      "category": "Meat",
+      "unit": "250 g",
+      "photo": "sausages",
+      "keywords": "sausage fresh links"
+    },
+    {
+      "id": "sausages-500-g",
+      "name": "Fresh sausages · 500 g",
+      "category": "Meat",
+      "unit": "500 g",
+      "photo": "sausages",
+      "keywords": "sausage fresh links"
+    },
+    {
+      "id": "sausages-1-kg",
+      "name": "Fresh sausages · 1 kg",
+      "category": "Meat",
+      "unit": "1 kg",
+      "photo": "sausages",
+      "keywords": "sausage fresh links"
+    },
+    {
+      "id": "sausages-2-kg",
+      "name": "Fresh sausages · 2 kg",
+      "category": "Meat",
+      "unit": "2 kg",
+      "photo": "sausages",
+      "keywords": "sausage fresh links"
+    },
+    {
+      "id": "aromat-75-g",
+      "name": "Knorr Aromat Original seasoning · 75 g",
+      "category": "Pantry",
+      "unit": "75 g",
+      "photo": "aromat",
+      "keywords": "aromat seasoning all purpose"
+    },
+    {
+      "id": "aromat-200-g",
+      "name": "Knorr Aromat Original seasoning · 200 g",
+      "category": "Pantry",
+      "unit": "200 g",
+      "photo": "aromat",
+      "keywords": "aromat seasoning all purpose"
+    },
+    {
+      "id": "mayonnaise-250-g",
+      "name": "Mayonnaise · 250 g",
+      "category": "Pantry",
+      "unit": "250 g",
+      "photo": "mayonnaise",
+      "keywords": "mayonnaise mayo"
+    },
+    {
+      "id": "mayonnaise-500-g",
+      "name": "Mayonnaise · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "mayonnaise",
+      "keywords": "mayonnaise mayo"
+    },
+    {
+      "id": "mayonnaise-750-g",
+      "name": "Mayonnaise · 750 g",
+      "category": "Pantry",
+      "unit": "750 g",
+      "photo": "mayonnaise",
+      "keywords": "mayonnaise mayo"
+    },
+    {
+      "id": "vinegar-375-ml",
+      "name": "White vinegar · 375 ml",
+      "category": "Pantry",
+      "unit": "375 ml",
+      "photo": "vinegar",
+      "keywords": "vinegar white"
+    },
+    {
+      "id": "vinegar-750-ml",
+      "name": "White vinegar · 750 ml",
+      "category": "Pantry",
+      "unit": "750 ml",
+      "photo": "vinegar",
+      "keywords": "vinegar white"
+    },
+    {
+      "id": "vinegar-2-l",
+      "name": "White vinegar · 2 L",
+      "category": "Pantry",
+      "unit": "2 L",
+      "photo": "vinegar",
+      "keywords": "vinegar white"
+    },
+    {
+      "id": "salt-500-g",
+      "name": "Table salt · 500 g",
+      "category": "Pantry",
+      "unit": "500 g",
+      "photo": "salt",
+      "keywords": "salt table"
+    },
+    {
+      "id": "salt-1-kg",
+      "name": "Table salt · 1 kg",
+      "category": "Pantry",
+      "unit": "1 kg",
+      "photo": "salt",
+      "keywords": "salt table"
+    },
+    {
+      "id": "salt-2-kg",
+      "name": "Table salt · 2 kg",
+      "category": "Pantry",
+      "unit": "2 kg",
+      "photo": "salt",
+      "keywords": "salt table"
+    },
+    {
+      "id": "instant-noodles-70-g",
+      "name": "Instant noodles · 70 g",
+      "category": "Pantry",
+      "unit": "70 g",
+      "photo": "instant-noodles",
+      "keywords": "instant noodles 2 minute two"
+    },
+    {
+      "id": "instant-noodles-5-x-70-g",
+      "name": "Instant noodles · 5 x 70 g",
+      "category": "Pantry",
+      "unit": "5 x 70 g",
+      "photo": "instant-noodles",
+      "keywords": "instant noodles 2 minute two"
+    },
+    {
+      "id": "instant-noodles-10-x-70-g",
+      "name": "Instant noodles · 10 x 70 g",
+      "category": "Pantry",
+      "unit": "10 x 70 g",
+      "photo": "instant-noodles",
+      "keywords": "instant noodles 2 minute two"
+    },
+    {
+      "id": "tomato-paste-50-g",
+      "name": "Tomato paste · 50 g",
+      "category": "Pantry",
+      "unit": "50 g",
+      "photo": "tomato-paste",
+      "keywords": "tomato paste"
+    },
+    {
+      "id": "tomato-paste-115-g",
+      "name": "Tomato paste · 115 g",
+      "category": "Pantry",
+      "unit": "115 g",
+      "photo": "tomato-paste",
+      "keywords": "tomato paste"
+    },
+    {
+      "id": "tomato-paste-200-g",
+      "name": "Tomato paste · 200 g",
+      "category": "Pantry",
+      "unit": "200 g",
+      "photo": "tomato-paste",
+      "keywords": "tomato paste"
+    },
+    {
+      "id": "tomato-paste-400-g",
+      "name": "Tomato paste · 400 g",
+      "category": "Pantry",
+      "unit": "400 g",
+      "photo": "tomato-paste",
+      "keywords": "tomato paste"
+    },
+    {
+      "id": "condensed-milk-385-g",
+      "name": "Condensed milk · 385 g",
+      "category": "Pantry",
+      "unit": "385 g",
+      "photo": "condensed-milk",
+      "keywords": "condensed milk sweetened"
+    },
+    {
+      "id": "condensed-milk-6-x-385-g",
+      "name": "Condensed milk · 6 x 385 g",
+      "category": "Pantry",
+      "unit": "6 x 385 g",
+      "photo": "condensed-milk",
+      "keywords": "condensed milk sweetened"
+    },
+    {
+      "id": "baby-lotion-100-ml",
+      "name": "Baby lotion · 100 ml",
+      "category": "Baby Care",
+      "unit": "100 ml",
+      "photo": "baby-lotion",
+      "keywords": "baby lotion moisturiser"
+    },
+    {
+      "id": "baby-lotion-200-ml",
+      "name": "Baby lotion · 200 ml",
+      "category": "Baby Care",
+      "unit": "200 ml",
+      "photo": "baby-lotion",
+      "keywords": "baby lotion moisturiser"
+    },
+    {
+      "id": "baby-lotion-500-ml",
+      "name": "Baby lotion · 500 ml",
+      "category": "Baby Care",
+      "unit": "500 ml",
+      "photo": "baby-lotion",
+      "keywords": "baby lotion moisturiser"
+    },
+    {
+      "id": "plastic-bags-single",
+      "name": "Plastic carrier bags · Single",
+      "category": "Household",
+      "unit": "Single",
+      "photo": "plastic-bags",
+      "keywords": "plastic bag shopping carrier"
+    },
+    {
+      "id": "plastic-bags-10-pack",
+      "name": "Plastic carrier bags · 10 pack",
+      "category": "Household",
+      "unit": "10 pack",
+      "photo": "plastic-bags",
+      "keywords": "plastic bag shopping carrier"
+    },
+    {
+      "id": "plastic-bags-50-pack",
+      "name": "Plastic carrier bags · 50 pack",
+      "category": "Household",
+      "unit": "50 pack",
+      "photo": "plastic-bags",
+      "keywords": "plastic bag shopping carrier"
+    },
+    {
+      "id": "plastic-bags-100-pack",
+      "name": "Plastic carrier bags · 100 pack",
+      "category": "Household",
+      "unit": "100 pack",
+      "photo": "plastic-bags",
+      "keywords": "plastic bag shopping carrier"
+    },
+    {
+      "id": "matches-1-box",
+      "name": "Matches · 1 box",
+      "category": "Household",
+      "unit": "1 box",
+      "photo": "matches",
+      "keywords": "matches matchbox match box"
+    },
+    {
+      "id": "matches-10-boxes",
+      "name": "Matches · 10 boxes",
+      "category": "Household",
+      "unit": "10 boxes",
+      "photo": "matches",
+      "keywords": "matches matchbox match box"
+    },
+    {
+      "id": "matches-100-boxes",
+      "name": "Matches · 100 boxes",
+      "category": "Household",
+      "unit": "100 boxes",
+      "photo": "matches",
+      "keywords": "matches matchbox match box"
+    },
+    {
+      "id": "toothbrush-single",
+      "name": "Toothbrush · Single",
+      "category": "Personal Care",
+      "unit": "Single",
+      "photo": "toothbrush",
+      "keywords": "toothbrush toothbrushes"
+    },
+    {
+      "id": "toothbrush-2-pack",
+      "name": "Toothbrush · 2 pack",
+      "category": "Personal Care",
+      "unit": "2 pack",
+      "photo": "toothbrush",
+      "keywords": "toothbrush toothbrushes"
+    },
+    {
+      "id": "toothbrush-4-pack",
+      "name": "Toothbrush · 4 pack",
+      "category": "Personal Care",
+      "unit": "4 pack",
+      "photo": "toothbrush",
+      "keywords": "toothbrush toothbrushes"
+    },
+    {
+      "id": "baby-formula-stage-1-400-g",
+      "name": "Baby formula powder — Stage 1 · 400 g",
+      "category": "Baby Care",
+      "unit": "400 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk infant formula stage 1"
+    },
+    {
+      "id": "baby-formula-stage-1-900-g",
+      "name": "Baby formula powder — Stage 1 · 900 g",
+      "category": "Baby Care",
+      "unit": "900 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk infant formula stage 1"
+    },
+    {
+      "id": "baby-formula-stage-2-400-g",
+      "name": "Baby formula powder — Stage 2 · 400 g",
+      "category": "Baby Care",
+      "unit": "400 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk infant formula stage 2"
+    },
+    {
+      "id": "baby-formula-stage-2-900-g",
+      "name": "Baby formula powder — Stage 2 · 900 g",
+      "category": "Baby Care",
+      "unit": "900 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk infant formula stage 2"
+    },
+    {
+      "id": "baby-formula-stage-3-400-g",
+      "name": "Baby formula powder — Stage 3 · 400 g",
+      "category": "Baby Care",
+      "unit": "400 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk toddler formula stage 3"
+    },
+    {
+      "id": "baby-formula-stage-3-900-g",
+      "name": "Baby formula powder — Stage 3 · 900 g",
+      "category": "Baby Care",
+      "unit": "900 g",
+      "photo": "baby-formula",
+      "keywords": "baby powder milk toddler formula stage 3"
+    },
+    {
+      "id": "sponges-2-pack",
+      "name": "Dishwashing sponges · 2 pack",
+      "category": "Household",
+      "unit": "2 pack",
+      "photo": "sponges",
+      "keywords": "dishwashing sponges sponge scourer scouring pads"
+    },
+    {
+      "id": "sponges-3-pack",
+      "name": "Dishwashing sponges · 3 pack",
+      "category": "Household",
+      "unit": "3 pack",
+      "photo": "sponges",
+      "keywords": "dishwashing sponges sponge scourer scouring pads"
+    },
+    {
+      "id": "sponges-5-pack",
+      "name": "Dishwashing sponges · 5 pack",
+      "category": "Household",
+      "unit": "5 pack",
+      "photo": "sponges",
+      "keywords": "dishwashing sponges sponge scourer scouring pads"
+    },
+    {
+      "id": "sponges-10-pack",
+      "name": "Dishwashing sponges · 10 pack",
+      "category": "Household",
+      "unit": "10 pack",
+      "photo": "sponges",
+      "keywords": "dishwashing sponges sponge scourer scouring pads"
+    },
+    {
+      "id": "baby-wipes-20-wipes",
+      "name": "Baby wipes · 20 wipes",
+      "category": "Baby Care",
+      "unit": "20 wipes",
+      "photo": "baby-wipes",
+      "keywords": "baby wipes wet"
+    },
+    {
+      "id": "baby-wipes-40-wipes",
+      "name": "Baby wipes · 40 wipes",
+      "category": "Baby Care",
+      "unit": "40 wipes",
+      "photo": "baby-wipes",
+      "keywords": "baby wipes wet"
+    },
+    {
+      "id": "baby-wipes-80-wipes",
+      "name": "Baby wipes · 80 wipes",
+      "category": "Baby Care",
+      "unit": "80 wipes",
+      "photo": "baby-wipes",
+      "keywords": "baby wipes wet"
+    },
+    {
+      "id": "baby-wipes-4-x-80-wipes",
+      "name": "Baby wipes · 4 x 80 wipes",
+      "category": "Baby Care",
+      "unit": "4 x 80 wipes",
+      "photo": "baby-wipes",
+      "keywords": "baby wipes wet"
+    },
+    {
+      "id": "candles-single",
+      "name": "Household candles · Single",
+      "category": "Household",
+      "unit": "Single",
+      "photo": "candles",
+      "keywords": "candles candle"
+    },
+    {
+      "id": "candles-6-pack",
+      "name": "Household candles · 6 pack",
+      "category": "Household",
+      "unit": "6 pack",
+      "photo": "candles",
+      "keywords": "candles candle"
+    },
+    {
+      "id": "candles-12-pack",
+      "name": "Household candles · 12 pack",
+      "category": "Household",
+      "unit": "12 pack",
+      "photo": "candles",
+      "keywords": "candles candle"
+    },
+    {
+      "id": "vaseline-50-ml",
+      "name": "Vaseline Blue Seal Original petroleum jelly · 50 ml",
+      "category": "Personal Care",
+      "unit": "50 ml",
+      "photo": "petroleum-jelly",
+      "keywords": "vaseline petroleum jelly blue seal"
+    },
+    {
+      "id": "vaseline-100-ml",
+      "name": "Vaseline Blue Seal Original petroleum jelly · 100 ml",
+      "category": "Personal Care",
+      "unit": "100 ml",
+      "photo": "petroleum-jelly",
+      "keywords": "vaseline petroleum jelly blue seal"
+    },
+    {
+      "id": "vaseline-250-ml",
+      "name": "Vaseline Blue Seal Original petroleum jelly · 250 ml",
+      "category": "Personal Care",
+      "unit": "250 ml",
+      "photo": "petroleum-jelly",
+      "keywords": "vaseline petroleum jelly blue seal"
+    },
+    {
+      "id": "vaseline-450-ml",
+      "name": "Vaseline Blue Seal Original petroleum jelly · 450 ml",
+      "category": "Personal Care",
+      "unit": "450 ml",
+      "photo": "petroleum-jelly",
+      "keywords": "vaseline petroleum jelly blue seal"
+    },
+    {
+      "id": "disposable-cups-10-pack",
+      "name": "Disposable cups · 10 pack",
+      "category": "Household",
+      "unit": "10 pack",
+      "photo": "disposable-cups",
+      "keywords": "disposable cups paper"
+    },
+    {
+      "id": "disposable-cups-25-pack",
+      "name": "Disposable cups · 25 pack",
+      "category": "Household",
+      "unit": "25 pack",
+      "photo": "disposable-cups",
+      "keywords": "disposable cups paper"
+    },
+    {
+      "id": "disposable-cups-50-pack",
+      "name": "Disposable cups · 50 pack",
+      "category": "Household",
+      "unit": "50 pack",
+      "photo": "disposable-cups",
+      "keywords": "disposable cups paper"
+    },
+    {
+      "id": "disposable-cups-100-pack",
+      "name": "Disposable cups · 100 pack",
+      "category": "Household",
+      "unit": "100 pack",
+      "photo": "disposable-cups",
+      "keywords": "disposable cups paper"
+    },
+    {
+      "id": "pencils-single",
+      "name": "HB pencils · Single",
+      "category": "Stationery",
+      "unit": "Single",
+      "photo": "pencils",
+      "keywords": "pencils pencil graphite hb"
+    },
+    {
+      "id": "pencils-2-pack",
+      "name": "HB pencils · 2 pack",
+      "category": "Stationery",
+      "unit": "2 pack",
+      "photo": "pencils",
+      "keywords": "pencils pencil graphite hb"
+    },
+    {
+      "id": "pencils-12-pack",
+      "name": "HB pencils · 12 pack",
+      "category": "Stationery",
+      "unit": "12 pack",
+      "photo": "pencils",
+      "keywords": "pencils pencil graphite hb"
+    },
+    {
+      "id": "baby-soap-75-g",
+      "name": "Baby soap · 75 g",
+      "category": "Baby Care",
+      "unit": "75 g",
+      "photo": "baby-soap",
+      "keywords": "baby soap bath"
+    },
+    {
+      "id": "baby-soap-100-g",
+      "name": "Baby soap · 100 g",
+      "category": "Baby Care",
+      "unit": "100 g",
+      "photo": "baby-soap",
+      "keywords": "baby soap bath"
+    },
+    {
+      "id": "baby-soap-175-g",
+      "name": "Baby soap · 175 g",
+      "category": "Baby Care",
+      "unit": "175 g",
+      "photo": "baby-soap",
+      "keywords": "baby soap bath"
+    },
+    {
+      "id": "wet-wipes-10-wipes",
+      "name": "Wet wipes · 10 wipes",
+      "category": "Personal Care",
+      "unit": "10 wipes",
+      "photo": "wet-wipes",
+      "keywords": "wet wipes hand cleansing"
+    },
+    {
+      "id": "wet-wipes-20-wipes",
+      "name": "Wet wipes · 20 wipes",
+      "category": "Personal Care",
+      "unit": "20 wipes",
+      "photo": "wet-wipes",
+      "keywords": "wet wipes hand cleansing"
+    },
+    {
+      "id": "wet-wipes-40-wipes",
+      "name": "Wet wipes · 40 wipes",
+      "category": "Personal Care",
+      "unit": "40 wipes",
+      "photo": "wet-wipes",
+      "keywords": "wet wipes hand cleansing"
+    },
+    {
+      "id": "wet-wipes-80-wipes",
+      "name": "Wet wipes · 80 wipes",
+      "category": "Personal Care",
+      "unit": "80 wipes",
+      "photo": "wet-wipes",
+      "keywords": "wet wipes hand cleansing"
+    },
+    {
+      "id": "baby-powder-100-g",
+      "name": "Baby powder · 100 g",
+      "category": "Baby Care",
+      "unit": "100 g",
+      "photo": "baby-powder",
+      "keywords": "baby powder"
+    },
+    {
+      "id": "baby-powder-200-g",
+      "name": "Baby powder · 200 g",
+      "category": "Baby Care",
+      "unit": "200 g",
+      "photo": "baby-powder",
+      "keywords": "baby powder"
+    },
+    {
+      "id": "baby-powder-400-g",
+      "name": "Baby powder · 400 g",
+      "category": "Baby Care",
+      "unit": "400 g",
+      "photo": "baby-powder",
+      "keywords": "baby powder"
+    },
+    {
+      "id": "erasers-single",
+      "name": "Eraser · Single",
+      "category": "Stationery",
+      "unit": "Single",
+      "photo": "erasers",
+      "keywords": "eraser erasers rubber school"
+    },
+    {
+      "id": "erasers-2-pack",
+      "name": "Eraser · 2 pack",
+      "category": "Stationery",
+      "unit": "2 pack",
+      "photo": "erasers",
+      "keywords": "eraser erasers rubber school"
+    },
+    {
+      "id": "erasers-6-pack",
+      "name": "Eraser · 6 pack",
+      "category": "Stationery",
+      "unit": "6 pack",
+      "photo": "erasers",
+      "keywords": "eraser erasers rubber school"
+    },
+    {
+      "id": "bleach-500-ml",
+      "name": "Household bleach · 500 ml",
+      "category": "Household",
+      "unit": "500 ml",
+      "photo": "bleach",
+      "keywords": "bleach cleaning"
+    },
+    {
+      "id": "bleach-750-ml",
+      "name": "Household bleach · 750 ml",
+      "category": "Household",
+      "unit": "750 ml",
+      "photo": "bleach",
+      "keywords": "bleach cleaning"
+    },
+    {
+      "id": "bleach-1-l",
+      "name": "Household bleach · 1 L",
+      "category": "Household",
+      "unit": "1 L",
+      "photo": "bleach",
+      "keywords": "bleach cleaning"
+    },
+    {
+      "id": "bleach-2-l",
+      "name": "Household bleach · 2 L",
+      "category": "Household",
+      "unit": "2 L",
+      "photo": "bleach",
+      "keywords": "bleach cleaning"
+    },
+    {
+      "id": "refuse-bags-10-pack",
+      "name": "Refuse bags · 10 pack",
+      "category": "Household",
+      "unit": "10 pack",
+      "photo": "refuse-bags",
+      "keywords": "refuse bags bin rubbish garbage"
+    },
+    {
+      "id": "refuse-bags-20-pack",
+      "name": "Refuse bags · 20 pack",
+      "category": "Household",
+      "unit": "20 pack",
+      "photo": "refuse-bags",
+      "keywords": "refuse bags bin rubbish garbage"
+    },
+    {
+      "id": "refuse-bags-50-pack",
+      "name": "Refuse bags · 50 pack",
+      "category": "Household",
+      "unit": "50 pack",
+      "photo": "refuse-bags",
+      "keywords": "refuse bags bin rubbish garbage"
+    },
+    {
+      "id": "deodorant-50-ml",
+      "name": "Roll-on deodorant · 50 ml",
+      "category": "Personal Care",
+      "unit": "50 ml",
+      "photo": "deodorant",
+      "keywords": "deodorant roll on roll-on"
+    },
+    {
+      "id": "deodorant-75-ml",
+      "name": "Roll-on deodorant · 75 ml",
+      "category": "Personal Care",
+      "unit": "75 ml",
+      "photo": "deodorant",
+      "keywords": "deodorant roll on roll-on"
+    },
+    {
+      "id": "deodorant-2-x-50-ml",
+      "name": "Roll-on deodorant · 2 x 50 ml",
+      "category": "Personal Care",
+      "unit": "2 x 50 ml",
+      "photo": "deodorant",
+      "keywords": "deodorant roll on roll-on"
+    },
+    {
+      "id": "baby-shampoo-100-ml",
+      "name": "Baby shampoo · 100 ml",
+      "category": "Baby Care",
+      "unit": "100 ml",
+      "photo": "baby-shampoo",
+      "keywords": "baby shampoo"
+    },
+    {
+      "id": "baby-shampoo-200-ml",
+      "name": "Baby shampoo · 200 ml",
+      "category": "Baby Care",
+      "unit": "200 ml",
+      "photo": "baby-shampoo",
+      "keywords": "baby shampoo"
+    },
+    {
+      "id": "baby-shampoo-500-ml",
+      "name": "Baby shampoo · 500 ml",
+      "category": "Baby Care",
+      "unit": "500 ml",
+      "photo": "baby-shampoo",
+      "keywords": "baby shampoo"
+    },
+    {
+      "id": "cotton-wool-50-g",
+      "name": "Cotton wool · 50 g",
+      "category": "Personal Care",
+      "unit": "50 g",
+      "photo": "cotton-wool",
+      "keywords": "cotton wool balls"
+    },
+    {
+      "id": "cotton-wool-100-g",
+      "name": "Cotton wool · 100 g",
+      "category": "Personal Care",
+      "unit": "100 g",
+      "photo": "cotton-wool",
+      "keywords": "cotton wool balls"
+    },
+    {
+      "id": "cotton-wool-200-g",
+      "name": "Cotton wool · 200 g",
+      "category": "Personal Care",
+      "unit": "200 g",
+      "photo": "cotton-wool",
+      "keywords": "cotton wool balls"
+    },
+    {
+      "id": "pantyliners-20-pack",
+      "name": "Pantyliners · 20 pack",
+      "category": "Personal Care",
+      "unit": "20 pack",
+      "photo": "pantyliners",
+      "keywords": "pantyliners panty liners sanitary"
+    },
+    {
+      "id": "pantyliners-40-pack",
+      "name": "Pantyliners · 40 pack",
+      "category": "Personal Care",
+      "unit": "40 pack",
+      "photo": "pantyliners",
+      "keywords": "pantyliners panty liners sanitary"
+    },
+    {
+      "id": "pantyliners-60-pack",
+      "name": "Pantyliners · 60 pack",
+      "category": "Personal Care",
+      "unit": "60 pack",
+      "photo": "pantyliners",
+      "keywords": "pantyliners panty liners sanitary"
+    },
+    {
+      "id": "dishcloths-single",
+      "name": "Dishcloths · Single",
+      "category": "Household",
+      "unit": "Single",
+      "photo": "dishcloths",
+      "keywords": "dishcloth dishcloths kitchen cloth cleaning"
+    },
+    {
+      "id": "dishcloths-3-pack",
+      "name": "Dishcloths · 3 pack",
+      "category": "Household",
+      "unit": "3 pack",
+      "photo": "dishcloths",
+      "keywords": "dishcloth dishcloths kitchen cloth cleaning"
+    },
+    {
+      "id": "dishcloths-5-pack",
+      "name": "Dishcloths · 5 pack",
+      "category": "Household",
+      "unit": "5 pack",
+      "photo": "dishcloths",
+      "keywords": "dishcloth dishcloths kitchen cloth cleaning"
+    },
+    {
+      "id": "dog-food-500-g",
+      "name": "Dry dog food · 500 g",
+      "category": "Pet Care",
+      "unit": "500 g",
+      "photo": "dog-food",
+      "keywords": "dog food pet kibble"
+    },
+    {
+      "id": "dog-food-1-kg",
+      "name": "Dry dog food · 1 kg",
+      "category": "Pet Care",
+      "unit": "1 kg",
+      "photo": "dog-food",
+      "keywords": "dog food pet kibble"
+    },
+    {
+      "id": "dog-food-2-kg",
+      "name": "Dry dog food · 2 kg",
+      "category": "Pet Care",
+      "unit": "2 kg",
+      "photo": "dog-food",
+      "keywords": "dog food pet kibble"
+    },
+    {
+      "id": "dog-food-5-kg",
+      "name": "Dry dog food · 5 kg",
+      "category": "Pet Care",
+      "unit": "5 kg",
+      "photo": "dog-food",
+      "keywords": "dog food pet kibble"
+    },
+    {
+      "id": "cat-food-85-g",
+      "name": "Wet cat food · 85 g",
+      "category": "Pet Care",
+      "unit": "85 g",
+      "photo": "cat-food",
+      "keywords": "cat food pet"
+    },
+    {
+      "id": "cat-food-100-g",
+      "name": "Wet cat food · 100 g",
+      "category": "Pet Care",
+      "unit": "100 g",
+      "photo": "cat-food",
+      "keywords": "cat food pet"
+    },
+    {
+      "id": "cat-food-400-g",
+      "name": "Wet cat food · 400 g",
+      "category": "Pet Care",
+      "unit": "400 g",
+      "photo": "cat-food",
+      "keywords": "cat food pet"
+    },
+    {
+      "id": "cat-food-6-x-400-g",
+      "name": "Wet cat food · 6 x 400 g",
+      "category": "Pet Care",
+      "unit": "6 x 400 g",
+      "photo": "cat-food",
+      "keywords": "cat food pet"
+    },
+    {
+      "id": "nappies-size-1-20-pack",
+      "name": "Disposable nappies · Size 1 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 1 - 20 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-6-20-pack",
+      "name": "Disposable nappies · Size 6 - 20 pack",
+      "category": "Baby Care",
+      "unit": "Size 6 - 20 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-2-40-pack",
+      "name": "Disposable nappies · Size 2 - 40 pack",
+      "category": "Baby Care",
+      "unit": "Size 2 - 40 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-3-40-pack",
+      "name": "Disposable nappies · Size 3 - 40 pack",
+      "category": "Baby Care",
+      "unit": "Size 3 - 40 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-4-40-pack",
+      "name": "Disposable nappies · Size 4 - 40 pack",
+      "category": "Baby Care",
+      "unit": "Size 4 - 40 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-5-40-pack",
+      "name": "Disposable nappies · Size 5 - 40 pack",
+      "category": "Baby Care",
+      "unit": "Size 5 - 40 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "nappies-size-6-40-pack",
+      "name": "Disposable nappies · Size 6 - 40 pack",
+      "category": "Baby Care",
+      "unit": "Size 6 - 40 pack",
+      "photo": "nappies",
+      "keywords": "baby nappies diapers"
+    },
+    {
+      "id": "strawberry-yogurt-175-g",
+      "name": "Strawberry yogurt · 175 g",
+      "category": "Dairy & Eggs",
+      "unit": "175 g",
+      "photo": "yogurt",
+      "keywords": "yogurt yoghurt flavoured strawberry"
+    },
+    {
+      "id": "strawberry-yogurt-500-g",
+      "name": "Strawberry yogurt · 500 g",
+      "category": "Dairy & Eggs",
+      "unit": "500 g",
+      "photo": "yogurt",
+      "keywords": "yogurt yoghurt flavoured strawberry"
+    },
+    {
+      "id": "strawberry-yogurt-1-kg",
+      "name": "Strawberry yogurt · 1 kg",
+      "category": "Dairy & Eggs",
+      "unit": "1 kg",
+      "photo": "yogurt",
+      "keywords": "yogurt yoghurt flavoured strawberry"
+    },
+    {
+      "id": "muffins-single",
+      "name": "Muffins · Single",
+      "category": "Bakery",
+      "unit": "Single",
+      "photo": "cakes",
+      "keywords": "cakes muffins bakery"
+    },
+    {
+      "id": "muffins-4-pack",
+      "name": "Muffins · 4 pack",
+      "category": "Bakery",
+      "unit": "4 pack",
+      "photo": "cakes",
+      "keywords": "cakes muffins bakery"
+    },
+    {
+      "id": "muffins-6-pack",
+      "name": "Muffins · 6 pack",
+      "category": "Bakery",
+      "unit": "6 pack",
+      "photo": "cakes",
+      "keywords": "cakes muffins bakery"
     }
   ]
 }

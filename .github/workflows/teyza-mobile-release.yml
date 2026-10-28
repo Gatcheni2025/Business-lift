@@ -99,8 +99,8 @@ jobs:
           url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
           with urllib.request.urlopen(url,timeout=30) as response:
               health=json.load(response)
-          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True and health.get('approvalRequired') is True and health.get('shopLocations') is True and health.get('addressAutocomplete') is True):
-              raise SystemExit('Deploy the current mobile service kit with approval-required publication, shop locations and address autocomplete before signing this release. Photo storage must also be ready.')
+          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True and health.get('approvalRequired') is True and health.get('shopLocations') is True and health.get('addressAutocomplete') is True and health.get('catalogueRevision',0)>=2 and health.get('catalogueProducts',0)>=378 and health.get('cataloguePhotos',0)>=96):
+              raise SystemExit('Deploy the current mobile service kit with the expanded product catalogue, approval-required publication, shop locations and address autocomplete before signing this release. Photo storage must also be ready.')
           PY_GATE
       - uses: actions/setup-node@v4
         with:

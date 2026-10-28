@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $fixture 'services/teyza-mobile-v39') -Force | Out-Null
+Copy-Item (Join-Path $root 'services/teyza-mobile-v39/catalogue.json') (Join-Path $fixture 'services/teyza-mobile-v39/catalogue.json')
 $global:calls = [System.Collections.Generic.List[string]]::new()
 $global:badHealth = $false
 function firebase {
@@ -15,7 +16,7 @@ function firebase {
   return '{"status":"success","result":{}}'
 }
 function npm { $global:LASTEXITCODE = 0 }
-function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.15.0';verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=184} }
+function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.15.0';verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=378;catalogueRevision=2;cataloguePhotos=96} }
 try {
   foreach ($name in @('ACTIVATE-TEYZA.ps1','DEPLOY-MOBILE.ps1','SETUP-VERIFICATION-KEY.ps1')) {
     $errors = $null

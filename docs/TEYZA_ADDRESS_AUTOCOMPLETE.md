@@ -1,5 +1,7 @@
 # Full seller addresses — 1.0.20 (30)
 
+The current **1.0.21 (31)** catalogue update includes this address flow. Use [Catalogue expansion](TEYZA_CATALOGUE_EXPANSION.md) for its deployment kit, branch and build command.
+
 ## Deploy and build
 
 Download the `teyza-mobile-r315-deploy-kit` artifact from the checks run on `fix/teyza-seller-address-autocomplete`, extract it once into a fresh folder and open PowerShell there. `DEPLOY-MOBILE.ps1` is at its root. Run `Unblock-File -LiteralPath '.\DEPLOY-MOBILE.ps1'` and then `.\DEPLOY-MOBILE.ps1` with Node 22 and the existing authorised Firebase CLI login. The script deploys only `functions:teyza-mobile` in `business-lift-3c19c`. Hosting and Firestore rules are not replaced.
