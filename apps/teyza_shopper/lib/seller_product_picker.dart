@@ -72,14 +72,15 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
     final tick=Checkbox(value:added||checked,onChanged:added?null:(_)=>toggle(product));
     if(compact)return Card(color:Colors.white,elevation:0,child:ListTile(
       contentPadding:const EdgeInsets.all(12),leading:CataloguePhoto(photoKey:product.photo,size:54),
-      title:Text(product.name),subtitle:Text(added?'Already in your shop':product.category),
+      title:Text(product.name),subtitle:Text(added?'Already in your shop · ${product.unit}':'${product.category} · ${product.unit}'),
       trailing:tick,onTap:added?null:()=>toggle(product)));
     return Material(color:Colors.white,borderRadius:BorderRadius.circular(20),child:InkWell(
       borderRadius:BorderRadius.circular(20),onTap:added?null:()=>toggle(product),
       child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Expanded(child:Center(child:CataloguePhoto(photoKey:product.photo,size:106))),
+        Expanded(child:Center(child:CataloguePhoto(photoKey:product.photo,size:96))),
         const SizedBox(height:6),Text(product.name,maxLines:2,overflow:TextOverflow.ellipsis,
           style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
+        const SizedBox(height:3),Text(product.unit,style:const TextStyle(fontWeight:FontWeight.w700,fontSize:12,color:Color(0xFF087D5E))),
         Row(children:[Expanded(child:Text(added?'Added':product.category,maxLines:1,overflow:TextOverflow.ellipsis,
           style:const TextStyle(fontSize:11,color:Color(0xFF6C7880)))),tick])
       ]))));

@@ -84,6 +84,14 @@ void main(){
     expect(find.text('Review 0 selected'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
+  testWidgets('Long product names keep their pack size visible before selection',(tester) async{
+    await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final session=CatalogueOwner();
+    await tester.pumpWidget(MaterialApp(home:SellerProductPickerPage(session:session,existingIds:{})));
+    await tester.pumpAndSettle();await tester.enterText(find.byType(TextField).first,'Vaseline');await tester.pumpAndSettle();
+    expect(find.text('50 ml'),findsOneWidget);expect(find.text('100 ml'),findsOneWidget);
+    expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+  });
   testWidgets('Picker remains usable on a narrow display with larger text',(tester) async{
     await tester.binding.setSurfaceSize(const Size(320,700));addTearDown(()=>tester.binding.setSurfaceSize(null));
     final session=CatalogueOwner();
