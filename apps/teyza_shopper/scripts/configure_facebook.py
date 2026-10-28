@@ -6,7 +6,7 @@ import re
 import xml.etree.ElementTree as ET
 
 HERE=Path(__file__).resolve().parent
-DEPENDENCY='  flutter_facebook_auth: 7.3.2\n'
+DEPENDENCY='  flutter_facebook_auth: 7.1.5\n'
 STUB="""// Facebook is not configured in this build. Google, Apple and email remain available.
 import 'facebook_identity.dart';
 const facebookConfigured=false;
