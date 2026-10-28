@@ -11,6 +11,9 @@ const ownerGreen=Color(0xFF3BB77E),ownerInk=Color(0xFF010F1C);
 enum SellerTool {services,hours,finance,stock,verification}
 const sellerToolNames={SellerTool.services:'Delivery & shop services',SellerTool.hours:'Opening & closing times',
   SellerTool.finance:'Finance & stock credit',SellerTool.stock:'Order stock',SellerTool.verification:'Owner verification'};
+String sellerFinanceStatus(Object? status)=>switch(status){
+  'under_review'=>'Under review','more_information'=>'More information needed',
+  'approved_in_principle'=>'Approved in principle','declined'=>'Declined',_=>'Enquiry received'};
 class SellerDashboard extends StatelessWidget {
   final int? productCount;
   final VoidCallback onProducts,onChat,onOrders,onProfile;
@@ -187,7 +190,7 @@ class _SellerToolState extends State<SellerToolPage> {
       const Text('Your enquiries',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
       for(final item in mobileRows(summary['credit']))ListTile(contentPadding:EdgeInsets.zero,
         title:Text(money((item['amountCents'] as num? ??0).toInt())),subtitle:Text(item['purpose']?.toString()??''),
-        trailing:const Text('Enquiry received',style:TextStyle(fontSize:11)))
+        trailing:SizedBox(width:105,child:Text(sellerFinanceStatus(item['status']),textAlign:TextAlign.end,style:const TextStyle(fontSize:11))))
     ]))
   ]);
   Future<void> supplier(String url) async {

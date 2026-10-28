@@ -258,9 +258,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {threadId:ref.id};
     }
     if(action==='chat_list') {
+      const ownerMode=data.asOwner===true;if(ownerMode)await owner(uid);
       const index=await db.collection('teyzaMobileChatIndex/'+uid+'/threads').orderBy('updatedAt','desc').limit(100).get();
       const rows=await Promise.all(index.docs.map(x=>doc('teyzaMobileChats/'+x.id).get()));
-      return {threads:rows.filter(x=>x.exists).map(x=>{
+      return {scope:ownerMode?'owner':'all',threads:rows.filter(x=>x.exists&&(!ownerMode||x.data().ownerUid===uid)).map(x=>{
         const t=D.member(x.data(),uid);return {id:x.id,name:t.ownerUid===uid?t.shopperName:t.shopName,
           lastMessage:t.lastMessage,updatedAt:t.updatedAt,unread:t.ownerUid===uid?t.ownerUnread:t.shopperUnread};
       }).sort((a,b)=>b.updatedAt-a.updatedAt)};

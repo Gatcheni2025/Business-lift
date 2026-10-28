@@ -82,6 +82,15 @@ class ShopperSession extends ChangeNotifier {
   bool isReady = false, isBusy = false, emailVerified = false;
   String? email, name, idToken, userId, phoneNumber;
   bool phoneVerified=false;
+  // A UID-bound presentation preference only. Seller permissions still come
+  // from authenticated account records and server checks.
+  String? _sellerWorkspaceUid;
+  bool get sellerWorkspace=>idToken!=null&&userId!=null&&_sellerWorkspaceUid==userId;
+  void useSellerWorkspace(){
+    if(idToken==null||userId==null)return;
+    _sellerWorkspaceUid=userId;_changed();
+    unawaited(_persist().catchError((Object _){}));
+  }
   bool get contactVerified=>emailVerified||phoneVerified;
   Future<void> Function()? beforeSignOut;
   bool get hasAdminClaim {
@@ -133,7 +142,8 @@ class ShopperSession extends ChangeNotifier {
     final refresh=_refreshToken;
     if(refresh==null)return;
     final version=_version;
-    final values={'teyza_refresh':refresh,'teyza_email':email??'','teyza_name':name??''};
+    final values={'teyza_refresh':refresh,'teyza_email':email??'','teyza_name':name??'',
+      'teyza_seller_workspace_uid':sellerWorkspace?userId!:''};
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final entry in values.entries){
         if(version!=_version||_disposed)return;
@@ -144,9 +154,10 @@ class ShopperSession extends ChangeNotifier {
     await operation;
   }
   Future<void> _clear() async {
+    _sellerWorkspaceUid=null;
     idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
-      for(final key in ['teyza_refresh','teyza_email','teyza_name']){
+      for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid']){
         await _store.delete(key);
       }
     });
@@ -165,12 +176,14 @@ class ShopperSession extends ChangeNotifier {
       if(refresh!=null&&refresh.isNotEmpty){
         final savedEmail=await _store.read('teyza_email');
         final savedName=await _store.read('teyza_name');
+        final savedWorkspaceUid=await _store.read('teyza_seller_workspace_uid');
         final data=await _refresh(refresh);
         if(version!=_version||_disposed)return;
         final token=data['id_token']?.toString()??'';
         final uid=data['user_id']?.toString()??'';
         if(token.isEmpty||uid.isEmpty)throw StateError('INVALID_REFRESH_TOKEN');
         idToken=token;userId=uid;
+        _sellerWorkspaceUid=savedWorkspaceUid==uid?uid:null;
         _refreshToken=data['refresh_token']?.toString()??refresh;
         email=savedEmail;name=savedName;
         await _persist();
@@ -194,6 +207,7 @@ class ShopperSession extends ChangeNotifier {
     final refresh=data['refreshToken']?.toString()??'';
     final uid=data['localId']?.toString()??'';
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
+    if(userId!=uid)_sellerWorkspaceUid=null;
     idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;
     email=data['email']?.toString()??fallbackEmail;
     name=data['displayName']?.toString()??fallbackName;

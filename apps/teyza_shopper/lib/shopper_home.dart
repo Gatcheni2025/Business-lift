@@ -19,6 +19,7 @@ import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
 import 'seller_push.dart';
+import 'seller_firestore.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -194,8 +195,11 @@ class ShopperHome extends StatefulWidget {
   final Future<List<OnlineShop>> Function(Area,String,int)? directoryLoader;
   final Area? initialArea;
   final bool enableBackgroundServices;
+  final ShopperSession? session;
+  final SellerFirestore Function(String uid,String token)? sellerApiFactory;
+  final TeyzaMobileApi? sellerMobileApi;
   const ShopperHome({super.key,this.catalogueLoader,this.directoryLoader,
-    this.initialArea,this.enableBackgroundServices=true});
+    this.initialArea,this.enableBackgroundServices=true,this.session,this.sellerApiFactory,this.sellerMobileApi});
   @override
   State<ShopperHome> createState() => _ShopperHomeState();
 }
@@ -220,7 +224,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String shopProductSearch='';
   int tab = 0;
   final cart = <String, int>{};
-  final session = ShopperSession();
+  late final session = widget.session??ShopperSession();
+  String? _observedUid,_checkedSellerUid;
+  bool _wasSeller=false;
+  String? _sellerInitialTarget;
+  int _sellerEntry=0;
   SellerPush? sellerPush;
   List<OnlineShop> online = [];
   String? onlineWarning;
@@ -238,16 +246,54 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    session.addListener(workspaceChanged);
+    Future<void>? restoring;
     if(widget.enableBackgroundServices){
       sellerPush=SellerPush(session)..onOpen=(){if(mounted)openOwnerWorkspace(notification:true);};
       chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
       refreshUnread();
-      session.restore();
+      restoring=session.restore();
       startCatalogueWatch();
     }else{session.isReady=true;}
-    _prepareLaunch();
+    workspaceChanged();
+    _prepareLaunch(restoring);
   }
-  Future<void> _prepareLaunch() async {
+  void workspaceChanged(){
+    if(!mounted)return;
+    final uid=session.userId,seller=session.sellerWorkspace;
+    if(uid!=_observedUid){
+      _observedUid=uid;_checkedSellerUid=null;
+      _sellerInitialTarget=null;
+      cart.clear();basketShop=null;selected=null;directorySelected=null;tab=0;unreadChats=0;
+    }
+    if(seller!=_wasSeller){
+      _wasSeller=seller;
+      if(seller){catalogueWatch?.cancel();catalogueWatch=null;_onlineRequestSerial++;}
+      else{
+        _launchReady=true;
+        if(widget.enableBackgroundServices)startCatalogueWatch();
+        unawaited(load(silent:true));
+        if(widget.enableBackgroundServices||widget.initialArea!=null)unawaited(_restoreSavedArea());
+      }
+    }
+    setState((){});
+    if(uid!=null&&!seller&&session.isReady&&!session.isBusy&&_checkedSellerUid!=uid&&
+      (widget.enableBackgroundServices||widget.sellerApiFactory!=null)){
+      _checkedSellerUid=uid;unawaited(resolveSellerWorkspace(uid));
+    }
+  }
+  Future<void> resolveSellerWorkspace(String uid) async {
+    try{
+      final token=await session.freshIdToken();
+      if(!mounted||session.userId!=uid||session.idToken==null)return;
+      final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
+      if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true)session.useSellerWorkspace();
+    }catch(_){/* A selected seller workspace remains available for retry during outages. */}
+  }
+  Future<void> _prepareLaunch([Future<void>? restoring]) async {
+    try{await restoring?.timeout(const Duration(seconds:12));}catch(_){/* Authentication retries independently. */}
+    if(!mounted)return;
+    if(session.sellerWorkspace){setState(()=>_launchReady=true);return;}
     // Catalogue and area discovery start together. Never trap people forever
     // on a splash screen when mobile data or location services are slow.
     try {
@@ -278,13 +324,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     chatWatch?.cancel();
     catalogueWatch?.cancel();
     sellerPush?.dispose();
-    session.dispose();
+    session.removeListener(workspaceChanged);
+    if(widget.session==null)session.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if(!widget.enableBackgroundServices)return;
+    if(session.sellerWorkspace)return;
     if(state==AppLifecycleState.resumed) {
       refreshUnread();
       load(silent:true);startCatalogueWatch();
@@ -293,12 +341,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }else{catalogueWatch?.cancel();catalogueWatch=null;}
   }
   void startCatalogueWatch(){
-    catalogueWatch?.cancel();catalogueWatch=Timer.periodic(const Duration(seconds:30),(_){
-      if(!loading)load(silent:true);
+    catalogueWatch?.cancel();if(session.sellerWorkspace)return;
+    catalogueWatch=Timer.periodic(const Duration(seconds:30),(_){
+      if(!loading&&!session.sellerWorkspace)load(silent:true);
     });
   }
 
   Future<void> refreshUnread() async {
+    if(session.sellerWorkspace)return;
     try {
       final unread=await ShopperChatApi.unreadTotal(session);
       if(mounted)setState(()=>unreadChats=unread);
@@ -306,6 +356,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> _restoreSavedArea() async {
+    if(session.sellerWorkspace)return;
     if(widget.initialArea!=null){
       await chooseArea(widget.initialArea!,persist:false);
       return;
@@ -356,6 +407,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> reloadOnline() async {
+    if(session.sellerWorkspace)return;
     if (!mounted) return;
     final requestSerial=++_onlineRequestSerial;
     setState(() { loadingOnline=true; onlineWarning=null; });
@@ -383,7 +435,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   Future<void> load({bool silent=false}) async {
-    if(!mounted)return;
+    if(!mounted||session.sellerWorkspace)return;
     final request=++_catalogueRequest;
     setState(() { if(!silent)loading = true; catalogueError = null; });
     try {
@@ -416,6 +468,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> useLocation({bool askPermission = true}) async {
+    if(session.sellerWorkspace)return;
     setState(() { geolocating = true; locationWarning = null; });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
@@ -852,12 +905,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ShopperChatPage(session:session)));
   }
   Future<void> openOwnerWorkspace({bool notification=false}) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder:(routeContext)=>
-      SellerWorkspacePage(session:session,initialTarget:notification?'notifications':null,openLogin:(){
-        Navigator.of(routeContext).pop();
-        if(mounted)setState(()=>tab=4);
-      })));
-    if(mounted)await load(silent:true);
+    if(session.idToken==null){navigateToTab(4);return;}
+    _sellerInitialTarget=notification?'notifications':null;
+    if(notification)_sellerEntry++;
+    session.useSellerWorkspace();
   }
   void navigateToTab(int index){
     setState(() {
@@ -871,6 +922,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if(session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
+      session:session,sellerMode:true,apiFactory:widget.sellerApiFactory,mobileApi:widget.sellerMobileApi,
+      initialTarget:_sellerInitialTarget,
+      openLogin:(){if(mounted)setState(()=>tab=0);});
     if(!_launchReady)return const ShopperLaunchScreen();
     return Scaffold(
       appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,

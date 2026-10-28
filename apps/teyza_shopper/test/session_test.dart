@@ -26,6 +26,27 @@ http.Response profile()=>jsonReply({'users':[{'localId':'user1','email':'user@ex
 http.Response refreshed()=>jsonReply({'id_token':'new-token','refresh_token':'rotated-refresh','user_id':'user1'});
 
 void main(){
+  test('Seller view survives reopening for the same Firebase UID and is cleared on logout',() async{
+    final store=MemoryStore();
+    final client=MockClient((r) async=>r.url.host=='securetoken.googleapis.com'?refreshed():
+      r.url.path.endsWith('signInWithPassword')?jsonReply(login):profile());
+    final session=ShopperSession(client:client,store:store);
+    await session.signIn('user@example.test','password123');session.useSellerWorkspace();
+    await session.freshIdToken();expect(store.values['teyza_seller_workspace_uid'],'user1');
+    session.dispose();
+    final reopened=ShopperSession(client:client,store:store);await reopened.restore();
+    expect(reopened.sellerWorkspace,isTrue);expect(reopened.hasAdminClaim,isFalse);
+    await reopened.signOut();expect(reopened.sellerWorkspace,isFalse);expect(store.values,isEmpty);
+    reopened.useSellerWorkspace();expect(reopened.sellerWorkspace,isFalse);
+    reopened.dispose();client.close();
+  });
+  test('A saved seller view for a different account never follows a restored shopper',() async{
+    final store=MemoryStore()..values.addAll({'teyza_refresh':'refresh','teyza_seller_workspace_uid':'other-owner'});
+    final client=MockClient((r) async=>r.url.host=='securetoken.googleapis.com'?refreshed():profile());
+    final session=ShopperSession(client:client,store:store);await session.restore();
+    expect(session.userId,'user1');expect(session.sellerWorkspace,isFalse);
+    expect(store.values['teyza_seller_workspace_uid'],'');session.dispose();client.close();
+  });
   test('Email sign-in uses the existing Firebase project and secure session store',() async{
     final store=MemoryStore();
     final requests=<http.Request>[];
