@@ -36,6 +36,29 @@ def configure(root,platform):
         print('Facebook omitted: Meta configuration absent; existing sign-in methods retained.')
         return False
     if platform=='android':
+        # Facebook 7.1.5 targets Java 11 but does not pin Kotlin's target.
+        # Configure only that module; keep JVM target validation enabled.
+        gradle=root/'android/build.gradle.kts'
+        compatibility=root/'android/teyza-facebook-jvm.gradle'
+        compatibility.write_text('''// Keep the Facebook plugin Java/Kotlin bytecode targets aligned.
+subprojects { subproject ->
+    if (subproject.name == 'flutter_facebook_auth') {
+        subproject.tasks.configureEach { task ->
+            if (task.name ==~ /compile.*Kotlin/) {
+                if (task.hasProperty('compilerOptions')) {
+                    def targetType = task.class.classLoader.loadClass('org.jetbrains.kotlin.gradle.dsl.JvmTarget')
+                    task.compilerOptions.jvmTarget.set(targetType.getField('JVM_11').get(null))
+                } else {
+                    task.kotlinOptions.jvmTarget = '11'
+                }
+            }
+        }
+    }
+}
+''')
+        source=gradle.read_text()
+        directive='apply(from = "teyza-facebook-jvm.gradle")'
+        if directive not in source:gradle.write_text(directive+'\n'+source)
         path=root/'android/app/src/main/AndroidManifest.xml'
         tree=ET.parse(path);manifest=tree.getroot();key='{http://schemas.android.com/apk/res/android}'
         application=manifest.find('application')

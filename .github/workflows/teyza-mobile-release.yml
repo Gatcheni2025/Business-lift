@@ -137,6 +137,10 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate Android platform
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
@@ -293,6 +297,10 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate and configure both native wrappers with test-only Meta settings
         working-directory: apps/teyza_shopper
         run: |
@@ -303,3 +311,4 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-infos
           flutter test test/session_test.dart test/social_auth_test.dart
+          flutter build apk --debug

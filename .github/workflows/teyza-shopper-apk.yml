@@ -158,6 +158,10 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate Android wrapper for shopper
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .

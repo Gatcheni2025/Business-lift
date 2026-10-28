@@ -11,6 +11,7 @@ class FacebookConfigurationTests(unittest.TestCase):
     def fixture(self,root):
         (root/'pubspec.yaml').write_text('name: test\ndependencies:\n  flutter:\n    sdk: flutter\n')
         manifest=root/'android/app/src/main/AndroidManifest.xml';manifest.parent.mkdir(parents=True)
+        (root/'android/build.gradle.kts').write_text('allprojects { repositories { google() } }\n')
         manifest.write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android"><queries><package android:name="keep.me"/></queries><application android:label="Teyza"><activity android:name="MainActivity"/></application></manifest>')
         info=root/'ios/Runner/Info.plist';info.parent.mkdir(parents=True)
         info.write_bytes(plistlib.dumps({'CFBundleURLTypes':[{'CFBundleURLSchemes':['com.googleusercontent.apps.keep','app-1-firebase']}]}))
@@ -35,6 +36,9 @@ class FacebookConfigurationTests(unittest.TestCase):
             metadata={m.get(key+'name'):m.get(key+'value') for m in manifest.findall('application/meta-data')}
             self.assertEqual(metadata['com.facebook.sdk.AdvertiserIDCollectionEnabled'],'false')
             self.assertEqual(metadata['com.facebook.sdk.AutoLogAppEventsEnabled'],'false')
+            self.assertIn('JVM_11',(root/'android/teyza-facebook-jvm.gradle').read_text())
+            self.assertNotIn('validation.mode',(root/'android/teyza-facebook-jvm.gradle').read_text())
+            self.assertEqual((root/'android/build.gradle.kts').read_text().count('apply(from = \"teyza-facebook-jvm.gradle\")'),1)
             self.assertIn('LoginTracking.limited',(root/'lib/facebook_bridge.dart').read_text())
     def test_ios_merges_apple_google_and_facebook_configuration(self):
         with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'TEYZA_FACEBOOK_APP_ID':'123456789','TEYZA_FACEBOOK_CLIENT_TOKEN':'synthetic-client-token'}):
