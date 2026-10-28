@@ -76,14 +76,19 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(data.status==='approved'&&(!view.exists||view.data().sellerUid!==sellerUid||clock()-view.data().viewedAt>300000))
      D.fail(409,'View the current private selfie before approving this seller.');
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
-    tx.update(accountRef,{approvalStatus:data.status==='needs_new_photo'?'pending':data.status,updatedAt:new Date(clock())});
+    const publicShop=s.exists?s.data():null;
+    const canList=data.status==='approved'&&publicShop?.sellerUid===sellerUid&&
+      (publicShop.status==='active'||(setup.completedAt&&publicShop.moderationSource==='owner_review'));
+    tx.update(accountRef,{approvalStatus:data.status==='needs_new_photo'?'pending':data.status,
+      ...(canList?{listingStatus:'active'}:data.status!=='approved'?{listingStatus:'not_listed'}:{}),updatedAt:new Date(clock())});
     // Completion enables selling; manual approval only grants the identity badge.
     if(data.status!=='approved'&&s.exists)tx.update(shopRef,{status:'suspended',sellingEnabled:false,identityVerified:false,verificationStatus:data.status,moderationSource:'owner_review'});
     if(setup.requiredVersion===2){
       tx.set(setupRef,{moderationBlocked:data.status!=='approved',sellingStatus:data.status==='approved'&&setup.completedAt?'active':'paused',updatedAt:clock()},{merge:true});
-      if(data.status==='approved'&&s.exists)tx.update(shopRef,{identityVerified:true,verificationStatus:'approved',
-        ...(setup.completedAt&&s.data().moderationSource==='owner_review'?{status:'active',sellingEnabled:true}: {})});
     }
+    if(data.status==='approved'&&publicShop?.sellerUid===sellerUid)tx.update(shopRef,{
+      identityVerified:true,verificationStatus:'approved',
+      ...(canList&&setup.completedAt&&publicShop.moderationSource==='owner_review'?{status:'active',sellingEnabled:true}: {})});
     tx.set(doc('teyzaSellerReviewAudit/'+submissionId),{sellerUid,submissionId,status:data.status,reason,reviewedBy:uid,reviewedAt:clock()});
     return {status:data.status};
    });

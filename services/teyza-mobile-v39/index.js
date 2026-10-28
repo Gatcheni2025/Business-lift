@@ -76,6 +76,7 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaPublicShops/{sellerUid}'},async event=>{
   if(!event.data?.after.exists)return;
   const before=event.data.before.data()||{},after=event.data.after.data();
+  await notifications.queue(event.id,notificationFor('listing',before,after,event.params.sellerUid));
   if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled&&before.sellingEnabled===after.sellingEnabled)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });

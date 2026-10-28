@@ -109,6 +109,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
     if(f.exists&&f.data().ownerUid===uid&&f.data().photoId)next.photoUrl=require('./shop-front').publicUrl(uid,f.data().photoId);
     Object.assign(next,catalogue.range(uid,next,drafts.docs.map(r=>({id:r.id,data:r.data()}))));
     tx.set(refs[4],next);
+    if(approved)tx.update(refs[0],{listingStatus:'active',updatedAt:new Date(clock())});
     tx.set(refs[3],{requiredVersion:2,legalType:id.legalType,sellingStatus:'active',identityEvidenceId:id.evidenceId,
      selfieSubmissionId:selfie.submissionId,verifiedPhone,phoneVerifiedAt:clock(),completedAt:clock(),updatedAt:clock()},{merge:true});
     return {sellingStatus:'active',publicationStatus:'active',verificationStatus:next.verificationStatus};

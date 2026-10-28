@@ -57,6 +57,20 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
         initialThreadId:result['threadId']?.toString(),initialTitle:widget.asOwner?order['shopperName']?.toString():order['shopName']?.toString())));
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   }
+  Future<void> rateShop(Map<String,dynamic> order) async {
+    final requestedUid=widget.session.userId;
+    final stars=await showDialog<int>(context:context,builder:(ctx)=>SimpleDialog(
+      title:const Text('Rate your shop experience'),children:[
+        const Padding(padding:EdgeInsets.symmetric(horizontal:24),child:Text('Your latest rating counts once per shop. You can update it after a completed order.')),
+        for(var n=5;n>=1;n--)SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,n),
+          child:Text('$n ${n==1?'star':'stars'}'))]));
+    if(stars==null||!mounted||requestedUid!=widget.session.userId)return;
+    setState(()=>working=true);
+    try{await api.call('shop_rate',{'orderId':order['id'],'stars':stars});
+      if(mounted&&requestedUid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your shop rating has been saved.')));
+    }catch(e){if(mounted&&requestedUid==widget.session.userId)setState(()=>error=mobileError(e));}
+    finally{if(mounted)setState(()=>working=false);}
+  }
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(
     padding:const EdgeInsets.fromLTRB(18,22,18,30),children:[
       Text(widget.asOwner?'Customer orders':'Your orders',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
@@ -95,7 +109,9 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
             Wrap(spacing:7,children:[for(final status in nextSteps(order))TextButton(onPressed:working?null:()=>update(order,status),
               child:Text(switch(status){'confirmed'=>'Confirm order','preparing'=>'Start preparing','ready'=>'Ready to collect',
                 'out_for_delivery'=>'Out for delivery','completed'=>'Mark completed',_=>'Cancel'})),
-              TextButton.icon(onPressed:working?null:()=>chat(order),icon:const Icon(Icons.chat_bubble_outline,size:17),label:const Text('Message'))])
+              TextButton.icon(onPressed:working?null:()=>chat(order),icon:const Icon(Icons.chat_bubble_outline,size:17),label:const Text('Message')),
+              if(!widget.asOwner&&order['status']=='completed')TextButton.icon(onPressed:working?null:()=>rateShop(order),
+                icon:const Icon(Icons.star_outline,size:17),label:const Text('Rate shop'))])
           ]))
     ]));
 }

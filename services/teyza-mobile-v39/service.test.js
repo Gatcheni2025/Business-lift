@@ -36,6 +36,33 @@ function fixture(extra={},options={}){const db=new FakeDB({'teyzaSellerAccounts/
  return {db,files,service:createService({db,bucket,clock:()=>1000000,sanitizeImage:async bytes=>bytes,
    encryptSelfie:bytes=>C.encrypt(bytes,secret),decryptSelfie:bytes=>C.decrypt(bytes,secret),...options})};}
 const rejects=(promise,status)=>assert.rejects(promise,error=>error.status===status);
+test('Only completed-order shoppers rate a shop; edits and repeat orders never inflate its count',async()=>{
+ const {service,db}=fixture({'teyzaMobileOrders/done':{ownerUid:'seller1',shopperUid:'buyer1',status:'completed'},
+  'teyzaMobileOrders/waiting':{ownerUid:'seller1',shopperUid:'buyer1',status:'requested'}});
+ await rejects(service.execute(owner,'shop_rate',{orderId:'done',stars:5}),403);
+ await rejects(service.execute(buyer,'shop_rate',{orderId:'waiting',stars:5}),409);
+ await rejects(service.execute({...buyer,email_verified:false},'shop_rate',{orderId:'done',stars:5}),403);
+ await rejects(service.execute(buyer,'shop_rate',{orderId:'done',stars:6}),422);
+ await service.execute(buyer,'shop_rate',{orderId:'done',stars:5,ratingCount:1000});
+ await service.execute(buyer,'shop_rate',{orderId:'done',stars:3});
+ let s=db.records.get('teyzaPublicShops/seller1');assert.equal(s.ratingCount,1);assert.equal(s.rating,3);
+ db.records.set('teyzaMobileOrders/second',{ownerUid:'seller1',shopperUid:'buyer2',status:'completed'});
+ await service.execute({...buyer,uid:'buyer2'},'shop_rate',{orderId:'second',stars:5});
+ s=db.records.get('teyzaPublicShops/seller1');assert.equal(s.ratingCount,2);assert.equal(s.rating,4);
+ assert.equal(s.ratingSource,'teyza_completed_orders');
+ db.records.set('teyzaPublicShops/seller1',{...s,status:'suspended'});
+ await rejects(service.execute(buyer,'shop_rate',{orderId:'done',stars:5}),409);
+});
+test('Existing approved active shops reconcile old listing flags but suspended shops stay paused',async()=>{
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,listingStatus:'not_listed'},
+  'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved'}});
+ const summary=await service.execute(owner,'seller_summary');
+ assert.equal(summary.publicationStatus,'active');assert.equal(summary.identityVerified,true);
+ assert.equal(db.records.get('teyzaSellerAccounts/seller1').listingStatus,'active');
+ db.records.set('teyzaPublicShops/seller1',{...db.records.get('teyzaPublicShops/seller1'),status:'suspended',identityVerified:false});
+ assert.equal((await service.execute(owner,'seller_summary')).publicationStatus,'suspended');
+ assert.equal(db.records.get('teyzaPublicShops/seller1').identityVerified,false);
+});
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
 
 test('Native seller registration binds the verified actor and cannot approve, activate or replace an existing shop',async()=>{
@@ -63,7 +90,7 @@ test('Only recent trusted reviewers can see the queue and approve the exact self
  await rejects(service.execute({...owner,teyzaAdmin:true,auth_time:1000},'admin_seller_review',decision),403);
  await service.execute(admin,'verification_read',{sellerUid:'seller1',submissionId});
  await service.execute(admin,'admin_seller_review',decision);
- const account=db.records.get('teyzaSellerAccounts/seller1');assert.equal(account.approvalStatus,'approved');assert.equal(account.listingStatus,'not_listed');
+ const account=db.records.get('teyzaSellerAccounts/seller1');assert.equal(account.approvalStatus,'approved');assert.equal(account.listingStatus,'active');
  assert.equal(db.records.get('teyzaPublicShops/seller1').catalogueEnabled,true);
  assert.equal(db.records.get('teyzaSellerReviewAudit/'+submissionId).reviewedBy,'buyer1');
  await rejects(service.execute(admin,'admin_seller_review',decision),409);
@@ -415,6 +442,8 @@ test('Version 2 admin approval requires both current private views and actual OT
  await rejects(service.execute(reviewer,'admin_seller_review',decision),409);
  await service.execute(reviewer,'seller_identity_read',decision);await service.execute(reviewer,'admin_seller_review',decision);
  assert.equal(db.records.get('teyzaPublicShops/buyer1').identityVerified,true);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingStatus,'active');
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').status,'active');
  assert.equal(db.records.get('teyzaPublicShops/buyer1').catalogueEnabled,false);
 });
 test('Moderation cannot be bypassed by completing again, uploading replacement files or claiming approval',async()=>{

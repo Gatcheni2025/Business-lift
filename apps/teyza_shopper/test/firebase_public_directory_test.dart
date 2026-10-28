@@ -21,6 +21,15 @@ Map<String,dynamic> row(String status,String name,{String id='seller100'}) => {
  }
 };
 void main(){
+ test('Public merchant ratings must identify Teyza completed orders as their source',(){
+  final listing=row('active','Rated shop');
+  final fields=(listing['document'] as Map)['fields'] as Map;
+  fields['rating']={'doubleValue':4.5};fields['ratingCount']={'integerValue':'2'};
+  expect(parseTeyzaPublicDirectory([listing]).single['rating'],isNull);
+  fields['ratingSource']={'stringValue':'teyza_completed_orders'};
+  expect(parseTeyzaPublicDirectory([listing]).single['rating'],4.5);
+  expect(parseTeyzaPublicDirectory([listing]).single['ratingCount'],2);
+ });
  test('Pending and invalid shops never appear in directory',(){
   final shops=parseTeyzaPublicDirectory([
     row('active','Verified Spaza'),
@@ -53,6 +62,20 @@ void main(){
   final rows=await fetchTeyzaPublicDirectory(client:mock);
   expect(rows.length,1);
   expect(rows.single['id'],'seller100');
+ });
+ test('Active shops after the first 200 are fetched using an exclusive document cursor',() async {
+  var pages=0;
+  final mock=MockClient((request) async {
+   final query=(jsonDecode(request.body) as Map)['structuredQuery'] as Map;
+   pages++;
+   if(pages==1){expect(query.containsKey('startAt'),false);
+    return http.Response(jsonEncode(List.generate(200,(n)=>row('active','Shop $n',id:'seller${n.toString().padLeft(3,'0')}'))),200);}
+   expect((query['startAt'] as Map)['before'],false);
+   expect(query['startAt'].toString(),contains('seller199'));
+   return http.Response(jsonEncode([row('active','Last shop',id:'seller200')]),200);
+  });
+  final shops=await fetchTeyzaPublicDirectory(client:mock);
+  expect(pages,2);expect(shops.length,201);expect(shops.last['id'],'seller200');
  });
  test('Denied Firestore query is never replaced with unverified shops',() async {
   final mock=MockClient((_) async => http.Response('{"error":"PERMISSION_DENIED"}',403));
