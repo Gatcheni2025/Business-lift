@@ -229,6 +229,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   bool _wasSeller=false;
   String? _sellerInitialTarget;
   int _sellerEntry=0;
+  Future<void>? _workspaceResolution;
   SellerPush? sellerPush;
   List<OnlineShop> online = [];
   String? onlineWarning;
@@ -263,6 +264,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final uid=session.userId,seller=session.sellerWorkspace;
     if(uid!=_observedUid){
       _observedUid=uid;_checkedSellerUid=null;
+      _workspaceResolution=null;
       _sellerInitialTarget=null;
       cart.clear();basketShop=null;selected=null;directorySelected=null;tab=0;unreadChats=0;
     }
@@ -279,7 +281,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     setState((){});
     if(uid!=null&&!seller&&session.isReady&&!session.isBusy&&_checkedSellerUid!=uid&&
       (widget.enableBackgroundServices||widget.sellerApiFactory!=null)){
-      _checkedSellerUid=uid;unawaited(resolveSellerWorkspace(uid));
+      _checkedSellerUid=uid;_workspaceResolution=resolveSellerWorkspace(uid);
     }
   }
   Future<void> resolveSellerWorkspace(String uid) async {
@@ -292,6 +294,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   Future<void> _prepareLaunch([Future<void>? restoring]) async {
     try{await restoring?.timeout(const Duration(seconds:12));}catch(_){/* Authentication retries independently. */}
+    try{await _workspaceResolution?.timeout(const Duration(seconds:8));}catch(_){/* Owner login remains available if the account cannot be checked. */}
     if(!mounted)return;
     if(session.sellerWorkspace){setState(()=>_launchReady=true);return;}
     // Catalogue and area discovery start together. Never trap people forever
@@ -314,7 +317,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         } catch (_) {/* Individual photos may be unavailable. */}
       })).timeout(const Duration(seconds:4));
     } catch (_) {/* Placeholders remain visible for slow photo providers. */}
-    await Future<void>.delayed(const Duration(milliseconds:380));
     if(mounted)setState(()=>_launchReady=true);
   }
 

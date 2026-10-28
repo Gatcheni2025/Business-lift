@@ -159,11 +159,12 @@ jobs:
           TEYZA_CAPTURE_UI: '1'
         run: flutter test
       - name: Save phone UI previews
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: teyza-phone-ui-previews
           path: apps/teyza_shopper/build/ui-preview/*.png
-          if-no-files-found: error
+          if-no-files-found: warn
 
   android:
     if: inputs.platforms != 'ios'

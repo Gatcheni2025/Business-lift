@@ -19,6 +19,7 @@ import 'seller_premium.dart';
 import 'seller_mandate.dart';
 import 'seller_selling.dart';
 import 'seller_areas.dart';
+import 'seller_review.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -364,6 +365,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
+    if(widget.session.hasAdminClaim&&widget.session.emailVerified)
+      businessTile(Icons.admin_panel_settings_outlined,'Seller review desk','Administrator access',()=>Navigator.push(context,
+        MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session,api:widget.mobileApi)))),
     Card(child:ListTile(leading:const Icon(Icons.star_rounded,color:Color(0xFFB57800)),
       title:Text(ratingCount>0&&shopRating!=null?'${shopRating!.toStringAsFixed(1)} from $ratingCount shoppers':'No ratings yet'),
       subtitle:const Text('Ratings from completed Teyza orders.'))),

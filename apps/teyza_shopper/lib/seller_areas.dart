@@ -78,6 +78,7 @@ class _AreasState extends State<SellerAreasPage>{
       const SizedBox(height:20),FilledButton.icon(onPressed:locating?null:locate,icon:const Icon(Icons.my_location),
         label:Text(locating?'Finding your area…':'Use my location')),
       const SizedBox(height:16),DropdownButtonFormField<SellingArea>(isExpanded:true,
+        key:ValueKey('seller-base-${base?.name}-${base?.lat}'),
         initialValue:sellingAreas.contains(base)?base:null,
         decoration:const InputDecoration(labelText:'Or choose a base area',border:OutlineInputBorder()),
         items:sellingAreas.map((a)=>DropdownMenuItem(value:a,child:Text('${a.name} · ${a.city}',overflow:TextOverflow.ellipsis))).toList(),

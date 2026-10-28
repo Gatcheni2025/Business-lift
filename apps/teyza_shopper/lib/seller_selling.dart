@@ -58,7 +58,7 @@ class SellerSellingDashboard extends StatelessWidget {
       const SizedBox(height:12),LayoutBuilder(builder:(context,c)=>GridView.count(
         crossAxisCount:c.maxWidth<310||MediaQuery.textScalerOf(context).scale(14)>19?1:c.maxWidth>700?3:2,
         mainAxisSpacing:12,crossAxisSpacing:12,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
-        mainAxisExtent:139+(MediaQuery.textScalerOf(context).scale(14)-14)*4,
+        mainAxisExtent:166+(MediaQuery.textScalerOf(context).scale(14)-14)*5,
         children:[
           _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
           _tool('Customer orders','Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
@@ -76,6 +76,8 @@ class SellerSellingDashboard extends StatelessWidget {
     shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20),side:const BorderSide(color:Color(0xFFE1E9DF))),
     child:InkWell(onTap:tap,borderRadius:BorderRadius.circular(20),child:Padding(padding:const EdgeInsets.all(15),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Icon(icon,color:_green,size:27),const Spacer(),Text(title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:15,color:_ink)),
-        const SizedBox(height:4),Text(detail,style:const TextStyle(fontSize:11,color:_muted))]))));
+        Icon(icon,color:_green,size:27),const Spacer(),Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
+          style:const TextStyle(fontWeight:FontWeight.w800,fontSize:15,color:_ink,height:1.2)),
+        const SizedBox(height:4),Text(detail,maxLines:2,overflow:TextOverflow.ellipsis,
+          style:const TextStyle(fontSize:11,color:_muted,height:1.2))]))));
 }

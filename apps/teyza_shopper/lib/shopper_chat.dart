@@ -98,8 +98,8 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
         if(widget.initialShop==null)Align(alignment:Alignment.centerLeft,child:TextButton.icon(
           onPressed:loading?null:(){setState((){threadId=null;title=null;messages=[];});refresh();},
           icon:const Icon(Icons.arrow_back,size:18),label:const Text('All conversations'))),
-        if(messages.isEmpty&&!loading)const Padding(padding:EdgeInsets.symmetric(vertical:30),
-          child:Text('Start a conversation with this shop.')),
+        if(messages.isEmpty&&!loading)Padding(padding:const EdgeInsets.symmetric(vertical:30),
+          child:Text(widget.asOwner?'Send a message to your customer.':'Start a conversation with this shop.')),
         for(final message in messages)Align(
           alignment:message['senderUid']==uid?Alignment.centerRight:Alignment.centerLeft,
           child:Container(constraints:const BoxConstraints(maxWidth:310),

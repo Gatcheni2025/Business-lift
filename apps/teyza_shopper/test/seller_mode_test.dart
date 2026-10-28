@@ -56,9 +56,10 @@ void main(){
     await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
     await (FontLoader('PT Sans')..addFont(rootBundle.load('assets/fonts/PTSans-Regular.ttf'))
       ..addFont(rootBundle.load('assets/fonts/PTSans-Bold.ttf'))).load();
+    await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
     final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
     var publicReads=0;final boundary=GlobalKey();
-    await tester.pumpWidget(MaterialApp(home:RepaintBoundary(key:boundary,child:ShopperHome(session:session,
+    await tester.pumpWidget(MaterialApp(theme:ThemeData(useMaterial3:true,fontFamily:'PT Sans'),home:RepaintBoundary(key:boundary,child:ShopperHome(session:session,
       enableBackgroundServices:false,initialArea:areas.first,sellerMobileApi:api,
       sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async{publicReads++;return [];},directoryLoader:(_,__,___) async=>[]))));
