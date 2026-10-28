@@ -8,7 +8,7 @@ Areas around me provides opt-in GPS or manual base-area selection, approximate s
 
 The seller presentation preference is stored with the existing secure session, bound to the authenticated Firebase UID. A restored UID must match the saved preference. Older registered sellers without this preference are detected through their authenticated seller-account read. This is presentation state only: it cannot grant seller registration, approval, admin claims or API permissions. Users who choose seller login without a shop enter the existing registration flow. Email, Google, Apple and Facebook owner sign-in all use the same presentation switch.
 
-Logout clears the secure mode preference, seller state and the shopper basket; the root returns to shopper browsing. A delayed seller-account lookup after logout or account change cannot restore seller mode. Public directory polling and shopper location prompts are suppressed while seller mode is active. If an older seller account cannot be checked during a network outage, owner login/Open shop owner workspace still enters a retryable seller view.
+Logout clears the secure mode preference, seller state and the shopper basket; the root returns to shopper browsing and closes any open seller subpages, including finance. A delayed seller-account lookup after logout or account change cannot restore seller mode. Public directory polling and shopper location prompts are suppressed while seller mode is active. If an older seller account cannot be checked during a network outage, owner login/Open shop owner workspace still enters a retryable seller view.
 
 ## Release
 

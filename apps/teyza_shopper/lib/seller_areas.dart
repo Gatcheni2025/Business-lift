@@ -63,7 +63,8 @@ class _AreasState extends State<SellerAreasPage>{
         result=SellingArea('My current location','',p.latitude,p.longitude);
       }
       if(mounted)setState(()=>base=result);
-    }catch(e){if(mounted)setState(()=>error=e.toString().replaceFirst('Bad state: ',''));}
+    }catch(e){if(mounted)setState(()=>error=e is StateError?e.message.toString():
+      'Could not find your location. Choose a base area or try again.');}
     finally{if(mounted)setState(()=>locating=false);}
   }
   Future<void> map(SellingArea area) async {

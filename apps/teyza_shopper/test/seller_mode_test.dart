@@ -59,7 +59,8 @@ void main(){
     await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
     final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
     var publicReads=0;final boundary=GlobalKey();
-    await tester.pumpWidget(MaterialApp(theme:ThemeData(useMaterial3:true,fontFamily:'PT Sans'),home:RepaintBoundary(key:boundary,child:ShopperHome(session:session,
+    await tester.pumpWidget(MaterialApp(theme:ThemeData(useMaterial3:true,fontFamily:'PT Sans',
+      colorScheme:ColorScheme.fromSeed(seedColor:green)),home:RepaintBoundary(key:boundary,child:ShopperHome(session:session,
       enableBackgroundServices:false,initialArea:areas.first,sellerMobileApi:api,
       sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async{publicReads++;return [];},directoryLoader:(_,__,___) async=>[]))));
@@ -107,6 +108,18 @@ void main(){
     await tester.pump();await session.signOut();result.complete(savedShop);await tester.pumpAndSettle();
     expect(session.sellerWorkspace,isFalse);expect(find.byType(SellerNavigation),findsNothing);expect(find.text('Shops'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+  });
+  testWidgets('Ending a seller session closes finance and returns to shopper navigation',(tester) async {
+    SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
+      initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
+      catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
+    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-nav-4')));await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply for stock finance'));await tester.pumpAndSettle();expect(find.text('Need help funding stock?'),findsOneWidget);
+    await session.signOut();await tester.pumpAndSettle();
+    expect(find.text('Need help funding stock?'),findsNothing);expect(find.text('Shops'),findsOneWidget);
+    expect(find.byType(SellerNavigation),findsNothing);expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('Seller navigation and actions fit a narrow screen with larger text',(tester) async {
     await tester.binding.setSurfaceSize(const Size(320,760));addTearDown(()=>tester.binding.setSurfaceSize(null));

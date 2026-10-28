@@ -262,15 +262,21 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void workspaceChanged(){
     if(!mounted)return;
     final uid=session.userId,seller=session.sellerWorkspace;
+    final previousUid=_observedUid;
     if(uid!=_observedUid){
       _observedUid=uid;_checkedSellerUid=null;
       _workspaceResolution=null;
       _sellerInitialTarget=null;
-      cart.clear();basketShop=null;selected=null;directorySelected=null;tab=0;unreadChats=0;
+      if(previousUid!=null||seller){cart.clear();basketShop=null;}
+      selected=null;directorySelected=null;tab=0;unreadChats=0;
+      if(uid==null&&previousUid!=null)WidgetsBinding.instance.addPostFrameCallback((_){
+        if(mounted&&session.userId==null)Navigator.of(context).popUntil((route)=>route.isFirst);
+      });
     }
     if(seller!=_wasSeller){
       _wasSeller=seller;
-      if(seller){catalogueWatch?.cancel();catalogueWatch=null;_onlineRequestSerial++;}
+      if(seller){cart.clear();basketShop=null;selected=null;directorySelected=null;
+        catalogueWatch?.cancel();catalogueWatch=null;_onlineRequestSerial++;}
       else{
         _launchReady=true;
         if(widget.enableBackgroundServices)startCatalogueWatch();
