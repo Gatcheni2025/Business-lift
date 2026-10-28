@@ -1,5 +1,7 @@
 # Approved shops and nearby discovery — 1.0.19 (29)
 
+For version **1.0.20 (30)** and later, follow [Address autocomplete](TEYZA_ADDRESS_AUTOCOMPLETE.md) for deployment and address entry. Full address selection now replaces the manual street/suburb/coordinate inputs described in this historical guide. The approval requirements below remain in effect.
+
 ## Deploy first
 
 Extract the GitHub deployment artifact once. `DEPLOY-MOBILE.ps1` is now at its root; there is no inner ZIP to open. Run it in PowerShell with the existing Firebase login and Node 22. Keep the existing verification encryption key. The script deploys only the `teyza-mobile` codebase and checks `approvalRequired: true` and `shopLocations: true` in the live health response. No hosting or Firestore rules replacement is included.

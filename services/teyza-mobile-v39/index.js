@@ -11,6 +11,7 @@ const sharp=require('sharp');
 const {defineSecret}=require('firebase-functions/params');
 const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
+const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -23,12 +24,13 @@ async function readiness(){
  return readinessCache;
 }
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
+  getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})
   .rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).jpeg({quality:82}).toBuffer()});
-exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
+exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.method==='GET'){
     if(req.query.publicShops!==undefined){
@@ -53,7 +55,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true});return;
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,service:'teyza-mobile',sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -94,6 +96,10 @@ exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
 // schedule performs a single checkpoint read; normal writes use existing triggers.
 exports.teyzaPublicationRepair=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'512MiB',timeoutSeconds:180},
   async()=>{const result=await service.reconcilePublicationBatch();if(result.checked)console.log('TEYZA_PUBLICATION_REPAIR',result.checked,result.complete);});
+exports.teyzaShopLocationRefresh=onSchedule({schedule:'every 6 hours',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,
+  memory:'512MiB',timeoutSeconds:540,secrets:[placesKey]},async()=>{
+  const result=await service.refreshShopLocations();if(result.checked)console.log('TEYZA_SHOP_LOCATION_REFRESH',result.checked,result.refreshed,result.cleared);
+});
 for(const [name,kind,document] of [
  ['teyzaSellerOrderNotification','order','teyzaMobileOrders/{reference}'],
  ['teyzaSellerStockNotification','stock','teyzaDraftProducts/{sellerUid}/items/{reference}'],

@@ -12,6 +12,15 @@ import 'package:teyza_shopper/seller_tools.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
 
+const addressFixture={'address':'12 Main Road, KwaMashu, Durban, South Africa','area':'KwaMashu','city':'Durban',
+  'latitude':-29.7402,'longitude':30.992,'placeId':'address-durban-1','addressSelection':'address-receipt'};
+Future<void> selectAddress(WidgetTester tester) async {
+  final field=find.byKey(const ValueKey('shop-address-search'));await tester.ensureVisible(field);
+  await tester.enterText(field,'12 Main Road Durban');tester.testTextInput.hide();
+  await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
+  await visibleTap(tester,find.widgetWithText(ListTile,addressFixture['address'] as String));
+}
+
 class Session extends ShopperSession{
  Session(){isReady=true;userId='owner';emailVerified=true;idToken='token';}
  @override Future<String> freshIdToken() async=>'token';
@@ -26,6 +35,8 @@ class ExperienceApi extends TeyzaMobileApi{
   calls.add((action:action,data:data));
   if(denied)throw StateError('Teyza administrator access is required.');
   return switch(action){
+   'seller_address_suggest'=>{'suggestions':[{'placeId':addressFixture['placeId'],'label':addressFixture['address'],'predictionToken':'prediction-receipt'}]},
+   'seller_address_select'=>{'selection':addressFixture},
    'notification_list'=>{'notifications':[{'id':'notice','title':'New order request','body':'Open your orders to respond.','read':false,'target':'orders'}]},
    'admin_seller_queue'=>{'sellers':[{'sellerUid':'seller1','submissionId':'submission1','shopName':'Durban Corner Shop','category':'spaza',
     'address':'KwaMashu, Durban','phone':'0712345678','ownerEmail':'owner@example.test','approvalStatus':'pending','listingStatus':'not_listed'}]},
@@ -99,12 +110,13 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
   await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
-  await tester.enterText(find.byType(TextFormField).at(2),'KwaMashu, Durban');
+  await selectAddress(tester);
   tester.testTextInput.hide();await tester.pumpAndSettle();
-  await visibleTap(tester,find.text('I confirm that these are my shop’s details.'));
+  await visibleTap(tester,find.text('I confirm that these are my shop’s details and shoppers may see this business address and map location.'));
   await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
+  expect(request.data['addressSelection'],'address-receipt');expect(request.data['locationConsent'],true);
   expect(request.data.containsKey('approvalStatus'),false);expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });

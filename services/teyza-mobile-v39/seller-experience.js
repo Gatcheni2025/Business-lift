@@ -9,7 +9,7 @@ function recentAdmin(auth,clock){
   const age=clock()/1000-auth.auth_time;
   if(!Number.isFinite(age)||age< -60||age>300)D.fail(401,'Sign in again before reviewing sellers. Your review session lasts five minutes.');
 }
-function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>null}){
+function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>null,shopAddress}){
  const doc=p=>db.doc(p);
  const owner=async uid=>{const s=await doc('teyzaSellerAccounts/'+uid).get();return D.seller(s.exists?s.data():null,uid);};
  async function execute(auth,action,data={}){
@@ -22,14 +22,17 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    if(!['individual','company'].includes(legalType))D.fail(422,'Choose Individual or Registered company.');
    if(legalType==='company'&&(!data.companyName?.trim()||!data.registrationNumber?.trim()))D.fail(422,'Enter the registered company name and registration number.');
    const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
-    ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),address:D.text(data.address,'shop address',250),
+    ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
     approvalStatus:'pending',listingStatus:'not_listed',createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
     if(snap.exists){D.seller(snap.data(),uid);return {registered:true,alreadyRegistered:true};}
-    tx.set(ref,values);tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
+    if(data.locationConsent!==true)D.fail(422,'Confirm that shoppers may see this business address and shop location.');
+    const location=shopAddress.location(uid,data);
+    tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
+    tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
@@ -83,7 +86,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
     const next=P.project(sellerUid,{account:updatedAccount,setup:nextSetup,verification:updatedVerification,
       shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
-      location:l.exists?l.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()}))});
+      location:l.exists?l.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
     if(next)tx.set(shopRef,{...next,updatedAt:clock()});

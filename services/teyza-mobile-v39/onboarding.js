@@ -60,7 +60,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
     shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
-    locationSaved:Boolean(P.locationFor(uid,account,location,shop)),
+    locationSaved:Boolean(P.locationFor(uid,account,location,shop,clock())),
     publicationStatus:P.state(uid,account,saved||{},selfie,shop).status};
   }
   if(action==='seller_identity_submit'){
@@ -109,7 +109,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
     const pin=await tx.get(doc('teyzaShopLocations/'+uid));
     const next=P.project(uid,{account:owner,setup:nextSetup,verification:selfie,shop,settings,
       front:f.exists?f.data():null,location:pin.exists?pin.data():null,
-      drafts:drafts.docs.map(r=>({id:r.id,data:r.data()}))});
+      drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     nextSetup.sellingStatus=next.status==='active'?'active':'pending_approval';
     tx.set(refs[4],{...next,updatedAt:clock()});
     tx.update(refs[0],{listingStatus:next.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});

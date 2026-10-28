@@ -24,14 +24,17 @@ function assertLive(uid,account,setup,verification,shop){
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
  typeof lng==='number'&&Number.isFinite(lng)&&lng>=-180&&lng<=180&&!(lat===0&&lng===0);
 const sameAddress=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
-function locationFor(uid,account,location,shop){
- if(location?.ownerUid===uid&&location.consentAt&&sameAddress(location.address,account.address)&&coordinates(location.latitude,location.longitude))
-  return {latitude:location.latitude,longitude:location.longitude,area:location.area,city:location.city||'',address:account.address};
- if(!location&&(!shop?.address||sameAddress(shop.address,account.address))&&coordinates(shop?.latitude,shop?.longitude))
+const locationMatches=(uid,account,location)=>location?.ownerUid===uid&&Boolean(location.consentAt)&&sameAddress(location.address,account?.address);
+const freshCoordinates=(value,now)=>value?.source!=='google_places'&&value?.coordinateSource!=='google_places'||Number.isFinite(value.coordinatesExpireAt)&&value.coordinatesExpireAt>now;
+function locationFor(uid,account,location,shop,now=Date.now()){
+ if(locationMatches(uid,account,location)&&freshCoordinates(location,now)&&coordinates(location.latitude,location.longitude))
+  return {latitude:location.latitude,longitude:location.longitude,area:location.area,city:location.city||'',address:account.address,
+   ...(location.source==='google_places'?{coordinateSource:'google_places',coordinatesExpireAt:location.coordinatesExpireAt}:{})};
+ if(!location&&freshCoordinates(shop,now)&&(!shop?.address||sameAddress(shop.address,account.address))&&coordinates(shop?.latitude,shop?.longitude))
   return {latitude:shop.latitude,longitude:shop.longitude,area:shop.area||account.address,city:shop.city||'',address:account.address};
  return null;
 }
-function project(uid,{account,setup={},verification,shop,settings={},front,location,drafts=[],removedProductId=null}){
+function project(uid,{account,setup={},verification,shop,settings={},front,location,drafts=[],removedProductId=null,now=Date.now()}){
  if(shop&&shop.sellerUid!==uid)D.fail(409,'This shop listing needs Teyza support to restore it.');
  const result=state(uid,account,setup,verification,shop);
  if(!result.registered||(!shop&&!setup.completedAt))return null;
@@ -56,8 +59,9 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
   if(p.customPhotoApproved===true&&typeof p.imageUrl==='string')reviewed[p.id]=p.imageUrl;
  if(Object.keys(reviewed).length)next.reviewedProductPhotos=reviewed;
  if(!shop||['onboarding','owner_review','approval'].includes(shop.moderationSource))next.moderationSource='approval';
- const pin=locationFor(uid,account,location,shop);
- delete next.latitude;delete next.longitude;delete next.city;
+ const pin=locationFor(uid,account,location,shop,now);
+ delete next.latitude;delete next.longitude;delete next.city;delete next.coordinateSource;delete next.coordinatesExpireAt;
+ if(locationMatches(uid,account,location)){next.area=location.area||next.area;next.city=location.city||'';}
  if(pin)Object.assign(next,pin);
  else if(!location&&(!shop?.address||sameAddress(shop.address,account.address))&&typeof shop?.city==='string')next.city=shop.city;
  if(front?.ownerUid===uid&&front.photoId)next.photoUrl=require('./shop-front').publicUrl(uid,front.photoId);
@@ -75,4 +79,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,project,publicRow,held};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,project,publicRow,held};

@@ -11,8 +11,10 @@ const mandate=require('./mandate');
 const ratings=require('./ratings');
 const P=require('./publication');
 const locations=require('./shop-location');
+const addresses=require('./shop-address');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,clock=Date.now}) {
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,
+  getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
@@ -51,7 +53,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const setup=setupSnap.exists?setupSnap.data():{};
       const verification=verificationSnap.exists?verificationSnap.data():null;
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
-        front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,drafts:entries,removedProductId});
+        front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,drafts:entries,removedProductId,now:clock()});
       const eligible=next?.status==='active';
       if(next){
         const listing=eligible?'active':'not_listed';
@@ -79,9 +81,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   }
   const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
   const shopRatings=ratings.createRatings({db,clock,rate});
-  const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue});
+  const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
+  const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
   const adminOperations=operations.createOperations({db,clock,rate});
-  const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser});
+  const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
@@ -106,6 +109,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
@@ -128,7 +132,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
         read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid)]);
-      const publication=P.state(uid,account,setup||{},verification,publicShop),pin=P.locationFor(uid,account,location,publicShop);
+      const publication=P.state(uid,account,setup||{},verification,publicShop),pin=P.locationFor(uid,account,location,publicShop,clock());
       return {settings:config||{},approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.live&&publicShop?.sellingEnabled===true,identityVerified:publication.approved,
@@ -390,9 +394,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
         const [a,o,v,l,f]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/'].map(p=>read(p+uid)));
         if(!P.state(uid,a,o||{},v,shop).live)return null;
-        const pin=P.locationFor(uid,a,l,shop),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
-          area:pin?.area||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
-          city:pin?.city||(!l&&(!shop.address||shop.address===a.address)?shop.city||'':'')};
+        const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
+          area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
+          city:pin?.city||(current?l.city:'')||(!l&&(!shop.address||shop.address===a.address)?shop.city||'':'')};
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
         return P.publicRow(uid,projected);
@@ -413,6 +417,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     await ref.set({after:rows.docs.at(-1)?.id||'',...(complete?{completedAt:clock()}:{}),updatedAt:clock()});
     return {complete,checked:rows.docs.length};
   }
-  return {execute,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,publicShopPhoto:shopFront.publicPhoto};
+  return {execute,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
+    publicShopPhoto:shopFront.publicPhoto};
 }
 module.exports = {createService};

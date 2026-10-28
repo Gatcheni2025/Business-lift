@@ -5,6 +5,7 @@ import 'seller_tools.dart';
 import 'seller_onboarding.dart';
 import 'seller_firestore.dart';
 import 'seller_phone.dart';
+import 'shop_address.dart';
 
 class SellerRegistrationPage extends StatefulWidget {
   final ShopperSession session;
@@ -14,31 +15,28 @@ class SellerRegistrationPage extends StatefulWidget {
 }
 class _RegistrationState extends State<SellerRegistrationPage>{
   final form=GlobalKey<FormState>();
-  final name=TextEditingController(),phone=TextEditingController(),address=TextEditingController(),company=TextEditingController(),number=TextEditingController();
+  final name=TextEditingController(),phone=TextEditingController(),unit=TextEditingController(),company=TextEditingController(),number=TextEditingController();
+  ShopAddressSelection? selectedAddress;
   late final String? uid;
   String category='spaza',legalType='individual';String? error;bool busy=false,consent=false,saved=false;
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(changed);}
   void changed(){if(mounted&&uid!=widget.session.userId)setState(()=>error='Your account changed. Close this page and sign in again.');}
-  @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,address,company,number]){c.dispose();}super.dispose();}
+  @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,unit,company,number]){c.dispose();}super.dispose();}
   Future<void> save() async{
     if(busy||uid!=widget.session.userId||!form.currentState!.validate())return;
+    final selected=selectedAddress;if(selected==null){setState(()=>error='Select your full shop address from the suggestions.');return;}
     if(!consent){setState(()=>error='Confirm that these shop details are yours.');return;}
     setState((){busy=true;error=null;});
     try{
       final data={'category':category,'legalType':legalType,'shopName':name.text.trim(),
-        'phone':normalizeMobile(phone.text),'address':address.text.trim(),'companyName':legalType=='company'?company.text.trim():'',
-        'registrationNumber':legalType=='company'?number.text.trim():'','consent':true};
-      try{await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);}
-      on ShopServiceUnavailable {
-        final owner=uid;if(owner==null||owner!=widget.session.userId)return;
-        final token=await widget.session.freshIdToken();if(owner!=widget.session.userId)return;
-        await SellerFirestore(uid:owner,token:token).registerShop(category:category,shopName:name.text.trim(),phone:normalizeMobile(phone.text),
-          address:address.text.trim(),ownerEmail:widget.session.email??'',companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String);
-      }
+        'phone':normalizeMobile(phone.text),'addressSelection':selected.receipt,'unit':unit.text.trim(),
+        'companyName':legalType=='company'?company.text.trim():'',
+        'registrationNumber':legalType=='company'?number.text.trim():'','consent':true,'locationConsent':true};
+      await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
       await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,api:widget.api,legalType:legalType,
-        shop:SellerShop(name.text.trim(),category,address.text.trim(),'pending','not_listed',phone:normalizeMobile(phone.text),
+        shop:SellerShop(name.text.trim(),category,'${unit.text.trim().isEmpty?'':unit.text.trim()+', '}${selected.address}','pending','not_listed',phone:normalizeMobile(phone.text),
           companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String))));
       if(mounted&&uid==widget.session.userId)Navigator.pop(context,true);
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
@@ -67,17 +65,22 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         DropdownButtonFormField<String>(initialValue:legalType,isExpanded:true,decoration:const InputDecoration(labelText:'Register as',border:OutlineInputBorder()),
           items:const [DropdownMenuItem(value:'individual',child:Text('Individual seller')),DropdownMenuItem(value:'company',child:Text('Registered company'))],
           onChanged:busy?null:(v)=>setState(()=>legalType=v??'individual')),const SizedBox(height:16),
-        for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),(address,'Shop address',250,true),
+        for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),
           if(legalType=='company')(company,'Registered company name',160,true),if(legalType=='company')(number,'Company registration number',50,true)])Padding(padding:const EdgeInsets.only(bottom:16),
           child:TextFormField(controller:f.$1,maxLength:f.$3,enabled:!busy,keyboardType:f.$1==phone?TextInputType.phone:TextInputType.text,
             decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
               border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
             validator:(v)=>f.$4&&(v??'').trim().length<(f.$1==phone?9:2)?'Enter ${f.$2.toLowerCase()}':null)),
+        ShopAddressPicker(session:widget.session,api:widget.api,enabled:!busy,
+          onChanged:(value){if(mounted)setState((){selectedAddress=value;consent=false;});}),
+        const SizedBox(height:16),TextFormField(controller:unit,enabled:!busy,maxLength:80,onChanged:(_)=>setState(()=>consent=false),
+          decoration:const InputDecoration(labelText:'Shop / unit number (optional)',hintText:'e.g. Shop 4, ground floor',
+            counterText:'',filled:true,fillColor:Colors.white,border:OutlineInputBorder())),
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:busy?null:(v)=>setState(()=>consent=v==true),
-          title:const Text('I confirm that these are my shop’s details.')),
+          title:const Text('I confirm that these are my shop’s details and shoppers may see this business address and map location.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
-        const SizedBox(height:12),const Text('Complete your document, selfie and SMS verification to start selling. Your verified badge follows a separate admin review. Resume setup from your dashboard at any time.',
+        const SizedBox(height:12),const Text('Your full address and map location are saved with your registration. Complete document, selfie and SMS verification, then Teyza reviews your shop before it becomes visible. Resume setup from your dashboard at any time.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));
