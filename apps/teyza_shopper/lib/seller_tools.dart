@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'seller_firestore.dart';
 import 'seller_selfie_camera.dart';
+import 'seller_location.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -260,28 +261,44 @@ class SellerProfilePage extends StatefulWidget {
   @override State<SellerProfilePage> createState()=>_ProfileState();
 }
 class _ProfileState extends State<SellerProfilePage>{
+  late final String? uid=widget.session.userId;
   late final name=TextEditingController(text:widget.shop.name),address=TextEditingController(text:widget.shop.address),
     phone=TextEditingController(text:widget.shop.phone);
   bool saving=false;String? error;
-  @override void dispose(){name.dispose();address.dispose();phone.dispose();super.dispose();}
+  @override void initState(){super.initState();widget.session.addListener(accountChanged);}
+  void accountChanged(){if(mounted&&uid!=widget.session.userId){name.clear();address.clear();phone.clear();
+    setState(()=>error='Your account changed. Close this page and sign in again.');}}
+  @override void dispose(){widget.session.removeListener(accountChanged);name.dispose();address.dispose();phone.dispose();super.dispose();}
+  Future<void> changeAddress() async {
+    if(saving||uid!=widget.session.userId)return;
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerLocationPage(session:widget.session,shopAddress:address.text)));
+    if(changed!=true||!mounted||uid!=widget.session.userId)return;
+    try{final data=await TeyzaMobileApi(widget.session).call('seller_location_read');
+      if(mounted&&uid==widget.session.userId)setState(()=>address.text=(data['address']??'').toString());
+    }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
+  }
   Future<void> save() async {
-    final uid=widget.session.userId;if(uid==null)return;
+    if(uid==null||uid!=widget.session.userId)return;
     if(name.text.trim().length<2||address.text.trim().isEmpty||phone.text.trim().length<9){
       setState(()=>error='Enter your shop name, address and contact number.');return;}
     setState((){saving=true;error=null;});
     try{final token=await widget.session.freshIdToken();if(uid!=widget.session.userId)return;
-      await SellerFirestore(uid:uid,token:token).saveProfile(name.text,address.text,phone.text);
-      if(mounted)Navigator.pop(context,true);
-    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+      await SellerFirestore(uid:uid!,token:token).saveProfile(name.text,phone.text);
+      if(mounted&&uid==widget.session.userId)Navigator.pop(context,true);
+    }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>saving=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Shop profile')),
     body:ListView(padding:const EdgeInsets.all(20),children:[
       Text(widget.shop.categoryLabel,style:const TextStyle(color:ownerGreen,fontWeight:FontWeight.w700)),const SizedBox(height:18),
       for(final field in [(name,'Shop name'),(address,'Shop address'),(phone,'Contact number')])Padding(
-        padding:const EdgeInsets.only(bottom:18),child:TextField(controller:field.$1,
+        padding:const EdgeInsets.only(bottom:18),child:TextField(controller:field.$1,readOnly:field.$1==address,
+          enabled:!saving&&uid==widget.session.userId,
           decoration:InputDecoration(labelText:field.$2,border:const OutlineInputBorder()))),
+      OutlinedButton.icon(onPressed:saving||uid!=widget.session.userId?null:changeAddress,
+        icon:const Icon(Icons.location_on_outlined),label:const Text('Change address & map location')),
+      const SizedBox(height:16),
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
-      FilledButton(onPressed:saving?null:save,child:Text(saving?'Saving…':'Save shop profile'))
+      FilledButton(onPressed:saving||uid!=widget.session.userId?null:save,child:Text(saving?'Saving…':'Save shop profile'))
     ]));
 }

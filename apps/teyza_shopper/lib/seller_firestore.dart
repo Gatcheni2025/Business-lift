@@ -92,22 +92,6 @@ class SellerFirestore {
     final data=_parse(response,operation:'shop');
     return SellerShop.fromFields(sellerDecodeFields(data['fields']));
   }
-  Future<void> registerShop({required String category,required String shopName,required String phone,required String address,
-    required String ownerEmail,String companyName='',String registrationNumber=''}) async {
-    if(!['spaza','retail'].contains(category)||shopName.trim().length<2||shopName.length>120||address.trim().isEmpty||address.length>250||
-      phone.length<9||phone.length>25||companyName.length>160||registrationNumber.length>50)throw const FormatException('Check your shop details.');
-    final values={'uid':uid,'category':category,'shopName':shopName.trim(),'ownerEmail':ownerEmail,'phone':phone,
-      'address':address.trim(),'companyName':companyName.trim(),'registrationNumber':registrationNumber.trim(),
-      'approvalStatus':'pending','listingStatus':'not_listed'};
-    final response=await _request('POST',Uri.https('firestore.googleapis.com',
-      '/v1/projects/$teyzaSellerProject/databases/(default)/documents:commit'),body:{'writes':[{
-      'update':{'name':'projects/$teyzaSellerProject/databases/(default)/documents/teyzaSellerAccounts/$uid',
-        'fields':{for(final entry in values.entries)entry.key:{'stringValue':entry.value}}},
-      'currentDocument':{'exists':false},'updateTransforms':[
-        {'fieldPath':'createdAt','setToServerValue':'REQUEST_TIME'},{'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}]}]});
-    if(response.statusCode==409||response.statusCode==412){if((await shop())?.hasRegisteredCategory==true)return;}
-    _parse(response);
-  }
   Future<List<String>> saveNewDrafts(List<SellerDraft> items) async {
     if(items.isEmpty||items.length>30)throw const FormatException('Choose between 1 and 30 products.');
     for(final item in items){validateDraft(item);}
@@ -127,16 +111,16 @@ class SellerFirestore {
     }
     throw StateError('Refresh your products and try again.');
   }
-  Future<void> saveProfile(String name,String address,String phone) async {
-    if(name.trim().length<2||name.trim().length>120||address.trim().isEmpty||address.length>250||phone.length>25){
-      throw const FormatException('Enter a valid shop name, address and contact number.');
+  Future<void> saveProfile(String name,String phone) async {
+    if(name.trim().length<2||name.trim().length>120||phone.length>25){
+      throw const FormatException('Enter a valid shop name and contact number.');
     }
     final path='projects/'+teyzaSellerProject+'/databases/(default)/documents/teyzaSellerAccounts/'+uid;
     final response=await _request('POST',Uri.https('firestore.googleapis.com',
       '/v1/projects/'+teyzaSellerProject+'/databases/(default)/documents:commit'),body:{'writes':[{
         'update':{'name':path,'fields':{'shopName':{'stringValue':name.trim()},
-          'address':{'stringValue':address.trim()},'phone':{'stringValue':phone.trim()}}},
-        'updateMask':{'fieldPaths':['shopName','address','phone']},'currentDocument':{'exists':true},
+          'phone':{'stringValue':phone.trim()}}},
+        'updateMask':{'fieldPaths':['shopName','phone']},'currentDocument':{'exists':true},
         'updateTransforms':[{'fieldPath':'updatedAt','setToServerValue':'REQUEST_TIME'}]
       }]});
     _parse(response);

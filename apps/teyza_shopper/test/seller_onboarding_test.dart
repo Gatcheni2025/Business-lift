@@ -107,17 +107,15 @@ void main(){
   await expectLater(TeyzaMobileApi(session,client:client).call('seller_summary'),throwsA(isA<ShopServiceUnavailable>()));
   client.close();session.dispose();
  });
- test('Fallback registration creates only the strict owner-scoped pending profile',() async{
+ test('Profile edits write only name and phone, preserving a location selected in another form',() async{
   final client=MockClient((request) async{
-   final writes=jsonDecode(request.body)['writes'] as List;expect(writes.length,1);
-   final write=writes.single as Map;expect(write['currentDocument'],{'exists':false});
-   final update=write['update'] as Map;expect(update['name'],endsWith('teyzaSellerAccounts/owner'));
-   final fields=update['fields'] as Map;expect(fields['uid'],{'stringValue':'owner'});expect(fields['approvalStatus'],{'stringValue':'pending'});
-   expect(fields['listingStatus'],{'stringValue':'not_listed'});expect(fields.containsKey('sellingEnabled'),false);
-   expect(write['updateTransforms'],hasLength(2));return http.Response('{}',200);
+   final write=(jsonDecode(request.body)['writes'] as List).single as Map;
+   expect(write['updateMask'],{'fieldPaths':['shopName','phone']});
+   final fields=write['update']['fields'] as Map;
+   expect(fields.keys.toSet(),{'shopName','phone'});expect(fields.containsKey('address'),false);
+   return http.Response('{}',200);
   });
-  await SellerFirestore(uid:'owner',token:'token',client:client).registerShop(category:'spaza',shopName:'Local Market',phone:'+27712345678',address:'Durban',ownerEmail:'owner@test');
-  client.close();
+  await SellerFirestore(uid:'owner',token:'token',client:client).saveProfile('Local Market','+27712345678');client.close();
  });
  test('Offline batch retries skip existing drafts and never overwrite reserved stock',() async{
   var commits=0;
