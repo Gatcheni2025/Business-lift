@@ -15,6 +15,7 @@
   "/index.html",
   "/js/owner-confirm.js",
   "/js/work-auth.mjs",
+  "/js/work-phone.mjs",
   "/js/work.js",
   "/owner-confirm.html",
   "/register.html",

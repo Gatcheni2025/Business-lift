@@ -23,7 +23,7 @@ After activation:
 - `/how-it-works.html` and `/for-shop-owners.html`: clear public shopper/seller guides.
 - `/work-privacy.html`: evidence use, access, consent and retention notice.
 
-Use your existing authorised Teyza administrator account on `/work.html`, select **Review team**, review agent applications and approve them before assigning visits. Seller verification remains in `/admin`. Each new agent uses their own account, verifies email or phone, supplies their working area and consents to evidence handling. Employment/contractor status, applicable wage protection and expense terms must be agreed separately before work starts; agent approval is not an employment contract.
+Use your existing authorised Teyza administrator account on `/work.html`, select **Review team**, review agent applications and approve them before assigning visits. Seller verification remains in `/admin`. Agent and owner sign-in supports email/password, Google, Apple and South African phone/SMS (subject to the existing Firebase provider/domain configuration). Each new agent uses their own account, verifies email or phone, supplies their working area and consents to evidence handling. Employment/contractor status, applicable wage protection and expense terms must be agreed separately before work starts; agent approval is not an employment contract.
 
 ## Guided visit
 
