@@ -123,7 +123,10 @@ void main(){
       items:const [{'id':'bread','name':'Bread','quantity':2,'priceCents':1800}],delivery:true,collection:true,api:api)));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first,'0712345678');
-    final send=find.text('Send order request');await tester.ensureVisible(send);await tester.tap(send);await tester.pumpAndSettle();
+    tester.testTextInput.hide();await tester.pumpAndSettle();
+    final send=find.text('Send order request');
+    await tester.scrollUntilVisible(send,180,scrollable:find.byType(Scrollable).first);
+    await tester.tap(send);await tester.pumpAndSettle();
     final data=api.calls.last['data'] as Map;expect(data['mode'],'collection');
     expect(data['items'],[{'id':'bread','quantity':2}]);expect(data.containsKey('totalCents'),isFalse);
     expect(data['expectedQuoteId'],'checked-total');

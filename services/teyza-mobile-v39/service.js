@@ -155,8 +155,22 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     if(action==='save_services'||action==='save_hours'||action==='save_restock') {
       await owner(uid);await rate(uid,'settings',40,60000);
-      const values=action==='save_services'?D.settings(data):action==='save_hours'?{hours:D.hours(data.hours),timezone:'Africa/Johannesburg'}:{restockList:D.restock(data.items)};
-      await doc('teyzaShopSettings/'+uid).set({...values,ownerUid:uid,updatedAt:clock()},{merge:true});
+      let values;
+      if(action==='save_services'){
+        values=await db.runTransaction(async tx=>{
+          const ref=doc('teyzaShopSettings/'+uid);
+          const [s,a]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid))]);
+          D.seller(a.exists?a.data():null,uid);
+          // Older app versions do not send this optional setting. Preserve the
+          // seller's choice until a current client explicitly changes it.
+          const next=D.settings({...data,cashDiscountPercent:Object.hasOwn(data,'cashDiscountPercent')?
+            data.cashDiscountPercent:offers.effective(s.exists?s.data():null).cashDiscountPercent});
+          tx.set(ref,{...next,ownerUid:uid,updatedAt:clock()},{merge:true});return next;
+        });
+      }else{
+        values=action==='save_hours'?{hours:D.hours(data.hours),timezone:'Africa/Johannesburg'}:{restockList:D.restock(data.items)};
+        await doc('teyzaShopSettings/'+uid).set({...values,ownerUid:uid,updatedAt:clock()},{merge:true});
+      }
       if(action!=='save_restock')await syncSettings(uid,values);
       return {saved:true};
     }

@@ -73,7 +73,7 @@ void main(){
   testWidgets('Cart survives Home and Shops navigation',(tester) async {
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
-    var merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
+    var merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban','pickupEnabled':true,
       'latitude':-29.8587,'longitude':31.0218,'products':[
         {'id':'bread','name':'Fresh bread','priceCents':1800,'stock':10}
       ]});
@@ -100,7 +100,7 @@ void main(){
     expect(find.text('Items from Corner Grocer'),findsOneWidget);
     expect(find.text('Fresh bread'),findsOneWidget);
     expect(find.text('Unit R18.00'),findsOneWidget);
-    merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban',
+    merchant=Shop.fromJson({'id':'test-store','name':'Corner Grocer','area':'Durban','pickupEnabled':true,
       'latitude':-29.8587,'longitude':31.0218,'products':[
         {'id':'bread','name':'Fresh bread','priceCents':1900,'stock':8}
       ]});

@@ -85,7 +85,7 @@ void main(){
   await mode.capture(tester,boundary,'seller-photo-service-dashboard');
   api.notices=[{'id':'order-notice','title':'New order request','target':'orders','category':'orders','read':false}];
   SellerPush(session).updates.add(null);await tester.pumpAndSettle();expect(find.text('New order request'),findsOneWidget);
-  await fixtures.visibleTap(tester,find.text('View orders'));expect(find.text('Customer orders'),findsOneWidget);
+  await fixtures.visibleTap(tester,find.text('View orders'));expect(find.byType(ShopOrdersPanel),findsOneWidget);
   expect(api.calls.any((c)=>c.action=='order_list'&&c.data['asOwner']==true),isTrue);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
@@ -107,12 +107,14 @@ void main(){
   expect(shopDirectionsUri(name:''),isNull);
  });
  testWidgets('A shopper opens directions directly from the shop page without signing in',(tester) async {
+  await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
   final session=ShopperSession()..isReady=true;Uri? opened;
   final shop=Shop.fromJson({'id':'shop-direction','name':'Direction Shop','area':'Durban','address':'12 Main Road, Durban',
     'latitude':-29.8587,'longitude':31.0218,'identityVerified':true,'pickupEnabled':true});
   await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,initialArea:areas.first,
     catalogueLoader:() async=>[shop],directoryLoader:(_,__,___) async=>[],externalLauncher:(uri) async{opened=uri;return true;})));
-  await tester.pumpAndSettle();final card=find.byKey(const ValueKey('nearby-shop-direction'));
+  await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+  final card=find.byKey(const ValueKey('nearby-shop-direction'));
   await tester.scrollUntilVisible(card,180,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,card);
   await fixtures.visibleTap(tester,find.text('Directions to shop'));
   expect(opened!.path,'/maps/dir/');expect(opened!.queryParameters['destination'],'-29.8587,31.0218');
@@ -135,6 +137,8 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:ShopperCheckoutPage(session:session,api:api,shopId:'shop1',shopName:'Shop',delivery:true,collection:true,
     items:const [{'id':'bread','name':'Bread','quantity':2,'priceCents':1}])));
   await tester.pump();await tester.tap(find.text('Delivery'));await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(find.text('Total: R46.50'),160,scrollable:find.byType(Scrollable).first);
+  expect(find.text('Total: R46.50'),findsOneWidget);
   api.firstQuote!.complete({'quote':{'quoteId':'old','totalCents':1,'items':[]}});await tester.pumpAndSettle();
   expect(find.text('Total: R46.50'),findsOneWidget);expect(find.text('Total: R0.01'),findsNothing);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();

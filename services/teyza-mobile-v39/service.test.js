@@ -223,6 +223,10 @@ test('Service quick controls preserve other shop settings and cannot add a card-
  const saved=db.records.get('teyzaShopSettings/seller1');assert.equal(saved.pickupEnabled,false);assert.equal(saved.cashback,true);assert.deepEqual(saved.hours,hours);
  assert.equal(saved.cashDiscountPercent,10);assert.equal(saved.cardPaymentFeePercent,0);
  assert.equal(db.records.get('teyzaPublicShops/seller1').deliveryFeeCents,2700);
+ await service.execute(owner,'save_services',services);
+ assert.equal(db.records.get('teyzaShopSettings/seller1').cashDiscountPercent,10);
+ await service.execute(owner,'save_services',{...services,cashDiscountPercent:0});
+ assert.equal(db.records.get('teyzaShopSettings/seller1').cashDiscountPercent,0);
  await rejects(service.execute(owner,'update_services',{cardPaymentFeePercent:10}),422);
  await rejects(service.execute(owner,'update_services',{approvalStatus:'approved'}),422);
  await rejects(service.execute(owner,'update_services',{cashDiscountPercent:15}),422);
