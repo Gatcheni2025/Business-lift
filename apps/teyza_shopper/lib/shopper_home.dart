@@ -20,6 +20,7 @@ import 'shop_orders.dart';
 import 'product_catalogue.dart';
 import 'seller_push.dart';
 import 'seller_firestore.dart';
+import 'shop_directions.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -58,13 +59,14 @@ class Shop {
   final int ratingCount;
   final List<TradingDay> hours;
   final int deliveryFeeCents;
+  final int cashDiscountPercent;
   List<Product> get rangeProducts=>{
     for(final p in highlights)p.id:p,for(final p in products)p.id:p
   }.values.toList();
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',this.address='',this.city='',
-    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.highlights=const []});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
@@ -88,6 +90,7 @@ class Shop {
     rating:(x['rating'] as num?)?.toDouble(),ratingCount:(x['ratingCount'] as num?)?.toInt()??0,
     identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
+    cashDiscountPercent:x['services'] is Map&&(x['services'] as Map)['cashDiscountPercent']==10?10:0,
     highlights:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
 }
 class ShopProduct {
@@ -213,8 +216,9 @@ class ShopperHome extends StatefulWidget {
   final ShopperSession? session;
   final SellerFirestore Function(String uid,String token)? sellerApiFactory;
   final TeyzaMobileApi? sellerMobileApi;
+  final Future<bool> Function(Uri)? externalLauncher;
   const ShopperHome({super.key,this.catalogueLoader,this.directoryLoader,
-    this.initialArea,this.enableBackgroundServices=true,this.session,this.sellerApiFactory,this.sellerMobileApi});
+    this.initialArea,this.enableBackgroundServices=true,this.session,this.sellerApiFactory,this.sellerMobileApi,this.externalLauncher});
   @override
   State<ShopperHome> createState() => _ShopperHomeState();
 }
@@ -265,7 +269,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     session.addListener(workspaceChanged);
     Future<void>? restoring;
     if(widget.enableBackgroundServices){
-      sellerPush=SellerPush(session)..onOpen=(){if(mounted)openOwnerWorkspace(notification:true);};
+      sellerPush=SellerPush(session)..onOpen=(target){if(mounted)openOwnerWorkspace(notification:true,target:target);};
       chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
       refreshUnread();
       restoring=session.restore();
@@ -664,14 +668,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         loadingBuilder:(context,child,progress)=>progress==null?child:placeholder));
   }
 
-  Widget _serviceRow(IconData icon,String label,bool? available)=>Container(
+  Widget _serviceRow(IconData icon,String label,bool? available,{String? detail})=>Container(
     padding:const EdgeInsets.symmetric(horizontal:12,vertical:10),
     margin:const EdgeInsets.only(bottom:7),
     decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),
     child:Row(children:[
       Icon(icon,color:green,size:22),const SizedBox(width:12),
       Expanded(child:Text(label,style:const TextStyle(fontWeight:FontWeight.w700))),
-      Flexible(child:Text(available==true?'Available':
+      Flexible(child:Text(available==true?(detail??'Available'):
         available==false?'Not offered':'Not confirmed',
         textAlign:TextAlign.end,style:TextStyle(fontSize:11,
           color:available==true?green:muted)))
@@ -689,9 +693,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget merchantServices(Shop shop)=>Column(
     crossAxisAlignment:CrossAxisAlignment.start,children:[
       section('Shop services',subtitle:'Information published by the merchant'),
-      _serviceRow(Icons.credit_card_outlined,'Pay by card',shop.acceptsCard),
+      _serviceRow(Icons.credit_card_outlined,'Card at the shop',shop.acceptsCard,detail:'No extra charge'),
       _serviceRow(Icons.account_balance_wallet_outlined,'Cashback',shop.cashback),
-      _serviceRow(Icons.local_shipping_outlined,'Delivery',shop.delivery),
+      _serviceRow(Icons.local_shipping_outlined,'Delivery',shop.delivery,detail:shop.deliveryFeeCents==0?'Free delivery':money(shop.deliveryFeeCents)),
+      if(shop.cashDiscountPercent==10)_serviceRow(Icons.savings_outlined,'Cash discount',true,detail:'10% off items'),
       _serviceRow(Icons.shopping_bag_outlined,'Collection',shop.pickup),
       _serviceRow(Icons.chat_bubble_outline,'Live chat',shop.liveChat),
     ]);
@@ -920,9 +925,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
   }
-  Future<void> openOwnerWorkspace({bool notification=false}) async {
+  Future<void> openOwnerWorkspace({bool notification=false,String? target}) async {
     if(session.idToken==null){navigateToTab(4);return;}
-    _sellerInitialTarget=notification?'notifications':null;
+    _sellerInitialTarget=notification?(target??'notifications'):null;
     if(notification)_sellerEntry++;
     session.useSellerWorkspace();
   }
@@ -1516,14 +1521,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             style:TextStyle(fontSize:12,color:ink))
         ])),
       const SizedBox(height:14),
-      FilledButton.icon(onPressed:() async {
-        final destination=shop.lat!=null&&shop.lng!=null
-          ?shop.lat.toString()+','+shop.lng.toString()
-          :shop.name+' '+(shop.address.isNotEmpty?shop.address:shop.area);
-        final uri=Uri.https('www.google.com','/maps/dir/',
-          {'api':'1','destination':destination});
-        await launchUrl(uri,mode:LaunchMode.externalApplication);
-      },icon:const Icon(Icons.directions_outlined),
+      FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.lat,longitude:shop.lng),icon:const Icon(Icons.directions_outlined),
         label:const Text('Directions to shop')),
       const SizedBox(height:8),
       OutlinedButton.icon(onPressed:()=>setState(()=>tab=4),
@@ -1561,6 +1559,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session,
       initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
   }
+  Future<void> openDirections({required String name,String address='',String area='',double? latitude,double? longitude}) async {
+    final uri=shopDirectionsUri(name:name,address:address,area:area,latitude:latitude,longitude:longitude);
+    try{if(uri==null)throw StateError('Address unavailable');
+      final opened=await (widget.externalLauncher?.call(uri)??launchUrl(uri,mode:LaunchMode.externalApplication));
+      if(!opened)throw StateError('Maps unavailable');
+    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not open directions. Check your Maps app or connection and try again.')));}
+  }
 
   Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
@@ -1574,23 +1579,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
     merchantTrust(shop),
-    if(shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id))
-      Padding(padding:const EdgeInsets.only(top:12),child:SizedBox(
-        width:double.infinity,child:FilledButton.icon(
-          icon:const Icon(Icons.chat_bubble_outline),
-          label:const Text('Live chat with this shop'),onPressed:()=>chatWithShop(shop)))),
+    Padding(padding:const EdgeInsets.only(top:12),child:Wrap(spacing:8,runSpacing:8,children:[
+      FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.latitude,longitude:shop.longitude),
+        icon:const Icon(Icons.directions_outlined),label:const Text('Directions to shop')),
+      if(shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id))OutlinedButton.icon(
+        icon:const Icon(Icons.chat_bubble_outline),label:const Text('Message shop'),onPressed:()=>chatWithShop(shop)),
+    ])),
     Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(shopHoursLabel(shop.hours),
       style:const TextStyle(color:green,fontWeight:FontWeight.w700))),
     merchantServices(shop),
-    OutlinedButton.icon(onPressed:() async {
-      final destination=shop.latitude!=null && shop.longitude!=null
-        ?shop.latitude.toString()+','+shop.longitude.toString()
-        :shop.name+' '+shop.area;
-      final url=Uri.https('www.google.com','/maps/dir/',
-        {'api':'1','destination':destination});
-      await launchUrl(url,mode:LaunchMode.externalApplication);
-    },icon:const Icon(Icons.directions_outlined),
-       label:const Text('Directions (approximate shop location)')),
     if(shop.rangeProducts.isEmpty)
       empty('Products coming soon', 'Ask this shop about its range in Live chat.'),
     if(shop.rangeProducts.isNotEmpty)...[
@@ -1613,7 +1610,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         mainAxisSpacing:12,crossAxisSpacing:12,mainAxisExtent:290+(MediaQuery.textScalerOf(context).scale(14)-14)*6),
       itemBuilder:(context,index){
         final p=products[index];
-        final canOrder=p.priceCents>0&&p.stock>0&&p.inStock;
+        final canOrder=p.priceCents>0&&p.stock>0&&p.inStock&&(shop.delivery||shop.pickup);
         final added=basketShop?.id==shop.id?(cart[p.id]??0):0;
         return Material(color:Colors.white,borderRadius:BorderRadius.circular(20),child:Padding(
           padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -1647,7 +1644,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
-      deliveryFeeCents:shop.deliveryFeeCents,items:basketItems.map((p)=>{
+      deliveryFeeCents:shop.deliveryFeeCents,acceptsCard:shop.acceptsCard==true,cashDiscountPercent:shop.cashDiscountPercent,items:basketItems.map((p)=>{
         'id':p.id,'name':p.name,'quantity':cart[p.id]??0,'priceCents':p.priceCents}).toList())));
     if(done==true&&mounted){setState((){cart.clear();basketShop=null;});navigateToTab(3);}
   }

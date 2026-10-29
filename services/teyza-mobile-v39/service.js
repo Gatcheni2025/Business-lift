@@ -1,7 +1,8 @@
 'use strict';
 const D = require('./domain');
 const {saveUpload}=require('./upload-storage');
-const {createShopFront}=require('./shop-front');
+const {createShopFront,valid:validShopFront}=require('./shop-front');
+const offers=require('./shop-services');
 const crypto = require('node:crypto');
 const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
@@ -96,11 +97,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const update={};
       if(values.hours)update.hours=values.hours;
       if('pickupEnabled' in values) {
-        update.pickupEnabled=values.pickupEnabled;update.deliveryEnabled=values.deliveryEnabled;
-        update.services={cashback:values.cashback,cardPayments:values.cardPayments,
-          payAndCollect:values.pickupEnabled,liveChat:values.liveChatEnabled};
-        update.deliveryFeeCents=values.deliveryFeeCents;update.deliveryRadiusKm=values.deliveryRadiusKm;
-        update.deliveryNotes=values.deliveryNotes;
+        Object.assign(update,offers.exposed(values));
       }
       tx.update(ref,update);
     });
@@ -127,13 +124,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
       const account=await owner(uid);
-      const [config,verification,finance,catalogue,photos,publicShop,setup,location]=await Promise.all([
+      const [config,verification,finance,catalogue,photos,publicShop,setup,location,front]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
-        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid)]);
+        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid)]);
       const publication=P.state(uid,account,setup||{},verification,publicShop),pin=P.locationFor(uid,account,location,publicShop,clock());
-      return {settings:config||{},approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
+      return {settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
+        approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.live&&publicShop?.sellingEnabled===true,identityVerified:publication.approved,
         verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
@@ -142,10 +140,37 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         ratingCount:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.ratingCount:0,
         catalogueStatus:catalogue?.status||'not_submitted',photos:photos.docs.map(x=>({id:x.id,url:x.data().url}))};
     }
+    if(action==='update_services'){
+      await owner(uid);await rate(uid,'settings',40,60000);
+      const allowed=['deliveryEnabled','pickupEnabled','cashback','cardPayments','liveChatEnabled','deliveryFeeCents','deliveryRadiusKm','deliveryNotes','cashDiscountPercent','cardPaymentFeePercent'];
+      if(!Object.keys(data).length||Object.keys(data).some(k=>!allowed.includes(k)))D.fail(422,'Choose valid shop service settings.');
+      const values=await db.runTransaction(async tx=>{
+        const ref=doc('teyzaShopSettings/'+uid);
+        const [s,a,p]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid)),tx.get(doc('teyzaPublicShops/'+uid))]);
+        D.seller(a.exists?a.data():null,uid);
+        const next=D.settings({...offers.effective(s.exists?s.data():null,p.exists?p.data():null),...data});
+        tx.set(ref,{...next,ownerUid:uid,updatedAt:clock()},{merge:true});return next;
+      });
+      await syncSettings(uid,values);return {saved:true,settings:values};
+    }
     if(action==='save_services'||action==='save_hours'||action==='save_restock') {
       await owner(uid);await rate(uid,'settings',40,60000);
-      const values=action==='save_services'?D.settings(data):action==='save_hours'?{hours:D.hours(data.hours),timezone:'Africa/Johannesburg'}:{restockList:D.restock(data.items)};
-      await doc('teyzaShopSettings/'+uid).set({...values,ownerUid:uid,updatedAt:clock()},{merge:true});
+      let values;
+      if(action==='save_services'){
+        values=await db.runTransaction(async tx=>{
+          const ref=doc('teyzaShopSettings/'+uid);
+          const [s,a]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid))]);
+          D.seller(a.exists?a.data():null,uid);
+          // Older app versions do not send this optional setting. Preserve the
+          // seller's choice until a current client explicitly changes it.
+          const next=D.settings({...data,cashDiscountPercent:Object.hasOwn(data,'cashDiscountPercent')?
+            data.cashDiscountPercent:offers.effective(s.exists?s.data():null).cashDiscountPercent});
+          tx.set(ref,{...next,ownerUid:uid,updatedAt:clock()},{merge:true});return next;
+        });
+      }else{
+        values=action==='save_hours'?{hours:D.hours(data.hours),timezone:'Africa/Johannesburg'}:{restockList:D.restock(data.items)};
+        await doc('teyzaShopSettings/'+uid).set({...values,ownerUid:uid,updatedAt:clock()},{merge:true});
+      }
       if(action!=='save_restock')await syncSettings(uid,values);
       return {saved:true};
     }
@@ -326,6 +351,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const rows=await Promise.all(index.docs.map(x=>doc('teyzaMobileOrders/'+x.id).get()));
       return {orders:rows.filter(x=>x.exists&&x.data()[ownerMode?'ownerUid':'shopperUid']===uid).map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt)};
     }
+    if(action==='order_quote'){
+      const sellerUid=D.id(data.shopId);if(sellerUid===uid)D.fail(422,'Choose another shop to place an order.');
+      await rate(uid,'order-quotes',60,60000);
+      return {quote:offers.quote(await active(sellerUid),await read('teyzaShopSettings/'+sellerUid),data)};
+    }
     if(action==='order_request') {
       const sellerUid=D.id(data.shopId),requestId=D.id(data.requestId);
       if(sellerUid===uid)D.fail(422,'Choose another shop to place an order.');
@@ -335,19 +365,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       await rate(uid,'orders',20,3600000);
       const ref=doc('teyzaMobileOrders/'+D.threadId(uid,requestId)),shopRef=doc('teyzaPublicShops/'+sellerUid);
       return db.runTransaction(async tx=>{
-        const [existing,shopSnap]=await Promise.all([tx.get(ref),tx.get(shopRef)]);
+        const [existing,shopSnap,config]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(doc('teyzaShopSettings/'+sellerUid))]);
         if(existing.exists){if(existing.data().shopperUid!==uid)D.fail(403,'Order access denied.');return {id:ref.id,status:existing.data().status};}
         const shop=await requireApproval(tx,sellerUid,shopSnap.exists?shopSnap.data():null);
-        if(!(data.mode==='delivery'?shop.deliveryEnabled:shop.pickupEnabled))D.fail(409,'This fulfilment option is not enabled by the shop.');
-        const items=D.orderItems(data.items,shop.products||[]);
-        const subtotal=items.reduce((n,p)=>n+p.priceCents*p.quantity,0);
-        const fee=data.mode==='delivery'&&Number.isInteger(shop.deliveryFeeCents)?shop.deliveryFeeCents:0;
+        const estimate=offers.quote(shop,config.exists?config.data():null,data);
+        if(data.expectedQuoteId!==undefined&&data.expectedQuoteId!==estimate.quoteId)D.fail(409,'Prices or shop services changed. Refresh the order total before sending this request.');
+        const {items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents}=estimate;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
-          mode:data.mode,address,phone,items,subtotalCents:subtotal,deliveryFeeCents:fee,totalCents:subtotal+fee,
+          mode:data.mode,address,phone,items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents,
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});
         tx.set(doc('teyzaMobileOrderIndex/'+uid+'/shopperOrders/'+ref.id),{createdAt:clock()});
         tx.set(doc('teyzaMobileOrderIndex/'+sellerUid+'/ownerOrders/'+ref.id),{createdAt:clock()});
-        return {id:ref.id,status:'requested'};
+        return {id:ref.id,status:'requested',totalCents};
       });
     }
     if(action==='order_update') {
@@ -392,11 +421,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const batch=await Promise.all(result.docs.slice(offset,offset+10).map(async row=>{
         const uid=row.id,shop=row.data();
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
-        const [a,o,v,l,f]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/'].map(p=>read(p+uid)));
+        const [a,o,v,l,f,c]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/'].map(p=>read(p+uid)));
         if(!P.state(uid,a,o||{},v,shop).live)return null;
         const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
           area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
           city:pin?.city||(current?l.city:'')||(!l&&(!shop.address||shop.address===a.address)?shop.city||'':'')};
+        Object.assign(projected,offers.exposed(offers.effective(c,shop)));
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
         return P.publicRow(uid,projected);

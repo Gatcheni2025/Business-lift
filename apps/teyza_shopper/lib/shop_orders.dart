@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'shopper_chat.dart';
 import 'teyza_mobile_api.dart';
+import 'seller_push.dart';
 
 const orderLabels={'requested':'Awaiting shop confirmation','confirmed':'Confirmed by shop',
   'preparing':'Being prepared','ready':'Ready to collect','out_for_delivery':'Out for delivery',
@@ -16,12 +17,14 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
   late final api=widget.api??TeyzaMobileApi(widget.session);
   String? uid,error;List<Map<String,dynamic>> orders=[];
   bool loading=false,working=false,active=true;Timer? poll;
+  StreamSubscription<void>? updates;
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);
     WidgetsBinding.instance.addObserver(this);load();
-    poll=Timer.periodic(const Duration(seconds:20),(_){if(active&&!working)load(quiet:true);});}
+    poll=Timer.periodic(const Duration(seconds:20),(_){if(active&&!working)load(quiet:true);});
+    if(widget.asOwner)updates=SellerPush(widget.session).updates.stream.listen((_){if(active&&!working)load(quiet:true);});}
   void accountChanged(){if(uid!=widget.session.userId&&mounted){uid=widget.session.userId;
     setState(()=>orders=[]);load();}}
-  @override void dispose(){poll?.cancel();widget.session.removeListener(accountChanged);WidgetsBinding.instance.removeObserver(this);super.dispose();}
+  @override void dispose(){poll?.cancel();updates?.cancel();widget.session.removeListener(accountChanged);WidgetsBinding.instance.removeObserver(this);super.dispose();}
   @override void didChangeAppLifecycleState(AppLifecycleState state){active=state==AppLifecycleState.resumed;}
   Future<void> load({bool quiet=false}) async {
     if(loading||widget.session.idToken==null)return;
@@ -103,7 +106,12 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
             for(final item in mobileRows(order['items']))Padding(padding:const EdgeInsets.only(bottom:6),child:Row(children:[
               Expanded(child:Text(item['name'].toString()+' ×'+item['quantity'].toString())),
               Text(money(((item['priceCents'] as num? ??0)*(item['quantity'] as num? ??0)).toInt()))])),
-            const Divider(),Row(children:[const Expanded(child:Text('Total',style:TextStyle(fontWeight:FontWeight.w700))),
+            const Divider(),
+            Text('Items: '+money((order['subtotalCents'] as num? ??0).toInt())),
+            if(order['mode']=='delivery')Text('Delivery: '+money((order['deliveryFeeCents'] as num? ??0).toInt())),
+            if((order['cashDiscountCents'] as num? ??0)>0)Text('Cash discount: −'+money((order['cashDiscountCents'] as num).toInt())),
+            Text(order['paymentMethod']=='card_at_shop'?'Card at shop · no extra card charge':order['paymentMethod']=='cash'?'Cash payment':'Payment to be arranged with shop'),
+            const SizedBox(height:8),Row(children:[const Expanded(child:Text('Total',style:TextStyle(fontWeight:FontWeight.w700))),
               Text(money((order['totalCents'] as num? ??0).toInt()),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))]),
             const SizedBox(height:7),const Text('Payment arranged with the shop. No online payment has been taken.',style:TextStyle(fontSize:11,color:Color(0xFF6C7880))),
             Wrap(spacing:7,children:[for(final status in nextSteps(order))TextButton(onPressed:working?null:()=>update(order,status),
@@ -118,49 +126,82 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
 
 class ShopperCheckoutPage extends StatefulWidget {
   final ShopperSession session;final String shopId,shopName;
-  final List<Map<String,dynamic>> items;final bool delivery,collection;final int deliveryFeeCents;
+  final List<Map<String,dynamic>> items;final bool delivery,collection,acceptsCard;final int deliveryFeeCents,cashDiscountPercent;
   final TeyzaMobileApi? api;
   const ShopperCheckoutPage({super.key,required this.session,required this.shopId,required this.shopName,
-    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.api});
+    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.acceptsCard=false,this.api});
   @override State<ShopperCheckoutPage> createState()=>_CheckoutState();
 }
 class _CheckoutState extends State<ShopperCheckoutPage>{
-  late String mode=widget.collection?'collection':'delivery';
+  late final String? uid=widget.session.userId;
+  late final api=widget.api??TeyzaMobileApi(widget.session);
+  late String mode=widget.collection?'collection':'delivery';String paymentMethod='cash';
   final address=TextEditingController(),phone=TextEditingController();
   final requestId='r'+DateTime.now().microsecondsSinceEpoch.toString();
-  bool working=false;String? error;
-  @override void dispose(){address.dispose();phone.dispose();super.dispose();}
+  bool working=false,checking=false;String? error;int quoteRequest=0;Map<String,dynamic>? quote;
+  @override void initState(){super.initState();widget.session.addListener(accountChanged);loadQuote();}
+  void accountChanged(){if(mounted&&uid!=widget.session.userId){quoteRequest++;address.clear();phone.clear();setState((){quote=null;error='Your account changed. Reopen your basket.';checking=false;});}}
+  @override void dispose(){quoteRequest++;widget.session.removeListener(accountChanged);address.dispose();phone.dispose();super.dispose();}
+  Map<String,dynamic> get request=>{'shopId':widget.shopId,'mode':mode,'paymentMethod':paymentMethod,
+    'items':widget.items.map((x)=>{'id':x['id'],'quantity':x['quantity']}).toList()};
+  Future<void> loadQuote() async {
+    if(uid!=widget.session.userId)return;
+    if(!widget.collection&&!widget.delivery){setState(()=>error='This shop is not currently accepting delivery or collection requests.');return;}
+    final ticket=++quoteRequest;setState((){checking=true;quote=null;error=null;});
+    try{final result=await api.call('order_quote',request);
+      if(!mounted||uid!=widget.session.userId||ticket!=quoteRequest)return;
+      if(result['quote'] is! Map)throw StateError('Could not check the current order total. Please retry.');
+      final current=Map<String,dynamic>.from(result['quote'] as Map);
+      if(current['quoteId'] is! String||current['totalCents'] is! num)throw StateError('Could not check the current order total. Please retry.');
+      setState(()=>quote=current);
+    }catch(e){if(mounted&&uid==widget.session.userId&&ticket==quoteRequest)setState(()=>error=mobileError(e));}
+    finally{if(mounted&&ticket==quoteRequest)setState(()=>checking=false);}
+  }
   Future<void> submit() async {
-    if(working)return;
+    if(working||checking||quote==null||uid!=widget.session.userId)return;
     if(phone.text.replaceAll(RegExp(r'\D'),'').length<9||(mode=='delivery'&&address.text.trim().length<8)){
       setState(()=>error='Enter your contact number and, for delivery, a complete delivery address.');return;}
     setState((){working=true;error=null;});
-    try{await (widget.api??TeyzaMobileApi(widget.session)).call('order_request',{
-      'shopId':widget.shopId,'requestId':requestId,'mode':mode,'phone':phone.text.trim(),'address':address.text.trim(),
-      'items':widget.items.map((x)=>{'id':x['id'],'quantity':x['quantity']}).toList()});
-      if(mounted)Navigator.pop(context,true);
-    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+    try{await api.call('order_request',{...request,'requestId':requestId,'phone':phone.text.trim(),'address':address.text.trim(),'expectedQuoteId':quote!['quoteId']});
+      if(mounted&&uid==widget.session.userId)Navigator.pop(context,true);
+    }catch(e){if(mounted&&uid==widget.session.userId)setState((){error=mobileError(e);quote=null;});}
     finally{if(mounted)setState(()=>working=false);}
   }
+  int cents(String key)=>(quote?[key] as num? ??0).toInt();
   @override Widget build(BuildContext context){
-    final subtotal=widget.items.fold<int>(0,(sum,x)=>sum+(x['priceCents'] as int)*(x['quantity'] as int));
+    final hasOptions=widget.collection||widget.delivery;
     return Scaffold(appBar:AppBar(title:const Text('Delivery or collection')),body:ListView(padding:const EdgeInsets.all(20),children:[
       Text(widget.shopName,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),const SizedBox(height:18),
-      SegmentedButton<String>(segments:[if(widget.collection)const ButtonSegment(value:'collection',label:Text('Pay & collect'),icon:Icon(Icons.shopping_bag_outlined)),
+      if(hasOptions)SegmentedButton<String>(segments:[if(widget.collection)const ButtonSegment(value:'collection',label:Text('Collect'),icon:Icon(Icons.shopping_bag_outlined)),
         if(widget.delivery)const ButtonSegment(value:'delivery',label:Text('Delivery'),icon:Icon(Icons.local_shipping_outlined))],selected:{mode},
-        onSelectionChanged:(v)=>setState(()=>mode=v.first)),const SizedBox(height:22),
-      TextField(controller:phone,keyboardType:TextInputType.phone,autofillHints:const [AutofillHints.telephoneNumber],
+        onSelectionChanged:working||uid!=widget.session.userId?null:(v){setState((){mode=v.first;if(mode=='delivery')paymentMethod='cash';});loadQuote();}),
+      const SizedBox(height:20),const Text('Payment with the shop',style:TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
+      const SizedBox(height:8),Wrap(spacing:8,runSpacing:8,children:[
+        ChoiceChip(label:Text(mode=='delivery'?'Cash on delivery':'Cash'),selected:paymentMethod=='cash',
+          onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='cash');loadQuote();}),
+        if(mode=='collection'&&widget.acceptsCard)ChoiceChip(label:const Text('Card at the shop'),selected:paymentMethod=='card_at_shop',
+          onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='card_at_shop');loadQuote();}),
+      ]),
+      if(paymentMethod=='card_at_shop')const Padding(padding:EdgeInsets.only(top:8),child:Text('No extra card charge. Pay the shop’s advertised price.')),
+      const SizedBox(height:20),TextField(controller:phone,enabled:!working&&uid==widget.session.userId,keyboardType:TextInputType.phone,autofillHints:const [AutofillHints.telephoneNumber],
         decoration:const InputDecoration(labelText:'Contact number',border:OutlineInputBorder())),const SizedBox(height:16),
       if(mode=='delivery')...[
-        TextField(controller:address,maxLines:3,decoration:const InputDecoration(labelText:'Full delivery address',border:OutlineInputBorder())),
+        TextField(controller:address,enabled:!working&&uid==widget.session.userId,maxLines:3,decoration:const InputDecoration(labelText:'Full delivery address',border:OutlineInputBorder())),
         const SizedBox(height:16)],
-      for(final item in widget.items)ListTile(contentPadding:EdgeInsets.zero,title:Text(item['name'].toString()),
+      if(checking)const LinearProgressIndicator(),
+      for(final item in quote==null?widget.items:mobileRows(quote!['items']))ListTile(contentPadding:EdgeInsets.zero,title:Text(item['name'].toString()),
         trailing:Text('×'+item['quantity'].toString())),
-      const Divider(),Text('Item subtotal: '+money(subtotal)),
-      if(mode=='delivery')Text('Delivery fee: '+money(widget.deliveryFeeCents)),const SizedBox(height:15),
-      const Text('The shop will confirm your request, current stock and delivery availability. Arrange payment directly with the shop.'),
-      const SizedBox(height:18),if(error!=null)Padding(padding:const EdgeInsets.only(bottom:14),child:Text(error!,style:const TextStyle(color:Colors.red))),
-      FilledButton(onPressed:working?null:submit,child:Text(working?'Sending…':'Send order request'))
+      if(quote!=null)...[
+        const Divider(),Text('Item subtotal: '+money(cents('subtotalCents'))),
+        if(mode=='delivery')Text('Delivery fee: '+money(cents('deliveryFeeCents'))),
+        if(cents('cashDiscountCents')>0)Text('10% cash discount on items: −'+money(cents('cashDiscountCents'))),
+        if(paymentMethod=='card_at_shop')Text('Extra card charge: '+money(cents('cardFeeCents'))),
+        const SizedBox(height:10),Text('Total: '+money(cents('totalCents')),style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
+      ],
+      const SizedBox(height:15),const Text('The shop will confirm stock and delivery availability. Payment is arranged directly with the shop.'),
+      if(error!=null)Padding(padding:const EdgeInsets.symmetric(vertical:14),child:Text(error!,style:const TextStyle(color:Colors.red))),
+      TextButton.icon(onPressed:checking||working||uid!=widget.session.userId?null:loadQuote,icon:const Icon(Icons.refresh),label:const Text('Refresh order total')),
+      FilledButton(onPressed:working||checking||quote==null||uid!=widget.session.userId?null:submit,child:Text(working?'Sending…':'Send order request'))
     ]));
   }
 }

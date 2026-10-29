@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
@@ -21,6 +22,9 @@ import 'seller_selling.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
+import 'seller_services.dart';
+import 'seller_shop_photo.dart';
+import 'seller_push.dart';
 
 class SellerWorkspacePage extends StatefulWidget{
   final ShopperSession session;
@@ -54,16 +58,21 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
   String approvalStatus='pending';bool hasLocation=false;
   double? shopRating;int ratingCount=0;
+  Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
+  Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
+  final seenOrderNotices=<String>{};StreamSubscription<void>? pushUpdates;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
   @override void initState(){
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_sessionChanged);
+    pushUpdates=SellerPush(widget.session).updates.stream.listen((_)=>refreshActivity());
     WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_sessionChanged();});
   }
   @override void dispose(){
     activityWatch?.cancel();WidgetsBinding.instance.removeObserver(this);
+    pushUpdates?.cancel();photoRequest++;shopPhoto=null;
     widget.session.removeListener(_sessionChanged);
     super.dispose();
   }
@@ -73,15 +82,53 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void startActivity(){activityWatch?.cancel();if(liveUpdates)activityWatch=Timer.periodic(const Duration(seconds:25),(_)=>refreshActivity());}
   Future<void> refreshActivity() async{
     if(!liveUpdates||activityLoading||shop==null||loadedUid!=widget.session.userId)return;
-    final uid=widget.session.userId;activityLoading=true;
+    final uid=widget.session.userId;if(uid==null)return;activityLoading=true;
     try{final results=await Future.wait([mobile.call('seller_summary'),widget.session.contactVerified?mobile.call('notification_list'):Future.value(<String,dynamic>{'unread':0})]);
-      if(mounted&&uid==widget.session.userId)setState((){unread=(results[1]['unread'] as num? ??0).toInt();
+      if(!mounted||uid!=widget.session.userId)return;
+      final notices=mobileRows(results[1]['notifications']).where((n)=>n['target']=='orders').toList();
+      final fresh=noticesPrimed?notices.where((n)=>n['read']!=true&&!seenOrderNotices.contains(n['id'].toString())).toList():<Map<String,dynamic>>[];
+      seenOrderNotices.addAll(notices.map((n)=>n['id'].toString()));noticesPrimed=true;
+      if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
+      setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
         approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
+        shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
+      final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
+      if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(fresh.length==1?fresh.first['title']?.toString()??'New order update':'${fresh.length} new order updates'),
+        action:SnackBarAction(label:'View orders',onPressed:()=>openDestination('orders'))));
     }catch(_){/* Account and private products remain usable during service outages. */}
     finally{activityLoading=false;}
+  }
+  Future<void> loadShopPhoto(String uid,String? id) async {
+    if(!mounted||uid!=widget.session.userId)return;
+    if(id==null){photoRequest++;setState((){shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;});return;}
+    if(shopPhotoId==id&&(shopPhoto!=null||shopPhotoLoading))return;
+    final request=++photoRequest;setState((){shopPhotoId=id;shopPhoto=null;shopPhotoLoading=true;});
+    try{final result=await mobile.call('shop_front_read'),front=result['shopFront'];
+      if(!mounted||uid!=widget.session.userId||photoRequest!=request||front is! Map||front['photoId']!=id||front['imageBase64'] is! String)return;
+      final bytes=base64Decode(front['imageBase64'] as String);if(bytes.length>2000000)return;
+      setState(()=>shopPhoto=bytes);
+    }catch(_){/* The photo manager remains available to retry or replace a photo. */}
+    finally{if(mounted&&photoRequest==request)setState(()=>shopPhotoLoading=false);}
+  }
+  Future<void> openShopPhoto() async {
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:widget.mobileApi)));
+    if(changed==true&&mounted){shopPhotoId=null;await refreshActivity();}
+  }
+  Future<void> enableOrderAlerts() async {
+    if(SellerPush(widget.session).isEnabled){await openNotifications();return;}
+    final uid=widget.session.userId;if(uid==null||busy)return;setState(()=>busy=true);
+    try{
+      await SellerPush(widget.session).enable();if(!mounted||uid!=widget.session.userId)return;
+      final result=await mobile.call('notification_list');if(uid!=widget.session.userId)return;
+      final prefs=result['preferences'] is Map?result['preferences'] as Map:const {};
+      await mobile.call('notification_preferences',{for(final key in ['orders','messages','stock','reviews'])key:key=='orders'||prefs[key]!=false});
+      if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Phone order alerts enabled. Every order also stays in your inbox.')));
+    }catch(e){if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(e))));}
+    finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> registerShop() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerRegistrationPage(session:widget.session,api:widget.mobileApi)));
@@ -108,6 +155,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
+      photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
       mandatePromptUid=null;loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
@@ -370,6 +418,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.local_shipping_outlined,'Delivery & shop services','Collection, delivery, cards, cashback & chat',()=>openTool(SellerTool.services)),
     businessTile(Icons.schedule_outlined,'Trading hours','Keep your opening times current',()=>openTool(SellerTool.hours)),
     businessTile(Icons.add_a_photo_outlined,'Shop photo & verification','Shop front, documents, selfie & mobile',()=>openTool(SellerTool.verification)),
+    businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
     businessTile(Icons.assignment_turned_in_outlined,'Membership & R99 mandate','View your membership agreement',openMandate),
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
@@ -407,6 +456,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:publicationStatus=='active'&&approvalStatus=='approved',verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
+      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,onNotifications:openNotifications,unread:unread,
+      phoneAlertsEnabled:SellerPush(widget.session).isEnabled,onEnableAlerts:busy?null:enableOrderAlerts,
+      serviceControls:SellerServiceControls(key:ValueKey('services-${widget.session.userId}'),session:widget.session,api:widget.mobileApi,
+        settings:shopServices,enabled:servicesReady,onSaved:refreshActivity),
       onAdd:busy||draftError!=null?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
       onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),

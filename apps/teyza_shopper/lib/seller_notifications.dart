@@ -41,7 +41,8 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
       SingleChildScrollView(child:Padding(padding:const EdgeInsets.fromLTRB(22,0,22,24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         const Text('Shop notifications',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:12),
         for(final item in const [('orders','Customer orders'),('messages','Customer messages'),('stock','Low stock & sold out'),('reviews','Registration & verification')])
-          SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(item.$2),value:chosen[item.$1]!,onChanged:(v)=>set(()=>chosen[item.$1]=v)),
+          SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(item.$2),subtitle:item.$1=='orders'?const Text('Controls phone alerts. Every order remains in your inbox.'):null,
+            value:chosen[item.$1]!,onChanged:(v)=>set(()=>chosen[item.$1]=v)),
         FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Save preferences'))
       ])))));
     if(saved!=true||!mounted||uid!=widget.session.userId)return;

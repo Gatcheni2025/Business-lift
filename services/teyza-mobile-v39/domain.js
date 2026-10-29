@@ -40,6 +40,10 @@ function settings(input) {
   }
   if (out.deliveryEnabled && out.deliveryRadiusKm < 1) fail(422, 'Set your delivery area in kilometres.');
   out.deliveryNotes = text(input.deliveryNotes || '', 'delivery notes', 300, false);
+  if(input.cardPaymentFeePercent!==undefined&&input.cardPaymentFeePercent!==0)fail(422,'Card payments use the advertised price. A card-only surcharge cannot be added.');
+  out.cardPaymentFeePercent=0;
+  out.cashDiscountPercent=input.cashDiscountPercent??0;
+  if(![0,10].includes(out.cashDiscountPercent))fail(422,'Choose no cash discount or a 10% cash discount.');
   return out;
 }
 function hours(input) {
