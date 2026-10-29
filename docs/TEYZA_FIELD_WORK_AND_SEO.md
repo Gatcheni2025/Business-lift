@@ -1,6 +1,6 @@
 # Teyza Work and search readiness — 29 October 2026
 
-This update extends the existing Business-lift Firebase project and current mobile service. It does not change app version 1.0.22 (32), seller approval requirements or the expanded 378-choice catalogue.
+This update extends the existing Business-lift Firebase project and current mobile service. The current app version is 1.0.23 (33), which includes the seller logout fix found during the release audit. Seller approval requirements and the expanded 378-choice catalogue remain in place.
 
 ## Activate
 
@@ -59,4 +59,5 @@ References: https://developers.google.com/search/docs/crawling-indexing/block-in
 
 ## Verification and limits
 
-Automated tests use synthetic accounts, image bytes, locations, mandates and invoices. They do not apply for real agent accounts, contact shops, collect money, publish a pending shop or send recruitment messages. Test physical Android/iPhone camera permission, GPS accuracy, owner confirmation on a separate device and your payment-provider/bank process after deployment. No native app rebuild is required for these web portal pages; owners use their existing compatible app for shop registration and identity verification.
+Automated tests use synthetic accounts, image bytes, locations, mandates and invoices. They do not apply for real agent accounts, contact shops, collect money, publish a pending shop or send recruitment messages. Test physical Android/iPhone camera permission, GPS accuracy, owner confirmation on a separate device and your payment-provider/bank process after deployment. The web portal pages do not themselves require a native app rebuild. The separate seller logout correction does require installing app version 1.0.23 (33); owners use their compatible app for shop registration and identity verification.
+

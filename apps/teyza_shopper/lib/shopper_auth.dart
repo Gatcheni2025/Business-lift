@@ -70,12 +70,13 @@ String authMessage(Object error) {
 }
 
 class ShopperSession extends ChangeNotifier {
-  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest,this.googleRequest,this.facebookRequest})
+  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest,this.googleRequest,this.facebookRequest,this.facebookSignOut})
     : _client=client??http.Client(), _ownsClient=client==null,
       _store=store??SecureSessionStore();
   final Future<AppleIdentity?> Function(String hashedNonce)? appleRequest;
   final Future<AppleIdentity?> Function()? googleRequest;
   final Future<FacebookIdentity?> Function(String hashedNonce)? facebookRequest;
+  final Future<void> Function()? facebookSignOut;
   final http.Client _client;
   final bool _ownsClient;
   final SessionStore _store;
@@ -406,7 +407,10 @@ class ShopperSession extends ChangeNotifier {
     ++_version;_refreshing=null;isBusy=false;isReady=true;
     try{await beforeSignOut?.call();}catch(_){/* Always allow local sign out. */}
     await _clear();
-    try{await facebook.clearFacebookSession();}catch(_){/* Local sign out always completes. */}
     _changed();
+    // Local credentials and navigation must not wait for an optional native SDK.
+    // Handle both synchronous failures and a late rejected cleanup callback.
+    unawaited(Future<void>.sync(facebookSignOut??facebook.clearFacebookSession)
+      .catchError((Object _){}));
   }
 }

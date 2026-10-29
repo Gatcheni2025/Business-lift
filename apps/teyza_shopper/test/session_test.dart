@@ -26,6 +26,30 @@ http.Response profile()=>jsonReply({'users':[{'localId':'user1','email':'user@ex
 http.Response refreshed()=>jsonReply({'id_token':'new-token','refresh_token':'rotated-refresh','user_id':'user1'});
 
 void main(){
+  test('A pending Facebook cleanup cannot delay local logout or seller-view reset',() async{
+    final store=MemoryStore(),cleanup=Completer<void>();
+    final client=MockClient((r) async=>r.url.path.endsWith('lookup')?profile():jsonReply(login));
+    final session=ShopperSession(client:client,store:store,facebookSignOut:()=>cleanup.future);
+    await session.signIn('user@example.test','password123');session.useSellerWorkspace();
+    var resetObserved=false;
+    session.addListener((){if(session.userId==null&&!session.sellerWorkspace)resetObserved=true;});
+    await session.signOut().timeout(const Duration(seconds:1));
+    expect(cleanup.isCompleted,isFalse);expect(resetObserved,isTrue);
+    expect(session.userId,isNull);expect(session.idToken,isNull);expect(store.values,isEmpty);
+    cleanup.completeError(StateError('Native logout failed after local logout'));
+    await Future<void>.delayed(Duration.zero);
+    session.dispose();client.close();
+  });
+  test('A synchronous provider cleanup failure still leaves the account signed out',() async{
+    final store=MemoryStore();
+    final client=MockClient((r) async=>r.url.path.endsWith('lookup')?profile():jsonReply(login));
+    final session=ShopperSession(client:client,store:store,
+      facebookSignOut:()=>throw StateError('Native logout unavailable'));
+    await session.signIn('user@example.test','password123');session.useSellerWorkspace();
+    await session.signOut();await Future<void>.delayed(Duration.zero);
+    expect(session.userId,isNull);expect(session.sellerWorkspace,isFalse);expect(store.values,isEmpty);
+    session.dispose();client.close();
+  });
   test('Seller view survives reopening for the same Firebase UID and is cleared on logout',() async{
     final store=MemoryStore();
     final client=MockClient((r) async=>r.url.host=='securetoken.googleapis.com'?refreshed():
