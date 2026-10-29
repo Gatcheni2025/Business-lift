@@ -30,6 +30,8 @@ class FakeMobile extends TeyzaMobileApi {
     if(action=='seller_summary')return {'settings':{'pickupEnabled':true,'deliveryEnabled':false,
       'deliveryFeeCents':0,'deliveryRadiusKm':5},'credit':[],'verification':{'status':'pending_review'}};
     if(action=='order_list')return {'orders':[]};
+    if(action=='order_quote')return {'quote':{'quoteId':'checked-total','items':[{'id':'bread','name':'Bread','quantity':2,'priceCents':1800}],
+      'subtotalCents':3600,'deliveryFeeCents':0,'cashDiscountCents':0,'cardFeeCents':0,'totalCents':3600}};
     return {'ok':true,'id':'request1','status':'requested'};
   }
 }
@@ -119,10 +121,12 @@ void main(){
     final session=TestSession();final api=FakeMobile(session);
     await tester.pumpWidget(MaterialApp(home:ShopperCheckoutPage(session:session,shopId:'shop1',shopName:'Corner Shop',
       items:const [{'id':'bread','name':'Bread','quantity':2,'priceCents':1800}],delivery:true,collection:true,api:api)));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first,'0712345678');
     final send=find.text('Send order request');await tester.ensureVisible(send);await tester.tap(send);await tester.pumpAndSettle();
     final data=api.calls.last['data'] as Map;expect(data['mode'],'collection');
     expect(data['items'],[{'id':'bread','quantity':2}]);expect(data.containsKey('totalCents'),isFalse);
+    expect(data['expectedQuoteId'],'checked-total');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
 }

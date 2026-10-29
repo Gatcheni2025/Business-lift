@@ -17,7 +17,8 @@ class SellerPush {
   final updates=StreamController<void>.broadcast();
   StreamSubscription<String>? refresh;
   StreamSubscription<RemoteMessage>? foreground,opened;
-  void Function()? onOpen;
+  void Function(String target)? onOpen;
+  bool get isEnabled=>!disposed&&owner==session.userId&&token!=null&&registeredAt!=null;
   String? token,owner;bool starting=false,disposed=false,stopping=false;
   Timer? renewal;DateTime? registeredAt;
   Future<void> initialize() async{await NativeFirebase.ensure();}
@@ -44,6 +45,7 @@ class SellerPush {
     if(Platform.isIOS&&await messaging.getAPNSToken()==null)throw StateError('Apple notification registration is still pending. Please try again shortly.');
     final value=await messaging.getToken();if(value==null)throw StateError('Could not register this device. Please try again.');
     await messaging.setAutoInitEnabled(true);
+    if(Platform.isIOS)await messaging.setForegroundNotificationPresentationOptions(alert:true,badge:true,sound:true);
     if(disposed||uid!=session.userId){await messaging.deleteToken();return;}
     owner=uid;token=value;registeredAt=null;
     await TeyzaMobileApi(session).call('notification_device_save',{'token':value,'platform':Platform.isIOS?'ios':'android'});
@@ -59,7 +61,8 @@ class SellerPush {
     opened??=FirebaseMessaging.onMessageOpenedApp.listen(open);
     final initial=await messaging.getInitialMessage();if(initial!=null)open(initial);
   }
-  void open(RemoteMessage message){if(!disposed&&session.userId!=null&&message.data['ownerUid']==session.userId)onOpen?.call();}
+  void open(RemoteMessage message){if(!disposed&&session.userId!=null&&message.data['ownerUid']==session.userId){
+    final target=message.data['target']?.toString();onOpen?.call(['orders','chat','products','verification'].contains(target)?target!:'notifications');}}
   Future<void> disable() async{
     stopping=true;
     renewal?.cancel();renewal=null;registeredAt=null;

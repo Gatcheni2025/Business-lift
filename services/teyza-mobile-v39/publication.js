@@ -1,5 +1,6 @@
 'use strict';
 const D=require('./domain'),catalogue=require('./catalogue');
+const offers=require('./shop-services');
 const normalizedPhone=value=>String(value||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27');
 const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup'].includes(shop.status)&&
  !(shop.status==='suspended'&&['onboarding','owner_review','approval'].includes(shop.moderationSource)));
@@ -56,6 +57,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
    payAndCollect:settings.pickupEnabled??shop?.pickupEnabled??true,
    liveChat:settings.liveChatEnabled??shop?.services?.liveChat??true},
   ...(settings.hours?{hours:settings.hours}:{})};
+ Object.assign(next,offers.exposed(offers.effective(settings,shop)));
  const reviewed={...(shop?.reviewedProductPhotos||{})};
  for(const p of [...(shop?.products||[]),...(shop?.productHighlights||[])])
   if(p.customPhotoApproved===true&&typeof p.imageUrl==='string')reviewed[p.id]=p.imageUrl;

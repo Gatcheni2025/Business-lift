@@ -76,6 +76,7 @@ class _SellerToolState extends State<SellerToolPage> {
   bool loading=true,working=false,capturing=false,ready=false,delivery=false,pickup=false,cashback=false,cards=false,liveChat=true,consent=false;
   String? error,status;
   Uint8List? selfie;
+  int cashDiscount=0;
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();}
   void accountChanged(){if(uid!=widget.session.userId&&mounted)setState((){
     selfie=null;summary={};ready=false;error='Your account changed. Close this page and sign in again.';
@@ -91,6 +92,7 @@ class _SellerToolState extends State<SellerToolPage> {
       setState((){
         summary=result;ready=true;delivery=settings['deliveryEnabled']==true;pickup=settings['pickupEnabled']==true;
         cashback=settings['cashback']==true;cards=settings['cardPayments']==true;liveChat=settings['liveChatEnabled']!=false;
+        cashDiscount=settings['cashDiscountPercent']==10?10:0;
         fee.text=((settings['deliveryFeeCents'] as num? ??0)/100).toStringAsFixed(2);
         radius.text=(settings['deliveryRadiusKm']??5).toString();notes.text=settings['deliveryNotes']?.toString()??'';
         stock=mobileRows(settings['restockList']);
@@ -145,7 +147,9 @@ class _SellerToolState extends State<SellerToolPage> {
     if(delivery)...[field(fee,'Delivery fee (R)',number:true),field(radius,'Delivery radius (km)',number:true),
       field(notes,'Delivery areas and instructions',lines:3)],
     SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Cash back'),subtitle:const Text('Subject to cash available at your shop'),value:cashback,onChanged:(v)=>setState(()=>cashback=v)),
-    SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Card payments at the shop'),value:cards,onChanged:(v)=>setState(()=>cards=v)),
+    SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Card payments at the shop'),subtitle:const Text('Advertised price · no extra card charge'),value:cards,onChanged:(v)=>setState(()=>cards=v)),
+    DropdownButton<int>(value:cashDiscount,isExpanded:true,items:const [DropdownMenuItem(value:0,child:Text('No cash discount')),
+      DropdownMenuItem(value:10,child:Text('10% cash discount on items'))],onChanged:working?null:(v)=>setState(()=>cashDiscount=v??0)),
     SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Live chat with shoppers'),value:liveChat,onChanged:(v)=>setState(()=>liveChat=v)),
     const SizedBox(height:12),button('Save shop services',(){
       final price=double.tryParse(fee.text.replaceAll(',','.'));
@@ -154,7 +158,7 @@ class _SellerToolState extends State<SellerToolPage> {
         setState(()=>error='Enter a delivery fee and a radius from 1 to 100 km.');return;
       }
       save('save_services',{'deliveryEnabled':delivery,'pickupEnabled':pickup,'cashback':cashback,'cardPayments':cards,
-        'liveChatEnabled':liveChat,'deliveryFeeCents':delivery?((price??0)*100).round():0,
+        'liveChatEnabled':liveChat,'cashDiscountPercent':cashDiscount,'cardPaymentFeePercent':0,'deliveryFeeCents':delivery?((price??0)*100).round():0,
         'deliveryRadiusKm':delivery?distance:0,'deliveryNotes':notes.text.trim()},'Shop services saved.');
     })
   ]));

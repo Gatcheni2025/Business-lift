@@ -211,7 +211,57 @@ test('Notification events deduplicate, respect preferences and deliver generic s
  assert.equal(notificationFor('stock',{stockQty:1},{ownerUid:'seller1',status:'draft',stockQty:0},'p').title,'Product sold out');
  assert.equal(notificationFor('message',null,{sender:'owner'},'thread'),null);
  db.records.set('teyzaSellerNotificationPreferences/seller1',{preferences:{orders:false}});
- await notifications.queue('event2',value);assert.equal([...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/')).length,1);
+ await notifications.queue('event2',value);
+ const all=[...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/'));assert.equal(all.length,2);
+ const muted=all.find(k=>k!==entries[0]);await notifications.deliver(db.doc(muted));
+ assert.equal(db.records.get(muted).pushStatus,'disabled');assert.equal(sends.length,1);
+});
+test('Service quick controls preserve other shop settings and cannot add a card-only surcharge',async()=>{
+ const hours=D.hours(Array.from({length:7},()=>({closed:false,open:'08:00',close:'18:00'})));
+ const {service,db}=fixture({'teyzaShopSettings/seller1':{...services,pickupEnabled:false,cashback:true,hours}});
+ await service.execute(owner,'update_services',{deliveryEnabled:true,deliveryFeeCents:2700,deliveryRadiusKm:6,cardPayments:true,cashDiscountPercent:10});
+ const saved=db.records.get('teyzaShopSettings/seller1');assert.equal(saved.pickupEnabled,false);assert.equal(saved.cashback,true);assert.deepEqual(saved.hours,hours);
+ assert.equal(saved.cashDiscountPercent,10);assert.equal(saved.cardPaymentFeePercent,0);
+ assert.equal(db.records.get('teyzaPublicShops/seller1').deliveryFeeCents,2700);
+ await rejects(service.execute(owner,'update_services',{cardPaymentFeePercent:10}),422);
+ await rejects(service.execute(owner,'update_services',{approvalStatus:'approved'}),422);
+ await rejects(service.execute(owner,'update_services',{cashDiscountPercent:15}),422);
+ await rejects(service.execute(buyer,'update_services',{deliveryEnabled:true}),403);
+ assert.equal(db.records.get('teyzaShopSettings/seller1').cardPaymentFeePercent,0);
+});
+test('Quotes use the current shop delivery fee; cash discounts affect items and card payments stay at advertised prices',async()=>{
+ const {service,db}=fixture({'teyzaShopSettings/seller1':{...services,deliveryFeeCents:2700,cashDiscountPercent:10}});
+ const request={shopId:'seller1',mode:'delivery',paymentMethod:'cash',items:[{id:'bread1',quantity:2,priceCents:1}],cardFeeCents:999};
+ const q=(await service.execute(buyer,'order_quote',request)).quote;
+ assert.equal(q.subtotalCents,3600);assert.equal(q.cashDiscountCents,360);assert.equal(q.deliveryFeeCents,2700);assert.equal(q.totalCents,5940);assert.equal(q.cardFeeCents,0);
+ const placed=await service.execute(buyer,'order_request',{...request,requestId:'quoted',phone:'0712345678',address:'12 Main Road, Durban',expectedQuoteId:q.quoteId,totalCents:1});
+ const order=db.records.get('teyzaMobileOrders/'+placed.id);assert.equal(order.totalCents,5940);assert.equal(order.paymentMethod,'cash');assert.equal(order.paymentStatus,'arrange_with_shop');
+ const card=(await service.execute(buyer,'order_quote',{...request,mode:'collection',paymentMethod:'card_at_shop'})).quote;
+ assert.equal(card.totalCents,3600);assert.equal(card.cashDiscountCents,0);assert.equal(card.deliveryFeeCents,0);assert.equal(card.cardFeeCents,0);
+ await rejects(service.execute(buyer,'order_quote',{...request,paymentMethod:'card_at_shop'}),409);
+});
+test('A changed fee or price requires a new accepted quote and disabled delivery cannot accept an old basket',async()=>{
+ const {service,db}=fixture({'teyzaShopSettings/seller1':{...services}});
+ const data={shopId:'seller1',mode:'delivery',paymentMethod:'cash',items:[{id:'bread1',quantity:1}]};
+ const quote=(await service.execute(buyer,'order_quote',data)).quote;
+ db.records.set('teyzaShopSettings/seller1',{...services,deliveryFeeCents:3500});
+ await rejects(service.execute(buyer,'order_request',{...data,requestId:'stale',phone:'0712345678',address:'12 Main Road, Durban',expectedQuoteId:quote.quoteId}),409);
+ assert(![...db.records.keys()].some(k=>k.startsWith('teyzaMobileOrders/')));
+ db.records.set('teyzaShopSettings/seller1',{...services,deliveryEnabled:false});
+ await rejects(service.execute(buyer,'order_quote',data),409);
+ db.records.set('teyzaShopSettings/seller1',{...services,cardPayments:false});
+ await rejects(service.execute(buyer,'order_quote',{...data,mode:'collection',paymentMethod:'card_at_shop'}),409);
+ db.records.set('teyzaSellerAccounts/seller1',{...seller,approvalStatus:'pending'});
+ await rejects(service.execute(buyer,'order_quote',{...data,mode:'collection'}),409);
+});
+test('A pending seller can read their photo metadata without exposing a public or private storage path',async()=>{
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending'}});
+ const bytes=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]);
+ const result=await service.execute(owner,'shop_front_submit',{consent:true,imageBase64:bytes.toString('base64')});
+ const summary=await service.execute(owner,'seller_summary');assert.deepEqual(summary.shopFront,{photoId:result.photoId});
+ assert.equal(summary.identityVerified,false);assert.notEqual(summary.publicationStatus,'active');
+ await rejects(service.execute(buyer,'seller_summary'),403);await rejects(service.publicShopPhoto('seller1',result.photoId),404);
+ assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');
 });
 test('Repeated device registration rotates the oldest device instead of silently blocking new phone alerts',async()=>{
  const seed={};for(let i=0;i<20;i++)seed['teyzaMobileDevices/old'+i]={ownerUid:'seller1',token:'old-token-'+i,updatedAt:i,expiresAt:2000000};
