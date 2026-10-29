@@ -9,6 +9,7 @@ const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
 const mandate=require('./mandate');
+const fieldAgents=require('./field-agents');
 const ratings=require('./ratings');
 const P=require('./publication');
 const locations=require('./shop-location');
@@ -81,6 +82,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
+  const agentWorkspace=fieldAgents.createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
@@ -106,6 +108,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);

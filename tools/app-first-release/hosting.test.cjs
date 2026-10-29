@@ -48,9 +48,19 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('Marketing assets are scoped and registration redirects precede legacy catch-all rewrites',()=>{
- const files=overlay(root);assert.equal(files.size,15);assert(![...files.keys()].some(p=>p.includes('admin')||p.startsWith('/api/')));
+ const files=overlay(root);assert.equal(files.size,require('./paths.json').length);assert(![...files.keys()].some(p=>p.includes('admin')||p.startsWith('/api/')));
  const config=servingConfig({rewrites:[{glob:'**',path:'/404.html'}]});assert.equal(config.rewrites.at(-1).glob,'**');
  assert(config.redirects.some(r=>r.glob==='/register'&&r.statusCode===301));assert(config.rewrites.some(r=>r.glob==='/download'&&r.path==='/download.html'));
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(!html.includes('data-open-register'));assert(!html.includes('landing-auth'));assert(!html.includes('auth=register'));
  assert(html.includes('Actual Teyza Android app screens'));assert(html.includes('Android early access'));assert(html.includes('iPhone release coming soon'));
+});
+
+test('Inherited noindex is removed from public pages while old private files and work pages stay excluded',()=>{
+ const original={headers:[{glob:'**',headers:{'X-Robots-Tag':'noindex,nofollow','Strict-Transport-Security':'max-age=31536000'}},{glob:'/admin/**',headers:{'Cache-Control':'no-store','X-Robots-Tag':'noindex'}}]};
+ const c=servingConfig(original,['/index.html','/legacy-account.html','/work.html']);
+ assert.equal(original.headers[0].headers['X-Robots-Tag'],'noindex,nofollow');
+ assert.equal(c.headers.find(h=>h.glob==='**').headers['Strict-Transport-Security'],'max-age=31536000');
+ assert(!c.headers.find(h=>h.glob==='**').headers['X-Robots-Tag']);
+ for(const page of ['/','/index.html','/how-it-works.html','/agents.html','/sitemap.xml'])assert(c.headers.some(h=>h.glob===page&&h.headers['X-Robots-Tag']?.startsWith('index')));
+ for(const page of ['/work.html','/owner-confirm.html','/legacy-account.html'])assert(c.headers.some(h=>h.glob===page&&h.headers['X-Robots-Tag']==='noindex, nofollow'));
 });

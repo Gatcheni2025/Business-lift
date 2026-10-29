@@ -57,7 +57,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     const uploads=await readiness();
     res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',fieldAgentWorkspace:true,agentEvidenceRetentionDays:90,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -120,6 +120,7 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
+  await require('./field-agents').purgeAgentEvidence({db,bucket});
   // Tracks every capture, including superseded selfies, so replacements cannot orphan private photos.
   const photos=await db.collection('teyzaVerificationPhotos').where('expiresAt','<=',Date.now()).limit(500).get();
   for(const record of photos.docs){const data=record.data();

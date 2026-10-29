@@ -1,0 +1,56 @@
+name: Teyza field work and search readiness
+on:
+  pull_request:
+    paths: ['services/teyza-mobile-v39/**', 'web/app-first/**', 'tools/app-first-release/**', 'tools/admin-release/field-work.browser.cjs', 'scripts/package_field_work.py', 'DEPLOY-FIELD-WORK.ps1', 'docs/TEYZA_FIELD_WORK_AND_SEO.md', '.github/workflows/teyza-field-work.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate_and_package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
+      - name: Check work authorization, evidence, consent and commissions
+        run: npm test --prefix services/teyza-mobile-v39
+      - name: Validate public search pages and preservation of existing Hosting
+        run: |
+          python3 scripts/check_app_first_website.py
+          node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/search.test.cjs
+          node --input-type=module --check < web/app-first/public/js/work.js
+          node --input-type=module --check < web/app-first/public/js/owner-confirm.js
+      - name: Check PowerShell deployment commands
+        shell: pwsh
+        run: |
+          foreach ($f in @('DEPLOY-FIELD-WORK.ps1','DEPLOY-MOBILE.ps1','tools/app-first-release/DEPLOY-WEBSITE.ps1')) {
+            $t=$null; $e=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $f),[ref]$t,[ref]$e) | Out-Null
+            if ($e.Count -gt 0) { throw ($e | Out-String) }
+          }
+      - name: Install browser test tools
+        run: npm ci --prefix tools/admin-release --ignore-scripts --no-audit --no-fund
+      - name: Test guided work pages and phone layouts with synthetic accounts
+        env:
+          TEYZA_FIELD_PREVIEW: ${{ github.workspace }}/field-previews
+        run: |
+          cd tools/admin-release
+          npx playwright install --with-deps chromium
+          node field-work.browser.cjs
+      - name: Package combined flat deployment kit
+        run: python3 scripts/package_field_work.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-field-work-and-seo-kit
+          path: build/teyza-field-work-deploy/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teyza-field-work-previews
+          path: field-previews/*.png
+          if-no-files-found: warn

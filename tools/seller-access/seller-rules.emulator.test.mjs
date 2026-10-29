@@ -70,3 +70,10 @@ test('Unverified email accounts can register and prepare privately while identit
     await assertFails(setDoc(doc(own,name,'phoneowner'),{sellingStatus:'active',phoneVerified:true,status:'approved'}));
   }
 });
+
+test('Agent approval, evidence, attribution and commission records remain server-only even for admin clients',async()=>{
+ const contexts=[env.unauthenticatedContext().firestore(),db('agent1'),env.authenticatedContext('reviewer',{teyzaAdmin:true,email_verified:true}).firestore()];
+ for(const client of contexts)for(const name of ['teyzaFieldAgents','teyzaAgentVisits','teyzaAgentEvidence','teyzaAgentCaptures','teyzaAgentClaims','teyzaSellerAgentAttribution','teyzaAgentCommissions','teyzaAgentPayoutReferences','teyzaAgentReviewViews','teyzaAgentAudit']){
+  await assertFails(getDoc(doc(client,name,'agent1')));await assertFails(setDoc(doc(client,name,'agent1'),{uid:'agent1',status:'approved',amountCents:9900}));
+ }
+});
