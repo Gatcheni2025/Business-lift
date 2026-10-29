@@ -362,6 +362,6 @@ jobs:
           python3 scripts/prepare_mobile_release.py ios
           flutter pub get
           flutter analyze --no-fatal-infos
-          flutter test test/session_test.dart test/social_auth_test.dart
+          flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
           flutter build apk --debug
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk

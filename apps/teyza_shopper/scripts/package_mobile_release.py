@@ -18,6 +18,7 @@ platform = sys.argv[1]
 mode = os.environ.get('SIGNING_MODE', 'unsigned')
 version = next(line.split(':', 1)[1].strip() for line in
                (root/'pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
+catalogue = json.loads((root/'assets/catalogue/product-catalogue.json').read_text())
 manifest = {'platform': platform, 'version': version, 'signing': mode,
             'commit': os.environ.get('GITHUB_SHA', ''),
             'emailPasswordLogin': True,
@@ -32,7 +33,9 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'firebaseBrowserReturnConfigured': True, 'inAppFrontCamera': True,
             'pendingSmsSessionRecovery': True,
             'devicePushVerified': False,
-            'catalogueProducts': 184, 'catalogueReferencePhotos': 48,
+            'catalogueProducts': len(catalogue['products']),
+            'catalogueReferencePhotos': len(catalogue['photos']),
+            'catalogueRevision': catalogue['version'],
             'storeSubmitted': False, 'deviceLoginVerified': False}
 if platform == 'android':
     source = root/'build/app/outputs/bundle/release/app-release.aab'
