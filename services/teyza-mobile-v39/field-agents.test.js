@@ -108,6 +108,6 @@ test('Withdrawn mandates, suspended agents and reversed first invoices block unp
  assert.equal((await f.call('agent_visit_get',{visitId:v.id})).visit.progress.commission,'paid_needs_review');
 });
 test('Expired private work photos are purged without deleting another storage prefix',async()=>{
- const f=setup();await visit(f);f.tick(91*86400000);await purgeAgentEvidence({db:f.db,bucket:f.bucket,clock:()=>start+91*86400000});assert.equal(f.files.size,0);
+ const f=setup();await visit(f);f.tick(91*86400000);await purgeAgentEvidence({db:f.db,bucket:f.bucket,clock:()=>start+91*86400000});assert.equal(f.files.size,0);assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaAgentCaptures/')||k.startsWith('teyzaAgentClaims/')));
  await rejects(f.call('agent_admin_photo',{visitId:'visit1',kind:'shop'},{...admin,auth_time:(start+91*86400000)/1000}),410);
 });

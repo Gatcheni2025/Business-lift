@@ -138,8 +138,14 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  return {execute};
 }
 async function purgeAgentEvidence({db,bucket,clock=Date.now}){
- const rows=await db.collection('teyzaAgentEvidence').where('expiresAt','<=',clock()).limit(100).get();
- for(const r of rows.docs){const p=r.data();if(p.objectPath?.startsWith('teyza-private/agent-evidence/'+p.agentUid+'/'))await bucket.file(p.objectPath).delete({ignoreNotFound:true});await r.ref.delete();}
+ const rows=await db.collection('teyzaAgentEvidence').where('expiresAt','<=',clock()).limit(200).get();
+ for(let n=0;n<rows.docs.length;n+=10)await Promise.all(rows.docs.slice(n,n+10).map(async r=>{
+  const p=r.data();if(p.objectPath?.startsWith('teyza-private/agent-evidence/'+p.agentUid+'/'))await bucket.file(p.objectPath).delete({ignoreNotFound:true});await r.ref.delete();
+ }));
+ for(const [collection,limit] of [['teyzaAgentCaptures',500],['teyzaAgentClaims',200]]){
+  const expired=await db.collection(collection).where('expiresAt','<=',clock()).limit(limit).get();
+  for(let n=0;n<expired.docs.length;n+=10)await Promise.all(expired.docs.slice(n,n+10).map(r=>r.ref.delete()));
+ }
  return rows.docs.length;
 }
 module.exports={createFieldAgents,actions,provinces,gps,distance,visitView,purgeAgentEvidence};

@@ -18,6 +18,8 @@ jobs:
         run: npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
       - name: Check work authorization, evidence, consent and commissions
         run: npm test --prefix services/teyza-mobile-v39
+      - name: Verify field-work function exports
+        run: GCLOUD_PROJECT=demo-teyza-field-work node -e "const assert=require('node:assert/strict');const f=require('./services/teyza-mobile-v39');assert(f.teyzaMobile.__endpoint);assert(f.teyzaFieldAgentCleanup.__endpoint);console.log('Field-work API and hourly evidence cleanup exports load successfully');"
       - name: Validate public search pages and preservation of existing Hosting
         run: |
           python3 scripts/check_app_first_website.py

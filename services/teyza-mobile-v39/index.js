@@ -119,8 +119,9 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
+exports.teyzaFieldAgentCleanup=onSchedule({schedule:'every 60 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'256MiB',timeoutSeconds:180},
+  ()=>require('./field-agents').purgeAgentEvidence({db,bucket}));
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
-  await require('./field-agents').purgeAgentEvidence({db,bucket});
   // Tracks every capture, including superseded selfies, so replacements cannot orphan private photos.
   const photos=await db.collection('teyzaVerificationPhotos').where('expiresAt','<=',Date.now()).limit(500).get();
   for(const record of photos.docs){const data=record.data();
