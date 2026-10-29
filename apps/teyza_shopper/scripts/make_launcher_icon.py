@@ -6,6 +6,7 @@ Android round and squircle masks do not cut off the growing petals.
 """
 from io import BytesIO
 from pathlib import Path
+import json
 from PIL import Image
 import cairosvg
 
@@ -61,7 +62,6 @@ print("TEYZA Y-sprout launcher: five densities and adaptive icon ready")
 ios_icons = root / "ios/Runner/Assets.xcassets/AppIcon.appiconset"
 contents = ios_icons / "Contents.json"
 if contents.exists():
-    import json
     metadata = json.loads(contents.read_text())
     for item in metadata["images"]:
         points = float(item["size"].split("x")[0])
@@ -75,3 +75,21 @@ if contents.exists():
         opaque.save(ios_icons / filename, optimize=True)
     contents.write_text(json.dumps(metadata, indent=2) + "\n")
     print("TEYZA iOS AppIcon: all required sizes, no alpha channel")
+
+# Replace Flutter's one-pixel launch placeholders with the same local brand.
+# The launch storyboard uses this asset's point size on its white background.
+ios_launch = root / "ios/Runner/Assets.xcassets/LaunchImage.imageset"
+launch_contents = ios_launch / "Contents.json"
+if launch_contents.exists():
+    metadata = json.loads(launch_contents.read_text())
+    for item in metadata["images"]:
+        scale = float(item.get("scale", "1x").rstrip("x"))
+        pixels = round(168 * scale)
+        image = vector_image(content, pixels)
+        opaque = Image.new("RGB", (pixels, pixels), "white")
+        opaque.paste(image, mask=image.getchannel("A"))
+        filename = item.get("filename") or f"LaunchImage-{scale:g}x.png"
+        item["filename"] = filename
+        opaque.save(ios_launch / filename, optimize=True)
+    launch_contents.write_text(json.dumps(metadata, indent=2) + "\n")
+    print("TEYZA iOS LaunchImage: branded 1x, 2x and 3x launch assets")

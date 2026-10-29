@@ -1,0 +1,6 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{checkLive}=require('./check-live-seo.cjs');
+function response(url,{blocked=false,privateIndex=false}={}){const path=new URL(url).pathname,priv=['/work.html','/owner-confirm.html','/admin'].includes(path);return {ok:true,status:200,headers:{get:()=>priv?(privateIndex?'index, follow':'noindex, nofollow'):(blocked?'noindex,nofollow':'index, follow')},text:async()=>'<link rel="canonical" href="https://teyza.co.za'+path+'">'};}
+test('Live header checker distinguishes public indexing from private work pages',async()=>{const paths=[];assert(await checkLive({fetchImpl:async url=>{paths.push(new URL(url).pathname);return response(url);},log:()=>{}}));assert(paths.includes('/agents.html'));assert(paths.includes('/owner-confirm.html'));});
+test('A successful HTTP response with inherited noindex still fails the search readiness check',async()=>{await assert.rejects(checkLive({fetchImpl:async url=>response(url,{blocked:true}),log:()=>{}}),/blocks indexing/);});
+test('Private portal routes require noindex even though the HTML is a public login shell',async()=>{await assert.rejects(checkLive({fetchImpl:async url=>response(url,{privateIndex:true}),log:()=>{}}),/Private page/);});

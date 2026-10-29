@@ -277,6 +277,28 @@ jobs:
           export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib"
           "$RUNNER_TEMP/teyza-icons/bin/python" scripts/make_launcher_icon.py
           xcodebuild -version
+      - name: Verify branded iOS launch assets
+        working-directory: apps/teyza_shopper
+        run: |
+          "$RUNNER_TEMP/teyza-icons/bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+          from PIL import Image, ImageChops
+          root=Path('ios/Runner/Assets.xcassets/LaunchImage.imageset')
+          images=json.loads((root/'Contents.json').read_text())['images']
+          assert {item['scale'] for item in images}=={'1x','2x','3x'}
+          for item in images:
+              pixels=168*int(item['scale'].rstrip('x'))
+              with Image.open(root/item['filename']) as image:
+                  assert image.size==(pixels,pixels) and image.mode=='RGB'
+                  assert ImageChops.difference(image,Image.new('RGB',image.size,'white')).getbbox()
+          print('Three branded iOS launch images verified; no template placeholders.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-ios-launch-preview
+          path: apps/teyza_shopper/ios/Runner/Assets.xcassets/LaunchImage.imageset/*.png
+          retention-days: 30
       - name: Install Apple distribution signing for a requested signed release
         if: env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
@@ -362,6 +384,6 @@ jobs:
           python3 scripts/prepare_mobile_release.py ios
           flutter pub get
           flutter analyze --no-fatal-infos
-          flutter test test/session_test.dart test/social_auth_test.dart
+          flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
           flutter build apk --debug
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk

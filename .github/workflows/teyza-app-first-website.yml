@@ -25,7 +25,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: TEYZA-APP-FIRST-WEBSITE
-          path: dist/TEYZA_APP_FIRST_WEBSITE_20261027.zip
+          path: dist/TEYZA_APP_FIRST_WEBSITE_20261029.zip
           if-no-files-found: error
   powershell:
     runs-on: windows-2025

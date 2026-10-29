@@ -118,3 +118,6 @@ h2{font-size:34px}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}
 *{animation:none!important;transition:none!important}
 }
+
+/* Secondary actions on the light public guide sections. */
+.section .btn.light{background:#fff;color:#073f49;border-color:#9fb5aa}

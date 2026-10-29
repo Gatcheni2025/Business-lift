@@ -12,9 +12,11 @@ function overlay(root){
  }
  return files;
 }
-function servingConfig(original){
+const publicPaths=['/','/index.html','/download','/download/','/download.html','/how-it-works','/how-it-works/','/how-it-works.html','/for-shop-owners','/for-shop-owners/','/for-shop-owners.html','/agents','/agents/','/agents.html','/work-privacy','/work-privacy/','/work-privacy.html','/support','/support/','/support.html','/seller-subscriptions','/seller-subscriptions/','/seller-subscriptions.html','/privacy.html','/terms.html','/data-deletion.html','/robots.txt','/sitemap.xml'];
+const privateRoutes=['/work','/work/','/work.html','/owner-confirm','/owner-confirm/','/owner-confirm.html'];
+function servingConfig(original,existingPaths=[]){
  const config=structuredClone(original||{});
- const pages=['/','/index.html','/download','/download/','/download.html','/support','/support/','/support.html','/seller-subscriptions','/seller-subscriptions/','/seller-subscriptions.html'];
+ const pages=[...publicPaths.filter(p=>!['/robots.txt','/sitemap.xml'].includes(p)),...privateRoutes];
  const managed=[...overlayPaths,...pages,...registrationRoutes];
  config.redirects=[...registrationRoutes.map(glob=>({glob,location:'/download.html#sellers',statusCode:301})),
   ...(config.redirects||[]).filter(r=>!managed.includes(r.glob))];
@@ -22,9 +24,16 @@ function servingConfig(original){
  config.rewrites=[...pageRewrites,...[...overlayPaths].filter(p=>!p.endsWith('.html')).map(glob=>({glob,path:glob})),
   ...(config.rewrites||[]).filter(r=>!managed.includes(r.glob))];
  // Keep unrelated serving rules, admin headers, API routing and security settings intact.
- config.headers=[...(config.headers||[]),
+ // Remove inherited robot directives from old rules, including catch-all noindex.
+ // Retain every other header. Reapply noindex to all non-public existing files
+ // and private route prefixes so this does not expose old account/admin pages.
+ const originalHeaders=(config.headers||[]).map(rule=>({...rule,headers:Object.fromEntries(Object.entries(rule.headers||{}).filter(([key])=>key.toLowerCase()!=='x-robots-tag'))})).filter(rule=>Object.keys(rule.headers).length);
+ const privateFiles=existingPaths.filter(p=>!publicPaths.includes(p)&&!p.startsWith('/assets/app/')&&p!=='/assets/app-first.css'&&p.endsWith('.html'));
+ config.headers=[...originalHeaders,
   ...['/','/index.html','/download{,/,.html}','/support{,/,.html}','/seller-subscriptions{,/,.html}','/robots.txt','/sitemap.xml','/assets/app-first.css'].map(glob=>({glob,headers:{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'}})),
-  {glob:'/assets/app/**',headers:{'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'}}];
+  {glob:'/assets/app/**',headers:{'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'}},
+  ...publicPaths.map(glob=>({glob,headers:{'X-Robots-Tag':'index, follow, max-image-preview:large','Cache-Control':'no-cache'}})),
+  ...[...new Set([...privateFiles,...privateRoutes,'/admin{,/**,.html,-*.html}','/dashboard{,/**,.html,-*.html}','/workspace{,/**,.html}','/js/work*','/js/owner-confirm*'])].map(glob=>({glob,headers:{'X-Robots-Tag':'noindex, nofollow','Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}}))];
  return config;
 }
 async function allFiles(client,version){
@@ -63,9 +72,9 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw new Error('teyza.co.za is not attached to the expected Firebase Hosting site.');
  const source=await current(client),original=await client.hosting('GET','/'+source),before=await allFiles(client,source),files=overlay(root);
  if(!before.has('/index.html'))throw new Error('The live version has no index.html. Stopping before changing Hosting.');
- const config=servingConfig(original.config),version=await clone(client,source,wait);
+ const config=servingConfig(original.config,[...before.keys()]),version=await clone(client,source,wait);
  // A local rollback record contains version metadata only; never tokens or seller evidence.
- const backup={release:'APP-FIRST-20261027',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
+ const backup={release:'FIELD-WORK-SEO-20261029',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
  const checkpoint=backupPath.replace(/\.json$/, '-'+version.split('/').at(-1)+'.json');
  fs.writeFileSync(checkpoint,JSON.stringify(backup,null,2),{mode:0o600});
  log('Cloned the active website. Uploading '+files.size+' app website files.');
@@ -87,7 +96,7 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  await client.hosting('PATCH','/'+version,{status:'FINALIZED'},{updateMask:'status'});
  // Refuse to overwrite a newer deployment published while this overlay was prepared.
  if(await current(client)!==source)throw new Error('The live website changed during preparation. Nothing was published. Run DEPLOY-WEBSITE again to use the new live version.');
- const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza app-first website and search metadata'},{versionName:version});
+ const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza field-work portal, public guides and indexing repair'},{versionName:version});
  if(await current(client)!==version)throw new Error('Hosting did not confirm the new live version. Check Firebase Hosting before retrying.');
  backup.releaseName=release.name;backup.publishedAt=new Date().toISOString();fs.writeFileSync(backupPath,JSON.stringify(backup,null,2),{mode:0o600});
  log('Website published: https://teyza.co.za/ · '+(before.size-[...before.keys()].filter(p=>overlayPaths.has(p)).length)+' existing files preserved.');
@@ -101,4 +110,4 @@ async function rollback({client,backupPath,log=console.log}){
  await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Restore website before app-first website overlay'},{versionName:source});
  log('Restored the website version that preceded this admin update.');
 }
-module.exports={SITE,BASE,registrationRoutes,overlayPaths,overlay,servingConfig,allFiles,preserved,versionName,patch,rollback};
+module.exports={SITE,BASE,publicPaths,privateRoutes,registrationRoutes,overlayPaths,overlay,servingConfig,allFiles,preserved,versionName,patch,rollback};

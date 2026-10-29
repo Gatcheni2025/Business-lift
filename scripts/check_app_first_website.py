@@ -22,6 +22,10 @@ class Page(HTMLParser):
   if tag=='script' and self.in_schema:self.schemas.append(json.loads(self.buffer));self.in_schema=False
 for p in PUBLIC.glob('*.html'):
  page=Page();text=p.read_text();page.feed(text)
+ if p.name in ['work.html','owner-confirm.html']:
+  assert page.meta.get('robots')=='noindex,nofollow',p.name
+  assert '<form' in text and 'type="module"' in text,p.name
+  continue
  assert page.headings==1,p.name
  assert page.meta['description'] and page.canonical.startswith('https://teyza.co.za/'),p.name
  assert page.meta.get('og:image')=='https://teyza.co.za/assets/app/social-preview.jpg'
@@ -35,7 +39,8 @@ for p in PUBLIC.glob('*.html'):
   assert 'actual' in text.lower() and 'Android early access' in text
 sitemap=ET.fromstring((PUBLIC/'sitemap.xml').read_text())
 urls=[e.text for e in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-assert len(urls)==len(set(urls))==7
+assert len(urls)==len(set(urls))==11
+assert not any(u.endswith('/work.html') or 'owner-confirm' in u for u in urls)
 assert not any('register' in u or 'admin' in u for u in urls)
 assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_text()
 for p in PUBLIC.rglob('*'):

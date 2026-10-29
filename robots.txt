@@ -1,8 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /admin
-Disallow: /dashboard
-Disallow: /workspace
 
 Sitemap: https://teyza.co.za/sitemap.xml

@@ -1,4 +1,5 @@
 [
+  "/agents.html",
   "/assets/app-first.css",
   "/assets/app/essentials.webp",
   "/assets/app/home.webp",
@@ -7,11 +8,21 @@
   "/assets/app/social-preview.jpg",
   "/assets/app/wordmark-light.svg",
   "/assets/app/wordmark.svg",
+  "/assets/work.css",
   "/download.html",
+  "/for-shop-owners.html",
+  "/how-it-works.html",
   "/index.html",
+  "/js/owner-confirm.js",
+  "/js/work-auth.mjs",
+  "/js/work-phone.mjs",
+  "/js/work.js",
+  "/owner-confirm.html",
   "/register.html",
   "/robots.txt",
   "/seller-subscriptions.html",
   "/sitemap.xml",
-  "/support.html"
+  "/support.html",
+  "/work-privacy.html",
+  "/work.html"
 ]
