@@ -73,7 +73,7 @@ else:
 manifest['sha256'] = {file.name:hashlib.sha256(file.read_bytes()).hexdigest()
                       for file in out.iterdir() if file.is_file()}
 (out/'release-manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
-guide = root/'../../docs/TEYZA_R38_MOBILE_RELEASE.md'
+guide = root/'../../docs/TEYZA_MOBILE_RELEASE.md'
 shutil.copy2(guide, out/'README-RELEASE.md')
 print(platform+' '+version+' '+mode+' release artifact prepared.')
 
