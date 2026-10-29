@@ -25,7 +25,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   const eligible=v.status==='approved'&&agentProfile?.status==='approved'&&a?.approvalStatus==='approved'&&consent&&paid&&newShop;
   return {sellerApproval:a?.approvalStatus||'pending',mandate:consent?'signed_pending_activation':m?.status||'not_signed',payment:paid?'first_invoice_paid':bill?'awaiting_payment':'not_invoiced',
    commission:c?.paidAt?(eligible?'paid':'paid_needs_review'):eligible?'eligible':paid&&!newShop?'existing_subscription':'not_eligible',commissionCents:9900,collectionActive:false,
-   distanceFromShopMeters:distance(v.location,location),payoutAt:c?.paidAt||null};
+   registeredShop:{name:a?.shopName||'',address:a?.address||''},distanceFromShopMeters:distance(v.location,location),payoutAt:c?.paidAt||null};
  }
  async function execute(auth,action,data={}){
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);

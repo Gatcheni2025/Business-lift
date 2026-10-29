@@ -65,7 +65,7 @@ test('Photos are encrypted, consented, capture-bound and cannot be replayed or e
 test('Owner confirmation requires their own registered account, rejects self-referral and links one visit only',async()=>{
  const f=setup(),v=await visit(f);await rejects(f.call('agent_owner_confirm',{token:v.token,consent:true}),403);
  await rejects(f.call('agent_owner_confirm',{token:v.token,consent:true},{uid:'stranger',email_verified:true}),403);
- await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);assert.equal(f.db.records.get('teyzaAgentVisits/visit1').sellerUid,'seller1');
+ await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);assert.equal(f.db.records.get('teyzaAgentVisits/visit1').sellerUid,'seller1');assert.equal((await f.call('agent_visit_get',{visitId:'visit1'})).visit.progress.registeredShop.name,'Corner Shop');
  assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');
  assert((await f.call('agent_owner_confirm',{token:v.token,consent:true},owner)).confirmed);
  const second='v2';await f.call('agent_visit_start',{requestId:second,shopName:'Another',address:'13 Main Road Durban',area:'Durban',province:'KwaZulu-Natal',ownerPermission:true});const l=await f.call('agent_owner_link',{visitId:second});await rejects(f.call('agent_owner_confirm',{token:l.url.split('#')[1],consent:true},owner),409);
