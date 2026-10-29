@@ -17,6 +17,14 @@ import 'package:teyza_shopper/teyza_mobile_api.dart';
 import 'seller_experience_test.dart' as fixtures;
 import 'seller_mode_test.dart' as mode;
 
+Future<void> loadTradingFonts() async {
+ await (FontLoader('PT Sans')..addFont(rootBundle.load('assets/fonts/PTSans-Regular.ttf'))
+   ..addFont(rootBundle.load('assets/fonts/PTSans-Bold.ttf'))).load();
+ await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+}
+ThemeData tradingTheme()=>ThemeData(useMaterial3:true,fontFamily:'PT Sans',scaffoldBackgroundColor:pale,
+ colorScheme:ColorScheme.fromSeed(seedColor:green,surface:Colors.white));
+
 class TradingApi extends TeyzaMobileApi {
   TradingApi(super.session);
   final calls=<({String action,Map<String,dynamic> data})>[];
@@ -48,10 +56,11 @@ class TradingApi extends TeyzaMobileApi {
 void main(){
  setUp(()=>SharedPreferences.setMockInitialValues({}));
  testWidgets('Seller quick controls save delivery price, card acceptance, messages and an optional cash discount',(tester) async {
+  await loadTradingFonts();final boundary=GlobalKey();
   final session=fixtures.Session(),api=TradingApi(fixtures.Session());
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(MaterialApp(home:Scaffold(body:ListView(children:[SellerServiceControls(session:session,api:api,
-    settings:const {'deliveryEnabled':false,'cardPayments':false,'liveChatEnabled':true})]))));
+  await tester.pumpWidget(MaterialApp(theme:tradingTheme(),home:RepaintBoundary(key:boundary,child:Scaffold(body:ListView(children:[SellerServiceControls(session:session,api:api,
+    settings:const {'deliveryEnabled':false,'cardPayments':false,'liveChatEnabled':true})])))));
   await fixtures.visibleTap(tester,find.byKey(const ValueKey('seller-delivery-toggle')));
   await tester.enterText(find.byKey(const ValueKey('seller-delivery-fee')),'15.00');
   await tester.enterText(find.byKey(const ValueKey('seller-delivery-radius')),'3');tester.testTextInput.hide();
@@ -59,6 +68,8 @@ void main(){
   await fixtures.visibleTap(tester,find.byKey(const ValueKey('seller-cash-discount')));
   await fixtures.visibleTap(tester,find.text('10% off items for cash').last);
   await fixtures.visibleTap(tester,find.byKey(const ValueKey('seller-messaging-toggle')));
+  await tester.ensureVisible(find.text('Delivery, cards & messages'));await tester.pumpAndSettle();
+  await mode.capture(tester,boundary,'seller-shop-service-options');
   await fixtures.visibleTap(tester,find.text('Save shop options'));
   expect(api.saved,{'deliveryEnabled':true,'deliveryFeeCents':1500,'deliveryRadiusKm':3,'cardPayments':true,
     'liveChatEnabled':false,'cashDiscountPercent':10,'cardPaymentFeePercent':0});
@@ -74,13 +85,16 @@ void main(){
   expect(find.text('27'),findsNothing);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('The seller dashboard displays the saved shop photo and a new order opens Orders',(tester) async {
+  await loadTradingFonts();
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
   final session=fixtures.Session(),api=TradingApi(fixtures.Session());
   api.photo=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();
   final boundary=GlobalKey();
-  await tester.pumpWidget(MaterialApp(home:RepaintBoundary(key:boundary,child:SellerWorkspacePage(session:session,openLogin:(){},sellerMode:true,
+  await tester.pumpWidget(MaterialApp(theme:tradingTheme(),home:RepaintBoundary(key:boundary,child:SellerWorkspacePage(session:session,openLogin:(){},sellerMode:true,
     apiFactory:(uid,token)=>mode.ShopRepo(uid:uid,token:token),mobileApi:api))));
   await tester.pumpAndSettle();expect(find.byKey(const ValueKey('seller-shop-photo')),findsOneWidget);
+  await tester.runAsync(()=>precacheImage(MemoryImage(api.photo!),tester.element(find.byKey(const ValueKey('seller-shop-photo')))));
+  await tester.pumpAndSettle();
   expect(api.calls.where((c)=>c.action=='shop_front_read').length,1);
   await mode.capture(tester,boundary,'seller-photo-service-dashboard');
   api.notices=[{'id':'order-notice','title':'New order request','target':'orders','category':'orders','read':false}];
@@ -107,16 +121,18 @@ void main(){
   expect(shopDirectionsUri(name:''),isNull);
  });
  testWidgets('A shopper opens directions directly from the shop page without signing in',(tester) async {
+  await loadTradingFonts();final boundary=GlobalKey();
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
   final session=ShopperSession()..isReady=true;Uri? opened;
   final shop=Shop.fromJson({'id':'shop-direction','name':'Direction Shop','area':'Durban','address':'12 Main Road, Durban',
     'latitude':-29.8587,'longitude':31.0218,'identityVerified':true,'pickupEnabled':true});
-  await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,initialArea:areas.first,
-    catalogueLoader:() async=>[shop],directoryLoader:(_,__,___) async=>[],externalLauncher:(uri) async{opened=uri;return true;})));
+  await tester.pumpWidget(MaterialApp(theme:tradingTheme(),home:RepaintBoundary(key:boundary,child:ShopperHome(session:session,enableBackgroundServices:false,initialArea:areas.first,
+    catalogueLoader:() async=>[shop],directoryLoader:(_,__,___) async=>[],externalLauncher:(uri) async{opened=uri;return true;}))));
   await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
   final card=find.byKey(const ValueKey('nearby-shop-direction'));
   await tester.scrollUntilVisible(card,180,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,card);
   await fixtures.visibleTap(tester,find.text('Directions to shop'));
+  await mode.capture(tester,boundary,'shopper-directions-and-messages');
   expect(opened!.path,'/maps/dir/');expect(opened!.queryParameters['destination'],'-29.8587,31.0218');
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
