@@ -16,7 +16,7 @@ badging=subprocess.check_output([str(Path(sorted(executables)[-1]).with_name('aa
 identity=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
 version=next(line.split(':',1)[1].strip() for line in (root/'pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
 name,code=version.split('+')
-if not identity or identity.groups()!=('com.asiyedriver.asiye',code,name):
+if not identity or (identity[1],identity[3])!=('com.asiyedriver.asiye',name) or int(identity[2])<int(code):
     raise SystemExit('The compiled APK does not match the existing Teyza Play package and candidate version.')
 def certificate(data):
     end=data.rfind(b'PK\x05\x06')
@@ -39,7 +39,9 @@ def certificate(data):
     raise SystemExit('No verified v2/v3 signing certificate found')
 cert=certificate(apk.read_bytes())
 values={'sha1':hashlib.sha1(cert).hexdigest().upper(),'sha256':hashlib.sha256(cert).hexdigest().upper()}
-values.update({'applicationId':identity[1],'versionCode':int(identity[2]),'versionName':identity[3],'signing':'android-test-only',
+# Flutter's split APKs add an ABI offset to the base version code. Export the
+# compiled code and its source code separately; Play's AAB uses the base code.
+values.update({'applicationId':identity[1],'versionCode':int(identity[2]),'sourceVersionCode':int(code),'versionName':identity[3],'signing':'android-test-only',
     'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'sourceCommit':os.environ.get('GITHUB_SHA','')})
 (apk.parent/'test-signing-fingerprints.json').write_text(json.dumps(values,indent=2)+'\n')
 print('Public Android test-certificate fingerprints exported.')
