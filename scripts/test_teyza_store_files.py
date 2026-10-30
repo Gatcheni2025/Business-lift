@@ -34,17 +34,17 @@ class StoreFilesTests(unittest.TestCase):
         self.assertIn('TEYZA_ANDROID_KEYSTORE_BASE64',report(env)['android']['invalidSettings'])
     def test_production_apk_identity_target_and_certificate_match_the_bundle(self):
         der=b'synthetic-public-certificate';pem=ssl.DER_cert_to_PEM_cert(der);digest=hashlib.sha256(der).hexdigest()
-        badging="package: name='za.co.teyza.shopper' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
+        badging="package: name='com.asiyedriver.asiye' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
         signature='Verifies\nNumber of signers: 1\nSigner #1 certificate SHA-256 digest: '+digest
         self.assertEqual(validate(badging,signature,pem,'1.0.13+23')['targetSdk'],36)
-        for wrong in [badging.replace("'36'","'35'"),badging.replace("'23'","'22'"),badging.replace('za.co.teyza.shopper','other.app')]:
+        for wrong in [badging.replace("'36'","'35'"),badging.replace("'23'","'22'"),badging.replace('com.asiyedriver.asiye','other.app')]:
             with self.assertRaises(ValueError):validate(wrong,signature,pem,'1.0.13+23')
         with self.assertRaises(ValueError):validate(badging,signature.replace(digest,'0'*64),pem,'1.0.13+23')
         with self.assertRaises(ValueError):validate(badging,signature+'\nAndroid Debug',pem,'1.0.13+23')
 
     def test_build_tools_37_scheme_labels_match_the_same_bundle_certificate(self):
         der=b'synthetic-public-certificate';pem=ssl.DER_cert_to_PEM_cert(der);digest=hashlib.sha256(der).hexdigest()
-        badging="package: name='za.co.teyza.shopper' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
+        badging="package: name='com.asiyedriver.asiye' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
         for label in ['V1 Signer:','V2 Signer:','V3.0 Signer:','V3.1 Signer:','V3.2 Signer:']:
             signature='Verifies\nNumber of signers: 1\n'+label+' certificate SHA-256 digest: '+digest
             with self.subTest(label=label):
@@ -57,7 +57,7 @@ class StoreFilesTests(unittest.TestCase):
 
     def test_multiple_signers_missing_signers_and_stamp_only_are_rejected(self):
         der=b'synthetic-public-certificate';pem=ssl.DER_cert_to_PEM_cert(der);digest=hashlib.sha256(der).hexdigest()
-        badging="package: name='za.co.teyza.shopper' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
+        badging="package: name='com.asiyedriver.asiye' versionCode='23' versionName='1.0.13'\ntargetSdkVersion:'36'"
         signature='Verifies\nNumber of signers: 1\nV2 Signer: certificate SHA-256 digest: '+digest
         for wrong in [signature.replace('signers: 1','signers: 2'),
                       signature.replace('Number of signers: 1\n',''),

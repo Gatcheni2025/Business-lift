@@ -10,6 +10,9 @@ import 'teyza_mobile_api.dart';
 class NativeFirebase {
   static Future<FirebaseApp>? _starting;
   static bool validAppId(String id,String platform)=>RegExp('^1:983479810697:$platform:[a-fA-F0-9]+\$').hasMatch(id);
+  static bool validAndroidConfig(Map<dynamic,dynamic> config)=>
+    config['projectId']=='business-lift-3c19c'&&config['androidPackageName']=='com.asiyedriver.asiye'&&
+    validAppId(config['androidAppId']?.toString()??'','android');
   static Future<FirebaseApp> ensure(){
     if(Firebase.apps.isNotEmpty)return Future.value(Firebase.app());
     return _starting??=_initialize().whenComplete(()=>_starting=null);
@@ -23,7 +26,7 @@ class NativeFirebase {
       const String.fromEnvironment('TEYZA_FIREBASE_ANDROID_APP_ID');
     if(appId.trim().isEmpty){
       final bundled=jsonDecode(await rootBundle.loadString('assets/config/firebase_native.json'));
-      if(bundled is Map&&bundled['projectId']=='business-lift-3c19c'){
+      if(bundled is Map&&(ios?bundled['projectId']=='business-lift-3c19c':validAndroidConfig(bundled))){
         appId=bundled[ios?'iosAppId':'androidAppId']?.toString()??'';
       }
     }
@@ -35,7 +38,7 @@ class NativeFirebase {
         final response=await client.get(Uri.parse(teyzaMobileEndpoint).replace(queryParameters:{'nativeConfig':'android'})).timeout(const Duration(seconds:15));
         if(response.statusCode!=200)throw const ShopServiceUnavailable();
         final config=jsonDecode(response.body);
-        if(config is Map&&config['projectId']=='business-lift-3c19c')appId=config['androidAppId']?.toString()??'';
+        if(config is Map&&validAndroidConfig(config))appId=config['androidAppId']?.toString()??'';
       }finally{client.close();}
     }
     if(!validAppId(appId,ios?'ios':'android')){

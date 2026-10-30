@@ -1,8 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $project = 'business-lift-3c19c'
-$appId = '1:983479810697:android:14f449587f5787f6db2458'
 $cert = Get-Content (Join-Path $PSScriptRoot 'test-signing-fingerprints.json') -Raw | ConvertFrom-Json
-if ($cert.applicationId -ne 'za.co.teyza.teyza_shopper' -or $cert.signing -ne 'android-test-only' -or
+if ($cert.applicationId -ne 'com.asiyedriver.asiye' -or $cert.signing -ne 'android-test-only' -or
     $cert.sha1 -cnotmatch '^[A-F0-9]{40}$' -or $cert.sha256 -cnotmatch '^[A-F0-9]{64}$') {
   throw 'This is not a valid Teyza test APK certificate file. Nothing changed.'
 }
@@ -14,8 +13,10 @@ function FirebaseJson([string[]]$Arguments) {
   return $reply.result
 }
 $apps = @(FirebaseJson -Arguments @('apps:list','android'))
-$target = @($apps | Where-Object { $_.appId -eq $appId -and $_.packageName -eq $cert.applicationId })
+$target = @($apps | Where-Object { $_.packageName -eq $cert.applicationId })
 if ($target.Count -ne 1) { throw 'The activated Teyza Android app was not found. Nothing changed.' }
+$appId = $target[0].appId
+if ($appId -notmatch '^1:983479810697:android:[a-fA-F0-9]+$') { throw 'Unexpected Firebase Android identity.' }
 $existing = @(FirebaseJson -Arguments @('apps:android:sha:list',$appId))
 foreach ($hash in @($cert.sha1,$cert.sha256)) {
   if ($existing | Where-Object { ($_.shaHash -replace ':','').ToUpperInvariant() -eq $hash }) {

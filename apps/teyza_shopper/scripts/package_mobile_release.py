@@ -50,7 +50,9 @@ if platform == 'android':
         if 'Android Debug' in certificate:
             raise SystemExit('A debug certificate cannot be used as a Play upload key.')
         manifest['certificate'] = certificate
-    manifest['applicationId'] = 'za.co.teyza.shopper'
+    manifest['applicationId'] = 'com.asiyedriver.asiye'
+    if mode == 'signed':
+        manifest['verifiedPlayUploadCertificateSha256'] = os.environ['TEYZA_PLAY_UPLOAD_CERT_SHA256']
     target = out/('teyza-'+version.replace('+','-')+'-'+mode+'.aab')
     shutil.copy2(source, target)
 else:

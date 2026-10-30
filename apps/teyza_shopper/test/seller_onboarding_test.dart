@@ -62,6 +62,14 @@ void main(){
   expect(()=>normalizeMobile('12345'),throwsFormatException);
   expect(NativeFirebase.validAppId('1:983479810697:web:aabb','android'),isFalse);
  });
+ test('Android bootstrap requires the existing Play package and the Teyza Firebase project',(){
+  final config=<String,Object>{'projectId':'business-lift-3c19c','androidPackageName':'com.asiyedriver.asiye',
+    'androidAppId':'1:983479810697:android:aabbcc'};
+  expect(NativeFirebase.validAndroidConfig(config),isTrue);
+  expect(NativeFirebase.validAndroidConfig({...config,'androidPackageName':'za.co.teyza.shopper'}),isFalse);
+  expect(NativeFirebase.validAndroidConfig({...config,'projectId':'another-project'}),isFalse);
+  expect(NativeFirebase.validAndroidConfig({...config,'androidAppId':'1:983479810697:web:aabbcc'}),isFalse);
+ });
  testWidgets('Selfie camera opens even when the shop service is unavailable',(tester) async{
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..offline=true;
   final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();var captured=false;

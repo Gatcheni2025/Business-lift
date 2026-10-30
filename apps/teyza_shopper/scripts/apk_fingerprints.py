@@ -3,6 +3,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import struct
 import subprocess
@@ -11,6 +12,12 @@ apk=root/'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
 executables=glob.glob(os.environ['ANDROID_HOME']+'/build-tools/*/apksigner')
 if not executables:raise SystemExit('Android signing verifier unavailable')
 subprocess.run([sorted(executables)[-1],'verify',str(apk)],check=True)
+badging=subprocess.check_output([str(Path(sorted(executables)[-1]).with_name('aapt')),'dump','badging',str(apk)],text=True)
+identity=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
+version=next(line.split(':',1)[1].strip() for line in (root/'pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
+name,code=version.split('+')
+if not identity or (identity[1],identity[3])!=('com.asiyedriver.asiye',name) or int(identity[2])<int(code):
+    raise SystemExit('The compiled APK does not match the existing Teyza Play package and candidate version.')
 def certificate(data):
     end=data.rfind(b'PK\x05\x06')
     if end<0:raise SystemExit('APK ZIP footer missing')
@@ -32,8 +39,11 @@ def certificate(data):
     raise SystemExit('No verified v2/v3 signing certificate found')
 cert=certificate(apk.read_bytes())
 values={'sha1':hashlib.sha1(cert).hexdigest().upper(),'sha256':hashlib.sha256(cert).hexdigest().upper()}
-values.update({'applicationId':'za.co.teyza.shopper','signing':'android-test-only',
+# Flutter's split APKs add an ABI offset to the base version code. Export the
+# compiled code and its source code separately; Play's AAB uses the base code.
+values.update({'applicationId':identity[1],'versionCode':int(identity[2]),'sourceVersionCode':int(code),'versionName':identity[3],'signing':'android-test-only',
     'apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'sourceCommit':os.environ.get('GITHUB_SHA','')})
 (apk.parent/'test-signing-fingerprints.json').write_text(json.dumps(values,indent=2)+'\n')
 print('Public Android test-certificate fingerprints exported.')
+print('Verified compiled APK:',identity[1],version)
 
