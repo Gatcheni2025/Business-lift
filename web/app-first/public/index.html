@@ -80,35 +80,61 @@
 </div>
 </div>
 </section>
-<section class="section" id="app">
-<div class="wrap">
-<div class="intro">
-<span class="eyebrow">MEET THE APP</span>
-<h2>A closer look at local shopping.</h2>
-<p>Actual Teyza Android app screens. Find nearby shops, explore categories and browse what participating businesses have listed.</p>
+<section class="section app-demo" id="app" aria-labelledby="app-demo-title" data-teyza-demo>
+<div class="wrap demo-layout">
+<div class="demo-copy">
+<span class="eyebrow">TAKE A LOOK INSIDE</span>
+<h2 id="app-demo-title">Your local shop,<br>right in your hands.</h2>
+<p>See how a shopper can find a nearby shop, choose everyday essentials and send an order request.</p>
+<p class="demo-note">Actual Teyza Android app screens lead into an interactive example. No order is sent from this website.</p>
+<div class="demo-steps" role="tablist" aria-label="Explore the example order" data-demo-controls hidden>
+<button type="button" role="tab" id="demo-tab-0" aria-controls="demo-panel-0" aria-selected="true" data-demo-step="0"><span>01</span> Discover</button>
+<button type="button" role="tab" id="demo-tab-1" aria-controls="demo-panel-1" aria-selected="false" tabindex="-1" data-demo-step="1"><span>02</span> Find a shop</button>
+<button type="button" role="tab" id="demo-tab-2" aria-controls="demo-panel-2" aria-selected="false" tabindex="-1" data-demo-step="2"><span>03</span> Add items</button>
+<button type="button" role="tab" id="demo-tab-3" aria-controls="demo-panel-3" aria-selected="false" tabindex="-1" data-demo-step="3"><span>04</span> Choose service</button>
+<button type="button" role="tab" id="demo-tab-4" aria-controls="demo-panel-4" aria-selected="false" tabindex="-1" data-demo-step="4"><span>05</span> Request</button>
 </div>
-<div class="gallery">
-<figure class="screen-card">
-<img src="/assets/app/home.webp" width="738" height="1600" loading="lazy" decoding="async" alt="Teyza home screen showing fresh grocery categories and local shop cards">
-<figcaption>
-<strong>Start close to home.</strong>
-<span>Explore spaza shops and other retailers in your chosen area.</span>
-</figcaption>
-</figure>
-<figure class="screen-card">
-<img src="/assets/app/nearby-shops.webp" width="738" height="1600" loading="lazy" decoding="async" alt="Teyza nearby shop list showing Sasol Avoca and local traders">
-<figcaption>
-<strong>Discover what’s nearby.</strong>
-<span>View available shop photos, distances and opening information.</span>
-</figcaption>
-</figure>
-<figure class="screen-card">
-<img src="/assets/app/essentials.webp" width="738" height="1600" loading="lazy" decoding="async" alt="Everyday essentials categories including milk and eggs in the Teyza app">
-<figcaption>
-<strong>Explore the essentials.</strong>
-<span>Browse everyday categories and products from participating shops.</span>
-</figcaption>
-</figure>
+<div class="demo-caption" aria-live="polite"><strong data-demo-title>Start close to home</strong><span data-demo-description>Explore local shops and everyday essentials in the app.</span></div>
+<div class="demo-actions"><button type="button" class="demo-play" data-demo-play hidden>Play example <span aria-hidden="true">↗</span></button><a href="/download.html">Get the Teyza app <span aria-hidden="true">↗</span></a></div>
+<noscript><p class="demo-note">Enable JavaScript to explore the example order. You can still see an actual Teyza app screen on the phone.</p></noscript>
+</div>
+<div class="demo-stage" aria-label="Teyza phone preview">
+<div class="demo-device" data-demo-device>
+<div class="demo-speaker" aria-hidden="true"></div>
+<div class="demo-screen">
+<div class="demo-panel demo-shot" id="demo-panel-0" role="tabpanel" aria-labelledby="demo-tab-0" data-demo-panel="0">
+<img src="/assets/app/home.webp" width="738" height="1600" loading="lazy" alt="Actual Teyza Android home screen showing nearby shops">
+<button type="button" class="demo-spot" data-demo-next="1">Explore nearby shops <span class="demo-touch" aria-hidden="true"></span></button>
+</div>
+<div class="demo-panel demo-shot" id="demo-panel-1" role="tabpanel" aria-labelledby="demo-tab-1" data-demo-panel="1" hidden>
+<img src="/assets/app/nearby-shops.webp" width="738" height="1600" loading="lazy" alt="Actual Teyza Android screen showing nearby shops">
+<button type="button" class="demo-spot" data-demo-next="2">Open an example shop <span class="demo-touch" aria-hidden="true"></span></button>
+</div>
+<div class="demo-panel demo-ui" id="demo-panel-2" role="tabpanel" aria-labelledby="demo-tab-2" data-demo-panel="2" hidden>
+<div class="demo-ui-top"><img src="/assets/app/wordmark.svg" width="128" height="40" alt="Teyza"><span>EXAMPLE</span></div>
+<div class="demo-ui-body"><span class="demo-back">‹ &nbsp; NEARBY SHOPS</span><h3>Your local shop</h3><p class="demo-muted">An example participating shop</p><div class="demo-shop-pill">● &nbsp; Shopping locally</div>
+<div class="demo-ui-heading"><strong>Everyday essentials</strong><span>Example items</span></div>
+<div class="demo-product"><img src="/assets/app/demo-milk.webp" width="640" height="640" loading="lazy" alt="Fresh milk"><div><strong>Fresh milk</strong><small>Everyday essential</small></div><button type="button" data-demo-add="milk" aria-pressed="false" aria-label="Add fresh milk to the example basket">Add<span class="demo-touch" aria-hidden="true"></span></button></div>
+<div class="demo-product"><img src="/assets/app/demo-bread.webp" width="640" height="640" loading="lazy" alt="Bread"><div><strong>Bread</strong><small>Everyday essential</small></div><button type="button" data-demo-add="bread" aria-pressed="false" aria-label="Add bread to the example basket">Add</button></div>
+<p class="demo-small">Products and availability vary by shop.</p>
+<button type="button" class="demo-primary" data-demo-basket disabled>View example basket <span data-demo-count>0</span></button></div>
+</div>
+<div class="demo-panel demo-ui" id="demo-panel-3" role="tabpanel" aria-labelledby="demo-tab-3" data-demo-panel="3" hidden>
+<div class="demo-ui-top"><img src="/assets/app/wordmark.svg" width="128" height="40" alt="Teyza"><span>EXAMPLE</span></div>
+<div class="demo-ui-body"><button type="button" class="demo-back demo-back-btn" data-demo-next="2">‹ &nbsp; BACK TO SHOP</button><h3>Your basket</h3><p class="demo-muted">Items from your example shop</p>
+<div class="demo-summary"><strong data-demo-items>No items selected</strong><span>Example basket</span></div>
+<div class="demo-ui-heading"><strong>Delivery or collection</strong></div>
+<div class="demo-modes" aria-label="Example fulfilment choice"><button type="button" data-demo-mode="delivery" aria-pressed="true">Delivery</button><button type="button" data-demo-mode="collection" aria-pressed="false">Collection</button></div>
+<p class="demo-small">Available options and fees are set by each participating shop.</p><div class="demo-summary"><strong>Payment with the shop</strong><span>Arranged directly</span></div>
+<button type="button" class="demo-primary" data-demo-request disabled>Preview order request <span class="demo-touch" aria-hidden="true"></span></button></div>
+</div>
+<div class="demo-panel demo-ui" id="demo-panel-4" role="tabpanel" aria-labelledby="demo-tab-4" data-demo-panel="4" hidden>
+<div class="demo-ui-top"><img src="/assets/app/wordmark.svg" width="128" height="40" alt="Teyza"><span>EXAMPLE</span></div>
+<div class="demo-ui-body demo-complete"><div class="demo-check" aria-hidden="true">✓</div><h3>Example complete</h3><p>In the app, your request goes to the shop for confirmation.</p><div class="demo-summary"><strong>Awaiting shop confirmation</strong><span>Illustrative order status</span></div><p class="demo-small">This was a preview. No order was sent.</p><a class="demo-primary" href="/download.html">Get the Teyza app ↗</a></div>
+</div>
+</div>
+</div>
+<span class="demo-stage-label">A guided look at Teyza</span>
 </div>
 </div>
 </section>
@@ -208,6 +234,7 @@
 </div>
 <div class="wrap footer-legal"><p>© 2026 TEYZA SA (PTY) LTD · Registration: 2026/826905/07</p></div>
 </footer>
+<script src="/assets/app-demo.js" defer></script>
 </body>
 </html>
 
