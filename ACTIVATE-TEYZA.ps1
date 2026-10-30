@@ -20,12 +20,12 @@ function FindNative([string]$Platform,[string]$Identity,[string]$Field,[string]$
   return (FirebaseJson -Arguments @('apps:create',$Platform,'Teyza-Shopper',$Flag,$Identity))
 }
 Write-Host 'Connecting the existing Teyza project. No Hosting or legacy functions are deployed.'
-$android = FindNative 'android' 'za.co.teyza.teyza_shopper' 'packageName' '--package-name'
+$android = FindNative 'android' 'com.asiyedriver.asiye' 'packageName' '--package-name'
 $ios = FindNative 'ios' 'za.co.teyza.shopper' 'bundleId' '--bundle-id'
 if ($android.appId -notmatch '^1:983479810697:android:[a-fA-F0-9]+$' -or $ios.appId -notmatch '^1:983479810697:ios:[a-fA-F0-9]+$') {
   throw 'Unexpected Firebase native app identity. Nothing deployed.'
 }
-$config = @{ androidAppId=$android.appId; iosAppId=$ios.appId; iosUrlScheme=('app-' + $ios.appId.Replace(':','-')) }
+$config = @{ androidPackageName='com.asiyedriver.asiye'; androidAppId=$android.appId; iosAppId=$ios.appId; iosUrlScheme=('app-' + $ios.appId.Replace(':','-')) }
 [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'services/teyza-mobile-v39/native-config.json'),($config | ConvertTo-Json),[System.Text.UTF8Encoding]::new($false))
 $variables = "TEYZA_FIREBASE_ANDROID_APP_ID=$($android.appId)`nTEYZA_FIREBASE_IOS_APP_ID=$($ios.appId)`n"
 [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'TEYZA-NATIVE-BUILD-VARIABLES.txt'),$variables,[System.Text.UTF8Encoding]::new($false))

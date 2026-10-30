@@ -1,6 +1,7 @@
 import importlib.util
 import base64
 import json
+import hashlib
 import os
 from pathlib import Path
 import plistlib
@@ -16,7 +17,10 @@ spec.loader.exec_module(prepare)
 
 class NativePermissionTests(unittest.TestCase):
     def test_android_background_registration_and_consent(self):
-        with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':'1:983479810697:android:aabbcc'}):
+        app_id='1:983479810697:android:aabbcc'
+        sdk={'project_info':{'project_id':'business-lift-3c19c'},'client':[{'client_info':{'mobilesdk_app_id':app_id,'android_client_info':{'package_name':'com.asiyedriver.asiye'}}}]}
+        encoded=base64.b64encode(json.dumps(sdk).encode()).decode()
+        with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':app_id,'TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64':encoded}):
             prepare.ROOT=Path(folder)
             manifest=prepare.ROOT/'android/app/src/main/AndroidManifest.xml';manifest.parent.mkdir(parents=True)
             manifest.write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name=".MainActivity" android:launchMode="singleTop" android:taskAffinity="" /></application></manifest>')
@@ -34,7 +38,7 @@ class NativePermissionTests(unittest.TestCase):
             self.assertNotIn(key+'taskAffinity',activity.attrib)
             self.assertEqual(activity.get(key+'launchMode'),'singleTop')
             self.assertEqual(activity.get(key+'name'),'za.co.teyza.teyza_shopper.MainActivity')
-            self.assertIn('applicationId = "za.co.teyza.shopper"',gradle.read_text())
+            self.assertIn('applicationId = "com.asiyedriver.asiye"',gradle.read_text())
             values=ET.parse(prepare.ROOT/'android/app/src/main/res/values/teyza_firebase.xml').getroot()
             self.assertEqual({v.get('name'):v.text for v in values}['google_app_id'],'1:983479810697:android:aabbcc')
     def test_ios_push_and_camera_configuration_precedes_app_launch(self):
@@ -57,13 +61,13 @@ class NativePermissionTests(unittest.TestCase):
     def test_signed_sdk_requires_matching_project_package_and_app(self):
         app_id='1:983479810697:android:aabbcc'
         config={'project_info':{'project_id':'business-lift-3c19c'},'client':[{'client_info':{
-          'mobilesdk_app_id':app_id,'android_client_info':{'package_name':'za.co.teyza.shopper'}}}]}
+          'mobilesdk_app_id':app_id,'android_client_info':{'package_name':'com.asiyedriver.asiye'}}}]}
         encode=lambda:base64.b64encode(json.dumps(config).encode()).decode()
         with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':app_id}):
             self.assertEqual(prepare.validate_android_sdk(encode()),app_id)
             config['client'][0]['client_info']['android_client_info']['package_name']='za.co.teyza.teyza_shopper'
             with self.assertRaises(SystemExit):prepare.validate_android_sdk(encode())
-            config['client'][0]['client_info']['android_client_info']['package_name']='za.co.teyza.shopper'
+            config['client'][0]['client_info']['android_client_info']['package_name']='com.asiyedriver.asiye'
             config['client'][0]['client_info']['mobilesdk_app_id']='1:983479810697:android:deadbeef'
             with self.assertRaises(SystemExit):prepare.validate_android_sdk(encode())
             config['client'][0]['client_info']['mobilesdk_app_id']=app_id
@@ -75,9 +79,30 @@ class NativePermissionTests(unittest.TestCase):
             with self.assertRaises(SystemExit):prepare.android('signed')
 
     def test_activated_native_identities_are_available_without_ci_variables(self):
-        with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':'','TEYZA_FIREBASE_IOS_APP_ID':''}):
-            self.assertEqual(prepare.native_app_id('android'),'1:983479810697:android:14f449587f5787f6db2458')
+        with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':'','TEYZA_FIREBASE_IOS_APP_ID':'','TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64':''}):
+            self.assertEqual(prepare.native_app_id('android'),'')
             self.assertEqual(prepare.native_app_id('ios'),'1:983479810697:ios:4aae4823892dd145db2458')
+
+    def test_legacy_firebase_registration_is_not_reused_for_the_existing_play_app(self):
+        app_id='1:983479810697:android:aabbcc'
+        sdk={'project_info':{'project_id':'business-lift-3c19c'},'client':[{'client_info':{'mobilesdk_app_id':app_id,'android_client_info':{'package_name':'za.co.teyza.shopper'}}}]}
+        with patch.dict(os.environ,{'TEYZA_FIREBASE_ANDROID_APP_ID':app_id,'TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64':base64.b64encode(json.dumps(sdk).encode()).decode()}):
+            self.assertEqual(prepare.native_app_id('android'),'')
+            with self.assertRaises(SystemExit):prepare.validate_android_sdk(os.environ['TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64'])
+
+    def test_existing_play_upload_key_must_match_the_confirmed_public_certificate(self):
+        certificate=b'disposable-public-certificate-fixture'
+        expected=hashlib.sha256(certificate).hexdigest()
+        settings={'TEYZA_PLAY_UPLOAD_CERT_SHA256':expected,'TEYZA_ANDROID_KEYSTORE_PATH':'fixture.jks','TEYZA_ANDROID_KEY_ALIAS':'fixture','TEYZA_ANDROID_STORE_PASSWORD':'not-a-real-password'}
+        with patch.dict(os.environ,settings),patch.object(prepare.subprocess,'check_output',return_value=certificate) as export:
+            self.assertEqual(prepare.verify_play_upload_key(),expected)
+            self.assertIn('-storepass:env',export.call_args.args[0])
+            self.assertNotIn(settings['TEYZA_ANDROID_STORE_PASSWORD'],export.call_args.args[0])
+            os.environ['TEYZA_PLAY_UPLOAD_CERT_SHA256']='E'*64
+            with self.assertRaises(SystemExit):prepare.verify_play_upload_key()
+        with patch.dict(os.environ,{'TEYZA_PLAY_UPLOAD_CERT_SHA256':''}),patch.object(prepare.subprocess,'check_output') as export:
+            with self.assertRaises(SystemExit):prepare.verify_play_upload_key()
+            export.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()

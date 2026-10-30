@@ -136,6 +136,16 @@ jobs:
       - name: Test activation helper without live credentials
         shell: pwsh
         run: ./scripts/test_teyza_activation.ps1
+      - name: Verify existing Play package connection without live credentials
+        shell: pwsh
+        run: ./tools/store-release/test-play-package.ps1
+      - name: Package existing Play app setup
+        run: python3 scripts/package_existing_play_setup.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-existing-play-setup
+          path: build/teyza-existing-play-setup/
+          retention-days: 30
       - name: Package mobile service deployment kit
         run: python3 scripts/package_teyza_mobile.py
       - uses: actions/upload-artifact@v4
@@ -178,6 +188,7 @@ jobs:
       TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
       TEYZA_ANDROID_KEY_PASSWORD: ${{ secrets.TEYZA_ANDROID_KEY_PASSWORD }}
       TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+      TEYZA_PLAY_UPLOAD_CERT_SHA256: ${{ vars.TEYZA_PLAY_UPLOAD_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

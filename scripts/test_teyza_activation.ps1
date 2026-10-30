@@ -9,7 +9,7 @@ function firebase {
   $line = $args -join ' '
   $global:calls.Add($line)
   $global:LASTEXITCODE = 0
-  if ($line.StartsWith('apps:list android')) { return '{"status":"success","result":[{"packageName":"za.co.teyza.teyza_shopper","appId":"1:983479810697:android:aabb"}]}' }
+  if ($line.StartsWith('apps:list android')) { return '{"status":"success","result":[{"packageName":"com.asiyedriver.asiye","appId":"1:983479810697:android:aabb"}]}' }
   if ($line.StartsWith('apps:list ios')) { return '{"status":"success","result":[{"bundleId":"za.co.teyza.shopper","appId":"1:983479810697:ios:ccdd"}]}' }
   if ($line.StartsWith('functions:secrets:get')) { return 'Secret metadata exists' }
   if ($line.StartsWith('deploy')) { return 'Mock deployment only' }

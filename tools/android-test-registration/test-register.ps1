@@ -9,7 +9,7 @@ function firebase {
   $line = $args -join ' '
   $global:requests.Add($line)
   if ($global:denyList) { $global:LASTEXITCODE = 1; return '{"status":"error"}' }
-  if ($line.StartsWith('apps:list android')) { return '{"status":"success","result":[{"packageName":"za.co.teyza.teyza_shopper","appId":"1:983479810697:android:14f449587f5787f6db2458"}]}' }
+  if ($line.StartsWith('apps:list android')) { return '{"status":"success","result":[{"packageName":"com.asiyedriver.asiye","appId":"1:983479810697:android:14f449587f5787f6db2458"}]}' }
   if ($line.StartsWith('apps:android:sha:create')) { $global:certificates.Add(@{shaHash=$args[2]}) }
   if ($line.StartsWith('apps:android:sha:list')) { return (@{status='success';result=@($global:certificates.ToArray())} | ConvertTo-Json -Depth 5 -Compress) }
   return '{"status":"success","result":{}}'
@@ -20,7 +20,7 @@ try {
   $null = [System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
   if ($errors.Count) { throw ($errors | Out-String) }
   Copy-Item $source $fixture
-  @{applicationId='za.co.teyza.teyza_shopper';signing='android-test-only';sha1=('A'*40);sha256=('B'*64)} |
+  @{applicationId='com.asiyedriver.asiye';signing='android-test-only';sha1=('A'*40);sha256=('B'*64)} |
     ConvertTo-Json | Set-Content (Join-Path $fixture 'test-signing-fingerprints.json')
   & (Join-Path $fixture 'REGISTER-TEST-APK.ps1')
   if ($global:certificates.Count -ne 2) { throw 'Both fingerprints were not registered.' }

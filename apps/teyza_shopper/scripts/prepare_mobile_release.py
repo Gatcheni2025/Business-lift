@@ -1,15 +1,17 @@
 """Configure generated Flutter wrappers without committing signing credentials."""
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
 import plistlib
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-ANDROID_ID = "za.co.teyza.shopper"
+ANDROID_ID = "com.asiyedriver.asiye"
 ANDROID_TEMPLATE_ID = "za.co.teyza.teyza_shopper"
 IOS_ID = os.environ.get("TEYZA_IOS_BUNDLE_ID") or "za.co.teyza.shopper"
 FIREBASE_API_KEY = "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U"
@@ -18,6 +20,7 @@ NATIVE_CONFIG = ROOT / "assets/config/firebase_native.json"
 
 def native_app_id(platform):
     value = os.environ.get("TEYZA_FIREBASE_" + platform.upper() + "_APP_ID", "").strip()
+    config = {}
     if not value:
         config = json.loads(NATIVE_CONFIG.read_text())
         if config.get("projectId") != "business-lift-3c19c":
@@ -25,6 +28,15 @@ def native_app_id(platform):
         value = config.get(platform + "AppId", "")
     if value and not re.fullmatch(r"1:983479810697:" + platform + r":[a-fA-F0-9]+", value):
         raise SystemExit("Use the existing project's native " + platform + " Firebase app ID.")
+    if platform == 'android':
+        encoded = os.environ.get('TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64', '')
+        if encoded:
+            try:
+                return validate_android_sdk(encoded, expected_app_id='')
+            except SystemExit:
+                return ''
+        # An opaque app ID cannot establish which Android package it belongs to.
+        return value if config.get('androidPackageName') == ANDROID_ID else ''
     return value
 
 
@@ -34,6 +46,7 @@ def android(signing):
         if not encoded:
             raise SystemExit('Run CONNECT-PLAY-PACKAGE.ps1 before signing: the Play package needs its matching Firebase registration.')
         validate_android_sdk(encoded)
+        verify_play_upload_key()
     path = ROOT / "android/app/src/main/AndroidManifest.xml"
     ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
     tree = ET.parse(path)
@@ -123,7 +136,7 @@ def android(signing):
     print("Android identity:", ANDROID_ID, "| signing:", signing)
 
 
-def validate_android_sdk(encoded):
+def validate_android_sdk(encoded, expected_app_id=None):
     try:
         sdk = json.loads(base64.b64decode(encoded, validate=True))
     except (ValueError, TypeError):
@@ -133,11 +146,33 @@ def validate_android_sdk(encoded):
     clients = [c for c in sdk.get('client', []) if
                c.get('client_info', {}).get('android_client_info', {}).get('package_name') == ANDROID_ID]
     if len(clients) != 1:
-        raise SystemExit('Android Firebase SDK does not match za.co.teyza.shopper.')
+        raise SystemExit('Android Firebase SDK does not match ' + ANDROID_ID + '. Run CONNECT-PLAY-PACKAGE.ps1.')
     app_id = clients[0]['client_info'].get('mobilesdk_app_id')
-    if not app_id or app_id != native_app_id('android'):
+    expected = os.environ.get('TEYZA_FIREBASE_ANDROID_APP_ID', '').strip() if expected_app_id is None else expected_app_id
+    if not isinstance(app_id, str) or not re.fullmatch(r'1:983479810697:android:[a-fA-F0-9]+', app_id):
+        raise SystemExit('Android Firebase app ID is not from the Teyza project.')
+    if expected and app_id != expected:
         raise SystemExit('Android Firebase app ID and saved SDK configuration differ. Run CONNECT-PLAY-PACKAGE.ps1.')
     return app_id
+
+
+def verify_play_upload_key():
+    expected = re.sub(r'[\s:]', '', os.environ.get('TEYZA_PLAY_UPLOAD_CERT_SHA256', '')).lower()
+    if not re.fullmatch(r'[0-9a-f]{64}', expected):
+        raise SystemExit('Run CONNECT-PLAY-PACKAGE.ps1 to confirm the existing com.asiyedriver.asiye Play upload certificate.')
+    required = ['TEYZA_ANDROID_KEYSTORE_PATH', 'TEYZA_ANDROID_KEY_ALIAS', 'TEYZA_ANDROID_STORE_PASSWORD']
+    if any(not os.environ.get(name) for name in required):
+        raise SystemExit('The existing Play upload keystore configuration is incomplete.')
+    try:
+        certificate = subprocess.check_output(['keytool', '-exportcert',
+            '-keystore', os.environ['TEYZA_ANDROID_KEYSTORE_PATH'],
+            '-alias', os.environ['TEYZA_ANDROID_KEY_ALIAS'],
+            '-storepass:env', 'TEYZA_ANDROID_STORE_PASSWORD'], stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        raise SystemExit('Could not read the configured existing Play upload certificate.')
+    if hashlib.sha256(certificate).hexdigest() != expected:
+        raise SystemExit('The saved GitHub upload key does not match com.asiyedriver.asiye in Play Console. Restore its existing key; no replacement key was generated.')
+    return expected
 
 
 def ios():
@@ -222,6 +257,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.platform == "android":
         android(args.signing)
+        if os.environ.get('GITHUB_ENV'):
+            with open(os.environ['GITHUB_ENV'], 'a') as environment:
+                environment.write('TEYZA_FIREBASE_ANDROID_APP_ID=' + native_app_id('android') + '\n')
     else:
         ios()
 
