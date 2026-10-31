@@ -55,6 +55,10 @@ async function main(){
    if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[]};
    if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
    if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
+   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true}],next:null};
+   if(body.action==='agent_admin_visits')result={ok:true,visits:[{id:'visit-test',shopName:'Demo Spaza',address:'12 Sample Road, Durban',area:'Durban',province:'KwaZulu-Natal',status:'submitted',revision:5,agentUid:'agent2',ownerConfirmed:true,progress:{sellerApproval:'approved',mandate:'signed_pending_activation',payment:'first_invoice_paid',commission:'not_eligible'},location:{latitude:-29.85,longitude:31.02,accuracy:12}}],next:null};
+   if(body.action==='agent_admin_application_evidence')result={ok:true,identityType:'sa_id',identityNumber:'SYNTHETIC000',identityFile:{name:'test.jpg',mime:'image/jpeg',base64:jpeg},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:Buffer.from('%PDF-1.4 synthetic').toString('base64')}};
+   if(body.action==='agent_admin_photo')result={ok:true,imageBase64:jpeg};
    if(body.action==='admin_seller_queue')result={ok:true,sellers:body.data.after?[{...rows[0],sellerUid:'last',shopName:'Last Page Shop'}]:pending,next:pagination&&!body.data.after?'retail1':null};
    if(body.action==='seller_identity_read')result={ok:true,imageBase64:jpeg,details:{legalType:'individual',kind:'id',documentNumber:'SYNTHETIC-TEST'}};
    if(body.action==='verification_read')result={ok:true,imageBase64:jpeg};
@@ -68,6 +72,31 @@ async function main(){
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('HR navigation stays in admin with document review, area management and signups',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
+   assert(!f.page.url().includes('work.html'));
+   await f.page.getByRole('button',{name:'Open ID/passport and CV'}).click();
+   for(const type of ['ID / passport','CV']){await f.page.getByRole('button',{name:'View '+type}).click();await f.page.locator('#fieldEvidenceDialog').getByRole('button',{name:'Close'}).click();}
+   await f.page.getByRole('button',{name:'Approve applicant'}).click();
+   await f.page.getByText('HR application decision saved.').waitFor();
+   assert(f.calls.some(c=>c.action==='agent_admin_profile_decide'&&c.data.agentUid==='applicant1'));
+   await f.page.getByRole('button',{name:'Area management',exact:true}).click();
+   await f.page.locator('.ops-form input').fill('Pinetown');
+   await f.page.getByRole('button',{name:'Save area assignment'}).click();
+   await f.page.getByText('Area assignment updated.').waitFor();
+   assert(f.calls.some(c=>c.action==='agent_admin_area_assign'&&c.data.area==='Pinetown'));
+   await f.page.getByRole('button',{name:'Shop signups',exact:true}).click();
+   await f.page.getByText('Demo Spaza',{exact:false}).first().waitFor();
+   await f.page.getByRole('button',{name:'Work reviews',exact:true}).click();
+   await f.page.getByRole('button',{name:'Review visit'}).click();
+   for(const kind of ['shop','selfie']){await f.page.getByRole('button',{name:'Open '+kind+' photo'}).click();await f.page.locator('#fieldEvidenceDialog').getByRole('button',{name:'Close'}).click();}
+   await f.page.getByRole('button',{name:'Approve work'}).click();
+   await f.page.getByText('Field visit review saved.').waitFor();
+   assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
+   await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    await f.page.getByRole('button',{name:'R99 billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('R99 monthly subscription',{exact:true}).waitFor();
