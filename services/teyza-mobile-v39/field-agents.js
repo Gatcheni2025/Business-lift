@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_area_assign','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
 function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
@@ -93,6 +93,40 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
     tx.update(ref,{area,province,revision:data.revision+1,assignedAt:clock(),assignedBy:uid});
     audit(tx,uid,action,target,{area,province});return {saved:true};
    });
+  }
+  if(action==='agent_admin_application_upload'){
+   // Backfill a legacy agent's missing recruitment documents without changing account status.
+   const target=D.id(data.agentUid),expected=data.revision;
+   if(target===uid)D.fail(403,'Another administrator must upload or review your documents.');
+   if(data.applicantPermissionConfirmed!==true)D.fail(422,'Confirm the applicant authorised Teyza to collect and review these documents.');
+   if(!Number.isInteger(expected)||expected<0)D.fail(422,'Refresh the agent record before uploading.');
+   const ref=doc('teyzaFieldAgents/'+target),prior=await read(ref.path);
+   if(!prior||prior.uid!==target)D.fail(404,'Agent account not found.');
+   if(prior.revision!==expected)D.fail(409,'The agent record changed. Refresh and try again.');
+   if(prior.evidenceId&&prior.documentsExpireAt>clock())D.fail(409,'Current documents are already saved. Open them for review instead.');
+   const privateDocs=identityDetails(data);
+   await rate(uid,'field-agent-admin-documents',10,3600000);
+   const evidenceId=crypto.randomUUID(),objectPath='teyza-private/agent-applications/'+target+'/'+evidenceId+'.enc',expiresAt=clock()+180*DAY;
+   const evidenceRef=doc('teyzaAgentEvidence/'+evidenceId);
+   try{
+    // Register expiry before upload; interrupted submissions cannot leave permanent orphan evidence.
+    await evidenceRef.set({agentUid:target,objectPath,expiresAt,kind:'application',source:'hr_legacy_backfill'});
+    await saveUpload(bucket,objectPath,await encryptSelfie(Buffer.from(JSON.stringify(privateDocs))),{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
+    return await db.runTransaction(async tx=>{
+     const snap=await tx.get(ref),current=snap.exists?snap.data():null;
+     if(!current||current.uid!==target)D.fail(404,'Agent account not found.');
+     if(current.revision!==expected||(current.evidenceId&&current.documentsExpireAt>clock()))D.fail(409,'The applicant documents or record changed. Refresh before retrying.');
+     tx.update(ref,{identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,
+      documentsSource:'hr_legacy_backfill',documentsUploadedBy:uid,documentsUploadedAt:clock(),
+      documentsPermissionConfirmedAt:clock(),revision:expected+1,updatedAt:clock()});
+     audit(tx,uid,action,target,{evidenceId,source:'hr_legacy_backfill'});
+     return {saved:true,profile:profileView({...current,identityType:privateDocs.identityType,evidenceId,documentsExpireAt:expiresAt,revision:expected+1})};
+    });
+   }catch(error){
+    await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});
+    await evidenceRef.delete().catch(()=>{});
+    throw error;
+   }
   }
   if(action==='agent_admin_application_evidence'){
    const target=D.id(data.agentUid),p=await read('teyzaFieldAgents/'+target);
