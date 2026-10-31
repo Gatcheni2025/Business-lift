@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_area_assign','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
 function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId,identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
@@ -82,6 +82,18 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   }
   if(action==='agent_admin_nearby')return nearby.execute(uid,'agent_nearby',data);
   if(discovery.actions.has(action)){await agent(uid);return nearby.execute(uid,action,data);}
+  if(action==='agent_admin_area_assign'){
+   const target=D.id(data.agentUid),area=D.text(data.area,'assigned town or area',120),province=data.province;
+   if(target===uid)D.fail(403,'Another administrator must manage your assignment.');
+   if(!provinces.includes(province))D.fail(422,'Choose a South African province.');
+   return db.runTransaction(async tx=>{
+    const ref=doc('teyzaFieldAgents/'+target),snap=await tx.get(ref);
+    if(!snap.exists||snap.data().status!=='approved')D.fail(409,'Only approved field agents can be assigned to an area.');
+    if(snap.data().revision!==data.revision)D.fail(409,'The agent details changed. Refresh.');
+    tx.update(ref,{area,province,revision:data.revision+1,assignedAt:clock(),assignedBy:uid});
+    audit(tx,uid,action,target,{area,province});return {saved:true};
+   });
+  }
   if(action==='agent_admin_application_evidence'){
    const target=D.id(data.agentUid),p=await read('teyzaFieldAgents/'+target);
    if(target===uid)D.fail(403,'Another administrator must review your application.');
