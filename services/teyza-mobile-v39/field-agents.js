@@ -56,7 +56,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
    const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),email:String(auth.email||'').slice(0,254),address:D.text(data.address||'','home address',350,false),province:data.province,area:D.text(data.area,'working town or area',120)};
    if(!provinces.includes(values.province))D.fail(422,'Choose a South African province.');
    const previous=await read('teyzaFieldAgents/'+uid);
-   if(previous?.evidenceId)return {profile:profileView(previous),alreadyApplied:true};
+   if(previous?.evidenceId&&previous.documentsExpireAt>clock()&&previous.status!=='rejected')return {profile:profileView(previous),alreadyApplied:true};
    const privateDocs=identityDetails(data),evidenceId=crypto.randomUUID();
    const objectPath='teyza-private/agent-applications/'+uid+'/'+evidenceId+'.enc',expiresAt=clock()+180*DAY;
    await doc('teyzaAgentEvidence/'+evidenceId).set({agentUid:uid,objectPath,expiresAt,kind:'application'});
@@ -65,7 +65,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
    try{
     saved=await db.runTransaction(async tx=>{
      const ref=doc('teyzaFieldAgents/'+uid),old=await tx.get(ref);
-     if(old.exists&&old.data().evidenceId)return {profile:profileView(old.data()),alreadyApplied:true};
+     if(old.exists&&old.data().evidenceId&&old.data().documentsExpireAt>clock()&&old.data().status!=='rejected')return {profile:profileView(old.data()),alreadyApplied:true};
      const prior=old.exists?old.data():null;
      if(prior?.status==='approved')D.fail(409,'Approved profiles cannot replace identity evidence through signup.');
      const p={...prior,uid,...values,status:'pending',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
