@@ -19,8 +19,43 @@ export function createFieldAdmin({api,onError,message}){
  const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews']]){const b=btn(title,()=>{forget();tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
  }
  function queryBar(root){const bar=el('div',undefined,'field-query');const search=el('input');search.type='search';search.placeholder='Search person, phone, town or province';search.setAttribute('aria-label','Filter field-team records');search.value=filter;search.oninput=()=>{filter=search.value;render(root);const field=root.querySelector('.field-query input');field?.focus();field?.setSelectionRange(filter.length,filter.length);};const selection=el('select');selection.setAttribute('aria-label','Filter by province');for(const [value,name] of [['all','All provinces'],...provinces.map(p=>[p,p])]){const option=el('option',name);option.value=value;selection.append(option);}selection.value=province;selection.onchange=()=>{province=selection.value;render(root);};bar.append(search,selection);root.append(bar);}
+ async function uploadFile(file,kind){
+  const max=kind==='CV'?1800000:1200000,accepted=kind==='CV'?['application/pdf']:['application/pdf','image/jpeg','image/png'];
+  if(!(file instanceof File)||file.size<50||file.size>max||!accepted.includes(file.type))throw Error('Choose a '+(kind==='CV'?'PDF CV under 1.8 MB':'PDF, JPG or PNG ID document under 1.2 MB')+'.');
+  return await new Promise((resolve,reject)=>{
+   const reader=new FileReader();reader.onerror=()=>reject(Error('Could not read the selected '+kind+' document.'));
+   reader.onload=()=>resolve({name:file.name,mime:file.type,base64:String(reader.result).split(',')[1]});
+   reader.readAsDataURL(file);
+  });
+ }
+ function uploadExistingForm(root,p){
+  const f=el('form',undefined,'ops-form field-upload-form');
+  f.append(el('h4','Add missing documents for '+p.name),el('p','Use documents supplied or authorised by the applicant. Their existing account status will not change.','footnote'));
+  function labelled(title,node){const l=el('label');l.append(el('span',title),node);f.append(l);return node;}
+  const type=el('select');type.required=true;for(const [value,title] of [['','Select document type'],['sa_id','South African ID'],['passport','Passport']]){const o=el('option',title);o.value=value;type.append(o);}labelled('Identity document type',type);
+  const identityNumber=el('input');identityNumber.type='text';identityNumber.maxLength=35;identityNumber.minLength=5;identityNumber.required=true;identityNumber.autocomplete='off';identityNumber.placeholder='Number printed on ID or passport';labelled('ID or passport number',identityNumber);
+  const idFile=el('input');idFile.type='file';idFile.required=true;idFile.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';labelled('ID / passport scan — PDF, JPG or PNG (max 1.2 MB)',idFile);
+  const cvFile=el('input');cvFile.type='file';cvFile.required=true;cvFile.accept='.pdf,application/pdf';labelled('Applicant CV — PDF (max 1.8 MB)',cvFile);
+  const consent=el('label',undefined,'confirm-check'),check=el('input');
+  check.type='checkbox';check.required=true;consent.append(check,el('span','I confirm these files were supplied by the applicant or collected with their permission for Teyza HR review.'));f.append(consent);
+  const save=el('button','Save private documents','button primary');save.type='submit';f.append(save);
+  f.addEventListener('submit',event=>{event.preventDefault();if(!f.reportValidity())return;
+   safe(async()=>{
+    const files=await Promise.all([uploadFile(idFile.files[0],'ID'),uploadFile(cvFile.files[0],'CV')]);
+    await api('agent_admin_application_upload',{agentUid:p.uid,revision:p.revision,identityType:type.value,identityNumber:identityNumber.value.trim(),
+     identityFile:files[0],cvFile:files[1],applicantPermissionConfirmed:check.checked});
+    await refresh();render(root);
+    message('Recruitment documents saved securely. Open the ID and CV to review before approving.','success');
+   })();
+  });
+  return f;
+ }
  function actionsForAgent(root,p){const c=card(p.name||'New applicant',[p.area,p.province,p.email,p.phone,p.address].filter(Boolean).join(' · '));c.append(el('p','Status: '+label(p.status)+' · Recruitment documents: '+(p.hasDocuments?'Submitted':'Missing'),'footnote'));
  if(p.reviewNote)c.append(el('p','Review note: '+p.reviewNote,'footnote'));
+  if(!p.hasDocuments){
+   const open=btn('Upload ID / passport & CV',()=>{if(c.querySelector('.field-upload-form'))return;c.append(uploadExistingForm(root,p));open.disabled=true;open.setAttribute('aria-expanded','true');},'quiet');
+   open.setAttribute('aria-expanded','false');c.append(open);
+  }
  if(p.hasDocuments){c.append(btn('Open ID/passport and CV',safe(async()=>{const r=await api('agent_admin_application_evidence',{agentUid:p.uid});forget();privateData=r;selectedProfile=p;opened.clear();render(root);message('Private recruitment documents opened for review.','success');}),'quiet'));}
  if(selectedProfile?.uid===p.uid&&privateData){const row=el('div',undefined,'field-doc-buttons');row.append(el('p','Document type: '+label(privateData.identityType)+' · Number: '+privateData.identityNumber));row.append(btn('View ID / passport',()=>{opened.add('identity');attach(privateData.identityFile,'Private ID / passport · '+p.name);}),btn('View CV',()=>{opened.add('cv');attach(privateData.cvFile,'Private CV · '+p.name);}));c.append(row);}
  if(['pending','rejected','suspended'].includes(p.status)){for(const [status,text] of [['approved','Approve applicant'],['rejected','Reject'],['suspended','Suspend']]){c.append(btn(text,safe(async()=>{if(status==='approved'&&(!privateData||selectedProfile?.uid!==p.uid||opened.size!==2))throw Error('Open the current ID/passport and CV before approving.');const note=window.prompt('HR review note / next steps:') ;if(note===null)return;if(status!=='approved'&&!note.trim())throw Error('Provide a reason for the applicant.');await api('agent_admin_profile_decide',{agentUid:p.uid,revision:p.revision,status,note});await refresh();render(root);message('HR application decision saved.','success');}),status==='approved'?'primary':'quiet'));}}
