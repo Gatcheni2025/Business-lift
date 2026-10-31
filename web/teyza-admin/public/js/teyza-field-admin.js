@@ -30,27 +30,64 @@ export function createFieldAdmin({api,onError,message}){
  }
  function uploadExistingForm(root,p){
   const f=el('form',undefined,'ops-form field-upload-form');
-  f.append(el('h4','Add missing documents for '+p.name),el('p','Use documents supplied or authorised by the applicant. Their existing account status will not change.','footnote'));
+  f.append(el('h4','Add missing documents for '+p.name),el('p','Use genuine documents supplied or authorised by the applicant. Saving will not change their account status.','footnote'));
   function labelled(title,node){const l=el('label');l.append(el('span',title),node);f.append(l);return node;}
-  const type=el('select');type.required=true;for(const [value,title] of [['','Select document type'],['sa_id','South African ID'],['passport','Passport']]){const o=el('option',title);o.value=value;type.append(o);}labelled('Identity document type',type);
-  const identityNumber=el('input');identityNumber.type='text';identityNumber.maxLength=35;identityNumber.minLength=5;identityNumber.required=true;identityNumber.autocomplete='off';identityNumber.placeholder='Number printed on ID or passport';labelled('ID or passport number',identityNumber);
-  const idFile=el('input');idFile.type='file';idFile.required=true;idFile.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';labelled('ID / passport scan — PDF, JPG or PNG (max 1.2 MB)',idFile);
-  const cvFile=el('input');cvFile.type='file';cvFile.required=true;cvFile.accept='.pdf,application/pdf';labelled('Applicant CV — PDF (max 1.8 MB)',cvFile);
+  const type=el('select');type.required=true;
+  for(const [value,title] of [['','Select document type'],['sa_id','South African ID'],['passport','Passport']]){const o=el('option',title);o.value=value;type.append(o);}
+  labelled('Identity document type',type);
+  const identityNumber=el('input');identityNumber.type='text';identityNumber.maxLength=35;identityNumber.minLength=5;identityNumber.required=true;identityNumber.autocomplete='off';identityNumber.placeholder='Number printed on ID or passport';
+  labelled('ID or passport number',identityNumber);
+  const idFile=el('input');idFile.type='file';idFile.required=true;idFile.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+  labelled('ID / passport scan — PDF, JPG or PNG (max 1.2 MB)',idFile);
+  const cvFile=el('input');cvFile.type='file';cvFile.required=true;cvFile.accept='.pdf,application/pdf';
+  labelled('Applicant CV — PDF (max 1.8 MB)',cvFile);
+  const fileDetails=el('p','Choose the applicant’s genuine ID/passport and CV. Files are encrypted on the server.','field-file-details');
+  fileDetails.setAttribute('aria-live','polite');f.append(fileDetails);
+  function describeFile(file){return file?file.name+' ('+(file.size/1024/1024).toFixed(2)+' MB)':'not selected';}
+  const updateFileDetails=()=>{fileDetails.textContent='ID: '+describeFile(idFile.files[0])+' · CV: '+describeFile(cvFile.files[0]);};
+  idFile.addEventListener('change',updateFileDetails);cvFile.addEventListener('change',updateFileDetails);
   const consent=el('label',undefined,'confirm-check'),check=el('input');
   check.type='checkbox';check.required=true;consent.append(check,el('span','I confirm these files were supplied by the applicant or collected with their permission for Teyza HR review.'));f.append(consent);
+  const feedback=el('p',undefined,'field-upload-feedback');feedback.hidden=true;feedback.setAttribute('role','alert');f.append(feedback);
   const save=el('button','Save private documents','button primary');save.type='submit';f.append(save);
-  f.addEventListener('submit',event=>{event.preventDefault();if(!f.reportValidity())return;
-   safe(async()=>{
+  let submitting=false;
+  f.addEventListener('submit',async event=>{
+   event.preventDefault();if(submitting)return;
+   feedback.hidden=true;feedback.textContent='';
+   if(!f.reportValidity())return;
+   submitting=true;save.disabled=true;save.textContent='Encrypting and saving documents…';
+   try{
     const files=await Promise.all([uploadFile(idFile.files[0],'ID'),uploadFile(cvFile.files[0],'CV')]);
-    await api('agent_admin_application_upload',{agentUid:p.uid,revision:p.revision,identityType:type.value,identityNumber:identityNumber.value.trim(),
+    const result=await api('agent_admin_application_upload',{agentUid:p.uid,revision:p.revision,identityType:type.value,identityNumber:identityNumber.value.trim(),
      identityFile:files[0],cvFile:files[1],applicantPermissionConfirmed:check.checked});
-    await refresh();render(root);
-    message('Recruitment documents saved securely. Open the ID and CV to review before approving.','success');
-   })();
+    if(result.saved!==true)throw Error('The server did not confirm that these documents were saved. Please check the agent profile before retrying.');
+    feedback.className='field-upload-feedback success';feedback.textContent='Documents saved successfully. Refreshing this agent’s record…';feedback.hidden=false;
+    try{
+     await refresh();render(root);
+     const matching=[...root.querySelectorAll('[data-field-agent-uid]')].find(x=>x.dataset.fieldAgentUid===p.uid);
+     if(matching){const status=el('p','ID/passport and CV saved securely. Open them to complete the review.','field-upload-feedback success');status.setAttribute('role','status');matching.prepend(status);matching.scrollIntoView({behavior:'smooth',block:'center'});}
+     message('Recruitment documents saved securely. Open the ID and CV to review before approving.','success');
+    }catch(error){
+     feedback.textContent='Documents were saved, but the list could not refresh. Reopen HR & field team to check the agent record before uploading again.';
+     feedback.scrollIntoView({block:'center'});
+    }
+   }catch(error){
+    const status=Number(error?.status||0);
+    const advice=status===401||status===403?' Your five-minute administrator review session may have expired. Sign in again and retry.':
+     status===404?' The upload endpoint is not available on the deployed backend. Deploy the updated teyzaMobile function first.':
+     status===413?' Reduce both PDFs to the stated file sizes and try again.':
+     status===409?' The agent record may have changed or may already have documents. Refresh HR before retrying.':
+     status===503?' Secure document storage may be unavailable. Check the Teyza Firebase backend and storage configuration.':'';
+    feedback.className='field-upload-feedback error';
+    feedback.textContent='Documents were not confirmed saved: '+(error?.message||'Unable to upload the files.')+advice;
+    feedback.hidden=false;feedback.scrollIntoView({behavior:'smooth',block:'center'});
+   }finally{
+    submitting=false;save.disabled=false;save.textContent='Save private documents';
+   }
   });
   return f;
  }
- function actionsForAgent(root,p){const c=card(p.name||'New applicant',[p.area,p.province,p.email,p.phone,p.address].filter(Boolean).join(' · '));c.append(el('p','Status: '+label(p.status)+' · Recruitment documents: '+(p.hasDocuments?'Submitted':'Missing'),'footnote'));
+ function actionsForAgent(root,p){const c=card(p.name||'New applicant',[p.area,p.province,p.email,p.phone,p.address].filter(Boolean).join(' · '));c.dataset.fieldAgentUid=p.uid;c.append(el('p','Status: '+label(p.status)+' · Recruitment documents: '+(p.hasDocuments?'Submitted':'Missing'),'footnote'));
  if(p.reviewNote)c.append(el('p','Review note: '+p.reviewNote,'footnote'));
   if(!p.hasDocuments){
    const open=btn('Upload ID / passport & CV',()=>{if(c.querySelector('.field-upload-form'))return;c.append(uploadExistingForm(root,p));open.disabled=true;open.setAttribute('aria-expanded','true');},'quiet');
