@@ -53,6 +53,46 @@ test('Agent applications bind the verified caller, ignore forged approval and ne
   assert.equal(f.db.records.get('teyzaFieldAgents/new').area,'Pretoria');
  await rejects(f.call('agent_apply',input,{uid:'bootstrap',email_verified:true,teyzaPhoneBootstrap:true}),403);
 });
+test('HR can backfill legacy applicant documents without registering another account or bypassing review',async()=>{
+ const f=setup(),pdf=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(150,32)]).toString('base64'),
+  photo=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(128,12)]).toString('base64'),
+  input={agentUid:'legacy',revision:3,identityType:'passport',identityNumber:'A12345678',
+   identityFile:{name:'identity.jpg',mime:'image/jpeg',base64:photo},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:pdf},applicantPermissionConfirmed:true};
+ f.db.records.set('teyzaFieldAgents/legacy',{uid:'legacy',name:'Existing Agent',status:'pending',revision:3,province:'Gauteng',area:'Soweto',createdAt:start-1000});
+ const applicant={uid:'legacy',email_verified:true};
+ await rejects(f.call('agent_admin_application_upload',input,applicant),403);
+ await rejects(f.call('agent_admin_application_upload',input,{...admin,teyzaAdmin:false}),403);
+ await rejects(f.call('agent_admin_application_upload',{...input,applicantPermissionConfirmed:false},admin),422);
+ await rejects(f.call('agent_admin_application_upload',{...input,revision:2},admin),409);
+ await rejects(f.call('agent_admin_profile_decide',{agentUid:'legacy',revision:3,status:'approved'},admin),409);
+ const r=await f.call('agent_admin_application_upload',input,admin);
+ assert.equal(r.saved,true);
+ const saved=f.db.records.get('teyzaFieldAgents/legacy');
+ assert.equal(saved.uid,'legacy');assert.equal(saved.name,'Existing Agent');assert.equal(saved.createdAt,start-1000);
+ assert.equal(saved.status,'pending');assert.equal(saved.revision,4);assert.equal(saved.documentsSource,'hr_legacy_backfill');
+ assert.equal(saved.documentsUploadedBy,admin.uid);assert(!JSON.stringify(saved).includes('A12345678'));
+ assert.equal(f.files.size,1);
+ const raw=[...f.files.values()][0].toString('utf8');assert(!raw.includes('A12345678'));assert(!raw.includes('%PDF'));
+ await rejects(f.call('agent_admin_application_upload',{...input,revision:4},admin),409);
+ await rejects(f.call('agent_admin_profile_decide',{agentUid:'legacy',revision:4,status:'approved'},admin),409);
+ const viewed=await f.call('agent_admin_application_evidence',{agentUid:'legacy'},admin);
+ assert.equal(viewed.identityNumber,'A12345678');assert.equal(viewed.cvFile.mime,'application/pdf');
+ await f.call('agent_admin_profile_decide',{agentUid:'legacy',revision:4,status:'approved'},admin);
+ assert.equal(f.db.records.get('teyzaFieldAgents/legacy').status,'approved');
+});
+test('HR backfill preserves already-approved legacy accounts and allows expired document renewal',async()=>{
+ const f=setup(),pdf=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(110,32)]).toString('base64'),
+  jpg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(110,25)]).toString('base64');
+ const input={agentUid:'agent1',revision:0,identityType:'sa_id',identityNumber:'9001010000000',
+  identityFile:{name:'id.jpg',mime:'image/jpeg',base64:jpg},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:pdf},applicantPermissionConfirmed:true};
+ const r=await f.call('agent_admin_application_upload',input,admin);
+ assert.equal(r.saved,true);assert.equal(f.db.records.get('teyzaFieldAgents/agent1').status,'approved');
+ assert.equal(f.db.records.get('teyzaFieldAgents/agent1').revision,1);
+ f.tick(181*86400000);
+ const newer=await f.call('agent_admin_application_upload',{...input,revision:1}, {...admin,auth_time:(start+181*86400000)/1000});
+ assert.equal(newer.saved,true);
+ assert.equal(f.db.records.get('teyzaFieldAgents/agent1').status,'approved');
+});
 test('Visit details and photos are agent bound; location needs current precise South African coordinates',async()=>{
  const f=setup();await visit(f);f.db.records.set('teyzaFieldAgents/other',{uid:'other',status:'approved'});
  await rejects(f.call('agent_visit_get',{visitId:'visit1'},{uid:'other',email_verified:true}),404);
