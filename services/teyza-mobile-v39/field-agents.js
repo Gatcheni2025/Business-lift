@@ -1,16 +1,17 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage');
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid']);
+const actions=new Set(['agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
-function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||''}:null;}
+function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',createdAt:p.createdAt||null}:null;}
 function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v.area,province:v.province,status:v.status,revision:v.revision,createdAt:v.createdAt,
  location:v.location||null,ownerConfirmed:!!v.sellerUid,reviewNote:v.reviewNote||'',photos:Object.fromEntries(Object.entries(v.photos||{}).map(([k,p])=>[k,{id:p.id,capturedAt:p.capturedAt,expiresAt:p.expiresAt}]))};}
 function verified(auth){if(!auth?.uid)D.fail(401,'Sign in first.');if(auth.teyzaPhoneBootstrap||(!auth.email_verified&&!auth.phone_number))D.fail(403,'Verify your email or phone before using the work portal.');}
 function editable(v){if(!['draft','needs_changes'].includes(v.status))D.fail(409,'This visit is already submitted. Ask the reviewer to request changes.');}
 function gps(data,now){const {latitude,longitude,accuracy,capturedAt}=data;if(![latitude,longitude,accuracy,capturedAt].every(Number.isFinite)||latitude< -35.5||latitude> -22||longitude<16||longitude>33.5||accuracy<=0||accuracy>100||Math.abs(now-capturedAt)>60000)D.fail(422,'Capture a fresh shop location with accuracy of 100 metres or better.');return {latitude,longitude,accuracy,capturedAt,receivedAt:now,source:'device_reported'};}
-function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock=Date.now,rate}){
+function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getPlacesKey=()=>'',fetchImpl=fetch,clock=Date.now,rate}){
+ const nearby=discovery.createFieldDiscovery({db,getPlacesKey,fetchImpl,clock,rate});
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  async function agent(uid){const p=await read('teyzaFieldAgents/'+uid);if(!p||p.uid!==uid||p.status!=='approved')D.fail(403,'An approved Teyza agent account is required.');return p;}
  function own(v,uid){if(!v||v.agentUid!==uid)D.fail(404,'Visit not found.');return v;}
@@ -33,11 +34,17 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   if(action==='agent_profile')return {profile:profileView(await read('teyzaFieldAgents/'+uid)),provinces,commissionCents:9900};
   if(action==='agent_apply'){
    if(data.consent!==true)D.fail(422,'Agree to the work evidence privacy notice.');
-   const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),province:data.province,area:D.text(data.area,'working town or area',120)};
+   const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),email:String(auth.email||'').slice(0,254),address:D.text(data.address||'','home address',350,false),province:data.province,area:D.text(data.area,'working town or area',120)};
    if(!provinces.includes(values.province))D.fail(422,'Choose a South African province.');
    return db.runTransaction(async tx=>{const ref=doc('teyzaFieldAgents/'+uid),old=await tx.get(ref);if(old.exists)return {profile:profileView(old.data()),alreadyApplied:true};
     const p={uid,...values,status:'pending',revision:0,privacyVersion:'agent-evidence-v1',consentedAt:clock(),createdAt:clock()};tx.set(ref,p);return {profile:profileView(p)};});
   }
+  if(action==='agent_profile_update'){
+   await agent(uid);const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),address:D.text(data.address,'home address',350),area:D.text(data.area,'working town or area',120),province:data.province};if(!provinces.includes(values.province))D.fail(422,'Choose a South African province.');
+   return db.runTransaction(async tx=>{const ref=doc('teyzaFieldAgents/'+uid),s=await tx.get(ref),old=s.data();if(!s.exists||old.status!=='approved')D.fail(403,'An approved agent account is required.');if(old.revision!==data.revision)D.fail(409,'Your details changed. Refresh first.');tx.update(ref,{...values,revision:old.revision+1,updatedAt:clock()});return {saved:true};});
+  }
+  if(action==='agent_admin_nearby')return nearby.execute(uid,'agent_nearby',data);
+  if(discovery.actions.has(action)){await agent(uid);return nearby.execute(uid,action,data);}
   if(action==='agent_admin_profiles'){
    let q=db.collection('teyzaFieldAgents').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));const r=await q.get();return {profiles:r.docs.slice(0,30).map(s=>profileView(s.data())),next:r.docs.length>30?r.docs[29].id:null};
   }
@@ -64,7 +71,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   }
   if(!admin)await agent(uid);
   if(action==='agent_visits'||action==='agent_admin_visits'){
-   let q=db.collection('teyzaAgentVisits');if(!admin)q=q.where('agentUid','==',uid);q=q.orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
+   let q=db.collection('teyzaAgentVisits');if(!admin)q=q.where('agentUid','==',uid);else if(data.agentUid)q=q.where('agentUid','==',D.id(data.agentUid));q=q.orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
    const r=await q.get(),rows=await Promise.all(r.docs.slice(0,30).map(async s=>({...visitView(s.id,s.data()),...(admin?{agentUid:s.data().agentUid}:{}),progress:await status(s.id,s.data())})));return {visits:rows,next:r.docs.length>30?r.docs[29].id:null};
   }
   if(action==='agent_visit_start'){

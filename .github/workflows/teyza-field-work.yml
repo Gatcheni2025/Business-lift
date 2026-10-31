@@ -1,7 +1,7 @@
 name: Teyza field work and search readiness
 on:
   pull_request:
-    paths: ['services/teyza-mobile-v39/**', 'web/app-first/**', 'tools/app-first-release/**', 'tools/admin-release/field-work.browser.cjs', 'scripts/package_field_work.py', 'DEPLOY-FIELD-WORK.ps1', 'docs/TEYZA_FIELD_WORK_AND_SEO.md', '.github/workflows/teyza-field-work.yml']
+    paths: ['services/teyza-mobile-v39/**', 'web/app-first/**', 'web/teyza-admin/public/admin.html', 'tools/app-first-release/**', 'tools/admin-release/field-work.browser.cjs', 'scripts/package_field_work.py', 'DEPLOY-FIELD-WORK.ps1', 'docs/TEYZA_FIELD_WORK_AND_SEO.md', '.github/workflows/teyza-field-work.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,11 +25,13 @@ jobs:
           python3 scripts/check_app_first_website.py
           node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/search.test.cjs
           node --input-type=module --check < web/app-first/public/js/work.js
+          node --input-type=module --check < web/app-first/public/js/work-discovery.mjs
+          node --test tools/admin-release/hosting.test.cjs
           node --input-type=module --check < web/app-first/public/js/owner-confirm.js
       - name: Check PowerShell deployment commands
         shell: pwsh
         run: |
-          foreach ($f in @('DEPLOY-FIELD-WORK.ps1','DEPLOY-MOBILE.ps1','tools/app-first-release/DEPLOY-WEBSITE.ps1')) {
+          foreach ($f in @('DEPLOY-FIELD-WORK.ps1','DEPLOY-MOBILE.ps1','tools/app-first-release/DEPLOY-WEBSITE.ps1','tools/admin-release/DEPLOY-ADMIN.ps1')) {
             $t=$null; $e=$null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $f),[ref]$t,[ref]$e) | Out-Null
             if ($e.Count -gt 0) { throw ($e | Out-String) }

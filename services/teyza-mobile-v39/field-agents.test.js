@@ -13,7 +13,7 @@ class FakeDB {
     where:(...filter)=>{filters.push(filter);return query;},orderBy:(...args)=>{sort=args;return query;},
     startAfter:value=>{after=value;return query;},limit:value=>{max=value;return query;},get:async()=>{
       let rows=[...db.records].filter(([key,value])=>key.startsWith(path+'/')&&key.slice(path.length+1).indexOf('/')===-1&&
-        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):value[field]<=wanted));
+        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):op==='>='?value[field]>=wanted:value[field]<=wanted));
       if(after)rows=rows.filter(([key])=>key.split('/').pop()>after);
       if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*(sort[0]==='__name__'?a[0].localeCompare(b[0]):((a[1][sort[0]]||0)-(b[1][sort[0]]||0))));
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
@@ -28,7 +28,7 @@ class FakeDB {
 const start=Date.parse('2026-10-29T09:00:00Z'),secret=crypto.randomBytes(32).toString('base64');
 const agent={uid:'agent1',email_verified:true},owner={uid:'seller1',email_verified:true},admin={uid:'admin',teyzaAdmin:true,email_verified:true,auth_time:start/1000};
 const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
-function setup(){let now=start;const db=new FakeDB({'teyzaFieldAgents/agent1':{uid:'agent1',name:'Field Agent',status:'approved',revision:0},'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',shopName:'Corner Shop',approvalStatus:'pending'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>{assert(files.has(p));return [files.get(p)];},delete:async()=>files.delete(p)})};const svc=createFieldAgents({db,bucket,clock:()=>now,rate:async()=>{},sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret)});return {db,files,bucket,tick:ms=>now+=ms,call:(action,data={},actor=agent)=>svc.execute(actor,action,data)};}
+function setup(options={}){let now=start;const db=new FakeDB({'teyzaFieldAgents/agent1':{uid:'agent1',name:'Field Agent',status:'approved',revision:0},'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',shopName:'Corner Shop',approvalStatus:'pending'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>{assert(files.has(p));return [files.get(p)];},delete:async()=>files.delete(p)})};const svc=createFieldAgents({db,bucket,clock:()=>now,rate:async()=>{},sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret),...options});return {db,files,bucket,tick:ms=>now+=ms,call:(action,data={},actor=agent)=>svc.execute(actor,action,data)};}
 async function visit(f,id='visit1'){
  await f.call('agent_visit_start',{requestId:id,shopName:'Corner Shop',address:'12 Main Road, Durban, South Africa',area:'Durban',province:'KwaZulu-Natal',ownerPermission:true});
  await f.call('agent_location',{visitId:id,revision:0,latitude:-29.85,longitude:31.02,accuracy:12,capturedAt:start});
@@ -110,4 +110,26 @@ test('Withdrawn mandates, suspended agents and reversed first invoices block unp
 test('Expired private work photos are purged without deleting another storage prefix',async()=>{
  const f=setup();await visit(f);f.tick(91*86400000);await purgeAgentEvidence({db:f.db,bucket:f.bucket,clock:()=>start+91*86400000});assert.equal(f.files.size,0);assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaAgentCaptures/')||k.startsWith('teyzaAgentClaims/')));
  await rejects(f.call('agent_admin_photo',{visitId:'visit1',kind:'shop'},{...admin,auth_time:(start+91*86400000)/1000}),410);
+});
+
+test('Nearby discovery and manual shop records require approval, distinguish matches and never expose owner contact details',async()=>{
+ const google=async()=>({ok:true,json:async()=>({places:[{id:'place1',displayName:{text:'Corner Shop'},formattedAddress:'12 Main Road, Durban',location:{latitude:-29.85,longitude:31.02}},{id:'place2',displayName:{text:'New Shop'},formattedAddress:'14 Main Road, Durban',location:{latitude:-29.8505,longitude:31.02}}]})});
+ const f=setup({getPlacesKey:()=> 'test',fetchImpl:google});const address='12 Main Road, Durban';
+ f.db.records.set('teyzaSellerAccounts/seller1',{uid:'seller1',category:'spaza',shopName:'Corner Shop',address,phone:'private',approvalStatus:'pending'});
+ f.db.records.set('teyzaShopLocations/seller1',{ownerUid:'seller1',address,latitude:-29.85,longitude:31.02,consentAt:start,source:'device'});
+ const center={latitude:-29.85,longitude:31.02};
+ await rejects(f.call('agent_nearby',center,{uid:'applicant',email_verified:true}),403);
+ await rejects(f.call('agent_admin_nearby',center,agent),403);
+ await rejects(f.call('agent_admin_nearby',center,{...admin,auth_time:start/1000-301}),401);
+ const result=await f.call('agent_nearby',center);assert.equal(result.registered.length,1);assert.equal(result.google.length,2);assert.equal(result.google.find(p=>p.name==='Corner Shop').possibleTeyzaMatch,true);assert.equal(result.google.find(p=>p.name==='New Shop').possibleTeyzaMatch,false);assert(!JSON.stringify(result).includes('private'));
+ const lead={name:'Unlisted spaza',address:'15 Main Road Durban',googleStatus:'not_found',...center,accuracy:10,capturedAt:start,ownerPermission:true};
+ await rejects(f.call('agent_lead_add',{...lead,ownerPermission:false}),422);await rejects(f.call('agent_lead_add',{...lead,accuracy:500}),422);
+ assert((await f.call('agent_lead_add',lead)).saved);assert((await f.call('agent_lead_add',lead)).alreadyExists);
+ const loaded=await f.call('agent_admin_nearby',center,admin);assert.equal(loaded.leads[0].googleStatus,'not_found');assert.equal(loaded.leads[0].possibleTeyzaMatch,false);assert(!JSON.stringify(loaded).includes('createdBy'));
+});
+test('Approved agents can update only their own contact details without changing approval status',async()=>{
+ const f=setup(),update={name:'Updated Agent',phone:'0712345678',address:'20 High Road, Durban',area:'Durban',province:'KwaZulu-Natal',revision:0,status:'approved'};
+ await rejects(f.call('agent_profile_update',update,{uid:'unknown',email_verified:true}),403);
+ await f.call('agent_profile_update',update);const p=f.db.records.get('teyzaFieldAgents/agent1');assert.equal(p.address,update.address);assert.equal(p.status,'approved');assert.equal(p.revision,1);
+ await rejects(f.call('agent_profile_update',update),409);
 });
