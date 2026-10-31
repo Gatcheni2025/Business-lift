@@ -4,7 +4,7 @@ const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo'
 const actions=new Set(['agent_admin_area_assign','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
-function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId,identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
+function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
 function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v.area,province:v.province,status:v.status,revision:v.revision,createdAt:v.createdAt,
  location:v.location||null,ownerConfirmed:!!v.sellerUid,reviewNote:v.reviewNote||'',photos:Object.fromEntries(Object.entries(v.photos||{}).map(([k,p])=>[k,{id:p.id,capturedAt:p.capturedAt,expiresAt:p.expiresAt}]))};}
 // Documents and ID number are encrypted together in private object storage.
@@ -68,7 +68,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
      if(old.exists&&old.data().evidenceId&&old.data().documentsExpireAt>clock()&&old.data().status!=='rejected')return {profile:profileView(old.data()),alreadyApplied:true};
      const prior=old.exists?old.data():null;
      if(prior?.status==='approved')D.fail(409,'Approved profiles cannot replace identity evidence through signup.');
-     const p={...prior,uid,...values,status:'pending',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
+     const p={...prior,uid,...values,status:'pending',reviewNote:'',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
      tx.set(ref,p);audit(tx,uid,action,uid);return {profile:profileView(p)};
     });
    }catch(error){await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});await doc('teyzaAgentEvidence/'+evidenceId).delete().catch(()=>{});throw error;}
