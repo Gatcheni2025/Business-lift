@@ -20,8 +20,8 @@ export function createFieldAdmin({api,onError,message}){
  }
  function queryBar(root){const bar=el('div',undefined,'field-query');const search=el('input');search.type='search';search.placeholder='Search person, phone, town or province';search.setAttribute('aria-label','Filter field-team records');search.value=filter;search.oninput=()=>{filter=search.value;render(root);const field=root.querySelector('.field-query input');field?.focus();field?.setSelectionRange(filter.length,filter.length);};const selection=el('select');selection.setAttribute('aria-label','Filter by province');for(const [value,name] of [['all','All provinces'],...provinces.map(p=>[p,p])]){const option=el('option',name);option.value=value;selection.append(option);}selection.value=province;selection.onchange=()=>{province=selection.value;render(root);};bar.append(search,selection);root.append(bar);}
  async function uploadFile(file,kind){
-  const max=kind==='CV'?1800000:1200000,accepted=kind==='CV'?['application/pdf']:['application/pdf','image/jpeg','image/png'];
-  if(!(file instanceof File)||file.size<50||file.size>max||!accepted.includes(file.type))throw Error('Choose a '+(kind==='CV'?'PDF CV under 1.8 MB':'PDF, JPG or PNG ID document under 1.2 MB')+'.');
+  const max=kind==='CV'?5000000:3000000,accepted=kind==='CV'?['application/pdf']:['application/pdf','image/jpeg','image/png'];
+  if(!(file instanceof File)||file.size<50||file.size>max||!accepted.includes(file.type))throw Error('Choose a '+(kind==='CV'?'PDF CV under 5 MB':'PDF, JPG or PNG ID document under 3 MB')+'.');
   return await new Promise((resolve,reject)=>{
    const reader=new FileReader();reader.onerror=()=>reject(Error('Could not read the selected '+kind+' document.'));
    reader.onload=()=>resolve({name:file.name,mime:file.type,base64:String(reader.result).split(',')[1]});
@@ -38,9 +38,9 @@ export function createFieldAdmin({api,onError,message}){
   const identityNumber=el('input');identityNumber.type='text';identityNumber.maxLength=35;identityNumber.minLength=5;identityNumber.required=true;identityNumber.autocomplete='off';identityNumber.placeholder='Number printed on ID or passport';
   labelled('ID or passport number',identityNumber);
   const idFile=el('input');idFile.type='file';idFile.required=true;idFile.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
-  labelled('ID / passport scan — PDF, JPG or PNG (max 1.2 MB)',idFile);
+  labelled('ID / passport scan — PDF, JPG or PNG (max 3 MB)',idFile);
   const cvFile=el('input');cvFile.type='file';cvFile.required=true;cvFile.accept='.pdf,application/pdf';
-  labelled('Applicant CV — PDF (max 1.8 MB)',cvFile);
+  labelled('Applicant CV — PDF (max 5 MB)',cvFile);
   const fileDetails=el('p','Choose the applicant’s genuine ID/passport and CV. Files are encrypted on the server.','field-file-details');
   fileDetails.setAttribute('aria-live','polite');f.append(fileDetails);
   function describeFile(file){return file?file.name+' ('+(file.size/1024/1024).toFixed(2)+' MB)':'not selected';}
