@@ -120,6 +120,30 @@ async function main(){
    assert(!f.page.url().includes('work.html'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Failed HR document uploads show an actionable inline error without losing selected files',async()=>{
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='agent_admin_application_upload'){
+     await route.fulfill({status:422,json:{error:'The uploaded PDF is not a valid recruitment document.'}});
+     return true;
+    }
+    return false;
+   }});
+   await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
+   const form=f.page.locator('.field-upload-form');
+   await form.locator('select').selectOption('passport');
+   await form.locator('input[type=text]').fill('P98765432');
+   await form.locator('input[accept*="png"]').setInputFiles({name:'identity.jpg',mimeType:'image/jpeg',buffer:Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(130,12)])});
+   await form.locator('input[accept=".pdf,application/pdf"]').setInputFiles({name:'cv.pdf',mimeType:'application/pdf',buffer:Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(150,12)])});
+   await form.locator('input[type=checkbox]').check();
+   await form.getByRole('button',{name:'Save private documents'}).click();
+   await form.locator('.field-upload-feedback.error').getByText('The uploaded PDF is not a valid recruitment document.',{exact:false}).waitFor();
+   assert(await form.locator('input[accept*="png"]').evaluate(input=>input.files.length===1));
+   assert(await form.locator('input[accept=".pdf,application/pdf"]').evaluate(input=>input.files.length===1));
+   assert(await form.getByRole('button',{name:'Save private documents'}).isEnabled());
+   assert.equal(await f.page.locator('.field-upload-form').count(),1);
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    await f.page.getByRole('button',{name:'R99 billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('R99 monthly subscription',{exact:true}).waitFor();
