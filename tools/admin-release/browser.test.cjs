@@ -42,7 +42,7 @@ async function main(){
  let browser;try{browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.TEYZA_ADMIN_CHROMIUM?{executablePath:process.env.TEYZA_ADMIN_CHROMIUM}:{})});}
  catch(error){server.close();throw error;}let count=0;
  async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false}={}){
-  const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows);
+  const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows),legacyUploaded=false;
   await page.addInitScript(value=>window.__testIdentity=value,identity);
   await page.route('https://www.gstatic.com/firebasejs/**',r=>r.fulfill({contentType:'application/javascript',body:r.request().url().endsWith('firebase-app.js')?
    'export const getApps=()=>[];export const initializeApp=c=>c;':firebaseAuth}));
@@ -55,8 +55,9 @@ async function main(){
    if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[]};
    if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
    if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
-   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true}],next:null};
+   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
    if(body.action==='agent_admin_visits')result={ok:true,visits:[{id:'visit-test',shopName:'Demo Spaza',address:'12 Sample Road, Durban',area:'Durban',province:'KwaZulu-Natal',status:'submitted',revision:5,agentUid:'agent2',ownerConfirmed:true,progress:{sellerApproval:'approved',mandate:'signed_pending_activation',payment:'first_invoice_paid',commission:'not_eligible'},location:{latitude:-29.85,longitude:31.02,accuracy:12}}],next:null};
+   if(body.action==='agent_admin_application_upload'){legacyUploaded=true;result={ok:true,saved:true};}
    if(body.action==='agent_admin_application_evidence')result={ok:true,identityType:'sa_id',identityNumber:'SYNTHETIC000',identityFile:{name:'test.jpg',mime:'image/jpeg',base64:jpeg},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:Buffer.from('%PDF-1.4 synthetic').toString('base64')}};
    if(body.action==='agent_admin_photo')result={ok:true,imageBase64:jpeg};
    if(body.action==='admin_seller_queue')result={ok:true,sellers:body.data.after?[{...rows[0],sellerUid:'last',shopName:'Last Page Shop'}]:pending,next:pagination&&!body.data.after?'retail1':null};
@@ -95,6 +96,28 @@ async function main(){
    await f.page.getByText('Field visit review saved.').waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
    await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('HR can upload an ID/passport and CV for an existing account',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
+   const form=f.page.locator('.field-upload-form');
+   await form.locator('select').selectOption('passport');
+   await form.locator('input[type=text]').fill('P98765432');
+   await form.locator('input[accept*="png"]').setInputFiles({name:'identity.jpg',mimeType:'image/jpeg',buffer:Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(130,12)])});
+   await form.locator('input[accept=".pdf,application/pdf"]').setInputFiles({name:'cv.pdf',mimeType:'application/pdf',buffer:Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(150,12)])});
+   await form.locator('input[type=checkbox]').check();
+   await form.getByRole('button',{name:'Save private documents'}).click();
+   await f.page.getByText('Recruitment documents saved securely.',{exact:false}).waitFor();
+   const upload=f.calls.find(x=>x.action==='agent_admin_application_upload');
+   assert(upload,'Admin upload must invoke secured backend action');
+   assert.equal(upload.data.agentUid,'legacy3');
+   assert.equal(upload.data.identityType,'passport');
+   assert.equal(upload.data.identityNumber,'P98765432');
+   assert.equal(upload.data.applicantPermissionConfirmed,true);
+   assert(upload.data.identityFile.base64.length>60);
+   assert(upload.data.cvFile.base64.length>60);
+   assert(!f.page.url().includes('work.html'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
