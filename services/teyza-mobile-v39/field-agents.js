@@ -11,9 +11,9 @@ function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v
 function applicantFile(value,kind){
  if(!value||typeof value!=='object')D.fail(422,'Attach your '+kind+' document.');
  const name=String(value.name||'').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,100),mime=String(value.mime||'');
- if(!name||typeof value.base64!=='string'||value.base64.length>2900000||!/^[A-Za-z0-9+/]+={0,2}$/.test(value.base64))D.fail(422,'The '+kind+' file is invalid or too large.');
+ if(!name||typeof value.base64!=='string'||value.base64.length>7000000||!/^[A-Za-z0-9+/]+={0,2}$/.test(value.base64))D.fail(422,'The '+kind+' file is invalid or too large.');
  const bytes=Buffer.from(value.base64,'base64');
- if(bytes.length<50||bytes.length>(kind==='CV'?1800000:1200000))D.fail(422,'The '+kind+' file must be smaller than '+(kind==='CV'?'1.8 MB':'1.2 MB')+'.');
+ if(bytes.length<50||bytes.length>(kind==='CV'?5000000:3000000))D.fail(422,'The '+kind+' file must be smaller than '+(kind==='CV'?'5 MB':'3 MB')+'.');
  const pdf=mime==='application/pdf'&&bytes.subarray(0,5).toString()==='%PDF-';
  const jpg=mime==='image/jpeg'&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
  const png=mime==='image/png'&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
