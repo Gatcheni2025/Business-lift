@@ -93,6 +93,22 @@ test('HR backfill preserves already-approved legacy accounts and allows expired 
  assert.equal(newer.saved,true);
  assert.equal(f.db.records.get('teyzaFieldAgents/agent1').status,'approved');
 });
+test('HR securely accepts practical scanned PDF sizes and rejects over-limit files',async()=>{
+ const f=setup(),id=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(2000000,32)]).toString('base64'),
+ cv=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(3500000,32)]).toString('base64');
+ f.db.records.set('teyzaFieldAgents/largePDF',{uid:'largePDF',status:'pending',name:'Large scan applicant',revision:0});
+ const data={agentUid:'largePDF',revision:0,identityType:'passport',identityNumber:'A12345678',
+  identityFile:{name:'passport.pdf',mime:'application/pdf',base64:id},cvFile:{name:'curriculum.pdf',mime:'application/pdf',base64:cv},applicantPermissionConfirmed:true};
+ const uploaded=await f.call('agent_admin_application_upload',data,admin);
+ assert.equal(uploaded.saved,true);
+ assert.equal(f.db.records.get('teyzaFieldAgents/largePDF').status,'pending');
+ const read=await f.call('agent_admin_application_evidence',{agentUid:'largePDF'},admin);
+ assert.equal(read.identityFile.base64,id);assert.equal(read.cvFile.base64,cv);
+ f.db.records.set('teyzaFieldAgents/tooLarge',{uid:'tooLarge',status:'pending',name:'Over limit',revision:0});
+ const over=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(5001000,32)]).toString('base64');
+ await rejects(f.call('agent_admin_application_upload',{...data,agentUid:'tooLarge',cvFile:{name:'too-large.pdf',mime:'application/pdf',base64:over}},admin),422);
+ assert.equal(f.db.records.get('teyzaFieldAgents/tooLarge').evidenceId,undefined);
+});
 test('Visit details and photos are agent bound; location needs current precise South African coordinates',async()=>{
  const f=setup();await visit(f);f.db.records.set('teyzaFieldAgents/other',{uid:'other',status:'approved'});
  await rejects(f.call('agent_visit_get',{visitId:'visit1'},{uid:'other',email_verified:true}),404);
