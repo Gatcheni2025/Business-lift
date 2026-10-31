@@ -1,16 +1,36 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage');
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid']);
+const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
-function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||''}:null;}
+function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
 function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v.area,province:v.province,status:v.status,revision:v.revision,createdAt:v.createdAt,
  location:v.location||null,ownerConfirmed:!!v.sellerUid,reviewNote:v.reviewNote||'',photos:Object.fromEntries(Object.entries(v.photos||{}).map(([k,p])=>[k,{id:p.id,capturedAt:p.capturedAt,expiresAt:p.expiresAt}]))};}
+// Documents and ID number are encrypted together in private object storage.
+function applicantFile(value,kind){
+ if(!value||typeof value!=='object')D.fail(422,'Attach your '+kind+' document.');
+ const name=String(value.name||'').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,100),mime=String(value.mime||'');
+ if(!name||typeof value.base64!=='string'||value.base64.length>7000000||!/^[A-Za-z0-9+/]+={0,2}$/.test(value.base64))D.fail(422,'The '+kind+' file is invalid or too large.');
+ const bytes=Buffer.from(value.base64,'base64');
+ if(bytes.length<50||bytes.length>(kind==='CV'?5000000:3000000))D.fail(422,'The '+kind+' file must be smaller than '+(kind==='CV'?'5 MB':'3 MB')+'.');
+ const pdf=mime==='application/pdf'&&bytes.subarray(0,5).toString()==='%PDF-';
+ const jpg=mime==='image/jpeg'&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+ const png=mime==='image/png'&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+ if(!(pdf||(kind==='identity'&&(jpg||png))))D.fail(422,'Upload a PDF'+(kind==='identity'?', JPEG or PNG':'')+' for '+kind+'.');
+ return {name,mime,base64:value.base64};
+}
+function identityDetails(data){
+ if(!['sa_id','passport'].includes(data.identityType))D.fail(422,'Choose an ID or passport document.');
+ const identityNumber=D.text(data.identityNumber,'ID/passport number',35);
+ if(!/^[A-Za-z0-9 -]{5,35}$/.test(identityNumber))D.fail(422,'Enter a valid ID or passport number.');
+ return {identityType:data.identityType,identityNumber,identityFile:applicantFile(data.identityFile,'identity'),cvFile:applicantFile(data.cvFile,'CV')};
+}
 function verified(auth){if(!auth?.uid)D.fail(401,'Sign in first.');if(auth.teyzaPhoneBootstrap||(!auth.email_verified&&!auth.phone_number))D.fail(403,'Verify your email or phone before using the work portal.');}
 function editable(v){if(!['draft','needs_changes'].includes(v.status))D.fail(409,'This visit is already submitted. Ask the reviewer to request changes.');}
 function gps(data,now){const {latitude,longitude,accuracy,capturedAt}=data;if(![latitude,longitude,accuracy,capturedAt].every(Number.isFinite)||latitude< -35.5||latitude> -22||longitude<16||longitude>33.5||accuracy<=0||accuracy>100||Math.abs(now-capturedAt)>60000)D.fail(422,'Capture a fresh shop location with accuracy of 100 metres or better.');return {latitude,longitude,accuracy,capturedAt,receivedAt:now,source:'device_reported'};}
-function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock=Date.now,rate}){
+function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getPlacesKey=()=>'',fetchImpl=fetch,clock=Date.now,rate}){
+ const nearby=discovery.createFieldDiscovery({db,getPlacesKey,fetchImpl,clock,rate});
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  async function agent(uid){const p=await read('teyzaFieldAgents/'+uid);if(!p||p.uid!==uid||p.status!=='approved')D.fail(403,'An approved Teyza agent account is required.');return p;}
  function own(v,uid){if(!v||v.agentUid!==uid)D.fail(404,'Visit not found.');return v;}
@@ -33,10 +53,89 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   if(action==='agent_profile')return {profile:profileView(await read('teyzaFieldAgents/'+uid)),provinces,commissionCents:9900};
   if(action==='agent_apply'){
    if(data.consent!==true)D.fail(422,'Agree to the work evidence privacy notice.');
-   const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),province:data.province,area:D.text(data.area,'working town or area',120)};
+   const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),email:String(auth.email||'').slice(0,254),address:D.text(data.address||'','home address',350,false),province:data.province,area:D.text(data.area,'working town or area',120)};
    if(!provinces.includes(values.province))D.fail(422,'Choose a South African province.');
-   return db.runTransaction(async tx=>{const ref=doc('teyzaFieldAgents/'+uid),old=await tx.get(ref);if(old.exists)return {profile:profileView(old.data()),alreadyApplied:true};
-    const p={uid,...values,status:'pending',revision:0,privacyVersion:'agent-evidence-v1',consentedAt:clock(),createdAt:clock()};tx.set(ref,p);return {profile:profileView(p)};});
+   const previous=await read('teyzaFieldAgents/'+uid);
+   if(previous?.evidenceId&&previous.documentsExpireAt>clock()&&previous.status!=='rejected')return {profile:profileView(previous),alreadyApplied:true};
+   const privateDocs=identityDetails(data),evidenceId=crypto.randomUUID();
+   const objectPath='teyza-private/agent-applications/'+uid+'/'+evidenceId+'.enc',expiresAt=clock()+180*DAY;
+   await doc('teyzaAgentEvidence/'+evidenceId).set({agentUid:uid,objectPath,expiresAt,kind:'application'});
+   await saveUpload(bucket,objectPath,await encryptSelfie(Buffer.from(JSON.stringify(privateDocs))),{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
+   let saved;
+   try{
+    saved=await db.runTransaction(async tx=>{
+     const ref=doc('teyzaFieldAgents/'+uid),old=await tx.get(ref);
+     if(old.exists&&old.data().evidenceId&&old.data().documentsExpireAt>clock()&&old.data().status!=='rejected')return {profile:profileView(old.data()),alreadyApplied:true};
+     const prior=old.exists?old.data():null;
+     if(prior?.status==='approved')D.fail(409,'Approved profiles cannot replace identity evidence through signup.');
+     const p={...prior,uid,...values,status:'pending',reviewNote:'',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
+     tx.set(ref,p);audit(tx,uid,action,uid);return {profile:profileView(p)};
+    });
+   }catch(error){await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});await doc('teyzaAgentEvidence/'+evidenceId).delete().catch(()=>{});throw error;}
+   if(saved.alreadyApplied){await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});await doc('teyzaAgentEvidence/'+evidenceId).delete().catch(()=>{});}
+   return saved;
+   }
+  
+  if(action==='agent_profile_update'){
+   await agent(uid);const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),address:D.text(data.address,'home address',350),area:D.text(data.area,'working town or area',120),province:data.province};if(!provinces.includes(values.province))D.fail(422,'Choose a South African province.');
+   return db.runTransaction(async tx=>{const ref=doc('teyzaFieldAgents/'+uid),s=await tx.get(ref),old=s.data();if(!s.exists||old.status!=='approved')D.fail(403,'An approved agent account is required.');if(old.revision!==data.revision)D.fail(409,'Your details changed. Refresh first.');tx.update(ref,{...values,revision:old.revision+1,updatedAt:clock()});return {saved:true};});
+  }
+  if(action==='agent_admin_nearby')return nearby.execute(uid,'agent_nearby',data);
+  if(discovery.actions.has(action)){await agent(uid);return nearby.execute(uid,action,data);}
+  if(action==='agent_admin_area_assign'){
+   const target=D.id(data.agentUid),area=D.text(data.area,'assigned town or area',120),province=data.province;
+   if(target===uid)D.fail(403,'Another administrator must manage your assignment.');
+   if(!provinces.includes(province))D.fail(422,'Choose a South African province.');
+   return db.runTransaction(async tx=>{
+    const ref=doc('teyzaFieldAgents/'+target),snap=await tx.get(ref);
+    if(!snap.exists||snap.data().status!=='approved')D.fail(409,'Only approved field agents can be assigned to an area.');
+    if(snap.data().revision!==data.revision)D.fail(409,'The agent details changed. Refresh.');
+    tx.update(ref,{area,province,revision:data.revision+1,assignedAt:clock(),assignedBy:uid});
+    audit(tx,uid,action,target,{area,province});return {saved:true};
+   });
+  }
+  if(action==='agent_admin_application_upload'){
+   // Backfill a legacy agent's missing recruitment documents without changing account status.
+   const target=D.id(data.agentUid),expected=data.revision;
+   if(target===uid)D.fail(403,'Another administrator must upload or review your documents.');
+   if(data.applicantPermissionConfirmed!==true)D.fail(422,'Confirm the applicant authorised Teyza to collect and review these documents.');
+   if(!Number.isInteger(expected)||expected<0)D.fail(422,'Refresh the agent record before uploading.');
+   const ref=doc('teyzaFieldAgents/'+target),prior=await read(ref.path);
+   if(!prior||prior.uid!==target)D.fail(404,'Agent account not found.');
+   if(prior.revision!==expected)D.fail(409,'The agent record changed. Refresh and try again.');
+   if(prior.evidenceId&&prior.documentsExpireAt>clock())D.fail(409,'Current documents are already saved. Open them for review instead.');
+   const privateDocs=identityDetails(data);
+   await rate(uid,'field-agent-admin-documents',10,3600000);
+   const evidenceId=crypto.randomUUID(),objectPath='teyza-private/agent-applications/'+target+'/'+evidenceId+'.enc',expiresAt=clock()+180*DAY;
+   const evidenceRef=doc('teyzaAgentEvidence/'+evidenceId);
+   try{
+    // Register expiry before upload; interrupted submissions cannot leave permanent orphan evidence.
+    await evidenceRef.set({agentUid:target,objectPath,expiresAt,kind:'application',source:'hr_legacy_backfill'});
+    await saveUpload(bucket,objectPath,await encryptSelfie(Buffer.from(JSON.stringify(privateDocs))),{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
+    return await db.runTransaction(async tx=>{
+     const snap=await tx.get(ref),current=snap.exists?snap.data():null;
+     if(!current||current.uid!==target)D.fail(404,'Agent account not found.');
+     if(current.revision!==expected||(current.evidenceId&&current.documentsExpireAt>clock()))D.fail(409,'The applicant documents or record changed. Refresh before retrying.');
+     tx.update(ref,{identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,
+      documentsSource:'hr_legacy_backfill',documentsUploadedBy:uid,documentsUploadedAt:clock(),
+      documentsPermissionConfirmedAt:clock(),revision:expected+1,updatedAt:clock()});
+     audit(tx,uid,action,target,{evidenceId,source:'hr_legacy_backfill'});
+     return {saved:true,profile:profileView({...current,identityType:privateDocs.identityType,evidenceId,documentsExpireAt:expiresAt,revision:expected+1})};
+    });
+   }catch(error){
+    await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});
+    await evidenceRef.delete().catch(()=>{});
+    throw error;
+   }
+  }
+  if(action==='agent_admin_application_evidence'){
+   const target=D.id(data.agentUid),p=await read('teyzaFieldAgents/'+target);
+   if(target===uid)D.fail(403,'Another administrator must review your application.');
+   if(!p||!p.evidenceId||!p.objectPath?.startsWith('teyza-private/agent-applications/'+target+'/')||p.documentsExpireAt<=clock())D.fail(410,'The application documents are missing or expired. Ask the applicant to resubmit.');
+   const [ciphertext]=await bucket.file(p.objectPath).download();
+   const evidence=JSON.parse((await decryptSelfie(ciphertext)).toString('utf8'));
+   await doc('teyzaAgentApplicationViews/'+uid+'_'+target).set({reviewerUid:uid,agentUid:target,evidenceId:p.evidenceId,revision:p.revision,viewedAt:clock()});
+   return {identityType:evidence.identityType,identityNumber:evidence.identityNumber,identityFile:evidence.identityFile,cvFile:evidence.cvFile};
   }
   if(action==='agent_admin_profiles'){
    let q=db.collection('teyzaFieldAgents').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));const r=await q.get();return {profiles:r.docs.slice(0,30).map(s=>profileView(s.data())),next:r.docs.length>30?r.docs[29].id:null};
@@ -44,7 +143,11 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   if(action==='agent_admin_profile_decide'){
    const target=D.id(data.agentUid),note=D.text(data.note||'','review note',500,false);if(target===uid)D.fail(403,'Another administrator must review your application.');if(!['approved','suspended','rejected'].includes(data.status))D.fail(422,'Choose an agent review outcome.');
    return db.runTransaction(async tx=>{const ref=doc('teyzaFieldAgents/'+target),s=await tx.get(ref);if(!s.exists)D.fail(404,'Agent not found.');if(s.data().revision!==data.revision)D.fail(409,'The agent application changed. Refresh first.');
-    tx.update(ref,{status:data.status,reviewNote:note,revision:data.revision+1,reviewedAt:clock(),reviewedBy:uid});audit(tx,uid,action,target,{status:data.status});return {saved:true};});
+    if(data.status==='approved'){
+      const p=s.data(),v=await tx.get(doc('teyzaAgentApplicationViews/'+uid+'_'+target));
+      if(!p.evidenceId||p.documentsExpireAt<=clock()||!v.exists||v.data().evidenceId!==p.evidenceId||v.data().revision!==p.revision||v.data().viewedAt<clock()-5*60000)D.fail(409,'Open the current ID/passport and CV before approving the applicant.');
+     }
+     tx.update(ref,{status:data.status,reviewNote:note,revision:data.revision+1,reviewedAt:clock(),reviewedBy:uid});audit(tx,uid,action,target,{status:data.status});return {saved:true};});
   }
   if(action==='agent_owner_inspect'||action==='agent_owner_confirm'){
    if(typeof data.token!=='string'||!/^[a-f0-9]{64}$/.test(data.token))D.fail(404,'Invalid owner confirmation link.');
@@ -64,7 +167,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   }
   if(!admin)await agent(uid);
   if(action==='agent_visits'||action==='agent_admin_visits'){
-   let q=db.collection('teyzaAgentVisits');if(!admin)q=q.where('agentUid','==',uid);q=q.orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
+   let q=db.collection('teyzaAgentVisits');if(!admin)q=q.where('agentUid','==',uid);else if(data.agentUid)q=q.where('agentUid','==',D.id(data.agentUid));q=q.orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
    const r=await q.get(),rows=await Promise.all(r.docs.slice(0,30).map(async s=>({...visitView(s.id,s.data()),...(admin?{agentUid:s.data().agentUid}:{}),progress:await status(s.id,s.data())})));return {visits:rows,next:r.docs.length>30?r.docs[29].id:null};
   }
   if(action==='agent_visit_start'){
@@ -140,7 +243,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
 async function purgeAgentEvidence({db,bucket,clock=Date.now}){
  const rows=await db.collection('teyzaAgentEvidence').where('expiresAt','<=',clock()).limit(200).get();
  for(let n=0;n<rows.docs.length;n+=10)await Promise.all(rows.docs.slice(n,n+10).map(async r=>{
-  const p=r.data();if(p.objectPath?.startsWith('teyza-private/agent-evidence/'+p.agentUid+'/'))await bucket.file(p.objectPath).delete({ignoreNotFound:true});await r.ref.delete();
+  const p=r.data();if(p.objectPath?.startsWith('teyza-private/agent-evidence/'+p.agentUid+'/')||p.objectPath?.startsWith('teyza-private/agent-applications/'+p.agentUid+'/'))await bucket.file(p.objectPath).delete({ignoreNotFound:true});await r.ref.delete();
  }));
  for(const [collection,limit] of [['teyzaAgentCaptures',500],['teyzaAgentClaims',200]]){
   const expired=await db.collection(collection).where('expiresAt','<=',clock()).limit(limit).get();

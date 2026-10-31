@@ -1,6 +1,6 @@
-import {createOperations} from '/js/teyza-operations.js?v=R317';
-import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R317';
-import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R317';
+import {createOperations} from '/js/teyza-operations.js?v=R318';
+import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R318';
+import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R318';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
   reauthenticateWithPopup,reauthenticateWithCredential,signOut,setPersistence,browserSessionPersistence}
   from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';

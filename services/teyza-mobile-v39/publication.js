@@ -83,4 +83,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,project,publicRow,held};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held};

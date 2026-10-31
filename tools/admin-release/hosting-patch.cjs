@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),
 const {PROJECT}=require('./firebase-client.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=['/admin.html','/admin-review.html','/admin-sellers.html','/admin-login.html','/admin-dashboard.html','/admin/index.html','/admin-payments.html','/admin-support.html','/admin-users.html'];
-const assets=['/assets/teyza-app-admin.css','/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-app-admin-firebase.mjs','/js/teyza-operations.js','/js/teyza-operations-model.mjs'];
+const assets=['/assets/teyza-app-admin.css','/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-app-admin-firebase.mjs','/js/teyza-operations.js','/js/teyza-operations-model.mjs','/js/teyza-field-admin.js'];
 const overlayPaths=new Set([...aliases,...assets]);
 function overlay(root){
  const files=new Map();
@@ -21,7 +21,7 @@ function servingConfig(original){
   ...(config.rewrites||[]).filter(r=>!routes.includes(r.glob))];
  // Retain every unrelated header and route, and make private-review pages non-cacheable.
  config.headers=[...(config.headers||[]),
-  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/assets/teyza-app-admin.css'].map(glob=>({glob,headers:{
+  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-field-admin.js','/assets/teyza-app-admin.css'].map(glob=>({glob,headers:{
    'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}}))];
  return config;
 }
@@ -63,7 +63,7 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  if(!before.has('/index.html'))throw new Error('The live version has no index.html. Stopping before changing Hosting.');
  const config=servingConfig(original.config),version=await clone(client,source,wait);
  // A local rollback record contains version metadata only; never tokens or seller evidence.
- const backup={release:'R317',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
+ const backup={release:'R318',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
  const checkpoint=backupPath.replace(/\.json$/, '-'+version.split('/').at(-1)+'.json');
  fs.writeFileSync(checkpoint,JSON.stringify(backup,null,2),{mode:0o600});
  log('Cloned the active website. Uploading '+files.size+' admin files.');

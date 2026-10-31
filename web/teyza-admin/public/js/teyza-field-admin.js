@@ -1,0 +1,120 @@
+// Teyza HR & field team — authenticated admin operations, no public evidence URLs.
+const el=(tag,text,cls='')=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n;};
+const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
+const label=s=>String(s||'pending').replaceAll('_',' ');
+function btn(text,click,cls='quiet'){const b=el('button',text,'button '+cls);b.type='button';b.onclick=click;return b;}
+function card(title,description){const section=el('section',undefined,'panel ops-card');section.append(el('h3',title));if(description)section.append(el('p',description,'footnote'));return section;}
+function pdfOrImage(doc){if(!doc||!['application/pdf','image/png','image/jpeg'].includes(doc.mime)||typeof doc.base64!=='string')throw Error('Document format is unavailable.');const binary=atob(doc.base64);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return new Blob([bytes],{type:doc.mime});}
+export function createFieldAdmin({api,onError,message}){
+ let active=false,tab='applications',profiles=[],visits=[],nextProfiles=null,nextVisits=null,filter='',province='all',selectedProfile=null,selectedVisit=null,privateData=null,opened=new Set(),seenPhotos=new Set(),busy=false,urls=[];
+ const safe=fn=>async()=>{if(busy||!active)return;busy=true;try{await fn();}catch(e){onError(e);}finally{busy=false;}};
+ function forget(){for(const url of urls)URL.revokeObjectURL(url);urls=[];privateData=null;opened.clear();seenPhotos.clear();const dialog=document.getElementById('fieldEvidenceDialog');if(dialog?.open)dialog.close();}
+ function clear(){active=false;forget();profiles=[];visits=[];nextProfiles=null;nextVisits=null;selectedProfile=null;selectedVisit=null;filter='';}
+ function attach(documentObject,title){const d=document.getElementById('fieldEvidenceDialog'),frame=document.getElementById('fieldEvidenceBody');const blob=pdfOrImage(documentObject),url=URL.createObjectURL(blob);urls.push(url);frame.replaceChildren(el('h3',title));const download=el('a','Download for private HR review','button quiet');download.href=url;download.download=String(documentObject.name||'document.pdf').replace(/[^a-zA-Z0-9._-]/g,'_');frame.append(download);if(blob.type==='application/pdf'){const view=el('iframe');view.src=url;view.title=title;view.className='field-document-viewer';frame.append(view);}else{const img=el('img');img.src=url;img.alt=title;img.className='field-image-viewer';frame.append(img);}d.showModal();}
+ async function refresh(){active=true;forget();const [p,v]=await Promise.all([api('agent_admin_profiles'),api('agent_admin_visits')]);if(!active)return;profiles=p.profiles||[];nextProfiles=p.next||null;visits=v.visits||[];nextVisits=v.next||null;selectedProfile=null;selectedVisit=null;}
+ async function more(kind){const isProfile=kind==='profiles',next=isProfile?nextProfiles:nextVisits;if(!next)return;const r=await api(isProfile?'agent_admin_profiles':'agent_admin_visits',{after:next});if(isProfile){profiles.push(...r.profiles);nextProfiles=r.next||null;}else{visits.push(...r.visits);nextVisits=r.next||null;}}
+ function filteredProfiles(){const t=filter.toLocaleLowerCase();return profiles.filter(p=>(province==='all'||p.province===province)&&[p.name,p.phone,p.email,p.area,p.province].join(' ').toLocaleLowerCase().includes(t));}
+ function top(root){const heading=el('div',undefined,'field-admin-intro');heading.append(el('div',undefined,'eyebrow'));heading.firstChild.textContent='HR & FIELD OPERATIONS';heading.append(el('h3','People, applications and neighbourhood coverage'),el('p','Review applicants, manage field areas, track shop signups and approve completed visits. Agent recruitment is separate from seller verification.'));const login=el('a','Open agent sign-in ↗','button quiet');login.href='/work.html';login.target='_blank';login.rel='noopener noreferrer';heading.append(login);root.append(heading);
+ const metrics=el('div',undefined,'field-admin-metrics');for(const [name,n] of [['Applications loaded',profiles.length],['Awaiting approval',profiles.filter(p=>p.status==='pending').length],['Approved agents',profiles.filter(p=>p.status==='approved').length],['Visits loaded',visits.length],['Owner-linked visits',visits.filter(v=>v.ownerConfirmed).length]]){const tile=el('div',undefined,'field-stat');tile.append(el('small',name),el('strong',n));metrics.append(tile);}root.append(metrics);
+ const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews']]){const b=btn(title,()=>{forget();tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
+ }
+ function queryBar(root){const bar=el('div',undefined,'field-query');const search=el('input');search.type='search';search.placeholder='Search person, phone, town or province';search.setAttribute('aria-label','Filter field-team records');search.value=filter;search.oninput=()=>{filter=search.value;render(root);const field=root.querySelector('.field-query input');field?.focus();field?.setSelectionRange(filter.length,filter.length);};const selection=el('select');selection.setAttribute('aria-label','Filter by province');for(const [value,name] of [['all','All provinces'],...provinces.map(p=>[p,p])]){const option=el('option',name);option.value=value;selection.append(option);}selection.value=province;selection.onchange=()=>{province=selection.value;render(root);};bar.append(search,selection);root.append(bar);}
+ async function uploadFile(file,kind){
+  const max=kind==='CV'?5000000:3000000,accepted=kind==='CV'?['application/pdf']:['application/pdf','image/jpeg','image/png'];
+  if(!(file instanceof File)||file.size<50||file.size>max||!accepted.includes(file.type))throw Error('Choose a '+(kind==='CV'?'PDF CV under 5 MB':'PDF, JPG or PNG ID document under 3 MB')+'.');
+  return await new Promise((resolve,reject)=>{
+   const reader=new FileReader();reader.onerror=()=>reject(Error('Could not read the selected '+kind+' document.'));
+   reader.onload=()=>resolve({name:file.name,mime:file.type,base64:String(reader.result).split(',')[1]});
+   reader.readAsDataURL(file);
+  });
+ }
+ function uploadExistingForm(root,p){
+  const f=el('form',undefined,'ops-form field-upload-form');
+  f.append(el('h4','Add missing documents for '+p.name),el('p','Use genuine documents supplied or authorised by the applicant. Saving will not change their account status.','footnote'));
+  function labelled(title,node){const l=el('label');l.append(el('span',title),node);f.append(l);return node;}
+  const type=el('select');type.required=true;
+  for(const [value,title] of [['','Select document type'],['sa_id','South African ID'],['passport','Passport']]){const o=el('option',title);o.value=value;type.append(o);}
+  labelled('Identity document type',type);
+  const identityNumber=el('input');identityNumber.type='text';identityNumber.maxLength=35;identityNumber.minLength=5;identityNumber.required=true;identityNumber.autocomplete='off';identityNumber.placeholder='Number printed on ID or passport';
+  labelled('ID or passport number',identityNumber);
+  const idFile=el('input');idFile.type='file';idFile.required=true;idFile.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+  labelled('ID / passport scan — PDF, JPG or PNG (max 3 MB)',idFile);
+  const cvFile=el('input');cvFile.type='file';cvFile.required=true;cvFile.accept='.pdf,application/pdf';
+  labelled('Applicant CV — PDF (max 5 MB)',cvFile);
+  const fileDetails=el('p','Choose the applicant’s genuine ID/passport and CV. Files are encrypted on the server.','field-file-details');
+  fileDetails.setAttribute('aria-live','polite');f.append(fileDetails);
+  function describeFile(file){return file?file.name+' ('+(file.size/1024/1024).toFixed(2)+' MB)':'not selected';}
+  const updateFileDetails=()=>{fileDetails.textContent='ID: '+describeFile(idFile.files[0])+' · CV: '+describeFile(cvFile.files[0]);};
+  idFile.addEventListener('change',updateFileDetails);cvFile.addEventListener('change',updateFileDetails);
+  const consent=el('label',undefined,'confirm-check'),check=el('input');
+  check.type='checkbox';check.required=true;consent.append(check,el('span','I confirm these files were supplied by the applicant or collected with their permission for Teyza HR review.'));f.append(consent);
+  const feedback=el('p',undefined,'field-upload-feedback');feedback.hidden=true;feedback.setAttribute('role','alert');f.append(feedback);
+  const save=el('button','Save private documents','button primary');save.type='submit';f.append(save);
+  let submitting=false;
+  f.addEventListener('submit',async event=>{
+   event.preventDefault();if(submitting)return;
+   feedback.hidden=true;feedback.textContent='';
+   if(!f.reportValidity())return;
+   submitting=true;save.disabled=true;save.textContent='Encrypting and saving documents…';
+   try{
+    const files=await Promise.all([uploadFile(idFile.files[0],'ID'),uploadFile(cvFile.files[0],'CV')]);
+    const result=await api('agent_admin_application_upload',{agentUid:p.uid,revision:p.revision,identityType:type.value,identityNumber:identityNumber.value.trim(),
+     identityFile:files[0],cvFile:files[1],applicantPermissionConfirmed:check.checked});
+    if(result.saved!==true)throw Error('The server did not confirm that these documents were saved. Please check the agent profile before retrying.');
+    feedback.className='field-upload-feedback success';feedback.textContent='Documents saved successfully. Refreshing this agent’s record…';feedback.hidden=false;
+    try{
+     await refresh();render(root);
+     const matching=[...root.querySelectorAll('[data-field-agent-uid]')].find(x=>x.dataset.fieldAgentUid===p.uid);
+     if(matching){const status=el('p','ID/passport and CV saved securely. Open them to complete the review.','field-upload-feedback success');status.setAttribute('role','status');matching.prepend(status);matching.scrollIntoView({behavior:'smooth',block:'center'});}
+     message('Recruitment documents saved securely. Open the ID and CV to review before approving.','success');
+    }catch(error){
+     feedback.textContent='Documents were saved, but the list could not refresh. Reopen HR & field team to check the agent record before uploading again.';
+     feedback.scrollIntoView({block:'center'});
+    }
+   }catch(error){
+    const status=Number(error?.status||0);
+    const advice=status===401||status===403?' Your five-minute administrator review session may have expired. Sign in again and retry.':
+     status===404?' The upload endpoint is not available on the deployed backend. Deploy the updated teyzaMobile function first.':
+     status===413?' Reduce both PDFs to the stated file sizes and try again.':
+     status===409?' The agent record may have changed or may already have documents. Refresh HR before retrying.':
+     status===503?' Secure document storage may be unavailable. Check the Teyza Firebase backend and storage configuration.':'';
+    feedback.className='field-upload-feedback error';
+    feedback.textContent='Documents were not confirmed saved: '+(error?.message||'Unable to upload the files.')+advice;
+    feedback.hidden=false;feedback.scrollIntoView({behavior:'smooth',block:'center'});
+   }finally{
+    submitting=false;save.disabled=false;save.textContent='Save private documents';
+   }
+  });
+  return f;
+ }
+ function actionsForAgent(root,p){const c=card(p.name||'New applicant',[p.area,p.province,p.email,p.phone,p.address].filter(Boolean).join(' · '));c.dataset.fieldAgentUid=p.uid;c.append(el('p','Status: '+label(p.status)+' · Recruitment documents: '+(p.hasDocuments?'Submitted':'Missing'),'footnote'));
+ if(p.reviewNote)c.append(el('p','Review note: '+p.reviewNote,'footnote'));
+  if(!p.hasDocuments){
+   const open=btn('Upload ID / passport & CV',()=>{if(c.querySelector('.field-upload-form'))return;c.append(uploadExistingForm(root,p));open.disabled=true;open.setAttribute('aria-expanded','true');},'quiet');
+   open.setAttribute('aria-expanded','false');c.append(open);
+  }
+ if(p.hasDocuments){c.append(btn('Open ID/passport and CV',safe(async()=>{const r=await api('agent_admin_application_evidence',{agentUid:p.uid});forget();privateData=r;selectedProfile=p;opened.clear();render(root);message('Private recruitment documents opened for review.','success');}),'quiet'));}
+ if(selectedProfile?.uid===p.uid&&privateData){const row=el('div',undefined,'field-doc-buttons');row.append(el('p','Document type: '+label(privateData.identityType)+' · Number: '+privateData.identityNumber));row.append(btn('View ID / passport',()=>{opened.add('identity');attach(privateData.identityFile,'Private ID / passport · '+p.name);}),btn('View CV',()=>{opened.add('cv');attach(privateData.cvFile,'Private CV · '+p.name);}));c.append(row);}
+ if(['pending','rejected','suspended'].includes(p.status)){for(const [status,text] of [['approved','Approve applicant'],['rejected','Reject'],['suspended','Suspend']]){c.append(btn(text,safe(async()=>{if(status==='approved'&&(!privateData||selectedProfile?.uid!==p.uid||opened.size!==2))throw Error('Open the current ID/passport and CV before approving.');const note=window.prompt('HR review note / next steps:') ;if(note===null)return;if(status!=='approved'&&!note.trim())throw Error('Provide a reason for the applicant.');await api('agent_admin_profile_decide',{agentUid:p.uid,revision:p.revision,status,note});await refresh();render(root);message('HR application decision saved.','success');}),status==='approved'?'primary':'quiet'));}}
+ if(p.status==='approved')c.append(btn('Suspend agent',safe(async()=>{const note=window.prompt('Reason for suspension:');if(!note?.trim())return;await api('agent_admin_profile_decide',{agentUid:p.uid,revision:p.revision,status:'suspended',note});await refresh();render(root);message('Agent suspended.','success');}),'danger'));
+ root.append(c);
+ }
+ function applications(root){queryBar(root);const rows=filteredProfiles().filter(p=>tab==='applications'||p.status==='approved');rows.sort((a,b)=>Number(b.status==='pending')-Number(a.status==='pending'));if(!rows.length)root.append(el('p','No matching agent records on the loaded pages.','footnote'));for(const p of rows)actionsForAgent(root,p);if(nextProfiles)root.append(btn('Load more applications',safe(async()=>{await more('profiles');render(root);}))); }
+ function areas(root){queryBar(root);const filtered=filteredProfiles();const areas=new Map();for(const p of filtered){const key=(p.province||'Unknown')+' · '+(p.area||'Unassigned');const row=areas.get(key)||{total:0,approved:0,pending:0};row.total++;if(p.status==='approved')row.approved++;if(p.status==='pending')row.pending++;areas.set(key,row);}const table=card('Coverage by province and town','Counts reflect loaded records; use Load more for additional agents.');for(const [name,s] of [...areas].sort((a,b)=>a[0].localeCompare(b[0]))){const line=el('div',undefined,'field-area-row');line.append(el('strong',name),el('span',s.approved+' active · '+s.pending+' awaiting · '+s.total+' total'));table.append(line);}if(!areas.size)table.append(el('p','No area assignments in the current results.'));root.append(table);
+ const approved=filtered.filter(p=>p.status==='approved');for(const p of approved){const c=card('Assign '+p.name,'Current area: '+p.area+' · '+p.province),f=el('form',undefined,'ops-form');const l=el('label','Province'),select=el('select');for(const name of provinces){const o=el('option',name);o.value=name;select.append(o);}select.value=p.province;l.append(select);const a=el('label','Town / operating area'),inp=el('input');inp.type='text';inp.value=p.area||'';inp.required=true;inp.maxLength=120;a.append(inp);f.append(l,a);f.append(btn('Save area assignment',()=>{f.requestSubmit();},'primary'));f.onsubmit=e=>{e.preventDefault();safe(async()=>{await api('agent_admin_area_assign',{agentUid:p.uid,revision:p.revision,province:select.value,area:inp.value.trim()});await refresh();render(root);message('Area assignment updated.','success');})();};c.append(f);root.append(c);}
+ if(nextProfiles)root.append(btn('Load more agents',safe(async()=>{await more('profiles');render(root);})));
+ }
+ function signups(root){const c=card('Shop signups attributed to field visits','Owner-linked visits are not necessarily approved shops, and R99 commission requires an approved visit, approved seller and first paid invoice.');const rows=visits.filter(v=>v.ownerConfirmed);if(!rows.length)c.append(el('p','No owner-linked visits among the loaded records.'));for(const v of rows){const line=el('div',undefined,'field-area-row');line.append(el('strong',v.shopName+' · '+v.area),el('span','Agent '+v.agentUid+' · Shop '+label(v.progress?.sellerApproval)+' · Payment '+label(v.progress?.payment)+' · Commission '+label(v.progress?.commission)));c.append(line);}root.append(c);if(nextVisits)root.append(btn('Load more signup records',safe(async()=>{await more('visits');render(root);}))); }
+ function visitsView(root){const c=card('Shop visits & work approvals','Review photo evidence before approving submitted work. Seller approval remains in Approvals & images.');for(const v of visits){const row=el('div',undefined,'field-visit');row.append(el('strong',v.shopName),el('span',v.area+' · '+v.province+' · Agent '+v.agentUid+' · '+label(v.status)));row.append(btn('Review visit',safe(async()=>{forget();selectedVisit=v;render(root);})));c.append(row);}if(!visits.length)c.append(el('p','No field visits on the loaded page.'));root.append(c);
+ if(selectedVisit){const v=selectedVisit,detail=card('Review: '+v.shopName,v.address);detail.append(el('p','Owner confirmed: '+(v.ownerConfirmed?'Yes':'Not yet')+' · Seller: '+label(v.progress?.sellerApproval)+' · Mandate: '+label(v.progress?.mandate)+' · Payment: '+label(v.progress?.payment)));if(v.location){const a=el('a','View reported location on Google Maps','button quiet');a.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(v.location.latitude+','+v.location.longitude);a.target='_blank';a.rel='noopener noreferrer';detail.append(a);}
+ for(const kind of ['shop','selfie'])detail.append(btn('Open '+kind+' photo',safe(async()=>{const r=await api('agent_admin_photo',{visitId:v.id,kind});seenPhotos.add(kind);attach({base64:r.imageBase64,mime:'image/jpeg',name:kind+'.jpg'},kind+' · '+v.shopName);})));
+ if(v.status==='submitted'){const note=el('textarea');note.rows=3;note.maxLength=500;note.placeholder='HR work review note';note.setAttribute('aria-label','Work review note');detail.append(note);for(const [status,labelText] of [['approved','Approve work'],['needs_changes','Request changes'],['rejected','Reject work']])detail.append(btn(labelText,safe(async()=>{if(status==='approved'&&seenPhotos.size!==2)throw Error('Open both current shop photos first.');await api('agent_admin_visit_decide',{visitId:v.id,revision:v.revision,status,note:note.value,reviewConfirmed:seenPhotos.size===2});await refresh();render(root);message('Field visit review saved.','success');}),status==='approved'?'primary':'quiet'));}
+ if(v.progress?.commission==='eligible'){detail.append(el('p','R99 commission eligible once payment is verified. Open the agent work portal for payout reconciliation.','footnote'));}
+ root.append(detail);}
+ if(nextVisits)root.append(btn('Load more visits',safe(async()=>{await more('visits');render(root);})));
+ }
+ function render(root){active=true;forgetIfChanged();root.replaceChildren();top(root);if(tab==='applications'||tab==='agents')applications(root);else if(tab==='areas')areas(root);else if(tab==='signups')signups(root);else visitsView(root);ensureDialog();}
+ function forgetIfChanged(){/* Private evidence persists only while this HR view is active. */}
+ function ensureDialog(){if(document.getElementById('fieldEvidenceDialog'))return;const d=el('dialog');d.id='fieldEvidenceDialog';d.className='field-evidence-dialog';const close=btn('Close',()=>d.close());close.className='button quiet';const body=el('div');body.id='fieldEvidenceBody';d.append(close,body);d.addEventListener('close',()=>{body.replaceChildren();for(const url of urls)URL.revokeObjectURL(url);urls=[];});document.body.append(d);}
+ return {refresh,render,clear,hideSensitive:forget};
+}

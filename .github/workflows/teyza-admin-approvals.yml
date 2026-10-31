@@ -36,6 +36,8 @@ jobs:
         run: |
           npm test
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-app-admin.js
+          node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-operations.js
+          node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-field-admin.js
           node -e "const {Client}=require('firebase-tools/lib/apiv2');const {requireAuth}=require('firebase-tools/lib/requireAuth');const {getGlobalDefaultAccount}=require('firebase-tools/lib/auth');if(typeof Client!=='function'||typeof requireAuth!=='function'||typeof getGlobalDefaultAccount!=='function')throw Error('Firebase CLI adapter changed');"
       - name: Run browser approval, privacy, session and phone layout scenarios
         working-directory: tools/admin-release

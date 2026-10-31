@@ -4,16 +4,19 @@ This update extends the existing Business-lift Firebase project and current mobi
 
 ## Activate
 
-Download `teyza-field-work-and-seo-kit` from the newest passing run on `feature/teyza-field-work-and-search`. Extract once into a fresh folder. Install Node 22 and use the authorised Firebase CLI account for `business-lift-3c19c`. In PowerShell in that folder:
+Download `teyza-field-work-and-seo-kit` from the newest passing field-work workflow on the current website branch. Extract once into a fresh folder. Install Node 22 and use the authorised Firebase CLI account for `business-lift-3c19c`. In PowerShell in that folder:
 
 ```powershell
 Unblock-File -LiteralPath '.\DEPLOY-FIELD-WORK.ps1'
 Unblock-File -LiteralPath '.\DEPLOY-MOBILE.ps1'
 Unblock-File -LiteralPath '.\DEPLOY-WEBSITE.ps1'
+Unblock-File -LiteralPath '.\DEPLOY-ADMIN.ps1'
 .\DEPLOY-FIELD-WORK.ps1
 ```
 
-The combined script deploys only the existing mobile Functions codebase first, checks `fieldAgentWorkspace`, then clones and overlays the existing Hosting release. It verifies unrelated files are preserved and refuses to publish over a concurrent release. It does not replace Firestore/Storage rules, grant admin roles or change DNS. Existing Google Places and verification encryption secrets are reused. Do not deploy the partial public folder with plain `firebase deploy`. Keep the Hosting backup files; the supplied rollback script restores the previous website only while this update is still live.
+The combined script deploys only the existing mobile Functions codebase first, checks `fieldAgentWorkspace`, checks both field-work and discovery health flags, then clones and overlays the existing Hosting release followed by a separate admin navigation overlay. It verifies unrelated files are preserved and refuses to publish over a concurrent release. It does not replace Firestore/Storage rules, grant admin roles or change DNS. Existing Google Places and verification encryption secrets are reused. Do not deploy the partial public folder with plain `firebase deploy`. Keep the Hosting backup files; the supplied rollback script restores the previous website only while this update is still live.
+
+If the backend already deployed but the website upload stopped, run `RESUME-FIELD-WORK.ps1` from a current kit. It verifies the backend health and retries the website and admin overlays without deploying the backend again. The uploader retries temporary network errors, reports a safe error code if available, and still checks file preservation before publishing.
 
 After activation:
 
@@ -23,7 +26,11 @@ After activation:
 - `/how-it-works.html` and `/for-shop-owners.html`: clear public shopper/seller guides.
 - `/work-privacy.html`: evidence use, access, consent and retention notice.
 
-Use your existing authorised Teyza administrator account on `/work.html`, select **Review team**, review agent applications and approve them before assigning visits. Seller verification remains in `/admin`. Agent and owner sign-in supports email/password, Google, Apple and South African phone/SMS (subject to the existing Firebase provider/domain configuration). Each new agent uses their own account, verifies email or phone, supplies their working area and consents to evidence handling. Employment/contractor status, applicable wage protection and expense terms must be agreed separately before work starts; agent approval is not an employment contract.
+Open **HR & field team** inside `/admin` for applications, team directory, area management, signups and work reviews (no redirect); or use your existing authorised Teyza administrator account on `/work.html` and select **Review team**. Review agent ID/CV evidence and approve before assigning visits. Seller verification remains in `/admin`. Agent and owner sign-in supports email/password, Google, Apple and South African phone/SMS (subject to the existing Firebase provider/domain configuration). Each new agent uses their own account, verifies email or phone, supplies contact, address, working-area details, ID/passport number, a private identity-document attachment and a PDF CV, and consents to evidence handling. Recruitment documents are encrypted and scheduled for removal after 180 days. Approvals require a fresh administrator document review. An administrator must approve the application before the guided dashboard opens. Agents can update their own details. HR can filter work by agent and search a selected full address. Employment/contractor status, applicable wage protection and expense terms must be agreed separately before work starts; agent approval is not an employment contract.
+
+## Nearby search and team-recorded leads
+
+Approved agents and recently authenticated admins can search by current device position or select a full South African address. Google Places results, Teyza shop locations and team-recorded shops appear separately. A same-name Teyza shop within 100 metres is marked as a possible match, never a definitive identity match. Teyza results require a saved current shop pin; searches are limited and do not include every business, every unpinned registration or every Google listing. Verify any result with the owner before a visit. Agents can record a shop they personally find, with the owner's permission and fresh on-site device GPS. They can mark it as not found on Google or not checked; neither label proves absence from Google. Google results are transient, and team records are entered independently, not copied from Google. A missing or partial Google service is reported while other records remain available. Google Places calls use the existing server secret and are rate limited.
 
 ## Guided visit
 
@@ -59,5 +66,5 @@ References: https://developers.google.com/search/docs/crawling-indexing/block-in
 
 ## Verification and limits
 
-Automated tests use synthetic accounts, image bytes, locations, mandates and invoices. They do not apply for real agent accounts, contact shops, collect money, publish a pending shop or send recruitment messages. Test physical Android/iPhone camera permission, GPS accuracy, owner confirmation on a separate device and your payment-provider/bank process after deployment. The web portal pages do not themselves require a native app rebuild. The separate seller logout correction does require installing app version 1.0.23 (33) or later; owners use their compatible app for shop registration and identity verification.
+Automated tests use synthetic accounts, image bytes, locations, mandates and invoices. They do not apply for real agent accounts, contact shops, collect money, publish a pending shop or send recruitment messages. Test physical Android/iPhone camera permission, GPS accuracy, owner confirmation on a separate device and your payment-provider/bank process after deployment. The web portal pages do not themselves require a native app rebuild. The separate seller logout correction does require installing app version 1.0.23 (33); owners use their compatible app for shop registration and identity verification.
 
