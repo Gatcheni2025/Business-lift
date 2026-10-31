@@ -76,7 +76,7 @@ async function main(){
    const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
    assert(!f.page.url().includes('work.html'));
-   await f.page.getByRole('button',{name:'Open ID/passport and CV'}).click();
+   await f.page.getByRole('button',{name:'Open ID/passport and CV'}).first().click();
    for(const type of ['ID / passport','CV']){await f.page.getByRole('button',{name:'View '+type}).click();await f.page.locator('#fieldEvidenceDialog').getByRole('button',{name:'Close'}).click();}
    await f.page.getByRole('button',{name:'Approve applicant'}).click();
    await f.page.getByText('HR application decision saved.').waitFor();
