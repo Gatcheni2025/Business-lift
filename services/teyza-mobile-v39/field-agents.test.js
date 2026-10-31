@@ -39,12 +39,18 @@ async function submitted(f){const v=await visit(f);await f.call('agent_owner_con
 async function approved(f){const v=await submitted(f);for(const kind of ['shop','selfie'])await f.call('agent_admin_photo',{visitId:v.id,kind},admin);await f.call('agent_admin_visit_decide',{visitId:v.id,revision:5,status:'approved',reviewConfirmed:true},admin);return v;}
 function paidInvoice(f){f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-11',{kind:'subscription_invoice',debitCents:9900,paidCents:9900,createdAt:start+1000});f.db.records.set('teyzaSellerAccounts/seller1',{uid:'seller1',category:'spaza',approvalStatus:'approved'});}
 test('Agent applications bind the verified caller, ignore forged approval and need a separate fresh admin',async()=>{
- const f=setup(),input={name:'New Agent',phone:'0712345678',province:'Gauteng',area:'Soweto',consent:true,status:'approved',uid:'someone'};
+ const f=setup(),pdf=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(120,32)]).toString('base64'),photo=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(125,32)]).toString('base64');
+  const input={name:'New Agent',phone:'0712345678',province:'Gauteng',area:'Soweto',consent:true,status:'approved',uid:'someone',identityType:'sa_id',identityNumber:'9001011234088',identityFile:{name:'id.jpg',mime:'image/jpeg',base64:photo},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:pdf}};
  const r=await f.call('agent_apply',input,{uid:'new',email_verified:true});assert.equal(r.profile.status,'pending');assert.equal(r.profile.uid,'new');
  await rejects(f.call('agent_visit_start',{requestId:'x'},{uid:'new',email_verified:true}),403);
  await rejects(f.call('agent_admin_profile_decide',{agentUid:'new',revision:0,status:'approved'},{...admin,uid:'new'}),403);
  await rejects(f.call('agent_admin_profile_decide',{agentUid:'new',revision:0,status:'approved'},{...admin,auth_time:start/1000-301}),401);
- await f.call('agent_admin_profile_decide',{agentUid:'new',revision:0,status:'approved'},admin);assert.equal(f.db.records.get('teyzaFieldAgents/new').status,'approved');
+ await rejects(f.call('agent_admin_profile_decide',{agentUid:'new',revision:0,status:'approved'},admin),409);
+  assert(!JSON.stringify(f.db.records.get('teyzaFieldAgents/new')).includes('9001011234088'),'Plaintext ID must never enter Firestore');
+  const evidence=await f.call('agent_admin_application_evidence',{agentUid:'new'},admin);assert.equal(evidence.identityNumber,'9001011234088');
+  await f.call('agent_admin_profile_decide',{agentUid:'new',revision:0,status:'approved'},admin);assert.equal(f.db.records.get('teyzaFieldAgents/new').status,'approved');
+  await f.call('agent_admin_area_assign',{agentUid:'new',revision:1,area:'Pretoria',province:'Gauteng'},admin);
+  assert.equal(f.db.records.get('teyzaFieldAgents/new').area,'Pretoria');
  await rejects(f.call('agent_apply',input,{uid:'bootstrap',email_verified:true,teyzaPhoneBootstrap:true}),403);
 });
 test('Visit details and photos are agent bound; location needs current precise South African coordinates',async()=>{
