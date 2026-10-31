@@ -16,6 +16,8 @@ Unblock-File -LiteralPath '.\DEPLOY-ADMIN.ps1'
 
 The combined script deploys only the existing mobile Functions codebase first, checks `fieldAgentWorkspace`, checks both field-work and discovery health flags, then clones and overlays the existing Hosting release followed by a separate admin navigation overlay. It verifies unrelated files are preserved and refuses to publish over a concurrent release. It does not replace Firestore/Storage rules, grant admin roles or change DNS. Existing Google Places and verification encryption secrets are reused. Do not deploy the partial public folder with plain `firebase deploy`. Keep the Hosting backup files; the supplied rollback script restores the previous website only while this update is still live.
 
+If the backend already deployed but the website upload stopped, run `RESUME-FIELD-WORK.ps1` from a current kit. It verifies the backend health and retries the website and admin overlays without deploying the backend again. The uploader retries temporary network errors, reports a safe error code if available, and still checks file preservation before publishing.
+
 After activation:
 
 - `/agents.html`: public programme explanation and application entry.

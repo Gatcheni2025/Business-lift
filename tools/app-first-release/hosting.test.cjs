@@ -53,6 +53,7 @@ test('Marketing assets are scoped and registration redirects precede legacy catc
  assert(config.redirects.some(r=>r.glob==='/register'&&r.statusCode===301));assert(config.rewrites.some(r=>r.glob==='/download'&&r.path==='/download.html'));
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(!html.includes('data-open-register'));assert(!html.includes('landing-auth'));assert(!html.includes('auth=register'));
  assert(html.includes('Actual Teyza Android app screens'));assert(html.includes('Android early access'));assert(html.includes('iPhone release coming soon'));
+ assert(html.includes('class="demo-stage"'));assert(html.includes('/assets/app-demo.js'));assert(html.includes('>Vacancy</a>'));assert(!html.includes('<h3>For field agents</h3>'));
 });
 
 test('Inherited noindex is removed from public pages while old private files and work pages stay excluded',()=>{

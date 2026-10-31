@@ -3,7 +3,7 @@ from pathlib import Path
 import json,hashlib,shutil
 root=Path(__file__).resolve().parents[1];stage=root/'build/teyza-field-work-deploy'
 if stage.exists():shutil.rmtree(stage)
-files=[root/'firebase.teyza-mobile-v39.json',root/'DEPLOY-MOBILE.ps1',root/'DEPLOY-FIELD-WORK.ps1',root/'SETUP-VERIFICATION-KEY.ps1']
+files=[root/'firebase.teyza-mobile-v39.json',root/'DEPLOY-MOBILE.ps1',root/'DEPLOY-FIELD-WORK.ps1',root/'RESUME-FIELD-WORK.ps1',root/'SETUP-VERIFICATION-KEY.ps1']
 files += [p for p in (root/'services/teyza-mobile-v39').rglob('*') if p.is_file() and 'node_modules' not in p.parts and not p.name.endswith('debug.log')]
 for p in files:
  dest=stage/p.relative_to(root);dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,dest)
