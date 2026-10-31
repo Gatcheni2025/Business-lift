@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $FieldWorkRoot = $PSScriptRoot
 Set-Location $FieldWorkRoot
 $FieldWorkHealth = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile' -TimeoutSec 30
-if ($FieldWorkHealth.fieldAgentWorkspace -ne $true -or $FieldWorkHealth.fieldAgentDiscovery -ne $true -or $FieldWorkHealth.fieldAgentDocuments -ne $true -or $FieldWorkHealth.fieldAgentAdminAreas -ne $true -or $FieldWorkHealth.verificationUploads -ne $true) {
+if ($FieldWorkHealth.fieldAgentWorkspace -ne $true -or $FieldWorkHealth.fieldAgentDiscovery -ne $true -or $FieldWorkHealth.fieldAgentDocuments -ne $true -or $FieldWorkHealth.fieldAgentAdminAreas -ne $true -or $FieldWorkHealth.fieldAgentAdminDocumentBackfill -ne $true -or $FieldWorkHealth.verificationUploads -ne $true) {
   throw 'The updated field-team backend is not active. Run DEPLOY-FIELD-WORK.ps1 from this kit instead.'
 }
 Write-Host 'The field-team backend is active. Resuming the website and admin update.'
