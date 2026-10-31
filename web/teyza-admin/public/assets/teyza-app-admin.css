@@ -24,3 +24,11 @@ body{background:#f3f6f3;color:#12343c}.topbar{background:#fff;border-bottom:1px 
 .field-document-viewer{width:100%;height:65vh;border:1px solid #ddd;border-radius:9px;margin-top:12px}
 .field-image-viewer{display:block;max-width:100%;max-height:65vh;object-fit:contain;margin:14px auto}
 @media(max-width:700px){.field-query{grid-template-columns:1fr}.field-admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.field-admin-tabs button{font-size:12px}}
+
+.field-upload-feedback{padding:14px 16px;border-radius:11px;border:1px solid #cbded0;background:#f0f7f2;color:#1f503e;line-height:1.5;overflow-wrap:anywhere}
+.field-upload-feedback.error{background:#fff1ef;color:#9b3428;border-color:#eab8ad}
+.field-upload-feedback.success{background:#eaf8ee;color:#176a44;border-color:#bde2ca}
+.field-file-details{font-size:13px;color:#526b61;overflow-wrap:anywhere;margin:0}
+.field-upload-form h4{margin:8px 0;font-size:18px}
+.field-upload-form .button.primary{width:100%;min-height:48px}
+.field-upload-form [type=file]{max-width:100%;font-size:14px}
