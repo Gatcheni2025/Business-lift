@@ -52,4 +52,51 @@ void main(){
   debugDefaultTargetPlatformOverride=TargetPlatform.iOS;addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final s=ShopperSession(store:MemoryStore());expect(s.appleSignInAvailable,true);expect(s.googleSignInAvailable,true);s.dispose();
  });
+
+ test('Apple ID token uses SHA-256 challenge and raw nonce in Firebase REST exchange',() async {
+  debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  String? hashedChallenge;
+  var exchanges=0;
+  final client=MockClient((request) async {
+   if(request.url.path.endsWith('signInWithIdp')){
+    exchanges++;
+    final payload=jsonDecode(request.body);
+    final query=Uri.splitQueryString(payload['postBody']);
+    expect(query['providerId'],'apple.com');
+    expect(query['id_token'],'apple-token');
+    expect(query['nonce'],isNotEmpty);
+    expect(sha256.convert(utf8.encode(query['nonce']!)).toString(),hashedChallenge);
+    expect(payload['returnIdpCredential'],false);
+    return authenticated();
+   }
+   return profile();
+  });
+  final session=ShopperSession(client:client,store:MemoryStore(),
+   appleRequest:(hashed) async {
+    hashedChallenge=hashed;
+    return const AppleIdentity('apple-token');
+   });
+  await session.signInWithApple();
+  expect(exchanges,1);
+  expect(session.userId,'existing-user');
+  expect(session.idToken,'firebase-token');
+  expect(session.hasAdminClaim,false);
+  expect(session.isBusy,false);
+  session.dispose();client.close();
+ });
+
+ test('Apple cancellation never creates a Firebase identity or seller privilege',() async {
+  debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  var calls=0;
+  final client=MockClient((_) async {calls++;return authenticated();});
+  final session=ShopperSession(client:client,store:MemoryStore(),appleRequest:(_) async=>null);
+  await session.signInWithApple();
+  expect(calls,0);
+  expect(session.userId,isNull);
+  expect(session.hasAdminClaim,false);
+  expect(session.isBusy,false);
+  session.dispose();client.close();
+ });
 }

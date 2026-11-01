@@ -280,7 +280,7 @@ jobs:
           flutter config --no-enable-swift-package-manager
           flutter create --platforms=ios --org za.co.teyza --project-name teyza_shopper .
           flutter pub get
-          python3 scripts/prepare_mobile_release.py ios
+          python3 scripts/prepare_mobile_release.py ios --signing "$SIGNING_MODE"
           ruby -c scripts/configure_ios_signing.rb
           python3 -m venv "$RUNNER_TEMP/teyza-icons"
           "$RUNNER_TEMP/teyza-icons/bin/pip" install --quiet pillow cairosvg
@@ -338,6 +338,23 @@ jobs:
           cp "$RUNNER_TEMP/teyza.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
           security cms -D -i "$RUNNER_TEMP/teyza.mobileprovision" > "$RUNNER_TEMP/teyza-profile.plist"
           export TEYZA_IOS_PROFILE_PLIST="$RUNNER_TEMP/teyza-profile.plist"
+          # A compiled entitlement alone does not enable Sign in with Apple.
+          # The distribution provisioning profile must explicitly contain it.
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          profile = plistlib.loads((Path(os.environ['RUNNER_TEMP']) / 'teyza-profile.plist').read_bytes())
+          entitlements = profile.get('Entitlements', {})
+          apple = entitlements.get('com.apple.developer.applesignin', [])
+          if 'Default' not in apple:
+              raise SystemExit('::error::Apple Sign In entitlement is missing from the saved iOS provisioning profile. Enable Sign in with Apple on the Teyza Apple App ID and generate a new distribution profile.')
+          bundle = os.environ['TEYZA_IOS_BUNDLE_ID']
+          team = os.environ['TEYZA_APPLE_TEAM_ID']
+          application_id = entitlements.get('application-identifier', '')
+          if application_id != f'{team}.{bundle}':
+              raise SystemExit('::error::iOS provisioning profile app ID does not match the Teyza Team ID and bundle ID.')
+          print('Teyza signed iOS profile confirms Apple Sign In, matching bundle and Team ID.')
+          PY
           gem install --user-install xcodeproj --no-document
           ruby scripts/configure_ios_signing.rb
       - name: Build iOS release archive or signed IPA

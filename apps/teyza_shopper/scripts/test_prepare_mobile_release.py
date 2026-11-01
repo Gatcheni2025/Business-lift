@@ -105,5 +105,56 @@ class NativePermissionTests(unittest.TestCase):
             export.assert_not_called()
 
 
+    def test_signed_google_oauth_must_match_web_client_and_existing_upload_sha1(self):
+        app_id='1:983479810697:android:aabbcc'
+        web='983479810697-webtest.apps.googleusercontent.com'
+        sha1='a'*40
+        sdk={'project_info':{'project_id':'business-lift-3c19c'},
+            'client':[{'client_info':{'mobilesdk_app_id':app_id,
+                'android_client_info':{'package_name':'com.asiyedriver.asiye'}},
+                'oauth_client':[{'client_type':3,'client_id':web},
+                    {'client_type':1,'client_id':'android-client',
+                     'android_info':{'package_name':'com.asiyedriver.asiye',
+                                     'certificate_hash':sha1}}]}]}
+        encoded=lambda:base64.b64encode(json.dumps(sdk).encode()).decode()
+        self.assertTrue(prepare.validate_android_google_oauth(encoded(),web,sha1))
+        with self.assertRaises(SystemExit):
+            prepare.validate_android_google_oauth(encoded(),'983479810697-wrong.apps.googleusercontent.com',sha1)
+        with self.assertRaises(SystemExit):
+            prepare.validate_android_google_oauth(encoded(),web,'b'*40)
+        sdk['client'][0]['oauth_client']=[{'client_type':3,'client_id':web}]
+        with self.assertRaises(SystemExit):
+            prepare.validate_android_google_oauth(encoded(),web,sha1)
+        sdk['client'][0]['oauth_client'].append({'client_type':1,
+            'android_info':{'package_name':'com.other.app','certificate_hash':sha1}})
+        with self.assertRaises(SystemExit):
+            prepare.validate_android_google_oauth(encoded(),web,sha1)
+        sdk['client'][0]['client_info']['android_client_info']['package_name']='za.co.teyza.shopper'
+        with self.assertRaises(SystemExit):
+            prepare.validate_android_google_oauth(encoded(),web,sha1)
+
+    def test_signed_ios_requires_real_google_client_pair_and_apple_team(self):
+        values={'TEYZA_GOOGLE_WEB_CLIENT_ID':'983479810697-webtest.apps.googleusercontent.com',
+          'TEYZA_GOOGLE_IOS_CLIENT_ID':'983479810697-iostest.apps.googleusercontent.com',
+          'TEYZA_FIREBASE_IOS_APP_ID':'1:983479810697:ios:abcd1234',
+          'TEYZA_APPLE_TEAM_ID':'TEAM1234AB'}
+        with patch.dict(os.environ,values):
+            self.assertTrue(prepare.validate_ios_google_oauth('signed'))
+            os.environ['TEYZA_GOOGLE_IOS_CLIENT_ID']=''
+            with self.assertRaises(SystemExit):
+                prepare.validate_ios_google_oauth('signed')
+            os.environ['TEYZA_GOOGLE_IOS_CLIENT_ID']=values['TEYZA_GOOGLE_WEB_CLIENT_ID']
+            with self.assertRaises(SystemExit):
+                prepare.validate_ios_google_oauth('signed')
+            os.environ['TEYZA_GOOGLE_IOS_CLIENT_ID']=values['TEYZA_GOOGLE_IOS_CLIENT_ID']
+            os.environ['TEYZA_APPLE_TEAM_ID']=''
+            with self.assertRaises(SystemExit):
+                prepare.validate_ios_google_oauth('signed')
+        # Existing unsigned local iOS fixture tests should remain possible.
+        with patch.dict(os.environ,{'TEYZA_GOOGLE_WEB_CLIENT_ID':'','TEYZA_GOOGLE_IOS_CLIENT_ID':''}):
+            self.assertIsNone(prepare.validate_ios_google_oauth('unsigned'))
+
+
+
 if __name__=='__main__':unittest.main()
 
