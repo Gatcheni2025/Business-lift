@@ -87,12 +87,16 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,clock=Date.now}) {
     }
     if(action==='ops_account_deletion_queue') {
       admin(actor,stamp);
-      const rows=await db.collection('teyzaAccountDeletionRequests')
-        .orderBy('__name__').limit(100).get();
-      return {requests:rows.docs.filter(x=>x.data().status!=='completed')
+      const pageSize=50;
+      let query=db.collection('teyzaAccountDeletionRequests').orderBy('__name__').limit(pageSize+1);
+      if(data.after)query=query.startAfter(D.id(data.after));
+      const rows=await query.get();
+      const page=rows.docs.slice(0,pageSize);
+      return {requests:page.filter(x=>x.data().status!=='completed')
         .map(x=>({uid:x.id,reference:x.data().reference,status:x.data().status,
           requestedAt:x.data().requestedAt,completeBy:x.data().completeBy,
-          seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true}))};
+          seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true})),
+        nextAfter:rows.docs.length>pageSize?page[page.length-1].id:null};
     }
     if(action==='ops_account_deletion_complete') {
       admin(actor,stamp);
@@ -104,11 +108,20 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,clock=Date.now}) {
       const ref=doc('teyzaAccountDeletionRequests/'+target),r=await get(ref);
       if(!r)D.fail(404,'Deletion request not found.');
       if(r.status==='completed')return {completed:true,reference:r.reference};
-      // Pending active orders cannot be orphaned. Finish or cancel them before closure.
+      // Check every order, not just the first page; a merchant may have
+      // hundreds of completed orders and one remaining open delivery.
       for(const field of ['ownerUid','shopperUid']) {
-        const orders=await db.collection('teyzaMobileOrders').where(field,'==',target).limit(100).get();
-        if(orders.docs.some(x=>!['completed','cancelled'].includes(x.data().status)))
-          D.fail(409,'Resolve outstanding orders before completing account deletion.');
+        let after=null;
+        for(;;) {
+          let query=db.collection('teyzaMobileOrders').where(field,'==',target)
+            .orderBy('__name__').limit(100);
+          if(after)query=query.startAfter(after);
+          const orders=await query.get();
+          if(orders.docs.some(x=>!['completed','cancelled'].includes(x.data().status)))
+            D.fail(409,'Resolve outstanding orders before completing account deletion.');
+          if(orders.docs.length<100)break;
+          after=orders.docs[orders.docs.length-1];
+        }
       }
       if(typeof deleteAuthUser!=='function')D.fail(503,'Account deletion service is not configured.');
       try { await deleteAuthUser(target); }
