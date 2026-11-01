@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -101,6 +102,15 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
           const Text('Security check: if your last login was more than 15 minutes ago, sign out and sign in again before submitting.',
             style:TextStyle(color:Colors.black54,fontSize:12)),
         ],
+        const SizedBox(height:16),
+        TextButton.icon(
+          icon:const Icon(Icons.open_in_new),
+          label:const Text('Read Teyza data deletion policy'),
+          onPressed:()=>launchUrl(
+            Uri.parse('https://teyza.co.za/data-deletion.html'),
+            mode:LaunchMode.externalApplication,
+          ),
+        ),
         if(error!=null)Padding(padding:const EdgeInsets.only(top:12),
           child:Text(error!,style:const TextStyle(color:Colors.red))),
       ])),
