@@ -14,8 +14,9 @@ const ratings=require('./ratings');
 const P=require('./publication');
 const locations=require('./shop-location');
 const addresses=require('./shop-address');
+const deletion=require('./account-deletion');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,createPhoneToken,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
@@ -105,9 +106,16 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
+  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,clock});
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    // Account deletion must be available regardless of an unverified email or
+    // shop approval. Pending-closure users cannot create more data or orders.
+    if(deletion.actions.has(action))return accountDeletion.execute(auth,action,data);
+    const deletionRecord=await read('teyzaAccountDeletionRequests/'+uid);
+    if(deletionRecord&&deletionRecord.status!=='completed'&&auth.teyzaAdmin!==true)
+      D.fail(403,'Your account deletion is being processed. Save your deletion reference and contact Teyza support if you need assistance.');
     if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
