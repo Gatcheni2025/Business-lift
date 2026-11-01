@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
+import 'account_deletion_page.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -423,6 +424,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
+    businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
+      'Request permanent account and shop listing deletion',
+      ()=>Navigator.push(context,MaterialPageRoute(
+        builder:(_)=>TeyzaDeleteAccountPage(session:widget.session,api:widget.mobileApi)))),
     if(widget.session.hasAdminClaim&&widget.session.emailVerified)
       businessTile(Icons.admin_panel_settings_outlined,'Seller review desk','Administrator access',()=>Navigator.push(context,
         MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session,api:widget.mobileApi)))),
