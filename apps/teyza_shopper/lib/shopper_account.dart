@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
+import 'account_deletion_page.dart';
 import 'seller_review.dart';
 
 class ShopperAccountPanel extends StatefulWidget {
@@ -273,6 +274,12 @@ class _AccountState extends State<ShopperAccountPanel> {
           if(widget.session.hasAdminClaim&&widget.session.emailVerified)
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
               icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('Seller review desk')),
+          OutlinedButton.icon(
+            onPressed:working?null:()=>Navigator.push(context,
+              MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:widget.session))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),
+            label:const Text('Privacy & Security · Delete My Account')),
+          const SizedBox(height:10),
           OutlinedButton.icon(onPressed:working?null:widget.session.signOut,
             icon:const Icon(Icons.logout),label:const Text('Sign out')),
         ] else ...[
