@@ -47,6 +47,7 @@ def android(signing):
             raise SystemExit('Run CONNECT-PLAY-PACKAGE.ps1 before signing: the Play package needs its matching Firebase registration.')
         validate_android_sdk(encoded)
         verify_play_upload_key()
+        verify_android_google_oauth_for_signed_release(encoded)
     path = ROOT / "android/app/src/main/AndroidManifest.xml"
     ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
     tree = ET.parse(path)
@@ -156,6 +157,76 @@ def validate_android_sdk(encoded, expected_app_id=None):
     return app_id
 
 
+
+def _google_client(value):
+    client = (value or '').strip()
+    if not re.fullmatch(r'[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com', client):
+        raise SystemExit('Teyza signed authentication requires a real Google OAuth client ID in GitHub Actions variables.')
+    return client
+
+
+def validate_android_google_oauth(encoded, web_client_id, upload_sha1):
+    """Fail signed Android builds with missing or mismatched Google OAuth."""
+    try:
+        sdk = json.loads(base64.b64decode(encoded, validate=True))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        raise SystemExit('Android Firebase SDK secret is not a valid google-services.json.')
+    client_id = _google_client(web_client_id)
+    sha1 = re.sub(r'[\s:]', '', (upload_sha1 or '')).lower()
+    if not re.fullmatch(r'[0-9a-f]{40}', sha1):
+        raise SystemExit('The Teyza upload certificate SHA-1 is missing or malformed.')
+    if sdk.get('project_info', {}).get('project_id') != 'business-lift-3c19c':
+        raise SystemExit('Google sign-in Firebase SDK belongs to another project.')
+    clients = [c for c in sdk.get('client', []) if
+        c.get('client_info', {}).get('android_client_info', {}).get('package_name') == ANDROID_ID]
+    if len(clients) != 1:
+        raise SystemExit('Google login Android package mismatch: expected ' + ANDROID_ID)
+    oauth = clients[0].get('oauth_client', [])
+    if not any(c.get('client_type') == 3 and
+        c.get('client_id') == client_id for c in oauth):
+        raise SystemExit('TEYZA_GOOGLE_WEB_CLIENT_ID is missing from the Firebase Android SDK OAuth clients. Download the refreshed google-services.json after registering Google sign-in.')
+    if not any(c.get('client_type') == 1 and
+        c.get('android_info', {}).get('package_name') == ANDROID_ID and
+        re.sub(r'[\s:]', '', c.get('android_info', {}).get('certificate_hash', '')).lower() == sha1
+        for c in oauth):
+        raise SystemExit('Google login Android SHA-1 mismatch: register the existing upload key SHA-1 in Firebase, refresh Google SDK secret; also register the Play app-signing SHA-1 for installed Play builds.')
+    return True
+
+
+def verify_android_google_oauth_for_signed_release(encoded):
+    required = ['TEYZA_ANDROID_KEYSTORE_PATH', 'TEYZA_ANDROID_KEY_ALIAS',
+                'TEYZA_ANDROID_STORE_PASSWORD']
+    if any(not os.environ.get(name) for name in required):
+        raise SystemExit('Cannot verify Google sign-in without the existing Teyza upload keystore.')
+    try:
+        certificate = subprocess.check_output(['keytool', '-exportcert',
+            '-keystore', os.environ['TEYZA_ANDROID_KEYSTORE_PATH'],
+            '-alias', os.environ['TEYZA_ANDROID_KEY_ALIAS'],
+            '-storepass:env', 'TEYZA_ANDROID_STORE_PASSWORD'],
+            stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        raise SystemExit('Cannot read the existing Teyza upload signing certificate.')
+    sha1 = hashlib.sha1(certificate).hexdigest()
+    validate_android_google_oauth(encoded, os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID'), sha1)
+    print('Signed Teyza Google login identity matched Firebase Android app, Web OAuth client, and upload certificate SHA-1.')
+
+
+def validate_ios_google_oauth(signing):
+    """iOS Google client, web server client and Firebase app must be explicit."""
+    if signing != 'signed':
+        return
+    _google_client(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID'))
+    ios_client = _google_client(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))
+    if ios_client == os.environ['TEYZA_GOOGLE_WEB_CLIENT_ID'].strip():
+        raise SystemExit('Google iOS OAuth client must be distinct from the Web OAuth client.')
+    app = native_app_id('ios')
+    if not app:
+        raise SystemExit('Signed iOS build requires TEYZA_FIREBASE_IOS_APP_ID in the Firebase project.')
+    if not os.environ.get('TEYZA_APPLE_TEAM_ID', '').strip():
+        raise SystemExit('Signed iOS build requires the real Apple Developer Team ID.')
+    return True
+
+
 def verify_play_upload_key():
     expected = re.sub(r'[\s:]', '', os.environ.get('TEYZA_PLAY_UPLOAD_CERT_SHA256', '')).lower()
     if not re.fullmatch(r'[0-9a-f]{64}', expected):
@@ -175,7 +246,8 @@ def verify_play_upload_key():
     return expected
 
 
-def ios():
+def ios(signing='unsigned'):
+    validate_ios_google_oauth(signing)
     if not re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+){2,}", IOS_ID):
         raise SystemExit("TEYZA_IOS_BUNDLE_ID must be an Apple bundle identifier.")
     path = ROOT / "ios/Runner/Info.plist"
@@ -261,7 +333,7 @@ if __name__ == "__main__":
             with open(os.environ['GITHUB_ENV'], 'a') as environment:
                 environment.write('TEYZA_FIREBASE_ANDROID_APP_ID=' + native_app_id('android') + '\n')
     else:
-        ios()
+        ios(args.signing)
 
 
     from configure_facebook import configure
