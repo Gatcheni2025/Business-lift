@@ -241,8 +241,16 @@ def verify_play_upload_key():
             '-storepass:env', 'TEYZA_ANDROID_STORE_PASSWORD'], stderr=subprocess.DEVNULL)
     except (OSError, subprocess.CalledProcessError):
         raise SystemExit('Could not read the configured existing Play upload certificate.')
-    if hashlib.sha256(certificate).hexdigest() != expected:
-        raise SystemExit('The saved GitHub upload key does not match com.asiyedriver.asiye in Play Console. Restore its existing key; no replacement key was generated.')
+    actual = hashlib.sha256(certificate).hexdigest()
+    if actual != expected:
+        # Certificate hashes are public; do not print keystores, aliases or passwords.
+        raise SystemExit(
+            'The saved GitHub upload key does not match the existing Play upload certificate. '
+            'Play upload certificate SHA-256: ' + expected.upper() + '; '
+            'GitHub keystore certificate SHA-256: ' + actual.upper() + '. '
+            'Verify the Upload key certificate under Play Console > App integrity. '
+            'Restore the original keystore only after confirming the matching certificate; '
+            'do not generate a new signing key or disable this check.')
     return expected
 
 
