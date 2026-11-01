@@ -27,13 +27,18 @@ class FakeDB {
   }
   collection(path) {
     const db=this,filters=[];
+    let max=Infinity,after=null;
     const q={
       where:(field,op,value)=>{filters.push([field,op,value]);return q;},
-      orderBy:()=>q,limit:()=>q,
+      orderBy:()=>q,
+      limit:(n)=>{max=n;return q;},
+      startAfter:(value)=>{after=typeof value==='string'?value:value.id;return q;},
       get:async()=>({docs:[...db.records].filter(([key,obj])=>
         key.startsWith(path+'/')&&key.slice(path.length+1).indexOf('/')<0&&
         filters.every(([f,op,v])=>op==='=='&&obj[f]===v))
-        .map(([key])=>db.snap(key))}),
+        .sort((a,b)=>a[0].localeCompare(b[0]))
+        .filter(([key])=>!after||key.split('/').at(-1)>after)
+        .slice(0,max).map(([key])=>db.snap(key))}),
     };
     return q;
   }
@@ -104,4 +109,43 @@ test('only recently signed-in admin can list and complete; live orders and confi
   assert.equal(result.completed,true);
   assert.deepEqual(deleted,['seller1']);
   assert.equal(db.records.get('teyzaAccountDeletionRequests/seller1').status,'completed');
+});
+
+test('Deletion queue pages more than fifty requests without skipping the next page',async()=>{
+  const requests={};
+  for(let n=0;n<75;n++){
+    const id='buyer'+String(n).padStart(3,'0');
+    requests['teyzaAccountDeletionRequests/'+id]={
+      uid:id,reference:'TZ-DEL-'+id,status:'pending_review',
+      requestedAt:now,completeBy:now+86400000,
+    };
+  }
+  const {service}=instance(requests);
+  const first=await service.execute(admin,'ops_account_deletion_queue');
+  assert.equal(first.requests.length,50);
+  assert(first.nextAfter);
+  const second=await service.execute(admin,'ops_account_deletion_queue',{after:first.nextAfter});
+  assert.equal(second.requests.length,25);
+  assert.equal(second.nextAfter,null);
+  assert.notEqual(first.requests.at(-1).uid,second.requests[0].uid);
+});
+test('Account closure inspects later order pages and refuses one open order past 100 completed',async()=>{
+  const seed={};
+  for(let n=0;n<103;n++){
+    const id='order'+String(n).padStart(3,'0');
+    seed['teyzaMobileOrders/'+id]={
+      ownerUid:'seller1',shopperUid:'buyer'+n,
+      status:n===102?'requested':'completed',
+    };
+  }
+  const {service,db,deleted}=instance(seed);
+  await service.execute(seller,'account_deletion_request',{confirmation:'DELETE'});
+  const confirmed={uid:'seller1',confirmedDataErased:true,
+    confirmedBillingResolved:true,confirmedProviderRevocation:true};
+  await fail(service.execute(admin,'ops_account_deletion_complete',confirmed),409);
+  assert.deepEqual(deleted,[]);
+  db.records.get('teyzaMobileOrders/order102').status='completed';
+  const outcome=await service.execute(admin,'ops_account_deletion_complete',confirmed);
+  assert.equal(outcome.completed,true);
+  assert.deepEqual(deleted,['seller1']);
 });
