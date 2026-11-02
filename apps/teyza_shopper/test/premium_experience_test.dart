@@ -222,6 +222,8 @@ void main(){
     await tester.ensureVisible(card);await tester.pumpAndSettle();
     await tester.tap(card);await tester.pumpAndSettle();
     expect(find.text('Verified Spaza'),findsWidgets);
+    await tester.scrollUntilVisible(find.text('Products coming soon'),200,
+      scrollable:find.byType(Scrollable).last);
     expect(find.text('Products coming soon'),findsOneWidget);
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
