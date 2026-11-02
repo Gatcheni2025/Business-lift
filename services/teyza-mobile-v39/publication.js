@@ -24,12 +24,14 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
  const approved=registered&&account.approvalStatus==='approved'&&reviewed;
  const blocked=held(shop)||setup.moderationBlocked===true||account?.approvalStatus==='rejected';
  const hasListing=entitled(uid,account,billing,now);
- const live=Boolean(ready&&approved&&!blocked&&hasListing);
- return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':!hasListing?'awaiting_subscription':'active'};
+ // Free registration is visible after genuine admin approval. R99 Basic
+ // purchases priority placement, not the right to be discoverable at all.
+ const live=Boolean(ready&&approved&&!blocked);
+ return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':'active'};
 }
 function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
- if(!state(uid,account,setup,verification,shop,billing,now).live)D.fail(409,'This shop is awaiting approval, verification or an active paid listing.');
+ if(!state(uid,account,setup,verification,shop,billing,now).live)D.fail(409,'This shop is awaiting approval or verification.');
  return shop;
 }
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
@@ -54,7 +56,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  const next={...(shop||{}),sellerUid:uid,name:account.shopName,address:account.address||'',
   area:shop?.address&&sameAddress(shop.address,account.address)?shop.area||account.address:account.address||'',
   shopCategory:account.category,status:result.status,approvalStatus:result.approved?'approved':'pending',
-  sponsored:result.live&&account.listingPlan==='basic',
+  sponsored:result.live&&entitled(uid,account,billing,now)&&account.listingPlan==='basic',
   sellingEnabled:result.live&&(setup.requiredVersion===2||shop?.sellingEnabled===true),
   identityVerified:result.approved,verificationStatus:result.approved?'approved':'pending_review',
   catalogueEnabled:shop?.catalogueEnabled===true,
