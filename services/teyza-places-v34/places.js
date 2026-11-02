@@ -7,8 +7,9 @@ const FIELD_MASK = ['places.id', 'places.displayName', 'places.formattedAddress'
 const QUERIES = {
   spaza: ['spaza shop', 'tuck shop', 'mini market', 'general dealer',
     'convenience store', 'grocery supermarket'],
-  variety: ['China Mall', 'shopping centre', 'wholesale cash and carry',
-    'variety store', 'retail shopping mall', 'supermarket']
+  variety: ['China Mall', 'shopping centre', 'variety store', 'retail shopping mall', 'supermarket'],
+  wholesale: ['wholesale cash and carry', 'food wholesaler', 'grocery distributor',
+    'bulk food suppliers', 'wholesale warehouse']
 };
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function num(value, low, high) {
@@ -16,7 +17,8 @@ function num(value, low, high) {
   const n = Number(value);
   return Number.isFinite(n) && n >= low && n <= high ? n : null;
 }
-const category = value => ['variety', 'retail', 'other', 'other retail', 'other-retail']
+const category = value => String(value).toLowerCase() === 'wholesale' || String(value).toLowerCase() === 'wholesaler'
+  ? 'wholesale' : ['variety', 'retail', 'other', 'other retail', 'other-retail']
   .includes(String(value).toLowerCase()) ? 'variety' : 'spaza';
 function distance(a, b, c, d) {
   const rad = Math.PI / 180, delta = (c - a) * rad, lon = (d - b) * rad;
@@ -31,9 +33,11 @@ function photoResource(value) {
 function kindMatch(place, kind) {
   const name = String(place.displayName?.text || '').toLowerCase();
   const types = new Set([place.primaryType, ...(place.types || [])]);
+  if (kind === 'wholesale') return types.has('wholesaler') || types.has('warehouse_store') ||
+    /\\bwholesal(e|er|ers|ing)\\b|cash\\s*(?:&|and|n)\\s*carry|bulk\\s*(?:food|grocer|suppl)|food\\s*distribut/.test(name);
   if (kind === 'spaza') return /spaza|tuck.?shop|mini.?market|convenience|grocer|general dealer|corner shop|supermarket|superette|food store/.test(name) ||
     ['convenience_store', 'grocery_store', 'supermarket', 'food_store'].some(t => types.has(t));
-  if (/spaza|tuck.?shop|tyres?|restaurant|takeaway|auto spares|motor spares|printing|salon/.test(name)) return false;
+  if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry|tyres?|restaurant|takeaway|auto spares|motor spares|printing|salon/.test(name) || types.has('wholesaler')) return false;
   return /china.?mall|mall|shopping|wholesale|cash.?(&|and).?carry|retail|supermarket|variety|bazaar|clothing|fashion|furniture|homeware|department/.test(name) ||
     ['shopping_mall', 'department_store', 'supermarket', 'clothing_store', 'home_goods_store', 'wholesaler'].some(t => types.has(t));
 }
