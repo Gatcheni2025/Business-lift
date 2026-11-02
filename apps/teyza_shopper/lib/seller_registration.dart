@@ -47,7 +47,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:ownerInk,title:const Text('Register your shop')),
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:ownerInk,title:const Text('Register your business')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(22),children:[
       Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:ownerInk,borderRadius:BorderRadius.circular(26)),
         child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -60,10 +60,10 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('Tell us about your shop',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
+        const Text('Register a Spaza Shop, Wholesaler or Retail Business',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'Shop type',filled:true,fillColor:Colors.white,
           border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
-          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop')),DropdownMenuItem(value:'retail',child:Text('Other Retail / Wholesale'))],
+          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop')),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler / Cash & Carry')),DropdownMenuItem(value:'retail',child:Text('Other Retail Shop'))],
           onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
         const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:legalType,isExpanded:true,decoration:const InputDecoration(labelText:'Register as',border:OutlineInputBorder()),
@@ -84,7 +84,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           title:const Text('I confirm that these are my shop’s details and shoppers may see this business address and map location.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
-        const SizedBox(height:12),const Text('Registration is free. After saving, choose Free or R99 Basic. Your shop must pass verification and have a paid listing before shoppers can discover it. Resume setup from your dashboard at any time.',
+        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other retailers. After verification, an active paid listing can be discovered. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));
