@@ -433,7 +433,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'Follow up orders and deliveries from your suppliers',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
         Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
-          body:ShopOrdersPanel(session:widget.session,asOwner:false,api:widget.mobileApi))))),
+          body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
     if(shop?.category=='wholesale')businessTile(Icons.local_shipping_outlined,'Your wholesale stock offers',
       'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
       ()=>selectSellerTab(1)),
