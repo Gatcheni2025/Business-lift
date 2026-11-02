@@ -16,7 +16,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
   const uid=D.id(auth.uid);
   if(action==='seller_register'){
    await rate(uid,'register',5,3600000);
-   if(!['spaza','retail'].includes(data.category))D.fail(422,'Choose Spaza Shop or Other Retail / Wholesale.');
+   if(!['spaza','retail','wholesale'].includes(data.category))D.fail(422,'Choose Spaza Shop, Wholesaler or Other Retail.');
    if(data.consent!==true)D.fail(422,'Confirm that these shop details are yours.');
    const legalType=data.legalType||'individual';
    if(!['individual','company'].includes(legalType))D.fail(422,'Choose Individual or Registered company.');
