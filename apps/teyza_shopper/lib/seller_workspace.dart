@@ -49,7 +49,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending',listingPlan='trial';bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='trial';int? trialEndsAt;bool hasLocation=false;
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -84,7 +84,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'trial';hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'trial';trialEndsAt=(results[0]['trialEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -573,6 +573,17 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          if(listingPlan=='trial')Card(child:ListTile(
+            leading:Icon(trialEndsAt!=null&&trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?
+              Icons.timer_off_outlined:Icons.hourglass_bottom_outlined),
+            title:Text(trialEndsAt==null?'7-day trial starts on approval':
+              trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?'Your trial has expired':
+              '7-day trial active'),
+            subtitle:Text(trialEndsAt==null?
+              'Complete verification and wait for Teyza approval. No bank mandate needed.':
+              trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?
+                'Shop listing and new orders are paused. A compliant paid renewal is required.':
+                'Expires on ${DateTime.fromMillisecondsSinceEpoch(trialEndsAt!).toLocal().toString().split(' ').first}. No automatic debit.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
