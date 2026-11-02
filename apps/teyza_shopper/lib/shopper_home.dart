@@ -1049,21 +1049,26 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final products=allPublishedProducts.where((entry)=>query.isEmpty||
       (entry.product.name+' '+entry.product.category+' '+entry.shop.name)
         .toLowerCase().contains(query)).toList();
-    return RefreshIndicator(onRefresh:()=>load(),child:ListView(
+    return RefreshIndicator(onRefresh:()=>load(),child:ListView.builder(
       key:const PageStorageKey<String>('teyza-shop-product-catalogue'),
-      padding:const EdgeInsets.fromLTRB(16,16,16,28),children:[
-      const Text('Shop',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900,color:ink)),
-      const SizedBox(height:5),
-      const Text('Products published by participating Teyza shops.',
-        style:TextStyle(color:muted,fontSize:12)),
-      const SizedBox(height:14),
-      TextField(onChanged:(value)=>setState(()=>productTabSearch=value),
-        decoration:const InputDecoration(prefixIcon:Icon(Icons.search),
-          hintText:'Search products and shops',border:OutlineInputBorder())),
-      const SizedBox(height:16),
-      if(products.isEmpty)empty('No matching products','Try another product or shop name.'),
-      for(final entry in products)
-        Card(color:Colors.white,elevation:0,margin:const EdgeInsets.only(bottom:10),
+      physics:const AlwaysScrollableScrollPhysics(),
+      padding:const EdgeInsets.fromLTRB(16,16,16,28),
+      itemCount:products.length+1,
+      itemBuilder:(context,index){
+        if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('Shop',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900,color:ink)),
+          const SizedBox(height:5),
+          const Text('Products published by participating Teyza shops.',
+            style:TextStyle(color:muted,fontSize:12)),
+          const SizedBox(height:14),
+          TextField(onChanged:(value)=>setState(()=>productTabSearch=value),
+            decoration:const InputDecoration(prefixIcon:Icon(Icons.search),
+              hintText:'Search products and shops',border:OutlineInputBorder())),
+          const SizedBox(height:16),
+          if(products.isEmpty)empty('No matching products','Try another product or shop name.'),
+        ]);
+        final entry=products[index-1];
+        return Card(color:Colors.white,elevation:0,margin:const EdgeInsets.only(bottom:10),
           child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[
             photo(entry.product.picture,size:82,icon:Icons.shopping_bag_outlined),
             const SizedBox(width:12),
@@ -1082,8 +1087,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ])),
             const SizedBox(width:5),
             FilledButton(onPressed:()=>openShop(entry.shop),child:const Text('Buy here')),
-          ]))),
-    ]));
+          ])));
+      }));
   }
 
   Widget groceryAisles()=>SizedBox(height:70,child:Row(
