@@ -221,7 +221,7 @@ void main(){
     final card=find.byKey(const ValueKey('nearby-approved-no-prices'));
     await tester.ensureVisible(card);await tester.pumpAndSettle();
     await tester.tap(card);await tester.pumpAndSettle();
-    expect(find.text('Verified Spaza'),findWidgets);
+    expect(find.text('Verified Spaza'),findsWidgets);
     expect(find.text('Products coming soon'),findsOneWidget);
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
