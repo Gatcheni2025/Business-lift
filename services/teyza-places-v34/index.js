@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions'}));
+app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions', wholesaleDiscovery: true}));
 app.get(['/shopper-discover.php', '/shopper-discover'], async (req, res) => {
   const lat = num(req.query.lat, -90, 90), lon = num(req.query.lon, -180, 180);
   if (lat === null || lon === null) return res.status(400).json({ok: false, error: 'lat and lon required'});
