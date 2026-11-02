@@ -80,6 +80,31 @@ test('shopper can request deletion without verified email; durable reference is 
   assert.equal(duplicate.reference,r.reference);
   assert.equal((await service.execute(buyer,'account_deletion_status')).reference,r.reference);
 });
+test('Apple revocation is backend-authorized and confirmed before account deletion',async()=>{
+ const calls=[];
+ const {service,db}=instance({},{
+   getAuthUser:async uid=>({uid,providerData:[{providerId:'apple.com'}]}),
+   revokeAppleToken:async(uid,code,idToken)=>calls.push({uid,code,idToken}),
+ });
+ await fail(service.execute(buyer,'account_apple_revoke',{authorizationCode:'valid-code-0123456789'}),403);
+ const actor={...buyer,verifiedFirebaseIdToken:'verified-firebase-id-token'};
+ const result=await service.execute(actor,'account_apple_revoke',{authorizationCode:'valid-code-0123456789'});
+ assert.equal(result.revoked,true);
+ assert.deepEqual(calls,[{uid:'shopper1',code:'valid-code-0123456789',
+   idToken:'verified-firebase-id-token'}]);
+ assert.equal(db.records.get('teyzaAppleRevocations/shopper1').status,'revoked');
+ const deleted=await service.execute(actor,'account_deletion_request',{confirmation:'DELETE'});
+ assert.equal(deleted.signInBlocked,true);
+ assert.equal(db.records.get('teyzaAccountDeletionRequests/shopper1').needsAppleTokenReview,false);
+});
+test('Non Apple-linked accounts cannot submit token revocation',async()=>{
+ const {service}=instance({},{
+   getAuthUser:async uid=>({uid,providerData:[{providerId:'password'}]}),
+   revokeAppleToken:async()=>{throw Error('should not reach provider');},
+ });
+ await fail(service.execute({...buyer,verifiedFirebaseIdToken:'token'},
+   'account_apple_revoke',{authorizationCode:'valid-code-0123456789'}),403);
+});
 test('seller deletion suspends public shop and flags billing and mandate review',async()=>{
   const {service,db}=instance({
     'teyzaSellerAccounts/seller1':{uid:'seller1',approvalStatus:'approved',listingStatus:'active'},
