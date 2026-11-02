@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'account_deletion_page.dart';
 import 'seller_review.dart';
+import 'chat_moderation_page.dart';
 
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
@@ -280,6 +281,10 @@ class _AccountState extends State<ShopperAccountPanel> {
           if(widget.session.hasAdminClaim&&widget.session.emailVerified)
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
               icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('Seller review desk')),
+          if(widget.session.hasAdminClaim&&widget.session.emailVerified)
+            OutlinedButton.icon(onPressed:()=>Navigator.push(context,
+              MaterialPageRoute(builder:(_)=>ChatModerationPage(session:widget.session))),
+              icon:const Icon(Icons.flag_outlined),label:const Text('Chat moderation reports')),
           OutlinedButton.icon(
             onPressed:working?null:()=>Navigator.push(context,
               MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:widget.session))),
