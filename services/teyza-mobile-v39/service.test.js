@@ -810,7 +810,16 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  await rejects(service.execute({uid:'outsider',email_verified:true},'order_quote',req),403);
  await rejects(service.execute({uid:'outsider',email_verified:true},'order_request',
    {...req,requestId:'bulk-order-two',phone:'0712345678',address:'12 Main Road KwaMashu Durban'}),403);
- db.records.set('teyzaSellerAccounts/buyer1',{...spaza,approvalStatus:'pending'});
+ db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'free'});
+ await rejects(service.execute(buyer,'wholesale_directory'),403);
+ await rejects(service.execute(buyer,'order_quote',req),403);
+ db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic'});
+ await rejects(service.execute(buyer,'wholesale_directory'),403);
+ const P=require('./publication');
+ db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:9900,latestPeriod:P.period(1000000)});
+ assert.equal((await service.execute(buyer,'wholesale_directory')).entries.length,1,
+   'Active paid Basic is eligible for wholesale sourcing');
+ db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic',approvalStatus:'pending'});
  await rejects(service.execute(buyer,'wholesale_directory'),403);
  await rejects(service.execute(buyer,'order_quote',req),403);
 });
