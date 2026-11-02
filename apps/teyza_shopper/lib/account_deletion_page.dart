@@ -16,7 +16,7 @@ class TeyzaDeleteAccountPage extends StatefulWidget {
 
 class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
   final confirmation=TextEditingController();
-  bool acknowledged=false,busy=false,loading=true;
+  bool acknowledged=false,busy=false,loading=true,appleRevocationPending=false;
   Map<String,dynamic>? receipt;
   String? error;
   TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
@@ -48,8 +48,14 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
   }
   Future<void> requestDeletion()async{
     if(busy||!acknowledged||confirmation.text.trim()!='DELETE')return;
-    setState((){busy=true;error=null;});
+    setState((){busy=true;error=null;appleRevocationPending=false;});
     try{
+      // Apple requires a fresh authorization code for token revocation.
+      // An unavailable provider must never prevent account deletion.
+      if(widget.session.appleProviderLinked){
+        try{await widget.session.revokeAppleForDeletion();}
+        catch(_){appleRevocationPending=true;}
+      }
       final response=await api.call('account_deletion_request',{'confirmation':'DELETE'});
       if(response['signInBlocked']!=true)throw StateError(
         'Your deletion request was saved, but sign-in closure was not confirmed. Contact Teyza support and do not assume the account has been closed.');
@@ -79,6 +85,15 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
             ?'Your previous Teyza account identity is closed and cannot be signed into again. You may register a NEW account with a new user ID, including the same email once the old sign-in identity is removed. The old shop, profile and orders will not be restored. Personal-data erasure and lawful retention review continue separately.'
             :'Your deletion request is recorded, but account sign-in closure is not confirmed. Contact Teyza support with your reference.',
             textAlign:TextAlign.center),
+          if(appleRevocationPending)...[
+            const SizedBox(height:12),
+            const Text('Apple token revocation could not be confirmed. Your Teyza '
+              'account is still closed for sign-in, but you should open iPhone '
+              'Settings → your Apple Account → Sign in with Apple → Teyza → '
+              'Stop Using Apple Account. Teyza support must also review the '
+              'provider revocation before marking deletion complete.',
+              style:TextStyle(color:Colors.deepOrange,fontWeight:FontWeight.w700)),
+          ],
           const SizedBox(height:16),
           SelectableText('Reference: ${r['reference']??'Not available'}',textAlign:TextAlign.center,
             style:const TextStyle(fontSize:18,fontWeight:FontWeight.w700)),
@@ -102,6 +117,11 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
           const SizedBox(height:12),
           const Text('Your account will stop accepting sign-ins after the server confirms closure. Complete data erasure may take up to 30 days. You can start here without emailing support.',
             style:TextStyle(fontWeight:FontWeight.w600)),
+          if(widget.session.appleProviderLinked)
+            const Padding(padding:EdgeInsets.only(bottom:12),
+              child:Text('Apple sign-in: Apple may ask you to authorize again '
+                'before the account is closed so that its provider token can be revoked. '
+                'This does not create a new Teyza account.')),
           const SizedBox(height:18),
           TextField(controller:confirmation,autocorrect:false,enableSuggestions:false,
             decoration:const InputDecoration(labelText:'Type DELETE to confirm',border:OutlineInputBorder()),
