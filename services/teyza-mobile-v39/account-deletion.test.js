@@ -51,18 +51,20 @@ const fail=(promise,status)=>assert.rejects(promise,error=>error.status===status
 const instance=(seed={},opts={})=>{
   const db=new FakeDB(seed),deleted=[],disabled=[],revoked=[];
   return {db,deleted,disabled,revoked,service:createAccountDeletion({
-    db,clock:()=>now,deleteAuthUser:async uid=>{deleted.push(uid);},
+    db,clock:()=>now,deleteAuthUser:async uid=>{if(deleted.includes(uid)){const e=Error('removed');e.code='auth/user-not-found';throw e;}deleted.push(uid);},
     disableAuthUser:async uid=>{disabled.push(uid);},
     revokeAuthTokens:async uid=>{revoked.push(uid);},...opts})};
 };
 
 test('shopper can request deletion without verified email; durable reference is idempotent',async()=>{
-  const {service,db,disabled,revoked}=instance();
+  const {service,db,deleted,disabled,revoked}=instance();
   await fail(service.execute(buyer,'account_deletion_request',{confirmation:'yes'}),422);
   const r=await service.execute(buyer,'account_deletion_request',{confirmation:'DELETE'});
   assert.match(r.reference,/^TZ-DEL-[0-9A-F]{12}$/);
   assert.equal(r.status,'pending_review');
   assert.equal(r.signInBlocked,true);
+  assert.equal(r.canRegisterAgain,true);
+  assert.deepEqual(deleted,['shopper1']);
   assert.deepEqual(disabled,['shopper1']);
   assert.deepEqual(revoked,['shopper1']);
   assert.equal(r.seller,false);
@@ -90,7 +92,7 @@ test('seller deletion suspends public shop and flags billing and mandate review'
 });
 
 test('Legacy deletion requests are blocked when status is checked and retry is idempotent',async()=>{
- const {service,db,disabled,revoked}=instance({
+ const {service,db,deleted,disabled,revoked}=instance({
   'teyzaAccountDeletionRequests/shopper1':{
     uid:'shopper1',reference:'TZ-DEL-OLD123',status:'pending_review',
     requestedAt:now-10000,completeBy:now+86400000,
@@ -101,6 +103,7 @@ test('Legacy deletion requests are blocked when status is checked and retry is i
  assert.equal(db.records.get('teyzaAccountDeletionRequests/shopper1').authDisabledAt,now);
  assert.deepEqual(disabled,['shopper1']);
  assert.deepEqual(revoked,['shopper1']);
+ assert.deepEqual(deleted,['shopper1']);
  assert.equal((await service.execute(buyer,'account_deletion_status')).signInBlocked,true);
  assert.deepEqual(disabled,['shopper1']);
 });
@@ -172,7 +175,7 @@ test('Account closure inspects later order pages and refuses one open order past
   const confirmed={uid:'seller1',confirmedDataErased:true,
     confirmedBillingResolved:true,confirmedProviderRevocation:true};
   await fail(service.execute(admin,'ops_account_deletion_complete',confirmed),409);
-  assert.deepEqual(deleted,[]);
+  assert.deepEqual(deleted,['seller1']);
   db.records.get('teyzaMobileOrders/order102').status='completed';
   const outcome=await service.execute(admin,'ops_account_deletion_complete',confirmed);
   assert.equal(outcome.completed,true);
