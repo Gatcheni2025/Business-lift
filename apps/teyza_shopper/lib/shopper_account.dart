@@ -23,8 +23,10 @@ class _AccountState extends State<ShopperAccountPanel> {
   @override
   void dispose() { email.dispose(); password.dispose(); name.dispose(); super.dispose(); }
   Future<void> submit() async {
+    // A previous Google OAuth error must not be attributed to email sign-in.
+    if(status!=null||failure)setState(() {status=null;failure=false;});
     if (!formKey.currentState!.validate()) return;
-    setState(() { working=true; status=null; });
+    setState(() { working=true; status=null;failure=false; });
     try {
       if (registering) {
         await widget.session.register(name.text,email.text,password.text);
@@ -226,7 +228,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             if (!widget.session.emailVerified) ...[
               FilledButton.icon(
                 onPressed:working?null:() async {
-                  setState(() {working=true;status=null;});
+                  setState(() {working=true;status=null;failure=false;});
                   try {
                     await widget.session.sendEmailVerification();
                     if(mounted)setState(() {
@@ -241,7 +243,7 @@ class _AccountState extends State<ShopperAccountPanel> {
                 label:const Text('Send verification email')),
               TextButton.icon(
                 onPressed:working?null:() async {
-                  setState(()=>working=true);
+                  setState(() {working=true;status=null;failure=false;});
                   try{
                     await widget.session.refreshEmailStatus();
                     if(mounted)setState(() {
@@ -346,7 +348,9 @@ class _AccountState extends State<ShopperAccountPanel> {
                 child:const Text('Forgot password?')),
           ])),
         ],
-        if(status!=null)Padding(padding:const EdgeInsets.only(top:12),
+        // Never display a failed provider login from a previous attempt after
+        // another method has successfully authenticated the Firebase user.
+        if(status!=null && !(logged && failure))Padding(padding:const EdgeInsets.only(top:12),
           child:Card(color:failure?const Color(0xFFFFEDE8):const Color(0xFFE3F5EC),
             child:Padding(padding:const EdgeInsets.all(13),child:Text(status!,
               style:TextStyle(color:failure?Colors.red.shade900:const Color(0xFF087D5E)))))) ,
