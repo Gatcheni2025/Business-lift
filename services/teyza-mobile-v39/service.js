@@ -21,8 +21,27 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
+  // Existing verified Free merchants receive one genuine seven-day trial
+  // on first access after migration. The start/end are written once in a
+  // transaction; repeated refreshes and device changes cannot extend it.
+  async function trialAccount(uid,account){
+    if(account?.listingPlan!=='free'||account.approvalStatus!=='approved')return account;
+    const ref=doc('teyzaSellerAccounts/'+uid);
+    return db.runTransaction(async tx=>{
+      const current=await tx.get(ref);
+      const value=current.exists?current.data():null;
+      if(!value||value.uid!==uid||value.approvalStatus!=='approved')return value;
+      if(value.listingPlan!=='free'||value.trialStartedAt>0)return value;
+      const at=clock(),updated={...value,listingPlan:'trial',
+        trialStartedAt:at,trialEndsAt:at+P.TRIAL_MS,updatedAt:new Date(at)};
+      tx.update(ref,{listingPlan:updated.listingPlan,trialStartedAt:at,
+        trialEndsAt:updated.trialEndsAt,updatedAt:updated.updatedAt});
+      return updated;
+    });
+  }
   const active = async uid => {
-    const [shop,account,setup,verification,billing]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>read(p+uid)));
+    const [shop,saved,setup,verification,billing]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>read(p+uid)));
+    const account=await trialAccount(uid,saved);
     return P.assertLive(uid,account,setup||{},verification,shop,billing,clock());
   };
   async function requireApproval(tx,uid,shop){
@@ -36,7 +55,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const setupRef=doc('teyzaSellerOnboarding/'+uid);
       const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
-      const account=accountSnap.exists?accountSnap.data():null;
+      let account=accountSnap.exists?accountSnap.data():null;
+      if(account?.listingPlan==='free'&&account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
+        const at=clock();account={...account,listingPlan:'trial',trialStartedAt:at,
+          trialEndsAt:at+P.TRIAL_MS};
+        tx.update(accountRef,{listingPlan:'trial',trialStartedAt:at,
+          trialEndsAt:account.trialEndsAt,updatedAt:new Date(at)});
+      }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
@@ -195,14 +220,16 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
-      const account=await owner(uid);
+      const account=await trialAccount(uid,await owner(uid));
       const [config,verification,finance,catalogue,photos,publicShop,setup,location,front,billing]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
         read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaBilling/'+uid)]);
       const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
-      return {listingPlan:account.listingPlan||'legacy',listingPaid:P.entitled(uid,account,billing,clock()),
+      return {listingPlan:account.listingPlan||'legacy',
+        trialStartedAt:account.trialStartedAt||null,trialEndsAt:account.trialEndsAt||null,
+        trialActive:P.trialActive(account,clock()),listingPaid:P.entitled(uid,account,billing,clock()),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
@@ -551,7 +578,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
         // Do not leak wholesale catalogue prices via the public customer endpoint.
         // Anonymous directory may show verified wholesalers' names, not B2B prices.
-        const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
+        const [saved,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
+        const a=await trialAccount(uid,saved);
         if((wholesaleOnly&&a?.category!=='wholesale') ||
            (shop.shopCategory && shop.shopCategory!==a.category) ||
            !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
