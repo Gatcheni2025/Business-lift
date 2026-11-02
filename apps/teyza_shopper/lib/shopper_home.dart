@@ -1281,26 +1281,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         subtitle:const Text('Open your seller dashboard and choose Buy from wholesalers to order from verified suppliers. Map listings are discovery-only.'),
         trailing:const Icon(Icons.chevron_right),
         onTap:()=>openOwnerWorkspace())),
-      section('Shops selling on Teyza',
-        subtitle:'Participating local sellers and published product listings',
-        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
-          child:const Text('View shops'))),
-      if(loading)const Center(child:Padding(padding:EdgeInsets.all(13),
-        child:CircularProgressIndicator())),
-      ...displayShops.take(8).map(shopTile),
-      if(displayShops.isEmpty)
-        empty('More shops joining Teyza',
-          'Local directory listings are shown separately. Only participating shops publish products and services.'),
-      section(discoveryType=='spaza'?'More neighbourhood shops':discoveryType=='wholesale'?'More local wholesalers':'More businesses to explore',
-        subtitle:'Public shop listings · confirm products with the owner'),
-      if(loadingOnline)const Padding(padding:EdgeInsets.all(12),
-        child:Center(child:CircularProgressIndicator())),
+      // Nearby shops merges public listings with verified Teyza sellers.
       if(onlineWarning!=null)Text(onlineWarning!,
         style:const TextStyle(color:muted,fontSize:12)),
-      ...displayedOnline.take(18).map(onlineTile),
-      if(displayedOnline.isEmpty&&!loadingOnline)
-        const Text('No public shop listings loaded yet. Select another area or refresh.',
-          style:TextStyle(color:muted,fontSize:12)),
       Card(color:const Color(0xFFE5F4ED),elevation:0,
         child:ListTile(
           leading:const Icon(Icons.add_business_outlined,color:green),
@@ -1577,17 +1560,60 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ]))));
 
 
+  Widget nearbyListingTile(NearbyListing entry){
+    final seller=entry.merchant,publicPlace=entry.directory;
+    final sellerImage=seller?.photo??'';
+    final dist=area==null||entry.lat==null||entry.lng==null?null:
+      km(area!.lat,area!.lng,entry.lat!,entry.lng!);
+    final subtitle=seller?.address.isNotEmpty==true?seller!.address:
+      publicPlace?.address.isNotEmpty==true?publicPlace!.address:
+      seller?.area??publicPlace?.area??'';
+    return Card(color:Colors.white,elevation:0,
+      margin:const EdgeInsets.only(bottom:11),
+      child:Padding(padding:const EdgeInsets.all(12),child:Column(
+        crossAxisAlignment:CrossAxisAlignment.start,children:[
+          InkWell(onTap:()=>seller!=null?openShop(seller):selectDirectory(publicPlace!),
+            borderRadius:BorderRadius.circular(14),
+            child:Row(children:[
+              sellerImage.isNotEmpty?photo(sellerImage,size:84):
+                publicPlace!=null?onlinePhoto(publicPlace,width:84,height:84):
+                photo('',size:84),
+              const SizedBox(width:12),
+              Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text(entry.name,maxLines:2,overflow:TextOverflow.ellipsis,
+                  style:const TextStyle(color:ink,fontWeight:FontWeight.w800,fontSize:15)),
+                const SizedBox(height:4),
+                Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
+                  style:const TextStyle(color:muted,fontSize:11)),
+                if(seller?.identityVerified==true)
+                  const Text('✓ Teyza Verified',
+                    style:TextStyle(color:green,fontSize:11,fontWeight:FontWeight.w800)),
+                if(publicPlace?.openNow!=null)shopFacts(publicPlace!),
+                if(dist!=null)Text(dist.toStringAsFixed(1)+' km away',
+                  style:const TextStyle(color:muted,fontSize:11))
+              ])),
+              const Icon(Icons.chevron_right_rounded,color:green)
+            ])),
+          const SizedBox(height:10),
+          SizedBox(width:double.infinity,child:FilledButton.icon(
+            onPressed:()=>buyHere(merchant:seller,directory:publicPlace),
+            icon:const Icon(Icons.shopping_bag_outlined,size:17),
+            label:const Text('Buy here'))),
+          if(publicPlace?.origin=='google_places')
+            const Text('Google Maps',style:TextStyle(color:muted,fontSize:10)),
+        ])));
+  }
+
   Widget allShopsPage()=>RefreshIndicator(onRefresh:reloadOnline,
     child:ListView.builder(key:PageStorageKey<String>('shopper-shops-'+discoveryType),
       padding:const EdgeInsets.all(16),
       itemCount:nearbyListings.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          FilterChip(label:const Text('Show all Teyza shops'),selected:allRegistered,
-            onSelected:(value)=>setState(()=>allRegistered=value)),
-          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':discoveryType=='wholesale'?'Wholesale suppliers nearby':'Other businesses nearby',
-            subtitle:nearbyListings.length.toString()+(allRegistered?' registered shops':' shops · within '+searchRadiusKm.toString()+' km')),
+          section('Nearby shops',
+            subtitle:nearbyListings.length.toString()+' businesses · '+
+              (discoveryType=='spaza'?'Spaza Shops':discoveryType=='wholesale'?'Wholesalers':'Other Businesses')),
           Row(children:[
-            Expanded(child:Text(allRegistered?'Across South Africa':'Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
+            Expanded(child:Text('Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
             TextButton.icon(onPressed:loadingOnline||area==null?null:() async {
               setState(()=>widerSearch=!widerSearch);await reloadOnline();
             },icon:const Icon(Icons.radar_rounded,size:17),
@@ -1600,7 +1626,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(height:8)
         ]);
         final entry=nearbyListings[index-1];
-        return entry.merchant!=null?shopTile(entry.merchant!):onlineTile(entry.directory!);
+        return nearbyListingTile(entry);
       }));
 
   Widget directoryPage(OnlineShop shop)=>ListView(
