@@ -21,6 +21,7 @@ class FakeDB {
   doc(path){const db=this;return {path,id:path.split('/').pop(),get:async()=>db.snapshot(path),
     set:async(value,options)=>db.records.set(path,options?.merge?{...db.records.get(path),...structuredClone(value)}:structuredClone(value)),
     update:async value=>{assert(db.records.has(path));db.records.set(path,{...db.records.get(path),...structuredClone(value)});},
+    create:async value=>{assert(!db.records.has(path));db.records.set(path,structuredClone(value));},
     collection:name=>db.collection(path+'/'+name)};}
   snapshot(path){const data=this.records.get(path);return {exists:data!==undefined,id:path.split('/').pop(),data:()=>structuredClone(data),ref:this.doc(path)};}
   collection(path){const db=this,filters=[];let sort=null,max=Infinity,after=null;const query={
@@ -833,4 +834,20 @@ test('wholesalers can register as a distinct unapproved seller category',async()
  assert.equal(created.category,'wholesale');
  assert.equal(created.approvalStatus,'pending');
  assert.equal(created.listingPlan,'free');
+});
+
+test('spaza owner requests a Google wholesaler link without forging a Teyza partnership',async()=>{
+ const {service,db}=fixture();
+ const input={placeId:'ChIJwholesale123456',name:'Durban Cash and Carry',address:'Durban, South Africa'};
+ const result=await service.execute(owner,'wholesale_link_request',input);
+ assert.equal(result.requested,true);
+ const record=db.records.get('teyzaWholesaleLinkRequests/'+result.reference);
+ assert.equal(record.status,'awaiting_supplier_outreach');
+ assert.equal(record.requesterUid,'seller1');
+ assert.equal(record.source,'google_places');
+ const again=await service.execute(owner,'wholesale_link_request',input);
+ assert.equal(again.alreadyRequested,true);
+ const nonSpaza={...owner,uid:'buyer1'};
+ await rejects(service.execute(nonSpaza,'wholesale_link_request',input),403);
+ await rejects(service.execute(owner,'wholesale_link_request',{...input,placeId:'oops!'}),422);
 });
