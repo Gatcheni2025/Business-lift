@@ -81,7 +81,7 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         D.fail(403,'This Firebase account is not linked to Apple sign-in.');
       const authorizationCode=D.text(data.authorizationCode,'Apple authorization code',4096);
       if(authorizationCode.length<10)D.fail(422,'Apple authorization code is incomplete.');
-      await revokeAppleToken(uid,authorizationCode);
+      await revokeAppleToken(uid,authorizationCode,actor.verifiedFirebaseIdToken);
       await doc('teyzaAppleRevocations/'+uid).set({
         ownerUid:uid,status:'revoked',revokedAt:stamp
       });
