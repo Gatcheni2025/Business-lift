@@ -37,7 +37,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
       // Everyone registers for free first; choose whether to request visibility.
-      await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(session:widget.session,api:widget.api)));
+      await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(session:widget.session,api:widget.api,businessType:category)));
       if(!mounted||uid!=widget.session.userId)return;
       await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,api:widget.api,legalType:legalType,
         shop:SellerShop(name.text.trim(),category,'${unit.text.trim().isEmpty?'':unit.text.trim()+', '}${selected.address}','pending','not_listed',phone:normalizeMobile(phone.text),
