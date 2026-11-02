@@ -743,6 +743,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               : 'Public map listing',
               style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
           ]),
+          const SizedBox(height:8),
+          if(verifiedMerchantFor(place)!=null)
+            FilledButton(onPressed:()=>openShop(verifiedMerchantFor(place)!),
+              child:const Text('Buy here'))
+          else const OutlinedButton(onPressed:null,child:Text('Shop Unavailable')),
+          if(place.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(place.phone),
+            icon:const Icon(Icons.phone_outlined,size:15),label:Text('Call '+place.phone)),
           if(place.hasPhoto && place.photoAttributions.isNotEmpty)
             Text('Photo: '+(place.photoAttributions.first['name']??'Google contributor'),
               maxLines:1,overflow:TextOverflow.ellipsis,
