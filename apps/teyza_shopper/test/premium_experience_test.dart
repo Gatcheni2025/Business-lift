@@ -169,8 +169,13 @@ void main(){
     expect(find.text('Bread').hitTestable(),findsOneWidget);
     expect(tester.takeException(),isNull);
     await capture('essentials');
-    await tester.scrollUntilVisible(find.text('See all'),-180,
-      scrollable:find.byType(Scrollable).first);
+    // After scrolling down to Bread, the lazily-built See all control is
+    // above the viewport. Scroll home to the top before opening nearby shops.
+    for(var attempt=0;attempt<8&&find.text('See all').evaluate().isEmpty;attempt++){
+      await tester.drag(find.byType(ListView).first,const Offset(0,600));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('See all'),findsOneWidget);
     await tester.tap(find.text('See all'));await tester.pumpAndSettle();
     expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
     await capture('shops');
