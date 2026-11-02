@@ -9,6 +9,19 @@
 4. **Basic** selects a preference only. No card/debit is charged from selecting Basic. Publishing requires current-month payment recorded by a trusted administrator, seller approval, phone/document compliance and absence of a suspension.
 5. When active, the paid shop appears for the local area with `sponsored: true` and a **Featured in your area** label. It ranks above other *locally relevant* merchants while preserving area filtering. This provides improved exposure, **not guaranteed sales**.
 
+## R99 Basic member benefit disclosures
+
+In addition to verified local discovery and featured placement, the seller plan selector and seller-facing website describe these potential benefits:
+
+| Benefit | What a merchant can actually expect |
+| --- | --- |
+| Business finance / stock loans | Submit an enquiry for consideration by an eligible finance partner; finance is **not automatic** and is subject to approval, affordability and lender conditions. |
+| Wholesale stock discounts | Access offers from participating wholesalers when deals are active and available to that merchant. Do not promise a fixed discount or guaranteed lowest price. |
+| Free stock delivery | Delivery fee may be waived only for **qualifying wholesale orders** in supported coverage areas, when an identified partner offers the benefit and its conditions are met. Not a promise of free delivery for all orders. |
+| Competitive retail pricing | Reduced stock acquisition costs may help sellers select attractive retail prices and improve potential margins. Prices remain seller-controlled; sales, savings and profit are not guaranteed. |
+
+**Operational prerequisite:** These are conditional programme benefits, not four already-proven live services. Before representing any of them as an included active entitlement, publish participating suppliers/lenders, concrete thresholds and coverage, eligibility disclosures, a redemption process and fulfilment ownership. If unavailable, mark the feature as coming soon or remove it from the current-benefit list. Neither plan selection nor a R99 payment may silently create loan, discount or delivery entitlements.
+
 ## Trusted entitlement
 
 `publication.entitled(uid,account,billing,now)` returns true for a new seller only when:
