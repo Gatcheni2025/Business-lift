@@ -206,25 +206,40 @@ jobs:
           name: teyza-places-r36-deploy-kit
           path: TEYZA_PLACES_R36_DEPLOY_KIT.zip
           retention-days: 14
-      - name: Restore the explicit Android test signing key
-        id: test-key
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
-          key: teyza-android-test-signing-v2
-      - name: Configure the same test key for both APKs
+      - name: Restore original Android test keystore from protected secret
+        shell: bash
+        env:
+          TEYZA_ANDROID_TEST_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_TEST_KEYSTORE_BASE64 }}
+          TEYZA_ANDROID_TEST_SHA256: ${{ vars.TEYZA_ANDROID_TEST_SHA256 }}
+        run: |
+          python3 - <<'PY'
+          import os,base64,subprocess,re
+          from pathlib import Path
+          value=os.environ.get('TEYZA_ANDROID_TEST_KEYSTORE_BASE64','').strip()
+          expected=os.environ.get('TEYZA_ANDROID_TEST_SHA256','').strip().replace(':','').lower()
+          if not value:
+              raise SystemExit('::error::Original test keystore missing. Set TEYZA_ANDROID_TEST_KEYSTORE_BASE64 to the same keystore used in run 41444508398. Never generate a new signing key.')
+          if not re.fullmatch(r'[0-9a-f]{64}',expected):
+              raise SystemExit('::error::Set TEYZA_ANDROID_TEST_SHA256 to the original certificate SHA-256 from run 41444508398 before building.')
+          path=Path(os.environ['TEYZA_ANDROID_TEST_KEYSTORE_PATH'])
+          path.parent.mkdir(parents=True,exist_ok=True)
+          path.write_bytes(base64.b64decode(value,validate=True))
+          path.chmod(0o600)
+          output=subprocess.check_output(['keytool','-list','-v','-keystore',str(path),'-storepass','android','-alias','androiddebug'],text=True)
+          match=re.search(r'SHA256:\\s*([0-9A-Fa-f:]+)',output)
+          if not match or match.group(1).replace(':','').lower()!=expected:
+              path.unlink(missing_ok=True)
+              raise SystemExit('::error::Test signing certificate does not match the original SHA-256; stopping to protect existing installations.')
+          print('Original signing SHA-256 verified. Safe to build an APK update.')
+          PY
+      - name: Configure the original certificate for both APKs
         shell: bash
         run: |
-          mkdir -p "$(dirname "$TEYZA_ANDROID_TEST_KEYSTORE_PATH")"
-          if [ ! -f "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" ]; then
-            keytool -genkeypair -keystore "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" -storepass android -keypass android -alias androiddebug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Teyza Test,C=ZA" -noprompt
-          fi
-          test -s "$TEYZA_ANDROID_TEST_KEYSTORE_PATH"
           python3 - <<'PY'
           from pathlib import Path
           p=Path('apps/teyza_shopper/android/app/build.gradle.kts')
           with p.open('a') as file:
-              file.write('''
+              file.write("""
           android {
               signingConfigs.getByName("debug") {
                   storeFile = file(System.getenv("TEYZA_ANDROID_TEST_KEYSTORE_PATH"))
@@ -233,14 +248,8 @@ jobs:
                   keyPassword = "android"
               }
           }
-          ''')
+          """)
           PY
-      - name: Preserve the key before building so a failed compile cannot rotate it
-        if: steps.test-key.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
-          key: teyza-android-test-signing-v2
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
         env:
