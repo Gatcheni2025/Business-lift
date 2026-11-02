@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
-const actions=new Set(['seller_register','admin_access','admin_seller_queue','admin_seller_review',
+const actions=new Set(['seller_register','seller_plan_select','admin_access','admin_seller_queue','admin_seller_review',
   'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
 function recentAdmin(auth,clock){
@@ -24,7 +24,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
     ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
-    approvalStatus:'pending',listingStatus:'not_listed',createdAt:new Date(clock()),updatedAt:new Date(clock())};
+    approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
@@ -34,6 +34,20 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
     tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
+  }
+  if(action==='seller_plan_select'){
+    // No user can purchase or activate visibility by changing a client-side flag.
+    if(!['free','basic'].includes(data.plan))D.fail(422,'Choose Free or R99 Basic.');
+    await rate(uid,'plan',15,3600000);
+    const result=await db.runTransaction(async tx=>{
+      const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
+      const account=D.seller(snap.exists?snap.data():null,uid);
+      if(account.deletionPending===true)D.fail(409,'Your account is being deleted.');
+      tx.update(ref,{listingPlan:data.plan,planSelectedAt:clock(),updatedAt:new Date(clock())});
+      return {plan:data.plan,requiresPayment:data.plan==='basic'};
+    });
+    return {...result,visibilityActive:false,
+      message:result.requiresPayment?'The R99 plan is selected, but visibility starts only after seller approval and verified payment.':'Free shop setup is active; shoppers will not see your shop until you activate a paid listing.'};
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
   if(action==='admin_seller_queue'){
@@ -61,8 +75,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     const ref=doc('teyzaMobileVerification/'+sellerUid),accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid);
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
     const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
-    const [v,a,s,view,o,i,c,f,l,drafts]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
-      tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),
+    const [v,a,s,view,o,i,c,f,l,b,drafts]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
+      tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),tx.get(doc('teyzaBilling/'+sellerUid)),
       tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201))]);
     const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
     const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
@@ -86,7 +100,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
     const next=P.project(sellerUid,{account:updatedAccount,setup:nextSetup,verification:updatedVerification,
       shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
-      location:l.exists?l.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
+      location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
     if(next)tx.set(shopRef,{...next,updatedAt:clock()});
