@@ -37,7 +37,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       const account=accountSnap.exists?accountSnap.data():null;
-      const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
+      const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
@@ -455,7 +455,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(old.exists&&old.data().after)query=query.startAfter(old.data().after);
     const rows=await query.get();
     for(let i=0;i<rows.docs.length;i+=10)await Promise.all(rows.docs.slice(i,i+10).map(r=>{
-      const a=r.data();return a.uid===r.id&&['spaza','retail'].includes(a.category)?synchronizeCatalogue(r.id):null;
+      const a=r.data();return a.uid===r.id&&['spaza','retail','wholesale'].includes(a.category)?synchronizeCatalogue(r.id):null;
     }));
     const complete=rows.docs.length<100;
     await ref.set({after:rows.docs.at(-1)?.id||'',...(complete?{completedAt:clock()}:{}),updatedAt:clock()});
