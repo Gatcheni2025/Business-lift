@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'account_deletion_page.dart';
+import 'seller_plan.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -51,13 +52,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> promptMandate(String uid) async {
     if(!liveUpdates||shop==null||mandatePromptUid==uid)return;mandatePromptUid=uid;
-    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();}catch(_){/* The membership form remains available from My business. */}
+    if(listingPlan!='basic')return;
+    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();catch(_){/* The membership form remains available from My business. */}
   }
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending';bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool hasLocation=false;
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -92,7 +94,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -424,6 +426,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
+    businessTile(Icons.workspace_premium_outlined,'Free or R99 Basic plan',
+      'Registration is free · priority listing after payment is verified',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        SellerPlanPage(session:widget.session,api:widget.mobileApi)))
+        .then((_){if(mounted)refreshActivity();})),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
@@ -541,6 +548,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           Text(error!,style:const TextStyle(color:Colors.red)),
           if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
           TextButton(onPressed:load,child:const Text('Retry')),
+          TextButton.icon(onPressed:()=>Navigator.push(context,
+            MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:session,api:widget.mobileApi))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
           TextButton(onPressed:() async{
             await session.signOut();if(mounted)widget.openLogin();
           },child:const Text('Sign in with another account'))
@@ -552,6 +562,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           const SizedBox(height:14),
           FilledButton(onPressed:registerShop,child:const Text('Register a shop')),
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
+          TextButton.icon(onPressed:()=>Navigator.push(context,
+            MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:session,api:widget.mobileApi))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
@@ -567,7 +580,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
-          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
+          OutlinedButton.icon(onPressed:()=>Navigator.push(context,
+              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi)))
+              .then((_){if(mounted)refreshActivity();}),
+            icon:const Icon(Icons.workspace_premium_outlined),
+            label:Text('Plan: ${listingPlan=='basic'?'R99 Basic':'Free'} · change')),
+          if(listingPlan=='basic')OutlinedButton.icon(onPressed:openMandate,
+            icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('R99 membership details')),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),
