@@ -53,7 +53,7 @@ void main(){
    expect(session.userId,isNull);
    expect(find.text('Account closed for sign-in'),findsOneWidget);
    expect(find.textContaining('Data erasure:'),findsOneWidget);
-   expect(find.textContaining('Personal-data erasure is still being processed'),findsOneWidget);
+   expect(find.textContaining('Personal-data erasure and lawful retention review'),findsOneWidget);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Old pending request gets closed for login on status check',(tester)async{
