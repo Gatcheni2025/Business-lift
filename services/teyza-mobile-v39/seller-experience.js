@@ -108,10 +108,10 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
      D.fail(409,'View the current private selfie before approving this seller.');
     const approved=data.status==='approved';
     const existing=a.data();
-    const startTrial=approved&&existing.listingPlan==='trial'&&
+    const startTrial=approved&&['trial','free'].includes(existing.listingPlan)&&
       !(Number.isFinite(existing.trialStartedAt)&&existing.trialStartedAt>0);
     const updatedAccount={...existing,approvalStatus:data.status==='needs_new_photo'?'pending':data.status,
-      ...(startTrial?{trialStartedAt:clock(),trialEndsAt:clock()+P.TRIAL_MS}:{})};
+      ...(startTrial?{listingPlan:'trial',trialStartedAt:clock(),trialEndsAt:clock()+P.TRIAL_MS}:{})};
     const updatedVerification={...record,status:data.status};
     const nextSetup={...setup,moderationBlocked:data.status!=='approved',
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
@@ -120,7 +120,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,
-      ...(startTrial?{trialStartedAt:updatedAccount.trialStartedAt,trialEndsAt:updatedAccount.trialEndsAt}:{}),
+      ...(startTrial?{listingPlan:'trial',trialStartedAt:updatedAccount.trialStartedAt,trialEndsAt:updatedAccount.trialEndsAt}:{}),
       listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
     if(next)tx.set(shopRef,{...next,updatedAt:clock()});
     if(setup.requiredVersion===2)tx.set(setupRef,{...nextSetup,
