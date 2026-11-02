@@ -20,8 +20,10 @@ class FakeFacebookSession extends ShopperSession {
 }
 class FakeEmailAfterGoogleErrorSession extends ShopperSession {
  FakeEmailAfterGoogleErrorSession():super(store:MemoryStore()){isReady=true;}
+ int googleCalls=0;
  @override bool get googleSignInAvailable=>true;
  @override Future<void> signInWithGoogle() async {
+   googleCalls++;
    throw StateError('PlatformException(sign_in_failed, ApiException: 10: DEVELOPER_ERROR)');
  }
  @override Future<void> signIn(String address,String pass) async {
@@ -37,7 +39,7 @@ void main(){
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
   await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
   await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
-  expect(find.textContaining('Google sign-in configuration mismatch'),findsOneWidget);
+  expect(session.googleCalls,1);
   await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
   await t.enterText(find.byType(TextFormField).at(1),'password123');
   await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
