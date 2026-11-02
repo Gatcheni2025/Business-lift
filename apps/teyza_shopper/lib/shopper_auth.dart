@@ -372,27 +372,20 @@ class ShopperSession extends ChangeNotifier {
       if(error.code!=AuthorizationErrorCode.canceled)rethrow;
     }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
-  /// Request an Apple reauthorization code only when the Firebase account
-  /// is actually linked to apple.com. Firebase/Identity Platform exchanges
-  /// this fresh code for revocation; no Apple credential is stored on device.
-  /// The account deletion flow must continue if Apple service is unavailable
-  /// and the operator must then handle revocation manually.
-  Future<void> revokeAppleForDeletion() async {
-    if(!appleProviderLinked)return;
-    if(!appleSignInAvailable||idToken==null)throw StateError('Apple reauthorization requires a signed-in iPhone account.');
-    final savedUid=userId,savedToken=await freshIdToken();
-    if(savedUid!=userId||savedToken.isEmpty)throw StateError('Sign in again before revoking Apple.');
+  /// Fetch a fresh one-use Apple authorization code; Teyza's authenticated
+  /// Firebase service, never this mobile client, performs the privileged
+  /// Identity Platform token revocation.
+  Future<String> appleDeletionAuthorizationCode() async {
+    if(!appleProviderLinked||!appleSignInAvailable||idToken==null)
+      throw StateError('Apple reauthorization requires a signed-in Apple account on iPhone.');
+    final savedUid=userId;
+    await freshIdToken();
+    if(savedUid!=userId)throw StateError('Sign in again before revoking Apple.');
     final credential=await SignInWithApple.getAppleIDCredential(scopes:const []);
     final authorizationCode=credential.authorizationCode;
-    if(authorizationCode.isEmpty)throw StateError('Apple did not provide a fresh authorization code.');
-    final response=await _client.post(
-      Uri.https('identitytoolkit.googleapis.com','/v2/accounts:revokeToken',{'key':teyzaFirebaseApiKey}),
-      headers:const {'Content-Type':'application/json'},
-      body:jsonEncode({'providerId':'apple.com','tokenType':'CODE',
-        'token':authorizationCode,'idToken':savedToken,
-        'redirectUri':'https://teyza.co.za'})).timeout(const Duration(seconds:25));
-    if(response.statusCode<200||response.statusCode>=300)_decode(response);
-    if(savedUid!=userId)throw StateError('Account changed during Apple token revocation.');
+    if(authorizationCode.isEmpty)throw StateError('Apple did not provide an authorization code.');
+    if(savedUid!=userId)throw StateError('Account changed during Apple reauthorization.');
+    return authorizationCode;
   }
 
   Future<void> signInWithFacebook() async {
