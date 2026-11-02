@@ -96,6 +96,7 @@ class ShopperSession extends ChangeNotifier {
   bool isReady = false, isBusy = false, emailVerified = false;
   String? email, name, idToken, userId, phoneNumber;
   bool phoneVerified=false;
+  bool appleProviderLinked=false;
   // A UID-bound presentation preference only. Seller permissions still come
   // from authenticated account records and server checks.
   String? _sellerWorkspaceUid;
@@ -169,7 +170,7 @@ class ShopperSession extends ChangeNotifier {
   }
   Future<void> _clear() async {
     _sellerWorkspaceUid=null;
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid']){
         await _store.delete(key);
@@ -222,7 +223,7 @@ class ShopperSession extends ChangeNotifier {
     final uid=data['localId']?.toString()??'';
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
     if(userId!=uid)_sellerWorkspaceUid=null;
-    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;
+    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
     email=data['email']?.toString()??fallbackEmail;
     name=data['displayName']?.toString()??fallbackName;
     try{await _persist();}catch(_){if(version==_version)await _clear();rethrow;}
@@ -246,6 +247,8 @@ class ShopperSession extends ChangeNotifier {
       emailVerified=profile['emailVerified']==true;
       phoneNumber=profile['phoneNumber']?.toString();
       final providers=profile['providerUserInfo'];
+      appleProviderLinked=providers is List&&providers.whereType<Map>().any(
+        (provider)=>provider['providerId']=='apple.com');
       phoneVerified=phoneNumber!=null&&phoneNumber!.isNotEmpty&&providers is List&&providers.whereType<Map>().any((p)=>
         p['providerId']=='phone'&&(p['phoneNumber']==phoneNumber||p['federatedId']==phoneNumber));
       email=profile['email']?.toString()??email;
@@ -253,7 +256,7 @@ class ShopperSession extends ChangeNotifier {
       await _persist();
     }catch(error){
       if(token!=idToken)return;
-      emailVerified=false;phoneVerified=false;phoneNumber=null;
+      emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
       if(_expired(error)){await _clear();rethrow;}
     }finally{_changed();}
   }
@@ -369,6 +372,22 @@ class ShopperSession extends ChangeNotifier {
       if(error.code!=AuthorizationErrorCode.canceled)rethrow;
     }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
+  /// Fetch a fresh one-use Apple authorization code; Teyza's authenticated
+  /// Firebase service, never this mobile client, performs the privileged
+  /// Identity Platform token revocation.
+  Future<String> appleDeletionAuthorizationCode() async {
+    if(!appleProviderLinked||!appleSignInAvailable||idToken==null)
+      throw StateError('Apple reauthorization requires a signed-in Apple account on iPhone.');
+    final savedUid=userId;
+    await freshIdToken();
+    if(savedUid!=userId)throw StateError('Sign in again before revoking Apple.');
+    final credential=await SignInWithApple.getAppleIDCredential(scopes:const []);
+    final authorizationCode=credential.authorizationCode;
+    if(authorizationCode.isEmpty)throw StateError('Apple did not provide an authorization code.');
+    if(savedUid!=userId)throw StateError('Account changed during Apple reauthorization.');
+    return authorizationCode;
+  }
+
   Future<void> signInWithFacebook() async {
     if(!facebookSignInAvailable)throw StateError('Facebook sign-in is not configured');
     final version=++_version;isBusy=true;_changed();

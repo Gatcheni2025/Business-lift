@@ -9,7 +9,7 @@ const D=require('./domain');
 const MAX_AGE_MS=15*60*1000;
 const COMPLETE_BY_MS=30*24*60*60*1000;
 const actions=new Set([
-  'account_deletion_request','account_deletion_status',
+  'account_deletion_request','account_deletion_status','account_apple_revoke',
   'ops_account_deletion_queue','ops_account_deletion_complete',
 ]);
 
@@ -38,7 +38,7 @@ function publicStatus(record) {
         : 'Your deletion request is recorded, but sign-in has not yet been disabled. Contact Teyza support if retry fails.',
   };
 }
-function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock=Date.now}) {
+function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,clock=Date.now}) {
   const doc=path=>db.doc(path);
   const get=async ref=>{const s=await ref.get();return s.exists?s.data():null;};
   async function blockSignIn(uid,request) {
@@ -72,6 +72,23 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
       // Migrate those requests to a closed login on the next status read.
       return entry?blockSignIn(uid,entry):{requested:false};
     }
+    if(action==='account_apple_revoke'){
+      recent(actor,stamp);
+      if(typeof actor.verifiedFirebaseIdToken!=='string'||actor.verifiedFirebaseIdToken.length<10)
+        D.fail(401,'Refresh your Firebase session before revoking Apple.');
+      if(typeof revokeAppleToken!=='function')
+        D.fail(503,'Apple provider revocation is temporarily unavailable.');
+      const user=await getAuthUser(uid);
+      if(!user?.providerData?.some(provider=>provider.providerId==='apple.com'))
+        D.fail(403,'This Firebase account is not linked to Apple sign-in.');
+      const authorizationCode=D.text(data.authorizationCode,'Apple authorization code',4096);
+      if(authorizationCode.length<10)D.fail(422,'Apple authorization code is incomplete.');
+      await revokeAppleToken(uid,authorizationCode,actor.verifiedFirebaseIdToken);
+      await doc('teyzaAppleRevocations/'+uid).set({
+        ownerUid:uid,status:'revoked',revokedAt:stamp
+      });
+      return {revoked:true};
+    }
     if(action==='account_deletion_request') {
       if(data.confirmation!=='DELETE')D.fail(422,'Type DELETE to confirm your request.');
       recent(actor,stamp);
@@ -81,8 +98,11 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const publicRef=doc('teyzaPublicShops/'+uid);
         const mandateRef=doc('teyzaSellerMandates/'+uid);
         const billingRef=doc('teyzaBilling/'+uid);
-        const [old,a,shop,m,b]=await Promise.all([
-          tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),tx.get(billingRef),
+        const shopperProfileRef=doc('teyzaShopperProfiles/'+uid);
+        const appleRevocationRef=doc('teyzaAppleRevocations/'+uid);
+        const [old,a,shop,m,b,shopperProfile,appleRevocation]=await Promise.all([
+          tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),
+          tx.get(billingRef),tx.get(shopperProfileRef),tx.get(appleRevocationRef),
         ]);
         if(old.exists)return old.data();
         const isSeller=a.exists&&a.data().uid===uid;
@@ -90,8 +110,14 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const record={uid,reference,status:'pending_review',seller:isSeller,
           requestedAt:stamp,completeBy:stamp+COMPLETE_BY_MS,
           needsBillingReview:isSeller&&(m.exists||b.exists),
-          needsAppleTokenReview:true};
+          needsAppleTokenReview:!(appleRevocation.exists&&
+            appleRevocation.data().ownerUid===uid&&appleRevocation.data().status==='revoked')};
         tx.set(requestRef,record);
+        // Delete the shopper's saved delivery address and contact profile as
+        // part of the closure transaction, independently of seller approval.
+        // Order and tax records remain subject to the documented erasure review.
+        if(shopperProfile.exists&&shopperProfile.data().ownerUid===uid)
+          tx.delete(shopperProfileRef);
         // Immediately remove pending-closure sellers from public discovery and
         // stop new orders or new Teyza-managed invoices.
         if(isSeller)tx.update(sellerRef,{deletionPending:true,

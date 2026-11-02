@@ -197,15 +197,35 @@ void main(){
       enableBackgroundServices:false,catalogueLoader:()async=>[],
       directoryLoader:(area,type,radius)async=>[directory])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-    expect(find.text('Shop Unavailable'),findsNothing);
+    expect(find.text('Ordering not available'),findsNothing);
     expect(find.text('Shop'),findsNothing);
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
     await tester.ensureVisible(card);await tester.pumpAndSettle();
     final buy=find.descendant(of:card,matching:find.text('Buy here'));
     await tester.tap(buy);await tester.pumpAndSettle();
-    expect(find.text('Shop Unavailable'),findsOneWidget);
+    expect(find.text('Ordering not available'),findsOneWidget);
     await tester.tap(find.text('Close'));await tester.pumpAndSettle();
-    expect(find.text('Shop Unavailable'),findsNothing);
+    expect(find.text('Ordering not available'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('Approved Teyza shop opens even without priced products',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final shop=Shop.fromJson({'id':'approved-no-prices','name':'Verified Spaza',
+      'area':'Durban','latitude':-29.8587,'longitude':31.0218,
+      'identityVerified':true,'products':[],'productHighlights':[]});
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[shop],
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    final card=find.byKey(const ValueKey('nearby-approved-no-prices'));
+    await tester.ensureVisible(card);await tester.pumpAndSettle();
+    await tester.tap(card);await tester.pumpAndSettle();
+    expect(find.text('Verified Spaza'),findsWidgets);
+    await tester.scrollUntilVisible(find.text('Products coming soon'),200,
+      scrollable:find.byType(Scrollable).last);
+    expect(find.text('Products coming soon'),findsOneWidget);
+    expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets('Shop tab shows all published products and disappears when catalogue empties',(tester)async{

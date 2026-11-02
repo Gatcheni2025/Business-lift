@@ -12,12 +12,13 @@ $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudf
 $catalogue = Get-Content -LiteralPath '.\services\teyza-mobile-v39\catalogue.json' -Raw | ConvertFrom-Json
 $expectedProducts = @($catalogue.products).Count
 $expectedPhotos = @($catalogue.photos.PSObject.Properties).Count
-if ($health.ok -ne $true -or $health.version -ne '3.15.0' -or $health.sellerOnboarding -ne $true -or
+if ($health.ok -ne $true -or $health.version -ne '3.16.0' -or $health.sellerOnboarding -ne $true -or
     $health.catalogueProducts -ne $expectedProducts -or $health.catalogueRevision -ne $catalogue.version -or $health.cataloguePhotos -ne $expectedPhotos) {
   throw 'Deployment returned unexpected service health. Do not distribute the app as connected.'
 }
 if ($health.verificationUploads -ne $true) { throw ('Photo storage is not ready (' + $health.uploadStatus + '). Open Firebase Storage for business-lift-3c19c, choose Get started, US-CENTRAL1 and production mode, then retry. Keep the existing encryption key.') }
 if ($health.shopFrontPhotos -ne $true) { throw 'Shop-front photo service was not activated.' }
+if ($health.chatModeration -ne $true -or $health.sevenDayTrial -ne $true -or $health.shopperDeletionProfileClear -ne $true -or $health.appleRevocationServer -ne $true) { throw 'New Apple review requirements are not active in Firebase yet.' }
 if ($health.accountDeletion -ne $true -or $health.accountDeletionAuthLock -ne $true -or $health.deletedUserReregister -ne $true -or $health.shopperSavedAddresses -ne $true -or $health.approvedFreeDiscovery -ne $true -or $health.freeSellerPlans -ne $true -or $health.paidAreaVisibility -ne $true -or $health.wholesaleSourcing -ne $true -or $health.protectedWholesalePrices -ne $true) { throw 'Updated deletion, Free/Basic plans and paid discovery are not active. Keep the app out of release.' }
 if ($health.approvalRequired -ne $true -or $health.shopLocations -ne $true -or $health.addressAutocomplete -ne $true -or
     $health.shopServices -ne $true -or $health.orderQuotes -ne $true -or $health.orderInboxAlways -ne $true) { throw 'The current approval, shop-service, order quote and order inbox features were not activated. Deploy this latest kit before building the current app release.' }

@@ -16,13 +16,32 @@ const locations=require('./shop-location');
 const addresses=require('./shop-address');
 const deletion=require('./account-deletion');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,createPhoneToken,
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
+  // Existing verified Free merchants receive one genuine seven-day trial
+  // on first access after migration. The start/end are written once in a
+  // transaction; repeated refreshes and device changes cannot extend it.
+  async function trialAccount(uid,account){
+    if(account?.listingPlan!=='free'||account.approvalStatus!=='approved')return account;
+    const ref=doc('teyzaSellerAccounts/'+uid);
+    return db.runTransaction(async tx=>{
+      const current=await tx.get(ref);
+      const value=current.exists?current.data():null;
+      if(!value||value.uid!==uid||value.approvalStatus!=='approved')return value;
+      if(value.listingPlan!=='free'||value.trialStartedAt>0)return value;
+      const at=clock(),updated={...value,listingPlan:'trial',
+        trialStartedAt:at,trialEndsAt:at+P.TRIAL_MS,updatedAt:new Date(at)};
+      tx.update(ref,{listingPlan:updated.listingPlan,trialStartedAt:at,
+        trialEndsAt:updated.trialEndsAt,updatedAt:updated.updatedAt});
+      return updated;
+    });
+  }
   const active = async uid => {
-    const [shop,account,setup,verification,billing]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>read(p+uid)));
+    const [shop,saved,setup,verification,billing]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>read(p+uid)));
+    const account=await trialAccount(uid,saved);
     return P.assertLive(uid,account,setup||{},verification,shop,billing,clock());
   };
   async function requireApproval(tx,uid,shop){
@@ -36,7 +55,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const setupRef=doc('teyzaSellerOnboarding/'+uid);
       const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
-      const account=accountSnap.exists?accountSnap.data():null;
+      let account=accountSnap.exists?accountSnap.data():null;
+      if(account?.listingPlan==='free'&&account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
+        const at=clock();account={...account,listingPlan:'trial',trialStartedAt:at,
+          trialEndsAt:at+P.TRIAL_MS};
+        tx.update(accountRef,{listingPlan:'trial',trialStartedAt:at,
+          trialEndsAt:account.trialEndsAt,updatedAt:new Date(at)});
+      }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
@@ -121,7 +146,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
-  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock});
+  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,clock});
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
@@ -158,12 +183,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
+    if(action==='seller_mandate_submit')D.fail(410,
+      'New Teyza debit mandates are discontinued. No bank debit is authorised by a free trial.');
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
+    if(action==='seller_plan_select'){
+      const choice=await sellerExperience.execute(auth,action,data);
+      await synchronizeCatalogue(uid); // refresh public shop eligibility after trial selection
+      return choice;
+    }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
     if(action==='wholesale_link_request'){
       const account=await read('teyzaSellerAccounts/'+uid);
@@ -193,14 +225,16 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
-      const account=await owner(uid);
+      const account=await trialAccount(uid,await owner(uid));
       const [config,verification,finance,catalogue,photos,publicShop,setup,location,front,billing]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
         read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaBilling/'+uid)]);
       const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
-      return {listingPlan:account.listingPlan||'legacy',listingPaid:P.entitled(uid,account,billing,clock()),
+      return {listingPlan:account.listingPlan||'legacy',
+        trialStartedAt:account.trialStartedAt||null,trialEndsAt:account.trialEndsAt||null,
+        trialActive:P.trialActive(account,clock()),listingPaid:P.entitled(uid,account,billing,clock()),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
@@ -349,6 +383,50 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return {status:'published'};
       });
     }
+    // Chat moderation is server-owned. Clients cannot forge a reporter, recipient or
+    // message body; only verified thread participants can submit a report or block.
+    if(action==='chat_block'||action==='chat_report') {
+      const threadId=D.id(data.threadId),threadRef=doc('teyzaMobileChats/'+threadId);
+      const thread=D.member(await read(threadRef.path),uid);
+      const otherUid=thread.ownerUid===uid?thread.shopperUid:thread.ownerUid;
+      if(action==='chat_block') {
+        if(typeof data.blocked!=='boolean')D.fail(422,'Choose block or unblock.');
+        await rate(uid,'chat-block',30,3600000);
+        await doc('teyzaChatBlocks/'+threadId+'_'+uid).set({
+          threadId,blockerUid:uid,blockedUid:otherUid,blocked:data.blocked,updatedAt:clock()
+        });
+        return {blocked:data.blocked};
+      }
+      const messageId=D.id(data.messageId),messageSnap=await threadRef.collection('messages').doc(messageId).get();
+      if(!messageSnap.exists||messageSnap.data().senderUid!==otherUid)D.fail(403,'You can only report a message sent by the other participant.');
+      const reasons=['harassment','hate','scam','spam','unsafe','other'];
+      if(!reasons.includes(data.reason))D.fail(422,'Select a reason for reporting the message.');
+      await rate(uid,'chat-report',10,3600000);
+      const reportId=crypto.createHash('sha256').update(uid+':'+threadId+':'+messageId).digest('hex');
+      const reportRef=doc('teyzaChatReports/'+reportId),prior=await reportRef.get();
+      if(prior.exists)return {reported:true,reference:reportId};
+      await reportRef.create({
+        threadId,messageId,reporterUid:uid,reportedUid:otherUid,
+        reason:data.reason,messageText:String(messageSnap.data().text||'').slice(0,1000),
+        status:'open',createdAt:clock()
+      });
+      return {reported:true,reference:reportId};
+    }
+    if(action==='chat_report_queue'||action==='chat_report_resolve'){
+      if(auth.teyzaAdmin!==true||auth.email_verified!==true||
+          !Number.isFinite(Number(auth.auth_time))||Math.abs(clock()/1000-Number(auth.auth_time))>900)
+        D.fail(403,'Recently authenticated Teyza administrator required.');
+      if(action==='chat_report_queue'){
+        const rows=await db.collection('teyzaChatReports').where('status','==','open').limit(50).get();
+        return {reports:rows.docs.map(x=>({id:x.id,...x.data()}))};
+      }
+      const reportId=D.id(data.reportId);
+      if(!['resolved','dismissed'].includes(data.status))D.fail(422,'Choose resolved or dismissed.');
+      const ref=doc('teyzaChatReports/'+reportId),entry=await ref.get();
+      if(!entry.exists)D.fail(404,'Report not found.');
+      await ref.update({status:data.status,reviewedBy:uid,reviewedAt:clock()});
+      return {resolved:true};
+    }
     if(action==='chat_open') {
       const sellerUid=D.id(data.shopId);
       if(sellerUid===uid)D.fail(422,'Open Live chat on your seller dashboard to reply to shoppers.');
@@ -380,6 +458,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const thread=D.member(await read(ref.path),uid);
       if(action==='chat_send') {
         const message=D.text(data.message,'message',1000),messageId=D.id(data.messageId);
+        const checks=await Promise.all([thread.ownerUid,thread.shopperUid].map(member=>
+          read('teyzaChatBlocks/'+ref.id+'_'+member)));
+        if(checks.some(c=>c?.blocked===true))D.fail(403,'This conversation is blocked. Unblock to continue.');
         const config=await read('teyzaShopSettings/'+thread.ownerUid);
         await active(thread.ownerUid);
         if(config?.liveChatEnabled===false)D.fail(409,'Chat is paused for this shop.');
@@ -401,7 +482,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const current=await tx.get(ref),t=D.member(current.exists?current.data():null,uid);
         if((t.lastMessageId||null)===(thread.lastMessageId||null))tx.update(ref,{[t.ownerUid===uid?'ownerUnread':'shopperUnread']:0});
       });
-      return {messages:messages.docs.map(x=>({id:x.id,...x.data()})).reverse()};
+      const blocks=await Promise.all([thread.ownerUid,thread.shopperUid].map(member=>
+        read('teyzaChatBlocks/'+ref.id+'_'+member)));
+      return {blockedByMe:blocks[thread.ownerUid===uid?0:1]?.blocked===true,
+        blocked:blocks.some(item=>item?.blocked===true),
+        messages:messages.docs.map(x=>({id:x.id,...x.data()})).reverse()};
     }
     if(action==='order_chat') {
       const order=await read('teyzaMobileOrders/'+D.id(data.orderId));
@@ -498,7 +583,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
         // Do not leak wholesale catalogue prices via the public customer endpoint.
         // Anonymous directory may show verified wholesalers' names, not B2B prices.
-        const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
+        const [saved,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
+        const a=await trialAccount(uid,saved);
         if((wholesaleOnly&&a?.category!=='wholesale') ||
            (shop.shopCategory && shop.shopCategory!==a.category) ||
            !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;

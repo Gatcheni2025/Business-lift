@@ -766,14 +766,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   void buyHere({Shop? merchant,OnlineShop? directory}){
     final linked=merchant??(directory==null?null:verifiedMerchantFor(directory));
-    if(linked!=null&&linked.rangeProducts.any((p)=>p.priceCents>0)){
+    // A genuine Teyza-approved shop is open for browsing immediately;
+    // prices and checkout appear only when that seller publishes real stock.
+    if(linked!=null&&linked.identityVerified){
       openShop(linked);
       return;
     }
     showDialog<void>(context:context,builder:(dialogContext)=>AlertDialog(
-      title:const Text('Shop Unavailable'),
-      content:Text((merchant?.name??directory?.name??'This business')+
-        ' has not published products for purchase on Teyza yet. You can still view its location and available contact information.'),
+      title:const Text('Ordering not available'),
+      content:Text((directory?.name??'This business')+
+        ' is a public map listing, not an approved Teyza seller. You can still view its location and contact details.'),
       actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),
         child:const Text('Close'))]));
   }
@@ -1199,10 +1201,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Shop? verifiedMerchantFor(OnlineShop publicPlace){
     String normalized(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
     for(final merchant in live){
-      if(!merchant.identityVerified||merchant.latitude==null||merchant.longitude==null||
-          publicPlace.lat==null||publicPlace.lng==null)continue;
-      if(normalized(merchant.name)==normalized(publicPlace.name)&&
-         km(merchant.latitude!,merchant.longitude!,publicPlace.lat!,publicPlace.lng!)<.15)return merchant;
+      if(!merchant.identityVerified||normalized(merchant.name)!=normalized(publicPlace.name))continue;
+      // Verified listings with no pin can still match the shop address/city.
+      if(merchant.latitude!=null&&merchant.longitude!=null&&publicPlace.lat!=null&&publicPlace.lng!=null){
+        if(km(merchant.latitude!,merchant.longitude!,publicPlace.lat!,publicPlace.lng!)<.5)return merchant;
+      }else{
+        final address=normalized(merchant.address),placeAddress=normalized(publicPlace.address);
+        if(address.length>=8&&placeAddress.contains(address))return merchant;
+      }
     }
     return null;
   }
@@ -1790,8 +1796,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> changeShop()async{
-    final choices=live.where((s)=>s.identityVerified&&
-      s.rangeProducts.any((p)=>p.priceCents>0&&p.inStock&&p.stock>0)).toList()
+    final choices=live.where((s)=>s.identityVerified).toList()
       ..sort((a,b)=>a.name.compareTo(b.name));
     if(choices.isEmpty){setState(()=>selected=null);return;}
     final chosen=await showModalBottomSheet<Shop>(context:context,isScrollControlled:true,

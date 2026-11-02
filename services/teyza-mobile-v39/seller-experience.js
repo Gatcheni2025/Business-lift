@@ -24,7 +24,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
     ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
-    approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',createdAt:new Date(clock()),updatedAt:new Date(clock())};
+    approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'trial',createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
@@ -36,18 +36,30 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    });
   }
   if(action==='seller_plan_select'){
-    // No user can purchase or activate visibility by changing a client-side flag.
-    if(!['free','basic'].includes(data.plan))D.fail(422,'Choose Free or R99 Basic.');
+    // A trial is a one-time entitlement, not a subscription or debit mandate.
+    // It never takes money, never extends itself, and cannot reset after expiry.
+    if(data.plan!=='trial')D.fail(422,'New registrations include one seven-day trial only.');
     await rate(uid,'plan',15,3600000);
     const result=await db.runTransaction(async tx=>{
       const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
       const account=D.seller(snap.exists?snap.data():null,uid);
       if(account.deletionPending===true)D.fail(409,'Your account is being deleted.');
-      tx.update(ref,{listingPlan:data.plan,planSelectedAt:clock(),updatedAt:new Date(clock())});
-      return {plan:data.plan,requiresPayment:data.plan==='basic'};
+      if(Number.isFinite(account.trialStartedAt)&&account.trialStartedAt>0){
+        return {plan:'trial',trialStartedAt:account.trialStartedAt,
+          trialEndsAt:account.trialEndsAt,alreadyStarted:true};
+      }
+      const approved=account.approvalStatus==='approved';
+      const fields={listingPlan:'trial',planSelectedAt:clock(),updatedAt:new Date(clock()),
+        ...(approved?{trialStartedAt:clock(),trialEndsAt:clock()+P.TRIAL_MS}:{})};
+      tx.update(ref,fields);
+      return {plan:'trial',trialStartedAt:fields.trialStartedAt||null,
+        trialEndsAt:fields.trialEndsAt||null,awaitingApproval:!approved};
     });
-    return {...result,visibilityActive:false,
-      message:result.requiresPayment?'The R99 plan is selected, but visibility starts only after seller approval and verified payment.':'Free shop setup is active; shoppers will not see your shop until you activate a paid listing.'};
+    return {...result,requiresPayment:false,
+      message:result.awaitingApproval?
+        'Your seven-day trial begins once your shop is approved and verified.':
+        result.alreadyStarted?'Your original trial dates are unchanged.':
+        'Your seven-day shop trial is active. No card or bank debit is required.'};
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
   if(action==='admin_seller_queue'){
@@ -94,7 +106,12 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(data.status==='approved'&&(!record.objectPath||record.expiresAt<=clock()))D.fail(409,'This selfie expired. Request a new photo.');
     if(data.status==='approved'&&(!view.exists||view.data().sellerUid!==sellerUid||clock()-view.data().viewedAt>300000))
      D.fail(409,'View the current private selfie before approving this seller.');
-    const updatedAccount={...a.data(),approvalStatus:data.status==='needs_new_photo'?'pending':data.status};
+    const approved=data.status==='approved';
+    const existing=a.data();
+    const startTrial=approved&&['trial','free'].includes(existing.listingPlan)&&
+      !(Number.isFinite(existing.trialStartedAt)&&existing.trialStartedAt>0);
+    const updatedAccount={...existing,approvalStatus:data.status==='needs_new_photo'?'pending':data.status,
+      ...(startTrial?{listingPlan:'trial',trialStartedAt:clock(),trialEndsAt:clock()+P.TRIAL_MS}:{})};
     const updatedVerification={...record,status:data.status};
     const nextSetup={...setup,moderationBlocked:data.status!=='approved',
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
@@ -102,7 +119,9 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
       location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
-    tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
+    tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,
+      ...(startTrial?{listingPlan:'trial',trialStartedAt:updatedAccount.trialStartedAt,trialEndsAt:updatedAccount.trialEndsAt}:{}),
+      listingStatus:next?.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
     if(next)tx.set(shopRef,{...next,updatedAt:clock()});
     if(setup.requiredVersion===2)tx.set(setupRef,{...nextSetup,
       sellingStatus:next?.status==='active'?'active':data.status!=='approved'?'paused':setup.completedAt?'pending_approval':'not_started',updatedAt:clock()});

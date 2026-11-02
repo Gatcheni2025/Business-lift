@@ -65,46 +65,31 @@ class _SellerPlanState extends State<SellerPlanPage> {
     backgroundColor:const Color(0xFFF6F8F6),
     appBar:AppBar(title:const Text('Choose your Teyza plan')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
-      const Text('Registration is free',style:TextStyle(fontSize:27,fontWeight:FontWeight.w800)),
+      const Text('7-day Teyza shop trial',
+        style:TextStyle(fontSize:27,fontWeight:FontWeight.w800)),
       const SizedBox(height:8),
-      Text(widget.businessType=='wholesale'?
-        'Register your wholesale business for free. Activate Basic to share your published wholesale catalogue with approved spaza buyers after verification and payment.':
-        'Set up your shop now. Select the R99 plan when you want to be listed for local shoppers.',
-        style:const TextStyle(color:Color(0xFF506458),height:1.4)),
+      const Text('A seven-day trial starts after Teyza approves your shop. '
+        'Your approved shop appears in local searches automatically, even if you '
+        'have not yet published product prices. No debit mandate or bank details '
+        'are required for the trial.',
+        style:TextStyle(color:Color(0xFF506458),height:1.4)),
       const SizedBox(height:20),
-      planCard(name:'Free',price:'R0',benefits:const [
-        'Create and manage your business profile',
-        'Submit your documents for verification',
-        'Prepare products and stock lists privately',
-        'Your shop is not shown in nearby shopper results',
-        'Upgrade your plan when you are ready',
-      ],button:'Continue with Free',select:()=>choose('free')),
-      planCard(name:'Basic',price:'R99 / month',featured:true,benefits:widget.businessType=='wholesale'?const [
-        'Everything in Free',
-        'List your verified business in the approved spaza-owner wholesale directory',
-        'Publish wholesale product and pack prices from your own catalogue',
-        'Receive direct stock order requests and customer messages from spaza buyers',
-        'Offer collection or delivery, including R0 delivery when your business can provide it',
-        'Only approved spaza shop accounts can view and request wholesale products',
-        'Your supplier listing goes live only after approval and verified payment',
-      ]:const [
-        'Everything in Free',
-        'Eligible to appear in nearby shopper searches after approval and payment',
-        'Priority placement within the relevant shopping area',
-        'Show approved products and offer collection or delivery',
-        'Receive enquiries, chat and order requests when your shop is active',
-        'Business finance and stock loans: submit an enquiry for lender assessment (approval is not guaranteed)',
-        'Wholesale stock discounts: access participating supplier offers when available',
-        'Free stock delivery on qualifying wholesale orders in supported areas when a partner offers it',
-        'Buy stock more affordably and set competitive retail prices; savings and sales vary',
-        'Prepare wholesale stock lists and access supplier links',
-        'Your listing is only activated after payment is verified',
-      ],button:'Choose R99 Basic',select:()=>choose('basic')),
+      planCard(name:'7-day trial',price:'R0 for 7 days',featured:true,
+        benefits:const [
+          'One trial per verified shop owner, beginning at approval',
+          'Approved shop appears in nearby results',
+          'Publish your real catalogue, prices and stock when ready',
+          'Receive customer messages and order enquiries',
+          'Collection and delivery options',
+          'After seven days, listing and order access pause until a valid paid entitlement is active',
+          'No automatic charge; no bank debit mandate',
+        ],button:'Activate my one-time trial',select:()=>choose('trial')),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:14),
         child:Text(error!,style:const TextStyle(color:Colors.red))),
-      Text(widget.businessType=='wholesale'?
-        'Choosing Basic does not charge your bank account. Supplier listing is subject to verification and payment. You control your own wholesale prices and delivery terms; Teyza does not guarantee orders.':
-        'Selecting Basic does not charge your card or bank account. Payment and activation are handled separately. Finance, discounts and free delivery depend on approved providers, eligibility and availability. Priority positioning does not guarantee sales.',
+      const Text('After the trial, the intended Basic plan is R99 per month. '
+        'The iOS purchase option is not available until Apple In-App Purchase '
+        'is configured and approved. This screen does not collect payment or '
+        'automatically renew a subscription.',
         style:TextStyle(color:Color(0xFF56665D),fontSize:12,height:1.5)),
     ])),
   );

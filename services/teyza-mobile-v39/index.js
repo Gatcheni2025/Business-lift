@@ -23,10 +23,28 @@ async function readiness(){
  if(!readinessCache||Date.now()>readinessUntil){readinessUntil=Date.now()+30000;readinessCache=uploadReadiness(bucket,verificationKey.value());}
  return readinessCache;
 }
+// Apple IdP revocation requires privileged OAuth scopes. Never put the
+// service account or an OAuth access token into a mobile application.
+async function revokeAppleCode(uid,authorizationCode,idToken){
+  if(!uid||!idToken||typeof authorizationCode!=='string'||authorizationCode.length<10)
+    throw new Error('Apple authorization code is invalid.');
+  const credential=admin.credential.applicationDefault();
+  const grant=await credential.getAccessToken();
+  if(!grant?.access_token)throw new Error('Apple revocation service credentials are unavailable.');
+  const response=await fetch(
+    'https://identitytoolkit.googleapis.com/v2/accounts:revokeToken?key=AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
+    {method:'POST',headers:{'Content-Type':'application/json',
+      Authorization:'Bearer '+grant.access_token},
+    body:JSON.stringify({providerId:'apple.com',tokenType:'CODE',
+      token:authorizationCode,idToken,
+      redirectUri:'https://teyza.co.za'})});
+  if(!response.ok)throw new Error('Apple token revocation was not accepted. Account deletion may proceed with manual revocation review.');
+}
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
    deleteAuthUser:uid=>admin.auth().deleteUser(uid),
    disableAuthUser:uid=>admin.auth().updateUser(uid,{disabled:true}),
    revokeAuthTokens:uid=>admin.auth().revokeRefreshTokens(uid),
+   revokeAppleToken:revokeAppleCode,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
@@ -58,9 +76,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.16.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:true,shopperDeletionProfileClear:true,appleRevocationServer:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -68,7 +86,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     if(!bearer){res.status(401).json({error:'Sign in to continue.'});return;}
     let actor;
     try{actor=await admin.auth().verifyIdToken(bearer[1],true);}catch(_){res.status(401).json({error:'Session expired. Sign in again.'});return;}
-    const result=await service.execute(actor,req.body?.action,req.body?.data||{});
+    // The verified Firebase ID token is passed only inside this trusted request.
+    // An Admin SDK custom token is NOT a valid Identity Platform ID token.
+    const result=await service.execute({...actor,verifiedFirebaseIdToken:bearer[1]},req.body?.action,req.body?.data||{});
     res.json({ok:true,...result});
   }catch(error){
     if(!error.status)console.error('TEYZA_MOBILE_SERVICE_ERROR',error.code||error.name);
