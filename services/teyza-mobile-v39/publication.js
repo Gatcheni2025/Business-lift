@@ -2,7 +2,7 @@
 const D=require('./domain'),catalogue=require('./catalogue');
 const offers=require('./shop-services');
 const normalizedPhone=value=>String(value||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27');
-const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup'].includes(shop.status)&&
+const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup','awaiting_subscription'].includes(shop.status)&&
  !(shop.status==='suspended'&&['onboarding','owner_review','approval'].includes(shop.moderationSource)));
 // New sellers choose Free or R99 Basic. A plan selection is not a payment.
 // Existing legacy shops with no plan field retain their previous publication
