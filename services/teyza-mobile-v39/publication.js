@@ -14,7 +14,7 @@ function entitled(uid,account,billing,now=Date.now()) {
    billing.monthlyCents===9900&&billing.latestPeriod===period(now);
 }
 function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
- const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
+ const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
  const modern=setup.requiredVersion===2;
  const ready=registered&&(modern?Boolean(setup.completedAt)&&!setup.moderationBlocked&&
    ['active','pending_approval'].includes(setup.sellingStatus)&&
