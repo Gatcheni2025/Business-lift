@@ -24,9 +24,9 @@ class SellerShop {
     (d['address']??'').toString(),(d['approvalStatus']??'pending').toString(),
     (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString(),companyName:(d['companyName']??'').toString(),registrationNumber:(d['registrationNumber']??'').toString());
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
-  bool get hasRegisteredCategory=>category=='spaza'||category=='retail';
+  bool get hasRegisteredCategory=>category=='spaza'||category=='retail'||category=='wholesale';
   String get categoryLabel=>category=='spaza'?'Spaza Shop':
-    category=='retail'?'Other Retail / Wholesale':'Shop setup required';
+    category=='wholesale'?'Wholesaler / Cash & Carry':category=='retail'?'Other Retail':'Shop setup required';
 }
 class SellerDraft {
   final String id,name,category,description;
