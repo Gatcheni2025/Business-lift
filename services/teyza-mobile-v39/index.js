@@ -92,7 +92,17 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
 exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
   const before=event.data?.before.data()||{},after=event.data?.after.data()||{};
-  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone&&before.address===after.address&&before.shopName===after.shopName)return;
+  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone&&before.address===after.address&&before.shopName===after.shopName&&before.listingPlan===after.listingPlan)return;
+  await service.synchronizeCatalogue(event.params.sellerUid);
+});
+// Recalculate publication after trusted billing changes. Selecting a plan
+// cannot activate a listing; only an admin-recorded paid status can.
+exports.teyzaSellerBillingChanged=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaBilling/{sellerUid}'},async event=>{
+  if(!event.data?.after.exists)return;
+  const before=event.data.before.data()||{},after=event.data.after.data()||{};
+  if(event.data.before.exists&&before.status===after.status&&
+    before.latestPeriod===after.latestPeriod&&before.monthlyCents===after.monthlyCents)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
 // One bounded pass repairs historical premature live flags. Once complete this
