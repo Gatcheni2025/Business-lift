@@ -3,7 +3,7 @@ const ROOT = 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPl
 const FIELD_MASK = ['places.id', 'places.displayName', 'places.formattedAddress',
   'places.location', 'places.googleMapsUri', 'places.primaryType', 'places.types',
   'places.photos', 'places.businessStatus', 'places.rating', 'places.userRatingCount',
-  'places.currentOpeningHours', 'places.nationalPhoneNumber', 'places.websiteUri', 'nextPageToken'].join(',');
+  'places.currentOpeningHours', 'nextPageToken'].join(',');
 const QUERIES = {
   spaza: ['spaza shop', 'tuck shop', 'mini market', 'general dealer',
     'convenience store', 'grocery supermarket'],
@@ -147,4 +147,18 @@ async function fetchPhoto({key, ref, width = 720, fetchImpl = fetch}) {
   if (bytes.length > 8 * 1024 * 1024) throw new Error('Photo too large');
   return {bytes, contentType: image.headers.get('content-type')};
 }
-module.exports = {ROOT, FIELD_MASK, num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto};
+
+async function fetchContact({key,placeId,fetchImpl=fetch}){
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(placeId||''))throw new Error('Invalid Google Place ID');
+  const response=await fetchImpl('https://places.googleapis.com/v1/places/'+encodeURIComponent(placeId),{
+    headers:{'X-Goog-Api-Key':key,
+      'X-Goog-FieldMask':'id,nationalPhoneNumber,websiteUri'},
+    signal:AbortSignal.timeout(8500)
+  });
+  if(!response.ok){const err=new Error('Places contact lookup unavailable');err.status=response.status;throw err;}
+  const place=await response.json();
+  return {phone:typeof place.nationalPhoneNumber==='string'?place.nationalPhoneNumber.slice(0,32):'',
+    websiteUrl:typeof place.websiteUri==='string'&&place.websiteUri.startsWith('https://')?place.websiteUri:''};
+}
+
+module.exports = {ROOT, FIELD_MASK, num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto, fetchContact};
