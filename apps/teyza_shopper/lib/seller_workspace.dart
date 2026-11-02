@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'account_deletion_page.dart';
 import 'seller_plan.dart';
+import 'wholesale_market.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -424,6 +425,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
     businessTile(Icons.assignment_turned_in_outlined,'Membership & R99 mandate','View your membership agreement',openMandate),
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
+    if(shop?.category=='spaza')businessTile(Icons.warehouse_outlined,'Buy from wholesalers',
+      'Choose approved suppliers, compare real wholesale prices and request stock delivery',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        WholesaleMarketPage(session:widget.session,api:widget.mobileApi)))),
+    if(shop?.category=='wholesale')businessTile(Icons.local_shipping_outlined,'Your wholesale stock offers',
+      'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
+      ()=>selectSellerTab(1)),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Free or R99 Basic plan',
