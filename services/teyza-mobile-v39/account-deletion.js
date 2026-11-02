@@ -40,12 +40,29 @@ function publicStatus(record) {
 function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock=Date.now}) {
   const doc=path=>db.doc(path);
   const get=async ref=>{const s=await ref.get();return s.exists?s.data():null;};
+  async function blockSignIn(uid,request) {
+    if(request.status==='completed'||request.authDisabledAt>0)return publicStatus(request);
+    if(typeof disableAuthUser!=='function'||typeof revokeAuthTokens!=='function')
+      D.fail(503,'Deletion requested but account sign-in protection is unavailable. Contact Teyza support with your deletion reference.');
+    try{
+      await disableAuthUser(uid);
+      await revokeAuthTokens(uid);
+    }catch(error){
+      if(error?.code!=='auth/user-not-found')
+        D.fail(503,'Deletion request recorded, but account sign-in closure could not be confirmed. Contact Teyza support and quote your deletion reference.');
+    }
+    const stoppedAt=clock();
+    await doc('teyzaAccountDeletionRequests/'+uid).update({authDisabledAt:stoppedAt,updatedAt:stoppedAt});
+    return publicStatus({...request,authDisabledAt:stoppedAt});
+  }
   async function execute(actor,action,data={}) {
     if(!actor?.uid)D.fail(401,'Sign in first.');
     const uid=D.id(actor.uid),stamp=clock();
     if(action==='account_deletion_status') {
       const entry=await get(doc('teyzaAccountDeletionRequests/'+uid));
-      return entry?publicStatus(entry):{requested:false};
+      // Older app releases saved requests but left Firebase Auth active.
+      // Migrate those requests to a closed login on the next status read.
+      return entry?blockSignIn(uid,entry):{requested:false};
     }
     if(action==='account_deletion_request') {
       if(data.confirmation!=='DELETE')D.fail(422,'Type DELETE to confirm your request.');
@@ -86,25 +103,8 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         });
         return record;
       });
-      // Do not merely revoke shop approval: Firebase Auth would still accept
-      // password/Google/Apple login to the same user. Keep the disabled identity
-      // reserved during the erasure review to prevent provider sign-in from
-      // silently recreating the same account.
-      if(request.status==='completed')return publicStatus(request);
-      if(typeof disableAuthUser!=='function'||typeof revokeAuthTokens!=='function')
-        D.fail(503,'Deletion requested but account sign-in protection is unavailable. Contact Teyza support with your deletion reference.');
-      try{
-        await disableAuthUser(uid);
-        await revokeAuthTokens(uid);
-      }catch(error){
-        // The saved deletion request is still valid. Do not report a
-        // completed sign-in blockade when Auth disabling failed.
-        if(error?.code!=='auth/user-not-found')
-          D.fail(503,'Deletion request recorded, but account sign-in closure could not be confirmed. Contact Teyza support and quote your deletion reference.');
-      }
-      const stoppedAt=clock();
-      await doc('teyzaAccountDeletionRequests/'+uid).update({authDisabledAt:stoppedAt,updatedAt:stoppedAt});
-      return publicStatus({...request,authDisabledAt:stoppedAt});
+      // The disabled Firebase Auth identity is held while erasure is reviewed.
+      return blockSignIn(uid,request);
     }
     if(action==='ops_account_deletion_queue') {
       admin(actor,stamp);
