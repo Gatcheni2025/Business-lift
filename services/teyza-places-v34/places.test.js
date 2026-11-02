@@ -74,3 +74,20 @@ test('photo host validation rejects unexpected targets',async()=>{
   await assert.rejects(fetchPhoto({key:'key',ref:'places/ChIJ1234/photos/Photo_1234',
     fetchImpl:async()=>json({photoUri:'https://untrusted.example/image'})}),/Invalid image host/);
 });
+
+test('Google-linked wholesalers are separated from ordinary retail and spaza categories',async()=>{
+ const wholesale=place('bulk',{displayName:{text:'Durban Wholesale Cash and Carry'},
+   primaryType:'wholesaler',types:['wholesaler']});
+ const retail=place('mall',{displayName:{text:'Durban Shopping Mall'},
+   primaryType:'shopping_mall',types:['shopping_mall']});
+ assert.equal(kindMatch(wholesale,'wholesale'),true);
+ assert.equal(kindMatch(wholesale,'spaza'),false);
+ assert.equal(kindMatch(wholesale,'variety'),false);
+ assert.equal(kindMatch(retail,'wholesale'),false);
+ const result=await discover({key:'test',lat,lon,radius:22000,kind:'wholesale',
+   fetchImpl:async()=>json({places:[wholesale,retail]})});
+ assert.deepEqual(result.entries.map(e=>e.id),['google-bulk']);
+ assert.equal(result.entries[0].isTeyzaMerchant,false);
+ assert.equal(result.entries[0].shopCategory,'wholesale');
+ assert.equal(result.entries[0].priceCents,undefined);
+});
