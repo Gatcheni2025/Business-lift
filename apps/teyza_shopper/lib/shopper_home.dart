@@ -79,7 +79,7 @@ class Shop {
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
     address:(x['address']??'').toString(),city:(x['city']??'').toString(),
-    shopCategory:x['shopCategory']=='variety'?'variety':'spaza',
+    shopCategory:['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
         ?(x['services'] as Map)['cardPayments'] as bool:null,
