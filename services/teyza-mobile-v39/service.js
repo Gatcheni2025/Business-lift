@@ -131,6 +131,29 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const deletionRecord=await read('teyzaAccountDeletionRequests/'+uid);
     if(deletionRecord&&deletionRecord.status!=='completed'&&auth.teyzaAdmin!==true)
       D.fail(403,'Your account deletion is being processed. Save your deletion reference and contact Teyza support if you need assistance.');
+    if(action==='shopper_profile_read'){
+      const profile=await read('teyzaShopperProfiles/'+uid);
+      return {profile:profile?.ownerUid===uid?profile:null};
+    }
+    if(action==='shopper_profile_save'){
+      const address=D.text(data.address,'delivery street address',300);
+      if(address.length<8)D.fail(422,'Enter your full delivery address.');
+      const displayName=D.text(data.displayName,'shopper name',120);
+      const phone=D.text(data.phone,'shopper phone',30);
+      if(phone.replace(/\D/g,'').length<9||phone.replace(/\D/g,'').length>15)
+        D.fail(422,'Enter a valid contact number.');
+      const lat=Number(data.latitude),lng=Number(data.longitude);
+      if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
+      const area=D.text(data.area||'','delivery area',130,false);
+      const city=D.text(data.city||'','delivery city',130,false);
+      // Email is authoritative only from Firebase Auth, never from a
+      // user-supplied profile field. We must not claim unverified email is verified.
+      const profile={ownerUid:uid,displayName,phone,address,area,city,
+        latitude:lat,longitude:lng,email:typeof auth.email==='string'?auth.email:'',
+        emailVerified:auth.email_verified===true,updatedAt:clock()};
+      await doc('teyzaShopperProfiles/'+uid).set(profile,{merge:true});
+      return {saved:true,profile};
+    }
     if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
