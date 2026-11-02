@@ -474,9 +474,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const uid=row.id,shop=row.data();
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
         // Do not leak wholesale catalogue prices via the public customer endpoint.
-        if(shop.shopCategory==='wholesale'&&!wholesaleOnly)return null;
+        // Anonymous directory may show verified wholesalers' names, not B2B prices.
         const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
-        if((a?.category==='wholesale')!==wholesaleOnly ||
+        if((wholesaleOnly&&a?.category!=='wholesale') ||
            (shop.shopCategory && shop.shopCategory!==a.category) ||
            !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
         const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
@@ -486,7 +486,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         Object.assign(projected,offers.exposed(offers.effective(c,shop)));
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
-        return P.publicRow(uid,projected);
+        const publicItem=P.publicRow(uid,projected);
+        if(a.category==='wholesale'&&!wholesaleOnly){publicItem.products=[];publicItem.productHighlights=[];}
+        return publicItem;
       }));entries.push(...batch.filter(Boolean));
     }
     return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
