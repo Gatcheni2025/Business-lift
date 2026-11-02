@@ -16,7 +16,7 @@ const locations=require('./shop-location');
 const addresses=require('./shop-address');
 const deletion=require('./account-deletion');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,createPhoneToken,
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,createPhoneToken,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
@@ -121,7 +121,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
-  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,clock});
+  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock});
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
