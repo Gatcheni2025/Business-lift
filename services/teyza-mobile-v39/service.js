@@ -73,6 +73,17 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         publicCount:eligible?next?.productHighlights.length||0:0};
     });
   }
+  // Wholesale prices are never exposed in the anonymous shopper directory.
+  // Registered, reviewed spaza operators can source from live suppliers.
+  async function assertSpazaBuyer(uid,tx=null){
+    const refs=['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaPublicShops/'].map(x=>doc(x+uid));
+    const entries=await Promise.all(refs.map(ref=>tx?tx.get(ref):ref.get()));
+    const [a,o,v,p]=entries.map(row=>row.exists?row.data():null);
+    if(a?.uid!==uid||a.category!=='spaza')D.fail(403,'Wholesale ordering is available to registered spaza shop owners only.');
+    const state=P.state(uid,a,o||{},v,p,null,clock());
+    if(!state.ready||!state.approved)D.fail(403,'Complete your spaza registration and seller approval to access wholesale prices.');
+    return a;
+  }
   async function rate(uid,kind,max,window) {
     const ref=doc('teyzaMobileLimits/'+uid+'_'+kind);
     await db.runTransaction(async tx => {
@@ -128,6 +139,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
+    if(action==='wholesale_directory'){
+      await assertSpazaBuyer(uid);await rate(uid,'wholesale-discovery',40,60000);
+      return publicDirectory(data.after||'',true);
+    }
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
       return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
@@ -367,7 +382,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='order_quote'){
       const sellerUid=D.id(data.shopId);if(sellerUid===uid)D.fail(422,'Choose another shop to place an order.');
       await rate(uid,'order-quotes',60,60000);
-      return {quote:offers.quote(await active(sellerUid),await read('teyzaShopSettings/'+sellerUid),data)};
+      const shop=await active(sellerUid);
+      if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid);
+      return {quote:offers.quote(shop,await read('teyzaShopSettings/'+sellerUid),data)};
     }
     if(action==='order_request') {
       const sellerUid=D.id(data.shopId),requestId=D.id(data.requestId);
@@ -381,11 +398,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const [existing,shopSnap,config]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(doc('teyzaShopSettings/'+sellerUid))]);
         if(existing.exists){if(existing.data().shopperUid!==uid)D.fail(403,'Order access denied.');return {id:ref.id,status:existing.data().status};}
         const shop=await requireApproval(tx,sellerUid,shopSnap.exists?shopSnap.data():null);
+        if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid,tx);
         const estimate=offers.quote(shop,config.exists?config.data():null,data);
         if(data.expectedQuoteId!==undefined&&data.expectedQuoteId!==estimate.quoteId)D.fail(409,'Prices or shop services changed. Refresh the order total before sending this request.');
         const {items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents}=estimate;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
           mode:data.mode,address,phone,items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents,
+          orderType:shop.shopCategory==='wholesale'?'wholesale_stock':'retail',
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});
         tx.set(doc('teyzaMobileOrderIndex/'+uid+'/shopperOrders/'+ref.id),{createdAt:clock()});
         tx.set(doc('teyzaMobileOrderIndex/'+sellerUid+'/ownerOrders/'+ref.id),{createdAt:clock()});
@@ -426,7 +445,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     D.fail(404,'This shop service is not available.');
   }
-  async function publicDirectory(after=''){
+  async function publicDirectory(after='',wholesaleOnly=false){
     let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(100);
     if(after)query=query.startAfter(D.id(after));
     const result=await query.get(),entries=[];
@@ -434,8 +453,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const batch=await Promise.all(result.docs.slice(offset,offset+10).map(async row=>{
         const uid=row.id,shop=row.data();
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
+        // Do not leak wholesale catalogue prices via the public customer endpoint.
+        if((shop.shopCategory==='wholesale')!==wholesaleOnly)return null;
         const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
-        if(!P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
+        if(!P.state(uid,a,o||{},v,shop,b,clock()).live||a?.category!==shop.shopCategory)return null;
         const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
            sponsored:a.listingPlan==='basic'&&P.entitled(uid,a,b,clock()),
           area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
@@ -446,7 +467,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return P.publicRow(uid,projected);
       }));entries.push(...batch.filter(Boolean));
     }
-    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null};
+    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
   }
   async function reconcilePublicationBatch(){
     const ref=doc('teyzaMaintenance/publication-approval-v1'),old=await ref.get();
