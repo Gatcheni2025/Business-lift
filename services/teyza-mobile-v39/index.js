@@ -25,8 +25,8 @@ async function readiness(){
 }
 // Apple IdP revocation requires privileged OAuth scopes. Never put the
 // service account or an OAuth access token into a mobile application.
-async function revokeAppleCode(uid,authorizationCode){
-  if(!uid||typeof authorizationCode!=='string'||authorizationCode.length<10)
+async function revokeAppleCode(uid,authorizationCode,idToken){
+  if(!uid||!idToken||typeof authorizationCode!=='string'||authorizationCode.length<10)
     throw new Error('Apple authorization code is invalid.');
   const credential=admin.credential.applicationDefault();
   const grant=await credential.getAccessToken();
@@ -36,7 +36,7 @@ async function revokeAppleCode(uid,authorizationCode){
     {method:'POST',headers:{'Content-Type':'application/json',
       Authorization:'Bearer '+grant.access_token},
     body:JSON.stringify({providerId:'apple.com',tokenType:'CODE',
-      token:authorizationCode,idToken:await admin.auth().createCustomToken(uid),
+      token:authorizationCode,idToken,
       redirectUri:'https://teyza.co.za'})});
   if(!response.ok)throw new Error('Apple token revocation was not accepted. Account deletion may proceed with manual revocation review.');
 }
@@ -86,7 +86,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     if(!bearer){res.status(401).json({error:'Sign in to continue.'});return;}
     let actor;
     try{actor=await admin.auth().verifyIdToken(bearer[1],true);}catch(_){res.status(401).json({error:'Session expired. Sign in again.'});return;}
-    const result=await service.execute(actor,req.body?.action,req.body?.data||{});
+    // The verified Firebase ID token is passed only inside this trusted request.
+    // An Admin SDK custom token is NOT a valid Identity Platform ID token.
+    const result=await service.execute({...actor,verifiedFirebaseIdToken:bearer[1]},req.body?.action,req.body?.data||{});
     res.json({ok:true,...result});
   }catch(error){
     if(!error.status)console.error('TEYZA_MOBILE_SERVICE_ERROR',error.code||error.name);
