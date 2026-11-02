@@ -242,7 +242,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   bool _usingGps=false;
   String _currentLocationDetail='';
   bool showAllShops=false;
-  bool allRegistered=false;
   Shop? selected;
   Shop? basketShop;
   OnlineShop? directorySelected;
@@ -639,7 +638,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return km(area!.lat, area!.lng, shop.latitude!, shop.longitude!);
   }
   List<Shop> get nearbyReal {
-    final filtered = live.where((shop)=>shopMatchesArea(shop,area,allRegistered:allRegistered,radiusKm:searchRadiusKm.toDouble())).toList();
+    final filtered = live.where((shop)=>shopMatchesArea(shop,area,radiusKm:searchRadiusKm.toDouble())).toList();
     filtered.sort((a,b) {
       if(a.sponsored!=b.sponsored)return a.sponsored?-1:1;
       return (distance(a)??double.infinity).compareTo(distance(b)??double.infinity);
@@ -648,7 +647,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   List<OnlineShop> get displayedOnline {
-    if(allRegistered)return [];
     final q=search.toLowerCase().trim();
     final places=online.where((place)=>q.isEmpty ||
       (place.name+' '+place.area+' '+place.address).toLowerCase().contains(q)).toList();
@@ -1119,7 +1117,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const Text('Good food. Stronger communities.',
             style:TextStyle(color:Color(0xFF566660),fontSize:10,height:1.3)),
           const SizedBox(height:10),
-          FilledButton(onPressed:()=>navigateToTab(1),
+          FilledButton(onPressed:browseNearby,
             style:FilledButton.styleFrom(minimumSize:Size.zero,
               padding:const EdgeInsets.symmetric(horizontal:14,vertical:9),
               textStyle:const TextStyle(fontFamily:'PT Sans',fontWeight:FontWeight.w700,fontSize:11)),
@@ -1552,7 +1550,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             style:const TextStyle(color:muted,fontSize:11)),
           merchantTrust(s),
           const SizedBox(height:7),
-          Text((s.rangeProducts.isEmpty?'Shop listed on Teyza':s.rangeProducts.length.toString()+' products')+
+          Text((s.rangeProducts.isEmpty?'Products coming soon':s.rangeProducts.length.toString()+' products')+
             (distance(s)!=null?' · '+distance(s)!.toStringAsFixed(1)+' km':''),
             style:const TextStyle(color:green,fontSize:12,fontWeight:FontWeight.bold))
         ])),
