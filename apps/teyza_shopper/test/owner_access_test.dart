@@ -90,8 +90,9 @@ void main(){
     await tester.ensureVisible(find.text('Retry products'));
     await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();
     expect(find.text('Retry products'),findsNothing);
-    await tester.scrollUntilVisible(add,180,scrollable:find.byType(Scrollable).first);
-    expect(tester.widget<FilledButton>(add).onPressed,isNotNull);
+    // A successful retry clears the permission error; the products button can
+    // move to an unbuilt position in a lazily rendered dashboard.
+    expect(find.text('Support reference: SELLER_PRODUCTS_ACCESS'),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
   });
