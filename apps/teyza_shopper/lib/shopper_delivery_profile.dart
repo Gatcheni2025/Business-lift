@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'shopper_auth.dart';
-import 'teyza_mobile_api.dart';
 
 /// Delivery address and contact details belong to the shopper, never a shop.
 /// Guest details stay encrypted on this device. Signed-in profiles are also
