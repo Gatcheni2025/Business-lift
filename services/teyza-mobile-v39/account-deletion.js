@@ -81,8 +81,10 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const publicRef=doc('teyzaPublicShops/'+uid);
         const mandateRef=doc('teyzaSellerMandates/'+uid);
         const billingRef=doc('teyzaBilling/'+uid);
-        const [old,a,shop,m,b]=await Promise.all([
-          tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),tx.get(billingRef),
+        const shopperProfileRef=doc('teyzaShopperProfiles/'+uid);
+        const [old,a,shop,m,b,shopperProfile]=await Promise.all([
+          tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),
+          tx.get(billingRef),tx.get(shopperProfileRef),
         ]);
         if(old.exists)return old.data();
         const isSeller=a.exists&&a.data().uid===uid;
@@ -92,6 +94,11 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
           needsBillingReview:isSeller&&(m.exists||b.exists),
           needsAppleTokenReview:true};
         tx.set(requestRef,record);
+        // Delete the shopper's saved delivery address and contact profile as
+        // part of the closure transaction, independently of seller approval.
+        // Order and tax records remain subject to the documented erasure review.
+        if(shopperProfile.exists&&shopperProfile.data().ownerUid===uid)
+          tx.delete(shopperProfileRef);
         // Immediately remove pending-closure sellers from public discovery and
         // stop new orders or new Teyza-managed invoices.
         if(isSeller)tx.update(sellerRef,{deletionPending:true,
