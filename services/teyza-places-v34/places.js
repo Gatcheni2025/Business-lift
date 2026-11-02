@@ -34,7 +34,7 @@ function kindMatch(place, kind) {
   const name = String(place.displayName?.text || '').toLowerCase();
   const types = new Set([place.primaryType, ...(place.types || [])]);
   if (kind === 'wholesale') return types.has('wholesaler') || types.has('warehouse_store') ||
-    /\\bwholesal(e|er|ers|ing)\\b|cash\\s*(?:&|and|n)\\s*carry|bulk\\s*(?:food|grocer|suppl)|food\\s*distribut/.test(name);
+    /\bwholesal(e|er|ers|ing)\b|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocer|suppl)|food\s*distribut/.test(name);
   if (kind === 'spaza') return /spaza|tuck.?shop|mini.?market|convenience|grocer|general dealer|corner shop|supermarket|superette|food store/.test(name) ||
     ['convenience_store', 'grocery_store', 'supermarket', 'food_store'].some(t => types.has(t));
   if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry|tyres?|restaurant|takeaway|auto spares|motor spares|printing|salon/.test(name) || types.has('wholesaler')) return false;
