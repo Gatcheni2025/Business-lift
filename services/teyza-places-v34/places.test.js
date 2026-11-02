@@ -1,7 +1,7 @@
 'use strict';
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {num,mapResult,discover,fetchPhoto,trustedPhotoUri,kindMatch} = require('./places');
+const {num,mapResult,discover,fetchPhoto,fetchContact,trustedPhotoUri,kindMatch} = require('./places');
 const lat=-29.8587,lon=31.0218;
 const place=(id,extra={})=>({id,displayName:{text:'Village Corner '+id},primaryType:'grocery_store',
   types:['grocery_store'],location:{latitude:lat,longitude:lon},...extra});
@@ -90,4 +90,31 @@ test('Google-linked wholesalers are separated from ordinary retail and spaza cat
  assert.equal(result.entries[0].isTeyzaMerchant,false);
  assert.equal(result.entries[0].shopCategory,'wholesale');
  assert.equal(result.entries[0].priceCents,undefined);
+});
+
+test('Other Businesses searches salons, furniture, upholsterers and plumbers separately',async()=>{
+ const salons=place('salon',{displayName:{text:'Durban Hair Salon'},types:['beauty_salon'],primaryType:'beauty_salon'});
+ const plumber=place('plumb',{displayName:{text:'Plumber on Call'},types:['plumber'],primaryType:'plumber'});
+ const store=place('furniture',{displayName:{text:'Furniture and Upholstery'},types:['furniture_store'],primaryType:'furniture_store'});
+ const wholesaler=place('wholesale',{displayName:{text:'Wholesale Cash and Carry'},types:['wholesaler'],primaryType:'wholesaler'});
+ for(const result of [salons,plumber,store])assert.equal(kindMatch(result,'variety'),true);
+ assert.equal(kindMatch(wholesaler,'variety'),false);
+ const result=await discover({key:'test',lat,lon,radius:30000,kind:'variety',fetchImpl:async()=>json({places:[salons,plumber,store,wholesaler]})});
+ assert.deepEqual(result.entries.map(x=>x.id).sort(),['google-furniture','google-plumb','google-salon']);
+});
+test('Business contact is fetched on demand and not with every Google Text Search',async()=>{
+ let calls=0;
+ const data=await discover({key:'test',lat,lon,radius:20000,kind:'wholesale',fetchImpl:async(_,opts)=>{
+   calls++;
+   assert(!opts.headers['X-Goog-FieldMask'].includes('nationalPhoneNumber'));
+   return json({places:[place('supplier',{displayName:{text:'Wholesale Supplier Depot'}})]});
+ }});
+ assert(data.entries.length>0);assert(calls>0);
+ const response=await fetchContact({key:'test',placeId:'ChIJwholesale123456',fetchImpl:async(url,opts)=>{
+   assert(url.endsWith('/ChIJwholesale123456'));
+   assert.equal(opts.headers['X-Goog-FieldMask'],'id,nationalPhoneNumber,websiteUri');
+   return json({id:'ChIJwholesale123456',nationalPhoneNumber:'031 000 1234',websiteUri:'https://example.org'});
+ }});
+ assert.equal(response.phone,'031 000 1234');
+ assert.equal(response.websiteUrl,'https://example.org');
 });
