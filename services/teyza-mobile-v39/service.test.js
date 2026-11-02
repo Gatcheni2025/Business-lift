@@ -22,6 +22,7 @@ class FakeDB {
     set:async(value,options)=>db.records.set(path,options?.merge?{...db.records.get(path),...structuredClone(value)}:structuredClone(value)),
     update:async value=>{assert(db.records.has(path));db.records.set(path,{...db.records.get(path),...structuredClone(value)});},
     create:async value=>{assert(!db.records.has(path));db.records.set(path,structuredClone(value));},
+    delete:async()=>db.records.delete(path),
     collection:name=>db.collection(path+'/'+name)};}
   snapshot(path){const data=this.records.get(path);return {exists:data!==undefined,id:path.split('/').pop(),data:()=>structuredClone(data),ref:this.doc(path)};}
   collection(path){const db=this,filters=[];let sort=null,max=Infinity,after=null;const query={
@@ -36,6 +37,7 @@ class FakeDB {
     }};return query;}
   transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},
     set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
+    delete:ref=>{wrote=true;writes.push(()=>ref.delete());},
     commit:async()=>{for(const write of writes)await write();}};}
   async runTransaction(fn){const tx=this.transaction(),result=await fn(tx);await tx.commit();return result;}
   batch(){return this.transaction();}
