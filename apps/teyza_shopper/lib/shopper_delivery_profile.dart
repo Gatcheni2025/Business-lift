@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'shopper_auth.dart';
 
 /// Delivery address and contact details belong to the shopper, never a shop.
@@ -53,7 +54,31 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
   late final email=TextEditingController(text:widget.session.email??widget.initial?.email??'');
   late final phone=TextEditingController(text:widget.initial?.phone??widget.session.phoneNumber??'');
   bool busy=false;
+  bool addressSaved=false;
+  double? detectedLatitude,detectedLongitude;
   String? error,notice;
+  @override void initState(){super.initState();addressSaved=widget.initial!=null; if(widget.initial==null){WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) detectAddress(); });}}
+  Future<void> detectAddress()async{
+    if(busy)return;
+    setState((){busy=true;error=null;notice='Detecting your full delivery address…';});
+    try{
+      if(!await Geolocator.isLocationServiceEnabled())throw StateError('Location is disabled. Enable GPS or enter your address manually.');
+      var permission=await Geolocator.checkPermission();
+      if(permission==LocationPermission.denied)permission=await Geolocator.requestPermission();
+      if(permission==LocationPermission.denied||permission==LocationPermission.deniedForever)throw StateError('Location permission is unavailable. Enter the delivery address manually.');
+      final position=await Geolocator.getCurrentPosition(locationSettings:const LocationSettings(accuracy:LocationAccuracy.high,timeLimit:Duration(seconds:18)));
+      final places=await placemarkFromCoordinates(position.latitude,position.longitude).timeout(const Duration(seconds:16));
+      if(places.isEmpty)throw StateError('Could not detect a full address. Enter or correct the address manually.');
+      final p=places.first;
+      final components=[p.street,p.subLocality,p.locality,p.administrativeArea,p.postalCode]
+        .whereType<String>().map((v)=>v.trim()).where((v)=>v.isNotEmpty).toList();
+      final full=components.toSet().join(', ');
+      if(full.length<8)throw StateError('The detected address is incomplete. Enter your street and suburb manually.');
+      if(!mounted)return;
+      setState((){address.text=full;detectedLatitude=position.latitude;detectedLongitude=position.longitude;notice='Confirm the detected address, then save it.';});
+    }catch(e){if(mounted)setState(()=>error=e is StateError?e.message.toString():'Automatic location failed. Enter your complete address manually.');}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
   @override void dispose(){
     for(final input in [address,name,email,phone])input.dispose();
     super.dispose();
@@ -71,17 +96,22 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> save()async{
+    if(!addressSaved){
+      if((address.text.trim()).length<8){setState(()=>error='Enter or detect your full street address.');return;}
+      setState((){addressSaved=true;error=null;notice=null;});return;
+    }
     if(!form.currentState!.validate())return;
     setState((){busy=true;error=null;});
     try{
       final full=address.text.trim();
-      final matches=await locationFromAddress(full).timeout(const Duration(seconds:16));
-      if(matches.isEmpty)throw StateError('Address not found. Add the street, suburb and city.');
-      final loc=matches.first;
-      if(loc.latitude==0&&loc.longitude==0)throw StateError('Choose a real delivery address.');
+      final matches=detectedLatitude!=null&&detectedLongitude!=null
+        ?<Location>[]:await locationFromAddress(full).timeout(const Duration(seconds:16));
+      if(matches.isEmpty&&detectedLatitude==null)throw StateError('Address not found. Add the street, suburb and city.');
+      final lat=detectedLatitude??matches.first.latitude,lon=detectedLongitude??matches.first.longitude;
+      if(lat==0&&lon==0)throw StateError('Choose a real delivery address.');
       var area='',city='';
       try{
-        final places=await placemarkFromCoordinates(loc.latitude,loc.longitude)
+        final places=await placemarkFromCoordinates(lat,lon)
           .timeout(const Duration(seconds:12));
         if(places.isNotEmpty){
           area=places.first.subLocality??places.first.locality??'';
@@ -91,7 +121,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
       final profile=ShopperDeliveryProfile(
         address:full,area:area.isNotEmpty?area:city,city:city,
         displayName:name.text.trim(),email:email.text.trim(),
-        phone:phone.text.trim(),latitude:loc.latitude,longitude:loc.longitude);
+        phone:phone.text.trim(),latitude:lat,longitude:lon);
       if(!mounted)return;
       Navigator.pop(context,profile);
     }catch(e){
@@ -108,11 +138,18 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
       const SizedBox(height:6),
       const Text('Save your street address and contact details so Teyza can find shops close to where orders should arrive.'),
       const SizedBox(height:16),
-      TextFormField(key:const ValueKey('shopper-delivery-address'),controller:address,
+      if(!addressSaved) ...[
+      OutlinedButton.icon(onPressed:busy?null:detectAddress,icon:const Icon(Icons.my_location),label:const Text('Detect my full address')),
+      const SizedBox(height:10),
+      ],
+      if(!addressSaved) TextFormField(key:const ValueKey('shopper-delivery-address'),controller:address,
         enabled:!busy,maxLines:2,keyboardType:TextInputType.streetAddress,
         decoration:const InputDecoration(labelText:'Full delivery street address',
           hintText:'12 Main Road, KwaMashu, Durban',border:OutlineInputBorder()),
         validator:(x)=>(x??'').trim().length<8?'Enter a full street address.':null),
+      if(addressSaved) ...[
+      Text(address.text,style:const TextStyle(fontWeight:FontWeight.w700)),
+      TextButton(onPressed:busy?null:()=>setState((){addressSaved=false;detectedLatitude=null;detectedLongitude=null;}),child:const Text('Change address')),
       const SizedBox(height:12),
       TextFormField(controller:name,enabled:!busy,
         decoration:const InputDecoration(labelText:'Full name',border:OutlineInputBorder()),
@@ -148,6 +185,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
           final digits=(x??'').replaceAll(RegExp(r'[^0-9]'),'');
           return digits.length<9||digits.length>15?'Enter a valid phone number.':null;
         }),
+      ],
       if(notice!=null)Padding(padding:const EdgeInsets.only(top:8),
         child:Text(notice!,style:const TextStyle(color:Colors.green))),
       if(error!=null)Padding(padding:const EdgeInsets.only(top:8),
@@ -155,7 +193,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
       const SizedBox(height:15),
       SizedBox(width:double.infinity,child:FilledButton.icon(
         onPressed:busy?null:save,icon:const Icon(Icons.place_outlined),
-        label:Text(busy?'Finding your address…':'Save address and find nearby shops'))),
+        label:Text(busy?'Working…':addressSaved?'Save contact details and find nearby shops':'Save address and continue'))),
       const SizedBox(height:8),
       const Text('Your address is used to find nearby shops and prefill delivery requests. It is not shared with a seller until you submit an order.',
         style:TextStyle(fontSize:11,color:Colors.black54)),

@@ -864,7 +864,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     showAllShops=true;
     search = '';
     category = 'All';
-    tab = tab==1?1:0;
+    tab = 1;
   });
 
   void selectDirectory(OnlineShop shop){
@@ -1095,7 +1095,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           Expanded(child:shopPage(selected!)),
         ]):shopProductsPage()):
         Column(children:[locationHeader(),Expanded(child:
-          selected!=null?shopPage(selected!):
+          selected!=null?Column(children:[
+            Container(color:Colors.white,padding:const EdgeInsets.symmetric(horizontal:16,vertical:8),
+              child:Row(children:[Expanded(child:Text(selected!.name,maxLines:1,overflow:TextOverflow.ellipsis)),
+                OutlinedButton(onPressed:changeShop,child:const Text('Change shop'))])),
+            Expanded(child:shopPage(selected!))]):
           directorySelected!=null?directoryPage(directorySelected!):
           tab==1||showAllShops?allShopsPage():homePage())]),
       bottomNavigationBar:premiumNavigation(),
