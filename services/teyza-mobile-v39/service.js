@@ -191,6 +191,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
+    if(action==='seller_plan_select'){
+      const choice=await sellerExperience.execute(auth,action,data);
+      await synchronizeCatalogue(uid); // refresh public shop eligibility after trial selection
+      return choice;
+    }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
     if(action==='wholesale_link_request'){
       const account=await read('teyzaSellerAccounts/'+uid);
