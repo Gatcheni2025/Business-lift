@@ -150,15 +150,16 @@ exports.teyzaDeletionSignInRepair=onSchedule({
     for(const item of result.docs){
       checked++;
       const request=item.data();
-      if(request.status==='completed'||request.authDisabledAt>0)continue;
+      if(request.status==='completed'||request.authDeletedAt>0)continue;
       try{
         try {
           await admin.auth().updateUser(item.id,{disabled:true});
           await admin.auth().revokeRefreshTokens(item.id);
+          await admin.auth().deleteUser(item.id);
         }catch(error){
           if(error?.code!=='auth/user-not-found')throw error;
         }
-        await item.ref.update({authDisabledAt:Date.now(),updatedAt:Date.now()});
+        await item.ref.update({authDisabledAt:Date.now(),authDeletedAt:Date.now(),updatedAt:Date.now()});
         blocked++;
       }catch(error){
         failed++;
