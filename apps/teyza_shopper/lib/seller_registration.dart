@@ -6,6 +6,7 @@ import 'seller_onboarding.dart';
 import 'seller_firestore.dart';
 import 'seller_phone.dart';
 import 'shop_address.dart';
+import 'seller_plan.dart';
 
 class SellerRegistrationPage extends StatefulWidget {
   final ShopperSession session;
@@ -19,6 +20,11 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   ShopAddressSelection? selectedAddress;
   late final String? uid;
   String category='spaza',legalType='individual';String? error;bool busy=false,consent=false,saved=false;
+  String get categoryExplanation=>switch(category){
+    'wholesale'=>'I supply spaza shops: publish bulk stock, pack prices and delivery or collection terms after approval.',
+    'retail'=>'I offer other local businesses or services, such as a salon, upholsterer, furniture shop or plumbing service.',
+    _=>'I operate a spaza shop: sell to nearby shoppers and source wholesale stock from approved suppliers.',
+  };
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(changed);}
   void changed(){if(mounted&&uid!=widget.session.userId)setState(()=>error='Your account changed. Close this page and sign in again.');}
   @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,unit,company,number]){c.dispose();}super.dispose();}
@@ -35,6 +41,9 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
+      // Everyone registers for free first; choose whether to request visibility.
+      await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(session:widget.session,api:widget.api,businessType:category)));
+      if(!mounted||uid!=widget.session.userId)return;
       await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,api:widget.api,legalType:legalType,
         shop:SellerShop(name.text.trim(),category,'${unit.text.trim().isEmpty?'':unit.text.trim()+', '}${selected.address}','pending','not_listed',phone:normalizeMobile(phone.text),
           companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String))));
@@ -43,7 +52,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:ownerInk,title:const Text('Register your shop')),
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:ownerInk,title:const Text('Register your business')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(22),children:[
       Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:ownerInk,borderRadius:BorderRadius.circular(26)),
         child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -52,15 +61,17 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           Wrap(spacing:12,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
             Text('1  Shop details',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
             Icon(Icons.arrow_forward_rounded,color:Color(0xFF83D9AE),size:17),
-            Text('2  Documents, selfie & mobile',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
+            Text('2  Choose plan · verify owner',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('Tell us about your shop',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
-        DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'Shop type',filled:true,fillColor:Colors.white,
+        const Text('Are you a Spaza Shop or a Wholesale Supplier?',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
+        DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'I am signing up as',filled:true,fillColor:Colors.white,
           border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
-          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop')),DropdownMenuItem(value:'retail',child:Text('Other Retail / Wholesale'))],
+          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop Owner')),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops')),DropdownMenuItem(value:'retail',child:Text('Other Business / Services'))],
           onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
+        const SizedBox(height:8),Text(categoryExplanation,style:const TextStyle(
+          color:Color(0xFF547363),fontWeight:FontWeight.w600,height:1.4)),
         const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:legalType,isExpanded:true,decoration:const InputDecoration(labelText:'Register as',border:OutlineInputBorder()),
           items:const [DropdownMenuItem(value:'individual',child:Text('Individual seller')),DropdownMenuItem(value:'company',child:Text('Registered company'))],
@@ -80,7 +91,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           title:const Text('I confirm that these are my shop’s details and shoppers may see this business address and map location.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
-        const SizedBox(height:12),const Text('Your full address and map location are saved with your registration. Complete document, selfie and SMS verification, then Teyza reviews your shop before it becomes visible. Resume setup from your dashboard at any time.',
+        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After verification, an active paid listing can be discovered. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));

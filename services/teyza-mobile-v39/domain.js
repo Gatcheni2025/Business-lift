@@ -14,7 +14,7 @@ const id = (value) => {
   return value;
 };
 function seller(account, uid) {
-  if (!account || account.uid !== uid || !['spaza', 'retail'].includes(account.category))
+  if (!account || account.uid !== uid || !['spaza', 'retail', 'wholesale'].includes(account.category))
     fail(403, 'Register your shop with this account first.');
   return account;
 }

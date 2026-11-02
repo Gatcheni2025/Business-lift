@@ -7,8 +7,12 @@ const FIELD_MASK = ['places.id', 'places.displayName', 'places.formattedAddress'
 const QUERIES = {
   spaza: ['spaza shop', 'tuck shop', 'mini market', 'general dealer',
     'convenience store', 'grocery supermarket'],
-  variety: ['China Mall', 'shopping centre', 'wholesale cash and carry',
-    'variety store', 'retail shopping mall', 'supermarket']
+  variety: ['hair salon', 'beauty salon', 'furniture shop', 'upholstery shop',
+    'plumber services', 'barber shop', 'electrical services', 'hardware store',
+    'China Mall', 'other local businesses'],
+  wholesale: ['wholesale cash and carry', 'cash and carry groceries',
+    'food wholesaler', 'grocery wholesaler', 'grocery distributor',
+    'bulk food supplier', 'wholesale warehouse', 'wholesale supermarket', 'wholesale suppliers']
 };
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function num(value, low, high) {
@@ -16,7 +20,8 @@ function num(value, low, high) {
   const n = Number(value);
   return Number.isFinite(n) && n >= low && n <= high ? n : null;
 }
-const category = value => ['variety', 'retail', 'other', 'other retail', 'other-retail']
+const category = value => String(value).toLowerCase() === 'wholesale' || String(value).toLowerCase() === 'wholesaler'
+  ? 'wholesale' : ['variety', 'retail', 'other', 'other retail', 'other-retail']
   .includes(String(value).toLowerCase()) ? 'variety' : 'spaza';
 function distance(a, b, c, d) {
   const rad = Math.PI / 180, delta = (c - a) * rad, lon = (d - b) * rad;
@@ -31,24 +36,31 @@ function photoResource(value) {
 function kindMatch(place, kind) {
   const name = String(place.displayName?.text || '').toLowerCase();
   const types = new Set([place.primaryType, ...(place.types || [])]);
+  if (kind === 'wholesale') return types.has('wholesaler') || types.has('warehouse_store') ||
+    /wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocer|suppl)|food\s*distribut|trading\s*depot/.test(name);
   if (kind === 'spaza') return /spaza|tuck.?shop|mini.?market|convenience|grocer|general dealer|corner shop|supermarket|superette|food store/.test(name) ||
     ['convenience_store', 'grocery_store', 'supermarket', 'food_store'].some(t => types.has(t));
-  if (/spaza|tuck.?shop|tyres?|restaurant|takeaway|auto spares|motor spares|printing|salon/.test(name)) return false;
-  return /china.?mall|mall|shopping|wholesale|cash.?(&|and).?carry|retail|supermarket|variety|bazaar|clothing|fashion|furniture|homeware|department/.test(name) ||
-    ['shopping_mall', 'department_store', 'supermarket', 'clothing_store', 'home_goods_store', 'wholesaler'].some(t => types.has(t));
+  if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry/.test(name) || types.has('wholesaler')) return false;
+  return /salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china.?mall|mall|shopping|retail|variety|bazaar|clothing|fashion|homeware|department|repair|tailor|motor spares|printing/.test(name) ||
+    ['shopping_mall','department_store','clothing_store','home_goods_store','beauty_salon',
+      'hair_care','plumber','electrician','furniture_store','hardware_store','barber_shop'].some(t=>types.has(t));
 }
 function mapResult(place, kind, lat, lon) {
   const la = num(place.location?.latitude, -90, 90), lo = num(place.location?.longitude, -180, 180);
-  if (!place.id || la === null || lo === null || place.businessStatus === 'CLOSED_PERMANENTLY') return null;
+  if (!place.id || place.businessStatus === 'CLOSED_PERMANENTLY' ||
+      ((la===null||lo===null)&&kind!=='variety')) return null;
   const photo = (place.photos || []).find(p => photoResource(p.name));
   const ref = photo ? photoResource(photo.name) : null;
   return {
     id: 'google-' + place.id, placeId: place.id,
-    name: place.displayName?.text || 'Local shop', area: 'Nearby',
+    name: place.displayName?.text || 'Local business',
+    area:la===null||lo===null?'Service area — check coverage':'Nearby',
     address: place.formattedAddress || '', latitude: la, longitude: lo,
-    distanceKm: +distance(lat, lon, la, lo).toFixed(2),
+    distanceKm:la===null||lo===null?null:+distance(lat, lon, la, lo).toFixed(2),
     origin: 'google_places', shopCategory: kind, categorizationVerified: true,
     primaryType: place.primaryType || '', types: place.types || [],
+    phone: typeof place.nationalPhoneNumber==='string' ? place.nationalPhoneNumber.slice(0,32) : '',
+    websiteUrl: typeof place.websiteUri==='string' && /^https:\/\//.test(place.websiteUri) ? place.websiteUri : '',
     rating: num(place.rating, 0, 5),
     ratingCount: num(place.userRatingCount, 0, Number.MAX_SAFE_INTEGER),
     openNow: typeof place.currentOpeningHours?.openNow === 'boolean' ? place.currentOpeningHours.openNow : null,
@@ -69,6 +81,7 @@ async function searchPage({key, text, lat, lon, radius, pageToken, fetchImpl}) {
     headers: {'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELD_MASK},
     body: JSON.stringify({textQuery: text, pageSize: 20, languageCode: 'en', regionCode: 'ZA',
       locationBias: {circle: {center: {latitude: lat, longitude: lon}, radius}},
+      ...(text==='plumber services'||text==='electrical services'?{includePureServiceAreaBusinesses:true}:{}),
       ...(pageToken ? {pageToken} : {})}),
     signal: AbortSignal.timeout(8500)
   });
@@ -84,7 +97,7 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
     for (const p of places) {
       if (!kindMatch(p, kind)) continue;
       const entry = mapResult(p, kind, lat, lon);
-      if (!entry || entry.distanceKm > radius / 1000) continue;
+      if (!entry || (entry.distanceKm!==null&&entry.distanceKm > radius / 1000)) continue;
       if (!unique.has(entry.id) || (!unique.get(entry.id).photoRef && entry.photoRef)) unique.set(entry.id, entry);
     }
   }
@@ -102,7 +115,8 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
       else partial = true;
     }
   }
-  const entries = [...unique.values()].sort((a, b) => a.distanceKm - b.distanceKm ||
+  const entries = [...unique.values()].sort((a, b) =>
+    (a.distanceKm??Number.POSITIVE_INFINITY)-(b.distanceKm??Number.POSITIVE_INFINITY) ||
     Number(Boolean(b.photoRef)) - Number(Boolean(a.photoRef))).slice(0, 100);
   return {ok: true, version: '3.6', provider: 'google_places', category: kind, entries,
     returned: entries.length, photoCount: entries.filter(p => p.photoRef).length,
@@ -137,4 +151,18 @@ async function fetchPhoto({key, ref, width = 720, fetchImpl = fetch}) {
   if (bytes.length > 8 * 1024 * 1024) throw new Error('Photo too large');
   return {bytes, contentType: image.headers.get('content-type')};
 }
-module.exports = {ROOT, FIELD_MASK, num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto};
+
+async function fetchContact({key,placeId,fetchImpl=fetch}){
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(placeId||''))throw new Error('Invalid Google Place ID');
+  const response=await fetchImpl('https://places.googleapis.com/v1/places/'+encodeURIComponent(placeId),{
+    headers:{'X-Goog-Api-Key':key,
+      'X-Goog-FieldMask':'id,nationalPhoneNumber,websiteUri'},
+    signal:AbortSignal.timeout(8500)
+  });
+  if(!response.ok){const err=new Error('Places contact lookup unavailable');err.status=response.status;throw err;}
+  const place=await response.json();
+  return {phone:typeof place.nationalPhoneNumber==='string'?place.nationalPhoneNumber.slice(0,32):'',
+    websiteUrl:typeof place.websiteUri==='string'&&place.websiteUri.startsWith('https://')?place.websiteUri:''};
+}
+
+module.exports = {ROOT, FIELD_MASK, num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto, fetchContact};

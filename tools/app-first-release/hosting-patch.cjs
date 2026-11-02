@@ -74,7 +74,7 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  if(!before.has('/index.html'))throw new Error('The live version has no index.html. Stopping before changing Hosting.');
  const config=servingConfig(original.config,[...before.keys()]),version=await clone(client,source,wait);
  // A local rollback record contains version metadata only; never tokens or seller evidence.
- const backup={release:'FIELD-WORK-SEO-20261029',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
+ const backup={release:'WHOLESALE-WEBSITE-20261102',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
  const checkpoint=backupPath.replace(/\.json$/, '-'+version.split('/').at(-1)+'.json');
  fs.writeFileSync(checkpoint,JSON.stringify(backup,null,2),{mode:0o600});
  log('Cloned the active website. Uploading '+files.size+' app website files.');
@@ -96,7 +96,7 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  await client.hosting('PATCH','/'+version,{status:'FINALIZED'},{updateMask:'status'});
  // Refuse to overwrite a newer deployment published while this overlay was prepared.
  if(await current(client)!==source)throw new Error('The live website changed during preparation. Nothing was published. Run DEPLOY-WEBSITE again to use the new live version.');
- const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza field-work portal, public guides and indexing repair'},{versionName:version});
+ const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza verified wholesale sourcing, spaza site and local shopping update'},{versionName:version});
  if(await current(client)!==version)throw new Error('Hosting did not confirm the new live version. Check Firebase Hosting before retrying.');
  backup.releaseName=release.name;backup.publishedAt=new Date().toISOString();fs.writeFileSync(backupPath,JSON.stringify(backup,null,2),{mode:0o600});
  log('Website published: https://teyza.co.za/ · '+(before.size-[...before.keys()].filter(p=>overlayPaths.has(p)).length)+' existing files preserved.');

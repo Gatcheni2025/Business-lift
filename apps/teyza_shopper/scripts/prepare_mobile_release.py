@@ -220,8 +220,13 @@ def validate_ios_google_oauth(signing):
     if ios_client == os.environ['TEYZA_GOOGLE_WEB_CLIENT_ID'].strip():
         raise SystemExit('Google iOS OAuth client must be distinct from the Web OAuth client.')
     app = native_app_id('ios')
+    expected = json.loads(NATIVE_CONFIG.read_text()).get('iosAppId')
     if not app:
         raise SystemExit('Signed iOS build requires TEYZA_FIREBASE_IOS_APP_ID in the Firebase project.')
+    if not expected or app != expected:
+        raise SystemExit('Teyza iOS Firebase app ID mismatch. Verify GitHub variable TEYZA_FIREBASE_IOS_APP_ID against Firebase Your apps / za.co.teyza.shopper; do not use an app ID from another registration.')
+    if IOS_ID != 'za.co.teyza.shopper':
+        raise SystemExit('iOS Google/Apple authentication requires the registered Teyza bundle za.co.teyza.shopper.')
     if not os.environ.get('TEYZA_APPLE_TEAM_ID', '').strip():
         raise SystemExit('Signed iOS build requires the real Apple Developer Team ID.')
     return True

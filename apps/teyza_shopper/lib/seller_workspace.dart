@@ -6,6 +6,9 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
+import 'account_deletion_page.dart';
+import 'seller_plan.dart';
+import 'wholesale_market.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -50,13 +53,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> promptMandate(String uid) async {
     if(!liveUpdates||shop==null||mandatePromptUid==uid)return;mandatePromptUid=uid;
+    if(listingPlan!='basic')return;
     try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();}catch(_){/* The membership form remains available from My business. */}
   }
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending';bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool hasLocation=false;
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -91,7 +95,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -226,7 +230,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     await load();
     if(mounted&&widget.sellerMode)setState((){sellerTab=1;productsView=true;});
     if(mounted){setState(()=>rangeStatus=result['publication']=='live'?
-      'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
+      shop?.category=='wholesale'?'Your wholesale range is available only to approved spaza owners.':'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
@@ -234,7 +238,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
       if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
+        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
     }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
   }
   Future<void> productPhoto(SellerDraft product) async {
@@ -329,7 +333,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(busy)return;
     final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
-    final category=TextEditingController(text:existing?.category??(shop?.category=='retail'?'General retail':'Groceries'));
+    final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));
     final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
     final stock=TextEditingController(text:existing?.stock.toString()??'');
@@ -360,7 +364,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               decoration:const InputDecoration(labelText:'Description (optional)',border:OutlineInputBorder())),
             const SizedBox(height:8),
             TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),
-              decoration:const InputDecoration(labelText:'Price (R)',border:OutlineInputBorder()),
+              decoration:InputDecoration(labelText:shop?.category=='wholesale'?'Wholesale price per unit or pack (R)':'Retail selling price (R)',border:const OutlineInputBorder()),
               validator:(v){final amount=double.tryParse((v??'').replaceAll(',','.'));
                 return amount==null||!amount.isFinite||amount<=0||amount>1000000?'Enter a valid price':null;}),
             const SizedBox(height:8),
@@ -410,7 +414,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     child:ListTile(leading:Icon(icon,color:ownerGreen),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),
       subtitle:Text(detail),trailing:const Icon(Icons.chevron_right),onTap:tap));
   Widget sellerBusiness()=>ListView(padding:const EdgeInsets.all(18),children:[
-    Text(shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
+    Text(shop!.category=='wholesale'?'Wholesaler · '+shop!.name:shop!.category=='spaza'?'Spaza Shop · '+shop!.name:shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
     Text(shop!.address,style:const TextStyle(color:Color(0xFF60736B))),const SizedBox(height:16),
     businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
@@ -421,8 +425,29 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
     businessTile(Icons.assignment_turned_in_outlined,'Membership & R99 mandate','View your membership agreement',openMandate),
     businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
+    if(shop?.category=='spaza')businessTile(Icons.warehouse_outlined,'Buy from wholesalers',
+      'Choose approved suppliers, compare real wholesale prices and request stock delivery',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??'')))),
+    if(shop?.category=='spaza')businessTile(Icons.receipt_long_outlined,'My wholesale stock orders',
+      'Follow up orders and deliveries from your suppliers',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
+          body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
+    if(shop?.category=='wholesale')businessTile(Icons.local_shipping_outlined,'Your wholesale stock offers',
+      'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
+      ()=>selectSellerTab(1)),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
+    businessTile(Icons.workspace_premium_outlined,'Free or R99 Basic plan',
+      'Registration is free · priority listing after payment is verified',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        SellerPlanPage(session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
+        .then((_){if(mounted)refreshActivity();})),
+    businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
+      'Request permanent account and shop listing deletion',
+      ()=>Navigator.push(context,MaterialPageRoute(
+        builder:(_)=>TeyzaDeleteAccountPage(session:widget.session,api:widget.mobileApi)))),
     if(widget.session.hasAdminClaim&&widget.session.emailVerified)
       businessTile(Icons.admin_panel_settings_outlined,'Seller review desk','Administrator access',()=>Navigator.push(context,
         MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session,api:widget.mobileApi)))),
@@ -510,6 +535,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
+          if(shop?.category=='spaza')IconButton(tooltip:'Buy wholesale stock',
+            onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+              WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))),
+            icon:const Icon(Icons.warehouse_outlined)),
           if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
             icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
@@ -536,6 +565,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           Text(error!,style:const TextStyle(color:Colors.red)),
           if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
           TextButton(onPressed:load,child:const Text('Retry')),
+          TextButton.icon(onPressed:()=>Navigator.push(context,
+            MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:session,api:widget.mobileApi))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
           TextButton(onPressed:() async{
             await session.signOut();if(mounted)widget.openLogin();
           },child:const Text('Sign in with another account'))
@@ -543,10 +575,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         if(error==null&&(shop==null||!shop!.hasRegisteredCategory))_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('No registered shop found',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
           const SizedBox(height:9),
-          const Text('Create your Spaza Shop or Other Retail / Wholesale profile here, then use the camera to verify the owner.'),
+          const Text('Choose Spaza Shop, Wholesaler supplying spaza shops, or Other Business. Your seller dashboard will reflect that choice after sign-in.'),
           const SizedBox(height:14),
           FilledButton(onPressed:registerShop,child:const Text('Register a shop')),
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
+          TextButton.icon(onPressed:()=>Navigator.push(context,
+            MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:session,api:widget.mobileApi))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
@@ -562,7 +597,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
-          OutlinedButton.icon(onPressed:openMandate,icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('Membership & R99 mandate')),
+          OutlinedButton.icon(onPressed:()=>Navigator.push(context,
+              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
+              .then((_){if(mounted)refreshActivity();}),
+            icon:const Icon(Icons.workspace_premium_outlined),
+            label:Text('Plan: ${listingPlan=='basic'?'R99 Basic':'Free'} · change')),
+          if(listingPlan=='basic')OutlinedButton.icon(onPressed:openMandate,
+            icon:const Icon(Icons.assignment_turned_in_outlined),label:const Text('R99 membership details')),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),

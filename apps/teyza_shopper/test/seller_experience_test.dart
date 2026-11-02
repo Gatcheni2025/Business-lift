@@ -117,7 +117,12 @@ void main(){
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
   expect(request.data['addressSelection'],'address-receipt');expect(request.data['locationConsent'],true);
-  expect(request.data.containsKey('approvalStatus'),false);expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
+  expect(request.data.containsKey('approvalStatus'),false);
+  expect(find.text('Registration is free'),findsOneWidget);
+  expect(find.text('R99 / month'),findsOneWidget);
+  await visibleTap(tester,find.text('Continue with Free'));
+  expect(api.calls.any((r)=>r.action=='seller_plan_select'&&r.data['plan']=='free'),true);
+  expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{

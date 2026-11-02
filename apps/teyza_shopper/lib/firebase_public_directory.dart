@@ -58,7 +58,7 @@ List<Map<String,dynamic>> parseTeyzaPublicDirectory(dynamic response) {
     if(!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id))continue;
     output.add(<String,dynamic>{
       'id':id,'name':data['name'],'area':data['area']??'',
-      'address':data['address']??'','city':data['city']??'','shopCategory':['retail','variety','other-retail'].contains(data['shopCategory'])?'variety':'spaza',
+      'address':data['address']??'','city':data['city']??'','shopCategory':data['shopCategory']=='wholesale'?'wholesale':['retail','variety','other-retail'].contains(data['shopCategory'])?'variety':'spaza',
       'photoUrl':publishedMerchantPhoto(data),
       'latitude': data['latitude'] is num ? data['latitude'] : null,
       'longitude': data['longitude'] is num ? data['longitude'] : null,
@@ -95,7 +95,7 @@ Future<List<Map<String,dynamic>>> fetchTeyzaPublicDirectory({http.Client? client
         if(id is! String||!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)||row['sellerUid']!=id||
           row['status']!='active'||row['approvalStatus']!='approved'||row['identityVerified']!=true||
           row['name'] is! String||(row['name'] as String).trim().length<2)continue;
-        shops.add({...row,'shopCategory':['retail','variety','other-retail'].contains(row['shopCategory'])?'variety':'spaza',
+        shops.add({...row,'shopCategory':row['shopCategory']=='wholesale'?'wholesale':['retail','variety','other-retail'].contains(row['shopCategory'])?'variety':'spaza',
           'photoUrl':publishedMerchantPhoto(row),'whatsappPhone':'','sponsored':false});
       }
       final next=data['next'];if(next==null||next=='')break;

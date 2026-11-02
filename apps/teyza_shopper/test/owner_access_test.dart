@@ -18,7 +18,7 @@ http.Response account(String category)=>http.Response(jsonEncode({'fields':{
   'approvalStatus':{'stringValue':'pending'},'listingStatus':{'stringValue':'not_listed'}
 }}),200);
 void main(){
-  for(final category in ['spaza','retail']){
+  for(final category in ['spaza','retail','wholesale']){
     testWidgets('$category owner sees the saved category and private workspace',(tester) async{
       final session=OwnerSession();
       final client=MockClient((r) async{
@@ -30,7 +30,7 @@ void main(){
         apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client))));
       await tester.pumpAndSettle();
       expect(find.text('Saved Shop'),findsOneWidget);
-      expect(find.text(category=='spaza'?'Spaza Shop':'Other Retail / Wholesale'),findsOneWidget);
+      expect(find.text(category=='spaza'?'Spaza Shop':category=='retail'?'Other Retail':'Wholesaler / Cash & Carry'),findsOneWidget);
       expect(find.text('Shop is not live yet'),findsOneWidget);
       expect(find.text('Add a product'),findsOneWidget);
       expect(tester.takeException(),isNull);

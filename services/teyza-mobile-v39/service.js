@@ -14,29 +14,30 @@ const ratings=require('./ratings');
 const P=require('./publication');
 const locations=require('./shop-location');
 const addresses=require('./shop-address');
+const deletion=require('./account-deletion');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,createPhoneToken,
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,createPhoneToken,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
   const active = async uid => {
-    const [shop,account,setup,verification]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>read(p+uid)));
-    return P.assertLive(uid,account,setup||{},verification,shop);
+    const [shop,account,setup,verification,billing]=await Promise.all(['teyzaPublicShops/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>read(p+uid)));
+    return P.assertLive(uid,account,setup||{},verification,shop,billing,clock());
   };
   async function requireApproval(tx,uid,shop){
-    const [a,o,v]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>tx.get(doc(p+uid))));
-    return P.assertLive(uid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shop);
+    const [a,o,v,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>tx.get(doc(p+uid))));
+    return P.assertLive(uid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shop,b.exists?b.data():null,clock());
   }
   async function synchronizeCatalogue(uid,{additions=[],removedProductId=null}={}) {
     D.id(uid);
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
       const setupRef=doc('teyzaSellerOnboarding/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap]=await Promise.all([
-        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid))]);
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       const account=accountSnap.exists?accountSnap.data():null;
-      const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
+      const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
@@ -55,13 +56,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const setup=setupSnap.exists?setupSnap.data():{};
       const verification=verificationSnap.exists?verificationSnap.data():null;
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
-        front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,drafts:entries,removedProductId,now:clock()});
+        front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
+         billing:billingSnap.exists?billingSnap.data():null,drafts:entries,removedProductId,now:clock()});
       const eligible=next?.status==='active';
       if(next){
         const listing=eligible?'active':'not_listed';
         if(account.listingStatus!==listing)tx.update(accountRef,{listingStatus:listing,updatedAt:new Date(clock())});
         if(setup.requiredVersion===2&&setup.completedAt){
-          const sellingStatus=eligible?'active':next.status==='pending_review'?'pending_approval':next.status==='suspended'?'paused':'not_started';
+          const sellingStatus=eligible?'active':['pending_review','awaiting_subscription'].includes(next.status)?'pending_approval':next.status==='suspended'?'paused':'not_started';
           if(setup.sellingStatus!==sellingStatus)tx.set(setupRef,{sellingStatus,updatedAt:clock()},{merge:true});
         }
       }
@@ -70,6 +72,20 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {addedIds:added.map(p=>p.id),alreadyAdded,publication:eligible?'live':'private',
         publicCount:eligible?next?.productHighlights.length||0:0};
     });
+  }
+  // Wholesale prices are never exposed in the anonymous shopper directory.
+  // Registered, reviewed spaza operators can source from live suppliers.
+  async function assertSpazaBuyer(uid,tx=null){
+    const refs=['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaPublicShops/','teyzaBilling/'].map(x=>doc(x+uid));
+    const entries=await Promise.all(refs.map(ref=>tx?tx.get(ref):ref.get()));
+    const [a,o,v,p,b]=entries.map(row=>row.exists?row.data():null);
+    if(a?.uid!==uid||a.category!=='spaza')D.fail(403,'Wholesale ordering is available to registered spaza shop owners only.');
+    const state=P.state(uid,a,o||{},v,p,b,clock());
+    if(!state.ready||!state.approved)D.fail(403,'Complete your spaza registration and seller approval to access wholesale prices.');
+    // Previously activated merchants are migrated separately; new free or unpaid
+    // accounts cannot unlock the R99 Basic wholesale stock benefit.
+    if(!P.entitled(uid,a,b,clock()))D.fail(403,'Your R99 Basic membership must be active before you can see wholesale stock prices.');
+    return a;
   }
   async function rate(uid,kind,max,window) {
     const ref=doc('teyzaMobileLimits/'+uid+'_'+kind);
@@ -92,10 +108,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
     await db.runTransaction(async tx => {
-      const [snap,accountSnap,setupSnap,v]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid)),tx.get(doc('teyzaSellerOnboarding/'+uid)),tx.get(doc('teyzaMobileVerification/'+uid))]);
+      const [snap,accountSnap,setupSnap,v,b]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+uid)),tx.get(doc('teyzaSellerOnboarding/'+uid)),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       const setup=setupSnap.exists?setupSnap.data():{};
       const account=D.seller(accountSnap.exists?accountSnap.data():null,uid);
-      if(!snap.exists||snap.data().status!=='active'||!P.state(uid,account,setup,v.exists?v.data():null,snap.data()).live)return;
+      if(!snap.exists||snap.data().status!=='active'||!P.state(uid,account,setup,v.exists?v.data():null,snap.data(),b.exists?b.data():null,clock()).live)return;
       const update={};
       if(values.hours)update.hours=values.hours;
       if('pickupEnabled' in values) {
@@ -105,9 +121,39 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     });
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
+  const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock});
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    // Account deletion must be available regardless of an unverified email or
+    // shop approval. Pending-closure users cannot create more data or orders.
+    if(deletion.actions.has(action))return accountDeletion.execute(auth,action,data);
+    const deletionRecord=await read('teyzaAccountDeletionRequests/'+uid);
+    if(deletionRecord&&deletionRecord.status!=='completed'&&auth.teyzaAdmin!==true)
+      D.fail(403,'Your account deletion is being processed. Save your deletion reference and contact Teyza support if you need assistance.');
+    if(action==='shopper_profile_read'){
+      const profile=await read('teyzaShopperProfiles/'+uid);
+      return {profile:profile?.ownerUid===uid?profile:null};
+    }
+    if(action==='shopper_profile_save'){
+      const address=D.text(data.address,'delivery street address',300);
+      if(address.length<8)D.fail(422,'Enter your full delivery address.');
+      const displayName=D.text(data.displayName,'shopper name',120);
+      const phone=D.text(data.phone,'shopper phone',30);
+      if(phone.replace(/\D/g,'').length<9||phone.replace(/\D/g,'').length>15)
+        D.fail(422,'Enter a valid contact number.');
+      const lat=Number(data.latitude),lng=Number(data.longitude);
+      if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
+      const area=D.text(data.area||'','delivery area',130,false);
+      const city=D.text(data.city||'','delivery city',130,false);
+      // Email is authoritative only from Firebase Auth, never from a
+      // user-supplied profile field. We must not claim unverified email is verified.
+      const profile={ownerUid:uid,displayName,phone,address,area,city,
+        latitude:lat,longitude:lng,email:typeof auth.email==='string'?auth.email:'',
+        emailVerified:auth.email_verified===true,updatedAt:clock()};
+      await doc('teyzaShopperProfiles/'+uid).set(profile,{merge:true});
+      return {saved:true,profile};
+    }
     if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
@@ -116,9 +162,30 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
-    if (!auth.email_verified&&!auth.phone_number&&!['seller_register','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+    if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
+    if(action==='wholesale_link_request'){
+      const account=await read('teyzaSellerAccounts/'+uid);
+      if(account?.uid!==uid||account.category!=='spaza'||account.deletionPending===true)
+        D.fail(403,'Register your spaza shop before requesting a wholesale supplier link.');
+      const placeId=D.text(data.placeId,'Google business reference',200);
+      if(!/^[A-Za-z0-9_-]{4,200}$/.test(placeId))D.fail(422,'Choose a valid Google-listed wholesale supplier.');
+      const name=D.text(data.name,'supplier name',140);
+      const address=D.text(data.address||'','supplier address',300,false);
+      await rate(uid,'wholesale-link-request',5,86400000);
+      const requestId=crypto.createHash('sha256').update(uid+':'+placeId).digest('hex');
+      const ref=doc('teyzaWholesaleLinkRequests/'+requestId);
+      const old=await ref.get();
+      if(old.exists)return {requested:true,alreadyRequested:true,reference:requestId};
+      await ref.create({requesterUid:uid,placeId,supplierName:name,address,
+        status:'awaiting_supplier_outreach',source:'google_places',createdAt:clock()});
+      return {requested:true,reference:requestId};
+    }
+    if(action==='wholesale_directory'){
+      await assertSpazaBuyer(uid);await rate(uid,'wholesale-discovery',40,60000);
+      return publicDirectory(data.after||'',true);
+    }
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
       return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
@@ -127,13 +194,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
       const account=await owner(uid);
-      const [config,verification,finance,catalogue,photos,publicShop,setup,location,front]=await Promise.all([
+      const [config,verification,finance,catalogue,photos,publicShop,setup,location,front,billing]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
-        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid)]);
-      const publication=P.state(uid,account,setup||{},verification,publicShop),pin=P.locationFor(uid,account,location,publicShop,clock());
-      return {settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
+        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaBilling/'+uid)]);
+      const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
+      return {listingPlan:account.listingPlan||'legacy',listingPaid:P.entitled(uid,account,billing,clock()),
+         settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.live&&publicShop?.sellingEnabled===true,identityVerified:publication.approved,
@@ -357,7 +425,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='order_quote'){
       const sellerUid=D.id(data.shopId);if(sellerUid===uid)D.fail(422,'Choose another shop to place an order.');
       await rate(uid,'order-quotes',60,60000);
-      return {quote:offers.quote(await active(sellerUid),await read('teyzaShopSettings/'+sellerUid),data)};
+      const shop=await active(sellerUid);
+      if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid);
+      return {quote:offers.quote(shop,await read('teyzaShopSettings/'+sellerUid),data)};
     }
     if(action==='order_request') {
       const sellerUid=D.id(data.shopId),requestId=D.id(data.requestId);
@@ -371,11 +441,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const [existing,shopSnap,config]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(doc('teyzaShopSettings/'+sellerUid))]);
         if(existing.exists){if(existing.data().shopperUid!==uid)D.fail(403,'Order access denied.');return {id:ref.id,status:existing.data().status};}
         const shop=await requireApproval(tx,sellerUid,shopSnap.exists?shopSnap.data():null);
+        if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid,tx);
         const estimate=offers.quote(shop,config.exists?config.data():null,data);
         if(data.expectedQuoteId!==undefined&&data.expectedQuoteId!==estimate.quoteId)D.fail(409,'Prices or shop services changed. Refresh the order total before sending this request.');
         const {items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents}=estimate;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
           mode:data.mode,address,phone,items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents,
+          orderType:shop.shopCategory==='wholesale'?'wholesale_stock':'retail',
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});
         tx.set(doc('teyzaMobileOrderIndex/'+uid+'/shopperOrders/'+ref.id),{createdAt:clock()});
         tx.set(doc('teyzaMobileOrderIndex/'+sellerUid+'/ownerOrders/'+ref.id),{createdAt:clock()});
@@ -416,7 +488,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     }
     D.fail(404,'This shop service is not available.');
   }
-  async function publicDirectory(after=''){
+  async function publicDirectory(after='',wholesaleOnly=false){
     let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(100);
     if(after)query=query.startAfter(D.id(after));
     const result=await query.get(),entries=[];
@@ -424,27 +496,36 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const batch=await Promise.all(result.docs.slice(offset,offset+10).map(async row=>{
         const uid=row.id,shop=row.data();
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
-        const [a,o,v,l,f,c]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/'].map(p=>read(p+uid)));
-        if(!P.state(uid,a,o||{},v,shop).live)return null;
+        // Do not leak wholesale catalogue prices via the public customer endpoint.
+        // Anonymous directory may show verified wholesalers' names, not B2B prices.
+        const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
+        if((wholesaleOnly&&a?.category!=='wholesale') ||
+           (shop.shopCategory && shop.shopCategory!==a.category) ||
+           !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
         const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
+           sponsored:a.listingPlan==='basic'&&P.entitled(uid,a,b,clock()),
           area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
           city:pin?.city||(current?l.city:'')||(!l&&(!shop.address||shop.address===a.address)?shop.city||'':'')};
         Object.assign(projected,offers.exposed(offers.effective(c,shop)));
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
-        return P.publicRow(uid,projected);
+        const publicItem=P.publicRow(uid,projected);
+        if(a.category==='wholesale'&&!wholesaleOnly){publicItem.products=[];publicItem.productHighlights=[];}
+        return publicItem;
       }));entries.push(...batch.filter(Boolean));
     }
-    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null};
+    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
   }
   async function reconcilePublicationBatch(){
-    const ref=doc('teyzaMaintenance/publication-approval-v1'),old=await ref.get();
+    // Rerun once after changing Free-plan publication eligibility. The
+    // completed v1 marker must not hide previously approved free sellers.
+    const ref=doc('teyzaMaintenance/publication-approved-free-v2'),old=await ref.get();
     if(old.exists&&old.data().completedAt)return {complete:true};
     let query=db.collection('teyzaSellerAccounts').orderBy('__name__').limit(100);
     if(old.exists&&old.data().after)query=query.startAfter(old.data().after);
     const rows=await query.get();
     for(let i=0;i<rows.docs.length;i+=10)await Promise.all(rows.docs.slice(i,i+10).map(r=>{
-      const a=r.data();return a.uid===r.id&&['spaza','retail'].includes(a.category)?synchronizeCatalogue(r.id):null;
+      const a=r.data();return a.uid===r.id&&['spaza','retail','wholesale'].includes(a.category)?synchronizeCatalogue(r.id):null;
     }));
     const complete=rows.docs.length<100;
     await ref.set({after:rows.docs.at(-1)?.id||'',...(complete?{completedAt:clock()}:{}),updatedAt:clock()});

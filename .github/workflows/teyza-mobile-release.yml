@@ -19,6 +19,10 @@ on:
         description: 'Use the existing Android upload key and Apple distribution credentials'
         type: boolean
         default: false
+      upload_to_testflight:
+        description: 'After signed iOS build, upload verified IPA to App Store Connect TestFlight'
+        type: boolean
+        default: false
       platforms:
         description: 'Platforms to prepare'
         type: choice
@@ -27,6 +31,9 @@ on:
   workflow_call:
     inputs:
       signed_release:
+        type: boolean
+        default: false
+      upload_to_testflight:
         type: boolean
         default: false
       platforms:
@@ -45,7 +52,7 @@ env:
   TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
   APP: apps/teyza_shopper
   TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
-  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID }}
+  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID || '1:983479810697:ios:4aae4823892dd145db2458' }}
   TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
   TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
@@ -93,14 +100,39 @@ jobs:
       - uses: actions/checkout@v4
       - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed'
+        env:
+          TEYZA_RELEASE_PLATFORMS: ${{ inputs.platforms }}
         run: |
           python3 - <<'PY_GATE'
-          import json, urllib.request
+          import os, urllib.request, json
+          from urllib.error import HTTPError, URLError
           url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
-          with urllib.request.urlopen(url,timeout=30) as response:
-              health=json.load(response)
-          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True and health.get('approvalRequired') is True and health.get('shopLocations') is True and health.get('addressAutocomplete') is True and health.get('catalogueRevision',0)>=2 and health.get('catalogueProducts',0)>=378 and health.get('cataloguePhotos',0)>=96 and health.get('shopServices') is True and health.get('orderQuotes') is True and health.get('orderInboxAlways') is True):
-              raise SystemExit('Deploy the latest mobile service kit with seller service controls, current order quotes and the order inbox before signing this release. Address, catalogue and photo services must also be ready.')
+          try:
+              with urllib.request.urlopen(url,timeout=30) as response:
+                  health=json.load(response)
+          except (HTTPError, URLError, TimeoutError, ValueError) as error:
+              raise SystemExit('Firebase mobile health request failed: '+str(error))
+          required_true=('verificationUploads','shopFrontPhotos','approvalRequired',
+                         'shopLocations','addressAutocomplete','shopServices',
+                         'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock',
+                         'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery','freeSellerPlans',
+                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices')
+          required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
+          failures=[]
+          if health.get('version')!='3.15.0':
+              failures.append('version (expected 3.15.0; received '+repr(health.get('version'))+')')
+          failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
+          failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
+                          if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)
+                          or health[field]<minimum)
+          if os.environ.get('TEYZA_RELEASE_PLATFORMS','all')!='android' and not os.environ.get('TEYZA_FIREBASE_IOS_APP_ID'):
+              failures.append('GitHub Actions variable TEYZA_FIREBASE_IOS_APP_ID is empty')
+          if failures:
+              print('::error::Signed Teyza release prerequisites are not met:')
+              for failure in failures:
+                  print('::error::'+failure)
+              raise SystemExit('Deploy the latest scoped Teyza mobile service and configure missing Firebase native app variables. Do not bypass this release gate.')
+          print('Signed Teyza release preflight passed: expected Firebase service flags and native app variables verified.')
           PY_GATE
       - uses: actions/setup-node@v4
         with:
@@ -127,7 +159,7 @@ jobs:
         run: |
           npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
           node --test services/teyza-mobile-v39/*.test.js
-          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair','teyzaShopLocationRefresh']) assert(e[name].__endpoint,name); console.log('Thirteen Firebase function exports load successfully');"
+          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaDeletionSignInRepair','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair','teyzaShopLocationRefresh']) assert(e[name].__endpoint,name); console.log('Firebase function exports, including account deletion sign-in recovery, load successfully');"
       - name: Verify shared product catalogue and photo assets
         run: |
           python3 scripts/verify_teyza_catalogue.py
@@ -245,6 +277,23 @@ jobs:
           flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
+      - name: Build installable debug APK for device testing
+        if: env.SIGNING_MODE != 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          # Debug APK is installable for smoke tests, but not Play upload signed.
+          # Keep it separate from the unsigned release AAB.
+          python3 scripts/prepare_mobile_release.py android --signing test
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+      - name: Upload installable Android test APK
+        if: env.SIGNING_MODE != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-debug-testing-only
+          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
         with:
@@ -375,6 +424,14 @@ jobs:
           path: apps/teyza_shopper/build/release/*
           if-no-files-found: error
           retention-days: 30
+      - name: Upload verified signed IPA to TestFlight (explicit opt-in only)
+        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 scripts/upload_testflight.py build/release
       - name: Remove Apple signing material
         if: always()
         shell: bash

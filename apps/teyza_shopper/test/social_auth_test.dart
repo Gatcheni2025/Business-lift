@@ -18,7 +18,55 @@ class FakeFacebookSession extends ShopperSession {
  @override bool get facebookSignInAvailable=>true;
  @override Future<void> signInWithFacebook() async {idToken='firebase-session';userId='existing-user';emailVerified=true;notifyListeners();}
 }
+class FakeEmailAfterGoogleErrorSession extends ShopperSession {
+ FakeEmailAfterGoogleErrorSession():super(store:MemoryStore()){isReady=true;}
+ int googleCalls=0;
+ @override bool get googleSignInAvailable=>true;
+ @override Future<void> signInWithGoogle() async {
+   googleCalls++;
+   throw StateError('PlatformException(sign_in_failed, ApiException: 10: DEVELOPER_ERROR)');
+ }
+ @override Future<void> signIn(String address,String pass) async {
+   idToken='firebase-email-session';userId='email-user';
+   email=address;emailVerified=true;notifyListeners();
+ }
+}
 void main(){
+ testWidgets('Successful email sign-in removes an earlier Google OAuth mismatch warning',(t)async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final session=FakeEmailAfterGoogleErrorSession();
+  await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
+  await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
+  await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
+  expect(session.googleCalls,1);
+  await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
+  await t.enterText(find.byType(TextFormField).at(1),'password123');
+  await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
+  expect(session.userId,'email-user');
+  expect(find.text('My Teyza account'),findsOneWidget);
+  expect(find.textContaining('Google sign-in configuration mismatch'),findsNothing);
+  // The success status may be below a lazily-built ListView viewport.
+  // UID and My Teyza account are the reliable on-screen success evidence.
+  await t.pumpWidget(const SizedBox.shrink());session.dispose();
+  debugDefaultTargetPlatformOverride=null;
+ });
+
+ test('Google OAuth mismatch explains Android test versus Play certificates',(){
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final message=authMessage(StateError(
+    'PlatformException(sign_in_failed, com.google.android.gms.common.api.ApiException: 10: )'));
+  expect(message,contains('APK signing certificate'));
+  expect(message,contains('Firebase'));
+  expect(message,contains('Google Play'));
+ });
+ test('Google and Apple iPhone configuration errors have actionable messages',(){
+  debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  expect(authMessage(StateError('DEVELOPER_ERROR')),contains('iOS OAuth client'));
+  expect(authMessage(StateError('INVALID_IDP_RESPONSE')),contains('Google/Apple'));
+ });
  for(final owner in [false,true])testWidgets('Facebook returns to the selected ${owner?'owner':'shopper'} workspace',(t) async {
   var ownerCalls=0,shopperCalls=0;final session=FakeFacebookSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session,onOpenOwner:()=>ownerCalls++,onShopperSignedIn:()=>shopperCalls++))));

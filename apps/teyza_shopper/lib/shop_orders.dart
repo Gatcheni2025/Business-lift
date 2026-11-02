@@ -9,8 +9,8 @@ const orderLabels={'requested':'Awaiting shop confirmation','confirmed':'Confirm
   'preparing':'Being prepared','ready':'Ready to collect','out_for_delivery':'Out for delivery',
   'completed':'Completed','cancelled':'Cancelled'};
 class ShopOrdersPanel extends StatefulWidget {
-  final ShopperSession session;final bool asOwner;final TeyzaMobileApi? api;final VoidCallback? onLogin;
-  const ShopOrdersPanel({super.key,required this.session,this.asOwner=false,this.api,this.onLogin});
+  final ShopperSession session;final bool asOwner,wholesaleOnly;final TeyzaMobileApi? api;final VoidCallback? onLogin;
+  const ShopOrdersPanel({super.key,required this.session,this.asOwner=false,this.wholesaleOnly=false,this.api,this.onLogin});
   @override State<ShopOrdersPanel> createState()=>_OrdersState();
 }
 class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
@@ -30,7 +30,7 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
     if(loading||widget.session.idToken==null)return;
     final requestedUid=widget.session.userId;setState((){loading=true;if(!quiet)error=null;});
     try{final result=await api.call('order_list',{'asOwner':widget.asOwner});
-      if(mounted&&requestedUid==widget.session.userId)setState((){orders=mobileRows(result['orders']);error=null;});
+      if(mounted&&requestedUid==widget.session.userId)setState((){orders=mobileRows(result['orders']).where((o)=>!widget.wholesaleOnly||o['orderType']=='wholesale_stock').toList();error=null;});
     }catch(e){if(mounted&&requestedUid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>loading=false);}
   }
@@ -76,8 +76,8 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
   }
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(
     padding:const EdgeInsets.fromLTRB(18,22,18,30),children:[
-      Text(widget.asOwner?'Customer orders':'Your orders',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
-      const SizedBox(height:7),Text(widget.asOwner?'Confirm stock, prepare orders and keep shoppers updated.':
+      Text(widget.wholesaleOnly?'Wholesale stock orders':widget.asOwner?'Customer orders':'Your orders',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
+      const SizedBox(height:7),Text(widget.wholesaleOnly?'Track stock requests placed with approved Teyza wholesalers.':widget.asOwner?'Confirm stock, prepare orders and keep shoppers updated.':
         'Delivery and collection requests from your local shops.',style:const TextStyle(color:Color(0xFF6C7880))),
       const SizedBox(height:18),
       if(widget.session.idToken==null)Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(children:[
@@ -127,19 +127,27 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
 class ShopperCheckoutPage extends StatefulWidget {
   final ShopperSession session;final String shopId,shopName;
   final List<Map<String,dynamic>> items;final bool delivery,collection,acceptsCard;final int deliveryFeeCents,cashDiscountPercent;
+  final String savedDeliveryAddress,savedPhone;
   final TeyzaMobileApi? api;
+  final bool wholesale;
   const ShopperCheckoutPage({super.key,required this.session,required this.shopId,required this.shopName,
-    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.acceptsCard=false,this.api});
+    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.acceptsCard=false,this.api,this.wholesale=false,
+    this.savedDeliveryAddress='',this.savedPhone=''});
   @override State<ShopperCheckoutPage> createState()=>_CheckoutState();
 }
 class _CheckoutState extends State<ShopperCheckoutPage>{
   late final String? uid=widget.session.userId;
   late final api=widget.api??TeyzaMobileApi(widget.session);
-  late String mode=widget.collection?'collection':'delivery';String paymentMethod='cash';
+  late String mode=widget.collection?'collection':'delivery';late String paymentMethod=widget.wholesale?'arrange_with_shop':'cash';
   final address=TextEditingController(),phone=TextEditingController();
   final requestId='r'+DateTime.now().microsecondsSinceEpoch.toString();
   bool working=false,checking=false;String? error;int quoteRequest=0;Map<String,dynamic>? quote;
-  @override void initState(){super.initState();widget.session.addListener(accountChanged);loadQuote();}
+  @override void initState(){
+    super.initState();
+    address.text=widget.savedDeliveryAddress;
+    phone.text=widget.savedPhone;
+    widget.session.addListener(accountChanged);loadQuote();
+  }
   void accountChanged(){if(mounted&&uid!=widget.session.userId){quoteRequest++;address.clear();phone.clear();setState((){quote=null;error='Your account changed. Reopen your basket.';checking=false;});}}
   @override void dispose(){quoteRequest++;widget.session.removeListener(accountChanged);address.dispose();phone.dispose();super.dispose();}
   Map<String,dynamic> get request=>{'shopId':widget.shopId,'mode':mode,'paymentMethod':paymentMethod,
@@ -170,14 +178,16 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
   int cents(String key)=>(quote?[key] as num? ??0).toInt();
   @override Widget build(BuildContext context){
     final hasOptions=widget.collection||widget.delivery;
-    return Scaffold(appBar:AppBar(title:const Text('Delivery or collection')),body:ListView(padding:const EdgeInsets.all(20),children:[
+    return Scaffold(appBar:AppBar(title:Text(widget.wholesale?'Wholesale stock request':'Delivery or collection')),body:ListView(padding:const EdgeInsets.all(20),children:[
       Text(widget.shopName,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),const SizedBox(height:18),
       if(hasOptions)SegmentedButton<String>(segments:[if(widget.collection)const ButtonSegment(value:'collection',label:Text('Collect'),icon:Icon(Icons.shopping_bag_outlined)),
         if(widget.delivery)const ButtonSegment(value:'delivery',label:Text('Delivery'),icon:Icon(Icons.local_shipping_outlined))],selected:{mode},
-        onSelectionChanged:working||uid!=widget.session.userId?null:(v){setState((){mode=v.first;if(mode=='delivery')paymentMethod='cash';});loadQuote();}),
-      const SizedBox(height:20),const Text('Payment with the shop',style:TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
+        onSelectionChanged:working||uid!=widget.session.userId?null:(v){setState((){mode=v.first;if(mode=='delivery')paymentMethod=widget.wholesale?'arrange_with_shop':'cash';});loadQuote();}),
+      const SizedBox(height:20),Text(widget.wholesale?'Payment with wholesaler':'Payment with the shop',style:const TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
       const SizedBox(height:8),Wrap(spacing:8,runSpacing:8,children:[
-        ChoiceChip(label:Text(mode=='delivery'?'Cash on delivery':'Cash'),selected:paymentMethod=='cash',
+        if(widget.wholesale)ChoiceChip(label:const Text('Arrange with supplier'),selected:paymentMethod=='arrange_with_shop',
+           onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='arrange_with_shop');loadQuote();}),
+         ChoiceChip(label:Text(mode=='delivery'?'Cash on delivery':'Cash'),selected:paymentMethod=='cash',
           onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='cash');loadQuote();}),
         if(mode=='collection'&&widget.acceptsCard)ChoiceChip(label:const Text('Card at the shop'),selected:paymentMethod=='card_at_shop',
           onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='card_at_shop');loadQuote();}),
@@ -193,12 +203,14 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
         trailing:Text('×'+item['quantity'].toString())),
       if(quote!=null)...[
         const Divider(),Text('Item subtotal: '+money(cents('subtotalCents'))),
-        if(mode=='delivery')Text('Delivery fee: '+money(cents('deliveryFeeCents'))),
+        if(mode=='delivery')Text('Delivery fee: '+(cents('deliveryFeeCents')==0?'FREE (R0 on quote)':money(cents('deliveryFeeCents')))),
         if(cents('cashDiscountCents')>0)Text('10% cash discount on items: −'+money(cents('cashDiscountCents'))),
         if(paymentMethod=='card_at_shop')Text('Extra card charge: '+money(cents('cardFeeCents'))),
         const SizedBox(height:10),Text('Total: '+money(cents('totalCents')),style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
       ],
-      const SizedBox(height:15),const Text('The shop will confirm stock and delivery availability. Payment is arranged directly with the shop.'),
+      const SizedBox(height:15),Text(widget.wholesale?
+         'The wholesaler confirms stock and delivery. This is a wholesale request, not a payment. After receipt, add stock and set retail prices in My Products.':
+         'The shop will confirm stock and delivery availability. Payment is arranged directly with the shop.'),
       if(error!=null)Padding(padding:const EdgeInsets.symmetric(vertical:14),child:Text(error!,style:const TextStyle(color:Colors.red))),
       TextButton.icon(onPressed:checking||working||uid!=widget.session.userId?null:loadQuote,icon:const Icon(Icons.refresh),label:const Text('Refresh order total')),
       FilledButton(onPressed:working||checking||quote==null||uid!=widget.session.userId?null:submit,child:Text(working?'Sending…':'Send order request'))

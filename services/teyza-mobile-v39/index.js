@@ -24,6 +24,9 @@ async function readiness(){
  return readinessCache;
 }
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
+   deleteAuthUser:uid=>admin.auth().deleteUser(uid),
+   disableAuthUser:uid=>admin.auth().updateUser(uid,{disabled:true}),
+   revokeAuthTokens:uid=>admin.auth().revokeRefreshTokens(uid),
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
@@ -57,7 +60,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     const uploads=await readiness();
     res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -91,7 +94,17 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
 exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
   const before=event.data?.before.data()||{},after=event.data?.after.data()||{};
-  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone&&before.address===after.address&&before.shopName===after.shopName)return;
+  if(before.uid===after.uid&&before.category===after.category&&before.approvalStatus===after.approvalStatus&&before.listingStatus===after.listingStatus&&before.phone===after.phone&&before.address===after.address&&before.shopName===after.shopName&&before.listingPlan===after.listingPlan)return;
+  await service.synchronizeCatalogue(event.params.sellerUid);
+});
+// Recalculate publication after trusted billing changes. Selecting a plan
+// cannot activate a listing; only an admin-recorded paid status can.
+exports.teyzaSellerBillingChanged=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaBilling/{sellerUid}'},async event=>{
+  if(!event.data?.after.exists)return;
+  const before=event.data.before.data()||{},after=event.data.after.data()||{};
+  if(event.data.before.exists&&before.status===after.status&&
+    before.latestPeriod===after.latestPeriod&&before.monthlyCents===after.monthlyCents)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
 // One bounded pass repairs historical premature live flags. Once complete this
@@ -121,6 +134,43 @@ exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
 exports.teyzaFieldAgentCleanup=onSchedule({schedule:'every 60 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'256MiB',timeoutSeconds:180},
   ()=>require('./field-agents').purgeAgentEvidence({db,bucket}));
+// Recover account-deletion requests created by older app versions that only
+// suspended the seller without closing Firebase Authentication. Never delete
+// an Auth user here: the data-retention and provider-closure review remains
+// a separate, auditable process.
+exports.teyzaDeletionSignInRepair=onSchedule({
+  schedule:'every 30 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',
+  maxInstances:1,memory:'256MiB',timeoutSeconds:240
+},async()=>{
+  let cursor=null,checked=0,blocked=0,failed=0;
+  for(let page=0;page<10;page++){
+    let q=db.collection('teyzaAccountDeletionRequests').orderBy('__name__').limit(100);
+    if(cursor)q=q.startAfter(cursor);
+    const result=await q.get();
+    for(const item of result.docs){
+      checked++;
+      const request=item.data();
+      if(request.status==='completed'||request.authDeletedAt>0)continue;
+      try{
+        try {
+          await admin.auth().updateUser(item.id,{disabled:true});
+          await admin.auth().revokeRefreshTokens(item.id);
+          await admin.auth().deleteUser(item.id);
+        }catch(error){
+          if(error?.code!=='auth/user-not-found')throw error;
+        }
+        await item.ref.update({authDisabledAt:Date.now(),authDeletedAt:Date.now(),updatedAt:Date.now()});
+        blocked++;
+      }catch(error){
+        failed++;
+        console.error('TEYZA_DELETION_SIGNIN_LOCK_FAILED',error.code||error.name);
+      }
+    }
+    if(result.docs.length<100)break;
+    cursor=result.docs.at(-1);
+  }
+  console.log('TEYZA_DELETION_SIGNIN_REPAIR',JSON.stringify({checked,blocked,failed}));
+});
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
   // Tracks every capture, including superseded selfies, so replacements cannot orphan private photos.
   const photos=await db.collection('teyzaVerificationPhotos').where('expiresAt','<=',Date.now()).limit(500).get();

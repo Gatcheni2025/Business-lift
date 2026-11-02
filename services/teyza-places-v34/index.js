@@ -2,7 +2,7 @@
 const express = require('express');
 const {onRequest} = require('firebase-functions/v2/https');
 const {defineSecret} = require('firebase-functions/params');
-const {num, category, photoResource, discover, fetchPhoto} = require('./places');
+const {num, category, photoResource, discover, fetchPhoto, fetchContact} = require('./places');
 const API_KEY = defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const app = express();
 const ORIGINS = new Set(['https://teyza.co.za', 'https://www.teyza.co.za',
@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions'}));
+app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions', wholesaleDiscovery: true}));
 app.get(['/shopper-discover.php', '/shopper-discover'], async (req, res) => {
   const lat = num(req.query.lat, -90, 90), lon = num(req.query.lon, -180, 180);
   if (lat === null || lon === null) return res.status(400).json({ok: false, error: 'lat and lon required'});
@@ -33,6 +33,20 @@ app.get(['/shopper-discover.php', '/shopper-discover'], async (req, res) => {
   } catch (error) {
     console.error('Teyza discovery:', error.message);
     return res.status(502).json({ok: false, error: 'Nearby shops temporarily unavailable'});
+  }
+});
+// Contact details are obtained only when a shopper opens a listing to avoid
+// expensive enterprise data fields on every local search.
+app.get('/shopper-place-contact.php',async(req,res)=>{
+  const id=String(req.query.placeId||'');
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(id))return res.status(400).json({error:'Invalid place reference'});
+  try{
+    const key=API_KEY.value();
+    if(!key)return res.status(503).json({error:'Places not configured'});
+    return res.json({ok:true,...await fetchContact({key,placeId:id})});
+  }catch(error){
+    console.error('Teyza Places contact lookup',error.code||error.status||'unavailable');
+    return res.status(502).json({error:'Business contact temporarily unavailable'});
   }
 });
 app.get(['/shopper-place-photo.php', '/shopper-place-photo'], async (req, res) => {

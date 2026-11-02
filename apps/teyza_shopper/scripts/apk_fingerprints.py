@@ -46,4 +46,12 @@ values.update({'applicationId':identity[1],'versionCode':int(identity[2]),'sourc
 (apk.parent/'test-signing-fingerprints.json').write_text(json.dumps(values,indent=2)+'\n')
 print('Public Android test-certificate fingerprints exported.')
 print('Verified compiled APK:',identity[1],version)
+summary_path=os.environ.get('GITHUB_STEP_SUMMARY')
+if summary_path:
+    with open(summary_path,'a',encoding='utf-8') as summary:
+        summary.write('\n### Teyza test APK Google sign-in certificate\n')
+        summary.write('App package: `'+identity[1]+'` (test key, not Google Play signing key)\n\n')
+        summary.write('SHA-1: `'+values['sha1']+'`\n\n')
+        summary.write('SHA-256: `'+values['sha256']+'`\n\n')
+        summary.write('Register this public test certificate in Firebase Project settings → Your apps → Android. Register Play app-signing and upload fingerprints separately.\n')
 

@@ -206,25 +206,59 @@ jobs:
           name: teyza-places-r36-deploy-kit
           path: TEYZA_PLACES_R36_DEPLOY_KIT.zip
           retention-days: 14
-      - name: Restore the explicit Android test signing key
-        id: test-key
+      # The original test certificate was saved by PR #97 under this cache key.
+      # Never create a new keystore: that breaks updates to existing tester installs.
+      # GitHub scopes PR caches to the originating PR ref; keep future updates on
+      # the same PR, or explicitly provide the original key using a protected secret.
+      - name: Restore original test signing key from PR cache
+        id: restore-test-signing
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
           key: teyza-android-test-signing-v2
-      - name: Configure the same test key for both APKs
+      - name: Verify original test APK signature and prevent key rotation
+        shell: bash
+        env:
+          TEYZA_ANDROID_TEST_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_TEST_KEYSTORE_BASE64 }}
+          TEST_CACHE_HIT: ${{ steps.restore-test-signing.outputs.cache-hit }}
+        run: |
+          python3 - <<'PY'
+          import os,base64,re,subprocess
+          from pathlib import Path
+          path=Path(os.environ['TEYZA_ANDROID_TEST_KEYSTORE_PATH'])
+          if not path.is_file():
+              encoded=os.environ.get('TEYZA_ANDROID_TEST_KEYSTORE_BASE64','').strip()
+              if not encoded:
+                  raise SystemExit(
+                      '::error::Original PR #97 test signing cache is not visible on this branch. '
+                      'Build from PR #97 to reuse its cache, or set TEYZA_ANDROID_TEST_KEYSTORE_BASE64 '
+                      'to the ORIGINAL test keystore (not the existing Play upload key). '
+                      'Never generate a replacement certificate.')
+              path.parent.mkdir(parents=True,exist_ok=True)
+              path.write_bytes(base64.b64decode(encoded,validate=True))
+              path.chmod(0o600)
+          original='5DD8A671C7FB12ABC83C4C343C6C749BAEEA4B28666663EA821E5ACD9E7CE673'
+          output=subprocess.check_output(
+              ['keytool','-list','-v','-keystore',str(path),
+               '-storepass','android','-alias','androiddebug'],
+              text=True,stderr=subprocess.STDOUT)
+          match=re.search(r'SHA256:\s*([0-9A-Fa-f:]+)',output)
+          actual=match.group(1).replace(':','').upper() if match else ''
+          if actual!=original:
+              path.unlink(missing_ok=True)
+              raise SystemExit('::error::Incorrect test signing certificate. '
+                               'Expected SHA-256 '+original+'; got '+actual+
+                               '. Refusing an APK incompatible with existing testers.')
+          print('Original APK certificate verified: SHA-256 '+original)
+          PY
+      - name: Configure the original certificate for both APKs
         shell: bash
         run: |
-          mkdir -p "$(dirname "$TEYZA_ANDROID_TEST_KEYSTORE_PATH")"
-          if [ ! -f "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" ]; then
-            keytool -genkeypair -keystore "$TEYZA_ANDROID_TEST_KEYSTORE_PATH" -storepass android -keypass android -alias androiddebug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Teyza Test,C=ZA" -noprompt
-          fi
-          test -s "$TEYZA_ANDROID_TEST_KEYSTORE_PATH"
           python3 - <<'PY'
           from pathlib import Path
           p=Path('apps/teyza_shopper/android/app/build.gradle.kts')
           with p.open('a') as file:
-              file.write('''
+              file.write("""
           android {
               signingConfigs.getByName("debug") {
                   storeFile = file(System.getenv("TEYZA_ANDROID_TEST_KEYSTORE_PATH"))
@@ -233,14 +267,8 @@ jobs:
                   keyPassword = "android"
               }
           }
-          ''')
+          """)
           PY
-      - name: Preserve the key before building so a failed compile cannot rotate it
-        if: steps.test-key.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.TEYZA_ANDROID_TEST_KEYSTORE_PATH }}
-          key: teyza-android-test-signing-v2
       - name: Build smaller Android ARM64 test APK
         working-directory: apps/teyza_shopper
         env:
@@ -252,6 +280,31 @@ jobs:
       - name: Export verified public Android fingerprints for Firebase Phone Auth
         working-directory: apps/teyza_shopper
         run: python3 scripts/apk_fingerprints.py
+      - name: Check test APK Google OAuth configuration against Firebase SDK
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+          TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from prepare_mobile_release import validate_android_google_oauth
+          fingerprints = json.loads(Path('build/app/outputs/flutter-apk/test-signing-fingerprints.json').read_text())
+          config = os.environ.get('TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64', '')
+          web_client = os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID', '')
+          if not config:
+              print('::warning::No refreshed Android Firebase SDK is saved. Google login on this test APK is unverified. Update TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 after registering the test certificate SHA-1.')
+          else:
+              try:
+                  validate_android_google_oauth(config, web_client, fingerprints['sha1'])
+              except SystemExit as error:
+                  print('::warning::Test APK Google OAuth mismatch: ' + str(error))
+                  print('::warning::Register the exact test SHA-1 on com.asiyedriver.asiye, re-download google-services.json and refresh GitHub Actions SDK secret. The Google Play signing SHA may be different.')
+              else:
+                  print('Test APK Google OAuth identity matches saved Firebase Android SDK, Web client and test certificate.')
+          PY
       - name: Upload smaller APK for testing
         if: success()
         uses: actions/upload-artifact@v4

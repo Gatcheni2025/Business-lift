@@ -136,7 +136,7 @@ class NativePermissionTests(unittest.TestCase):
     def test_signed_ios_requires_real_google_client_pair_and_apple_team(self):
         values={'TEYZA_GOOGLE_WEB_CLIENT_ID':'983479810697-webtest.apps.googleusercontent.com',
           'TEYZA_GOOGLE_IOS_CLIENT_ID':'983479810697-iostest.apps.googleusercontent.com',
-          'TEYZA_FIREBASE_IOS_APP_ID':'1:983479810697:ios:abcd1234',
+          'TEYZA_FIREBASE_IOS_APP_ID':'1:983479810697:ios:4aae4823892dd145db2458',
           'TEYZA_APPLE_TEAM_ID':'TEAM1234AB'}
         with patch.dict(os.environ,values):
             self.assertTrue(prepare.validate_ios_google_oauth('signed'))
@@ -147,6 +147,11 @@ class NativePermissionTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 prepare.validate_ios_google_oauth('signed')
             os.environ['TEYZA_GOOGLE_IOS_CLIENT_ID']=values['TEYZA_GOOGLE_IOS_CLIENT_ID']
+            os.environ['TEYZA_FIREBASE_IOS_APP_ID']='1:983479810697:ios:badc0ffe'
+            with self.assertRaises(SystemExit):
+                prepare.validate_ios_google_oauth('signed')
+            os.environ['TEYZA_FIREBASE_IOS_APP_ID']='1:983479810697:ios:4aae4823892dd145db2458'
+            self.assertTrue(prepare.validate_ios_google_oauth('signed'))
             os.environ['TEYZA_APPLE_TEAM_ID']=''
             with self.assertRaises(SystemExit):
                 prepare.validate_ios_google_oauth('signed')

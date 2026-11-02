@@ -13,16 +13,29 @@ Uri teyzaPlacesUrl(String path,[Map<String,String> params=const {}]) {
       base.host!='us-central1-business-lift-3c19c.cloudfunctions.net' ||
       base.path!='/teyzaPlaces' || base.userInfo.isNotEmpty ||
       base.hasQuery || base.hasFragment ||
-      !['shopper-discover.php','shopper-place-photo.php'].contains(path)) {
+      !['shopper-discover.php','shopper-place-photo.php','shopper-place-contact.php'].contains(path)) {
     throw const FormatException('Teyza Google Places Function URL is invalid.');
   }
   return base.replace(path:'/teyzaPlaces/$path',
     queryParameters:params.isEmpty?null:params);
 }
 Uri teyzaGooglePhotoUrl(String ref)=>teyzaPlacesUrl('shopper-place-photo.php',{'ref':ref});
+Future<String> teyzaBusinessContact(String placeId,{http.Client? client})async{
+  if(placeId.length<10||placeId.length>200||
+      RegExp(r'^[A-Za-z0-9_-]+').stringMatch(placeId)!=placeId)return '';
+  final remote=client??http.Client();
+  try{
+    final response=await remote.get(teyzaPlacesUrl('shopper-place-contact.php',{'placeId':placeId}))
+      .timeout(const Duration(seconds:12));
+    if(response.statusCode!=200)return '';
+    final parsed=jsonDecode(response.body);
+    if(parsed is! Map||parsed['ok']!=true)return '';
+    return parsed['phone'] is String?parsed['phone'] as String:'';
+  }catch(_){return '';}finally{if(client==null)remote.close();}
+}
 
 class OnlineShop {
-  final String id, name, area, address, source, origin, claimUrl;
+  final String id, name, area, address, source, origin, claimUrl, phone, websiteUrl, placeId;
   final double? lat, lng;
   final List<Map<String,String>> providerAttributions;
   final List<Map<String,String>> photoAttributions;
@@ -51,7 +64,8 @@ class OnlineShop {
   }
   const OnlineShop(this.id,this.name,this.area,this.address,this.source,
     this.origin,this.claimUrl,this.lat,this.lng,{
-      this.providerAttributions=const [],
+      this.phone='',this.websiteUrl='',this.placeId='',
+    this.providerAttributions=const [],
       this.photoAttributions=const [],
       this.photoRef,
       this.photoUrl,
@@ -65,9 +79,11 @@ class OnlineShop {
     (p['sourceUrl']??'').toString(),(p['origin']??'').toString(),
     (p['claimUrl']??'').toString(),
     (p['latitude'] as num?)?.toDouble(),(p['longitude'] as num?)?.toDouble(),
+    phone:(p['phone']??'').toString(),websiteUrl:(p['websiteUrl']??'').toString(),
+    placeId:(p['placeId']??'').toString(),
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
-    shopCategory:p['shopCategory']=='variety'?'variety':'spaza',
+    shopCategory:p['shopCategory']=='wholesale'?'wholesale':p['shopCategory']=='variety'?'variety':'spaza',
     categorizationVerified:p['categorizationVerified']==true,
     types:[if(p['primaryType'] is String) p['primaryType'] as String,
       ...((p['types'] as List?)??const []).whereType<String>()],
@@ -94,11 +110,16 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   // Old R3.3 responses without this flag still receive client name filtering.
   if(shop.categorizationVerified) return shop.shopCategory==category;
   final name = shop.name.toLowerCase();
+  if(category == 'wholesale') {
+    return shop.types.any(const {'wholesaler','warehouse_store'}.contains)||
+      RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
+  }
   if(category == 'variety') {
-    if(RegExp(r'spaza|tuck\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
-    if(shop.types.any(const {'shopping_mall','department_store','supermarket',
-      'clothing_store','home_goods_store','wholesaler'}.contains))return true;
-    return RegExp(r'china\s?mall|shopping|mall|wholesale|cash\s?(and|&)\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
+    if(RegExp(r'spaza|tuck\s?shop|wholesal|cash\s?(and|&)\s?carry').hasMatch(name))return false;
+    if(shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
+        'furniture_store','hardware_store','barber_shop','clothing_store',
+        'home_goods_store','shopping_mall','department_store'}.contains))return true;
+    return RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
   }
   if(category == 'spaza') {
     return shop.types.any(const {'convenience_store','grocery_store','supermarket','food_store'}.contains)||
@@ -118,10 +139,11 @@ Future<List<OnlineShop>> _osmFallback({
   final key='$lat:$lon:$category';
   final cached=_osmCache[key];
   if(cached!=null && DateTime.now().difference(cached.fetched)<const Duration(minutes:10))return cached.shops;
-  final types=category=='variety'
-    ?r'^(variety_store|department_store|wholesale|mall|general)$'
+  final types=category=='wholesale'
+    ?r'^(wholesale|warehouse|supermarket)$':category=='variety'
+    ?r'^(variety_store|department_store|mall|general)$'
     :r'^(convenience|grocery|kiosk|general|supermarket)$';
-  final radius=category=='variety'?15000:12000;
+  final radius=category=='wholesale'?30000:category=='variety'?15000:12000;
   final query='[out:json][timeout:16];(nwr(around:$radius,$lat,$lon)["shop"~"$types"]["name"];);out center 70;';
   final res=await client.post(Uri.https('overpass-api.de','/api/interpreter'),
     body:{'data':query},headers:const{'Accept':'application/json'})
@@ -159,12 +181,12 @@ Future<List<OnlineShop>> _osmFallback({
 
 Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
   double? longitude,String category='spaza',int? radiusKm,http.Client? client}) async {
-  final kind=category=='variety'?'variety':'spaza';
+  final kind=category=='wholesale'?'wholesale':category=='variety'?'variety':'spaza';
   final uri=teyzaPlacesUrl('shopper-discover.php',{
     if(area.isNotEmpty)'area':area,'category':kind,
     if(latitude!=null && longitude!=null)...{
       'lat':latitude.toStringAsFixed(4),'lon':longitude.toStringAsFixed(4),
-      'radius':((radiusKm??(kind=='variety'?40:22)).clamp(1,50)*1000).toString(),
+      'radius':((radiusKm??(kind=='wholesale'?50:kind=='variety'?40:22)).clamp(1,50)*1000).toString(),
     },
   });
   final httpClient=client??http.Client();

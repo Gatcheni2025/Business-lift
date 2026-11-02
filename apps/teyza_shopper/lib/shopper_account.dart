@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
+import 'account_deletion_page.dart';
 import 'seller_review.dart';
 
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
   final VoidCallback? onOpenOwner;
   final VoidCallback? onShopperSignedIn;
-  final VoidCallback? onMessages,onOrders,onBrowse;
-  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse});
+  final VoidCallback? onMessages,onOrders,onBrowse,onChangeDeliveryAddress;
+  final String? savedDeliveryAddress;
+  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse,
+    this.onChangeDeliveryAddress,this.savedDeliveryAddress});
   @override
   State<ShopperAccountPanel> createState()=>_AccountState();
 }
@@ -22,8 +25,10 @@ class _AccountState extends State<ShopperAccountPanel> {
   @override
   void dispose() { email.dispose(); password.dispose(); name.dispose(); super.dispose(); }
   Future<void> submit() async {
+    // A previous Google OAuth error must not be attributed to email sign-in.
+    if(status!=null||failure)setState(() {status=null;failure=false;});
     if (!formKey.currentState!.validate()) return;
-    setState(() { working=true; status=null; });
+    setState(() { working=true; status=null;failure=false; });
     try {
       if (registering) {
         await widget.session.register(name.text,email.text,password.text);
@@ -225,7 +230,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             if (!widget.session.emailVerified) ...[
               FilledButton.icon(
                 onPressed:working?null:() async {
-                  setState(() {working=true;status=null;});
+                  setState(() {working=true;status=null;failure=false;});
                   try {
                     await widget.session.sendEmailVerification();
                     if(mounted)setState(() {
@@ -240,7 +245,7 @@ class _AccountState extends State<ShopperAccountPanel> {
                 label:const Text('Send verification email')),
               TextButton.icon(
                 onPressed:working?null:() async {
-                  setState(()=>working=true);
+                  setState(() {working=true;status=null;failure=false;});
                   try{
                     await widget.session.refreshEmailStatus();
                     if(mounted)setState(() {
@@ -256,9 +261,11 @@ class _AccountState extends State<ShopperAccountPanel> {
                 label:const Text('Check verification status')),
             ],
             const Divider(height:1),
-            const ListTile(leading:Icon(Icons.location_on_outlined),
-              title:Text('Your shopping area'),
-              subtitle:Text('Use the location selector on the Home tab.')),
+            ListTile(leading:const Icon(Icons.location_on_outlined),
+              title:const Text('Saved delivery address'),
+              subtitle:Text(widget.savedDeliveryAddress??'Add your delivery address'),
+              trailing:const Icon(Icons.edit_location_alt_outlined),
+              onTap:widget.onChangeDeliveryAddress),
             const Divider(height:1),
             ListTile(leading:const Icon(Icons.shopping_bag_outlined),
               title:const Text('Delivery & collection orders'),onTap:widget.onOrders,
@@ -273,6 +280,12 @@ class _AccountState extends State<ShopperAccountPanel> {
           if(widget.session.hasAdminClaim&&widget.session.emailVerified)
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
               icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('Seller review desk')),
+          OutlinedButton.icon(
+            onPressed:working?null:()=>Navigator.push(context,
+              MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:widget.session))),
+            icon:const Icon(Icons.delete_outline,color:Colors.red),
+            label:const Text('Privacy & Security · Delete My Account')),
+          const SizedBox(height:10),
           OutlinedButton.icon(onPressed:working?null:widget.session.signOut,
             icon:const Icon(Icons.logout),label:const Text('Sign out')),
         ] else ...[
@@ -339,7 +352,9 @@ class _AccountState extends State<ShopperAccountPanel> {
                 child:const Text('Forgot password?')),
           ])),
         ],
-        if(status!=null)Padding(padding:const EdgeInsets.only(top:12),
+        // Never display a failed provider login from a previous attempt after
+        // another method has successfully authenticated the Firebase user.
+        if(status!=null && !(logged && failure))Padding(padding:const EdgeInsets.only(top:12),
           child:Card(color:failure?const Color(0xFFFFEDE8):const Color(0xFFE3F5EC),
             child:Padding(padding:const EdgeInsets.all(13),child:Text(status!,
               style:TextStyle(color:failure?Colors.red.shade900:const Color(0xFF087D5E)))))) ,

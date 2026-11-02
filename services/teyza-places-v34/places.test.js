@@ -1,7 +1,7 @@
 'use strict';
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {num,mapResult,discover,fetchPhoto,trustedPhotoUri,kindMatch} = require('./places');
+const {num,mapResult,discover,fetchPhoto,fetchContact,trustedPhotoUri,kindMatch} = require('./places');
 const lat=-29.8587,lon=31.0218;
 const place=(id,extra={})=>({id,displayName:{text:'Village Corner '+id},primaryType:'grocery_store',
   types:['grocery_store'],location:{latitude:lat,longitude:lon},...extra});
@@ -73,4 +73,59 @@ test('photo host validation rejects unexpected targets',async()=>{
     'https://user:password@lh3.googleusercontent.com/p','https://127.0.0.1/p'])assert.equal(trustedPhotoUri(uri),null);
   await assert.rejects(fetchPhoto({key:'key',ref:'places/ChIJ1234/photos/Photo_1234',
     fetchImpl:async()=>json({photoUri:'https://untrusted.example/image'})}),/Invalid image host/);
+});
+
+test('Google-linked wholesalers are separated from ordinary retail and spaza categories',async()=>{
+ const wholesale=place('bulk',{displayName:{text:'Durban Wholesale Cash and Carry'},
+   primaryType:'wholesaler',types:['wholesaler']});
+ const retail=place('mall',{displayName:{text:'Durban Shopping Mall'},
+   primaryType:'shopping_mall',types:['shopping_mall']});
+ assert.equal(kindMatch(wholesale,'wholesale'),true);
+ assert.equal(kindMatch(wholesale,'spaza'),false);
+ assert.equal(kindMatch(wholesale,'variety'),false);
+ assert.equal(kindMatch(retail,'wholesale'),false);
+ const result=await discover({key:'test',lat,lon,radius:22000,kind:'wholesale',
+   fetchImpl:async()=>json({places:[wholesale,retail]})});
+ assert.deepEqual(result.entries.map(e=>e.id),['google-bulk']);
+ assert.equal(result.entries[0].isTeyzaMerchant,false);
+ assert.equal(result.entries[0].shopCategory,'wholesale');
+ assert.equal(result.entries[0].priceCents,undefined);
+});
+
+test('Other Businesses searches salons, furniture, upholsterers and plumbers separately',async()=>{
+ const salons=place('salon',{displayName:{text:'Durban Hair Salon'},types:['beauty_salon'],primaryType:'beauty_salon'});
+ const plumber=place('plumb',{displayName:{text:'Plumber on Call'},types:['plumber'],primaryType:'plumber'});
+ const store=place('furniture',{displayName:{text:'Furniture and Upholstery'},types:['furniture_store'],primaryType:'furniture_store'});
+ const wholesaler=place('wholesale',{displayName:{text:'Wholesale Cash and Carry'},types:['wholesaler'],primaryType:'wholesaler'});
+ for(const result of [salons,plumber,store])assert.equal(kindMatch(result,'variety'),true);
+ assert.equal(kindMatch(wholesaler,'variety'),false);
+ const result=await discover({key:'test',lat,lon,radius:30000,kind:'variety',fetchImpl:async()=>json({places:[salons,plumber,store,wholesaler]})});
+ assert.deepEqual(result.entries.map(x=>x.id).sort(),['google-furniture','google-plumb','google-salon']);
+});
+test('Business contact is fetched on demand and not with every Google Text Search',async()=>{
+ let calls=0;
+ const data=await discover({key:'test',lat,lon,radius:20000,kind:'wholesale',fetchImpl:async(_,opts)=>{
+   calls++;
+   assert(!opts.headers['X-Goog-FieldMask'].includes('nationalPhoneNumber'));
+   return json({places:[place('supplier',{displayName:{text:'Wholesale Supplier Depot'}})]});
+ }});
+ assert(data.entries.length>0);assert(calls>0);
+ const response=await fetchContact({key:'test',placeId:'ChIJwholesale123456',fetchImpl:async(url,opts)=>{
+   assert(url.endsWith('/ChIJwholesale123456'));
+   assert.equal(opts.headers['X-Goog-FieldMask'],'id,nationalPhoneNumber,websiteUri');
+   return json({id:'ChIJwholesale123456',nationalPhoneNumber:'031 000 1234',websiteUri:'https://example.org'});
+ }});
+ assert.equal(response.phone,'031 000 1234');
+ assert.equal(response.websiteUrl,'https://example.org');
+});
+
+test('Service-area plumber can be discovered without inventing location or distance',async()=>{
+ const plumber=place('plumber123',{displayName:{text:'Durban Mobile Plumber'},
+  location:undefined,primaryType:'plumber',types:['plumber']});
+ const result=await discover({key:'test',lat,lon,radius:30000,kind:'variety',
+  fetchImpl:async()=>json({places:[plumber]})});
+ assert.equal(result.entries.length,1);
+ assert.equal(result.entries[0].area,'Service area — check coverage');
+ assert.equal(result.entries[0].latitude,null);
+ assert.equal(result.entries[0].distanceKm,null);
 });
