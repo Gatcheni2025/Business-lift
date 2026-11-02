@@ -2056,8 +2056,8 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
   @override
   Widget build(BuildContext context) {
     final term=query.trim().toLowerCase();
-    final filteredOnline=found.where((shop)=>term.isEmpty||
-      (shop.name+' '+shop.area+' '+shop.address).toLowerCase().contains(term))
+    final filteredOnline=found.where((shop)=>shop.shopCategory==currentType&&
+      (term.isEmpty||(shop.name+' '+shop.area+' '+shop.address).toLowerCase().contains(term)))
       .toList()
       ..sort((a,b)=> (_distance(a.lat,a.lng)??double.infinity)
         .compareTo(_distance(b.lat,b.lng)??double.infinity));
@@ -2067,6 +2067,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
       .toList()
       ..sort((a,b)=>(_distance(a.latitude,a.longitude)??double.infinity)
         .compareTo(_distance(b.latitude,b.longitude)??double.infinity));
+    final combined=mergeNearbyListings(filteredMerchants,filteredOnline,area:current);
     final googleResults=filteredOnline.any((shop)=>shop.origin=='google_places');
 
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -2076,14 +2077,17 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
             fontSize:25,fontWeight:FontWeight.w900,color:ink)),
           const SizedBox(height:4),
           Text(current==null?'Find a nearby spaza shop by location or suburb.':
-            (currentType=='spaza'?'Spaza shops near ':'Variety and wholesale shops near ')+current!.label,
+            (currentType=='spaza'?'Spaza shops near ':currentType=='wholesale'?'Wholesalers near ':'Other businesses near ')+current!.label,
             style:const TextStyle(color:muted,fontSize:13)),
           const SizedBox(height:11),
           Wrap(spacing:8,runSpacing:7,children:[
             ChoiceChip(label:const Text('Spaza Shops'),
               selected:currentType=='spaza',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('spaza'))),
-            ChoiceChip(label:const Text('Other Retail'),
+            ChoiceChip(label:const Text('Wholesalers'),
+              selected:currentType=='wholesale',onSelected:busy?null:
+                (_) => _perform(()=>widget.onChooseCategory('wholesale'))),
+            ChoiceChip(label:const Text('Other Businesses'),
               selected:currentType=='variety',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('variety'))),
           ]),
@@ -2140,49 +2144,35 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
               if(error!=null)Card(color:const Color(0xFFFFF2E6),
                 child:Padding(padding:const EdgeInsets.all(12),
                   child:Text(error!,style:const TextStyle(color:ink)))),
-              if(filteredMerchants.isNotEmpty)...[
-                const Padding(padding:EdgeInsets.only(top:12,bottom:8),
-                  child:Text('SHOPS ON TEYZA',style:TextStyle(
-                    fontSize:13,color:green,fontWeight:FontWeight.w900))),
-                ...filteredMerchants.map((shop)=>Card(color:Colors.white,
-                  child:ListTile(
-                    leading:ClipRRect(borderRadius:BorderRadius.circular(12),child:
-                      shop.photo.startsWith('https://')?Image.network(shop.photo,width:56,height:56,fit:BoxFit.cover,
-                        errorBuilder:(_,__,___)=>const Icon(Icons.storefront_outlined,color:green)):
-                        const Icon(Icons.storefront_outlined,color:green)),
-                    title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
-                    subtitle:Text(shop.area+_distanceLabel(
-                      _distance(shop.latitude,shop.longitude))+'\n'+
-                      (shop.identityVerified?'Teyza verified · ':'')+shop.products.length.toString()+' available products',maxLines:3),
-                    isThreeLine:true,
-                    trailing:const Icon(Icons.arrow_forward_ios,color:green,size:17),
-                    onTap:()=>widget.onOpenMerchant(shop)))),
-              ],
-              if(filteredOnline.isNotEmpty)...[
-                Padding(padding:const EdgeInsets.only(top:12,bottom:7),
-                  child:Row(children:[
-                    Expanded(child:Text(currentType=='spaza'?
-                      'OTHER NEARBY SPAZA SHOPS':'VARIETY MALLS & WHOLESALE',
-                      style:TextStyle(fontSize:13,fontWeight:FontWeight.w900,color:ink))),
-
-                  ])),
-                ...filteredOnline.map((shop)=>Card(color:Colors.white,
-                  child:ListTile(
-                    contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:4),
-                    leading:_shopThumb(shop),
-                    title:Text(shop.name,style:const TextStyle(fontWeight:FontWeight.w800)),
-                    subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                      Text(shop.address.isNotEmpty?shop.address:shop.area,
-                        maxLines:2,overflow:TextOverflow.ellipsis),
-                      Text('Nearby shop'+_distanceLabel(_distance(shop.lat,shop.lng)),
-                        style:const TextStyle(fontSize:11,color:muted)),
-                      const Text('Shop products not yet connected',
-                        style:TextStyle(fontSize:11,color:muted)),
-                    ]),
-                    trailing:const Icon(Icons.chevron_right,color:green),
-                    onTap:()=>widget.onOpenOnline(shop)))),
-              ],
-              if(filteredMerchants.isEmpty&&filteredOnline.isEmpty)
+              const Padding(padding:EdgeInsets.only(top:12,bottom:8),
+                child:Text('NEARBY SHOPS',style:TextStyle(fontSize:13,
+                  color:ink,fontWeight:FontWeight.w900))),
+              for(final entry in combined)Card(color:Colors.white,
+                child:ListTile(
+                  contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:5),
+                  leading:entry.merchant?.photo.startsWith('https://')==true?
+                    ClipRRect(borderRadius:BorderRadius.circular(12),
+                      child:Image.network(entry.merchant!.photo,width:62,height:62,
+                        fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.storefront_outlined,color:green))):
+                    entry.directory!=null?_shopThumb(entry.directory!):
+                    const Icon(Icons.storefront_outlined,color:green),
+                  title:Text(entry.name,style:const TextStyle(fontWeight:FontWeight.w800)),
+                  subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Text(entry.merchant?.address.isNotEmpty==true?entry.merchant!.address:
+                      entry.directory?.address.isNotEmpty==true?entry.directory!.address:
+                      entry.merchant?.area??entry.directory?.area??'',
+                      maxLines:2,overflow:TextOverflow.ellipsis),
+                    Text('Nearby shop'+_distanceLabel(_distance(entry.lat,entry.lng)),
+                      style:const TextStyle(fontSize:11,color:muted)),
+                    if(entry.merchant?.identityVerified==true)
+                      const Text('✓ Teyza Verified',style:TextStyle(color:green,
+                        fontSize:11,fontWeight:FontWeight.w800)),
+                  ]),
+                  trailing:const Icon(Icons.chevron_right,color:green),
+                  onTap:()=>entry.merchant!=null?
+                    widget.onOpenMerchant(entry.merchant!):
+                    widget.onOpenOnline(entry.directory!))),
+              if(combined.isEmpty)
                 Padding(padding:const EdgeInsets.symmetric(vertical:30,horizontal:12),
                   child:Column(children:[
                     const Icon(Icons.search_off,size:47,color:green),
