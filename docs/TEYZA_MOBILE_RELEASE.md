@@ -1,4 +1,4 @@
-# Teyza 1.0.24 (34): mobile release guide
+# Teyza 1.0.25 (35): mobile release guide
 
 This candidate includes the seller dashboard, shop photo and service controls, order quotes and alerts, shopper directions, full-address autocomplete and the 378-choice catalogue with 96 reference-photo types. Logout clears the local account and returns the app to the shopper view without waiting for optional Facebook SDK cleanup. The native iOS launch assets use Teyza's existing brand.
 
@@ -14,40 +14,40 @@ The R99 mandate records consent. Billing is currently manual_receipt; signing a 
 
 The field-agent portal is a website at /work.html. Deploy its backend and Hosting kit separately; installing this native app alone does not publish the work pages or SEO fixes.
 
-For the existing Android listing, complete [the package/certificate connection](TEYZA_EXISTING_PLAY_APP.md) first. The existing iOS TestFlight build 1.0.23 (33) remains available; this Android package change does not require another Apple upload.
+For the existing Android listing, complete [the package/certificate connection](TEYZA_EXISTING_PLAY_APP.md) first. A compiled iOS archive is not an uploaded TestFlight build. For this wholesale-marketplace release, build and upload a newly signed IPA, then confirm Apple processing and tester access in App Store Connect.
 
 ## Build a signed candidate
 
-Use the reviewed fix/teyza-existing-play-package branch, which includes the preceding catalogue and seller-service updates. Deploy the latest scoped Firebase kit first. Existing Android upload-key and Apple distribution/profile credentials are reused; do not generate replacement keys.
+Use reviewed PR #97 branch `feat/teyza-account-deletion-review-20261101`, which includes the current wholesaler and spaza marketplace. Deploy and verify the latest scoped Google Places and mobile services first. The signed workflow stops if `wholesaleSourcing`, `protectedWholesalePrices`, account deletion, or Basic billing publication controls are not confirmed active. Existing Android upload-key and Apple distribution/profile credentials are reused; do not generate replacement keys.
 
 ```powershell
-gh workflow run teyza-mobile-release.yml --repo Gatcheni2025/Business-lift --ref fix/teyza-existing-play-package -f signed_release=true -f platforms=android
+gh workflow run teyza-mobile-release.yml --repo Gatcheni2025/Business-lift --ref feat/teyza-account-deletion-review-20261101 -f signed_release=true -f platforms=all -f upload_to_testflight=true
 ```
 
 Find and watch the successful signed run:
 
 ```powershell
-gh run list --repo Gatcheni2025/Business-lift --workflow teyza-mobile-release.yml --branch fix/teyza-existing-play-package --event workflow_dispatch --limit 5
+gh run list --repo Gatcheni2025/Business-lift --workflow teyza-mobile-release.yml --branch feat/teyza-account-deletion-review-20261101 --event workflow_dispatch --limit 5
 ```
 
-Signed artifacts are teyza-android-aab-signed and teyza-ios-release-signed. The Android artifact includes the production-key AAB and APK; the Apple artifact includes the signed IPA and archive. Each contains release-manifest.json with the version, commit, signing mode, enabled configuration flags, catalogue counts and binary hashes.
+Signed artifacts are `teyza-android-aab-signed` and `teyza-ios-release-signed`; test APKs are separately available in the Teyza Shopper APK Actions run. The Android artifact includes the production-key AAB and APK; the Apple artifact includes the signed IPA and archive. Each contains release-manifest.json with the version, commit, signing mode, enabled configuration flags, catalogue counts and binary hashes.
 
 Pull-request artifacts named unsigned are compilation checks. The Shopper APK workflow uses a separate test key; its APKs are for device testing and are not Play production uploads. The release manifest keeps storeSubmitted and device-verification flags false because packaging does not establish those outcomes.
 
 ## Send the completed IPA to Apple
 
-A successful signed build saves files on GitHub. App Store Connect upload is a separate workflow mode. Replace the value below with the successful signed run ID from this same branch:
+For a manual signed workflow dispatch with `upload_to_testflight=true`, the signed iOS job now uploads its SHA-256-verified IPA to App Store Connect in the same run. This uses existing GitHub secrets `TEYZA_ASC_ISSUER_ID`, `TEYZA_ASC_KEY_ID`, `TEYZA_ASC_PRIVATE_KEY`. Upload success is **not** equivalent to Apple processing completion or TestFlight tester availability. If an already successful **signed** run exists and you chose not to upload at build time, you can reuse that IPA in the existing upload-only workflow mode. Replace the run ID below:
 
 ```powershell
 $SignedRunId = "REPLACE_WITH_THE_SUCCESSFUL_SIGNED_RUN_ID"
-gh workflow run teyza-mobile-release.yml --repo Gatcheni2025/Business-lift --ref fix/teyza-existing-play-package -f "upload_existing_ios_run=$SignedRunId"
+gh workflow run teyza-mobile-release.yml --repo Gatcheni2025/Business-lift --ref feat/teyza-account-deletion-review-20261101 -f "upload_existing_ios_run=$SignedRunId"
 ```
 
 This reuses the signed IPA and the existing TEYZA_ASC_ISSUER_ID, TEYZA_ASC_KEY_ID and TEYZA_ASC_PRIVATE_KEY secrets. Confirm successful Apple processing and tester access in App Store Connect; a green GitHub build alone does not confirm TestFlight availability. Upload the signed AAB through the appropriate Play Console testing or release track separately.
 
 ## Device acceptance
 
-Install the intended signed version through Play internal testing and TestFlight. Confirm version 1.0.24 and build 34. Exercise these checks using separate shopper and seller accounts:
+Install the intended signed version through Play internal testing and TestFlight. Confirm version 1.0.25 and build 35. The GitHub PR run's `teyza-shopper-arm64-test-apk` is test-key signed (`com.asiyedriver.asiye`, version code 2035) and cannot be installed over the already Play-signed app without uninstalling the old app; do not uninstall without considering local data. Exercise these checks using separate shopper and seller accounts:
 
 - Email/password, Google, Apple on iOS, phone OTP, password recovery and logout/reopen preserve the correct Firebase account.
 - Seller mode has products, orders, messages, finance and business tools. Signing out closes private seller pages and returns to shopper navigation.
