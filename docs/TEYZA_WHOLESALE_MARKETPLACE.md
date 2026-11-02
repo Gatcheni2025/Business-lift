@@ -32,6 +32,19 @@ The seller-category key is immutable after registration. A previously registered
 - R99 for a paid listing/placement inside the same iOS app triggers potential Apple In-App Purchase requirements. Do not begin collecting it in the iOS app until the purchase model is compliant.
 - Deletion requests remain independent of seller approval and must actually be processed by operations as documented in `docs/TEYZA_ACCOUNT_DELETION_APP_REVIEW.md`.
 
+## November 2 update — discovery, links, and local services
+
+- The seller registration question now distinguishes **Spaza Shop Owner**, **Wholesaler supplying Spaza Shops** and **Other Business / Services**. Registered sellers are restored to their seller workspace on login. The dashboard shows sourcing for spaza owners and bulk stock offers for wholesalers.
+- A spaza owner's **Buy from wholesalers** page now has two separate lists: **approved Teyza wholesale sellers** with private orderable stock, and **Google-listed nearby wholesalers** using the registered shop address through geocoding. Google listing results cannot accept an order merely because they exist in Maps.
+- A Google-listed wholesaler may have a **Request supplier link** button. An authenticated spaza owner can create one rate-limited request in `teyzaWholesaleLinkRequests` via the server action `wholesale_link_request`; it is an admin follow-up lead, **not** a Google Business claim, a connected wholesaler, a price agreement or a confirmed order. The business must still register and pass verification.
+- Shopper business cards show **Buy here** only for live verified Teyza merchants. A Google-only business explicitly shows **Shop Unavailable**, while keeping Maps directions. A trusted same-name, same-location Teyza shop may be matched in the UI and its actual published range opened.
+- **Other Businesses** expands the public directory to salons, barber shops, upholstery, furniture, plumbers, electrical services, local retail and repair providers. Pure service-area providers are labelled **Service area — check coverage** rather than fabricating a pin or distance.
+- Public business telephone numbers are fetched only on opening a listing through the new `/shopper-place-contact.php` endpoint. Google Places national phone number is a higher-cost Enterprise field; avoid requesting it during every search or promising it on every business. Configure quota/budget alerts before production.
+- The prominent **Verify my shopper account** action was removed from the Google-only shop profile. Optional Firebase email verification remains available in the account settings for capabilities whose backend requires a verified contact.
+- The new Places endpoint and mobile supplier-link action **require a new scoped Firebase Functions deployment**. Updating the website alone or installing a new APK will not activate the server changes.
+- Prior account deletion ZIP download link error: use the directly linked GitHub Actions artifact `teyza-mobile-r315-deploy-kit` from the PR's latest successful **Teyza Android and iOS Release** check, rather than an outdated older ZIP. After extracting, run `DEPLOY-MOBILE.ps1` in PowerShell from the kit root. Also deploy Places via `firebase deploy --only functions:teyza-places --config firebase.teyza-places-v34.json --project business-lift-3c19c` from an up-to-date repository checkout. The kit archive alone may not contain the Places source.
+- Check actual deployed `teyzaMobile` health returns `accountDeletionAuthLock:true` for sign-in closure, and `teyzaPlaces/health` shows wholesale discovery enabled. Complete real-device Android/iPhone acceptance testing before publishing.
+
 ## Deployment and acceptance checklist
 
 1. Verify backend tests: `npm test --prefix services/teyza-mobile-v39` and Google Places tests `npm test --prefix services/teyza-places-v34`.
