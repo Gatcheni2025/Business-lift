@@ -1082,7 +1082,18 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           onChangeDeliveryAddress:promptDeliveryProfile):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
-        tab==1?(selected!=null?shopPage(selected!):shopProductsPage()):
+        tab==1?(selected!=null?Column(children:[
+          Container(color:Colors.white,padding:const EdgeInsets.fromLTRB(16,10,16,10),
+            child:Row(children:[
+              Expanded(child:Text(selected!.name,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900,color:ink))),
+              const SizedBox(width:8),
+              OutlinedButton.icon(key:const ValueKey('change-shop'),
+                onPressed:changeShop,icon:const Icon(Icons.swap_horiz,size:17),
+                label:const Text('Change shop')),
+            ])),
+          Expanded(child:shopPage(selected!)),
+        ]):shopProductsPage()):
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
           directorySelected!=null?directoryPage(directorySelected!):
@@ -1791,13 +1802,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(chosen!=null&&mounted)openShop(chosen);
   }
   Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
-    if(tab==1)Row(children:[
-      Expanded(child:Text(shop.name,style:const TextStyle(
-        fontSize:22,fontWeight:FontWeight.w900,color:ink))),
-      OutlinedButton.icon(onPressed:changeShop,icon:const Icon(Icons.swap_horiz),
-        label:const Text('Change shop')),
-    ]),
-
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
       icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
