@@ -3,13 +3,16 @@ const ROOT = 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPl
 const FIELD_MASK = ['places.id', 'places.displayName', 'places.formattedAddress',
   'places.location', 'places.googleMapsUri', 'places.primaryType', 'places.types',
   'places.photos', 'places.businessStatus', 'places.rating', 'places.userRatingCount',
-  'places.currentOpeningHours', 'nextPageToken'].join(',');
+  'places.currentOpeningHours', 'places.nationalPhoneNumber', 'places.websiteUri', 'nextPageToken'].join(',');
 const QUERIES = {
   spaza: ['spaza shop', 'tuck shop', 'mini market', 'general dealer',
     'convenience store', 'grocery supermarket'],
-  variety: ['China Mall', 'shopping centre', 'variety store', 'retail shopping mall', 'supermarket'],
-  wholesale: ['wholesale cash and carry', 'food wholesaler', 'grocery distributor',
-    'bulk food suppliers', 'wholesale warehouse']
+  variety: ['hair salon', 'beauty salon', 'furniture shop', 'upholstery shop',
+    'plumber services', 'barber shop', 'electrical services', 'hardware store',
+    'China Mall', 'other local businesses'],
+  wholesale: ['wholesale cash and carry', 'cash and carry groceries',
+    'food wholesaler', 'grocery wholesaler', 'grocery distributor',
+    'bulk food supplier', 'wholesale warehouse', 'wholesale supermarket', 'wholesale suppliers']
 };
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function num(value, low, high) {
@@ -34,12 +37,13 @@ function kindMatch(place, kind) {
   const name = String(place.displayName?.text || '').toLowerCase();
   const types = new Set([place.primaryType, ...(place.types || [])]);
   if (kind === 'wholesale') return types.has('wholesaler') || types.has('warehouse_store') ||
-    /\bwholesal(e|er|ers|ing)\b|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocer|suppl)|food\s*distribut/.test(name);
+    /wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocer|suppl)|food\s*distribut|trading\s*depot/.test(name);
   if (kind === 'spaza') return /spaza|tuck.?shop|mini.?market|convenience|grocer|general dealer|corner shop|supermarket|superette|food store/.test(name) ||
     ['convenience_store', 'grocery_store', 'supermarket', 'food_store'].some(t => types.has(t));
-  if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry|tyres?|restaurant|takeaway|auto spares|motor spares|printing|salon/.test(name) || types.has('wholesaler')) return false;
-  return /china.?mall|mall|shopping|wholesale|cash.?(&|and).?carry|retail|supermarket|variety|bazaar|clothing|fashion|furniture|homeware|department/.test(name) ||
-    ['shopping_mall', 'department_store', 'supermarket', 'clothing_store', 'home_goods_store', 'wholesaler'].some(t => types.has(t));
+  if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry/.test(name) || types.has('wholesaler')) return false;
+  return /salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china.?mall|mall|shopping|retail|variety|bazaar|clothing|fashion|homeware|department|repair|tailor|motor spares|printing/.test(name) ||
+    ['shopping_mall','department_store','clothing_store','home_goods_store','beauty_salon',
+      'hair_care','plumber','electrician','furniture_store','hardware_store','barber_shop'].some(t=>types.has(t));
 }
 function mapResult(place, kind, lat, lon) {
   const la = num(place.location?.latitude, -90, 90), lo = num(place.location?.longitude, -180, 180);
@@ -53,6 +57,8 @@ function mapResult(place, kind, lat, lon) {
     distanceKm: +distance(lat, lon, la, lo).toFixed(2),
     origin: 'google_places', shopCategory: kind, categorizationVerified: true,
     primaryType: place.primaryType || '', types: place.types || [],
+    phone: typeof place.nationalPhoneNumber==='string' ? place.nationalPhoneNumber.slice(0,32) : '',
+    websiteUrl: typeof place.websiteUri==='string' && /^https:\/\//.test(place.websiteUri) ? place.websiteUri : '',
     rating: num(place.rating, 0, 5),
     ratingCount: num(place.userRatingCount, 0, Number.MAX_SAFE_INTEGER),
     openNow: typeof place.currentOpeningHours?.openNow === 'boolean' ? place.currentOpeningHours.openNow : null,
