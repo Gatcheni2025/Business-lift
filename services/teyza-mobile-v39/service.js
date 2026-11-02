@@ -142,6 +142,23 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
       D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
+    if(action==='wholesale_link_request'){
+      const account=await read('teyzaSellerAccounts/'+uid);
+      if(account?.uid!==uid||account.category!=='spaza'||account.deletionPending===true)
+        D.fail(403,'Register your spaza shop before requesting a wholesale supplier link.');
+      const placeId=D.text(data.placeId,'Google business reference',200);
+      if(!/^[A-Za-z0-9_-]{4,200}$/.test(placeId))D.fail(422,'Choose a valid Google-listed wholesale supplier.');
+      const name=D.text(data.name,'supplier name',140);
+      const address=D.text(data.address||'','supplier address',300,false);
+      await rate(uid,'wholesale-link-request',5,86400000);
+      const requestId=crypto.createHash('sha256').update(uid+':'+placeId).digest('hex');
+      const ref=doc('teyzaWholesaleLinkRequests/'+requestId);
+      const old=await ref.get();
+      if(old.exists)return {requested:true,alreadyRequested:true,reference:requestId};
+      await ref.create({requesterUid:uid,placeId,supplierName:name,address,
+        status:'awaiting_supplier_outreach',source:'google_places',createdAt:clock()});
+      return {requested:true,reference:requestId};
+    }
     if(action==='wholesale_directory'){
       await assertSpazaBuyer(uid);await rate(uid,'wholesale-discovery',40,60000);
       return publicDirectory(data.after||'',true);
