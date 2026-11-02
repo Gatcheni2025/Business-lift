@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'shopper_auth.dart';
+import 'shopper_delivery_profile.dart';
 import 'shopper_account.dart';
 import 'seller_workspace.dart';
 import 'shopper_discovery.dart';
@@ -233,6 +234,11 @@ class ShopperHome extends StatefulWidget {
 }
 class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Area? area;
+  ShopperDeliveryProfile? deliveryProfile;
+  final deliveryProfileStore=ShopperDeliveryProfileStore();
+  int _deliveryProfileRequest=0;
+  bool _deliverySheetOpen=false;
+  String? deliveryProfileWarning;
   String locationName = 'Choose your area';
   String? locationWarning;
   bool geolocating = false;
@@ -299,6 +305,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _sellerInitialTarget=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
       selected=null;directorySelected=null;tab=0;unreadChats=0;
+      deliveryProfile=null;
+      if(_launchReady&&!seller&&widget.initialArea==null){
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted)unawaited(restoreDeliveryProfile());
+        });
+      }
       if(uid==null&&previousUid!=null)WidgetsBinding.instance.addPostFrameCallback((_){
         if(mounted&&session.userId==null)Navigator.of(context).popUntil((route)=>route.isFirst);
       });
@@ -354,6 +366,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       })).timeout(const Duration(seconds:4));
     } catch (_) {/* Placeholders remain visible for slow photo providers. */}
     if(mounted)setState(()=>_launchReady=true);
+    if(widget.initialArea==null)unawaited(restoreDeliveryProfile());
   }
 
   @override
@@ -393,12 +406,71 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }catch(_){/* Unread service unavailable; do not block shopping. */}
   }
 
+  Future<void> restoreDeliveryProfile()async{
+    if(!mounted||session.sellerWorkspace||widget.initialArea!=null)return;
+    final uid=session.userId,request=++_deliveryProfileRequest;
+    ShopperDeliveryProfile? saved;
+    try{saved=await deliveryProfileStore.load(uid);}catch(_){/* prompt if storage unavailable */}
+    if(uid!=null&&session.idToken!=null){
+      try{
+        final result=await TeyzaMobileApi(session).call('shopper_profile_read');
+        if(result['profile'] is Map){
+          saved=ShopperDeliveryProfile.fromJson(result['profile'] as Map);
+          await deliveryProfileStore.save(uid,saved);
+        }
+      }catch(_){/* local copy works while offline */}
+    }
+    if(!mounted||request!=_deliveryProfileRequest||session.userId!=uid||session.sellerWorkspace)return;
+    if(saved!=null&&saved.address.trim().isNotEmpty){
+      deliveryProfile=saved;
+      await chooseArea(Area(saved.area.isNotEmpty?saved.area:saved.city,
+        saved.city.isNotEmpty?saved.city:saved.area,
+        saved.latitude,saved.longitude),persist:false);
+      if(mounted&&request==_deliveryProfileRequest)setState((){
+        locationName=saved!.address;_usingGps=false;locationWarning=null;
+      });
+    }else if(_launchReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_){
+        if(mounted&&request==_deliveryProfileRequest)unawaited(promptDeliveryProfile());
+      });
+    }
+  }
+  Future<void> promptDeliveryProfile()async{
+    if(!mounted||session.sellerWorkspace||_deliverySheetOpen)return;
+    _deliverySheetOpen=true;
+    final uid=session.userId;
+    try{
+      final profile=await showModalBottomSheet<ShopperDeliveryProfile>(
+        context:context,isScrollControlled:true,useSafeArea:true,
+        backgroundColor:Colors.white,showDragHandle:true,
+        builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:deliveryProfile));
+      if(profile==null||!mounted||uid!=session.userId)return;
+      await deliveryProfileStore.save(uid,profile);
+      if(uid!=null&&session.idToken!=null){
+        try{await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());}
+        catch(_){
+          if(mounted)setState(()=>deliveryProfileWarning=
+            'Address saved on this device. Cloud backup will retry when connected.');
+        }
+      }
+      if(!mounted||uid!=session.userId)return;
+      deliveryProfile=profile;
+      await chooseArea(Area(profile.area.isNotEmpty?profile.area:profile.city,
+        profile.city.isNotEmpty?profile.city:profile.area,
+        profile.latitude,profile.longitude),persist:false);
+      if(mounted)setState((){
+        locationName=profile.address;_usingGps=false;locationWarning=null;
+      });
+    }finally{_deliverySheetOpen=false;}
+  }
+
   Future<void> _restoreSavedArea() async {
     if(session.sellerWorkspace)return;
     if(widget.initialArea!=null){
       await chooseArea(widget.initialArea!,persist:false);
       return;
     }
+    if(deliveryProfile!=null)return; // Saved address takes priority over GPS.
     // Never require the shopper to tap refresh after reopening the app.
     // Recheck permission at startup, respecting Android privacy settings.
     final prefs=await SharedPreferences.getInstance();
@@ -594,6 +666,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     await reloadOnline();
   }
   Future<void> areaSheet() async {
+    if(widget.initialArea==null){await promptDeliveryProfile();return;}
     await showModalBottomSheet<void>(
       context:context, showDragHandle:true, isScrollControlled:true,
       useSafeArea:true, backgroundColor:pale,
