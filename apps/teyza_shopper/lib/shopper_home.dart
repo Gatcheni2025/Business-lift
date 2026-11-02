@@ -1677,17 +1677,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           },icon:const Icon(Icons.open_in_new,size:14),
           label:Text('Data: ${credit['name']??''}'))),
       const SizedBox(height:14),
-      Container(padding:const EdgeInsets.all(14),
-        decoration:BoxDecoration(color:const Color(0xFFEAF5EF),
-          borderRadius:BorderRadius.circular(13)),
-        child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text('GOOGLE-LINKED BUSINESS DIRECTORY',style:TextStyle(
-            fontWeight:FontWeight.w900,fontSize:11,color:green)),
-          SizedBox(height:5),
-          Text('Google Maps listings are for discovery. Only participating verified Teyza shops can accept orders in-app.',
-            style:TextStyle(fontSize:12,color:ink))
-        ])),
-      const SizedBox(height:14),
       FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.lat,longitude:shop.lng),icon:const Icon(Icons.directions_outlined),
         label:const Text('Directions to shop')),
       const SizedBox(height:8),
