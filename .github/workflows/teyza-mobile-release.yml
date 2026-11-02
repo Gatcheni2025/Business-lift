@@ -277,6 +277,23 @@ jobs:
           flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
+      - name: Build installable debug APK for device testing
+        if: env.SIGNING_MODE != 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          # Debug APK is installable for smoke tests, but not Play upload signed.
+          # Keep it separate from the unsigned release AAB.
+          python3 scripts/prepare_mobile_release.py android --signing test
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+      - name: Upload installable Android test APK
+        if: env.SIGNING_MODE != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-debug-testing-only
+          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
         with:
