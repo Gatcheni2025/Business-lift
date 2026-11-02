@@ -114,7 +114,8 @@ jobs:
               raise SystemExit('Firebase mobile health request failed: '+str(error))
           required_true=('verificationUploads','shopFrontPhotos','approvalRequired',
                          'shopLocations','addressAutocomplete','shopServices',
-                         'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock','freeSellerPlans',
+                         'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock',
+                         'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery','freeSellerPlans',
                          'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           failures=[]
