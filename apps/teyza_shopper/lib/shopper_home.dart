@@ -1171,7 +1171,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('See all'))),
       if(displayedOnline.isNotEmpty||displayShops.isNotEmpty)
-        SizedBox(height:213,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:282,child:ListView(scrollDirection:Axis.horizontal,
           children:nearbyListings.take(30).map(nearbyCard).toList()))
       else if(loadingOnline)const SizedBox(height:106,
         child:Center(child:CircularProgressIndicator()))
