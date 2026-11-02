@@ -63,7 +63,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const listing=eligible?'active':'not_listed';
         if(account.listingStatus!==listing)tx.update(accountRef,{listingStatus:listing,updatedAt:new Date(clock())});
         if(setup.requiredVersion===2&&setup.completedAt){
-          const sellingStatus=eligible?'active':next.status==='pending_review'?'pending_approval':next.status==='suspended'?'paused':'not_started';
+          const sellingStatus=eligible?'active':['pending_review','awaiting_subscription'].includes(next.status)?'pending_approval':next.status==='suspended'?'paused':'not_started';
           if(setup.sellingStatus!==sellingStatus)tx.set(setupRef,{sellingStatus,updatedAt:clock()},{merge:true});
         }
       }
