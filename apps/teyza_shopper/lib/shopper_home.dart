@@ -140,6 +140,14 @@ List<NearbyListing> mergeNearbyListings(List<Shop> merchants,List<OnlineShop> di
   double d(NearbyListing s)=>area==null||s.lat==null||s.lng==null?double.infinity:
     km(area.lat,area.lng,s.lat!,s.lng!);
   entries.sort((a,b){
+    // Sponsored shops are promoted only within the selected local area.
+    // Never rank a distant shop ahead of locally relevant options.
+    final aLocal=d(a)<=35,bLocal=d(b)<=35;
+    if(aLocal!=bLocal)return aLocal?-1:1;
+    if(aLocal&&bLocal){
+      final aFeatured=a.merchant?.sponsored==true,bFeatured=b.merchant?.sponsored==true;
+      if(aFeatured!=bFeatured)return aFeatured?-1:1;
+    }
     final delta=d(a).compareTo(d(b));
     if(delta!=0)return delta;
     if(a.hasPhoto!=b.hasPhoto)return a.hasPhoto?-1:1;
@@ -1064,6 +1072,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             :photo('',size:176)),
           Padding(padding:const EdgeInsets.fromLTRB(9,8,9,7),child:Column(
             crossAxisAlignment:CrossAxisAlignment.start,children:[
+              if(merchant?.sponsored==true)
+                const Padding(padding:EdgeInsets.only(bottom:3),
+                  child:Text('FEATURED IN YOUR AREA',style:TextStyle(fontSize:9,
+                    color:Color(0xFF08794E),fontWeight:FontWeight.w800))),
               Text(entry.name,maxLines:1,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w700)),
               const SizedBox(height:4),
