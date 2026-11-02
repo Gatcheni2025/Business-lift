@@ -49,6 +49,7 @@ void main(){
   // The success status may be below a lazily-built ListView viewport.
   // UID and My Teyza account are the reliable on-screen success evidence.
   await t.pumpWidget(const SizedBox.shrink());session.dispose();
+  debugDefaultTargetPlatformOverride=null;
  });
 
  test('Google OAuth mismatch explains Android test versus Play certificates',(){
