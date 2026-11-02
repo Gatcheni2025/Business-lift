@@ -454,9 +454,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const uid=row.id,shop=row.data();
         if(!/^[A-Za-z0-9_-]{1,128}$/.test(uid)||shop.sellerUid!==uid)return null;
         // Do not leak wholesale catalogue prices via the public customer endpoint.
-        if((shop.shopCategory==='wholesale')!==wholesaleOnly)return null;
+        if(shop.shopCategory==='wholesale'&&!wholesaleOnly)return null;
         const [a,o,v,l,f,c,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaShopLocations/','teyzaShopFrontPhotos/','teyzaShopSettings/','teyzaBilling/'].map(p=>read(p+uid)));
-        if(!P.state(uid,a,o||{},v,shop,b,clock()).live||a?.category!==shop.shopCategory)return null;
+        if((a?.category==='wholesale')!==wholesaleOnly ||
+           (shop.shopCategory && shop.shopCategory!==a.category) ||
+           !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
         const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
            sponsored:a.listingPlan==='basic'&&P.entitled(uid,a,b,clock()),
           area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
