@@ -53,7 +53,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Future<void> promptMandate(String uid) async {
     if(!liveUpdates||shop==null||mandatePromptUid==uid)return;mandatePromptUid=uid;
     if(listingPlan!='basic')return;
-    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();catch(_){/* The membership form remains available from My business. */}
+    try{final r=await mobile.call('seller_mandate_status');if(mounted&&uid==widget.session.userId&&r['required']==true)await openMandate();}catch(_){/* The membership form remains available from My business. */}
   }
   Map<String,String> productPhotos={};
   String? rangeStatus;
