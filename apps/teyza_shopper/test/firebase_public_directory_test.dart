@@ -52,6 +52,16 @@ void main(){
   expect(publishedMerchantPhoto({'logoUrl':'https://example.com/logo.png'}),
     'https://example.com/logo.png');
  });
+ test('Approved wholesalers remain wholesale on the shopper directory',()async{
+  final mock=MockClient((_)async=>http.Response(jsonEncode({'ok':true,
+    'entries':[{
+      ...apiRow('wholesaler1'),'shopCategory':'wholesale',
+      'products':[],'productHighlights':[],
+    }],'next':null}),200));
+  final shops=await fetchTeyzaPublicDirectory(client:mock);
+  expect(shops.single['shopCategory'],'wholesale');
+  expect(shops.single['products'],isEmpty);
+ });
  test('Directory reads the approved server projection and rejects stale active-but-pending entries',() async {
   final mock=MockClient((request) async {
    expect(request.method,'GET');expect(request.url.host,'us-central1-business-lift-3c19c.cloudfunctions.net');
