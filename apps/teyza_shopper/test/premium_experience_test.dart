@@ -34,11 +34,20 @@ void main(){
     final visited=<int>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(
       bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,cartCount:2,onSelect:visited.add))));
-    for(final label in ['Home','Shops','Cart','Orders','Account']){
+    for(final label in ['Home','Shop','Cart','Orders','Account']){
       await tester.tap(find.text(label));
     }
     expect(visited,[0,1,2,3,4]);
     expect(find.text('Sell'),findsNothing);
+    expect(tester.takeException(),isNull);
+  });
+  testWidgets('Shop tab is omitted when no published products exist',(tester)async{
+    await tester.pumpWidget(MaterialApp(home:Scaffold(
+      bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,cartCount:0,
+        showShop:false,onSelect:(_){}))));
+    expect(find.text('Shop'),findsNothing);
+    expect(find.text('Home'),findsOneWidget);
+    expect(find.text('Cart'),findsOneWidget);
     expect(tester.takeException(),isNull);
   });
   testWidgets('Navigation fits a narrow screen with larger text',(tester) async {
@@ -95,7 +104,7 @@ void main(){
     await tester.tap(add.hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));await tester.pumpAndSettle();
-    await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
+    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
     await tester.tap(find.text('Cart'));await tester.pumpAndSettle();
     expect(find.text('Items from Corner Grocer'),findsOneWidget);
     expect(find.text('Fresh bread'),findsOneWidget);
@@ -160,7 +169,7 @@ void main(){
     expect(find.text('Bread').hitTestable(),findsOneWidget);
     expect(tester.takeException(),isNull);
     await capture('essentials');
-    await tester.tap(find.text('Shops'));await tester.pumpAndSettle();
+    await tester.tap(find.text('See all'));await tester.pumpAndSettle();
     expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
     await capture('shops');
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
