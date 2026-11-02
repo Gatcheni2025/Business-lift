@@ -6,17 +6,22 @@ const seller={uid:'seller1',category:'spaza',shopName:'Local Shop',approvalStatu
 const shop={sellerUid:'seller1',status:'active',name:'Local Shop',sellingEnabled:true};
 const basic={...seller,listingPlan:'basic'};
 const paid={ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(NOW)};
-test('approved free sellers appear locally without paid priority placement',()=>{
- const free={...seller,listingPlan:'free'};
- const result=P.state('seller1',free,{},null,shop,null,NOW);
- assert.equal(result.approved,true);assert.equal(result.live,true);
- assert.equal(result.hasListing,false);
- assert.equal(result.status,'active');
+test('Seven-day trial is active only once and expires exactly on day eight',()=>{
+ const trial={...seller,listingPlan:'trial',trialStartedAt:NOW,
+   trialEndsAt:NOW+P.TRIAL_MS};
+ assert.equal(P.TRIAL_MS,7*24*60*60*1000);
+ assert.equal(P.state('seller1',trial,{},null,shop,null,NOW).live,true);
+ assert.equal(P.state('seller1',trial,{},null,shop,null,NOW+P.TRIAL_MS-1).live,true);
+ const expired=P.state('seller1',trial,{},null,shop,null,NOW+P.TRIAL_MS);
+ assert.equal(expired.live,false);
+ assert.equal(expired.status,'awaiting_subscription');
+ assert.equal(P.entitled('seller1',{...trial,trialEndsAt:NOW+20*P.TRIAL_MS},null,NOW),false);
+ assert.equal(P.state('seller1',{...seller,listingPlan:'free'}, {},null,shop,null,NOW).live,false);
 });
-test('unpaid Basic sellers remain published but cannot claim paid prominence',()=>{
+test('Unpaid R99 Basic cannot publish, paid membership can',()=>{
  for(const b of [null,{...paid,status:'invoiced'},{...paid,ownerUid:'another'},
    {...paid,latestPeriod:'2026-10'},{...paid,monthlyCents:1}]){
-   assert.equal(P.state('seller1',basic,{},null,shop,b,NOW).live,true);
+   assert.equal(P.state('seller1',basic,{},null,shop,b,NOW).live,false);
    assert.equal(P.entitled('seller1',basic,b,NOW),false);
  }
  assert.equal(P.state('seller1',basic,{},null,shop,paid,NOW).live,true);
