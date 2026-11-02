@@ -226,7 +226,7 @@ jobs:
           path.write_bytes(base64.b64decode(value,validate=True))
           path.chmod(0o600)
           output=subprocess.check_output(['keytool','-list','-v','-keystore',str(path),'-storepass','android','-alias','androiddebug'],text=True)
-          match=re.search(r'SHA256:\\s*([0-9A-Fa-f:]+)',output)
+          match=re.search(r'SHA256:\s*([0-9A-Fa-f:]+)',output)
           if not match or match.group(1).replace(':','').lower()!=expected:
               path.unlink(missing_ok=True)
               raise SystemExit('::error::Test signing certificate does not match the original SHA-256; stopping to protect existing installations.')
