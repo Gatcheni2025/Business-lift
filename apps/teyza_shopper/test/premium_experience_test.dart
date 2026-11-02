@@ -233,4 +233,36 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  test('Approved nearby shop with matching city stays discoverable without map coordinates',(){
+    final merchant=Shop.fromJson({'id':'approved-shop','name':'Approved Teyza Shop',
+      'area':'Main Road','city':'Durban','identityVerified':true});
+    expect(shopMatchesArea(merchant,areas.first),true);
+    expect(mergeNearbyListings([merchant],[],area:areas.first).single.merchant?.id,'approved-shop');
+  });
+  testWidgets('Buy selects only that seller products and Change shop switches catalogues',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final shops=[
+      Shop.fromJson({'id':'s1','name':'One Spaza','area':'Durban','identityVerified':true,
+        'products':[{'id':'a','name':'Bread Buns','priceCents':1200,'stock':4}]}),
+      Shop.fromJson({'id':'s2','name':'Second Spaza','area':'Durban','identityVerified':true,
+        'products':[{'id':'b','name':'Fresh Eggs','priceCents':3000,'stock':4}]}),
+    ];
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>shops,
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
+    final firstBuy=find.widgetWithText(FilledButton,'Buy').first;
+    await tester.tap(firstBuy);await tester.pumpAndSettle();
+    expect(find.text('Change shop'),findsOneWidget);
+    expect(find.text('Bread Buns'),findsOneWidget);
+    expect(find.text('Fresh Eggs'),findsNothing);
+    await tester.tap(find.text('Change shop'));await tester.pumpAndSettle();
+    await tester.tap(find.text('Second Spaza').last);await tester.pumpAndSettle();
+    expect(find.text('Fresh Eggs'),findsOneWidget);
+    expect(find.text('Bread Buns'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
 }
