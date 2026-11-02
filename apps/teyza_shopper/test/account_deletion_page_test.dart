@@ -15,6 +15,15 @@ class _Session extends ShopperSession {
     await super.signOut();
   }
 }
+class _AppleSession extends _Session {
+  _AppleSession({this.revocationFails=false}):super(){appleProviderLinked=true;}
+  final bool revocationFails;
+  int revocations=0;
+  @override Future<void> revokeAppleForDeletion()async{
+    revocations++;
+    if(revocationFails)throw StateError('Apple provider unavailable');
+  }
+}
 class _Api extends TeyzaMobileApi {
   _Api(super.session,{this.oldRequest=false});
   final bool oldRequest;
@@ -66,4 +75,27 @@ void main(){
    expect(find.textContaining('TZ-DEL-OLD'),findsOneWidget);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
+ testWidgets('Apple-linked shopper attempts revocation before account closure',(tester)async{
+   await tester.binding.setSurfaceSize(const Size(430,900));
+   addTearDown(()=>tester.binding.setSurfaceSize(null));
+   final session=_AppleSession(revocationFails:true),api=_Api(session);
+   await tester.pumpWidget(MaterialApp(home:TeyzaDeleteAccountPage(session:session,api:api)));
+   await tester.pumpAndSettle();
+   expect(find.textContaining('Apple may ask you to authorize again'),findsOneWidget);
+   await tester.enterText(find.byType(TextField).first,'DELETE');
+   await tester.scrollUntilVisible(find.byType(CheckboxListTile),180,
+     scrollable:find.byType(Scrollable).first);
+   await tester.tap(find.byType(CheckboxListTile));await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.text('Close account and request deletion'),200,
+     scrollable:find.byType(Scrollable).first);
+   await tester.tap(find.text('Close account and request deletion'));await tester.pumpAndSettle();
+   expect(session.revocations,1);
+   expect(api.calls,contains('account_deletion_request'));
+   expect(session.userId,isNull);
+   await tester.scrollUntilVisible(find.textContaining('Apple token revocation could not be confirmed'),180,
+     scrollable:find.byType(Scrollable).first);
+   expect(find.textContaining('Apple token revocation could not be confirmed'),findsOneWidget);
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+
 }
