@@ -1,8 +1,9 @@
 'use strict';
 
-// Verified, self-service account-deletion initiation. Erasure is intentionally
-// separated from initiation because shop owners can have outstanding deliveries,
-// statutory billing records, external mandates and Apple token-revocation work.
+// Verified account closure: immediately disable Firebase Authentication and revoke
+// existing sessions. Full erasure follows after outstanding transactions, lawful
+// retention and third-party token revocation are handled. Never call this
+// 'permanently erased' until those actions really finish.
 const crypto=require('node:crypto');
 const D=require('./domain');
 const MAX_AGE_MS=15*60*1000;
@@ -28,13 +29,15 @@ function publicStatus(record) {
   return {
     requested:true,reference:record.reference,status:record.status,
     requestedAt:record.requestedAt,completeBy:record.completeBy,
-    seller:record.seller===true,
+    seller:record.seller===true,signInBlocked:record.authDisabledAt>0,
     message:record.status==='completed'
       ? 'Your account deletion is complete.'
-      : 'Your deletion request has been received. We aim to complete it within 30 days. Some billing and order records may need lawful retention.',
+      : record.authDisabledAt>0
+        ? 'Your Teyza account is closed for sign-in. Final personal-data erasure is in progress; records required by law may be retained.'
+        : 'Your deletion request is recorded, but sign-in has not yet been disabled. Contact Teyza support if retry fails.',
   };
 }
-function createAccountDeletion({db,getAuthUser,deleteAuthUser,clock=Date.now}) {
+function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,clock=Date.now}) {
   const doc=path=>db.doc(path);
   const get=async ref=>{const s=await ref.get();return s.exists?s.data():null;};
   async function execute(actor,action,data={}) {
@@ -83,7 +86,25 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,clock=Date.now}) {
         });
         return record;
       });
-      return publicStatus(request);
+      // Do not merely revoke shop approval: Firebase Auth would still accept
+      // password/Google/Apple login to the same user. Keep the disabled identity
+      // reserved during the erasure review to prevent provider sign-in from
+      // silently recreating the same account.
+      if(request.status==='completed')return publicStatus(request);
+      if(typeof disableAuthUser!=='function'||typeof revokeAuthTokens!=='function')
+        D.fail(503,'Deletion requested but account sign-in protection is unavailable. Contact Teyza support with your deletion reference.');
+      try{
+        await disableAuthUser(uid);
+        await revokeAuthTokens(uid);
+      }catch(error){
+        // The saved deletion request is still valid. Do not report a
+        // completed sign-in blockade when Auth disabling failed.
+        if(error?.code!=='auth/user-not-found')
+          D.fail(503,'Deletion request recorded, but account sign-in closure could not be confirmed. Contact Teyza support and quote your deletion reference.');
+      }
+      const stoppedAt=clock();
+      await doc('teyzaAccountDeletionRequests/'+uid).update({authDisabledAt:stoppedAt,updatedAt:stoppedAt});
+      return publicStatus({...request,authDisabledAt:stoppedAt});
     }
     if(action==='ops_account_deletion_queue') {
       admin(actor,stamp);
@@ -94,6 +115,7 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,clock=Date.now}) {
       const page=rows.docs.slice(0,pageSize);
       return {requests:page.filter(x=>x.data().status!=='completed')
         .map(x=>({uid:x.id,reference:x.data().reference,status:x.data().status,
+          signInBlocked:x.data().authDisabledAt>0,
           requestedAt:x.data().requestedAt,completeBy:x.data().completeBy,
           seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true})),
         nextAfter:rows.docs.length>pageSize?page[page.length-1].id:null};
