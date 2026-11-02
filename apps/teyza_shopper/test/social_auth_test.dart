@@ -18,7 +18,36 @@ class FakeFacebookSession extends ShopperSession {
  @override bool get facebookSignInAvailable=>true;
  @override Future<void> signInWithFacebook() async {idToken='firebase-session';userId='existing-user';emailVerified=true;notifyListeners();}
 }
+class FakeEmailAfterGoogleErrorSession extends ShopperSession {
+ FakeEmailAfterGoogleErrorSession():super(store:MemoryStore()){isReady=true;}
+ @override bool get googleSignInAvailable=>true;
+ @override Future<void> signInWithGoogle() async {
+   throw StateError('PlatformException(sign_in_failed, ApiException: 10: DEVELOPER_ERROR)');
+ }
+ @override Future<void> signIn(String address,String pass) async {
+   idToken='firebase-email-session';userId='email-user';
+   email=address;emailVerified=true;notifyListeners();
+ }
+}
 void main(){
+ testWidgets('Successful email sign-in removes an earlier Google OAuth mismatch warning',(t)async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final session=FakeEmailAfterGoogleErrorSession();
+  await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
+  await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
+  await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
+  expect(find.textContaining('Google sign-in configuration mismatch'),findsOneWidget);
+  await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
+  await t.enterText(find.byType(TextFormField).at(1),'password123');
+  await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
+  expect(session.userId,'email-user');
+  expect(find.text('My Teyza account'),findsOneWidget);
+  expect(find.textContaining('Google sign-in configuration mismatch'),findsNothing);
+  expect(find.text('Welcome to Teyza!'),findsOneWidget);
+  await t.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+
  test('Google OAuth mismatch explains Android test versus Play certificates',(){
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
