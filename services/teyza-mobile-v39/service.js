@@ -76,12 +76,15 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   // Wholesale prices are never exposed in the anonymous shopper directory.
   // Registered, reviewed spaza operators can source from live suppliers.
   async function assertSpazaBuyer(uid,tx=null){
-    const refs=['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaPublicShops/'].map(x=>doc(x+uid));
+    const refs=['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaPublicShops/','teyzaBilling/'].map(x=>doc(x+uid));
     const entries=await Promise.all(refs.map(ref=>tx?tx.get(ref):ref.get()));
-    const [a,o,v,p]=entries.map(row=>row.exists?row.data():null);
+    const [a,o,v,p,b]=entries.map(row=>row.exists?row.data():null);
     if(a?.uid!==uid||a.category!=='spaza')D.fail(403,'Wholesale ordering is available to registered spaza shop owners only.');
-    const state=P.state(uid,a,o||{},v,p,null,clock());
+    const state=P.state(uid,a,o||{},v,p,b,clock());
     if(!state.ready||!state.approved)D.fail(403,'Complete your spaza registration and seller approval to access wholesale prices.');
+    // Previously activated merchants are migrated separately; new free or unpaid
+    // accounts cannot unlock the R99 Basic wholesale stock benefit.
+    if(!P.entitled(uid,a,b,clock()))D.fail(403,'Your R99 Basic membership must be active before you can see wholesale stock prices.');
     return a;
   }
   async function rate(uid,kind,max,window) {
