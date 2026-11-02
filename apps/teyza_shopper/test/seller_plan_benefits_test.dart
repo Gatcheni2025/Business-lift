@@ -16,7 +16,7 @@ class _PlanApi extends TeyzaMobileApi {
 }
 
 void main() {
-  testWidgets('R99 Basic explains all conditional merchant benefits without charging',
+  testWidgets('7-day trial discloses duration, expiry and absence of bank mandate',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 860));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -28,10 +28,10 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final phrase in [
-      'Business finance and stock loans',
-      'Wholesale stock discounts',
-      'Free stock delivery on qualifying',
-      'competitive retail prices',
+      'One trial per verified shop owner',
+      'Approved shop appears in nearby results',
+      'After seven days',
+      'No automatic charge',
     ]) {
       await tester.scrollUntilVisible(
           find.textContaining(phrase), 200,
