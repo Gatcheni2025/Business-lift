@@ -1,6 +1,6 @@
 # Teyza account deletion — App Review and operations
 
-**Status: proposed code, not a deployed or accepted Apple build.** Do not promise compliance until the backend and app are deployed, the processes below are staffed and exercised on a physical iPhone.
+**Status: updated PR #97 code; not yet deployed or verified in a signed mobile build.** Do not claim full erasure or Apple compliance until cleanup, provider revocation, backend deployment, and real-device tests have been completed.
 
 ## User-visible flow
 
@@ -8,17 +8,17 @@
 - Seller → **My Business → Privacy & Security · Delete My Account**
 - The user signs in, types **DELETE**, accepts the irreversible-deletion notice, and submits.
 - Server accepts the authenticated Firebase UID (never a client-supplied UID). Auth must be recent (15 minutes). If stale, the user signs out and signs in again.
-- Server records a unique `TZ-DEL-...` reference and a 30-day processing target under `teyzaAccountDeletionRequests/{uid}`. The client can copy the reference, see `pending_review` and sign out.
+- Server records a unique `TZ-DEL-...` reference and a 30-day processing target under `teyzaAccountDeletionRequests/{uid}`. It **immediately disables Firebase Authentication for that UID and revokes its refresh tokens**. Server-side authenticated APIs already verify token revocation. A successful response includes `signInBlocked: true`; the app automatically clears its local session, shows the reference and cannot sign in again using the old account. This is sign-in closure, not proof of completed data erasure.
 - If seller-owned documents are present, the listing is suspended and disabled for new orders, the seller account is marked not listed, any Teyza-stored mandate is marked withdrawn, and billing flagged for closure review.
 - A withdrawn internal mandate flag **does not** guarantee cancellation with an external debit-order/payment provider. Operations must separately cancel/verify external collections.
 
-This is an actual deletion request, not an email-only instruction. It is **not instant erasure**.
+This is an actual deletion request that closes the old account for sign-in immediately, not an email-only instruction. It is **not instant erasure**. The disabled Firebase Auth user record is retained until required deletion and retention operations are completed. A login attempt to that disabled identity must fail. Firebase's standard password, Google and Apple identity providers may permit creation of a *new* account after the old Auth identity is finally deleted; this does not restore the deleted UID or its old data. Do not promise a permanent platform-wide ban unless a separate lawful identity-blocking mechanism is built. Legacy `pending_review` requests are locked when their status is read; `teyzaDeletionSignInRepair` also locks older requests on its scheduled pass.
 
 ## Operator workflow — required for every submitted request
 
 The admin-only backend actions are `ops_account_deletion_queue` and `ops_account_deletion_complete`. These require `teyzaAdmin=true`, a verified admin email and an authentication event no more than 15 minutes old.
 
-1. Review the deletion queue **daily** in Firestore `teyzaAccountDeletionRequests` or through the authenticated admin API. Record `reference`, `requestedAt`, `completeBy`; do not use email to authenticate the requester.
+1. Review the deletion queue **daily** in Firestore `teyzaAccountDeletionRequests` or through the authenticated admin API. Record `reference`, `requestedAt`, `completeBy`, `authDisabledAt`; confirm the Firebase Auth identity is disabled, sign-in no longer works, and refresh tokens are revoked. Do not use email to authenticate the requester.
 2. Confirm open `teyzaMobileOrders` are completed or cancelled. The completion endpoint refuses to proceed with open orders belonging to the account.
 3. Cancel any actual **third-party** direct debit, card recurrence, seller fee, or connected payment mandate, and settle unresolved credits/refunds. Changing the Firestore mandate state alone is insufficient.
 4. Delete or de-identify user-authored Firestore data and Storage objects not subject to legal retention. Relevant sources include, as applicable:
@@ -31,7 +31,7 @@ The admin-only backend actions are `ops_account_deletion_queue` and `ops_account
    - Any older website/legacy customer data, local databases and connected Meta/third-party data systems. Deleting Firebase Authentication alone does **not** erase these records.
 5. Examine invoices, receipts, completed orders, finance enquiries, security investigations and other legally required records. Retain only what applicable law requires; limit access and anonymise unnecessary personal details. Do not blindly delete accounting/retention records.
 6. For Apple-linked accounts, revoke the user's Sign in with Apple token through Apple's REST API, and inspect connected identity-provider links as applicable. **Apple-token revocation is not implemented automatically in this branch.** Put an operational integration in place before claiming full Sign in with Apple deletion compliance.
-7. Once erasure, legal retention decisions, billing closure and identity revocation have **actually** been completed, call the admin `ops_account_deletion_complete` action with `uid`, `confirmedDataErased: true`, `confirmedBillingResolved: true` and `confirmedProviderRevocation: true`. This deletes the Firebase Authentication identity and marks the request `completed`. **Do not send this action earlier:** it does not itself purge all legacy collections.
+7. Once erasure, legal retention decisions, billing closure and identity revocation have **actually** been completed, call the admin `ops_account_deletion_complete` action with `uid`, `confirmedDataErased: true`, `confirmedBillingResolved: true` and `confirmedProviderRevocation: true`. This **permanently deletes** the disabled Firebase Authentication identity and marks the request `completed`. **Do not send this action earlier:** it does not itself purge all legacy collections. When a user account has no business obligations, operations should promptly complete cleanup instead of waiting the full 30 days.
 8. Confirm completion to the requester using the contact channel and reference originally collected while active, without sending their sensitive documents. Keep a minimal completion audit according to approved retention policy.
 
 **Privacy:** Do not expose `teyzaAccountDeletionRequests` to direct client Firestore reads. The server allows authenticated status reads only for the requester's UID, and admin-only queue access.
@@ -56,10 +56,10 @@ Deploy only after code review, operational acceptance testing and security check
 
 ## Physical iPhone acceptance tests for Apple
 
-1. Shopper creates account → Account → Delete My Account → type DELETE → request → see reference → sign out.
-2. Seller logs in → My Business → Delete My Account → see closure and external-billing warnings → request → confirm shop is no longer publicly listed.
+1. Shopper creates account → Account → Delete My Account → type DELETE → request → see reference, sign-in is blocked, and local session signs out automatically. Try signing back in with the former email/password and Google/Apple credentials: access to the same disabled UID must be denied.
+2. Seller logs in → My Business → Delete My Account → see closure and external-billing warnings → request → confirm shop is no longer publicly listed AND Firebase Auth sign-in is disabled regardless of approval status.
 3. Stale login requires signing out/in; another UID cannot retrieve a different user's request.
-4. Admin sees only the recorded request queue; unresolved orders prevent completion; admin finishes actual erasure and legal retention checks; Firebase Auth account removed.
+4. Admin sees only the recorded request queue; unresolved orders prevent final deletion; admin finishes actual Firestore/Storage erasure and legal retention checks; Firebase Auth identity is removed and request marked completed.
 5. Check Apple sign-in revocation, support response and final completion notification. Record the real flow on a physical iPhone using the corrected, signed TestFlight build.
 
 Public explanatory page: `https://teyza.co.za/data-deletion.html`. The updated page must be published separately from the mobile release.
