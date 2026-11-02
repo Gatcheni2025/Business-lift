@@ -793,8 +793,10 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  const spazaShop={sellerUid:'buyer1',status:'active',name:'Spaza Buyer',shopCategory:'spaza',products:[]};
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':supplier,'teyzaPublicShops/seller1':wholesaleShop,
    'teyzaSellerAccounts/buyer1':spaza,'teyzaPublicShops/buyer1':spazaShop});
- assert.equal((await service.publicDirectory()).entries.some(p=>p.id==='seller1'),false,
-   'Public shopper directory must never contain wholesale stock prices');
+ const publicSupplier=(await service.publicDirectory()).entries.find(p=>p.id==='seller1');
+ assert(publicSupplier,'Approved wholesalers should appear with other nearby businesses');
+ assert.deepEqual(publicSupplier.products,[]);
+ assert.deepEqual(publicSupplier.productHighlights,[]);
  const rows=await service.execute(buyer,'wholesale_directory');
  assert.equal(rows.entries.length,1);
  assert.equal(rows.entries[0].shopCategory,'wholesale');
