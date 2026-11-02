@@ -19,9 +19,10 @@ class _AppleSession extends _Session {
   _AppleSession({this.revocationFails=false}):super(){appleProviderLinked=true;}
   final bool revocationFails;
   int revocations=0;
-  @override Future<void> revokeAppleForDeletion()async{
+  @override Future<String> appleDeletionAuthorizationCode()async{
     revocations++;
     if(revocationFails)throw StateError('Apple provider unavailable');
+    return 'fresh-apple-authorization-code';
   }
 }
 class _Api extends TeyzaMobileApi {
@@ -34,6 +35,10 @@ class _Api extends TeyzaMobileApi {
     if(action=='account_deletion_status')return oldRequest?
       {'requested':true,'signInBlocked':true,'status':'pending_review','reference':'TZ-DEL-OLD'}:
       {'requested':false};
+    if(action=='account_apple_revoke'){
+      expect(data['authorizationCode'],'fresh-apple-authorization-code');
+      return {'revoked':true};
+    }
     if(action=='account_deletion_request'){
       expect(data['confirmation'],'DELETE');
       return {'requested':true,'signInBlocked':true,'status':'pending_review','reference':'TZ-DEL-NEW'};
