@@ -6,18 +6,21 @@ const seller={uid:'seller1',category:'spaza',shopName:'Local Shop',approvalStatu
 const shop={sellerUid:'seller1',status:'active',name:'Local Shop',sellingEnabled:true};
 const basic={...seller,listingPlan:'basic'};
 const paid={ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(NOW)};
-test('new free sellers cannot publish even if admin approved',()=>{
+test('approved free sellers appear locally without paid priority placement',()=>{
  const free={...seller,listingPlan:'free'};
  const result=P.state('seller1',free,{},null,shop,null,NOW);
- assert.equal(result.approved,true);assert.equal(result.live,false);
- assert.equal(result.status,'awaiting_subscription');
+ assert.equal(result.approved,true);assert.equal(result.live,true);
+ assert.equal(result.hasListing,false);
+ assert.equal(result.status,'active');
 });
-test('only verified current 99 rand billing can make a Basic shop public',()=>{
+test('unpaid Basic sellers remain published but cannot claim paid prominence',()=>{
  for(const b of [null,{...paid,status:'invoiced'},{...paid,ownerUid:'another'},
    {...paid,latestPeriod:'2026-10'},{...paid,monthlyCents:1}]){
-   assert.equal(P.state('seller1',basic,{},null,shop,b,NOW).live,false);
+   assert.equal(P.state('seller1',basic,{},null,shop,b,NOW).live,true);
+   assert.equal(P.entitled('seller1',basic,b,NOW),false);
  }
  assert.equal(P.state('seller1',basic,{},null,shop,paid,NOW).live,true);
+ assert.equal(P.entitled('seller1',basic,paid,NOW),true);
 });
 test('paid plan cannot bypass rejection or incomplete verification',()=>{
  assert.equal(P.state('seller1',{...basic,approvalStatus:'rejected'},{},null,shop,paid,NOW).live,false);
