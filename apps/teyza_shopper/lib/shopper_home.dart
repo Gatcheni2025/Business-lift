@@ -1105,7 +1105,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ]),
       body:tab==4?ShopperAccountPanel(session:session,
           onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
-          onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby):
+          onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby,
+          savedDeliveryAddress:deliveryProfile?.address,
+          onChangeDeliveryAddress:promptDeliveryProfile):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
         tab==1?(selected!=null?shopPage(selected!):shopProductsPage()):
@@ -1307,6 +1309,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
       if(locationWarning!=null)Card(color:const Color(0xFFFFF2DE),
         child:Padding(padding:const EdgeInsets.all(12),child:Text(locationWarning!))),
+      if(deliveryProfileWarning!=null)Card(color:const Color(0xFFFFF2DE),
+        child:Padding(padding:const EdgeInsets.all(12),
+          child:Text(deliveryProfileWarning!))),
+      if(deliveryProfile==null&&widget.initialArea==null)
+        Card(child:ListTile(leading:const Icon(Icons.place_outlined,color:green),
+          title:const Text('Add your delivery address'),
+          subtitle:const Text('Enter your street address and contact details to see shops near you.'),
+          onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
       if(discoveryType=='spaza')groceryAisles(),
@@ -1894,7 +1904,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
-      deliveryFeeCents:shop.deliveryFeeCents,acceptsCard:shop.acceptsCard==true,cashDiscountPercent:shop.cashDiscountPercent,items:basketItems.map((p)=>{
+      deliveryFeeCents:shop.deliveryFeeCents,acceptsCard:shop.acceptsCard==true,
+      savedDeliveryAddress:deliveryProfile?.address??'',
+      savedPhone:deliveryProfile?.phone??'',
+      cashDiscountPercent:shop.cashDiscountPercent,items:basketItems.map((p)=>{
         'id':p.id,'name':p.name,'quantity':cart[p.id]??0,'priceCents':p.priceCents}).toList())));
     if(done==true&&mounted){setState((){cart.clear();basketShop=null;});navigateToTab(3);}
   }
