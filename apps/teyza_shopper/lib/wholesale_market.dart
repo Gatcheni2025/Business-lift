@@ -71,7 +71,7 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
         ShopperCheckoutPage(session:widget.session,api:widget.api,
           shopId:supplier['id'].toString(),shopName:supplier['name'].toString(),
           delivery:supplier['deliveryEnabled']==true,collection:supplier['pickupEnabled']==true,
-          deliveryFeeCents:(supplier['deliveryFeeCents'] as num? ??0).toInt(),items:items)));
+          deliveryFeeCents:(supplier['deliveryFeeCents'] as num? ??0).toInt(),items:items,wholesale:true)));
       if(mounted&&result==true){
         setState(()=>quantities.clear());
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:
