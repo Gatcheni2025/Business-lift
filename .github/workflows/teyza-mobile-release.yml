@@ -100,14 +100,38 @@ jobs:
       - uses: actions/checkout@v4
       - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed'
+        env:
+          TEYZA_RELEASE_PLATFORMS: ${{ inputs.platforms }}
         run: |
           python3 - <<'PY_GATE'
-          import json, urllib.request
+          import os, urllib.request, json
+          from urllib.error import HTTPError, URLError
           url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
-          with urllib.request.urlopen(url,timeout=30) as response:
-              health=json.load(response)
-          if not (health.get('version')=='3.15.0' and health.get('verificationUploads') is True and health.get('shopFrontPhotos') is True and health.get('approvalRequired') is True and health.get('shopLocations') is True and health.get('addressAutocomplete') is True and health.get('catalogueRevision',0)>=2 and health.get('catalogueProducts',0)>=378 and health.get('cataloguePhotos',0)>=96 and health.get('shopServices') is True and health.get('orderQuotes') is True and health.get('orderInboxAlways') is True and health.get('accountDeletion') is True and health.get('freeSellerPlans') is True and health.get('paidAreaVisibility') is True and health.get('wholesaleSourcing') is True and health.get('protectedWholesalePrices') is True):
-              raise SystemExit('Deploy the latest mobile service kit with seller service controls, current order quotes and the order inbox before signing this release. Address, catalogue and photo services must also be ready.')
+          try:
+              with urllib.request.urlopen(url,timeout=30) as response:
+                  health=json.load(response)
+          except (HTTPError, URLError, TimeoutError, ValueError) as error:
+              raise SystemExit('Firebase mobile health request failed: '+str(error))
+          required_true=('verificationUploads','shopFrontPhotos','approvalRequired',
+                         'shopLocations','addressAutocomplete','shopServices',
+                         'orderQuotes','orderInboxAlways','accountDeletion','freeSellerPlans',
+                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices')
+          required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
+          failures=[]
+          if health.get('version')!='3.15.0':
+              failures.append('version (expected 3.15.0; received '+repr(health.get('version'))+')')
+          failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
+          failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
+                          if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)
+                          or health[field]<minimum)
+          if os.environ.get('TEYZA_RELEASE_PLATFORMS','all')!='android' and not os.environ.get('TEYZA_FIREBASE_IOS_APP_ID'):
+              failures.append('GitHub Actions variable TEYZA_FIREBASE_IOS_APP_ID is empty')
+          if failures:
+              print('::error::Signed Teyza release prerequisites are not met:')
+              for failure in failures:
+                  print('::error::'+failure)
+              raise SystemExit('Deploy the latest scoped Teyza mobile service and configure missing Firebase native app variables. Do not bypass this release gate.')
+          print('Signed Teyza release preflight passed: expected Firebase service flags and native app variables verified.')
           PY_GATE
       - uses: actions/setup-node@v4
         with:
