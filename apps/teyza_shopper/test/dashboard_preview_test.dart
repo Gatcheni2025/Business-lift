@@ -31,7 +31,10 @@ void main(){
       colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF3BB77E))),
       home:RepaintBoundary(key:boundary,child:SellerWorkspacePage(session:session,openLogin:(){},
         apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client)))));
-    await tester.pumpAndSettle();expect(find.text('Your shop dashboard'),findsOneWidget);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Your shop dashboard'),160,
+      scrollable:find.byType(Scrollable).first);
+    expect(find.text('Your shop dashboard'),findsOneWidget);
     expect(tester.takeException(),isNull);
     if(Platform.environment['TEYZA_CAPTURE_UI']=='1')await tester.runAsync(() async{
       final render=boundary.currentContext!.findRenderObject() as RenderRepaintBoundary;
