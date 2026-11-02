@@ -70,7 +70,7 @@ String authMessage(Object error) {
     return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google/Apple provider and registered app configuration in Firebase.';
   }
   if (value.contains('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')) return 'This email uses another sign-in method. Use your original method or reset your password.';
-  if (value.contains('USER_DISABLED')) return 'This account is disabled. Contact Teyza support.';
+  if (value.contains('USER_DISABLED')) return 'This account is closed or disabled. If you requested deletion, you cannot sign back in. Keep your deletion reference to ask Teyza support about the remaining data-erasure process.';
   if (value.contains('TOKEN_EXPIRED') || value.contains('INVALID_REFRESH_TOKEN') ||
       value.contains('USER_NOT_FOUND') || value.contains('Session expired')) {
     return 'Your session has expired. Sign in again.';
