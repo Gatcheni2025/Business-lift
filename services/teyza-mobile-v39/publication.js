@@ -8,8 +8,18 @@ const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup','awai
 // Existing legacy shops with no plan field retain their previous publication
 // treatment until the business completes an explicit migration.
 function period(now) { return new Date(now+2*3600000).toISOString().slice(0,7); }
+const TRIAL_MS=7*24*60*60*1000;
+function trialActive(account,now=Date.now()){
+ return account?.listingPlan==='trial' &&
+   Number.isFinite(account.trialStartedAt) && account.trialStartedAt>0 &&
+   Number.isFinite(account.trialEndsAt) && account.trialEndsAt-account.trialStartedAt===TRIAL_MS &&
+   now>=account.trialStartedAt && now<account.trialEndsAt;
+}
 function entitled(uid,account,billing,now=Date.now()) {
+ // Existing legacy contracts without a plan are maintained until individually
+ // migrated; new registrations MUST use a non-renewable seven-day trial.
  if(!account||!Object.prototype.hasOwnProperty.call(account,'listingPlan'))return true;
+ if(trialActive(account,now))return true;
  return account.listingPlan==='basic'&&billing?.ownerUid===uid&&billing.status==='paid'&&
    billing.monthlyCents===9900&&billing.latestPeriod===period(now);
 }
@@ -24,10 +34,11 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
  const approved=registered&&account.approvalStatus==='approved'&&reviewed;
  const blocked=held(shop)||setup.moderationBlocked===true||account?.approvalStatus==='rejected';
  const hasListing=entitled(uid,account,billing,now);
- // Free registration is visible after genuine admin approval. R99 Basic
- // purchases priority placement, not the right to be discoverable at all.
- const live=Boolean(ready&&approved&&!blocked);
- return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':'active'};
+ // Listing access is derived server-side on every directory read and order.
+ // An expired trial cannot remain visible merely because its stored shop
+ // projection is still marked active. Approval itself is not a paid entitlement.
+ const live=Boolean(ready&&approved&&!blocked&&hasListing);
+ return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':!hasListing?'awaiting_subscription':'active'};
 }
 function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
@@ -96,4 +107,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,trialActive,TRIAL_MS};
