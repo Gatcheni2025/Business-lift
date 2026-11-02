@@ -1,0 +1,41 @@
+# GitHub displays manual workflow_dispatch controls only for workflows present
+# on the default branch. The actual Teyza release implementation remains on
+# feat/teyza-account-deletion-review-20261101 until the PR is reviewed.
+# Select that branch under "Use workflow from" before clicking "Run workflow".
+name: Teyza Android and iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_existing_ios_run:
+        description: 'Upload signed IPA from a previous signed run (otherwise leave empty)'
+        type: string
+        default: ''
+      signed_release:
+        description: 'Sign Android and iOS using existing store credentials'
+        type: boolean
+        default: false
+      upload_to_testflight:
+        description: 'Upload signed iOS IPA to TestFlight after building'
+        type: boolean
+        default: false
+      platforms:
+        description: 'Platforms to prepare'
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  choose-reviewed-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select the reviewed Teyza release branch
+        run: |
+          echo "::error::The default-branch workflow is a safe launcher only. Select feat/teyza-account-deletion-review-20261101 under Use workflow from to execute the full signed release workflow."
+          exit 1
