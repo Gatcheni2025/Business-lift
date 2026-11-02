@@ -23,10 +23,28 @@ async function readiness(){
  if(!readinessCache||Date.now()>readinessUntil){readinessUntil=Date.now()+30000;readinessCache=uploadReadiness(bucket,verificationKey.value());}
  return readinessCache;
 }
+// Apple IdP revocation requires privileged OAuth scopes. Never put the
+// service account or an OAuth access token into a mobile application.
+async function revokeAppleCode(uid,authorizationCode){
+  if(!uid||typeof authorizationCode!=='string'||authorizationCode.length<10)
+    throw new Error('Apple authorization code is invalid.');
+  const credential=admin.credential.applicationDefault();
+  const grant=await credential.getAccessToken();
+  if(!grant?.access_token)throw new Error('Apple revocation service credentials are unavailable.');
+  const response=await fetch(
+    'https://identitytoolkit.googleapis.com/v2/accounts:revokeToken?key=AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
+    {method:'POST',headers:{'Content-Type':'application/json',
+      Authorization:'Bearer '+grant.access_token},
+    body:JSON.stringify({providerId:'apple.com',tokenType:'CODE',
+      token:authorizationCode,idToken:await admin.auth().createCustomToken(uid),
+      redirectUri:'https://teyza.co.za'})});
+  if(!response.ok)throw new Error('Apple token revocation was not accepted. Account deletion may proceed with manual revocation review.');
+}
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
    deleteAuthUser:uid=>admin.auth().deleteUser(uid),
    disableAuthUser:uid=>admin.auth().updateUser(uid,{disabled:true}),
    revokeAuthTokens:uid=>admin.auth().revokeRefreshTokens(uid),
+   revokeAppleToken:revokeAppleCode,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
