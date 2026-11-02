@@ -29,6 +29,11 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
     if(widget.session.userId==null){if(mounted)setState(()=>loading=false);return;}
     try{
       final response=await api.call('account_deletion_status');
+      if(response['requested']==true&&response['signInBlocked']==true){
+        // The server has disabled this Firebase Auth identity and revoked
+        // sessions; clear local tokens immediately. Do not restore it.
+        await widget.session.signOut();
+      }
       if(mounted)setState((){
         receipt=response['requested']==true?response:null;
         loading=false;error=null;
@@ -39,9 +44,12 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
   }
   Future<void> requestDeletion()async{
     if(busy||!acknowledged||confirmation.text.trim()!='DELETE')return;
-    setState(()=>busy=true);
+    setState((){busy=true;error=null;});
     try{
       final response=await api.call('account_deletion_request',{'confirmation':'DELETE'});
+      if(response['signInBlocked']!=true)throw StateError(
+        'Your deletion request was saved, but sign-in closure was not confirmed. Contact Teyza support and do not assume the account has been closed.');
+      await widget.session.signOut();
       if(mounted)setState(()=>receipt=response);
     }catch(e){
       if(mounted)setState(()=>error=mobileError(e));
@@ -55,35 +63,38 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
       body:SafeArea(child:ListView(padding:const EdgeInsets.all(22),children:[
         const Icon(Icons.shield_outlined,size:52,color:Color(0xFF007F62)),
         const SizedBox(height:14),
-        Text(r!=null?'Deletion request received':'Delete your Teyza account',
+        Text(r!=null&&r['signInBlocked']==true?'Account closed for sign-in':r!=null?'Deletion request received':'Delete your Teyza account',
           textAlign:TextAlign.center,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
         const SizedBox(height:15),
         if(loading)
           const Center(child:CircularProgressIndicator())
         else if(r!=null)...[
-          const Text('Keep this reference for your records. Teyza will process the request within 30 days, subject to legally required retention. Shop listings are removed from discovery while pending.',
+          Text(r['signInBlocked']==true
+            ?'Your Teyza sign-in has been disabled and existing sessions revoked. Your old password, Google and Apple sign-in will no longer open this account. Personal-data erasure is still being processed, subject to legally required record retention.'
+            :'Your deletion request is recorded, but account sign-in closure is not confirmed. Contact Teyza support with your reference.',
             textAlign:TextAlign.center),
           const SizedBox(height:16),
           SelectableText('Reference: ${r['reference']??'Not available'}',textAlign:TextAlign.center,
             style:const TextStyle(fontSize:18,fontWeight:FontWeight.w700)),
           const SizedBox(height:10),
-          Text('Status: ${r['status']??'pending_review'}',textAlign:TextAlign.center),
+          Text('Data erasure: ${r['status']=='completed'?'Completed':'In progress / compliance review'}',
+            textAlign:TextAlign.center),
           const SizedBox(height:15),
           OutlinedButton.icon(icon:const Icon(Icons.copy),label:const Text('Copy reference'),
             onPressed:()=>Clipboard.setData(ClipboardData(text:'${r['reference']??''}'))),
           const SizedBox(height:18),
-          FilledButton.icon(icon:const Icon(Icons.logout),label:const Text('Sign out'),
+          FilledButton.icon(icon:const Icon(Icons.arrow_back),label:const Text('Return to sign-in'),
             onPressed:busy?null:()async{
-              await widget.session.signOut();
+              if(widget.session.userId!=null)await widget.session.signOut();
               if(context.mounted)Navigator.of(context).pop();
             }),
         ]else...[
-          const Text('Request permanent deletion of your Teyza account and personal information that Teyza is not legally required to retain. This cannot be undone once completed.'),
+          const Text('Closing your account disables sign-in and revokes your sessions immediately. Teyza then removes personal data it does not have to retain by law. You cannot recover this account after closure.'),
           const SizedBox(height:14),
           const Card(child:Padding(padding:EdgeInsets.all(14),
             child:Text('Shop owners: your public shop listing will be suspended immediately. Outstanding orders, subscriptions or debit mandates need settlement; some transaction records may be legally retained. A request does not automatically stop external bank collections.'))),
           const SizedBox(height:12),
-          const Text('We aim to complete deletion requests within 30 days. You can start here without emailing support.',
+          const Text('Your account will stop accepting sign-ins after the server confirms closure. Complete data erasure may take up to 30 days. You can start here without emailing support.',
             style:TextStyle(fontWeight:FontWeight.w600)),
           const SizedBox(height:18),
           TextField(controller:confirmation,autocorrect:false,enableSuggestions:false,
@@ -97,7 +108,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
           FilledButton.icon(icon:const Icon(Icons.delete_forever),
             onPressed:busy||!acknowledged||confirmation.text.trim()!='DELETE'?null:requestDeletion,
             style:FilledButton.styleFrom(backgroundColor:Colors.red),
-            label:Text(busy?'Submitting…':'Request permanent account deletion')),
+            label:Text(busy?'Closing account…':'Close account and request deletion')),
           const SizedBox(height:10),
           const Text('Security check: if your last login was more than 15 minutes ago, sign out and sign in again before submitting.',
             style:TextStyle(color:Colors.black54,fontSize:12)),
