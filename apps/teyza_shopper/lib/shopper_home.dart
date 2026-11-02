@@ -173,7 +173,8 @@ bool shopMatchesArea(Shop shop,Area? area,{bool allRegistered=false,double radiu
   final targetCity=_areaWords(area.city).replaceFirst(RegExp(r'^city of '),'');
   if(city.isNotEmpty&&targetCity.isNotEmpty&&city!=targetCity&&city!=_areaWords(area.label))return false;
   final words=' ${_areaWords('${shop.area} ${shop.city} ${shop.address}')} ';
-  return [area.label,area.city].where((s)=>s.trim().isNotEmpty).any((s)=>words.contains(' ${_areaWords(s)} '));
+  return [area.label,area.city].where((s)=>s.trim().isNotEmpty).any((s)=>words.contains(' ${_areaWords(s)} '))||
+    (city.isNotEmpty&&targetCity.isNotEmpty&&city==targetCity);
 }
 const areas = <Area>[
   Area('Durban', 'Durban', -29.8587, 31.0218),
