@@ -783,7 +783,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       for(final p in shop.rangeProducts)
         if(p.priceCents>0)ShopProduct(shop,p)
   ];
-  bool get hasShopProducts => live.any((shop)=>shop.rangeProducts.any((p)=>p.priceCents>0));
+  bool get hasShopProducts => live.any((shop)=>shop.rangeProducts.any((p)=>p.priceCents>0&&p.inStock&&p.stock>0));
   List<ShopProduct> get featured {
     return discoverShopProducts(nearbyReal,type:discoveryType,category:category,query:search);
   }
