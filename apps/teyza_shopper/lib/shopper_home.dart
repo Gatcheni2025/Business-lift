@@ -714,12 +714,25 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   Widget merchantTrust(Shop shop)=>Wrap(spacing:8,runSpacing:4,children:[
-    if(shop.identityVerified)const Chip(avatar:Icon(Icons.verified,color:green,size:17),label:Text('Teyza verified'))
-    else const Chip(label:Text('Identity review pending')),
+    if(shop.identityVerified)const Chip(avatar:Icon(Icons.verified,color:green,size:17),label:Text('Teyza Verified')),
     Chip(avatar:const Icon(Icons.star_rounded,color:Color(0xFFB57800),size:18),
       label:Text(shop.ratingCount>0&&shop.rating!=null
         ?'${shop.rating!.toStringAsFixed(1)} (${shop.ratingCount}) · Teyza orders':'No ratings yet')),
   ]);
+
+  void buyHere({Shop? merchant,OnlineShop? directory}){
+    final linked=merchant??(directory==null?null:verifiedMerchantFor(directory));
+    if(linked!=null&&linked.rangeProducts.any((p)=>p.priceCents>0)){
+      openShop(linked);
+      return;
+    }
+    showDialog<void>(context:context,builder:(dialogContext)=>AlertDialog(
+      title:const Text('Shop Unavailable'),
+      content:Text((merchant?.name??directory?.name??'This business')+
+        ' has not published products for purchase on Teyza yet. You can still view its location and available contact information.'),
+      actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),
+        child:const Text('Close'))]));
+  }
 
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
     shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
@@ -748,10 +761,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
           ]),
           const SizedBox(height:8),
-          if(verifiedMerchantFor(place)!=null)
-            FilledButton(onPressed:()=>openShop(verifiedMerchantFor(place)!),
-              child:const Text('Buy here'))
-          else OutlinedButton(onPressed:null,child:const Text('Shop Unavailable')),
+          FilledButton(onPressed:()=>buyHere(directory:place),
+            child:const Text('Buy here')),
           if(place.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(place.phone),
             icon:const Icon(Icons.phone_outlined,size:15),label:Text('Call '+place.phone)),
           if(place.hasPhoto && place.photoAttributions.isNotEmpty)
@@ -1175,18 +1186,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               Text(entry.name,maxLines:1,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w700)),
               const SizedBox(height:4),
-              if(merchant!=null)Text(
-                '${merchant.identityVerified?'✓ Teyza verified':'Identity review pending'} · ${merchant.ratingCount>0&&merchant.rating!=null?'${merchant.rating!.toStringAsFixed(1)} ★ (${merchant.ratingCount})':'No ratings yet'}',
-                maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:10,color:green))
-              else if(directory!=null&&(directory.rating!=null||directory.openNow!=null))shopFacts(directory),
+              if(merchant?.identityVerified==true)
+                const Text('✓ Teyza Verified',style:TextStyle(fontSize:10,
+                  color:green,fontWeight:FontWeight.w800)),
+              if(directory!=null&&(directory.rating!=null||directory.openNow!=null))
+                shopFacts(directory),
               const SizedBox(height:3),
-              Text((d==null?'Nearby':d.toStringAsFixed(1)+' km')+
-                (merchant!=null?' · On Teyza':directory?.origin=='google_places'?' · Google Maps':' · OpenStreetMap'),
-                maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:10)),
-              Padding(padding:const EdgeInsets.only(top:7),child:merchant!=null
-                ?SizedBox(width:double.infinity,child:FilledButton(
-                    onPressed:()=>openShop(merchant),child:const Text('Buy here')))
-                :const OutlinedButton(onPressed:null,child:Text('Shop Unavailable'))),
+              Text(d==null?'Nearby':d.toStringAsFixed(1)+' km away',
+                maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:muted,fontSize:10)),
+              Padding(padding:const EdgeInsets.only(top:7),
+                child:SizedBox(width:double.infinity,child:FilledButton(
+                  onPressed:()=>buyHere(merchant:merchant,directory:directory),
+                  child:const Text('Buy here')))),
               if(directory?.photoAttributions.isNotEmpty==true)
                 Text('Photo: '+(directory!.photoAttributions.first['name']??''),maxLines:1,
                   overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:9))
@@ -1624,11 +1636,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         onPressed:()=>contactBusiness(selectedDirectoryPhone??shop.phone),
         icon:const Icon(Icons.call_outlined),
         label:Text('Call '+(selectedDirectoryPhone??shop.phone))),
-      if(verifiedMerchantFor(shop)!=null)
-        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
-          icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here'))
-      else OutlinedButton.icon(onPressed:null,icon:const Icon(Icons.shopping_bag_outlined),
-        label:const Text('Shop Unavailable')),
+      FilledButton.icon(onPressed:()=>buyHere(directory:shop),
+        icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here')),
       for(final credit in shop.providerAttributions)
         Align(alignment:Alignment.centerLeft,
           child:TextButton.icon(onPressed:() async {
@@ -1657,13 +1666,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Text('Messaging is available when the shop registers with Teyza.',
           style:TextStyle(fontSize:12,color:muted))),
       onlineServices(shop),
-      section('SHOP ITEMS'),
-      if(verifiedMerchantFor(shop)==null)
-        empty('Shop Unavailable','This business has no active Teyza catalogue or checkout.'),
       if(verifiedMerchantFor(shop)!=null)
-        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
+        section('SHOP ITEMS'),
+      if(verifiedMerchantFor(shop)!=null)
+        FilledButton.icon(onPressed:()=>buyHere(directory:shop),
           icon:const Icon(Icons.shopping_bag_outlined),
-          label:const Text('Buy here — see items and prices')),
+          label:const Text('View products and prices')),
       const SizedBox(height:15),
       OutlinedButton.icon(onPressed:() async {
         await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
