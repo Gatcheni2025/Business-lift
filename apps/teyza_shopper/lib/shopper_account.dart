@@ -7,8 +7,10 @@ class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
   final VoidCallback? onOpenOwner;
   final VoidCallback? onShopperSignedIn;
-  final VoidCallback? onMessages,onOrders,onBrowse;
-  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse});
+  final VoidCallback? onMessages,onOrders,onBrowse,onChangeDeliveryAddress;
+  final String? savedDeliveryAddress;
+  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse,
+    this.onChangeDeliveryAddress,this.savedDeliveryAddress});
   @override
   State<ShopperAccountPanel> createState()=>_AccountState();
 }
@@ -259,9 +261,11 @@ class _AccountState extends State<ShopperAccountPanel> {
                 label:const Text('Check verification status')),
             ],
             const Divider(height:1),
-            const ListTile(leading:Icon(Icons.location_on_outlined),
-              title:Text('Your shopping area'),
-              subtitle:Text('Use the location selector on the Home tab.')),
+            ListTile(leading:const Icon(Icons.location_on_outlined),
+              title:const Text('Saved delivery address'),
+              subtitle:Text(widget.savedDeliveryAddress??'Add your delivery address'),
+              trailing:const Icon(Icons.edit_location_alt_outlined),
+              onTap:widget.onChangeDeliveryAddress),
             const Divider(height:1),
             ListTile(leading:const Icon(Icons.shopping_bag_outlined),
               title:const Text('Delivery & collection orders'),onTap:widget.onOrders,
