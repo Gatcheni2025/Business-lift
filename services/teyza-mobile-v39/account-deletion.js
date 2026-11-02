@@ -74,6 +74,8 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
     }
     if(action==='account_apple_revoke'){
       recent(actor,stamp);
+      if(typeof actor.verifiedFirebaseIdToken!=='string'||actor.verifiedFirebaseIdToken.length<10)
+        D.fail(401,'Refresh your Firebase session before revoking Apple.');
       if(typeof revokeAppleToken!=='function')
         D.fail(503,'Apple provider revocation is temporarily unavailable.');
       const user=await getAuthUser(uid);
