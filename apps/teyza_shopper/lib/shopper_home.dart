@@ -905,7 +905,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         TextField(key:ValueKey(discoveryType),
           onChanged:(value)=>setState(()=>search=value),
           decoration:InputDecoration(
-            hintText:discoveryType=='spaza'?'Search for products, shops…':discoveryType=='wholesale'?'Find wholesalers and cash & carry…':'Search malls and retail shops…',
+            hintText:discoveryType=='spaza'?'Search for products, shops…':discoveryType=='wholesale'?'Find wholesalers and cash & carry…':'Search salons, furniture, plumbers, businesses…',
             hintStyle:const TextStyle(color:muted,fontSize:12),
             filled:true,fillColor:const Color(0xFFF7F8F7),
             prefixIcon:const Icon(Icons.search_rounded,color:ink,size:21),
@@ -920,7 +920,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(width:8),
           _shopMode('WHOLESALE','Bulk suppliers',Icons.warehouse_outlined,'wholesale',green),
           const SizedBox(width:8),
-          _shopMode('OTHER RETAIL','China Mall & shops',Icons.store_mall_directory_rounded,'variety',deep)
+          _shopMode('OTHER BUSINESSES','Salons, furniture & services',Icons.store_mall_directory_rounded,'variety',deep)
         ])
       ]
     ]));
@@ -1042,6 +1042,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]));
 
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
+  Shop? verifiedMerchantFor(OnlineShop publicPlace){
+    String normalized(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
+    for(final merchant in live){
+      if(!merchant.identityVerified||merchant.latitude==null||merchant.longitude==null||
+          publicPlace.lat==null||publicPlace.lng==null)continue;
+      if(normalized(merchant.name)==normalized(publicPlace.name)&&
+         km(merchant.latitude!,merchant.longitude!,publicPlace.lat!,publicPlace.lng!)<.15)return merchant;
+    }
+    return null;
+  }
+  Future<void> contactBusiness(String rawPhone)async{
+    final digits=rawPhone.replaceAll(RegExp(r'[^0-9+]'),'');
+    if(digits.isEmpty)return;
+    try{await launchUrl(Uri(scheme:'tel',path:digits),mode:LaunchMode.externalApplication);}
+    catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content:Text('Unable to open the phone dialler.')));}
+  }
   Widget shopFacts(OnlineShop shop)=>Row(children:[
     if(shop.rating!=null)...[
       const Icon(Icons.star_rounded,color:Color(0xFFF3B929),size:13),
@@ -1089,6 +1106,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               Text((d==null?'Nearby':d.toStringAsFixed(1)+' km')+
                 (merchant!=null?' · On Teyza':directory?.origin=='google_places'?' · Google Maps':' · OpenStreetMap'),
                 maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:10)),
+              Padding(padding:const EdgeInsets.only(top:7),child:merchant!=null
+                ?SizedBox(width:double.infinity,child:FilledButton(
+                    onPressed:()=>openShop(merchant),child:const Text('Buy here')))
+                :const OutlinedButton(onPressed:null,child:Text('Shop Unavailable'))),
               if(directory?.photoAttributions.isNotEmpty==true)
                 Text('Photo: '+(directory!.photoAttributions.first['name']??''),maxLines:1,
                   overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:9))
@@ -1108,7 +1129,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       onSelected:(_)=>setDiscoveryType('spaza')),
     ChoiceChip(label:const Text('Wholesalers'),selected:discoveryType=='wholesale',
       onSelected:(_)=>setDiscoveryType('wholesale')),
-    ChoiceChip(label:const Text('Other Retail'),selected:discoveryType=='variety',
+    ChoiceChip(label:const Text('Other Businesses'),selected:discoveryType=='variety',
       onSelected:(_)=>setDiscoveryType('variety')),
   ]);
 
@@ -1138,9 +1159,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
         'Use your current location or select a shopping area.')),
       const SizedBox(height:9),
-      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):discoveryType=='wholesale'?'Wholesale suppliers':'Explore other retail',
+      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):discoveryType=='wholesale'?'Wholesale suppliers':'Explore other businesses',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
-          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Variety stores and malls',
+          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Salons, upholstery, furniture, plumbers and other businesses',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
       if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
@@ -1181,7 +1202,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(displayShops.isEmpty)
         empty('More shops joining Teyza',
           'Local directory listings are shown separately. Only participating shops publish products and services.'),
-      section(discoveryType=='spaza'?'More neighbourhood shops':discoveryType=='wholesale'?'More local wholesalers':'More retailers to explore',
+      section(discoveryType=='spaza'?'More neighbourhood shops':discoveryType=='wholesale'?'More local wholesalers':'More businesses to explore',
         subtitle:'Public shop listings · confirm products with the owner'),
       if(loadingOnline)const Padding(padding:EdgeInsets.all(12),
         child:Center(child:CircularProgressIndicator())),
@@ -1474,7 +1495,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           FilterChip(label:const Text('Show all Teyza shops'),selected:allRegistered,
             onSelected:(value)=>setState(()=>allRegistered=value)),
-          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':discoveryType=='wholesale'?'Wholesale suppliers nearby':'Other retail nearby',
+          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':discoveryType=='wholesale'?'Wholesale suppliers nearby':'Other businesses nearby',
             subtitle:nearbyListings.length.toString()+(allRegistered?' registered shops':' shops · within '+searchRadiusKm.toString()+' km')),
           Row(children:[
             Expanded(child:Text(allRegistered?'Across South Africa':'Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
@@ -1522,6 +1543,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:const TextStyle(fontSize:14,color:muted)),
       const SizedBox(height:8),
       onlineProviderLabel(shop),
+      if(shop.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(shop.phone),
+        icon:const Icon(Icons.call_outlined),label:Text('Call '+shop.phone)),
+      if(verifiedMerchantFor(shop)!=null)
+        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
+          icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here'))
+      else const OutlinedButton.icon(onPressed:null,icon:Icon(Icons.shopping_bag_outlined),
+        label:Text('Shop Unavailable')),
       for(final credit in shop.providerAttributions)
         Align(alignment:Alignment.centerLeft,
           child:TextButton.icon(onPressed:() async {
@@ -1536,31 +1564,27 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         decoration:BoxDecoration(color:const Color(0xFFEAF5EF),
           borderRadius:BorderRadius.circular(13)),
         child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text('LOCAL SHOP · NOT YET ON TEYZA',style:TextStyle(
+          Text('GOOGLE-LINKED BUSINESS DIRECTORY',style:TextStyle(
             fontWeight:FontWeight.w900,fontSize:11,color:green)),
           SizedBox(height:5),
-          Text('This shop has been found on public maps. Confirm products, prices '
-            'and services with its owner before visiting.',
+          Text('Google Maps listings are for discovery. Only participating verified Teyza shops can accept orders in-app.',
             style:TextStyle(fontSize:12,color:ink))
         ])),
       const SizedBox(height:14),
       FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.lat,longitude:shop.lng),icon:const Icon(Icons.directions_outlined),
         label:const Text('Directions to shop')),
       const SizedBox(height:8),
-      OutlinedButton.icon(onPressed:()=>setState(()=>tab=4),
-        icon:Icon(session.emailVerified?Icons.verified_user_outlined:
-          Icons.mark_email_read_outlined),
-        label:Text(session.emailVerified?'View verified shopper account':
-          'Verify my shopper account')),
       const Padding(padding:EdgeInsets.only(top:9,bottom:6),
         child:Text('Messaging is available when the shop registers with Teyza.',
           style:TextStyle(fontSize:12,color:muted))),
       onlineServices(shop),
       section('SHOP ITEMS'),
-      empty('Shop stock not connected yet',
-        'This real spaza has not published its products to Teyza. '
-        'Explore everyday groceries below while more shop owners register.'),
-      essentialsShelf(),
+      if(verifiedMerchantFor(shop)==null)
+        empty('Shop Unavailable','This business has no active Teyza catalogue or checkout.'),
+      if(verifiedMerchantFor(shop)!=null)
+        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
+          icon:const Icon(Icons.shopping_bag_outlined),
+          label:const Text('Buy here — see items and prices')),
       const SizedBox(height:15),
       OutlinedButton.icon(onPressed:() async {
         await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
@@ -1568,8 +1592,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       },icon:const Icon(Icons.add_business_outlined),
         label:const Text('Own this shop? Claim your listing')),
       const SizedBox(height:13),
-      const Text('Online directory listing only. No verified stock or checkout '
-        'is available for this shop yet.',
+      const Text('Public listings do not imply a Teyza partnership. Ordering requires a verified participating merchant.',
         textAlign:TextAlign.center,
         style:TextStyle(color:muted,fontSize:11))
     ]);
@@ -1602,6 +1625,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
     merchantTrust(shop),
+    if(shop.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(shop.phone),
+      icon:const Icon(Icons.call_outlined),label:Text('Call '+shop.phone)),
     Padding(padding:const EdgeInsets.only(top:12),child:Wrap(spacing:8,runSpacing:8,children:[
       FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.latitude,longitude:shop.longitude),
         icon:const Icon(Icons.directions_outlined),label:const Text('Directions to shop')),
