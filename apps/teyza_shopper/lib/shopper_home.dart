@@ -1035,7 +1035,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
-        tab==1?shopProductsPage():
+        tab==1?(selected!=null?shopPage(selected!):shopProductsPage()):
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
           directorySelected!=null?directoryPage(directorySelected!):
@@ -1087,7 +1087,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 const Text('Out of stock',style:TextStyle(color:Colors.deepOrange,fontSize:11))
             ])),
             const SizedBox(width:5),
-            FilledButton(onPressed:()=>openShop(entry.shop),child:const Text('Buy here')),
+            FilledButton(onPressed:()=>openShop(entry.shop),child:const Text('Buy')),
           ])));
       }));
   }
@@ -1719,7 +1719,30 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not open directions. Check your Maps app or connection and try again.')));}
   }
 
+  Future<void> changeShop()async{
+    final choices=live.where((s)=>s.identityVerified&&
+      s.rangeProducts.any((p)=>p.priceCents>0&&p.inStock&&p.stock>0)).toList()
+      ..sort((a,b)=>a.name.compareTo(b.name));
+    if(choices.isEmpty){setState(()=>selected=null);return;}
+    final chosen=await showModalBottomSheet<Shop>(context:context,isScrollControlled:true,
+      builder:(context)=>SafeArea(child:ListView(shrinkWrap:true,children:[
+        const Padding(padding:EdgeInsets.all(18),child:Text('Change shop',
+          style:TextStyle(fontSize:23,fontWeight:FontWeight.w900))),
+        for(final s in choices)ListTile(
+          title:Text(s.name),subtitle:Text(s.area),
+          trailing:const Icon(Icons.chevron_right),
+          onTap:()=>Navigator.of(context).pop(s)),
+      ])));
+    if(chosen!=null&&mounted)openShop(chosen);
+  }
   Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
+    if(tab==1)Row(children:[
+      Expanded(child:Text(shop.name,style:const TextStyle(
+        fontSize:22,fontWeight:FontWeight.w900,color:ink))),
+      OutlinedButton.icon(onPressed:changeShop,icon:const Icon(Icons.swap_horiz),
+        label:const Text('Change shop')),
+    ]),
+
     TextButton.icon(onPressed:()=>setState(()=>selected=null),
       icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
@@ -1889,11 +1912,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 color:ink,fontWeight:FontWeight.w800))
             ]),
             const SizedBox(height:10),
-            const Row(children:[
-              Expanded(child:Text('Delivery or collection',
+            Row(children:[
+              const Expanded(child:Text('Fulfilment options',
                 style:TextStyle(color:muted))),
-              Text('Confirm with shop',style:TextStyle(
-                color:muted,fontSize:12))
+              Text(basketShop!.delivery&&basketShop!.pickup?'Delivery or collection':
+                basketShop!.delivery?'Delivery available':
+                basketShop!.pickup?'Order to collect':'Not enabled',
+                style:const TextStyle(color:muted,fontSize:12)),
             ]),
             const Divider(height:27),
             Row(children:[
@@ -1909,7 +1934,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         SizedBox(width:double.infinity,child:FilledButton.icon(
           onPressed:(!basketShop!.pickup&&!basketShop!.delivery)?null:requestOrder,
           icon:const Icon(Icons.chat_bubble_outline_rounded,size:19),
-          label:const Text('Choose delivery or collection'))),
+          label:Text(basketShop!.delivery&&basketShop!.pickup?'Choose delivery or collection':
+            basketShop!.delivery?'Order for delivery':'Order to collect'))),
         if(!basketShop!.pickup&&!basketShop!.delivery)
           const Padding(padding:EdgeInsets.only(top:12),
             child:Text('This shop has not enabled delivery or collection yet. Ask the shop in Live chat.',
