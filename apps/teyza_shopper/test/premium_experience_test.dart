@@ -169,6 +169,8 @@ void main(){
     expect(find.text('Bread').hitTestable(),findsOneWidget);
     expect(tester.takeException(),isNull);
     await capture('essentials');
+    await tester.scrollUntilVisible(find.text('See all'),-180,
+      scrollable:find.byType(Scrollable).first);
     await tester.tap(find.text('See all'));await tester.pumpAndSettle();
     expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
     await capture('shops');
