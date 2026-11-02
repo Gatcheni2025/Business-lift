@@ -851,3 +851,21 @@ test('spaza owner requests a Google wholesaler link without forging a Teyza part
  await rejects(service.execute(nonSpaza,'wholesale_link_request',input),403);
  await rejects(service.execute(owner,'wholesale_link_request',{...input,placeId:'oops!'}),422);
 });
+
+test('Shopper delivery profile is UID-bound, stores full address and contacts, and does not accept forged email verification',async()=>{
+ const {service,db}=fixture();
+ const payload={displayName:'A Shopper',phone:'082 123 4567',
+   address:'12 Main Road, KwaMashu, Durban',area:'KwaMashu',city:'Durban',
+   latitude:-29.7402,longitude:30.992,email:'forged@example.test',
+   emailVerified:true};
+ const saved=await service.execute({...buyer,email_verified:false},'shopper_profile_save',payload);
+ assert.equal(saved.saved,true);
+ assert.equal(saved.profile.ownerUid,'buyer1');
+ assert.equal(saved.profile.email,'buyer@example.test');
+ assert.equal(saved.profile.emailVerified,false);
+ assert.equal((await service.execute(buyer,'shopper_profile_read')).profile.address,payload.address);
+ assert.equal((await service.execute({...buyer,uid:'other-shopper'},'shopper_profile_read')).profile,null);
+ assert(db.records.has('teyzaShopperProfiles/buyer1'));
+ await rejects(service.execute(buyer,'shopper_profile_save',{...payload,phone:'123'}),422);
+ await rejects(service.execute(buyer,'shopper_profile_save',{...payload,latitude:0,longitude:0}),422);
+});
