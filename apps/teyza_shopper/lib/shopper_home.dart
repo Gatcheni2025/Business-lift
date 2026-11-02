@@ -251,6 +251,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String search = '';
   String category = 'All';
   String shopProductSearch='';
+  String productTabSearch='';
   int tab = 0;
   final cart = <String, int>{};
   late final session = widget.session??ShopperSession();
@@ -481,6 +482,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       var basketChanged=false;
       setState(() {
         live = next; loading = false;
+        if(tab==1&&!hasShopProducts){tab=0;showAllShops=true;}
         if(selected!=null){final matches=next.where((s)=>s.id==selected!.id);selected=matches.isEmpty?null:matches.first;}
         if(basketShop!=null){
           final matches=next.where((s)=>s.id==basketShop!.id);
@@ -767,6 +769,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       (shop.name+' '+shop.area+' '+shop.rangeProducts.map((p)=>p.name).join(' '))
         .toLowerCase().contains(q))).toList();
   }
+  List<ShopProduct> get allPublishedProducts => [
+    for(final shop in nearbyReal)
+      for(final p in shop.rangeProducts)
+        if(p.priceCents>0)ShopProduct(shop,p)
+  ];
+  bool get hasShopProducts => nearbyReal.any((shop)=>shop.rangeProducts.any((p)=>p.priceCents>0));
   List<ShopProduct> get featured {
     return discoverShopProducts(nearbyReal,type:discoveryType,category:category,query:search);
   }
@@ -960,15 +968,22 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(notification)_sellerEntry++;
     session.useSellerWorkspace();
   }
+  void browseNearby()=>setState((){
+    tab=0;selected=null;directorySelected=null;showAllShops=true;
+  });
   void navigateToTab(int index){
     setState(() {
+      if(index==1&&!hasShopProducts){
+        tab=0;selected=null;directorySelected=null;showAllShops=true;
+        return;
+      }
       tab=index;
       if(index==0){selected=null;directorySelected=null;showAllShops=false;}
-      if(index==1){selected=null;directorySelected=null;showAllShops=true;}
+      if(index==1){selected=null;directorySelected=null;showAllShops=false;productTabSearch='';}
     });
   }
   Widget premiumNavigation()=>PremiumShopperNavigation(
-    selectedIndex:tab,cartCount:count,onSelect:navigateToTab);
+    selectedIndex:tab,cartCount:count,showShop:hasShopProducts,onSelect:navigateToTab);
 
   @override
   Widget build(BuildContext context) {
@@ -1007,9 +1022,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ]),
       body:tab==4?ShopperAccountPanel(session:session,
           onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
-          onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:()=>navigateToTab(1)):
+          onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
+        tab==1?shopProductsPage():
         Column(children:[locationHeader(),Expanded(child:
           selected!=null?shopPage(selected!):
           directorySelected!=null?directoryPage(directorySelected!):
@@ -1018,6 +1034,48 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     );
   }
 
+
+  Widget shopProductsPage(){
+    final query=productTabSearch.trim().toLowerCase();
+    final products=allPublishedProducts.where((entry)=>query.isEmpty||
+      (entry.product.name+' '+entry.product.category+' '+entry.shop.name)
+        .toLowerCase().contains(query)).toList();
+    return RefreshIndicator(onRefresh:()=>load(),child:ListView(
+      key:const PageStorageKey<String>('teyza-shop-product-catalogue'),
+      padding:const EdgeInsets.fromLTRB(16,16,16,28),children:[
+      const Text('Shop',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900,color:ink)),
+      const SizedBox(height:5),
+      const Text('Products published by participating shops near you.',
+        style:TextStyle(color:muted,fontSize:12)),
+      const SizedBox(height:14),
+      TextField(onChanged:(value)=>setState(()=>productTabSearch=value),
+        decoration:const InputDecoration(prefixIcon:Icon(Icons.search),
+          hintText:'Search products and shops',border:OutlineInputBorder())),
+      const SizedBox(height:16),
+      if(products.isEmpty)empty('No matching products','Try another product or shop name.'),
+      for(final entry in products)
+        Card(color:Colors.white,elevation:0,margin:const EdgeInsets.only(bottom:10),
+          child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[
+            photo(entry.product.picture,size:82,icon:Icons.shopping_bag_outlined),
+            const SizedBox(width:12),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(entry.product.name,maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontWeight:FontWeight.w800,color:ink)),
+              const SizedBox(height:4),
+              Text(entry.shop.name,style:const TextStyle(color:muted,fontSize:12)),
+              if(entry.shop.identityVerified)
+                const Text('Teyza Verified',style:TextStyle(color:green,fontSize:11,
+                  fontWeight:FontWeight.bold)),
+              Text(rand(entry.product.priceCents),
+                style:const TextStyle(color:ink,fontSize:17,fontWeight:FontWeight.w800)),
+              if(!entry.product.inStock||entry.product.stock==0)
+                const Text('Out of stock',style:TextStyle(color:Colors.deepOrange,fontSize:11))
+            ])),
+            const SizedBox(width:5),
+            FilledButton(onPressed:()=>openShop(entry.shop),child:const Text('Buy here')),
+          ]))),
+    ]));
+  }
 
   Widget groceryAisles()=>SizedBox(height:70,child:Row(
     mainAxisAlignment:MainAxisAlignment.spaceBetween,
