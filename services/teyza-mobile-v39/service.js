@@ -158,6 +158,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
+    if(action==='seller_mandate_submit')D.fail(410,
+      'New Teyza debit mandates are discontinued. No bank debit is authorised by a free trial.');
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
@@ -349,6 +351,50 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return {status:'published'};
       });
     }
+    // Chat moderation is server-owned. Clients cannot forge a reporter, recipient or
+    // message body; only verified thread participants can submit a report or block.
+    if(action==='chat_block'||action==='chat_report') {
+      const threadId=D.id(data.threadId),threadRef=doc('teyzaMobileChats/'+threadId);
+      const thread=D.member(await read(threadRef.path),uid);
+      const otherUid=thread.ownerUid===uid?thread.shopperUid:thread.ownerUid;
+      if(action==='chat_block') {
+        if(typeof data.blocked!=='boolean')D.fail(422,'Choose block or unblock.');
+        await rate(uid,'chat-block',30,3600000);
+        await doc('teyzaChatBlocks/'+threadId+'_'+uid).set({
+          threadId,blockerUid:uid,blockedUid:otherUid,blocked:data.blocked,updatedAt:clock()
+        });
+        return {blocked:data.blocked};
+      }
+      const messageId=D.id(data.messageId),messageSnap=await threadRef.collection('messages').doc(messageId).get();
+      if(!messageSnap.exists||messageSnap.data().senderUid!==otherUid)D.fail(403,'You can only report a message sent by the other participant.');
+      const reasons=['harassment','hate','scam','spam','unsafe','other'];
+      if(!reasons.includes(data.reason))D.fail(422,'Select a reason for reporting the message.');
+      await rate(uid,'chat-report',10,3600000);
+      const reportId=crypto.createHash('sha256').update(uid+':'+threadId+':'+messageId).digest('hex');
+      const reportRef=doc('teyzaChatReports/'+reportId),prior=await reportRef.get();
+      if(prior.exists)return {reported:true,reference:reportId};
+      await reportRef.create({
+        threadId,messageId,reporterUid:uid,reportedUid:otherUid,
+        reason:data.reason,messageText:String(messageSnap.data().text||'').slice(0,1000),
+        status:'open',createdAt:clock()
+      });
+      return {reported:true,reference:reportId};
+    }
+    if(action==='chat_report_queue'||action==='chat_report_resolve'){
+      if(auth.teyzaAdmin!==true||auth.email_verified!==true||
+          !Number.isFinite(Number(auth.auth_time))||Math.abs(clock()/1000-Number(auth.auth_time))>900)
+        D.fail(403,'Recently authenticated Teyza administrator required.');
+      if(action==='chat_report_queue'){
+        const rows=await db.collection('teyzaChatReports').where('status','==','open').limit(50).get();
+        return {reports:rows.docs.map(x=>({id:x.id,...x.data()}))};
+      }
+      const reportId=D.id(data.reportId);
+      if(!['resolved','dismissed'].includes(data.status))D.fail(422,'Choose resolved or dismissed.');
+      const ref=doc('teyzaChatReports/'+reportId),entry=await ref.get();
+      if(!entry.exists)D.fail(404,'Report not found.');
+      await ref.update({status:data.status,reviewedBy:uid,reviewedAt:clock()});
+      return {resolved:true};
+    }
     if(action==='chat_open') {
       const sellerUid=D.id(data.shopId);
       if(sellerUid===uid)D.fail(422,'Open Live chat on your seller dashboard to reply to shoppers.');
@@ -380,6 +426,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const thread=D.member(await read(ref.path),uid);
       if(action==='chat_send') {
         const message=D.text(data.message,'message',1000),messageId=D.id(data.messageId);
+        const checks=await Promise.all([thread.ownerUid,thread.shopperUid].map(member=>
+          read('teyzaChatBlocks/'+ref.id+'_'+member)));
+        if(checks.some(c=>c?.blocked===true))D.fail(403,'This conversation is blocked. Unblock to continue.');
         const config=await read('teyzaShopSettings/'+thread.ownerUid);
         await active(thread.ownerUid);
         if(config?.liveChatEnabled===false)D.fail(409,'Chat is paused for this shop.');
@@ -401,7 +450,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const current=await tx.get(ref),t=D.member(current.exists?current.data():null,uid);
         if((t.lastMessageId||null)===(thread.lastMessageId||null))tx.update(ref,{[t.ownerUid===uid?'ownerUnread':'shopperUnread']:0});
       });
-      return {messages:messages.docs.map(x=>({id:x.id,...x.data()})).reverse()};
+      const blocks=await Promise.all([thread.ownerUid,thread.shopperUid].map(member=>
+        read('teyzaChatBlocks/'+ref.id+'_'+member)));
+      return {blockedByMe:blocks[thread.ownerUid===uid?0:1]?.blocked===true,
+        blocked:blocks.some(item=>item?.blocked===true),
+        messages:messages.docs.map(x=>({id:x.id,...x.data()})).reverse()};
     }
     if(action==='order_chat') {
       const order=await read('teyzaMobileOrders/'+D.id(data.orderId));
