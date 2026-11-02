@@ -256,10 +256,18 @@ void main(){
     final firstBuy=find.widgetWithText(FilledButton,'Buy').first;
     await tester.tap(firstBuy);await tester.pumpAndSettle();
     expect(find.text('Change shop'),findsOneWidget);
+    for(var n=0;n<8&&find.text('Bread Buns').evaluate().isEmpty;n++){
+      await tester.drag(find.byType(ListView).first,const Offset(0,-220));
+      await tester.pumpAndSettle();
+    }
     expect(find.text('Bread Buns'),findsOneWidget);
     expect(find.text('Fresh Eggs'),findsNothing);
     await tester.tap(find.text('Change shop'));await tester.pumpAndSettle();
     await tester.tap(find.text('Second Spaza').last);await tester.pumpAndSettle();
+    for(var n=0;n<8&&find.text('Fresh Eggs').evaluate().isEmpty;n++){
+      await tester.drag(find.byType(ListView).first,const Offset(0,-220));
+      await tester.pumpAndSettle();
+    }
     expect(find.text('Fresh Eggs'),findsOneWidget);
     expect(find.text('Bread Buns'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
