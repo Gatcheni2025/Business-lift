@@ -55,7 +55,7 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
     final key=p['id'] as String,max=(p['stock'] as num).toInt();
     setState((){
       final n=(quantities[key]??0)+delta;
-      if(n<=0)quantities.remove(key);else quantities[key]=n.clamp(1,max);
+      if(n<=0)quantities.remove(key);else quantities[key]=n>max?max:n;
     });
   }
   Future<void> checkout()async{
