@@ -324,6 +324,33 @@ test('Firebase UID shops open authenticated conversations, with isolation and id
  assert.equal(db.records.get('teyzaMobileChats/'+opened.threadId).ownerUid,'seller1');
  assert.equal((await service.execute(owner,'chat_list')).threads.length,1);
 });
+test('Chat users can report incoming messages and block both directions without impersonation',async()=>{
+ const {service,db}=fixture();const opened=await service.execute(buyer,'chat_open',{shopId:'seller1'});
+ await service.execute(buyer,'chat_send',{threadId:opened.threadId,message:'Is bread available?',messageId:'first'});
+ await service.execute(owner,'chat_send',{threadId:opened.threadId,message:'Yes, please visit.',messageId:'second'});
+ await rejects(service.execute(buyer,'chat_report',{threadId:opened.threadId,messageId:'first',reason:'spam'}),403);
+ await rejects(service.execute({...buyer,uid:'stranger'},'chat_block',{threadId:opened.threadId,blocked:true}),403);
+ await rejects(service.execute(buyer,'chat_report',{threadId:opened.threadId,messageId:'second',reason:'unknown'}),422);
+ const report=await service.execute(buyer,'chat_report',{threadId:opened.threadId,messageId:'second',reason:'spam'});
+ assert.equal(report.reported,true);
+ await service.execute(buyer,'chat_report',{threadId:opened.threadId,messageId:'second',reason:'spam'});
+ assert.equal(db.records.size>0,true);
+ await rejects(service.execute(buyer,'chat_report_queue',{}),403);
+ const adminActor={...buyer,uid:'moderator1',teyzaAdmin:true,auth_time:1000};
+ const queue=await service.execute(adminActor,'chat_report_queue');
+ assert.equal(queue.reports.length,1);
+ assert.equal(queue.reports[0].reporterUid,'buyer1');
+ assert.equal(queue.reports[0].reportedUid,'seller1');
+ await service.execute(buyer,'chat_block',{threadId:opened.threadId,blocked:true});
+ await rejects(service.execute(owner,'chat_send',{threadId:opened.threadId,message:'Reply',messageId:'third'}),403);
+ await rejects(service.execute(buyer,'chat_send',{threadId:opened.threadId,message:'More',messageId:'fourth'}),403);
+ assert.equal((await service.execute(buyer,'chat_read',{threadId:opened.threadId})).blockedByMe,true);
+ await service.execute(buyer,'chat_block',{threadId:opened.threadId,blocked:false});
+ await service.execute(owner,'chat_send',{threadId:opened.threadId,message:'Allowed again',messageId:'fifth'});
+ await service.execute(adminActor,'chat_report_resolve',{reportId:report.reference,status:'resolved'});
+ assert.equal((await service.execute(adminActor,'chat_report_queue')).reports.length,0);
+});
+
 test('Disabled chat and inactive shop listings reject new conversations',async()=>{
  const disabled=fixture({'teyzaShopSettings/seller1':{liveChatEnabled:false}});
  await rejects(disabled.service.execute(buyer,'chat_open',{shopId:'seller1'}),409);
