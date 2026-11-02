@@ -246,6 +246,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Shop? selected;
   Shop? basketShop;
   OnlineShop? directorySelected;
+  String? selectedDirectoryPhone;
+  int _directoryContactRequest=0;
   String search = '';
   String category = 'All';
   String shopProductSearch='';
@@ -802,9 +804,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     tab = tab==1?1:0;
   });
 
-  void selectDirectory(OnlineShop shop)=>setState((){
-    directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;
-  });
+  void selectDirectory(OnlineShop shop){
+    final request=++_directoryContactRequest;
+    setState((){
+      directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;
+      selectedDirectoryPhone=shop.phone;
+    });
+    if(shop.origin=='google_places'&&shop.placeId.isNotEmpty){
+      teyzaBusinessContact(shop.placeId).then((phone){
+        if(mounted&&request==_directoryContactRequest&&directorySelected?.id==shop.id)
+          setState(()=>selectedDirectoryPhone=phone);
+      });
+    }
+  }
 
   Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
     final catalogueKey=cataloguePhotoKey(url);
@@ -1550,8 +1562,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:const TextStyle(fontSize:14,color:muted)),
       const SizedBox(height:8),
       onlineProviderLabel(shop),
-      if(shop.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(shop.phone),
-        icon:const Icon(Icons.call_outlined),label:Text('Call '+shop.phone)),
+      if((selectedDirectoryPhone??shop.phone).isNotEmpty)TextButton.icon(
+        onPressed:()=>contactBusiness(selectedDirectoryPhone??shop.phone),
+        icon:const Icon(Icons.call_outlined),
+        label:Text('Call '+(selectedDirectoryPhone??shop.phone))),
       if(verifiedMerchantFor(shop)!=null)
         FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
           icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here'))
