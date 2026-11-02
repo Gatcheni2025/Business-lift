@@ -79,7 +79,7 @@ class Shop {
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
     address:(x['address']??'').toString(),city:(x['city']??'').toString(),
-    shopCategory:['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
+    shopCategory:x['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
         ?(x['services'] as Map)['cardPayments'] as bool:null,
@@ -263,7 +263,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   bool loadingOnline = false;
   String discoveryType='spaza';
   bool widerSearch=false;
-  int get searchRadiusKm=>discoveryType=='variety'?(widerSearch?50:40):(widerSearch?40:22);
+  int get searchRadiusKm=>discoveryType=='wholesale'?(widerSearch?50:40):discoveryType=='variety'?(widerSearch?50:40):(widerSearch?40:22);
   int _onlineRequestSerial=0;
   int unreadChats=0;
   Timer? chatWatch;
@@ -428,7 +428,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> setDiscoveryType(String type) async {
-    if(type!='spaza'&&type!='variety')return;
+    if(type!='spaza'&&type!='variety'&&type!='wholesale')return;
     if(discoveryType==type)return;
     setState(() {
       discoveryType=type;
@@ -905,7 +905,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         TextField(key:ValueKey(discoveryType),
           onChanged:(value)=>setState(()=>search=value),
           decoration:InputDecoration(
-            hintText:discoveryType=='spaza'?'Search for products, shops…':'Search malls, wholesalers, shops…',
+            hintText:discoveryType=='spaza'?'Search for products, shops…':discoveryType=='wholesale'?'Find wholesalers and cash & carry…':'Search malls and retail shops…',
             hintStyle:const TextStyle(color:muted,fontSize:12),
             filled:true,fillColor:const Color(0xFFF7F8F7),
             prefixIcon:const Icon(Icons.search_rounded,color:ink,size:21),
@@ -918,7 +918,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         Row(children:[
           _shopMode('SPAZA SHOPS','Discover local shops',Icons.storefront_rounded,'spaza',green),
           const SizedBox(width:8),
-          _shopMode('OTHER RETAIL','China Mall & wholesalers',Icons.store_mall_directory_rounded,'variety',deep)
+          _shopMode('WHOLESALE','Bulk suppliers',Icons.warehouse_outlined,'wholesale',green),
+          const SizedBox(width:8),
+          _shopMode('OTHER RETAIL','China Mall & shops',Icons.store_mall_directory_rounded,'variety',deep)
         ])
       ]
     ]));
@@ -1104,6 +1106,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget categoryPicker()=>Wrap(spacing:8,runSpacing:6,children:[
     ChoiceChip(label:const Text('Spaza Shops'),selected:discoveryType=='spaza',
       onSelected:(_)=>setDiscoveryType('spaza')),
+    ChoiceChip(label:const Text('Wholesalers'),selected:discoveryType=='wholesale',
+      onSelected:(_)=>setDiscoveryType('wholesale')),
     ChoiceChip(label:const Text('Other Retail'),selected:discoveryType=='variety',
       onSelected:(_)=>setDiscoveryType('variety')),
   ]);
@@ -1134,9 +1138,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
         'Use your current location or select a shopping area.')),
       const SizedBox(height:9),
-      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):'Explore other retail',
+      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):discoveryType=='wholesale'?'Wholesale suppliers':'Explore other retail',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
-          'Variety stores, malls, wholesalers and more',
+          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Variety stores and malls',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
       if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
@@ -1160,6 +1164,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 ])),
               const Icon(Icons.arrow_forward_rounded,color:Colors.white)
             ])))),
+      if(discoveryType=='wholesale')Card(color:const Color(0xFFE5F4ED),child:ListTile(
+        leading:const Icon(Icons.inventory_2_outlined,color:green),
+        title:const Text('Spaza shop owner? Buy stock at wholesale prices',
+          style:TextStyle(fontWeight:FontWeight.w800)),
+        subtitle:const Text('Open your seller dashboard and choose Buy from wholesalers to order from verified suppliers. Map listings are discovery-only.'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:()=>openOwnerWorkspace())),
       section('Shops selling on Teyza',
         subtitle:'Participating local sellers and published product listings',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
@@ -1170,7 +1181,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(displayShops.isEmpty)
         empty('More shops joining Teyza',
           'Local directory listings are shown separately. Only participating shops publish products and services.'),
-      section(discoveryType=='spaza'?'More neighbourhood shops':'More retailers to explore',
+      section(discoveryType=='spaza'?'More neighbourhood shops':discoveryType=='wholesale'?'More local wholesalers':'More retailers to explore',
         subtitle:'Public shop listings · confirm products with the owner'),
       if(loadingOnline)const Padding(padding:EdgeInsets.all(12),
         child:Center(child:CircularProgressIndicator())),
@@ -1463,7 +1474,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           FilterChip(label:const Text('Show all Teyza shops'),selected:allRegistered,
             onSelected:(value)=>setState(()=>allRegistered=value)),
-          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':'Other retail nearby',
+          section(allRegistered?'Shops on Teyza':discoveryType=='spaza'?'Nearby spaza shops':discoveryType=='wholesale'?'Wholesale suppliers nearby':'Other retail nearby',
             subtitle:nearbyListings.length.toString()+(allRegistered?' registered shops':' shops · within '+searchRadiusKm.toString()+' km')),
           Row(children:[
             Expanded(child:Text(allRegistered?'Across South Africa':'Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
