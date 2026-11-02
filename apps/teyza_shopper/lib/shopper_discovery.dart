@@ -21,7 +21,18 @@ Uri teyzaPlacesUrl(String path,[Map<String,String> params=const {}]) {
 }
 Uri teyzaGooglePhotoUrl(String ref)=>teyzaPlacesUrl('shopper-place-photo.php',{'ref':ref});
 Future<String> teyzaBusinessContact(String placeId,{http.Client? client})async{
-  if(!RegExp(r'^[A-Za-z0-9_-]{10,200}
+  if(placeId.length<10||placeId.length>200||
+      RegExp(r'^[A-Za-z0-9_-]+').stringMatch(placeId)!=placeId)return '';
+  final remote=client??http.Client();
+  try{
+    final response=await remote.get(teyzaPlacesUrl('shopper-place-contact.php',{'placeId':placeId}))
+      .timeout(const Duration(seconds:12));
+    if(response.statusCode!=200)return '';
+    final parsed=jsonDecode(response.body);
+    if(parsed is! Map||parsed['ok']!=true)return '';
+    return parsed['phone'] is String?parsed['phone'] as String:'';
+  }catch(_){return '';}finally{if(client==null)remote.close();}
+}
 
 class OnlineShop {
   final String id, name, area, address, source, origin, claimUrl, phone, websiteUrl, placeId;
