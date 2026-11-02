@@ -60,7 +60,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     const uploads=await readiness();
     res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.15.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -134,6 +134,42 @@ exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
 exports.teyzaFieldAgentCleanup=onSchedule({schedule:'every 60 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'256MiB',timeoutSeconds:180},
   ()=>require('./field-agents').purgeAgentEvidence({db,bucket}));
+// Recover account-deletion requests created by older app versions that only
+// suspended the seller without closing Firebase Authentication. Never delete
+// an Auth user here: the data-retention and provider-closure review remains
+// a separate, auditable process.
+exports.teyzaDeletionSignInRepair=onSchedule({
+  schedule:'every 30 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',
+  maxInstances:1,memory:'256MiB',timeoutSeconds:240
+},async()=>{
+  let cursor=null,checked=0,blocked=0,failed=0;
+  for(let page=0;page<10;page++){
+    let q=db.collection('teyzaAccountDeletionRequests').orderBy('__name__').limit(100);
+    if(cursor)q=q.startAfter(cursor);
+    const result=await q.get();
+    for(const item of result.docs){
+      checked++;
+      const request=item.data();
+      if(request.status==='completed'||request.authDisabledAt>0)continue;
+      try{
+        try {
+          await admin.auth().updateUser(item.id,{disabled:true});
+          await admin.auth().revokeRefreshTokens(item.id);
+        }catch(error){
+          if(error?.code!=='auth/user-not-found')throw error;
+        }
+        await item.ref.update({authDisabledAt:Date.now(),updatedAt:Date.now()});
+        blocked++;
+      }catch(error){
+        failed++;
+        console.error('TEYZA_DELETION_SIGNIN_LOCK_FAILED',error.code||error.name);
+      }
+    }
+    if(result.docs.length<100)break;
+    cursor=result.docs.at(-1);
+  }
+  console.log('TEYZA_DELETION_SIGNIN_REPAIR',JSON.stringify({checked,blocked,failed}));
+});
 exports.teyzaMobilePurgeSelfies=onSchedule({schedule:'every day 03:00',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1},async()=>{
   // Tracks every capture, including superseded selfies, so replacements cannot orphan private photos.
   const photos=await db.collection('teyzaVerificationPhotos').where('expiresAt','<=',Date.now()).limit(500).get();
