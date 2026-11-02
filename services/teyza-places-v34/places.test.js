@@ -118,3 +118,14 @@ test('Business contact is fetched on demand and not with every Google Text Searc
  assert.equal(response.phone,'031 000 1234');
  assert.equal(response.websiteUrl,'https://example.org');
 });
+
+test('Service-area plumber can be discovered without inventing location or distance',async()=>{
+ const plumber=place('plumber123',{displayName:{text:'Durban Mobile Plumber'},
+  location:undefined,primaryType:'plumber',types:['plumber']});
+ const result=await discover({key:'test',lat,lon,radius:30000,kind:'variety',
+  fetchImpl:async()=>json({places:[plumber]})});
+ assert.equal(result.entries.length,1);
+ assert.equal(result.entries[0].area,'Service area — check coverage');
+ assert.equal(result.entries[0].latitude,null);
+ assert.equal(result.entries[0].distanceKm,null);
+});
