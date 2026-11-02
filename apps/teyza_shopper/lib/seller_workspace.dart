@@ -229,7 +229,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     await load();
     if(mounted&&widget.sellerMode)setState((){sellerTab=1;productsView=true;});
     if(mounted){setState(()=>rangeStatus=result['publication']=='live'?
-      'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
+      shop?.category=='wholesale'?'Your wholesale range is available only to approved spaza owners.':'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
@@ -237,7 +237,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
       if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
+        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
     }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
   }
   Future<void> productPhoto(SellerDraft product) async {
@@ -332,7 +332,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(busy)return;
     final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
-    final category=TextEditingController(text:existing?.category??(shop?.category=='retail'?'General retail':'Groceries'));
+    final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));
     final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
     final stock=TextEditingController(text:existing?.stock.toString()??'');
@@ -363,7 +363,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               decoration:const InputDecoration(labelText:'Description (optional)',border:OutlineInputBorder())),
             const SizedBox(height:8),
             TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),
-              decoration:const InputDecoration(labelText:'Price (R)',border:OutlineInputBorder()),
+              decoration:InputDecoration(labelText:shop?.category=='wholesale'?'Wholesale price per unit or pack (R)':'Retail selling price (R)',border:const OutlineInputBorder()),
               validator:(v){final amount=double.tryParse((v??'').replaceAll(',','.'));
                 return amount==null||!amount.isFinite||amount<=0||amount>1000000?'Enter a valid price':null;}),
             const SizedBox(height:8),
