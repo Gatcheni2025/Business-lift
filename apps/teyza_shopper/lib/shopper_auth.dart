@@ -170,7 +170,7 @@ class ShopperSession extends ChangeNotifier {
   }
   Future<void> _clear() async {
     _sellerWorkspaceUid=null;
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid']){
         await _store.delete(key);
@@ -391,7 +391,7 @@ class ShopperSession extends ChangeNotifier {
       body:jsonEncode({'providerId':'apple.com','tokenType':'CODE',
         'token':authorizationCode,'idToken':savedToken,
         'redirectUri':'https://teyza.co.za'})).timeout(const Duration(seconds:25));
-    _decode(response);
+    if(response.statusCode<200||response.statusCode>=300)_decode(response);
     if(savedUid!=userId)throw StateError('Account changed during Apple token revocation.');
   }
 
