@@ -9,8 +9,8 @@ const orderLabels={'requested':'Awaiting shop confirmation','confirmed':'Confirm
   'preparing':'Being prepared','ready':'Ready to collect','out_for_delivery':'Out for delivery',
   'completed':'Completed','cancelled':'Cancelled'};
 class ShopOrdersPanel extends StatefulWidget {
-  final ShopperSession session;final bool asOwner;final TeyzaMobileApi? api;final VoidCallback? onLogin;
-  const ShopOrdersPanel({super.key,required this.session,this.asOwner=false,this.api,this.onLogin});
+  final ShopperSession session;final bool asOwner,wholesaleOnly;final TeyzaMobileApi? api;final VoidCallback? onLogin;
+  const ShopOrdersPanel({super.key,required this.session,this.asOwner=false,this.wholesaleOnly=false,this.api,this.onLogin});
   @override State<ShopOrdersPanel> createState()=>_OrdersState();
 }
 class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
@@ -30,7 +30,7 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
     if(loading||widget.session.idToken==null)return;
     final requestedUid=widget.session.userId;setState((){loading=true;if(!quiet)error=null;});
     try{final result=await api.call('order_list',{'asOwner':widget.asOwner});
-      if(mounted&&requestedUid==widget.session.userId)setState((){orders=mobileRows(result['orders']);error=null;});
+      if(mounted&&requestedUid==widget.session.userId)setState((){orders=mobileRows(result['orders']).where((o)=>!widget.wholesaleOnly||o['orderType']=='wholesale_stock').toList();error=null;});
     }catch(e){if(mounted&&requestedUid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>loading=false);}
   }
@@ -76,8 +76,8 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
   }
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(
     padding:const EdgeInsets.fromLTRB(18,22,18,30),children:[
-      Text(widget.asOwner?'Customer orders':'Your orders',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
-      const SizedBox(height:7),Text(widget.asOwner?'Confirm stock, prepare orders and keep shoppers updated.':
+      Text(widget.wholesaleOnly?'Wholesale stock orders':widget.asOwner?'Customer orders':'Your orders',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
+      const SizedBox(height:7),Text(widget.wholesaleOnly?'Track stock requests placed with approved Teyza wholesalers.':widget.asOwner?'Confirm stock, prepare orders and keep shoppers updated.':
         'Delivery and collection requests from your local shops.',style:const TextStyle(color:Color(0xFF6C7880))),
       const SizedBox(height:18),
       if(widget.session.idToken==null)Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(children:[
