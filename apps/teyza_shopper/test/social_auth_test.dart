@@ -19,6 +19,21 @@ class FakeFacebookSession extends ShopperSession {
  @override Future<void> signInWithFacebook() async {idToken='firebase-session';userId='existing-user';emailVerified=true;notifyListeners();}
 }
 void main(){
+ test('Google OAuth mismatch explains Android test versus Play certificates',(){
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final message=authMessage(StateError(
+    'PlatformException(sign_in_failed, com.google.android.gms.common.api.ApiException: 10: )'));
+  expect(message,contains('APK signing certificate'));
+  expect(message,contains('Firebase'));
+  expect(message,contains('Google Play'));
+ });
+ test('Google and Apple iPhone configuration errors have actionable messages',(){
+  debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  expect(authMessage(StateError('DEVELOPER_ERROR')),contains('iOS OAuth client'));
+  expect(authMessage(StateError('INVALID_IDP_RESPONSE')),contains('Google/Apple'));
+ });
  for(final owner in [false,true])testWidgets('Facebook returns to the selected ${owner?'owner':'shopper'} workspace',(t) async {
   var ownerCalls=0,shopperCalls=0;final session=FakeFacebookSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session,onOpenOwner:()=>ownerCalls++,onShopperSignedIn:()=>shopperCalls++))));
