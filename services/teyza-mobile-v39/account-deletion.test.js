@@ -86,7 +86,7 @@ test('Apple revocation is backend-authorized and confirmed before account deleti
    getAuthUser:async uid=>({uid,providerData:[{providerId:'apple.com'}]}),
    revokeAppleToken:async(uid,code,idToken)=>calls.push({uid,code,idToken}),
  });
- await fail(service.execute(buyer,'account_apple_revoke',{authorizationCode:'valid-code-0123456789'}),403);
+ await fail(service.execute(buyer,'account_apple_revoke',{authorizationCode:'valid-code-0123456789'}),401);
  const actor={...buyer,verifiedFirebaseIdToken:'verified-firebase-id-token'};
  const result=await service.execute(actor,'account_apple_revoke',{authorizationCode:'valid-code-0123456789'});
  assert.equal(result.revoked,true);
@@ -102,7 +102,7 @@ test('Non Apple-linked accounts cannot submit token revocation',async()=>{
    getAuthUser:async uid=>({uid,providerData:[{providerId:'password'}]}),
    revokeAppleToken:async()=>{throw Error('should not reach provider');},
  });
- await fail(service.execute({...buyer,verifiedFirebaseIdToken:'token'},
+ await fail(service.execute({...buyer,verifiedFirebaseIdToken:'verified-firebase-id-token'},
    'account_apple_revoke',{authorizationCode:'valid-code-0123456789'}),403);
 });
 test('seller deletion suspends public shop and flags billing and mandate review',async()=>{
