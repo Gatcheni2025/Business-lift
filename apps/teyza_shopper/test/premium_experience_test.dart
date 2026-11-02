@@ -178,4 +178,52 @@ void main(){
     expect(tester.takeException(),isNull);await capture('login-roles');
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  testWidgets('Google-only business offers Buy here but no unavailable warning before tap',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final directory=OnlineShop.fromJson({
+      'id':'google-public-shop','name':'Neighbourhood Grocer','shopCategory':'spaza',
+      'latitude':-29.8587,'longitude':31.0218,'origin':'google_places',
+      'openNow':true,'categorizationVerified':true
+    });
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[],
+      directoryLoader:(area,type,radius)async=>[directory])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    expect(find.text('Shop Unavailable'),findsNothing);
+    expect(find.text('Shop'),findsNothing);
+    final card=find.byKey(const ValueKey('nearby-google-public-shop'));
+    await tester.ensureVisible(card);await tester.pumpAndSettle();
+    final buy=find.descendant(of:card,matching:find.text('Buy here'));
+    await tester.tap(buy);await tester.pumpAndSettle();
+    expect(find.text('Shop Unavailable'),findsOneWidget);
+    await tester.tap(find.text('Close'));await tester.pumpAndSettle();
+    expect(find.text('Shop Unavailable'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('Shop tab shows all published products and disappears when catalogue empties',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    var shops=[Shop.fromJson({'id':'shop-1','name':'Corner Spaza','area':'Durban',
+      'latitude':-29.8587,'longitude':31.0218,'identityVerified':true,
+      'products':[{'id':'milk-1','name':'Fresh Milk 1L','priceCents':2500,'stock':3}]}),
+      Shop.fromJson({'id':'shop-2','name':'Highway Shop','area':'Pinetown',
+      'latitude':-29.8145,'longitude':30.8597,
+      'products':[{'id':'soap-2','name':'Laundry Soap','priceCents':1600,'stock':7}]})];
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>shops,
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
+    expect(find.text('Fresh Milk 1L'),findsOneWidget);
+    expect(find.text('Laundry Soap'),findsOneWidget);
+    expect(find.text('R25.00'),findsOneWidget);
+    shops=[];
+    final refresh=tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator).first).show();
+    await tester.pumpAndSettle();await refresh;
+    expect(find.text('Shop'),findsNothing);
+    expect(find.text('Home'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
 }
