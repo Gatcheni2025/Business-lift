@@ -35,9 +35,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
         // sessions; clear local tokens immediately. Do not restore it.
         final oldUid=widget.session.userId;
         await ShopperDeliveryProfileStore().clear(oldUid);
-        final oldUid=widget.session.userId;
-      await ShopperDeliveryProfileStore().clear(oldUid);
-      await widget.session.signOut();
+        await widget.session.signOut();
       }
       if(mounted)setState((){
         receipt=response['requested']==true?response:null;
@@ -54,6 +52,8 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
       final response=await api.call('account_deletion_request',{'confirmation':'DELETE'});
       if(response['signInBlocked']!=true)throw StateError(
         'Your deletion request was saved, but sign-in closure was not confirmed. Contact Teyza support and do not assume the account has been closed.');
+      final oldUid=widget.session.userId;
+      await ShopperDeliveryProfileStore().clear(oldUid);
       await widget.session.signOut();
       if(mounted)setState(()=>receipt=response);
     }catch(e){
