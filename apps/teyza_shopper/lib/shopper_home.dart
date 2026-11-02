@@ -779,11 +779,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         .toLowerCase().contains(q))).toList();
   }
   List<ShopProduct> get allPublishedProducts => [
-    for(final shop in nearbyReal)
+    for(final shop in live)
       for(final p in shop.rangeProducts)
         if(p.priceCents>0)ShopProduct(shop,p)
   ];
-  bool get hasShopProducts => nearbyReal.any((shop)=>shop.rangeProducts.any((p)=>p.priceCents>0));
+  bool get hasShopProducts => live.any((shop)=>shop.rangeProducts.any((p)=>p.priceCents>0));
   List<ShopProduct> get featured {
     return discoverShopProducts(nearbyReal,type:discoveryType,category:category,query:search);
   }
@@ -1054,7 +1054,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       padding:const EdgeInsets.fromLTRB(16,16,16,28),children:[
       const Text('Shop',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900,color:ink)),
       const SizedBox(height:5),
-      const Text('Products published by participating shops near you.',
+      const Text('Products published by participating Teyza shops.',
         style:TextStyle(color:muted,fontSize:12)),
       const SizedBox(height:14),
       TextField(onChanged:(value)=>setState(()=>productTabSearch=value),
