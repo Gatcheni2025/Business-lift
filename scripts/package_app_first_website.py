@@ -8,7 +8,7 @@ for p in (r/'web/app-first/public').rglob('*'):
 for name in ['firebase-client.cjs','hosting-patch.cjs','check-live-seo.cjs','paths.json','run.cjs','package.json','package-lock.json']:
  entries['tools/app-first-release/'+name]=(r/'tools/app-first-release'/name).read_bytes()
 for name in ['DEPLOY-WEBSITE.ps1','ROLLBACK-WEBSITE.ps1']:entries[name]=(r/'tools/app-first-release'/name).read_bytes()
-entries['START-HERE.txt']=('''TEYZA FIELD-WORK WEBSITE AND SEO UPDATE — 29 OCTOBER 2026
+entries['START-HERE.txt']=('''TEYZA SPAZA + WHOLESALE WEBSITE UPDATE — 2 NOVEMBER 2026
 
 1. Extract this ZIP to a folder on your PC.
 2. Install Node.js 22 or newer if needed.
@@ -17,11 +17,11 @@ entries['START-HERE.txt']=('''TEYZA FIELD-WORK WEBSITE AND SEO UPDATE — 29 OCT
 5. Run: Unblock-File -LiteralPath '.\\DEPLOY-WEBSITE.ps1'
 6. Run: .\\DEPLOY-WEBSITE.ps1
 
-The helper reuses your Firebase CLI account for project business-lift-3c19c. It clones the current live site, changes only the reviewed marketing pages/images and registration redirects, verifies that unrelated files remain intact, and publishes. No mobile build, Functions deployment, account deletion or Firebase security-rule replacement is involved.
+The helper uses your authorized Firebase CLI account for project business-lift-3c19c. It clones the current live site, changes only the reviewed marketing pages/images and registration redirects, verifies that unrelated files remain intact, and publishes. This website overlay does not deploy mobile builds, Google Places or wholesale Functions, account deletion code, or Firebase security rules. Deploy the new wholesale backend separately before inviting spaza owners to place stock orders.
 
 IMPORTANT: Do not run plain firebase deploy with this partial public folder.
 
-The store listings were not publicly available when checked. Android is labelled early access for approved testers; iPhone is labelled coming soon. Update these labels/links when the public store releases are available. Website registration moves to app instructions; existing admin and authenticated workspace pages are preserved.
+This package includes the refreshed spaza-to-wholesaler website, new business-type registration descriptions, and private B2B pricing safeguards. The public store listings were not confirmed live when packaged. Android is labelled early access for approved testers; iPhone is labelled coming soon. Update these labels/links when the public store releases are available. Website registration moves to app instructions; existing admin and authenticated workspace pages are preserved.
 
 After success, check the homepage, /download.html, /register.html and /sitemap.xml. Verify both www.teyza.co.za and teyza.co.za. Submit the sitemap in Google Search Console and Bing Webmaster Tools after verifying domain ownership. Search engines decide when to index and rank pages; rankings are not guaranteed.
 
