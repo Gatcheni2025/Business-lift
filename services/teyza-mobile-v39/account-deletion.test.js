@@ -9,6 +9,7 @@ class FakeDB {
     path,id:path.split('/').pop(),
     get:async()=>db.snap(path),
     set:async data=>db.records.set(path,structuredClone(data)),
+    delete:async()=>db.records.delete(path),
     update:async data=>{if(!db.records.has(path))throw Error('missing '+path);
       db.records.set(path,{...db.records.get(path),...structuredClone(data)});},
   };}
@@ -20,6 +21,7 @@ class FakeDB {
       get:async r=>r.get(),
       set:(r,data)=>writes.push(()=>r.set(data)),
       update:(r,data)=>writes.push(()=>r.update(data)),
+      delete:r=>writes.push(()=>r.delete()),
     };
     const out=await fn(tx);
     for(const w of writes)await w();
@@ -57,7 +59,10 @@ const instance=(seed={},opts={})=>{
 };
 
 test('shopper can request deletion without verified email; durable reference is idempotent',async()=>{
-  const {service,db,deleted,disabled,revoked}=instance();
+  const {service,db,deleted,disabled,revoked}=instance({
+    'teyzaShopperProfiles/shopper1':{ownerUid:'shopper1',displayName:'Shopper',
+      phone:'0712345678',address:'12 Main Road, Durban'}
+  });
   await fail(service.execute(buyer,'account_deletion_request',{confirmation:'yes'}),422);
   const r=await service.execute(buyer,'account_deletion_request',{confirmation:'DELETE'});
   assert.match(r.reference,/^TZ-DEL-[0-9A-F]{12}$/);
@@ -69,6 +74,7 @@ test('shopper can request deletion without verified email; durable reference is 
   assert.deepEqual(revoked,['shopper1']);
   assert.equal(r.seller,false);
   assert.equal(r.completeBy,now+30*86400000);
+  assert.equal(db.records.has('teyzaShopperProfiles/shopper1'),false);
   assert.equal(db.records.size,1);
   const duplicate=await service.execute(buyer,'account_deletion_request',{confirmation:'DELETE'});
   assert.equal(duplicate.reference,r.reference);
