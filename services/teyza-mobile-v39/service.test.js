@@ -744,3 +744,35 @@ test('A pending shop can prepare its front photo without publishing it or exposi
  db.records.set('teyzaShopFrontPhotos/seller1',{ownerUid:'seller1',photoId:saved.photoId,objectPath:'teyza-private/mobile-verification/seller1/private.enc'});
  await rejects(service.publicShopPhoto('seller1',saved.photoId),404);
 });
+
+test('account deletion bypasses shop approval for approved, pending and rejected owners and users without a shop',async()=>{
+ for(const status of ['approved','pending','rejected']){
+   const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:status}});
+   const result=await service.execute({...owner,auth_time:940},'account_deletion_request',{confirmation:'DELETE'});
+   assert.equal(result.requested,true);
+   assert.match(result.reference,/^TZ-DEL-/);
+   assert.equal(db.records.get('teyzaSellerAccounts/seller1').deletionPending,true);
+ }
+ const {service}=fixture();
+ const result=await service.execute({...buyer,uid:'newShopper',auth_time:940,email_verified:false},
+   'account_deletion_request',{confirmation:'DELETE'});
+ assert.equal(result.requested,true);
+});
+test('free registration and plan selection cannot self-approve or mark billing paid',async()=>{
+ const {service,db}=fixture();
+ const data={category:'spaza',shopName:'Another local shop',phone:'0712345678',
+   consent:true,locationConsent:true,...await chosen(service,buyer)};
+ await service.execute(buyer,'seller_register',data);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
+ const choice=await service.execute(buyer,'seller_plan_select',{plan:'basic'});
+ assert.equal(choice.requiresPayment,true);
+ assert.equal(choice.visibilityActive,false);
+ const changed=db.records.get('teyzaSellerAccounts/buyer1');
+ assert.equal(changed.listingPlan,'basic');
+ assert.equal(changed.approvalStatus,'pending');
+ assert.equal(changed.listingStatus,'not_listed');
+ assert.equal(db.records.has('teyzaBilling/buyer1'),false);
+ await rejects(service.execute(buyer,'seller_plan_select',{plan:'premium-unlimited'}),422);
+ await service.execute(buyer,'seller_plan_select',{plan:'free'});
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
+});
