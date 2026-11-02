@@ -55,7 +55,20 @@ String authMessage(Object error) {
   if (value.contains('Google sign-in is not configured')) return 'Google login setup is not complete for this build. Use email login while Teyza connects it.';
   if (error is SignInWithAppleAuthorizationException) return 'Could not complete Apple sign-in. Please try again or use email login.';
   if (value.contains('Apple sign-in is not configured')) return 'Apple login setup is not complete. Please use email login and contact Teyza support.';
-  if (value.contains('DEVELOPER_ERROR') || value.contains('10:')) return 'Google login setup mismatch. Please use email login and contact Teyza support.';
+  // Android Google Play Services error 10 indicates an OAuth app identity
+  // mismatch, commonly package name + the installed APK signing certificate.
+  // iOS uses a separate client ID and reversed URL callback scheme.
+  if (value.contains('DEVELOPER_ERROR') ||
+      RegExp(r'ApiException:\\s*10\\b').hasMatch(value) ||
+      value.contains('sign_in_failed, 10')) {
+    return defaultTargetPlatform==TargetPlatform.android
+      ? 'Google sign-in configuration mismatch for this Android build. Teyza support must register this installed APK signing certificate (SHA-1) and app package in Firebase. A test APK and Google Play install can use different certificates.'
+      : 'Google sign-in configuration mismatch on iPhone. Teyza support must verify the registered iOS OAuth client, app bundle ID and Google callback URL scheme.';
+  }
+  if (value.contains('INVALID_IDP_RESPONSE') || value.contains('INVALID_OAUTH_CLIENT_ID') ||
+      value.contains('INVALID_CERT_HASH')) {
+    return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google/Apple provider and registered app configuration in Firebase.';
+  }
   if (value.contains('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')) return 'This email uses another sign-in method. Use your original method or reset your password.';
   if (value.contains('USER_DISABLED')) return 'This account is disabled. Contact Teyza support.';
   if (value.contains('TOKEN_EXPIRED') || value.contains('INVALID_REFRESH_TOKEN') ||
