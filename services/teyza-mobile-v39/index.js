@@ -25,6 +25,8 @@ async function readiness(){
 }
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
    deleteAuthUser:uid=>admin.auth().deleteUser(uid),
+   disableAuthUser:uid=>admin.auth().updateUser(uid,{disabled:true}),
+   revokeAuthTokens:uid=>admin.auth().revokeRefreshTokens(uid),
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
