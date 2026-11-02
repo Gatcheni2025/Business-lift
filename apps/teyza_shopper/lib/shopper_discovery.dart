@@ -22,7 +22,7 @@ Uri teyzaPlacesUrl(String path,[Map<String,String> params=const {}]) {
 Uri teyzaGooglePhotoUrl(String ref)=>teyzaPlacesUrl('shopper-place-photo.php',{'ref':ref});
 
 class OnlineShop {
-  final String id, name, area, address, source, origin, claimUrl;
+  final String id, name, area, address, source, origin, claimUrl, phone, websiteUrl, placeId;
   final double? lat, lng;
   final List<Map<String,String>> providerAttributions;
   final List<Map<String,String>> photoAttributions;
@@ -51,7 +51,8 @@ class OnlineShop {
   }
   const OnlineShop(this.id,this.name,this.area,this.address,this.source,
     this.origin,this.claimUrl,this.lat,this.lng,{
-      this.providerAttributions=const [],
+      this.phone='',this.websiteUrl='',this.placeId='',
+    this.providerAttributions=const [],
       this.photoAttributions=const [],
       this.photoRef,
       this.photoUrl,
@@ -65,6 +66,8 @@ class OnlineShop {
     (p['sourceUrl']??'').toString(),(p['origin']??'').toString(),
     (p['claimUrl']??'').toString(),
     (p['latitude'] as num?)?.toDouble(),(p['longitude'] as num?)?.toDouble(),
+    phone:(p['phone']??'').toString(),websiteUrl:(p['websiteUrl']??'').toString(),
+    placeId:(p['placeId']??'').toString(),
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
     shopCategory:p['shopCategory']=='wholesale'?'wholesale':p['shopCategory']=='variety'?'variety':'spaza',
@@ -96,13 +99,14 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   final name = shop.name.toLowerCase();
   if(category == 'wholesale') {
     return shop.types.any(const {'wholesaler','warehouse_store'}.contains)||
-      RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut').hasMatch(name);
+      RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
   }
   if(category == 'variety') {
-    if(RegExp(r'spaza|tuck\s?shop|takeaway|restaurant|tyres?|motor spares|printing|salon').hasMatch(name)) return false;
-    if(shop.types.any(const {'shopping_mall','department_store','supermarket',
-      'clothing_store','home_goods_store','wholesaler'}.contains))return true;
-    return RegExp(r'china\s?mall|shopping|mall|wholesale|cash\s?(and|&)\s?carry|variety|department|retail|supermarket|hypermarket|furniture|homeware|bazaar|clothing|fashion|market|trading').hasMatch(name);
+    if(RegExp(r'spaza|tuck\\s?shop|wholesal|cash\\s?(and|&)\\s?carry').hasMatch(name))return false;
+    if(shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
+        'furniture_store','hardware_store','barber_shop','clothing_store',
+        'home_goods_store','shopping_mall','department_store'}.contains))return true;
+    return RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
   }
   if(category == 'spaza') {
     return shop.types.any(const {'convenience_store','grocery_store','supermarket','food_store'}.contains)||
