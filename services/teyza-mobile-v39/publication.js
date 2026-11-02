@@ -4,7 +4,16 @@ const offers=require('./shop-services');
 const normalizedPhone=value=>String(value||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27');
 const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup'].includes(shop.status)&&
  !(shop.status==='suspended'&&['onboarding','owner_review','approval'].includes(shop.moderationSource)));
-function state(uid,account,setup={},verification,shop){
+// New sellers choose Free or R99 Basic. A plan selection is not a payment.
+// Existing legacy shops with no plan field retain their previous publication
+// treatment until the business completes an explicit migration.
+function period(now) { return new Date(now+2*3600000).toISOString().slice(0,7); }
+function entitled(uid,account,billing,now=Date.now()) {
+ if(!account||!Object.prototype.hasOwnProperty.call(account,'listingPlan'))return true;
+ return account.listingPlan==='basic'&&billing?.ownerUid===uid&&billing.status==='paid'&&
+   billing.monthlyCents===9900&&billing.latestPeriod===period(now);
+}
+function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
  const registered=account?.uid===uid&&['spaza','retail'].includes(account.category);
  const modern=setup.requiredVersion===2;
  const ready=registered&&(modern?Boolean(setup.completedAt)&&!setup.moderationBlocked&&
@@ -14,12 +23,13 @@ function state(uid,account,setup={},verification,shop){
  const reviewed=(!modern&&!verification)||(verification?.ownerUid===uid&&verification.status==='approved');
  const approved=registered&&account.approvalStatus==='approved'&&reviewed;
  const blocked=held(shop)||setup.moderationBlocked===true||account?.approvalStatus==='rejected';
- const live=Boolean(ready&&approved&&!blocked);
- return {registered,ready,approved,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':'active'};
+ const hasListing=entitled(uid,account,billing,now);
+ const live=Boolean(ready&&approved&&!blocked&&hasListing);
+ return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':!hasListing?'awaiting_subscription':'active'};
 }
-function assertLive(uid,account,setup,verification,shop){
+function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
- if(!state(uid,account,setup,verification,shop).live)D.fail(409,'This shop is awaiting approval or has not finished setup.');
+ if(!state(uid,account,setup,verification,shop,billing,now).live)D.fail(409,'This shop is awaiting approval, verification or an active paid listing.');
  return shop;
 }
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
@@ -37,13 +47,14 @@ function locationFor(uid,account,location,shop,now=Date.now()){
    ...(shop.coordinateSource==='google_places'?{coordinateSource:'google_places',coordinatesExpireAt:shop.coordinatesExpireAt}:{})};
  return null;
 }
-function project(uid,{account,setup={},verification,shop,settings={},front,location,drafts=[],removedProductId=null,now=Date.now()}){
+function project(uid,{account,setup={},verification,shop,settings={},front,location,billing=null,drafts=[],removedProductId=null,now=Date.now()}){
  if(shop&&shop.sellerUid!==uid)D.fail(409,'This shop listing needs Teyza support to restore it.');
- const result=state(uid,account,setup,verification,shop);
+ const result=state(uid,account,setup,verification,shop,billing,now);
  if(!result.registered||(!shop&&!setup.completedAt))return null;
  const next={...(shop||{}),sellerUid:uid,name:account.shopName,address:account.address||'',
   area:shop?.address&&sameAddress(shop.address,account.address)?shop.area||account.address:account.address||'',
   shopCategory:account.category,status:result.status,approvalStatus:result.approved?'approved':'pending',
+  sponsored:result.live&&account.listingPlan==='basic',
   sellingEnabled:result.live&&(setup.requiredVersion===2||shop?.sellingEnabled===true),
   identityVerified:result.approved,verificationStatus:result.approved?'approved':'pending_review',
   catalogueEnabled:shop?.catalogueEnabled===true,
@@ -74,7 +85,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
 }
 function publicRow(uid,shop){
  return {id:uid,sellerUid:uid,name:shop.name,area:shop.area||'',city:shop.city||'',address:shop.address||'',
-  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,
+  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,sponsored:shop.sponsored===true,
   photoUrl:shop.photoUrl||'',latitude:coordinates(shop.latitude,shop.longitude)?shop.latitude:null,
   longitude:coordinates(shop.latitude,shop.longitude)?shop.longitude:null,
   pickupEnabled:shop.pickupEnabled===true,deliveryEnabled:shop.deliveryEnabled===true,
@@ -83,4 +94,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled};
