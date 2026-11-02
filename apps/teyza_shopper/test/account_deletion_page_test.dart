@@ -41,10 +41,12 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:TeyzaDeleteAccountPage(session:session,api:api)));
    await tester.pumpAndSettle();
    await tester.enterText(find.byType(TextField).first,'DELETE');
-   await tester.ensureVisible(find.byType(CheckboxListTile));
+   await tester.scrollUntilVisible(find.byType(CheckboxListTile),220,
+     scrollable:find.byType(Scrollable).first);
    await tester.tap(find.byType(CheckboxListTile));await tester.pumpAndSettle();
    final button=find.text('Close account and request deletion');
-   await tester.ensureVisible(button);
+   await tester.scrollUntilVisible(button,220,
+     scrollable:find.byType(Scrollable).first);
    await tester.tap(button);await tester.pumpAndSettle();
    expect(api.calls,contains('account_deletion_request'));
    expect(session.signOutCount,1);
