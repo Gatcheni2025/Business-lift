@@ -51,7 +51,7 @@ function fixture(extra={},options={}){const db=new FakeDB({'teyzaSellerAccounts/
  return {db,files,service:createService({db,bucket,clock:()=>1000000,sanitizeImage:async bytes=>bytes,
    encryptSelfie:bytes=>C.encrypt(bytes,secret),decryptSelfie:bytes=>C.decrypt(bytes,secret),
    getPlacesKey:()=> 'test-key',getAddressSigningKey:()=>secret,addressFetch,
-   disableAuthUser:async()=>{},revokeAuthTokens:async()=>{},...options})};}
+   disableAuthUser:async()=>{},revokeAuthTokens:async()=>{},deleteAuthUser:async()=>{},...options})};}
 const rejects=(promise,status)=>assert.rejects(promise,error=>error.status===status);
 test('Only completed-order shoppers rate a shop; edits and repeat orders never inflate its count',async()=>{
  const {service,db}=fixture({'teyzaMobileOrders/done':{ownerUid:'seller1',shopperUid:'buyer1',status:'completed'},
