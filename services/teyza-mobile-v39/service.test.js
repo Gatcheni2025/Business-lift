@@ -781,3 +781,46 @@ test('free registration and plan selection cannot self-approve or mark billing p
  await service.execute(buyer,'seller_plan_select',{plan:'free'});
  assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
 });
+
+test('wholesale directory protects supplier prices and only approved spaza owners can request stock',async()=>{
+ const supplier={...seller,category:'wholesale',shopName:'KwaMashu Bulk Depot'};
+ const wholesaleShop={...shop,shopCategory:'wholesale',deliveryFeeCents:0,
+   products:[{id:'bulk1',name:'Rice 10kg bulk',priceCents:12500,stock:20}]};
+ const spaza={uid:'buyer1',category:'spaza',shopName:'Spaza Buyer',
+   approvalStatus:'approved',listingStatus:'active'};
+ const spazaShop={sellerUid:'buyer1',status:'active',name:'Spaza Buyer',shopCategory:'spaza',products:[]};
+ const {service,db}=fixture({'teyzaSellerAccounts/seller1':supplier,'teyzaPublicShops/seller1':wholesaleShop,
+   'teyzaSellerAccounts/buyer1':spaza,'teyzaPublicShops/buyer1':spazaShop});
+ assert.equal((await service.publicDirectory()).entries.some(p=>p.id==='seller1'),false,
+   'Public shopper directory must never contain wholesale stock prices');
+ const rows=await service.execute(buyer,'wholesale_directory');
+ assert.equal(rows.entries.length,1);
+ assert.equal(rows.entries[0].shopCategory,'wholesale');
+ assert.equal(rows.entries[0].products[0].priceCents,12500);
+ const req={shopId:'seller1',mode:'delivery',paymentMethod:'cash',
+   items:[{id:'bulk1',quantity:2}]};
+ const quote=(await service.execute(buyer,'order_quote',req)).quote;
+ assert.equal(quote.deliveryFeeCents,0);
+ assert.equal(quote.totalCents,25000);
+ const order=await service.execute(buyer,'order_request',{...req,requestId:'bulk-order-one',
+   phone:'0712345678',address:'12 Main Road KwaMashu Durban',
+   expectedQuoteId:quote.quoteId});
+ assert.equal(db.records.get('teyzaMobileOrders/'+order.id).orderType,'wholesale_stock');
+ await rejects(service.execute({uid:'outsider',email_verified:true},'wholesale_directory'),403);
+ await rejects(service.execute({uid:'outsider',email_verified:true},'order_quote',req),403);
+ await rejects(service.execute({uid:'outsider',email_verified:true},'order_request',
+   {...req,requestId:'bulk-order-two',phone:'0712345678',address:'12 Main Road KwaMashu Durban'}),403);
+ db.records.set('teyzaSellerAccounts/buyer1',{...spaza,approvalStatus:'pending'});
+ await rejects(service.execute(buyer,'wholesale_directory'),403);
+ await rejects(service.execute(buyer,'order_quote',req),403);
+});
+
+test('wholesalers can register as a distinct unapproved seller category',async()=>{
+ const {service,db}=fixture();
+ await register(service,buyer,{category:'wholesale',shopName:'Local Cash and Carry',
+   phone:'0712345678',consent:true});
+ const created=db.records.get('teyzaSellerAccounts/buyer1');
+ assert.equal(created.category,'wholesale');
+ assert.equal(created.approvalStatus,'pending');
+ assert.equal(created.listingPlan,'free');
+});
