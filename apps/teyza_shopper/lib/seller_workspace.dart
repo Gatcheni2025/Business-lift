@@ -414,7 +414,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     child:ListTile(leading:Icon(icon,color:ownerGreen),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),
       subtitle:Text(detail),trailing:const Icon(Icons.chevron_right),onTap:tap));
   Widget sellerBusiness()=>ListView(padding:const EdgeInsets.all(18),children:[
-    Text(shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
+    Text(shop!.category=='wholesale'?'Wholesaler · '+shop!.name:shop!.category=='spaza'?'Spaza Shop · '+shop!.name:shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
     Text(shop!.address,style:const TextStyle(color:Color(0xFF60736B))),const SizedBox(height:16),
     businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
@@ -428,7 +428,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(shop?.category=='spaza')businessTile(Icons.warehouse_outlined,'Buy from wholesalers',
       'Choose approved suppliers, compare real wholesale prices and request stock delivery',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-        WholesaleMarketPage(session:widget.session,api:widget.mobileApi)))),
+        WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??'')))),
     if(shop?.category=='spaza')businessTile(Icons.receipt_long_outlined,'My wholesale stock orders',
       'Follow up orders and deliveries from your suppliers',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
@@ -537,7 +537,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         actions:widget.sellerMode?[
           if(shop?.category=='spaza')IconButton(tooltip:'Buy wholesale stock',
             onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-              WholesaleMarketPage(session:widget.session,api:widget.mobileApi))),
+              WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))),
             icon:const Icon(Icons.warehouse_outlined)),
           if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
             icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
@@ -575,7 +575,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         if(error==null&&(shop==null||!shop!.hasRegisteredCategory))_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('No registered shop found',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
           const SizedBox(height:9),
-          const Text('Create your Spaza Shop or Other Retail / Wholesale profile here, then use the camera to verify the owner.'),
+          const Text('Choose Spaza Shop, Wholesaler supplying spaza shops, or Other Business. Your seller dashboard will reflect that choice after sign-in.'),
           const SizedBox(height:14),
           FilledButton(onPressed:registerShop,child:const Text('Register a shop')),
           OutlinedButton(onPressed:load,child:const Text('Refresh my shop')),
