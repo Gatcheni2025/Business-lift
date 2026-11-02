@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
+import 'shopper_delivery_profile.dart';
 import 'teyza_mobile_api.dart';
 
 /// Available from both Shopper Account and Seller > My Business.
@@ -32,7 +33,11 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
       if(response['requested']==true&&response['signInBlocked']==true){
         // The server has disabled this Firebase Auth identity and revoked
         // sessions; clear local tokens immediately. Do not restore it.
-        await widget.session.signOut();
+        final oldUid=widget.session.userId;
+        await ShopperDeliveryProfileStore().clear(oldUid);
+        final oldUid=widget.session.userId;
+      await ShopperDeliveryProfileStore().clear(oldUid);
+      await widget.session.signOut();
       }
       if(mounted)setState((){
         receipt=response['requested']==true?response:null;
@@ -70,7 +75,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
           const Center(child:CircularProgressIndicator())
         else if(r!=null)...[
           Text(r['signInBlocked']==true
-            ?'Your Teyza sign-in has been disabled and existing sessions revoked. Your old password, Google and Apple sign-in will no longer open this account. Personal-data erasure is still being processed, subject to legally required record retention.'
+            ?'Your previous Teyza account identity is closed and cannot be signed into again. You may register a NEW account with a new user ID, including the same email once the old sign-in identity is removed. The old shop, profile and orders will not be restored. Personal-data erasure and lawful retention review continue separately.'
             :'Your deletion request is recorded, but account sign-in closure is not confirmed. Contact Teyza support with your reference.',
             textAlign:TextAlign.center),
           const SizedBox(height:16),
@@ -89,7 +94,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
               if(context.mounted)Navigator.of(context).pop();
             }),
         ]else...[
-          const Text('Closing your account disables sign-in and revokes your sessions immediately. Teyza then removes personal data it does not have to retain by law. You cannot recover this account after closure.'),
+          const Text('Closing your account removes the old Firebase sign-in identity and revokes sessions. You may register a new account, but cannot restore or sign back into the old UID. Remaining personal data is handled under the deletion review.'),
           const SizedBox(height:14),
           const Card(child:Padding(padding:EdgeInsets.all(14),
             child:Text('Shop owners: your public shop listing will be suspended immediately. Outstanding orders, subscriptions or debit mandates need settlement; some transaction records may be legally retained. A request does not automatically stop external bank collections.'))),
