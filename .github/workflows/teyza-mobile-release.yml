@@ -19,6 +19,10 @@ on:
         description: 'Use the existing Android upload key and Apple distribution credentials'
         type: boolean
         default: false
+      upload_to_testflight:
+        description: 'After signed iOS build, upload verified IPA to App Store Connect TestFlight'
+        type: boolean
+        default: false
       platforms:
         description: 'Platforms to prepare'
         type: choice
@@ -27,6 +31,9 @@ on:
   workflow_call:
     inputs:
       signed_release:
+        type: boolean
+        default: false
+      upload_to_testflight:
         type: boolean
         default: false
       platforms:
@@ -375,6 +382,14 @@ jobs:
           path: apps/teyza_shopper/build/release/*
           if-no-files-found: error
           retention-days: 30
+      - name: Upload verified signed IPA to TestFlight (explicit opt-in only)
+        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 scripts/upload_testflight.py build/release
       - name: Remove Apple signing material
         if: always()
         shell: bash
