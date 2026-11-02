@@ -517,7 +517,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
   }
   async function reconcilePublicationBatch(){
-    const ref=doc('teyzaMaintenance/publication-approval-v1'),old=await ref.get();
+    // Rerun once after changing Free-plan publication eligibility. The
+    // completed v1 marker must not hide previously approved free sellers.
+    const ref=doc('teyzaMaintenance/publication-approved-free-v2'),old=await ref.get();
     if(old.exists&&old.data().completedAt)return {complete:true};
     let query=db.collection('teyzaSellerAccounts').orderBy('__name__').limit(100);
     if(old.exists&&old.data().after)query=query.startAfter(old.data().after);
