@@ -468,38 +468,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(session.sellerWorkspace)return;
     if(widget.initialArea!=null){
       await chooseArea(widget.initialArea!,persist:false);
-      return;
     }
-    if(deliveryProfile!=null)return; // Saved address takes priority over GPS.
-    // Never require the shopper to tap refresh after reopening the app.
-    // Recheck permission at startup, respecting Android privacy settings.
-    final prefs=await SharedPreferences.getInstance();
-    final saved=prefs.getString('teyza_selected_area');
-    final permission=await Geolocator.checkPermission();
-    if (!mounted)return;
-    // A shopper's explicit suburb selection takes precedence over GPS.
-    if(saved!=null&&saved!='gps') {
-      for(final entry in areas) {
-        if(entry.label==saved) {
-          await chooseArea(entry,persist:false);
-          return;
-        }
-      }
-    }
-    if(permission==LocationPermission.always ||
-       permission==LocationPermission.whileInUse) {
-      await useLocation(askPermission:false);
-      if(area!=null)return;
-    }
-    if(permission==LocationPermission.denied &&
-       !(prefs.getBool('teyza_gps_initial_prompt_done')??false)) {
-      await prefs.setBool('teyza_gps_initial_prompt_done',true);
-      if(mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if(mounted)useLocation(askPermission:true);
-        });
-      }
-    }
+    // On a real device, first ask for the saved delivery street address.
+    // GPS is optional: never override a previously saved delivery destination
+    // with the device's current position when reopening the app.
   }
 
   Future<void> setDiscoveryType(String type) async {
