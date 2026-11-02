@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 /// Shopper destinations. Merchant access lives in the account role selector.
 class PremiumShopperNavigation extends StatelessWidget {
   final int selectedIndex, cartCount;
+  final bool showShop;
   final ValueChanged<int> onSelect;
   const PremiumShopperNavigation({super.key,required this.selectedIndex,
-    required this.cartCount,required this.onSelect});
+    required this.cartCount,required this.onSelect,this.showShop=true});
   static const green=Color(0xFF3BB77E),ink=Color(0xFF010F1C),muted=Color(0xFF89929B);
 
   Widget destination(int index,String label,IconData active,IconData idle){
@@ -37,7 +38,7 @@ class PremiumShopperNavigation extends StatelessWidget {
         child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(27),
           child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
             destination(0,'Home',Icons.home_rounded,Icons.home_outlined),
-            destination(1,'Shops',Icons.storefront_rounded,Icons.storefront_outlined),
+            if(showShop)destination(1,'Shop',Icons.shopping_bag_rounded,Icons.shopping_bag_outlined),
             Expanded(child:Semantics(button:true,selected:selectedIndex==2,label:'Cart',
               child:InkWell(onTap:()=>onSelect(2),borderRadius:BorderRadius.circular(24),
                 child:Padding(padding:const EdgeInsets.symmetric(vertical:7),
