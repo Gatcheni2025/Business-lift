@@ -535,6 +535,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
+          if(shop?.category=='spaza')IconButton(tooltip:'Buy wholesale stock',
+            onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+              WholesaleMarketPage(session:widget.session,api:widget.mobileApi))),
+            icon:const Icon(Icons.warehouse_outlined)),
           if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
             icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
