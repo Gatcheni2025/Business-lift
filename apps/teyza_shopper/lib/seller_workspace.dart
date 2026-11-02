@@ -437,7 +437,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.workspace_premium_outlined,'Free or R99 Basic plan',
       'Registration is free · priority listing after payment is verified',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-        SellerPlanPage(session:widget.session,api:widget.mobileApi)))
+        SellerPlanPage(session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
         .then((_){if(mounted)refreshActivity();})),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
@@ -589,7 +589,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               icon:const Icon(Icons.add),label:const Text('Add a product')),
             const SizedBox(height:16),
           OutlinedButton.icon(onPressed:()=>Navigator.push(context,
-              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi)))
+              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
             label:Text('Plan: ${listingPlan=='basic'?'R99 Basic':'Free'} · change')),
