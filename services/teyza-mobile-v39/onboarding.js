@@ -53,15 +53,15 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    return {uid,token:await createPhoneToken(uid)};
   }
   if(action==='seller_onboarding'){
-   const [saved,id,selfie,shop,user,front,location]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
-    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid)]);
+   const [saved,id,selfie,shop,user,front,location,billing]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
+    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid),read('teyzaBilling/'+uid)]);
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
     shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
     locationSaved:Boolean(P.locationFor(uid,account,location,shop,clock())),
-    publicationStatus:P.state(uid,account,saved||{},selfie,shop).status};
+    publicationStatus:P.state(uid,account,saved||{},selfie,shop,billing,clock()).status};
   }
   if(action==='seller_identity_submit'){
    if(data.consent!==true)D.fail(422,'Confirm that you want to submit this private document.');
@@ -95,7 +95,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    const user=await getAuthUser(uid);checkedPhone(user,account.phone);
    return db.runTransaction(async tx=>{
     const refs=['teyzaSellerAccounts/','teyzaSellerIdentity/','teyzaMobileVerification/','teyzaSellerOnboarding/','teyzaPublicShops/','teyzaShopSettings/','teyzaShopFrontPhotos/'].map(p=>doc(p+uid));
-    const [a,i,v,o,s,c,f,drafts]=await Promise.all([...refs.map(r=>tx.get(r)),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201))]);
+    const [a,i,v,o,s,c,f,b,drafts]=await Promise.all([...refs.map(r=>tx.get(r)),tx.get(doc('teyzaBilling/'+uid)),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201))]);
     const owner=D.seller(a.exists?a.data():null,uid),id=i.exists?i.data():null,selfie=v.exists?v.data():null,setup=o.exists?o.data():{},shop=s.exists?s.data():null,settings=c.exists?c.data():{};
     const verifiedPhone=checkedPhone(user,owner.phone);
     if(setup.moderationBlocked||owner.approvalStatus==='rejected'||['rejected','needs_new_photo'].includes(selfie?.status))D.fail(409,'Your registration needs an administrator’s review before selling can resume.');
@@ -108,7 +108,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
       phoneVerifiedAt:clock(),completedAt:clock(),updatedAt:clock()};
     const pin=await tx.get(doc('teyzaShopLocations/'+uid));
     const next=P.project(uid,{account:owner,setup:nextSetup,verification:selfie,shop,settings,
-      front:f.exists?f.data():null,location:pin.exists?pin.data():null,
+      front:f.exists?f.data():null,location:pin.exists?pin.data():null,billing:b.exists?b.data():null,
       drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     nextSetup.sellingStatus=next.status==='active'?'active':'pending_approval';
     tx.set(refs[4],{...next,updatedAt:clock()});
