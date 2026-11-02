@@ -59,7 +59,7 @@ String authMessage(Object error) {
   // mismatch, commonly package name + the installed APK signing certificate.
   // iOS uses a separate client ID and reversed URL callback scheme.
   if (value.contains('DEVELOPER_ERROR') ||
-      RegExp(r'ApiException:\\s*10\\b').hasMatch(value) ||
+      RegExp(r'ApiException:\s*10\b').hasMatch(value) ||
       value.contains('sign_in_failed, 10')) {
     return defaultTargetPlatform==TargetPlatform.android
       ? 'Google sign-in configuration mismatch for this Android build. Teyza support must register this installed APK signing certificate (SHA-1) and app package in Firebase. A test APK and Google Play install can use different certificates.'
