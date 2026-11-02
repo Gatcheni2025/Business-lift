@@ -102,11 +102,11 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
       RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
   }
   if(category == 'variety') {
-    if(RegExp(r'spaza|tuck\\s?shop|wholesal|cash\\s?(and|&)\\s?carry').hasMatch(name))return false;
+    if(RegExp(r'spaza|tuck\s?shop|wholesal|cash\s?(and|&)\s?carry').hasMatch(name))return false;
     if(shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
         'furniture_store','hardware_store','barber_shop','clothing_store',
         'home_goods_store','shopping_mall','department_store'}.contains))return true;
-    return RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
+    return RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
   }
   if(category == 'spaza') {
     return shop.types.any(const {'convenience_store','grocery_store','supermarket','food_store'}.contains)||
