@@ -34,7 +34,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
         // The server has disabled this Firebase Auth identity and revoked
         // sessions; clear local tokens immediately. Do not restore it.
         final oldUid=widget.session.userId;
-        await ShopperDeliveryProfileStore().clear(oldUid);
+        try{await ShopperDeliveryProfileStore().clear(oldUid);}catch(_){/* Always clear authentication. */}
         await widget.session.signOut();
       }
       if(mounted)setState((){
@@ -53,7 +53,7 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
       if(response['signInBlocked']!=true)throw StateError(
         'Your deletion request was saved, but sign-in closure was not confirmed. Contact Teyza support and do not assume the account has been closed.');
       final oldUid=widget.session.userId;
-      await ShopperDeliveryProfileStore().clear(oldUid);
+      try{await ShopperDeliveryProfileStore().clear(oldUid);}catch(_){/* Always clear authentication. */}
       await widget.session.signOut();
       if(mounted)setState(()=>receipt=response);
     }catch(e){
