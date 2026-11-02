@@ -127,10 +127,12 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
 class ShopperCheckoutPage extends StatefulWidget {
   final ShopperSession session;final String shopId,shopName;
   final List<Map<String,dynamic>> items;final bool delivery,collection,acceptsCard;final int deliveryFeeCents,cashDiscountPercent;
+  final String savedDeliveryAddress,savedPhone;
   final TeyzaMobileApi? api;
   final bool wholesale;
   const ShopperCheckoutPage({super.key,required this.session,required this.shopId,required this.shopName,
-    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.acceptsCard=false,this.api,this.wholesale=false});
+    required this.items,required this.delivery,required this.collection,this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.acceptsCard=false,this.api,this.wholesale=false,
+    this.savedDeliveryAddress='',this.savedPhone=''});
   @override State<ShopperCheckoutPage> createState()=>_CheckoutState();
 }
 class _CheckoutState extends State<ShopperCheckoutPage>{
@@ -140,7 +142,12 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
   final address=TextEditingController(),phone=TextEditingController();
   final requestId='r'+DateTime.now().microsecondsSinceEpoch.toString();
   bool working=false,checking=false;String? error;int quoteRequest=0;Map<String,dynamic>? quote;
-  @override void initState(){super.initState();widget.session.addListener(accountChanged);loadQuote();}
+  @override void initState(){
+    super.initState();
+    address.text=widget.savedDeliveryAddress;
+    phone.text=widget.savedPhone;
+    widget.session.addListener(accountChanged);loadQuote();
+  }
   void accountChanged(){if(mounted&&uid!=widget.session.userId){quoteRequest++;address.clear();phone.clear();setState((){quote=null;error='Your account changed. Reopen your basket.';checking=false;});}}
   @override void dispose(){quoteRequest++;widget.session.removeListener(accountChanged);address.dispose();phone.dispose();super.dispose();}
   Map<String,dynamic> get request=>{'shopId':widget.shopId,'mode':mode,'paymentMethod':paymentMethod,
