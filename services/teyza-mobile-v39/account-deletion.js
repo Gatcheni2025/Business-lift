@@ -30,6 +30,7 @@ function publicStatus(record) {
     requested:true,reference:record.reference,status:record.status,
     requestedAt:record.requestedAt,completeBy:record.completeBy,
     seller:record.seller===true,signInBlocked:record.authDisabledAt>0,
+    canRegisterAgain:record.authDeletedAt>0,
     message:record.status==='completed'
       ? 'Your account deletion is complete.'
       : record.authDisabledAt>0
@@ -41,19 +42,26 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
   const doc=path=>db.doc(path);
   const get=async ref=>{const s=await ref.get();return s.exists?s.data():null;};
   async function blockSignIn(uid,request) {
-    if(request.status==='completed'||request.authDisabledAt>0)return publicStatus(request);
-    if(typeof disableAuthUser!=='function'||typeof revokeAuthTokens!=='function')
-      D.fail(503,'Deletion requested but account sign-in protection is unavailable. Contact Teyza support with your deletion reference.');
+    if(request.status==='completed'||request.authDeletedAt>0)return publicStatus(request);
+    if(typeof disableAuthUser!=='function'||typeof revokeAuthTokens!=='function'||
+       typeof deleteAuthUser!=='function')
+      D.fail(503,'Deletion identity closure is unavailable. Contact Teyza support with your reference.');
+    // Permanently remove the OLD Auth identity now. Unlike merely disabling
+    // an account, this frees its email for a genuinely new registration. Data
+    // erasure, billing checks and Apple token obligations remain in the queue.
     try{
       await disableAuthUser(uid);
       await revokeAuthTokens(uid);
+      await deleteAuthUser(uid);
     }catch(error){
       if(error?.code!=='auth/user-not-found')
-        D.fail(503,'Deletion request recorded, but account sign-in closure could not be confirmed. Contact Teyza support and quote your deletion reference.');
+        D.fail(503,'Deletion request saved but identity removal could not be confirmed. Contact Teyza support.');
     }
     const stoppedAt=clock();
-    await doc('teyzaAccountDeletionRequests/'+uid).update({authDisabledAt:stoppedAt,updatedAt:stoppedAt});
-    return publicStatus({...request,authDisabledAt:stoppedAt});
+    await doc('teyzaAccountDeletionRequests/'+uid).update({
+      authDisabledAt:stoppedAt,authDeletedAt:stoppedAt,updatedAt:stoppedAt
+    });
+    return publicStatus({...request,authDisabledAt:stoppedAt,authDeletedAt:stoppedAt});
   }
   async function execute(actor,action,data={}) {
     if(!actor?.uid)D.fail(401,'Sign in first.');
@@ -103,7 +111,7 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         });
         return record;
       });
-      // The disabled Firebase Auth identity is held while erasure is reviewed.
+      // The old Auth identity is removed so new registration uses a new UID.
       return blockSignIn(uid,request);
     }
     if(action==='ops_account_deletion_queue') {
@@ -115,7 +123,7 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
       const page=rows.docs.slice(0,pageSize);
       return {requests:page.filter(x=>x.data().status!=='completed')
         .map(x=>({uid:x.id,reference:x.data().reference,status:x.data().status,
-          signInBlocked:x.data().authDisabledAt>0,
+          signInBlocked:x.data().authDisabledAt>0,canRegisterAgain:x.data().authDeletedAt>0,
           requestedAt:x.data().requestedAt,completeBy:x.data().completeBy,
           seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true})),
         nextAfter:rows.docs.length>pageSize?page[page.length-1].id:null};
