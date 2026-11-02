@@ -749,7 +749,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           if(verifiedMerchantFor(place)!=null)
             FilledButton(onPressed:()=>openShop(verifiedMerchantFor(place)!),
               child:const Text('Buy here'))
-          else const OutlinedButton(onPressed:null,child:Text('Shop Unavailable')),
+          else OutlinedButton(onPressed:null,child:const Text('Shop Unavailable')),
           if(place.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(place.phone),
             icon:const Icon(Icons.phone_outlined,size:15),label:Text('Call '+place.phone)),
           if(place.hasPhoto && place.photoAttributions.isNotEmpty)
@@ -1569,8 +1569,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(verifiedMerchantFor(shop)!=null)
         FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
           icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here'))
-      else const OutlinedButton.icon(onPressed:null,icon:Icon(Icons.shopping_bag_outlined),
-        label:Text('Shop Unavailable')),
+      else OutlinedButton.icon(onPressed:null,icon:const Icon(Icons.shopping_bag_outlined),
+        label:const Text('Shop Unavailable')),
       for(final credit in shop.providerAttributions)
         Align(alignment:Alignment.centerLeft,
           child:TextButton.icon(onPressed:() async {
