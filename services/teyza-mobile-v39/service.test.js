@@ -547,10 +547,10 @@ test('A stale active flag cannot expose an unapproved shop, accept an order or o
  const summary=await service.execute(owner,'seller_summary');assert.equal(summary.sellingEnabled,false);assert.equal(summary.identityVerified,false);
  assert.notEqual(summary.publicationStatus,'active');assert.notEqual(db.records.get('teyzaPublicShops/seller1').status,'active');
 });
-// One trusted, recorded payment is needed before a new approved seller goes live.
+// The one-time trial begins on genuine administrator approval, not on a
+// client-declared start date. No bank debit mandates or payment are generated.
 const paidForTest=async(service,db)=>{
- await service.execute(newOwner,'seller_plan_select',{plan:'basic'});
- db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:9900,latestPeriod:'1970-01'});
+ await service.execute(newOwner,'seller_plan_select',{plan:'trial'});
 };
 test('Approval before completion stays private, then completing the approved setup publishes it',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);await approve(service,db);
@@ -792,23 +792,28 @@ test('account deletion bypasses shop approval for approved, pending and rejected
    'account_deletion_request',{confirmation:'DELETE'});
  assert.equal(result.requested,true);
 });
-test('free registration and plan selection cannot self-approve or mark billing paid',async()=>{
+test('Seller gets one trial at approval and cannot restart it or submit a new mandate',async()=>{
  const {service,db}=fixture();
  const data={category:'spaza',shopName:'Another local shop',phone:'0712345678',
    consent:true,locationConsent:true,...await chosen(service,buyer)};
  await service.execute(buyer,'seller_register',data);
- assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
- const choice=await service.execute(buyer,'seller_plan_select',{plan:'basic'});
- assert.equal(choice.requiresPayment,true);
- assert.equal(choice.visibilityActive,false);
- const changed=db.records.get('teyzaSellerAccounts/buyer1');
- assert.equal(changed.listingPlan,'basic');
- assert.equal(changed.approvalStatus,'pending');
- assert.equal(changed.listingStatus,'not_listed');
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'trial');
+ const choice=await service.execute(buyer,'seller_plan_select',{plan:'trial'});
+ assert.equal(choice.requiresPayment,false);
+ assert.equal(choice.awaitingApproval,true);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').trialStartedAt,undefined);
+ await rejects(service.execute(buyer,'seller_plan_select',{plan:'free'}),422);
+ await rejects(service.execute(buyer,'seller_plan_select',{plan:'basic'}),422);
+ await rejects(service.execute(buyer,'seller_mandate_submit',{}),410);
  assert.equal(db.records.has('teyzaBilling/buyer1'),false);
- await rejects(service.execute(buyer,'seller_plan_select',{plan:'premium-unlimited'}),422);
- await service.execute(buyer,'seller_plan_select',{plan:'free'});
- assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
+ const oldSeller={...seller,uid:'seller1',listingPlan:'free',approvalStatus:'approved'};
+ const converted=fixture({'teyzaSellerAccounts/seller1':oldSeller});
+ await converted.service.publicDirectory();
+ const migrated=converted.db.records.get('teyzaSellerAccounts/seller1');
+ assert.equal(migrated.listingPlan,'trial');
+ const firstEnd=migrated.trialEndsAt;
+ await converted.service.publicDirectory();
+ assert.equal(converted.db.records.get('teyzaSellerAccounts/seller1').trialEndsAt,firstEnd);
 });
 
 test('wholesale directory protects supplier prices and only approved spaza owners can request stock',async()=>{
@@ -862,7 +867,7 @@ test('wholesalers can register as a distinct unapproved seller category',async()
  const created=db.records.get('teyzaSellerAccounts/buyer1');
  assert.equal(created.category,'wholesale');
  assert.equal(created.approvalStatus,'pending');
- assert.equal(created.listingPlan,'free');
+ assert.equal(created.listingPlan,'trial');
 });
 
 test('spaza owner requests a Google wholesaler link without forging a Teyza partnership',async()=>{
