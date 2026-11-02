@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'shopper_discovery.dart';
 import 'shop_orders.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
@@ -7,13 +10,16 @@ import 'teyza_mobile_api.dart';
 class WholesaleMarketPage extends StatefulWidget {
   final ShopperSession session;
   final TeyzaMobileApi? api;
-  const WholesaleMarketPage({super.key,required this.session,this.api});
+  final String businessAddress;
+  const WholesaleMarketPage({super.key,required this.session,this.api,this.businessAddress=''});
   @override State<WholesaleMarketPage> createState()=>_WholesaleMarketState();
 }
 class _WholesaleMarketState extends State<WholesaleMarketPage> {
   String? uid,error;
   bool loading=true,busy=false;
   List<Map<String,dynamic>> suppliers=[];
+  List<OnlineShop> googleSuppliers=[];
+  String? discoveryError,memberNotice;
   Map<String,dynamic>? selected;
   final quantities=<String,int>{};
   String search='';
@@ -24,14 +30,16 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
   }
   @override void dispose(){widget.session.removeListener(accountChanged);super.dispose();}
   void accountChanged(){if(!mounted||uid==widget.session.userId)return;
-    setState((){uid=widget.session.userId;suppliers=[];selected=null;quantities.clear();
+    setState((){uid=widget.session.userId;suppliers=[];googleSuppliers=[];selected=null;quantities.clear();
       error='Account changed. Sign in as an approved spaza owner.';});}
   Future<void> load()async{
     if(uid==null||uid!=widget.session.userId){
       if(mounted)setState((){loading=false;error='Sign in with your spaza shop account.';});return;
     }
     final requestUid=uid;
-    setState((){loading=true;error=null;suppliers=[];selected=null;quantities.clear();});
+    setState((){loading=true;error=null;memberNotice=null;discoveryError=null;
+      suppliers=[];googleSuppliers=[];selected=null;quantities.clear();});
+    // Public discovery and private B2B ordering are intentionally independent.
     try{
       final rows=<Map<String,dynamic>>[];
       String? cursor;
@@ -43,9 +51,42 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
         cursor=data['next'] is String?data['next'] as String:null;
         if(cursor==null||cursor.isEmpty)break;
       }
-      if(mounted&&requestUid==widget.session.userId)setState((){suppliers=rows;loading=false;});
-    }catch(e){if(mounted&&requestUid==widget.session.userId)
-      setState((){error=mobileError(e);loading=false;});}
+      suppliers=rows;
+    }catch(e){
+      memberNotice='Verified wholesale prices require an approved spaza account with active R99 Basic access. Public Google-listed suppliers remain available below.';
+    }
+    try{
+      if(widget.businessAddress.trim().isEmpty)throw StateError('Add your shop address to discover nearby wholesalers.');
+      final locations=await locationFromAddress(widget.businessAddress).timeout(const Duration(seconds:12));
+      if(locations.isEmpty)throw StateError('Unable to find your shop location.');
+      final origin=locations.first;
+      final results=await findOnlineShops(latitude:origin.latitude,longitude:origin.longitude,
+        category:'wholesale',radiusKm:50);
+      if(mounted&&requestUid==widget.session.userId)googleSuppliers=results;
+    }catch(_){
+      discoveryError='Google-linked wholesale discovery is unavailable for this address. Check your shop address, connection and Places deployment.';
+    }
+    if(mounted&&requestUid==widget.session.userId)setState(()=>loading=false);
+  }
+  Future<void> requestSupplierLink(OnlineShop supplier)async{
+    if(busy)return;
+    setState(()=>busy=true);
+    try{
+      if(supplier.origin=='google_places'&&supplier.placeId.isNotEmpty){
+        await api.call('wholesale_link_request',{
+          'placeId':supplier.placeId,'name':supplier.name,'address':supplier.address});
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content:Text('Supplier link requested. Teyza must confirm the wholesaler before orders are available.')));
+      }else{
+        final text=Uri.encodeComponent('Please register your wholesale business on Teyza so spaza shops can request stock: https://www.teyza.co.za/');
+        await launchUrl(Uri.parse('https://wa.me/?text=$text'),mode:LaunchMode.externalApplication);
+      }
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(e))));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  Future<void> openMaps(OnlineShop place)async{
+    final uri=Uri.tryParse(place.source);
+    if(uri!=null&&uri.scheme=='https')await launchUrl(uri,mode:LaunchMode.externalApplication);
   }
   List<Map<String,dynamic>> get products=>selected==null?[]:
     mobileRows(selected!['products']).where((p)=>p['id'] is String&&
@@ -95,6 +136,10 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
         const SizedBox(height:8),
         const Text('Only approved Teyza wholesalers have orderable prices. Google-listed businesses must join Teyza before selling here.',
           style:TextStyle(color:Colors.black54,fontSize:12)),
+        if(memberNotice!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),
+          child:Text(memberNotice!,style:const TextStyle(color:Colors.deepOrange))),
+        if(discoveryError!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),
+          child:Text(discoveryError!,style:const TextStyle(color:Colors.black54))),
         if(loading)const Padding(padding:EdgeInsets.all(20),child:Center(child:CircularProgressIndicator())),
         if(error!=null)Padding(padding:const EdgeInsets.all(12),
           child:Text(error!,style:const TextStyle(color:Colors.red))),
@@ -113,7 +158,29 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
                 (p['deliveryFeeCents']==0?'Advertises free delivery':'Delivery offered'):
                 'Collection / delivery subject to supplier')),
             trailing:const Icon(Icons.chevron_right),
-            onTap:()=>setState((){selected=p;quantities.clear();})))
+            onTap:()=>setState((){selected=p;quantities.clear();}))),
+          const SizedBox(height:20),
+          const Text('Nearby Google-listed wholesalers',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
+          const Text('These businesses are not automatically on Teyza. You can view their map listing or request that Teyza contact them to join.',
+            style:TextStyle(fontSize:12,color:Colors.black54)),
+          if(googleSuppliers.isEmpty)const Padding(padding:EdgeInsets.all(14),
+            child:Text('No public wholesale suppliers were found. Check your business address or try another area.')),
+          for(final g in googleSuppliers.where((p)=>
+              p.name.toLowerCase().contains(search.toLowerCase())))Card(child:Padding(
+            padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(g.name,style:const TextStyle(fontWeight:FontWeight.bold)),
+              Text(g.address,style:const TextStyle(fontSize:12)),
+              if(g.phone.isNotEmpty)Text('Contact: '+g.phone,style:const TextStyle(fontSize:12)),
+              const SizedBox(height:8),
+              Wrap(spacing:8,runSpacing:8,children:[
+                OutlinedButton.icon(onPressed:()=>openMaps(g),
+                  icon:const Icon(Icons.map_outlined),label:const Text('View on Maps')),
+                FilledButton.tonalIcon(onPressed:busy?null:()=>requestSupplierLink(g),
+                  icon:const Icon(Icons.add_link),label:const Text('Request supplier link')),
+              ]),
+              const Text('Not yet connected to Teyza · Orders unavailable',
+                style:TextStyle(fontSize:11,color:Colors.black54))
+            ]))),
         ],
         if(!loading&&supplier!=null)...[
           TextButton.icon(onPressed:()=>setState((){selected=null;quantities.clear();}),
