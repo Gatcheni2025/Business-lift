@@ -114,7 +114,7 @@ jobs:
               raise SystemExit('Firebase mobile health request failed: '+str(error))
           required_true=('verificationUploads','shopFrontPhotos','approvalRequired',
                          'shopLocations','addressAutocomplete','shopServices',
-                         'orderQuotes','orderInboxAlways','accountDeletion','freeSellerPlans',
+                         'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock','freeSellerPlans',
                          'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           failures=[]
@@ -158,7 +158,7 @@ jobs:
         run: |
           npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
           node --test services/teyza-mobile-v39/*.test.js
-          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair','teyzaShopLocationRefresh']) assert(e[name].__endpoint,name); console.log('Thirteen Firebase function exports load successfully');"
+          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaDeletionSignInRepair','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair','teyzaShopLocationRefresh']) assert(e[name].__endpoint,name); console.log('Firebase function exports, including account deletion sign-in recovery, load successfully');"
       - name: Verify shared product catalogue and photo assets
         run: |
           python3 scripts/verify_teyza_catalogue.py
