@@ -82,6 +82,8 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:TeyzaDeleteAccountPage(session:session,api:api)));
    await tester.pumpAndSettle();
    expect(find.textContaining('Apple may ask you to authorize again'),findsOneWidget);
+   await tester.scrollUntilVisible(find.byType(TextField).first,220,
+     scrollable:find.byType(Scrollable).first);
    await tester.enterText(find.byType(TextField).first,'DELETE');
    await tester.scrollUntilVisible(find.byType(CheckboxListTile),180,
      scrollable:find.byType(Scrollable).first);
