@@ -7,7 +7,8 @@ import 'teyza_mobile_api.dart';
 class SellerPlanPage extends StatefulWidget {
   final ShopperSession session;
   final TeyzaMobileApi? api;
-  const SellerPlanPage({super.key,required this.session,this.api});
+  final String businessType;
+  const SellerPlanPage({super.key,required this.session,this.api,this.businessType='spaza'});
   @override State<SellerPlanPage> createState()=>_SellerPlanState();
 }
 
@@ -66,8 +67,10 @@ class _SellerPlanState extends State<SellerPlanPage> {
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
       const Text('Registration is free',style:TextStyle(fontSize:27,fontWeight:FontWeight.w800)),
       const SizedBox(height:8),
-      const Text('Set up your shop now. Select the R99 plan when you want to be listed for local shoppers.',
-        style:TextStyle(color:Color(0xFF506458),height:1.4)),
+      Text(widget.businessType=='wholesale'?
+        'Register your wholesale business for free. Activate Basic to share your published wholesale catalogue with approved spaza buyers after verification and payment.':
+        'Set up your shop now. Select the R99 plan when you want to be listed for local shoppers.',
+        style:const TextStyle(color:Color(0xFF506458),height:1.4)),
       const SizedBox(height:20),
       planCard(name:'Free',price:'R0',benefits:const [
         'Create and manage your business profile',
@@ -76,7 +79,15 @@ class _SellerPlanState extends State<SellerPlanPage> {
         'Your shop is not shown in nearby shopper results',
         'Upgrade your plan when you are ready',
       ],button:'Continue with Free',select:()=>choose('free')),
-      planCard(name:'Basic',price:'R99 / month',featured:true,benefits:const [
+      planCard(name:'Basic',price:'R99 / month',featured:true,benefits:widget.businessType=='wholesale'?const [
+        'Everything in Free',
+        'List your verified business in the approved spaza-owner wholesale directory',
+        'Publish wholesale product and pack prices from your own catalogue',
+        'Receive direct stock order requests and customer messages from spaza buyers',
+        'Offer collection or delivery, including R0 delivery when your business can provide it',
+        'Only approved spaza shop accounts can view and request wholesale products',
+        'Your supplier listing goes live only after approval and verified payment',
+      ]:const [
         'Everything in Free',
         'Eligible to appear in nearby shopper searches after approval and payment',
         'Priority placement within the relevant shopping area',
@@ -91,7 +102,9 @@ class _SellerPlanState extends State<SellerPlanPage> {
       ],button:'Choose R99 Basic',select:()=>choose('basic')),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:14),
         child:Text(error!,style:const TextStyle(color:Colors.red))),
-      const Text('Selecting Basic does not charge your card or bank account. Payment and activation are handled separately. Finance, discounts and free delivery depend on approved providers, eligibility and availability. Priority positioning does not guarantee sales.',
+      Text(widget.businessType=='wholesale'?
+        'Choosing Basic does not charge your bank account. Supplier listing is subject to verification and payment. You control your own wholesale prices and delivery terms; Teyza does not guarantee orders.':
+        'Selecting Basic does not charge your card or bank account. Payment and activation are handled separately. Finance, discounts and free delivery depend on approved providers, eligibility and availability. Priority positioning does not guarantee sales.',
         style:TextStyle(color:Color(0xFF56665D),fontSize:12,height:1.5)),
     ])),
   );
