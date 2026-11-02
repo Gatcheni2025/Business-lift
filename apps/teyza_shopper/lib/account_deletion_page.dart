@@ -53,8 +53,10 @@ class _DeleteAccountState extends State<TeyzaDeleteAccountPage> {
       // Apple requires a fresh authorization code for token revocation.
       // An unavailable provider must never prevent account deletion.
       if(widget.session.appleProviderLinked){
-        try{await widget.session.revokeAppleForDeletion();}
-        catch(_){appleRevocationPending=true;}
+        try{
+          final code=await widget.session.appleDeletionAuthorizationCode();
+          await api.call('account_apple_revoke',{'authorizationCode':code});
+        }catch(_){appleRevocationPending=true;}
       }
       final response=await api.call('account_deletion_request',{'confirmation':'DELETE'});
       if(response['signInBlocked']!=true)throw StateError(
