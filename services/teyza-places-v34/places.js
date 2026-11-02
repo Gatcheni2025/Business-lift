@@ -47,14 +47,16 @@ function kindMatch(place, kind) {
 }
 function mapResult(place, kind, lat, lon) {
   const la = num(place.location?.latitude, -90, 90), lo = num(place.location?.longitude, -180, 180);
-  if (!place.id || la === null || lo === null || place.businessStatus === 'CLOSED_PERMANENTLY') return null;
+  if (!place.id || place.businessStatus === 'CLOSED_PERMANENTLY' ||
+      ((la===null||lo===null)&&kind!=='variety')) return null;
   const photo = (place.photos || []).find(p => photoResource(p.name));
   const ref = photo ? photoResource(photo.name) : null;
   return {
     id: 'google-' + place.id, placeId: place.id,
-    name: place.displayName?.text || 'Local shop', area: 'Nearby',
+    name: place.displayName?.text || 'Local business',
+    area:la===null||lo===null?'Service area — check coverage':'Nearby',
     address: place.formattedAddress || '', latitude: la, longitude: lo,
-    distanceKm: +distance(lat, lon, la, lo).toFixed(2),
+    distanceKm:la===null||lo===null?null:+distance(lat, lon, la, lo).toFixed(2),
     origin: 'google_places', shopCategory: kind, categorizationVerified: true,
     primaryType: place.primaryType || '', types: place.types || [],
     phone: typeof place.nationalPhoneNumber==='string' ? place.nationalPhoneNumber.slice(0,32) : '',
@@ -79,6 +81,7 @@ async function searchPage({key, text, lat, lon, radius, pageToken, fetchImpl}) {
     headers: {'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELD_MASK},
     body: JSON.stringify({textQuery: text, pageSize: 20, languageCode: 'en', regionCode: 'ZA',
       locationBias: {circle: {center: {latitude: lat, longitude: lon}, radius}},
+      ...(text==='plumber services'||text==='electrical services'?{includePureServiceAreaBusinesses:true}:{}),
       ...(pageToken ? {pageToken} : {})}),
     signal: AbortSignal.timeout(8500)
   });
@@ -94,7 +97,7 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
     for (const p of places) {
       if (!kindMatch(p, kind)) continue;
       const entry = mapResult(p, kind, lat, lon);
-      if (!entry || entry.distanceKm > radius / 1000) continue;
+      if (!entry || (entry.distanceKm!==null&&entry.distanceKm > radius / 1000)) continue;
       if (!unique.has(entry.id) || (!unique.get(entry.id).photoRef && entry.photoRef)) unique.set(entry.id, entry);
     }
   }
@@ -112,7 +115,8 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
       else partial = true;
     }
   }
-  const entries = [...unique.values()].sort((a, b) => a.distanceKm - b.distanceKm ||
+  const entries = [...unique.values()].sort((a, b) =>
+    (a.distanceKm??Number.POSITIVE_INFINITY)-(b.distanceKm??Number.POSITIVE_INFINITY) ||
     Number(Boolean(b.photoRef)) - Number(Boolean(a.photoRef))).slice(0, 100);
   return {ok: true, version: '3.6', provider: 'google_places', category: kind, entries,
     returned: entries.length, photoCount: entries.filter(p => p.photoRef).length,
