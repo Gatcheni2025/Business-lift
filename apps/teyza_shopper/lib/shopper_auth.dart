@@ -159,7 +159,8 @@ class ShopperSession extends ChangeNotifier {
     if(refresh==null)return;
     final version=_version;
     final values={'teyza_refresh':refresh,'teyza_email':email??'','teyza_name':name??'',
-      'teyza_seller_workspace_uid':sellerWorkspace?userId!:''};
+      'teyza_seller_workspace_uid':sellerWorkspace?userId!:'',
+      'teyza_anonymous_shopper_uid':anonymousShopper?userId??'':''};
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final entry in values.entries){
         if(version!=_version||_disposed)return;
