@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'shopper_chat.dart';
 import 'teyza_mobile_api.dart';
+import 'shopper_payment_preference.dart';
 import 'seller_push.dart';
 
 const orderLabels={'requested':'Awaiting shop confirmation','confirmed':'Confirmed by shop',
@@ -147,6 +148,29 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
     address.text=widget.savedDeliveryAddress;
     phone.text=widget.savedPhone;
     widget.session.addListener(accountChanged);loadQuote();
+    restorePaymentPreference();
+  }
+  Future<void> restorePaymentPreference()async{
+    final current=uid;
+    if(current==null||widget.wholesale)return;
+    try{
+      final saved=await ShopperPaymentPreferenceStore().load(current);
+      if(!mounted||current!=widget.session.userId)return;
+      if(saved==ShopperPaymentPreferenceStore.cardAtShop&&mode=='collection'&&widget.acceptsCard){
+        setState(()=>paymentMethod=ShopperPaymentPreferenceStore.cardAtShop);
+        await loadQuote();
+      }
+    }catch(_){/* The safe default is cash. */}
+  }
+  Future<void> selectPayment(String preference)async{
+    if(working||uid!=widget.session.userId)return;
+    setState(()=>paymentMethod=preference);
+    if(!widget.wholesale&&uid!=null&&
+        ShopperPaymentPreferenceStore.choices.contains(preference)){
+      try{await ShopperPaymentPreferenceStore().save(uid!,preference);}
+      catch(_){/* Checkout remains usable even when vault temporarily fails. */}
+    }
+    await loadQuote();
   }
   void accountChanged(){if(mounted&&uid!=widget.session.userId){quoteRequest++;address.clear();phone.clear();setState((){quote=null;error='Your account changed. Reopen your basket.';checking=false;});}}
   @override void dispose(){quoteRequest++;widget.session.removeListener(accountChanged);address.dispose();phone.dispose();super.dispose();}
@@ -188,9 +212,9 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
         if(widget.wholesale)ChoiceChip(label:const Text('Arrange with supplier'),selected:paymentMethod=='arrange_with_shop',
            onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='arrange_with_shop');loadQuote();}),
          ChoiceChip(label:Text(mode=='delivery'?'Cash on delivery':'Cash'),selected:paymentMethod=='cash',
-          onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='cash');loadQuote();}),
+          onSelected:working||uid!=widget.session.userId?null:(_)=>selectPayment('cash')),
         if(mode=='collection'&&widget.acceptsCard)ChoiceChip(label:const Text('Card at the shop'),selected:paymentMethod=='card_at_shop',
-          onSelected:working||uid!=widget.session.userId?null:(_){setState(()=>paymentMethod='card_at_shop');loadQuote();}),
+          onSelected:working||uid!=widget.session.userId?null:(_)=>selectPayment('card_at_shop')),
       ]),
       if(paymentMethod=='card_at_shop')const Padding(padding:EdgeInsets.only(top:8),child:Text('No extra card charge. Pay the shop’s advertised price.')),
       const SizedBox(height:20),TextField(controller:phone,enabled:!working&&uid==widget.session.userId,keyboardType:TextInputType.phone,autofillHints:const [AutofillHints.telephoneNumber],
