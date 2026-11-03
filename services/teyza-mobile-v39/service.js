@@ -151,8 +151,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const profile=await read('teyzaShopperProfiles/'+uid);
     if(profile?.ownerUid!==uid||
        typeof profile.displayName!=='string'||profile.displayName.trim().length<2||
-       typeof profile.phone!=='string'||profile.phone.replace(/\\D/g,'').length<9||
-       typeof profile.contactEmail!=='string'||!(/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/).test(profile.contactEmail)||
+       typeof profile.phone!=='string'||profile.phone.replace(/\D/g,'').length<9||
+       typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)||
        typeof profile.address!=='string'||profile.address.trim().length<8||
        !P.coordinates(profile.latitude,profile.longitude))
       D.fail(403,'Save your name, phone, email and delivery address once before shopping.');
@@ -183,7 +183,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const area=D.text(data.area||'','delivery area',130,false);
       const city=D.text(data.city||'','delivery city',130,false);
       const suppliedEmail=D.text(data.email,'shopper contact email',150).trim().toLowerCase();
-      if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(suppliedEmail))
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
         D.fail(422,'Enter a valid email address.');
       // Do NOT pretend the contact email verifies Firebase identity.
       // It is used for communication, while account authority stays with UID.
