@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,10 +21,10 @@ class SellerPush {
   void Function(String target)? onOpen;
   bool get isEnabled=>!disposed&&owner==session.userId&&token!=null&&registeredAt!=null;
   String? token,owner;bool starting=false,disposed=false,stopping=false;
-  Timer? renewal;DateTime? registeredAt;
+  Timer? renewal;DateTime? registeredAt,lastChatVibration;
   Future<void> initialize() async{await NativeFirebase.ensure();}
   Future<void> restore() async{
-    if(disposed||starting||stopping||session.userId==null||!session.contactVerified)return;
+    if(disposed||starting||stopping||session.userId==null||(!session.contactVerified&&!session.anonymousShopper))return;
     if(owner==session.userId&&registeredAt!=null&&DateTime.now().difference(registeredAt!)<const Duration(days:1))return;
     starting=true;
     try{final prefs=await SharedPreferences.getInstance();if(prefs.getString('teyza_seller_push_uid')==session.userId)await enable(request:false);}
@@ -36,7 +37,7 @@ class SellerPush {
     if(!disposed)unawaited(restore());
   }
   Future<void> enable({bool request=true}) async{
-    final uid=session.userId;if(uid==null||!session.contactVerified)throw StateError('Sign in and verify your email or mobile number first.');
+    final uid=session.userId;if(uid==null||(!session.contactVerified&&!session.anonymousShopper))throw StateError('Save your shopper details or sign in first.');
     await initialize();
     final messaging=FirebaseMessaging.instance;
     final settings=request?await messaging.requestPermission(alert:true,badge:true,sound:true):await messaging.getNotificationSettings();
@@ -57,7 +58,16 @@ class SellerPush {
       if(disposed||owner!=session.userId)return;token=value;
       try{await TeyzaMobileApi(session).call('notification_device_save',{'token':value,'platform':Platform.isIOS?'ios':'android'});}catch(_){}
     });
-    foreground??=FirebaseMessaging.onMessage.listen((m){if(m.data['ownerUid']==session.userId&&!disposed)updates.add(null);});
+    foreground??=FirebaseMessaging.onMessage.listen((m){
+      if(m.data['ownerUid']!=session.userId||disposed)return;
+      updates.add(null);
+      final now=DateTime.now();
+      if(m.data['target']=='chat'&&(lastChatVibration==null||
+          now.difference(lastChatVibration!)>const Duration(seconds:3))){
+        lastChatVibration=now;
+        unawaited(HapticFeedback.vibrate());
+      }
+    });
     opened??=FirebaseMessaging.onMessageOpenedApp.listen(open);
     final initial=await messaging.getInitialMessage();if(initial!=null)open(initial);
   }

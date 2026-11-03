@@ -32,8 +32,8 @@ function createShopFront({db,bucket,sanitizeImage,clock,rate}){
  }
  async function publicPhoto(uid,photoId){
   D.id(uid);D.id(photoId);
-  const [shop,saved,owner,setup,v]=await Promise.all(['teyzaPublicShops/','teyzaShopFrontPhotos/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>db.doc(p+uid).get()));
-  if(!shop.exists||shop.data().status!=='active'||!P.state(uid,owner.exists?owner.data():null,setup.exists?setup.data():{},v.exists?v.data():null,shop.data()).live||!saved.exists||!valid(saved.data(),uid)||saved.data().photoId!==photoId)
+  const [shop,saved,owner,setup,v,b]=await Promise.all(['teyzaPublicShops/','teyzaShopFrontPhotos/','teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>db.doc(p+uid).get()));
+  if(!shop.exists||shop.data().status!=='active'||!P.state(uid,owner.exists?owner.data():null,setup.exists?setup.data():{},v.exists?v.data():null,shop.data(),b.exists?b.data():null,clock()).live||!saved.exists||!valid(saved.data(),uid)||saved.data().photoId!==photoId)
    D.fail(404,'Shop photo is not published.');
   const [bytes]=await bucket.file(saved.data().objectPath).download();return bytes;
  }

@@ -18,7 +18,7 @@ function trialActive(account,now=Date.now()){
 function entitled(uid,account,billing,now=Date.now()) {
  // Existing legacy contracts without a plan are maintained until individually
  // migrated; new registrations MUST use a non-renewable seven-day trial.
- if(!account||!Object.prototype.hasOwnProperty.call(account,'listingPlan'))return true;
+ if(!account||!Object.prototype.hasOwnProperty.call(account,'listingPlan'))return false;
  if(trialActive(account,now))return true;
  return account.listingPlan==='basic'&&billing?.ownerUid===uid&&billing.status==='paid'&&
    billing.monthlyCents===9900&&billing.latestPeriod===period(now);

@@ -25,7 +25,7 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
                (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
             'appleLoginImplemented': platform == 'ios',
-            'mobileBackendVersionRequired': '3.15.0', 'shopFrontPhotoImplemented': True,
+            'mobileBackendVersionRequired': '3.17.0', 'shopFrontPhotoImplemented': True,
             'sellerNotificationsImplemented': True, 'adminSellerReviewImplemented': True,
             'nativeSellerRegistration': True, 'sellerIdentityDocuments': True, 'sellerPhoneOtpImplemented': True,
             'deviceOtpVerified': False, 'sellingAfterCompletedSetup': True,

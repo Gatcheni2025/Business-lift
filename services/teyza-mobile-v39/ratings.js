@@ -15,9 +15,9 @@ function createRatings({db,clock,rate}){
    if(order.status!=='completed')D.fail(409,'Rate the shop after your order is completed.');
    const shopRef=db.doc('teyzaPublicShops/'+D.id(order.ownerUid));
    const ratingRef=db.doc('teyzaShopRatings/'+order.ownerUid+'/shoppers/'+uid);
-   const [shopSnap,oldSnap,a,o,v]=await Promise.all([tx.get(shopRef),tx.get(ratingRef),
-     ...['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/'].map(p=>tx.get(db.doc(p+order.ownerUid)))]);
-   const shop=P.assertLive(order.ownerUid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shopSnap.exists?shopSnap.data():null);
+   const [shopSnap,oldSnap,a,o,v,b]=await Promise.all([tx.get(shopRef),tx.get(ratingRef),
+     ...['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>tx.get(db.doc(p+order.ownerUid)))]);
+   const shop=P.assertLive(order.ownerUid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shopSnap.exists?shopSnap.data():null,b.exists?b.data():null,clock());
    const old=oldSnap.exists?oldSnap.data():null;
    // One current rating per shopper per shop. Repeat orders cannot inflate count.
    const count=(Number.isInteger(shop.ratingCount)?shop.ratingCount:0)+(old?0:1);

@@ -1,4 +1,7 @@
 name: Teyza Android and iOS Release
+# PR runs only check compilation and are intentionally unsigned. Manually running
+# this workflow defaults to signed distribution and requires original secrets.
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'Teyza SIGNED distribution' || 'Teyza UNSIGNED PR preview' }} - ${{ github.ref_name }}
 
 on:
   pull_request:
@@ -16,11 +19,11 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'Use the existing Android upload key and Apple distribution credentials'
+        description: 'SIGNED AAB + APK + IPA (existing Play/Apple keys); requires deployed Firebase 3.17.0'
         type: boolean
-        default: false
+        default: true
       upload_to_testflight:
-        description: 'After signed iOS build, upload verified IPA to App Store Connect TestFlight'
+        description: 'Upload the SIGNED iOS IPA to TestFlight after successful checks (optional)'
         type: boolean
         default: false
       platforms:
@@ -98,6 +101,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Declare release signing mode and reject contradictory TestFlight requests
+        env:
+          REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
+        shell: bash
+        run: |
+          echo "### Teyza build mode: $SIGNING_MODE" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SIGNING_MODE" = signed ]; then
+            echo "This is a SIGNED distribution request. The existing Play upload certificate and Apple distribution identity will be validated before any signed artifacts are published." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "This is an UNSIGNED code-validation preview. Its AAB and iOS archive are NOT ready for Play Console or TestFlight. Use Actions > Run workflow > signed_release=true to produce store artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$SIGNING_MODE" != signed ]; then
+            echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
+            exit 1
+          fi
       - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed'
         env:
@@ -116,11 +134,11 @@ jobs:
                          'shopLocations','addressAutocomplete','shopServices',
                          'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock',
                          'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery','freeSellerPlans',
-                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices','chatModeration','sevenDayTrial','shopperDeletionProfileClear','appleRevocationServer')
+                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices','chatModeration','sevenDayTrial','shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity','twoWayChatNotifications','wholesaleConnections','strictSevenDayMembership')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           failures=[]
-          if health.get('version')!='3.16.0':
-              failures.append('version (expected 3.16.0; received '+repr(health.get('version'))+')')
+          if health.get('version')!='3.17.0':
+              failures.append('version (expected 3.17.0; received '+repr(health.get('version'))+')')
           failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
           failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
                           if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)

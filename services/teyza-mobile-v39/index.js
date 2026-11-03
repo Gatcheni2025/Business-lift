@@ -76,9 +76,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.16.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.17.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:true,shopperDeletionProfileClear:true,appleRevocationServer:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:true,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -147,8 +147,13 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaMobileChats/{threadId}/messages/{messageId}'},async event=>{
  const value=notificationFor('message',null,event.data?.data(),event.params.threadId);if(!value)return;
  const thread=await db.doc('teyzaMobileChats/'+event.params.threadId).get();
- if(thread.exists&&event.data.data().senderUid===thread.data().shopperUid)
-  await notifications.queue(event.id,{...value,ownerUid:thread.data().ownerUid});
+ if(!thread.exists)return;
+ const sender=event.data.data().senderUid;
+ const t=thread.data();
+ if(sender!==t.shopperUid&&sender!==t.ownerUid)return;
+ // Owner replies notify the shopper; shopper messages notify the seller.
+ await notifications.queue(event.id,{...value,
+   ownerUid:sender===t.ownerUid?t.shopperUid:t.ownerUid});
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));

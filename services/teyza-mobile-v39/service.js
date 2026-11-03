@@ -25,17 +25,21 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   // on first access after migration. The start/end are written once in a
   // transaction; repeated refreshes and device changes cannot extend it.
   async function trialAccount(uid,account){
-    if(account?.listingPlan!=='free'||account.approvalStatus!=='approved')return account;
+    if(!account||(!['free',undefined].includes(account.listingPlan))||
+       account.approvalStatus!=='approved')return account;
     const ref=doc('teyzaSellerAccounts/'+uid);
     return db.runTransaction(async tx=>{
       const current=await tx.get(ref);
       const value=current.exists?current.data():null;
       if(!value||value.uid!==uid||value.approvalStatus!=='approved')return value;
-      if(value.listingPlan!=='free'||value.trialStartedAt>0)return value;
-      const at=clock(),updated={...value,listingPlan:'trial',
-        trialStartedAt:at,trialEndsAt:at+P.TRIAL_MS,updatedAt:new Date(at)};
-      tx.update(ref,{listingPlan:updated.listingPlan,trialStartedAt:at,
-        trialEndsAt:updated.trialEndsAt,updatedAt:updated.updatedAt});
+      if(!['free',undefined].includes(value.listingPlan))return value;
+      const at=Number.isFinite(value.trialStartedAt)&&value.trialStartedAt>0?value.trialStartedAt:clock();
+      const end=Number.isFinite(value.trialEndsAt)&&value.trialEndsAt-at===P.TRIAL_MS?
+        value.trialEndsAt:at+P.TRIAL_MS;
+      const updated={...value,listingPlan:'trial',
+        trialStartedAt:at,trialEndsAt:end,updatedAt:new Date(clock())};
+      tx.update(ref,{listingPlan:'trial',trialStartedAt:at,
+        trialEndsAt:end,updatedAt:updated.updatedAt});
       return updated;
     });
   }
@@ -56,11 +60,15 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
-      if(account?.listingPlan==='free'&&account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
-        const at=clock();account={...account,listingPlan:'trial',trialStartedAt:at,
-          trialEndsAt:at+P.TRIAL_MS};
+      if(account&&['free',undefined].includes(account.listingPlan)&&
+          account.approvalStatus==='approved'){
+        const at=Number.isFinite(account.trialStartedAt)&&account.trialStartedAt>0?
+          account.trialStartedAt:clock();
+        const end=Number.isFinite(account.trialEndsAt)&&account.trialEndsAt-at===P.TRIAL_MS?
+          account.trialEndsAt:at+P.TRIAL_MS;
+        account={...account,listingPlan:'trial',trialStartedAt:at,trialEndsAt:end};
         tx.update(accountRef,{listingPlan:'trial',trialStartedAt:at,
-          trialEndsAt:account.trialEndsAt,updatedAt:new Date(at)});
+          trialEndsAt:end,updatedAt:new Date(clock())});
       }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
@@ -112,6 +120,26 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(!P.entitled(uid,a,b,clock()))D.fail(403,'Your R99 Basic membership must be active before you can see wholesale stock prices.');
     return a;
   }
+  function wholesalePair(spazaUid,supplierUid){
+    return doc('teyzaWholesaleConnections/'+D.id(spazaUid)+'_'+D.id(supplierUid));
+  }
+  async function connectedSupplier(spazaUid,supplierUid,tx=null){
+    const ref=wholesalePair(spazaUid,supplierUid),snap=await (tx?tx.get(ref):ref.get());
+    const link=snap.exists?snap.data():null;
+    if(!link||link.spazaUid!==spazaUid||link.supplierUid!==supplierUid||link.status!=='approved')
+      D.fail(403,'Connect with this wholesaler and receive approval before accessing wholesale prices or ordering stock.');
+    return link;
+  }
+  function supplierOffer(shop,settings,link){
+    const percent=Number.isInteger(link.discountPercent)&&link.discountPercent>=0&&link.discountPercent<=50?
+      link.discountPercent:0;
+    const products=(shop.products||[]).map(p=>({...p,
+      priceCents:Math.max(1,Math.round(p.priceCents*(100-percent)/100))}));
+    const fee=Number.isInteger(link.deliveryFeeCents)&&link.deliveryFeeCents>=0?
+      link.deliveryFeeCents:offers.effective(settings,shop).deliveryFeeCents;
+    return {shop:{...shop,products},settings:{...(settings||{}),deliveryFeeCents:fee},
+      discountPercent:percent,deliveryFeeCents:fee};
+  }
   async function rate(uid,kind,max,window) {
     const ref=doc('teyzaMobileLimits/'+uid+'_'+kind);
     await db.runTransaction(async tx => {
@@ -147,6 +175,17 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
   const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,clock});
+  async function registeredShopper(uid){
+    const profile=await read('teyzaShopperProfiles/'+uid);
+    if(profile?.ownerUid!==uid||
+       typeof profile.displayName!=='string'||profile.displayName.trim().length<2||
+       typeof profile.phone!=='string'||profile.phone.replace(/\D/g,'').length<9||
+       typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)||
+       typeof profile.address!=='string'||profile.address.trim().length<8||
+       !P.coordinates(profile.latitude,profile.longitude))
+      D.fail(403,'Save your name, phone, email and delivery address once before shopping.');
+    return profile;
+  }
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
@@ -171,10 +210,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
       const area=D.text(data.area||'','delivery area',130,false);
       const city=D.text(data.city||'','delivery city',130,false);
-      // Email is authoritative only from Firebase Auth, never from a
-      // user-supplied profile field. We must not claim unverified email is verified.
+      const suppliedEmail=D.text(data.email,'shopper contact email',150).trim().toLowerCase();
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
+        D.fail(422,'Enter a valid email address.');
+      // Do NOT pretend the contact email verifies Firebase identity.
+      // It is used for communication, while account authority stays with UID.
       const profile={ownerUid:uid,displayName,phone,address,area,city,
-        latitude:lat,longitude:lng,email:typeof auth.email==='string'?auth.email:'',
+        latitude:lat,longitude:lng,contactEmail:suppliedEmail,
+        email:typeof auth.email==='string'?auth.email:'',
         emailVerified:auth.email_verified===true,updatedAt:clock()};
       await doc('teyzaShopperProfiles/'+uid).set(profile,{merge:true});
       return {saved:true,profile};
@@ -189,8 +232,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
-    if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
-      D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
+    const isShopperAction=['order_quote','order_request','order_list',
+      'chat_open','chat_list','chat_read','chat_send','chat_block','chat_report',
+      'notification_list','notification_read','notification_preferences',
+      'notification_device_save','notification_device_delete'].includes(action);
+    // One-time location + contact onboarding is sufficient for a basic buyer
+    // account. Never use this bypass for seller approvals, finance or stock.
+    let shopperProfile=null;
+    if(!auth.email_verified&&!auth.phone_number){
+      if(isShopperAction)shopperProfile=await registeredShopper(uid);
+      else if(!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+        D.fail(403,'Verify your email or mobile number before using seller services.');
+    }
     if(action==='seller_plan_select'){
       const choice=await sellerExperience.execute(auth,action,data);
       await synchronizeCatalogue(uid); // refresh public shop eligibility after trial selection
@@ -214,9 +267,114 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         status:'awaiting_supplier_outreach',source:'google_places',createdAt:clock()});
       return {requested:true,reference:requestId};
     }
+    if(action==='wholesale_connection_request'){
+      await assertSpazaBuyer(uid);
+      const supplierUid=D.id(data.supplierUid);
+      if(supplierUid===uid)D.fail(422,'Choose a different wholesale business.');
+      const supplier=await active(supplierUid);
+      if(supplier.shopCategory!=='wholesale')D.fail(422,'This shop is not a verified wholesale supplier.');
+      await rate(uid,'wholesale-connect',12,86400000);
+      const ref=wholesalePair(uid,supplierUid);
+      return db.runTransaction(async tx=>{
+        const old=await tx.get(ref);
+        if(old.exists&&['pending','approved'].includes(old.data().status))
+          return {status:old.data().status,alreadyRequested:true};
+        tx.set(ref,{spazaUid:uid,supplierUid,status:'pending',
+          discountPercent:0,deliveryFeeCents:null,
+          createdAt:old.exists?old.data().createdAt:clock(),updatedAt:clock()});
+        return {status:'pending',requested:true};
+      });
+    }
+    if(action==='wholesale_connection_respond'){
+      const account=await owner(uid);
+      if(account.category!=='wholesale')D.fail(403,'Only verified wholesaler owners can respond.');
+      await active(uid);
+      const buyerUid=D.id(data.spazaUid),status=data.status;
+      if(!['approved','declined'].includes(status))D.fail(422,'Accept or decline the connection.');
+      // Terms are always chosen by the supplier, not the spaza client.
+      const discountPercent=data.discountPercent??0;
+      if(!Number.isInteger(discountPercent)||discountPercent<0||discountPercent>50)
+        D.fail(422,'Discount must be between 0% and 50%.');
+      const deliveryFeeCents=data.deliveryFeeCents??null;
+      if(deliveryFeeCents!==null&&(!Number.isInteger(deliveryFeeCents)||
+          deliveryFeeCents<0||deliveryFeeCents>1000000))
+        D.fail(422,'Enter a valid delivery fee in cents.');
+      const buyer=await owner(buyerUid);
+      if(buyer.category!=='spaza')D.fail(403,'Only registered spaza shops can connect.');
+      await rate(uid,'wholesale-respond',50,3600000);
+      const ref=wholesalePair(buyerUid,uid);
+      return db.runTransaction(async tx=>{
+        const old=await tx.get(ref);
+        if(!old.exists||old.data().supplierUid!==uid||old.data().spazaUid!==buyerUid)
+          D.fail(404,'This spaza shop has not requested a connection.');
+        if(old.data().status==='declined'&&status==='approved')
+          D.fail(409,'The spaza must send a new connection request.');
+        tx.update(ref,{status,discountPercent:status==='approved'?discountPercent:0,
+          deliveryFeeCents:status==='approved'?deliveryFeeCents:null,updatedAt:clock()});
+        return {status,spazaUid:buyerUid};
+      });
+    }
+    if(action==='wholesale_connection_chat_open'){
+      const account=await owner(uid);
+      if(!['spaza','wholesale'].includes(account.category))
+        D.fail(403,'Only connected spaza shops and wholesalers can open supplier chat.');
+      const supplierUid=account.category==='wholesale'?uid:D.id(data.supplierUid);
+      const spazaUid=account.category==='spaza'?uid:D.id(data.spazaUid);
+      await active(supplierUid);
+      await assertSpazaBuyer(spazaUid);
+      await connectedSupplier(spazaUid,supplierUid);
+      await rate(uid,'wholesale-chat-open',20,60000);
+      const supplier=await owner(supplierUid),spaza=await owner(spazaUid);
+      const ref=doc('teyzaMobileChats/'+D.threadId(supplierUid,spazaUid));
+      await db.runTransaction(async tx=>{
+        const saved=await tx.get(ref);
+        if(saved.exists)D.member(saved.data(),uid);
+        for(const member of [supplierUid,spazaUid])
+          tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),
+            {updatedAt:saved.exists?saved.data().updatedAt:clock()});
+        if(saved.exists)return;
+        tx.set(ref,{ownerUid:supplierUid,shopperUid:spazaUid,
+          members:[supplierUid,spazaUid],shopName:supplier.shopName,
+          shopperName:spaza.shopName,lastMessage:'',messageCount:0,
+          updatedAt:clock(),ownerUnread:0,shopperUnread:0,
+          wholesalePartnerChat:true});
+      });
+      return {threadId:ref.id,shopName:account.category==='spaza'?
+        supplier.shopName:spaza.shopName};
+    }
+    if(action==='wholesale_connections'){
+      const account=await owner(uid);
+      if(!['spaza','wholesale'].includes(account.category))D.fail(403,'Only shop owners can view wholesale connections.');
+      const supplier=account.category==='wholesale';
+      const rows=await db.collection('teyzaWholesaleConnections')
+        .where(supplier?'supplierUid':'spazaUid','==',uid).limit(100).get();
+      const entries=await Promise.all(rows.docs.map(async snap=>{
+        const item=snap.data(),otherUid=supplier?item.spazaUid:item.supplierUid;
+        const other=await read('teyzaSellerAccounts/'+otherUid);
+        return other?.uid===otherUid?{...item,id:snap.id,
+          name:other.shopName||'Shop',area:other.address||''}:null;
+      }));
+      return {connections:entries.filter(Boolean)};
+    }
     if(action==='wholesale_directory'){
       await assertSpazaBuyer(uid);await rate(uid,'wholesale-discovery',40,60000);
-      return publicDirectory(data.after||'',true);
+      const results=await publicDirectory(data.after||'',true);
+      results.entries=await Promise.all(results.entries.map(async entry=>{
+        const supplierUid=entry.id;
+        const link=await read(wholesalePair(uid,supplierUid).path);
+        if(link?.spazaUid===uid&&link.supplierUid===supplierUid&&link.status==='approved'){
+          const offered=supplierOffer(entry,await read('teyzaShopSettings/'+supplierUid),link);
+          return {...entry,products:offered.shop.products,
+            productHighlights:offered.shop.products.map(p=>({
+              id:p.id,name:p.name,category:p.category,inStock:p.stock>0,
+              priceCents:p.priceCents,imageUrl:p.imageUrl||''
+            })),connected:true,connectionStatus:'approved',
+            discountPercent:offered.discountPercent,deliveryFeeCents:offered.deliveryFeeCents};
+        }
+        return {...entry,connected:false,connectionStatus:link?.status||'none',
+          discountPercent:0,products:[],productHighlights:[],deliveryFeeCents:null};
+      }));
+      return results;
     }
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
@@ -431,8 +589,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const sellerUid=D.id(data.shopId);
       if(sellerUid===uid)D.fail(422,'Open Live chat on your seller dashboard to reply to shoppers.');
       const shop=await active(sellerUid),settings=await read('teyzaShopSettings/'+sellerUid);
+      if(shop.shopCategory==='wholesale'){
+        await assertSpazaBuyer(uid);
+        await connectedSupplier(uid,sellerUid);
+      }
       if(settings?.liveChatEnabled===false)D.fail(409,'This shop is not accepting chat messages right now.');
-      await rate(uid,'chatopen',20,60000);
+      await rate(uid,'chatopen',shopperProfile?5:20,60000);
       const ref=doc('teyzaMobileChats/'+D.threadId(sellerUid,uid));
       await db.runTransaction(async tx=>{
         const snap=await tx.get(ref);
@@ -440,7 +602,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         for(const member of [sellerUid,uid])tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),{updatedAt:snap.exists?snap.data().updatedAt:clock()});
         if(snap.exists)return;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,members:[sellerUid,uid],shopName:shop.name,
-          shopperName:auth.name||auth.email||'Shopper',lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
+          shopperName:shopperProfile?.displayName||auth.name||auth.email||'Shopper',lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
       });
       return {threadId:ref.id};
     }
@@ -464,7 +626,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const config=await read('teyzaShopSettings/'+thread.ownerUid);
         await active(thread.ownerUid);
         if(config?.liveChatEnabled===false)D.fail(409,'Chat is paused for this shop.');
-        await rate(uid,'message',30,60000);
+        await rate(uid,'message',shopperProfile?8:30,60000);
         const entry=ref.collection('messages').doc(messageId);
         await db.runTransaction(async tx=>{
           const [snapshot,existing]=await Promise.all([tx.get(ref),tx.get(entry)]);
@@ -511,8 +673,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const sellerUid=D.id(data.shopId);if(sellerUid===uid)D.fail(422,'Choose another shop to place an order.');
       await rate(uid,'order-quotes',60,60000);
       const shop=await active(sellerUid);
-      if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid);
-      return {quote:offers.quote(shop,await read('teyzaShopSettings/'+sellerUid),data)};
+      const settings=await read('teyzaShopSettings/'+sellerUid);
+      if(shop.shopCategory==='wholesale'){
+        await assertSpazaBuyer(uid);
+        const link=await connectedSupplier(uid,sellerUid);
+        const offered=supplierOffer(shop,settings,link);
+        return {quote:offers.quote(offered.shop,offered.settings,data)};
+      }
+      return {quote:offers.quote(shop,settings,data)};
     }
     if(action==='order_request') {
       const sellerUid=D.id(data.shopId),requestId=D.id(data.requestId);
@@ -520,17 +688,28 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!['collection','delivery'].includes(data.mode))D.fail(422,'Choose delivery or collection.');
       const address=data.mode==='delivery'?D.text(data.address,'delivery address',300):'';
       const phone=D.text(data.phone,'contact number',25);
-      await rate(uid,'orders',20,3600000);
+      if(shopperProfile){
+        if(phone!==shopperProfile.phone||(data.mode==='delivery'&&address!==shopperProfile.address))
+          D.fail(403,'Use your saved contact and delivery details, or update them in your profile first.');
+      }
+      await rate(uid,'orders',shopperProfile?5:20,3600000);
       const ref=doc('teyzaMobileOrders/'+D.threadId(uid,requestId)),shopRef=doc('teyzaPublicShops/'+sellerUid);
       return db.runTransaction(async tx=>{
         const [existing,shopSnap,config]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(doc('teyzaShopSettings/'+sellerUid))]);
         if(existing.exists){if(existing.data().shopperUid!==uid)D.fail(403,'Order access denied.');return {id:ref.id,status:existing.data().status};}
         const shop=await requireApproval(tx,sellerUid,shopSnap.exists?shopSnap.data():null);
-        if(shop.shopCategory==='wholesale')await assertSpazaBuyer(uid,tx);
-        const estimate=offers.quote(shop,config.exists?config.data():null,data);
+        let offeredShop=shop,offeredSettings=config.exists?config.data():null;
+        if(shop.shopCategory==='wholesale'){
+          await assertSpazaBuyer(uid,tx);
+          const link=await connectedSupplier(uid,sellerUid,tx);
+          const offered=supplierOffer(shop,offeredSettings,link);
+          offeredShop=offered.shop;offeredSettings=offered.settings;
+        }
+        const estimate=offers.quote(offeredShop,offeredSettings,data);
         if(data.expectedQuoteId!==undefined&&data.expectedQuoteId!==estimate.quoteId)D.fail(409,'Prices or shop services changed. Refresh the order total before sending this request.');
         const {items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents}=estimate;
-        tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
+        tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name||shop.shopName||'Shop',
+          shopperName:shopperProfile?.displayName||auth.name||auth.email||'Shopper',
           mode:data.mode,address,phone,items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents,
           orderType:shop.shopCategory==='wholesale'?'wholesale_stock':'retail',
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});

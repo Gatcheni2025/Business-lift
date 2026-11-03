@@ -33,7 +33,7 @@ test('paid plan cannot bypass rejection or incomplete verification',()=>{
    verifiedPhone:'+27712345678',selfieSubmissionId:'selfie-1'};
  assert.equal(P.state('seller1',basic,setup,null,shop,paid,NOW).live,false);
 });
-test('legacy approved shops have backwards-compatible publication while migration is planned',()=>{
- assert.equal(P.state('seller1',seller,{},null,shop,null,NOW).live,true);
+test('unmigrated legacy shops are not permanently free; activation requires a trial or payment',()=>{
+ assert.equal(P.state('seller1',seller,{},null,shop,null,NOW).live,false);
  assert.equal(P.publicRow('seller1',{...shop,sponsored:true}).sponsored,true);
 });

@@ -92,6 +92,37 @@ void main(){
     expect(store.values.values,isNot(contains('id-token')));
     expect(requests,hasLength(2));session.dispose();client.close();
   });
+  test('First-time shopper gets one persistent anonymous Firebase identity without a second login',() async{
+    final store=MemoryStore();var signups=0;
+    final client=MockClient((r)async{
+      if(r.url.path.endsWith('signUp')){
+        signups++;
+        expect(jsonDecode(r.body),{'returnSecureToken':true});
+        return jsonReply({'idToken':'anon-id','refreshToken':'anon-refresh','localId':'anon-uid'});
+      }
+      if(r.url.host=='securetoken.googleapis.com')return jsonReply({
+        'id_token':'anon-refreshed','refresh_token':'anon-refresh-2','user_id':'anon-uid'});
+      if(r.url.path.endsWith('lookup'))return jsonReply({'users':[{
+        'localId':'anon-uid','emailVerified':false,'providerUserInfo':[]}]});
+      throw StateError('No second registration or login should be called.');
+    });
+    final shopper=ShopperSession(client:client,store:store);
+    await shopper.ensureShoppingIdentity();
+    expect(shopper.userId,'anon-uid');
+    expect(shopper.anonymousShopper,isTrue);
+    expect(shopper.email,isNull);
+    await shopper.ensureShoppingIdentity();
+    expect(signups,1);
+    expect(store.values['teyza_anonymous_shopper_uid'],'anon-uid');
+    shopper.dispose();
+    final restored=ShopperSession(client:client,store:store);
+    await restored.restore();
+    expect(restored.userId,'anon-uid');
+    expect(restored.anonymousShopper,isTrue);
+    await restored.ensureShoppingIdentity();
+    expect(signups,1);
+    restored.dispose();client.close();
+  });
   test('Shopper signup creates an Auth account without creating a merchant',() async{
     final calls=<String>[];
     final client=MockClient((r) async{
