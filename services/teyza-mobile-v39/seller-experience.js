@@ -129,7 +129,14 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     return {status:data.status,publicationStatus:next?.status||'not_listed'};
    });
   }
-  await owner(uid);
+  if(['notification_list','notification_read','notification_preferences',
+      'notification_device_save','notification_device_delete'].includes(action)){
+    const snap=await doc('teyzaSellerAccounts/'+uid).get();
+    if(!snap.exists||snap.data().uid!==uid){
+      const buyer=await doc('teyzaShopperProfiles/'+uid).get();
+      if(!buyer.exists||buyer.data().ownerUid!==uid)D.fail(403,'Complete your shopping profile before using notifications.');
+    }
+  }else await owner(uid);
   if(action==='notification_list'){
    const [rows,prefs,unread]=await Promise.all([
     db.collection('teyzaSellerNotifications/'+uid+'/items').orderBy('createdAt','desc').limit(60).get(),
