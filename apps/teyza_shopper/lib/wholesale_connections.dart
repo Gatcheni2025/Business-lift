@@ -77,10 +77,17 @@ class _ConnectionsState extends State<WholesaleConnectionsPage>{
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{discount.dispose();delivery.dispose();if(mounted)setState(()=>working=false);}
   }
-  void chat(Map<String,dynamic> shop){
+  Future<void> chat(Map<String,dynamic> shop)async{
     if(shop['status']!='approved')return;
-    Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(
-      session:widget.session,api:widget.api,asOwner:true)));
+    try{
+      final result=await api.call('wholesale_connection_chat_open',
+        {'spazaUid':shop['spazaUid']});
+      if(!mounted)return;
+      Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(
+        session:widget.session,api:widget.api,asOwner:true,
+        initialThreadId:result['threadId']?.toString(),
+        initialTitle:shop['name']?.toString()??'Spaza partner')));
+    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Spaza partnerships'),
