@@ -25,13 +25,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   // on first access after migration. The start/end are written once in a
   // transaction; repeated refreshes and device changes cannot extend it.
   async function trialAccount(uid,account){
-    if(account?.listingPlan!=='free'||account.approvalStatus!=='approved')return account;
+    if(!account||(!['free',undefined].includes(account.listingPlan))||
+       account.approvalStatus!=='approved')return account;
     const ref=doc('teyzaSellerAccounts/'+uid);
     return db.runTransaction(async tx=>{
       const current=await tx.get(ref);
       const value=current.exists?current.data():null;
       if(!value||value.uid!==uid||value.approvalStatus!=='approved')return value;
-      if(value.listingPlan!=='free'||value.trialStartedAt>0)return value;
+      if(!['free',undefined].includes(value.listingPlan)||value.trialStartedAt>0)return value;
       const at=clock(),updated={...value,listingPlan:'trial',
         trialStartedAt:at,trialEndsAt:at+P.TRIAL_MS,updatedAt:new Date(at)};
       tx.update(ref,{listingPlan:updated.listingPlan,trialStartedAt:at,
@@ -56,7 +57,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
-      if(account?.listingPlan==='free'&&account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
+      if(account&&['free',undefined].includes(account.listingPlan)&&
+          account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
         const at=clock();account={...account,listingPlan:'trial',trialStartedAt:at,
           trialEndsAt:at+P.TRIAL_MS};
         tx.update(accountRef,{listingPlan:'trial',trialStartedAt:at,
@@ -329,11 +331,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         if(link?.spazaUid===uid&&link.supplierUid===supplierUid&&link.status==='approved'){
           const offered=supplierOffer(entry,await read('teyzaShopSettings/'+supplierUid),link);
           return {...entry,products:offered.shop.products,
-            connected:true,connectionStatus:'approved',
+            productHighlights:offered.shop.products.map(p=>({
+              id:p.id,name:p.name,category:p.category,inStock:p.stock>0,
+              priceCents:p.priceCents,imageUrl:p.imageUrl||''
+            })),connected:true,connectionStatus:'approved',
             discountPercent:offered.discountPercent,deliveryFeeCents:offered.deliveryFeeCents};
         }
         return {...entry,connected:false,connectionStatus:link?.status||'none',
-          discountPercent:0,products:[],deliveryFeeCents:null};
+          discountPercent:0,products:[],productHighlights:[],deliveryFeeCents:null};
       }));
       return results;
     }
