@@ -1,4 +1,4 @@
-name: Teyza operations admin R317
+name: Teyza operations admin R319
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - 'scripts/package_operations_admin.py'
       - 'services/teyza-mobile-v39/**'
       - 'DEPLOY-OPERATIONS.ps1'
-      - 'docs/TEYZA_R317_OPERATIONS.md'
+      - 'docs/TEYZA_R319_ADMIN_USERS.md'
       - 'docs/TEYZA_R316_ADMIN_APPROVALS.md'
       - '.github/workflows/teyza-admin-approvals.yml'
   workflow_dispatch:
@@ -58,8 +58,8 @@ jobs:
         run: python3 scripts/package_operations_admin.py
       - uses: actions/upload-artifact@v4
         with:
-          name: teyza-admin-r317-operations-kit
-          path: TEYZA_ADMIN_R317_OPERATIONS_KIT.zip
+          name: teyza-admin-r319-users-kit
+          path: TEYZA_ADMIN_R319_OPERATIONS_KIT.zip
           retention-days: 30
 
   backend:
