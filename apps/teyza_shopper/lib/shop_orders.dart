@@ -165,10 +165,12 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
   Future<void> selectPayment(String preference)async{
     if(working||uid!=widget.session.userId)return;
     setState(()=>paymentMethod=preference);
+    // Do not hold back a live quote while the secure storage plugin writes.
+    // Persist the preference independently and recalculate the price now.
     if(!widget.wholesale&&uid!=null&&
         ShopperPaymentPreferenceStore.choices.contains(preference)){
-      try{await ShopperPaymentPreferenceStore().save(uid!,preference);}
-      catch(_){/* Checkout remains usable even when vault temporarily fails. */}
+      unawaited(ShopperPaymentPreferenceStore().save(uid!,preference)
+        .catchError((Object _){/* Checkout remains usable on vault failure. */}));
     }
     await loadQuote();
   }
