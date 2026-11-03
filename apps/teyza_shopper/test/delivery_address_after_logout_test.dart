@@ -69,6 +69,25 @@ void main(){
     another.dispose();
   });
 
+  testWidgets('Confirmed account deletion forgets the saved delivery location unlike logout',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final vault=MemoryStore(),profiles=ShopperDeliveryProfileStore(vault:vault),
+      session=SignedInTestSession(vault);
+    await profiles.save('shopper-1',savedShopper);
+    await profiles.saveDeviceLocation(savedShopper);
+    await tester.pumpWidget(homeFor(session,profiles));
+    await tester.pumpAndSettle();
+    session.forgetDeviceLocationOnSignOut=true;
+    await session.signOut();
+    await tester.pumpAndSettle();
+    expect(await profiles.loadDeviceLocation(),isNull);
+    expect(find.text('Set your delivery address'),findsNothing);
+    expect(find.text('Choose your area'),findsWidgets);
+    await tester.pumpWidget(const SizedBox.shrink());
+    session.dispose();
+  });
+
   testWidgets('A different signed-in UID never inherits a previous shopper personal profile',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
