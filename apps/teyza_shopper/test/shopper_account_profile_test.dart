@@ -48,7 +48,7 @@ void main(){
      onOpenOwner:()=>ownerCalls++,onChangeDeliveryAddress:()=>edits++))));
    await t.pumpAndSettle();
    expect(find.text('My Teyza account'),findsOneWidget);
-   expect(find.text('Saved Shopper'),findWidgets);
+   expect(find.text('Saved Shopper'),findsWidgets);
    expect(find.text('082 123 4567'),findsOneWidget);
    expect(find.text('shopper@example.test'),findsOneWidget);
    expect(find.text('Email not verified'),findsOneWidget);
