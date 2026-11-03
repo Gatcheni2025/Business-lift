@@ -7,8 +7,9 @@ function notificationFor(kind,before,after,reference){
   body:'Shoppers can now find your shop on Teyza. Keep your shop photo, services and stock up to date.'};
  if(kind==='order'&&after&&(!before||before.status!==after.status))return {ownerUid:after.ownerUid,category:'orders',target:'orders',reference,
   title:before?'Order updated':'New order request',body:before?'An order status changed. Open your orders to see the latest details.':'A shopper has sent an order request. Open your orders to respond.'};
- if(kind==='message'&&after&&after.sender==='shopper')return {category:'messages',target:'chat',reference,
-  title:'New customer message',body:'A shopper sent you a message. Open Live chat to reply.'};
+ if(kind==='message'&&after&&['shopper','owner'].includes(after.sender))return {
+  category:'messages',target:'chat',reference,
+  title:'New Teyza message',body:'A new message has arrived. Open Teyza to reply.'};
  if(kind==='stock'&&after?.status==='draft'&&Number.isInteger(after.stockQty)&&after.stockQty<=5&&
    (!before||before.stockQty>5||(after.stockQty===0&&before.stockQty>0)))return {ownerUid:after.ownerUid,category:'stock',target:'products',reference,
   title:after.stockQty===0?'Product sold out':'Stock running low',body:'Check your product stock and update your available quantities.'};
@@ -26,8 +27,12 @@ function createNotifications({db,messaging,clock=Date.now}){
   const uid=value.ownerUid;
   const ref=db.doc('teyzaSellerNotifications/'+uid+'/items/'+crypto.createHash('sha256').update(eventId).digest('hex'));
   await db.runTransaction(async tx=>{
-   const [old,account,prefs]=await Promise.all([tx.get(ref),tx.get(db.doc('teyzaSellerAccounts/'+uid)),tx.get(db.doc('teyzaSellerNotificationPreferences/'+uid))]);
-   if(old.exists||!account.exists||account.data().uid!==uid)return;
+   const [old,account,buyer,prefs]=await Promise.all([
+     tx.get(ref),tx.get(db.doc('teyzaSellerAccounts/'+uid)),
+     tx.get(db.doc('teyzaShopperProfiles/'+uid)),
+     tx.get(db.doc('teyzaSellerNotificationPreferences/'+uid))]);
+   if(old.exists||(!(account.exists&&account.data().uid===uid)&&
+       !(value.category==='messages'&&buyer.exists&&buyer.data().ownerUid===uid)))return;
    // Every order has a durable inbox entry. Preferences control its phone alert.
    if(value.category!=='orders'&&prefs.exists&&prefs.data().preferences?.[value.category]===false)return;
    tx.set(ref,{...value,read:false,createdAt:clock(),pushStatus:'pending'});
@@ -42,9 +47,9 @@ function createNotifications({db,messaging,clock=Date.now}){
   const devices=result.docs.filter(d=>d.data().token&&d.data().expiresAt>clock());
   if(!devices.length){await ref.update({pushStatus:'no_device'});return;}
   // Lock-screen text deliberately excludes shop names, messages, selfie results and customer details.
-  const title=n.category==='orders'?(n.title==='New order request'?'New Teyza order':'Teyza order update'):n.category==='messages'?'New customer message':'Teyza seller update';
-  const response=await messaging.sendEachForMulticast({tokens:devices.map(d=>d.data().token),notification:{title,body:n.category==='orders'?'Open Teyza to view and respond to your order.':'You have a new shop update. Open Teyza to view it.'},
-   data:{target:n.target,ownerUid:n.ownerUid,notificationId:ref.id},android:{priority:'high',notification:{tag:ref.id,sound:'default'}},
+  const title=n.category==='orders'?(n.title==='New order request'?'New Teyza order':'Teyza order update'):n.category==='messages'?'New Teyza message':'Teyza update';
+  const response=await messaging.sendEachForMulticast({tokens:devices.map(d=>d.data().token),notification:{title,body:n.category==='orders'?'Open Teyza to view and respond to your order.':'Open Teyza to read the new message or update.'},
+   data:{target:n.target,ownerUid:n.ownerUid,notificationId:ref.id},android:{priority:'high',notification:{tag:ref.id,sound:'default',defaultVibrateTimings:true}},
    apns:{headers:{'apns-collapse-id':ref.id},payload:{aps:{sound:'default'}}}});
   let retry=false;
   for(let i=0;i<response.responses.length;i++){
