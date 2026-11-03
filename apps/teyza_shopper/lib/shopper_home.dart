@@ -225,18 +225,21 @@ class ShopperHome extends StatefulWidget {
   final Area? initialArea;
   final bool enableBackgroundServices;
   final ShopperSession? session;
+  final ShopperDeliveryProfileStore? shopperProfileStore;
   final SellerFirestore Function(String uid,String token)? sellerApiFactory;
   final TeyzaMobileApi? sellerMobileApi;
   final Future<bool> Function(Uri)? externalLauncher;
   const ShopperHome({super.key,this.catalogueLoader,this.directoryLoader,
-    this.initialArea,this.enableBackgroundServices=true,this.session,this.sellerApiFactory,this.sellerMobileApi,this.externalLauncher});
+    this.initialArea,this.enableBackgroundServices=true,this.session,this.shopperProfileStore,
+    this.sellerApiFactory,this.sellerMobileApi,this.externalLauncher});
   @override
   State<ShopperHome> createState() => _ShopperHomeState();
 }
 class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Area? area;
   ShopperDeliveryProfile? deliveryProfile;
-  final deliveryProfileStore=ShopperDeliveryProfileStore();
+  ShopperDeviceDeliveryLocation? rememberedLocation;
+  late final deliveryProfileStore=widget.shopperProfileStore??ShopperDeliveryProfileStore();
   int _deliveryProfileRequest=0;
   bool _deliverySheetOpen=false;
   String? deliveryProfileWarning;
@@ -311,6 +314,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final uid=session.userId,seller=session.sellerWorkspace;
     final previousUid=_observedUid;
     if(uid!=_observedUid){
+      // Log out clears authentication and personal contact data, not the
+      // delivery destination already confirmed on this installation.
+      final priorProfile=deliveryProfile;
+      if(previousUid!=null&&uid==null&&priorProfile!=null){
+        rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(priorProfile);
+        unawaited(deliveryProfileStore.saveDeviceLocation(priorProfile)
+          .catchError((Object _){/* Keep the in-memory location on logout. */}));
+      }
       _observedUid=uid;_checkedSellerUid=null;
       _workspaceResolution=null;
       _sellerInitialTarget=null;
@@ -424,13 +435,30 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(!mounted||session.sellerWorkspace||widget.initialArea!=null)return;
     final uid=session.userId,request=++_deliveryProfileRequest;
     ShopperDeliveryProfile? saved;
+    ShopperDeviceDeliveryLocation? deviceLocation=rememberedLocation;
     try{
-      saved=await deliveryProfileStore.load(uid);
-      // One-time migration of pre-existing guest delivery details into the
-      // newly authenticated shopping identity on the SAME device.
-      if(saved==null&&uid!=null&&session.anonymousShopper)
-        saved=await deliveryProfileStore.load(null);
-    }catch(_){/* prompt if storage unavailable */}
+      // Signed-in profiles are private to their Firebase UID. A logged-out
+      // device only restores the last confirmed *location*, never contact data.
+      if(uid!=null){
+        saved=await deliveryProfileStore.load(uid);
+        if(saved==null&&session.anonymousShopper)
+          saved=await deliveryProfileStore.load(null);
+      }
+      deviceLocation=await deliveryProfileStore.loadDeviceLocation()??deviceLocation;
+      if(uid==null&&deviceLocation==null){
+        // Legacy guest profiles may predate the split-location store.
+        // Migrate the address only, then remove cached guest contact details.
+        final legacy=await deliveryProfileStore.load(null);
+        if(legacy!=null){
+          final location=ShopperDeviceDeliveryLocation.fromProfile(legacy);
+          if(location.isValid){
+            deviceLocation=location;
+            await deliveryProfileStore.saveDeviceLocation(legacy);
+            await deliveryProfileStore.clear(null);
+          }
+        }
+      }
+    }catch(_){/* Keep the current confirmed device location if storage fails. */}
     if(uid!=null&&session.idToken!=null){
       try{
         final result=await TeyzaMobileApi(session).call('shopper_profile_read');
@@ -448,11 +476,26 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(!mounted||request!=_deliveryProfileRequest||session.userId!=uid||session.sellerWorkspace)return;
     if(saved!=null&&saved.address.trim().isNotEmpty){
       deliveryProfile=saved;
+      rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(saved);
+      try{await deliveryProfileStore.saveDeviceLocation(saved);}
+      catch(_){/* Use the confirmed local location while storage is unavailable. */}
+      if(!mounted||request!=_deliveryProfileRequest||session.userId!=uid)return;
       await chooseArea(Area(saved.area.isNotEmpty?saved.area:saved.city,
         saved.city.isNotEmpty?saved.city:saved.area,
         saved.latitude,saved.longitude),persist:false);
       if(mounted&&request==_deliveryProfileRequest)setState((){
         locationName=saved!.address;_usingGps=false;locationWarning=null;
+      });
+    }else if(deviceLocation?.isValid==true){
+      // After logout do not trigger first-time address onboarding again.
+      // The saved shopper's name, email and phone are not reattached.
+      rememberedLocation=deviceLocation;
+      deliveryProfile=null;
+      await chooseArea(Area(deviceLocation!.area.isNotEmpty?deviceLocation.area:deviceLocation.city,
+        deviceLocation.city.isNotEmpty?deviceLocation.city:deviceLocation.area,
+        deviceLocation.latitude,deviceLocation.longitude),persist:false);
+      if(mounted&&request==_deliveryProfileRequest)setState((){
+        locationName=deviceLocation!.address;_usingGps=false;locationWarning=null;
       });
     }else if(_launchReady) {
       WidgetsBinding.instance.addPostFrameCallback((_){
@@ -479,6 +522,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final savedUid=session.userId;
       if(!mounted||savedUid==null||session.sellerWorkspace)return;
       await deliveryProfileStore.save(savedUid,profile);
+      rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(profile);
+      try{await deliveryProfileStore.saveDeviceLocation(profile);}
+      catch(_){/* Retain the user's chosen location in memory until retry. */}
       try{
         await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());
         // Clear the legacy guest copy ONLY after cloud persistence succeeds.
