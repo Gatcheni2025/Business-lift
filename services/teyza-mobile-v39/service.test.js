@@ -157,7 +157,7 @@ test('Coordinate refresh replaces provider coordinates while preserving the sell
  let now=1000000;const {service,db}=fixture({}, {clock:()=>now});
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  const initial=db.records.get('teyzaShopLocations/seller1');now+=28*DAY;
- db.records.set('teyzaSellerAccounts/seller1',{...seller,listingPlan:'basic'});
+ db.records.set('teyzaSellerAccounts/seller1',{...db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
  db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(now)});
  const result=await service.refreshShopLocations();assert.equal(result.refreshed,1);
  const updated=db.records.get('teyzaShopLocations/seller1');assert(updated.coordinatesExpireAt>initial.coordinatesExpireAt);
@@ -170,7 +170,7 @@ test('Provider failure clears cached pins and retains the confirmed suburb witho
  }});
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  now+=31*DAY;down=true;
- db.records.set('teyzaSellerAccounts/seller1',{...seller,listingPlan:'basic'});
+ db.records.set('teyzaSellerAccounts/seller1',{...db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
  db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(now)});
  let entry=(await service.publicDirectory()).entries[0];assert.equal(entry.latitude,null);assert.equal(entry.city,'Durban');
  const result=await service.refreshShopLocations();assert.equal(result.cleared,1);
