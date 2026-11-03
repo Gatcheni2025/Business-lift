@@ -102,6 +102,8 @@ class ShopperSession extends ChangeNotifier {
   bool appleProviderLinked=false;
   bool googleProviderLinked=false;
   bool anonymousShopper=false;
+  // Set only after server-confirmed account deletion, never normal logout.
+  bool forgetDeviceLocationOnSignOut=false;
   // A UID-bound presentation preference only. Seller permissions still come
   // from authenticated account records and server checks.
   String? _sellerWorkspaceUid;
