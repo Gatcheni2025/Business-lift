@@ -314,6 +314,34 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return {status,spazaUid:buyerUid};
       });
     }
+    if(action==='wholesale_connection_chat_open'){
+      const account=await owner(uid);
+      if(!['spaza','wholesale'].includes(account.category))
+        D.fail(403,'Only connected spaza shops and wholesalers can open supplier chat.');
+      const supplierUid=account.category==='wholesale'?uid:D.id(data.supplierUid);
+      const spazaUid=account.category==='spaza'?uid:D.id(data.spazaUid);
+      await active(supplierUid);
+      await assertSpazaBuyer(spazaUid);
+      await connectedSupplier(spazaUid,supplierUid);
+      await rate(uid,'wholesale-chat-open',20,60000);
+      const supplier=await owner(supplierUid),spaza=await owner(spazaUid);
+      const ref=doc('teyzaMobileChats/'+D.threadId(supplierUid,spazaUid));
+      await db.runTransaction(async tx=>{
+        const saved=await tx.get(ref);
+        if(saved.exists)D.member(saved.data(),uid);
+        for(const member of [supplierUid,spazaUid])
+          tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),
+            {updatedAt:saved.exists?saved.data().updatedAt:clock()});
+        if(saved.exists)return;
+        tx.set(ref,{ownerUid:supplierUid,shopperUid:spazaUid,
+          members:[supplierUid,spazaUid],shopName:supplier.shopName,
+          shopperName:spaza.shopName,lastMessage:'',messageCount:0,
+          updatedAt:clock(),ownerUnread:0,shopperUnread:0,
+          wholesalePartnerChat:true});
+      });
+      return {threadId:ref.id,shopName:account.category==='spaza'?
+        supplier.shopName:spaza.shopName};
+    }
     if(action==='wholesale_connections'){
       const account=await owner(uid);
       if(!['spaza','wholesale'].includes(account.category))D.fail(403,'Only shop owners can view wholesale connections.');
@@ -561,6 +589,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const sellerUid=D.id(data.shopId);
       if(sellerUid===uid)D.fail(422,'Open Live chat on your seller dashboard to reply to shoppers.');
       const shop=await active(sellerUid),settings=await read('teyzaShopSettings/'+sellerUid);
+      if(shop.shopCategory==='wholesale'){
+        await assertSpazaBuyer(uid);
+        await connectedSupplier(uid,sellerUid);
+      }
       if(settings?.liveChatEnabled===false)D.fail(409,'This shop is not accepting chat messages right now.');
       await rate(uid,'chatopen',shopperProfile?5:20,60000);
       const ref=doc('teyzaMobileChats/'+D.threadId(sellerUid,uid));
