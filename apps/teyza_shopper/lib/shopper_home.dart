@@ -314,14 +314,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final uid=session.userId,seller=session.sellerWorkspace;
     final previousUid=_observedUid;
     if(uid!=_observedUid){
-      // Log out clears authentication and personal contact data, not the
-      // delivery destination already confirmed on this installation.
+      // Prevent a delayed restore from the previous user reopening the sheet.
+      ++_deliveryProfileRequest;
+      final deletedAccount=previousUid!=null&&uid==null&&
+        session.forgetDeviceLocationOnSignOut;
       final priorProfile=deliveryProfile;
-      if(previousUid!=null&&uid==null&&priorProfile!=null){
+      if(deletedAccount){
+        // Account deletion is not logout. Erase the installation's location.
+        rememberedLocation=null;area=null;locationName='Choose your area';
+        unawaited(deliveryProfileStore.clearDeviceLocation()
+          .catchError((Object _){/* Profile clearing is retried by deletion page. */}));
+      }else if(previousUid!=null&&uid==null&&priorProfile!=null){
+        // Ordinary logout retains only the delivery destination, not contact.
         rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(priorProfile);
         unawaited(deliveryProfileStore.saveDeviceLocation(priorProfile)
           .catchError((Object _){/* Keep the in-memory location on logout. */}));
       }
+      if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
       _observedUid=uid;_checkedSellerUid=null;
       _workspaceResolution=null;
       _sellerInitialTarget=null;
@@ -330,7 +339,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       // Keep the guest profile during automatic guest→Firebase session
       // activation. Never carry it from one signed-in UID to another.
       if(previousUid!=null||seller)deliveryProfile=null;
-      if(_launchReady&&!seller&&widget.initialArea==null){
+      if(_launchReady&&!seller&&!deletedAccount&&widget.initialArea==null){
         WidgetsBinding.instance.addPostFrameCallback((_){
           if(mounted)unawaited(restoreDeliveryProfile());
         });
