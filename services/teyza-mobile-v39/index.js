@@ -147,8 +147,13 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaMobileChats/{threadId}/messages/{messageId}'},async event=>{
  const value=notificationFor('message',null,event.data?.data(),event.params.threadId);if(!value)return;
  const thread=await db.doc('teyzaMobileChats/'+event.params.threadId).get();
- if(thread.exists&&event.data.data().senderUid===thread.data().shopperUid)
-  await notifications.queue(event.id,{...value,ownerUid:thread.data().ownerUid});
+ if(!thread.exists)return;
+ const sender=event.data.data().senderUid;
+ const t=thread.data();
+ if(sender!==t.shopperUid&&sender!==t.ownerUid)return;
+ // Owner replies notify the shopper; shopper messages notify the seller.
+ await notifications.queue(event.id,{...value,
+   ownerUid:sender===t.ownerUid?t.shopperUid:t.ownerUid});
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
