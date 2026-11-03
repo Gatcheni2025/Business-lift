@@ -1126,7 +1126,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       body:tab==4?ShopperAccountPanel(session:session,
           onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
           onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby,
-          savedDeliveryAddress:deliveryProfile?.address,
+          savedDeliveryAddress:deliveryProfile?.address,savedProfile:deliveryProfile,
           onChangeDeliveryAddress:promptDeliveryProfile):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
         tab==2?basketPage():
