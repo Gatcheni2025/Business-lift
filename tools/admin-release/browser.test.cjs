@@ -43,6 +43,8 @@ async function main(){
  catch(error){server.close();throw error;}let count=0;
  async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false}={}){
   const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows),legacyUploaded=false;
+  let syntheticUsers=[{uid:'admin1',email:'reviewer@example.test',displayName:'Reviewer',verified:true,disabled:false,admin:true,providers:['google.com']},
+    {uid:'shopper2',email:'shopper@example.test',displayName:'Existing Shopper',verified:false,disabled:false,admin:false,providers:['password']}];
   await page.addInitScript(value=>window.__testIdentity=value,identity);
   await page.route('https://www.gstatic.com/firebasejs/**',r=>r.fulfill({contentType:'application/javascript',body:r.request().url().endsWith('firebase-app.js')?
    'export const getApps=()=>[];export const initializeApp=c=>c;':firebaseAuth}));
@@ -52,7 +54,23 @@ async function main(){
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
-   if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[]};
+   if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[],
+     documents:{identity:{available:true,evidenceId:'doc1',submittedAt:1792910000000},selfie:{available:true,submissionId:'selfie1',submittedAt:1792910000000}}};
+   if(body.action==='ops_users')result={ok:true,users:syntheticUsers,next:null};
+   if(body.action==='ops_user_create'){
+     const user={uid:'new-user1',email:body.data.email.toLowerCase(),displayName:body.data.displayName,
+       verified:false,disabled:false,admin:false,providers:[],registeredRole:body.data.requestedRole,invitationStatus:'sent'};
+     syntheticUsers=[...syntheticUsers,user];result={ok:true,created:true,inviteSent:true,user};
+   }
+   if(body.action==='ops_user_detail'){
+     const user=syntheticUsers.find(x=>x.uid===body.data.userUid);
+     result={ok:true,user,seller:null};
+   }
+   if(body.action==='ops_user_invite')result={ok:true,sent:true};
+   if(body.action==='ops_user_set_disabled'){
+     syntheticUsers=syntheticUsers.map(u=>u.uid===body.data.userUid?{...u,disabled:body.data.disabled}:u);
+     result={ok:true,updated:true,disabled:body.data.disabled};
+   }
    if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
    if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
    if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
@@ -73,6 +91,45 @@ async function main(){
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('User management creates a non-admin account, sends setup email and suspends without changing claims',async()=>{
+    const f=await pageFor();
+    await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Users & access'}).waitFor();
+    const create=f.page.getByRole('button',{name:'Create account and send setup email'}).locator('xpath=..');
+    const form=f.page.locator('.ops-form').first();
+    await form.locator('input[name=displayName]').fill('New Teyza Seller');
+    await form.locator('input[name=email]').fill('new-seller@example.test');
+    await form.locator('select[name=requestedRole]').selectOption('seller');
+    await form.locator('input[name=confirmed]').check();
+    await form.getByRole('button',{name:'Create account and send setup email'}).click();
+    await f.page.getByText('Account created. Firebase sent a password-setup email',{exact:false}).waitFor();
+    const created=f.calls.find(x=>x.action==='ops_user_create');
+    assert.equal(created.data.requestedRole,'seller');
+    assert.equal(created.data.email,'new-seller@example.test');
+    assert.equal(created.data.confirmed,true);
+    assert(!JSON.stringify(created).includes('password'));
+    const row=f.page.getByRole('row').filter({hasText:'new-seller@example.test'});
+    await row.getByRole('button',{name:'View user'}).click();
+    await f.page.getByRole('button',{name:'Send password setup email'}).click();
+    assert(f.calls.some(x=>x.action==='ops_user_invite'&&x.data.userUid==='new-user1'));
+    await f.page.getByRole('button',{name:'Suspend user'}).click();
+    assert(f.calls.some(x=>x.action==='ops_user_set_disabled'&&x.data.userUid==='new-user1'&&x.data.disabled===true));
+    assert.equal(f.errors.length,0);
+    await f.context.close();
+  });
+  await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
+    const f=await pageFor();
+    await f.page.getByRole('button',{name:'Sellers',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByRole('heading',{name:'Verification documents'}).waitFor();
+    await f.page.getByRole('button',{name:'View private document'}).first().click();
+    assert(f.calls.some(x=>x.action==='seller_identity_read'&&x.data.evidenceId==='doc1'));
+    await f.page.locator('#photoDialog').getByRole('button',{name:/close/i}).click();
+    await f.page.waitForFunction(()=>!document.getElementById('largePhoto').getAttribute('src'));
+    await f.page.getByRole('button',{name:'View private document'}).last().click();
+    assert(f.calls.some(x=>x.action==='verification_read'&&x.data.submissionId==='selfie1'));
+    await f.context.close();
+  });
   await check('HR navigation stays in admin with document review, area management and signups',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
