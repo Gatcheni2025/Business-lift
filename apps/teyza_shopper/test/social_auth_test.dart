@@ -240,10 +240,12 @@ void main(){
   final store=MemoryStore(),session=ShopperSession(client:client,store:store,
     googleRequest:()async=>const AppleIdentity('conflicting-google-id'));
   await session.ensureShoppingIdentity();
-  final original=session.idToken;
   await expectLater(session.verifyShopperWithGoogle(),throwsStateError);
   expect(session.userId,'current-shopper');
-  expect(session.idToken,original);
+  // Refreshing the original UID legitimately rotated its Firebase ID token;
+  // the rejected provider credential did not replace that UID or refresh token.
+  expect(session.idToken,'fresh-anon');
+  expect(session.idToken,isNot('unexpected-id'));
   expect(session.anonymousShopper,true);
   expect(store.values['teyza_anonymous_shopper_uid'],'current-shopper');
   session.dispose();client.close();
