@@ -89,11 +89,17 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  void supplierChat(Map<String,dynamic> supplier){
-    if(supplier['connected']!=true)return;
-    Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(
-      session:widget.session,api:widget.api,
-      initialShop:ShopperConversation(supplier['id'].toString(),supplier['name'].toString()))));
+  Future<void> supplierChat(Map<String,dynamic> supplier)async{
+    if(supplier['connected']!=true||busy)return;
+    try{
+      final result=await api.call('wholesale_connection_chat_open',
+        {'supplierUid':supplier['id']});
+      if(!mounted)return;
+      Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(
+        session:widget.session,api:widget.api,
+        initialThreadId:result['threadId']?.toString(),
+        initialTitle:supplier['name']?.toString()??'Wholesaler')));
+    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   }
   double distanceKm(double a,double b,double c,double d){
     const radius=6371.0,rad=math.pi/180;
