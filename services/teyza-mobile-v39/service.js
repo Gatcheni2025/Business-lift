@@ -147,6 +147,17 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   }
   const shopFront=createShopFront({db,bucket,sanitizeImage,clock,rate});
   const accountDeletion=deletion.createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,clock});
+  async function registeredShopper(uid){
+    const profile=await read('teyzaShopperProfiles/'+uid);
+    if(profile?.ownerUid!==uid||
+       typeof profile.displayName!=='string'||profile.displayName.trim().length<2||
+       typeof profile.phone!=='string'||profile.phone.replace(/\\D/g,'').length<9||
+       typeof profile.contactEmail!=='string'||!(/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/).test(profile.contactEmail)||
+       typeof profile.address!=='string'||profile.address.trim().length<8||
+       !P.coordinates(profile.latitude,profile.longitude))
+      D.fail(403,'Save your name, phone, email and delivery address once before shopping.');
+    return profile;
+  }
   async function execute(auth, action, data={}) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
@@ -171,10 +182,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
       const area=D.text(data.area||'','delivery area',130,false);
       const city=D.text(data.city||'','delivery city',130,false);
-      // Email is authoritative only from Firebase Auth, never from a
-      // user-supplied profile field. We must not claim unverified email is verified.
+      const suppliedEmail=D.text(data.email,'shopper contact email',150).trim().toLowerCase();
+      if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(suppliedEmail))
+        D.fail(422,'Enter a valid email address.');
+      // Do NOT pretend the contact email verifies Firebase identity.
+      // It is used for communication, while account authority stays with UID.
       const profile={ownerUid:uid,displayName,phone,address,area,city,
-        latitude:lat,longitude:lng,email:typeof auth.email==='string'?auth.email:'',
+        latitude:lat,longitude:lng,contactEmail:suppliedEmail,
+        email:typeof auth.email==='string'?auth.email:'',
         emailVerified:auth.email_verified===true,updatedAt:clock()};
       await doc('teyzaShopperProfiles/'+uid).set(profile,{merge:true});
       return {saved:true,profile};
@@ -189,8 +204,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);
-    if (!auth.email_verified&&!auth.phone_number&&!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
-      D.fail(403,'Verify your email or mobile number before using shop services or sending requests.');
+    const isShopperAction=['order_quote','order_request','order_list',
+      'chat_open','chat_list','chat_read','chat_send','chat_block','chat_report',
+      'notification_list','notification_read','notification_preferences',
+      'notification_device_save','notification_device_delete'].includes(action);
+    // One-time location + contact onboarding is sufficient for a basic buyer
+    // account. Never use this bypass for seller approvals, finance or stock.
+    let shopperProfile=null;
+    if(!auth.email_verified&&!auth.phone_number){
+      if(isShopperAction)shopperProfile=await registeredShopper(uid);
+      else if(!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+        D.fail(403,'Verify your email or mobile number before using seller services.');
+    }
     if(action==='seller_plan_select'){
       const choice=await sellerExperience.execute(auth,action,data);
       await synchronizeCatalogue(uid); // refresh public shop eligibility after trial selection
@@ -432,7 +457,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(sellerUid===uid)D.fail(422,'Open Live chat on your seller dashboard to reply to shoppers.');
       const shop=await active(sellerUid),settings=await read('teyzaShopSettings/'+sellerUid);
       if(settings?.liveChatEnabled===false)D.fail(409,'This shop is not accepting chat messages right now.');
-      await rate(uid,'chatopen',20,60000);
+      await rate(uid,'chatopen',shopperProfile?5:20,60000);
       const ref=doc('teyzaMobileChats/'+D.threadId(sellerUid,uid));
       await db.runTransaction(async tx=>{
         const snap=await tx.get(ref);
@@ -440,7 +465,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         for(const member of [sellerUid,uid])tx.set(doc('teyzaMobileChatIndex/'+member+'/threads/'+ref.id),{updatedAt:snap.exists?snap.data().updatedAt:clock()});
         if(snap.exists)return;
         tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,members:[sellerUid,uid],shopName:shop.name,
-          shopperName:auth.name||auth.email||'Shopper',lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
+          shopperName:shopperProfile?.displayName||auth.name||auth.email||'Shopper',lastMessage:'',messageCount:0,updatedAt:clock(),ownerUnread:0,shopperUnread:0});
       });
       return {threadId:ref.id};
     }
@@ -464,7 +489,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const config=await read('teyzaShopSettings/'+thread.ownerUid);
         await active(thread.ownerUid);
         if(config?.liveChatEnabled===false)D.fail(409,'Chat is paused for this shop.');
-        await rate(uid,'message',30,60000);
+        await rate(uid,'message',shopperProfile?8:30,60000);
         const entry=ref.collection('messages').doc(messageId);
         await db.runTransaction(async tx=>{
           const [snapshot,existing]=await Promise.all([tx.get(ref),tx.get(entry)]);
@@ -520,7 +545,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!['collection','delivery'].includes(data.mode))D.fail(422,'Choose delivery or collection.');
       const address=data.mode==='delivery'?D.text(data.address,'delivery address',300):'';
       const phone=D.text(data.phone,'contact number',25);
-      await rate(uid,'orders',20,3600000);
+      if(shopperProfile){
+        if(phone!==shopperProfile.phone||(data.mode==='delivery'&&address!==shopperProfile.address))
+          D.fail(403,'Use your saved contact and delivery details, or update them in your profile first.');
+      }
+      await rate(uid,'orders',shopperProfile?5:20,3600000);
       const ref=doc('teyzaMobileOrders/'+D.threadId(uid,requestId)),shopRef=doc('teyzaPublicShops/'+sellerUid);
       return db.runTransaction(async tx=>{
         const [existing,shopSnap,config]=await Promise.all([tx.get(ref),tx.get(shopRef),tx.get(doc('teyzaShopSettings/'+sellerUid))]);
@@ -530,7 +559,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const estimate=offers.quote(shop,config.exists?config.data():null,data);
         if(data.expectedQuoteId!==undefined&&data.expectedQuoteId!==estimate.quoteId)D.fail(409,'Prices or shop services changed. Refresh the order total before sending this request.');
         const {items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents}=estimate;
-        tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name,shopperName:auth.name||auth.email||'Shopper',
+        tx.set(ref,{ownerUid:sellerUid,shopperUid:uid,shopName:shop.name||shop.shopName||'Shop',
+          shopperName:shopperProfile?.displayName||auth.name||auth.email||'Shopper',
           mode:data.mode,address,phone,items,subtotalCents,deliveryFeeCents,totalCents,paymentMethod,cashDiscountCents,cashDiscountPercent,cardFeeCents,
           orderType:shop.shopCategory==='wholesale'?'wholesale_stock':'retail',
           status:'requested',paymentStatus:'arrange_with_shop',createdAt:clock(),updatedAt:clock(),reserved:false});
