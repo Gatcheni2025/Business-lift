@@ -20,6 +20,7 @@ import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
 import 'seller_push.dart';
+import 'seller_notifications.dart';
 import 'seller_firestore.dart';
 import 'shop_directions.dart';
 
@@ -267,6 +268,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int _sellerEntry=0;
   Future<void>? _workspaceResolution;
   SellerPush? sellerPush;
+  StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
   String? onlineWarning;
   bool loadingOnline = false;
@@ -286,8 +288,17 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     session.addListener(workspaceChanged);
     Future<void>? restoring;
     if(widget.enableBackgroundServices){
-      sellerPush=SellerPush(session)..onOpen=(target){if(mounted)openOwnerWorkspace(notification:true,target:target);};
-      chatWatch=Timer.periodic(const Duration(minutes:1),(_)=>refreshUnread());
+      sellerPush=SellerPush(session)..onOpen=(target){
+        if(!mounted)return;
+        if(session.sellerWorkspace){openOwnerWorkspace(notification:true,target:target);return;}
+        if(target=='chat'){openInbox();return;}
+        if(target=='orders'){navigateToTab(3);return;}
+        openBellNotifications();
+      };
+      shopperMessageAlerts=sellerPush!.updates.stream.listen((_){
+        if(mounted)unawaited(refreshUnread());
+      });
+      chatWatch=Timer.periodic(const Duration(seconds:25),(_)=>refreshUnread());
       refreshUnread();
       restoring=session.restore();
       startCatalogueWatch();
@@ -376,6 +387,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     chatWatch?.cancel();
     catalogueWatch?.cancel();
+    shopperMessageAlerts?.cancel();
     sellerPush?.dispose();
     session.removeListener(workspaceChanged);
     if(widget.session==null)session.dispose();
@@ -1028,6 +1040,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   void openBasket()=>navigateToTab(2);
+  void openBellNotifications(){
+    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
+      unawaited(promptDeliveryProfile());return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(builder:(_)=>SellerNotificationsPage(
+      session:session,asShopper:true,onOpen:(target){
+        if(target=='chat')openInbox();
+        else if(target=='orders')navigateToTab(3);
+      })));
+  }
   void openInbox(){
     if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
       unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1088,7 +1110,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ]))))
         ]),
         actions:[
-          IconButton(tooltip:'Messages',onPressed:openInbox,
+          IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
               child:const Icon(Icons.notifications_none_rounded,size:25))),
