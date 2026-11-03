@@ -71,7 +71,7 @@ export function createOperations({api,onError}){
     const q=search.value.toLowerCase();
     list.replaceChildren(table(['Account','Email status','Access',''],users.filter(u=>
       [u.email,u.displayName,u.uid].join(' ').toLowerCase().includes(q)).map(u=>[
-        (u.displayName||u.email||'Anonymous shopper')+' · '+u.uid,
+        (u.displayName||'Anonymous shopper')+' · '+(u.email||'No email')+' · '+u.uid,
         tag(u.verified?'Email verified':'Not verified'),
         tag(u.admin?'Administrator':u.disabled?'Suspended':'Active'),
         button('View user',()=>chooseUser(u))])));
