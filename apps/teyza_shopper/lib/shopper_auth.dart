@@ -202,7 +202,7 @@ class ShopperSession extends ChangeNotifier {
         idToken=token;userId=uid;anonymousShopper=savedAnonymousUid==uid;
         _sellerWorkspaceUid=savedWorkspaceUid==uid?uid:null;
         _refreshToken=data['refresh_token']?.toString()??refresh;
-        email=savedEmail;name=savedName;
+        email=savedEmail?.isNotEmpty==true?savedEmail:null;name=savedName;
         await _persist();
         if(version!=_version||_disposed)return;
         await refreshEmailStatus();
@@ -226,7 +226,8 @@ class ShopperSession extends ChangeNotifier {
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
     if(userId!=uid)_sellerWorkspaceUid=null;
     idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;anonymousShopper=false;
-    email=data['email']?.toString()??fallbackEmail;
+    email=(data['email']?.toString().isNotEmpty==true?data['email'].toString():fallbackEmail);
+    if(email?.isEmpty==true)email=null;
     name=data['displayName']?.toString()??fallbackName;
     try{await _persist();}catch(_){if(version==_version)await _clear();rethrow;}
     if(version!=_version||_disposed)return;
@@ -253,7 +254,7 @@ class ShopperSession extends ChangeNotifier {
         (provider)=>provider['providerId']=='apple.com');
       phoneVerified=phoneNumber!=null&&phoneNumber!.isNotEmpty&&providers is List&&providers.whereType<Map>().any((p)=>
         p['providerId']=='phone'&&(p['phoneNumber']==phoneNumber||p['federatedId']==phoneNumber));
-      email=profile['email']?.toString()??email;
+      if(profile['email']?.toString().isNotEmpty==true)email=profile['email'].toString();
       name=profile['displayName']?.toString()??name;
       await _persist();
     }catch(error){
