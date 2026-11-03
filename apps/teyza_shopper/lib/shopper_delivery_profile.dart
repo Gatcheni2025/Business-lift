@@ -24,10 +24,55 @@ class ShopperDeliveryProfile {
     longitude:(data['longitude'] as num).toDouble());
 }
 
+/// The device's last confirmed delivery destination is separate from an
+/// authenticated shopper profile. Only location is retained after sign-out:
+/// never expose another account's name, phone or email to a new user.
+class ShopperDeviceDeliveryLocation {
+  final String address,area,city;
+  final double latitude,longitude;
+  const ShopperDeviceDeliveryLocation({required this.address,
+    required this.area,required this.city,required this.latitude,
+    required this.longitude});
+  factory ShopperDeviceDeliveryLocation.fromProfile(ShopperDeliveryProfile p)=>
+    ShopperDeviceDeliveryLocation(address:p.address,area:p.area,city:p.city,
+      latitude:p.latitude,longitude:p.longitude);
+  bool get isValid=>address.trim().length>=8&&
+    latitude.isFinite&&longitude.isFinite&&
+    latitude>=-90&&latitude<=90&&longitude>=-180&&longitude<=180&&
+    (latitude!=0||longitude!=0);
+  Map<String,dynamic> toJson()=>{'address':address,'area':area,'city':city,
+    'latitude':latitude,'longitude':longitude};
+  static ShopperDeviceDeliveryLocation? fromJson(Map data){
+    final lat=data['latitude'],lng=data['longitude'];
+    if(lat is! num||lng is! num)return null;
+    final location=ShopperDeviceDeliveryLocation(
+      address:(data['address']??'').toString(),
+      area:(data['area']??'').toString(),
+      city:(data['city']??'').toString(),
+      latitude:lat.toDouble(),longitude:lng.toDouble());
+    return location.isValid?location:null;
+  }
+}
+
 class ShopperDeliveryProfileStore {
   ShopperDeliveryProfileStore({SessionStore? vault}):_vault=vault??SecureSessionStore();
   final SessionStore _vault;
   String _key(String? uid)=>'teyza_delivery_profile_'+(uid??'guest');
+  static const _deviceLocationKey='teyza_last_confirmed_delivery_location';
+  Future<ShopperDeviceDeliveryLocation?> loadDeviceLocation()async{
+    final value=await _vault.read(_deviceLocationKey);
+    if(value==null)return null;
+    try{
+      final parsed=jsonDecode(value);
+      return parsed is Map?ShopperDeviceDeliveryLocation.fromJson(parsed):null;
+    }catch(_){return null;}
+  }
+  Future<void> saveDeviceLocation(ShopperDeliveryProfile profile)async{
+    final location=ShopperDeviceDeliveryLocation.fromProfile(profile);
+    if(!location.isValid)throw ArgumentError('A complete delivery location is required.');
+    await _vault.write(_deviceLocationKey,jsonEncode(location.toJson()));
+  }
+  Future<void> clearDeviceLocation()=>_vault.delete(_deviceLocationKey);
   Future<ShopperDeliveryProfile?> load(String? uid)async{
     final value=await _vault.read(_key(uid));
     if(value==null)return null;
