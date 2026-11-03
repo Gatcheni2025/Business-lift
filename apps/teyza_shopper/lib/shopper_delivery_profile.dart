@@ -19,7 +19,7 @@ class ShopperDeliveryProfile {
   factory ShopperDeliveryProfile.fromJson(Map data)=>ShopperDeliveryProfile(
     address:(data['address']??'').toString(),area:(data['area']??'').toString(),
     city:(data['city']??'').toString(),displayName:(data['displayName']??'').toString(),
-    email:(data['email']??'').toString(),phone:(data['phone']??'').toString(),
+    email:(data['contactEmail']??data['email']??'').toString(),phone:(data['phone']??'').toString(),
     latitude:(data['latitude'] as num).toDouble(),
     longitude:(data['longitude'] as num).toDouble());
 }
@@ -51,7 +51,8 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
   final form=GlobalKey<FormState>();
   late final address=TextEditingController(text:widget.initial?.address??'');
   late final name=TextEditingController(text:widget.initial?.displayName??widget.session.name??'');
-  late final email=TextEditingController(text:widget.session.email??widget.initial?.email??'');
+  late final email=TextEditingController(text:widget.session.email?.trim().isNotEmpty==true?
+    widget.session.email!:widget.initial?.email??'');
   late final phone=TextEditingController(text:widget.initial?.phone??widget.session.phoneNumber??'');
   bool busy=false;
   bool addressSaved=false;
