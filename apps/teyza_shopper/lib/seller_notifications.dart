@@ -7,7 +7,8 @@ import 'seller_push.dart';
 class SellerNotificationsPage extends StatefulWidget{
   final ShopperSession session;final TeyzaMobileApi? api;
   final ValueChanged<String>? onOpen;
-  const SellerNotificationsPage({super.key,required this.session,this.api,this.onOpen});
+  final bool asShopper;
+  const SellerNotificationsPage({super.key,required this.session,this.api,this.onOpen,this.asShopper=false});
   @override State<SellerNotificationsPage> createState()=>_NotificationsState();
 }
 class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBindingObserver{
@@ -39,8 +40,9 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
     final chosen=Map<String,bool>.from(preferences);
     final saved=await showModalBottomSheet<bool>(context:context,isScrollControlled:true,showDragHandle:true,useSafeArea:true,builder:(c)=>StatefulBuilder(builder:(c,set)=>
       SingleChildScrollView(child:Padding(padding:const EdgeInsets.fromLTRB(22,0,22,24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('Shop notifications',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:12),
-        for(final item in const [('orders','Customer orders'),('messages','Customer messages'),('stock','Low stock & sold out'),('reviews','Registration & verification')])
+        Text(widget.asShopper?'Shopper notifications':'Shop notifications',style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:12),
+        for(final item in widget.asShopper?const [('orders','Order updates'),('messages','Chat messages')]:
+          const [('orders','Customer orders'),('messages','Customer messages'),('stock','Low stock & sold out'),('reviews','Registration & verification')])
           SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(item.$2),subtitle:item.$1=='orders'?const Text('Controls phone alerts. Every order remains in your inbox.'):null,
             value:chosen[item.$1]!,onChanged:(v)=>set(()=>chosen[item.$1]=v)),
         FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Save preferences'))
@@ -53,17 +55,17 @@ class _NotificationsState extends State<SellerNotificationsPage> with WidgetsBin
   Future<void> phoneAlerts(bool enable) async{
     if(working||uid!=widget.session.userId)return;setState((){working=true;error=null;status=null;});
     try{final push=SellerPush(widget.session);if(enable){await push.enable();}else{await push.disable();}
-      if(mounted)setState(()=>status=enable?'Phone alerts enabled for this seller account.':'Phone alerts turned off on this device.');}
+      if(mounted)setState(()=>status=enable?'Bell alerts enabled. Incoming chat messages can vibrate when allowed by your phone settings.':'Phone alerts turned off on this device.');}
     catch(e){if(mounted)setState(()=>error=mobileError(e));}finally{if(mounted)setState(()=>working=false);}
   }
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F8F5),
-    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:const Color(0xFF010F1C),title:const Text('Shop notifications'),actions:[IconButton(tooltip:'Notification preferences',onPressed:working?null:settings,icon:const Icon(Icons.tune_rounded))]),
+    appBar:AppBar(backgroundColor:const Color(0xFFF7F8F5),foregroundColor:const Color(0xFF010F1C),title:Text(widget.asShopper?'Shopper notifications':'Shop notifications'),actions:[IconButton(tooltip:'Notification preferences',onPressed:working?null:settings,icon:const Icon(Icons.tune_rounded))]),
     body:SafeArea(child:RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(20),children:[
       Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:const Color(0xFF010F1C),borderRadius:BorderRadius.circular(25)),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Icon(Icons.notifications_active_outlined,color:Color(0xFF70D7A8),size:32),const SizedBox(height:14),
-          const Text('Stay close to your customers.',style:TextStyle(color:Colors.white,fontSize:25,fontWeight:FontWeight.w800)),
-          const SizedBox(height:10),const Text('Orders, messages, stock and review updates in one place.',style:TextStyle(color:Color(0xFFCCDCD3),height:1.5)),
+          Text(widget.asShopper?'Stay in touch with your shops.':'Stay close to your customers.',style:TextStyle(color:Colors.white,fontSize:25,fontWeight:FontWeight.w800)),
+          const SizedBox(height:10),Text(widget.asShopper?'Shop replies and order updates in one place.':'Orders, messages, stock and review updates in one place.',style:TextStyle(color:Color(0xFFCCDCD3),height:1.5)),
           const SizedBox(height:16),FilledButton(onPressed:working?null:()=>phoneAlerts(true),child:const Text('Enable phone alerts')),
           TextButton(onPressed:working?null:()=>phoneAlerts(false),child:const Text('Turn off phone alerts',style:TextStyle(color:Color(0xFFCCDCD3))))])),
       const SizedBox(height:18),if(status!=null)Text(status!,style:const TextStyle(color:Color(0xFF078E66))),
