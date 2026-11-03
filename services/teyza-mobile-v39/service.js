@@ -8,6 +8,7 @@ const experience=require('./seller-experience');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
+const adminUsers=require('./admin-users');
 const mandate=require('./mandate');
 const fieldAgents=require('./field-agents');
 const ratings=require('./ratings');
@@ -16,7 +17,7 @@ const locations=require('./shop-location');
 const addresses=require('./shop-address');
 const deletion=require('./account-deletion');
 
-function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,
+function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
@@ -156,6 +157,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
   const adminOperations=operations.createOperations({db,clock,rate});
+  const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
@@ -229,6 +231,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='seller_mandate_submit')D.fail(410,
       'New Teyza debit mandates are discontinued. No bank debit is authorised by a free trial.');
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
+    if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
     if(['shop_front_read','shop_front_submit'].includes(action))return shopFront.execute(auth,action,data);
     if(onboarding.actions.has(action))return sellerOnboarding.execute(auth,action,data);

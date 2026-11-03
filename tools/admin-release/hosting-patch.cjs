@@ -63,7 +63,7 @@ async function patch({client,root,backupPath,wait=pause,log=console.log}){
  if(!before.has('/index.html'))throw new Error('The live version has no index.html. Stopping before changing Hosting.');
  const config=servingConfig(original.config),version=await clone(client,source,wait);
  // A local rollback record contains version metadata only; never tokens or seller evidence.
- const backup={release:'R318',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
+ const backup={release:'R319',site:SITE,sourceVersion:source,patchedVersion:version,createdAt:new Date().toISOString(),oldConfig:original.config};
  const checkpoint=backupPath.replace(/\.json$/, '-'+version.split('/').at(-1)+'.json');
  fs.writeFileSync(checkpoint,JSON.stringify(backup,null,2),{mode:0o600});
  log('Cloned the active website. Uploading '+files.size+' admin files.');

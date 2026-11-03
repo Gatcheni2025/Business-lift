@@ -32,3 +32,8 @@ body{background:#f3f6f3;color:#12343c}.topbar{background:#fff;border-bottom:1px 
 .field-upload-form h4{margin:8px 0;font-size:18px}
 .field-upload-form .button.primary{width:100%;min-height:48px}
 .field-upload-form [type=file]{max-width:100%;font-size:14px}
+
+/* R319 — authorized users and document inspection */
+.ops-document-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #dfe8df}
+.ops-document-row span{font-weight:650}.ops-document-row small{color:#667b71}
+.ops-card [data-user-detail]{scroll-margin-top:26px}
