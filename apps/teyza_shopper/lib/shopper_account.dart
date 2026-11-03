@@ -3,6 +3,9 @@ import 'shopper_auth.dart';
 import 'account_deletion_page.dart';
 import 'seller_review.dart';
 import 'chat_moderation_page.dart';
+import 'shopper_delivery_profile.dart';
+import 'shopper_payment_preference.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
@@ -10,8 +13,11 @@ class ShopperAccountPanel extends StatefulWidget {
   final VoidCallback? onShopperSignedIn;
   final VoidCallback? onMessages,onOrders,onBrowse,onChangeDeliveryAddress;
   final String? savedDeliveryAddress;
+  final ShopperDeliveryProfile? savedProfile;
+  final ShopperDeliveryProfileStore? deliveryStore;
+  final ShopperPaymentPreferenceStore? paymentStore;
   const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse,
-    this.onChangeDeliveryAddress,this.savedDeliveryAddress});
+    this.onChangeDeliveryAddress,this.savedDeliveryAddress,this.savedProfile,this.deliveryStore,this.paymentStore});
   @override
   State<ShopperAccountPanel> createState()=>_AccountState();
 }
@@ -23,8 +29,117 @@ class _AccountState extends State<ShopperAccountPanel> {
   bool get ownerMode=>audience=='owner';
   String? status;
   bool failure=false;
+  ShopperDeliveryProfile? loadedProfile;
+  String paymentPreference=ShopperPaymentPreferenceStore.cash;
+  String? loadedUid;
+  late final ShopperDeliveryProfileStore _profiles=widget.deliveryStore??ShopperDeliveryProfileStore();
+  late final ShopperPaymentPreferenceStore _payments=widget.paymentStore??ShopperPaymentPreferenceStore();
+  ShopperDeliveryProfile? get shopperProfile=>widget.savedProfile??loadedProfile;
+  String get displayName{
+    final saved=shopperProfile?.displayName.trim()??'';
+    if(saved.isNotEmpty)return saved;
+    final firebase=widget.session.name?.trim()??'';
+    return firebase.isNotEmpty?firebase:'Teyza shopper';
+  }
+  String get displayPhone{
+    final saved=shopperProfile?.phone.trim()??'';
+    return saved.isNotEmpty?saved:(widget.session.phoneNumber??'Not provided');
+  }
+  String get contactEmail{
+    final saved=shopperProfile?.email.trim()??'';
+    return saved.isNotEmpty?saved:(widget.session.email??'Not provided');
+  }
+  bool get contactEmailVerified=>widget.session.emailVerified&&
+    widget.session.email?.toLowerCase()==contactEmail.toLowerCase();
+  @override void initState(){
+    super.initState();
+    loadedUid=widget.session.userId;
+    widget.session.addListener(_sessionChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)loadProfileAndPayment();});
+  }
+  void _sessionChanged(){
+    final uid=widget.session.userId;
+    if(loadedUid==uid)return;
+    loadedUid=uid;
+    loadedProfile=null;
+    paymentPreference=ShopperPaymentPreferenceStore.cash;
+    if(mounted)WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted)loadProfileAndPayment();
+    });
+  }
+  Future<void> loadProfileAndPayment()async{
+    final uid=widget.session.userId;
+    if(uid==null)return;
+    try{
+      final profile=await _profiles.load(uid);
+      final choice=await _payments.load(uid);
+      if(!mounted||uid!=widget.session.userId)return;
+      setState((){loadedProfile=profile;paymentPreference=choice;});
+    }catch(_){/* Use the parent shopper's saved profile if local vault unavailable. */}
+  }
+  Future<void> changePaymentMethod()async{
+    final uid=widget.session.userId;
+    if(uid==null)return;
+    final selected=await showModalBottomSheet<String>(context:context,showDragHandle:true,
+      builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        const Padding(padding:EdgeInsets.all(14),
+          child:Text('Preferred payment method',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800))),
+        ListTile(leading:const Icon(Icons.payments_outlined),
+          title:const Text('Cash on delivery / collection'),
+          subtitle:const Text('Pay the seller directly when receiving or collecting goods'),
+          onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cash)),
+        ListTile(leading:const Icon(Icons.credit_card_outlined),
+          title:const Text('Card at the shop'),
+          subtitle:const Text('Available only for collection where the seller accepts cards'),
+          onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cardAtShop)),
+        const Padding(padding:EdgeInsets.all(12),
+          child:Text('Teyza does not collect or store your card number. This is a checkout preference, not an online payment.',
+            textAlign:TextAlign.center,style:TextStyle(fontSize:12))),
+      ])));
+    if(selected==null||!mounted||uid!=widget.session.userId)return;
+    try{
+      await _payments.save(uid,selected);
+      if(mounted)setState(()=>paymentPreference=selected);
+    }catch(_){
+      if(mounted)setState((){status='Could not save your preferred payment method. Try again.';failure=true;});
+    }
+  }
+  Future<void> verifyWithProvider(bool apple)async{
+    if(working||widget.session.userId==null)return;
+    if(apple){
+      final allowed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+        title:const Text('Verify with Apple'),
+        content:const Text('Your Apple ID will be securely linked to this existing Teyza account. Apple may provide a private relay email. Your saved contact email will remain unverified if it differs from that Apple address.'),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Continue'))]));
+      if(allowed!=true||!mounted)return;
+    }
+    setState((){working=true;status=null;failure=false;});
+    final uid=widget.session.userId;
+    try{
+      if(apple){await widget.session.verifyShopperWithApple();}
+      else{await widget.session.verifyShopperWithGoogle();}
+      if(!mounted||uid!=widget.session.userId)return;
+      setState((){
+        status=contactEmailVerified?'Your saved email is verified.':
+          'Your Google/Apple account is linked. The saved contact email is not verified because it differs from the provider email. You can edit it using Saved delivery details.';
+        failure=false;
+      });
+    }catch(e){
+      if(mounted)setState((){status=authMessage(e);failure=true;});
+    }finally{if(mounted)setState(()=>working=false);}
+  }
+  Future<void> openTerms()async{
+    final url=Uri.parse('https://teyza.co.za/terms.html');
+    try{if(!await launchUrl(url,mode:LaunchMode.externalApplication))
+      throw StateError('Could not open terms');}
+    catch(_){if(mounted)setState((){status='Terms could not be opened. Visit teyza.co.za/terms.html';failure=true;});}
+  }
   @override
-  void dispose() { email.dispose(); password.dispose(); name.dispose(); super.dispose(); }
+  void dispose() {
+    widget.session.removeListener(_sessionChanged);
+    email.dispose(); password.dispose(); name.dispose(); super.dispose();
+  }
   Future<void> submit() async {
     // A previous Google OAuth error must not be attributed to email sign-in.
     if(status!=null||failure)setState(() {status=null;failure=false;});
@@ -175,11 +290,12 @@ class _AccountState extends State<ShopperAccountPanel> {
             const CircleAvatar(radius:32,backgroundColor:Color(0xFFE0F3EA),
               child:Icon(Icons.person_rounded,size:38,color:Color(0xFF078E66))),
             const SizedBox(height:10),
-            Text(logged?'My Teyza account':audience==null?'Welcome to Teyza':ownerMode?(registering?'Create owner account':'Shop owner sign in'):registering?'Join Teyza':'Shopper sign in',
+            if(logged)const Text('My Teyza account',style:TextStyle(
+              fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF078E66))),
+            Text(logged?displayName:audience==null?'Welcome to Teyza':ownerMode?(registering?'Create owner account':'Shop owner sign in'):registering?'Join Teyza':'Shopper sign in',
               style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
             const SizedBox(height:6),
-            Text(logged?(widget.session.name?.isNotEmpty==true?
-              widget.session.name!:widget.session.email??'') :
+            Text(logged?'Your saved shopping profile' :
               audience==null?'How would you like to continue?':
               ownerMode?(registering?'Create an account, register your shop, then complete your documents, selfie and mobile verification.':'Sign in with the account registered for your shop.') :
               'Sign in to manage your profile and shop enquiries.',
@@ -215,20 +331,45 @@ class _AccountState extends State<ShopperAccountPanel> {
           ]),
           const SizedBox(height:14),
           Card(color:Colors.white,child:Column(children:[
-            ListTile(leading:const Icon(Icons.email_outlined),
-              title:const Text('Email'),subtitle:Text(widget.session.email??'')),
+            ListTile(leading:const Icon(Icons.badge_outlined),
+              title:const Text('Display name'),subtitle:Text(displayName),
+              trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
             const Divider(height:1),
+            ListTile(leading:const Icon(Icons.phone_outlined),
+              title:const Text('Phone number'),subtitle:Text(displayPhone),
+              trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
+            const Divider(height:1),
+            ListTile(leading:const Icon(Icons.email_outlined),
+              title:const Text('Email'),subtitle:Text(contactEmail),
+              trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
             ListTile(
-              leading:Icon(widget.session.emailVerified?
+              leading:Icon(contactEmailVerified?
                 Icons.verified_user:Icons.mark_email_unread_outlined,
-                color:widget.session.emailVerified?const Color(0xFF078E66):null),
-              title:Text(widget.session.emailVerified?'Email verified':'Verify your email'),
-              subtitle:Text(widget.session.emailVerified?
-                'Your Teyza email has been confirmed.' :
-                'Confirm your email for account updates. Sellers also verify their mobile during setup.'),
+                color:contactEmailVerified?const Color(0xFF078E66):Colors.orange),
+              title:Text(contactEmailVerified?'Email verified':'Email not verified'),
+              subtitle:Text(contactEmailVerified?'This contact email matches your verified Teyza identity.':
+                widget.session.emailVerified?
+                  'Your signed-in identity is verified, but its email differs from your saved contact email.':
+                  'Link Google or Apple to verify your identity, or confirm your email using a verification link.'),
             ),
-            if(widget.session.phoneVerified)ListTile(leading:const Icon(Icons.verified_outlined,color:Color(0xFF078E66)),title:const Text('Mobile number verified'),subtitle:Text(widget.session.phoneNumber??'')),
-            if (!widget.session.emailVerified) ...[
+            if(widget.session.emailVerified&&!contactEmailVerified&&widget.session.email!=null)
+              ListTile(leading:const Icon(Icons.account_circle_outlined),
+                title:const Text('Verified sign-in email'),
+                subtitle:Text(widget.session.email!)),
+            if(widget.session.phoneVerified)
+              ListTile(leading:const Icon(Icons.verified_outlined,color:Color(0xFF078E66)),
+                title:const Text('Mobile number verified'),subtitle:Text(widget.session.phoneNumber??'')),
+            if(!contactEmailVerified)...[
+              if(widget.session.googleSignInAvailable&&!widget.session.googleProviderLinked)
+                OutlinedButton.icon(onPressed:working?null:()=>verifyWithProvider(false),
+                  icon:const Icon(Icons.account_circle_outlined),
+                  label:const Text('Verify with Google')),
+              if(widget.session.appleSignInAvailable&&!widget.session.appleProviderLinked)
+                OutlinedButton.icon(onPressed:working?null:()=>verifyWithProvider(true),
+                  icon:const Icon(Icons.apple),
+                  label:const Text('Verify with Apple')),
+              if(widget.session.email!=null&&!widget.session.emailVerified)
+                ...[
               FilledButton.icon(
                 onPressed:working?null:() async {
                   setState(() {working=true;status=null;failure=false;});
@@ -260,24 +401,31 @@ class _AccountState extends State<ShopperAccountPanel> {
                 },
                 icon:const Icon(Icons.refresh),
                 label:const Text('Check verification status')),
+              ],
             ],
             const Divider(height:1),
             ListTile(leading:const Icon(Icons.location_on_outlined),
               title:const Text('Saved delivery address'),
-              subtitle:Text(widget.savedDeliveryAddress??'Add your delivery address'),
+              subtitle:Text(shopperProfile?.address??widget.savedDeliveryAddress??'Add your delivery address'),
               trailing:const Icon(Icons.edit_location_alt_outlined),
               onTap:widget.onChangeDeliveryAddress),
             const Divider(height:1),
             ListTile(leading:const Icon(Icons.shopping_bag_outlined),
               title:const Text('Delivery & collection orders'),onTap:widget.onOrders,
-              subtitle:const Text('View shop confirmations and fulfilment status.'))
+              subtitle:const Text('View shop confirmations and fulfilment status.')),
+            const Divider(height:1),
+            ListTile(leading:const Icon(Icons.payments_outlined),
+              title:const Text('Payment method'),
+              subtitle:Text(ShopperPaymentPreferenceStore.label(paymentPreference)),
+              trailing:const Icon(Icons.edit_outlined),
+              onTap:working?null:changePaymentMethod),
+            const Divider(height:1),
+            ListTile(leading:const Icon(Icons.description_outlined),
+              title:const Text('Terms of Service'),
+              subtitle:const Text('Review Teyza shopping and account terms'),
+              trailing:const Icon(Icons.open_in_new_outlined),onTap:openTerms)
           ])),
           const SizedBox(height:16),
-          if(widget.onOpenOwner!=null)
-            FilledButton.icon(onPressed:widget.onOpenOwner,
-              icon:const Icon(Icons.storefront_outlined),
-              label:const Text('Open shop owner workspace')),
-          const SizedBox(height:10),
           if(widget.session.hasAdminClaim&&widget.session.emailVerified)
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
               icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('Seller review desk')),

@@ -41,7 +41,10 @@ String authMessage(Object error) {
   if(value.contains('INVALID_CODE')||value.contains('INVALID_VERIFICATION_CODE'))return 'That SMS code is incorrect. Check the six digits and try again.';
   if(value.contains('SESSION_EXPIRED')||value.contains('CODE_EXPIRED'))return 'This SMS code expired. Request a new code.';
   if(value.contains('PHONE_NUMBER_EXISTS')||value.contains('PHONE_ALREADY_LINKED'))return 'This number belongs to another account. Sign in to that account or contact Teyza support.';
-  if (value.contains('EMAIL_EXISTS')) return 'This email is already registered. Sign in instead.';
+  if (value.contains('ACCOUNT_LINK_UID_MISMATCH')) return 'Verification could not preserve your existing shopper account. Your shopping details were not transferred; try again or contact Teyza support.';
+  if(value.contains('FEDERATED_USER_ID_ALREADY_LINKED'))
+    return 'This Google or Apple identity is already linked to another account. Sign in using that account or contact Teyza support; your shopping history was not replaced.';
+  if(value.contains('EMAIL_EXISTS'))return 'This email is already registered. Sign in to that account or contact Teyza support; your current shopper profile was not replaced.';
   if (value.contains('INVALID_LOGIN_CREDENTIALS') ||
       value.contains('EMAIL_NOT_FOUND') || value.contains('INVALID_PASSWORD')) {
     return 'Incorrect email or password. Try again or reset your password.';
@@ -97,6 +100,7 @@ class ShopperSession extends ChangeNotifier {
   String? email, name, idToken, userId, phoneNumber;
   bool phoneVerified=false;
   bool appleProviderLinked=false;
+  bool googleProviderLinked=false;
   bool anonymousShopper=false;
   // A UID-bound presentation preference only. Seller permissions still come
   // from authenticated account records and server checks.
@@ -172,7 +176,7 @@ class ShopperSession extends ChangeNotifier {
   }
   Future<void> _clear() async {
     _sellerWorkspaceUid=null;
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;anonymousShopper=false;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;googleProviderLinked=false;googleProviderLinked=false;anonymousShopper=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_anonymous_shopper_uid']){
         await _store.delete(key);
@@ -253,6 +257,8 @@ class ShopperSession extends ChangeNotifier {
       final providers=profile['providerUserInfo'];
       appleProviderLinked=providers is List&&providers.whereType<Map>().any(
         (provider)=>provider['providerId']=='apple.com');
+      googleProviderLinked=providers is List&&providers.whereType<Map>().any(
+        (provider)=>provider['providerId']=='google.com');
       phoneVerified=phoneNumber!=null&&phoneNumber!.isNotEmpty&&providers is List&&providers.whereType<Map>().any((p)=>
         p['providerId']=='phone'&&(p['phoneNumber']==phoneNumber||p['federatedId']==phoneNumber));
       if(profile['email']?.toString().isNotEmpty==true)email=profile['email'].toString();
@@ -341,6 +347,93 @@ class ShopperSession extends ChangeNotifier {
     final token=await freshIdToken();
     await _post('sendOobCode',{'requestType':'VERIFY_EMAIL','idToken':token});
   }
+  /// Attach Google or Apple to the *existing* shopper UID. Using ordinary
+  /// signInWithGoogle/signInWithApple here would silently create/switch to
+  /// another Firebase user and make saved delivery details and orders vanish.
+  Future<void> _linkProvider(String provider,AppleIdentity identity,
+      {String? nonce}) async {
+    final originalUid=userId,originalName=name,wasAnonymous=anonymousShopper;
+    if(originalUid==null||idToken==null)throw StateError('Sign in to your shopping account first.');
+    if(identity.idToken.isEmpty)throw StateError('Provider did not supply an identity token.');
+    final currentToken=await freshIdToken();
+    if(originalUid!=userId)throw StateError('Account changed. Reopen your profile.');
+    final version=++_version;
+    isBusy=true;_changed();
+    try{
+      final fields=<String,String>{'id_token':identity.idToken,'providerId':provider,
+        if(nonce!=null)'nonce':nonce};
+      final response=await _post('signInWithIdp',{
+        'idToken':currentToken,
+        'postBody':Uri(queryParameters:fields).query,
+        'requestUri':'https://teyza.co.za',
+        'returnSecureToken':true,'returnIdpCredential':false});
+      if(response['localId']!=originalUid||version!=_version||_disposed)
+        throw StateError('ACCOUNT_LINK_UID_MISMATCH');
+      await _save(response,identity.email,originalName??identity.name,version);
+      if(userId!=originalUid||version!=_version)throw StateError('ACCOUNT_LINK_UID_MISMATCH');
+      // The shopper's chosen display name belongs to the same UID and should
+      // not be silently replaced by Google/Apple's provider profile name.
+      if(wasAnonymous&&originalName!=null&&originalName.trim().isNotEmpty){
+        name=originalName;
+        try{await _post('update',{'idToken':idToken!,
+          'displayName':originalName,'returnSecureToken':false});}
+        catch(_){/* The Firebase provider link remains authoritative. */}
+        await _persist();
+      }
+      await refreshEmailStatus();
+      _changed();
+    }finally{
+      if(version==_version){isBusy=false;isReady=true;_changed();}
+    }
+  }
+
+  Future<void> verifyShopperWithGoogle() async {
+    if(userId==null||idToken==null)throw StateError('Save your shopper profile first.');
+    if(!googleSignInAvailable||(!googleSignInConfigured&&googleRequest==null))
+      throw StateError('Google sign-in is not configured');
+    AppleIdentity? identity;
+    if(googleRequest!=null){identity=await googleRequest!();}
+    else{
+      final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId,
+        clientId:defaultTargetPlatform==TargetPlatform.iOS?_googleIosClientId:null);
+      final account=await google.signIn();
+      if(account==null)return;
+      final token=await account.authentication;
+      identity=AppleIdentity(token.idToken??'',email:account.email,
+        name:account.displayName??'');
+    }
+    if(identity==null)return;
+    await _linkProvider('google.com',identity);
+  }
+
+  Future<void> verifyShopperWithApple() async {
+    if(userId==null||idToken==null)throw StateError('Save your shopper profile first.');
+    if(!appleSignInAvailable)throw StateError('Apple sign-in is not configured');
+    final random=Random.secure();
+    final nonce=base64Url.encode(List.generate(32,(_)=>random.nextInt(256)))
+      .replaceAll('=','');
+    final challenge=sha256.convert(utf8.encode(nonce)).toString();
+    AppleIdentity? identity;
+    if(appleRequest!=null){identity=await appleRequest!(challenge);}
+    else{
+      if(!await SignInWithApple.isAvailable())
+        throw StateError('Apple sign-in is not configured');
+      try{
+        final credentials=await SignInWithApple.getAppleIDCredential(
+          scopes:[AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName],nonce:challenge);
+        identity=AppleIdentity(credentials.identityToken??'',
+          email:credentials.email??'',name:[credentials.givenName,
+          credentials.familyName].whereType<String>().join(' ').trim());
+      }on SignInWithAppleAuthorizationException catch(error){
+        if(error.code==AuthorizationErrorCode.canceled)return;
+        rethrow;
+      }
+    }
+    if(identity==null)return;
+    await _linkProvider('apple.com',identity,nonce:nonce);
+  }
+
   Future<void> signInWithGoogle() async {
     if(!googleSignInAvailable||(!googleSignInConfigured&&googleRequest==null))throw StateError('Google sign-in is not configured');
     final version=++_version;

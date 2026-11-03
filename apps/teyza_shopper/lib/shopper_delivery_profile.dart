@@ -156,26 +156,29 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
         decoration:const InputDecoration(labelText:'Full name',border:OutlineInputBorder()),
         validator:(x)=>(x??'').trim().length<2?'Enter your name.':null),
       const SizedBox(height:12),
-      TextFormField(controller:email,enabled:!busy&&widget.session.email==null,
+      TextFormField(controller:email,enabled:!busy,
         keyboardType:TextInputType.emailAddress,
         decoration:const InputDecoration(labelText:'Email address',border:OutlineInputBorder()),
         validator:(x){
           final value=(x??'').trim();
           if(!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value))
             return 'Enter a valid email address.';
-          if(widget.session.email!=null&&value.toLowerCase()!=widget.session.email!.toLowerCase())
-            return 'Use the email linked to your signed-in account.';
+          // A delivery contact email may differ from the Google/Apple sign-in
+          // address; never claim it is verified until they actually match.
           return null;
         }),
-      if(widget.session.idToken!=null)
+      if(widget.session.emailVerified&&widget.session.email?.toLowerCase()==
+          email.text.trim().toLowerCase())
+        const Text('Email verified',style:TextStyle(fontSize:12,color:Colors.green))
+      else if(widget.session.email!=null&&!widget.session.anonymousShopper)
         Row(children:[
-          Expanded(child:Text(widget.session.emailVerified?'Email verified':'Email confirmation required',
-            style:const TextStyle(fontSize:12))),
+          const Expanded(child:Text('Contact email not verified',
+            style:TextStyle(fontSize:12))),
           if(!widget.session.emailVerified)
             TextButton(onPressed:busy?null:verifyEmail,child:const Text('Send link')),
         ])
       else const Padding(padding:EdgeInsets.only(top:5),
-        child:Text('Email verification is available when you create or sign in to a shopper account.',
+        child:Text('You can verify this email through Google, Apple, or an email link in My Teyza account after saving. The contact email is not verified yet.',
           style:TextStyle(fontSize:11))),
       const SizedBox(height:12),
       TextFormField(controller:phone,enabled:!busy,
