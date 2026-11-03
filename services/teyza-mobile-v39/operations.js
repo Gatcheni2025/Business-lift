@@ -29,7 +29,7 @@ function createOperations({db,clock=Date.now,rate}){
    return {mandate,seller:{sellerUid:target,shopName:account.shopName,ownerEmail:account.ownerEmail||'',phone:account.phone||'',address:account.address||'',approvalStatus:account.approvalStatus},billing:billing||{status:'not_started',monthlyCents:PRICE},...books,verification:{status:verification?.status||'not_submitted',phoneVerified:!!setup?.verifiedPhone,completed:!!setup?.completedAt},
     documents:self?undefined:{
       identity:identity?.ownerUid===target?{
-        available:typeof identity.objectPath==='string'&&identity.objectPath.startsWith('teyza-private/seller-identity/')&&identity.expiresAt>clock(),
+        available:typeof identity.objectPath==='string'&&identity.objectPath.startsWith('teyza-private/mobile-verification/'+target+'/')&&identity.expiresAt>clock(),
         evidenceId:identity.evidenceId||null,
         kind:identity.kind||'identity',submittedAt:identity.submittedAt||null,
         expired:!(identity.expiresAt>clock()),
