@@ -134,6 +134,121 @@ void main(){
   session.dispose();client.close();
  });
 
+ test('Link Google verifies existing anonymous shopper without changing UID or wiping shopping state',() async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final vault=MemoryStore();
+  var linked=false,accountCreations=0;
+  final client=MockClient((request)async{
+    if(request.url.path.endsWith('signUp')){
+      accountCreations++;
+      return reply({'idToken':'anon-id','refreshToken':'anon-refresh','localId':'saved-shopper-uid'});
+    }
+    if(request.url.host=='securetoken.googleapis.com')
+      return reply({'id_token':'fresh-anon','refresh_token':'anon-refresh','user_id':'saved-shopper-uid'});
+    if(request.url.path.endsWith('signInWithIdp')){
+      final d=jsonDecode(request.body);
+      expect(d['idToken'],'fresh-anon');
+      final query=Uri.splitQueryString(d['postBody']);
+      expect(query['providerId'],'google.com');
+      expect(query['id_token'],'verified-google-token');
+      linked=true;
+      return reply({'idToken':'linked-id','refreshToken':'linked-refresh',
+        'localId':'saved-shopper-uid','email':'saved@example.test',
+        'displayName':'Provider name'});
+    }
+    if(request.url.path.endsWith('lookup')){
+      return reply({'users':[{'localId':'saved-shopper-uid',
+        'email':linked?'saved@example.test':'',
+        'emailVerified':linked,
+        'providerUserInfo':linked?[{'providerId':'google.com'}]:[]}]});
+    }
+    if(request.url.path.endsWith('update'))return reply({'localId':'saved-shopper-uid'});
+    throw StateError('Unexpected authentication call ${request.url}');
+  });
+  final session=ShopperSession(client:client,store:vault,googleRequest:() async=>
+    const AppleIdentity('verified-google-token',email:'saved@example.test'));
+  await session.ensureShoppingIdentity();
+  expect(session.userId,'saved-shopper-uid');
+  session.name='Shopper display name';
+  await session.verifyShopperWithGoogle();
+  expect(session.userId,'saved-shopper-uid');
+  expect(session.name,'Shopper display name');
+  expect(session.anonymousShopper,false);
+  expect(session.googleProviderLinked,true);
+  expect(session.emailVerified,true);
+  expect(session.email,'saved@example.test');
+  expect(accountCreations,1);
+  expect(vault.values['teyza_anonymous_shopper_uid'],'');
+  session.dispose();client.close();
+ });
+
+ test('Link Apple verifies the same account with the correct nonce and preserves shopper UID',()async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final vault=MemoryStore();String? challenge;var linked=false;
+  final client=MockClient((request)async{
+    if(request.url.path.endsWith('signUp'))return reply({
+      'idToken':'anon-id','refreshToken':'anon-refresh','localId':'same-shopper'});
+    if(request.url.host=='securetoken.googleapis.com')return reply({
+      'id_token':'fresh-apple-anon','refresh_token':'anon-refresh','user_id':'same-shopper'});
+    if(request.url.path.endsWith('signInWithIdp')){
+      final d=jsonDecode(request.body);
+      expect(d['idToken'],'fresh-apple-anon');
+      final q=Uri.splitQueryString(d['postBody']);
+      expect(q['providerId'],'apple.com');
+      expect(q['id_token'],'signed-apple-id-token');
+      expect(sha256.convert(utf8.encode(q['nonce']!)).toString(),challenge);
+      linked=true;
+      return reply({'idToken':'linked-apple','refreshToken':'apple-refresh','localId':'same-shopper',
+        'email':'private@privaterelay.appleid.com'});
+    }
+    if(request.url.path.endsWith('lookup'))return reply({'users':[{
+      'localId':'same-shopper','email':linked?'private@privaterelay.appleid.com':'',
+      'emailVerified':linked,'providerUserInfo':linked?[{'providerId':'apple.com'}]:[]}]});
+    throw StateError('Unexpected ${request.url}');
+  });
+  final session=ShopperSession(client:client,store:vault,
+    appleRequest:(nonce)async{
+      challenge=nonce;
+      return const AppleIdentity('signed-apple-id-token',
+        email:'private@privaterelay.appleid.com');
+    });
+  await session.ensureShoppingIdentity();
+  await session.verifyShopperWithApple();
+  expect(session.userId,'same-shopper');
+  expect(session.appleProviderLinked,true);
+  expect(session.emailVerified,true);
+  expect(session.anonymousShopper,false);
+  session.dispose();client.close();
+ });
+
+ test('Provider account conflict never switches the saved shopper account',()async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final client=MockClient((request)async{
+    if(request.url.path.endsWith('signUp'))return reply({
+      'idToken':'anon-id','refreshToken':'anon-refresh','localId':'current-shopper'});
+    if(request.url.host=='securetoken.googleapis.com')return reply({
+      'id_token':'fresh-anon','refresh_token':'anon-refresh','user_id':'current-shopper'});
+    if(request.url.path.endsWith('lookup'))return reply({'users':[{
+      'localId':'current-shopper','emailVerified':false,'providerUserInfo':[]}]});
+    if(request.url.path.endsWith('signInWithIdp'))
+      return reply({'idToken':'unexpected-id','refreshToken':'other-refresh','localId':'different-user'});
+    throw StateError('Unexpected ${request.url}');
+  });
+  final store=MemoryStore(),session=ShopperSession(client:client,store:store,
+    googleRequest:()async=>const AppleIdentity('conflicting-google-id'));
+  await session.ensureShoppingIdentity();
+  final original=session.idToken;
+  await expectLater(session.verifyShopperWithGoogle(),throwsStateError);
+  expect(session.userId,'current-shopper');
+  expect(session.idToken,original);
+  expect(session.anonymousShopper,true);
+  expect(store.values['teyza_anonymous_shopper_uid'],'current-shopper');
+  session.dispose();client.close();
+ });
+
  test('Apple cancellation never creates a Firebase identity or seller privilege',() async {
   debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
