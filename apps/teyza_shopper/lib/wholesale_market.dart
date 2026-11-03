@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'shopper_chat.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'shopper_discovery.dart';
@@ -53,13 +55,19 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
       }
       suppliers=rows;
     }catch(e){
-      memberNotice='Verified wholesale prices require an approved spaza account with active R99 Basic access. Public Google-listed suppliers remain available below.';
+      memberNotice='Wholesale connections require approved Teyza spaza registration and an active seven-day trial or R99 membership.';
     }
     try{
       if(widget.businessAddress.trim().isEmpty)throw StateError('Add your shop address to discover nearby wholesalers.');
       final locations=await locationFromAddress(widget.businessAddress).timeout(const Duration(seconds:12));
       if(locations.isEmpty)throw StateError('Unable to find your shop location.');
       final origin=locations.first;
+      suppliers.sort((a,b){
+        final al=a['latitude'],ao=a['longitude'],bl=b['latitude'],bo=b['longitude'];
+        final ad=al is num&&ao is num?distanceKm(origin.latitude,origin.longitude,al.toDouble(),ao.toDouble()):1e9;
+        final bd=bl is num&&bo is num?distanceKm(origin.latitude,origin.longitude,bl.toDouble(),bo.toDouble()):1e9;
+        return ad.compareTo(bd);
+      });
       final results=await findOnlineShops(latitude:origin.latitude,longitude:origin.longitude,
         category:'wholesale',radiusKm:50);
       if(mounted&&requestUid==widget.session.userId)googleSuppliers=results;
@@ -67,6 +75,32 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
       discoveryError='Google-linked wholesale discovery is unavailable for this address. Check your shop address, connection and Places deployment.';
     }
     if(mounted&&requestUid==widget.session.userId)setState(()=>loading=false);
+  }
+  Future<void> connect(Map<String,dynamic> supplier)async{
+    if(busy)return;
+    setState(()=>busy=true);
+    try{
+      final result=await api.call('wholesale_connection_request',{
+        'supplierUid':supplier['id']});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(result['status']=='approved'?'Supplier already connected.':
+          'Connection request sent. The wholesaler must approve your terms.')));
+      if(mounted)await load();
+    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  void supplierChat(Map<String,dynamic> supplier){
+    if(supplier['connected']!=true)return;
+    Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(
+      session:widget.session,api:widget.api,
+      initialShop:ShopperConversation(supplier['id'].toString(),supplier['name'].toString()))));
+  }
+  double distanceKm(double a,double b,double c,double d){
+    const radius=6371.0,rad=math.pi/180;
+    final deltaLat=(c-a)*rad,deltaLon=(d-b)*rad;
+    final h=math.pow(math.sin(deltaLat/2),2)+math.cos(a*rad)*
+      math.cos(c*rad)*math.pow(math.sin(deltaLon/2),2);
+    return 2*radius*math.asin(math.sqrt(h.clamp(0.0,1.0)));
   }
   Future<void> requestSupplierLink(OnlineShop supplier)async{
     if(busy)return;
@@ -132,7 +166,7 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
         padding:const EdgeInsets.all(16),children:[
         const Text('Wholesale marketplace',style:TextStyle(fontSize:25,fontWeight:FontWeight.w800)),
         const SizedBox(height:7),
-        const Text('Choose a verified wholesaler and send a stock order. You can then choose your own retail selling prices in My Products.'),
+        const Text('Discover approved wholesalers near your spaza, request a connection and chat. Once the supplier approves, view their agreed discounts and delivery fee.'),
         const SizedBox(height:8),
         const Text('Only approved Teyza wholesalers have orderable prices. Google-listed businesses must join Teyza before selling here.',
           style:TextStyle(color:Colors.black54,fontSize:12)),
@@ -150,15 +184,34 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
             onChanged:(v)=>setState(()=>search=v)),
           if(rows.isEmpty)const Padding(padding:EdgeInsets.all(18),
             child:Text('No approved wholesale suppliers are listed yet. Invite wholesalers in your area to register.')),
-          for(final p in rows)Card(child:ListTile(
-            leading:const Icon(Icons.warehouse_outlined,color:Color(0xFF087954)),
-            title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),
-            subtitle:Text((p['area']??'').toString()+' · '+
-              (p['deliveryEnabled']==true?
-                (p['deliveryFeeCents']==0?'Advertises free delivery':'Delivery offered'):
-                'Collection / delivery subject to supplier')),
-            trailing:const Icon(Icons.chevron_right),
-            onTap:()=>setState((){selected=p;quantities.clear();}))),
+          for(final p in rows)Card(child:Padding(
+            padding:const EdgeInsets.all(12),child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,children:[
+              ListTile(contentPadding:EdgeInsets.zero,
+                leading:const Icon(Icons.warehouse_outlined,color:Color(0xFF087954)),
+                title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),
+                subtitle:Text((p['area']??'').toString()+' · '+
+                  (p['connected']==true?'Connected supplier':
+                   p['connectionStatus']=='pending'?'Waiting for supplier approval':
+                   'Request a partnership to unlock private prices')),
+                trailing:p['connected']==true?const Icon(Icons.verified,color:Colors.green):null),
+              if(p['connected']==true)...[
+                Text('Approved discount: ${p['discountPercent']??0}%'),
+                if(p['deliveryFeeCents'] is num)
+                  Text('Supplier delivery fee: R${((p['deliveryFeeCents'] as num)/100).toStringAsFixed(2)}'),
+              ],
+              Wrap(spacing:8,runSpacing:8,children:[
+                if(p['connected']==true)...[
+                  FilledButton.icon(onPressed:()=>setState((){selected=p;quantities.clear();}),
+                    icon:const Icon(Icons.local_offer_outlined),label:const Text('View negotiated prices')),
+                  OutlinedButton.icon(onPressed:()=>supplierChat(p),
+                    icon:const Icon(Icons.chat_bubble_outline),label:const Text('Chat with wholesaler')),
+                ]else if(p['connectionStatus']=='pending')
+                  const OutlinedButton(onPressed:null,child:Text('Request pending'))
+                else FilledButton.tonalIcon(onPressed:busy?null:()=>connect(p),
+                  icon:const Icon(Icons.handshake_outlined),label:const Text('Connect')),
+              ]),
+          ]))),
           const SizedBox(height:20),
           const Text('Nearby Google-listed wholesalers',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
           const Text('These businesses are not automatically on Teyza. You can view their map listing or request that Teyza contact them to join.',
@@ -187,6 +240,9 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
             icon:const Icon(Icons.arrow_back),label:const Text('All wholesalers')),
           Text(supplier['name'].toString(),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
           Text((supplier['area']??'').toString()),
+          Text('Connected · ${supplier['discountPercent']??0}% negotiated discount'),
+          OutlinedButton.icon(onPressed:()=>supplierChat(supplier),
+            icon:const Icon(Icons.chat_bubble_outline),label:const Text('Message this wholesaler')),
           if(supplier['deliveryEnabled']==true&&supplier['deliveryFeeCents']==0)
             const Chip(avatar:Icon(Icons.local_shipping_outlined),label:Text('Supplier advertises free delivery')),
           const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text(
