@@ -437,6 +437,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         if(result['profile'] is Map){
           saved=ShopperDeliveryProfile.fromJson(result['profile'] as Map);
           await deliveryProfileStore.save(uid,saved);
+        }else if(saved!=null){
+          // The identity is valid but the server profile was not synced yet.
+          await TeyzaMobileApi(session).call('shopper_profile_save',saved.toJson());
+          await deliveryProfileStore.save(uid,saved);
+          await deliveryProfileStore.clear(null);
         }
       }catch(_){/* local copy works while offline */}
     }
@@ -451,7 +456,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       });
     }else if(_launchReady) {
       WidgetsBinding.instance.addPostFrameCallback((_){
-        if(mounted&&request==_deliveryProfileRequest)unawaited(promptDeliveryProfile());
+        if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
+            !_deliverySheetOpen)unawaited(promptDeliveryProfile());
       });
     }
   }
@@ -484,6 +490,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       }
       if(!mounted||savedUid!=session.userId)return;
       deliveryProfile=profile;
+      ++_deliveryProfileRequest; // invalidate a queued first-login prompt
       await chooseArea(Area(profile.area.isNotEmpty?profile.area:profile.city,
         profile.city.isNotEmpty?profile.city:profile.area,
         profile.latitude,profile.longitude),persist:false);
