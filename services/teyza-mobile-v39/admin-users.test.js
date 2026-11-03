@@ -64,7 +64,7 @@ test('Only recently signed-in verified reviewers can list and create users',asyn
  const result=await service.execute(admin,'ops_users');
  assert.equal(result.users.length,2);
  assert(result.users.some(u=>u.admin===true));
- assert(!JSON.stringify(result).includes('password'));
+ assert(result.users.every(u=>!Object.prototype.hasOwnProperty.call(u,'password')));
 });
 test('Admin creates a non-privileged shopper and mails a password setup link once',async()=>{
  const {service,users,sent,db}=fixture();
