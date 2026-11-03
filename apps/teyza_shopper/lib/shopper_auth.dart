@@ -42,8 +42,9 @@ String authMessage(Object error) {
   if(value.contains('SESSION_EXPIRED')||value.contains('CODE_EXPIRED'))return 'This SMS code expired. Request a new code.';
   if(value.contains('PHONE_NUMBER_EXISTS')||value.contains('PHONE_ALREADY_LINKED'))return 'This number belongs to another account. Sign in to that account or contact Teyza support.';
   if (value.contains('ACCOUNT_LINK_UID_MISMATCH')) return 'Verification could not preserve your existing shopper account. Your shopping details were not transferred; try again or contact Teyza support.';
-  if (value.contains('FEDERATED_USER_ID_ALREADY_LINKED')||value.contains('EMAIL_EXISTS'))
-    return 'This Google or Apple identity is already linked to another account. Sign in using that account or contact Teyza support; your current shopping history was not replaced.';
+  if(value.contains('FEDERATED_USER_ID_ALREADY_LINKED'))
+    return 'This Google or Apple identity is already linked to another account. Sign in using that account or contact Teyza support; your shopping history was not replaced.';
+  if(value.contains('EMAIL_EXISTS'))return 'This email is already registered. Sign in to that account or contact Teyza support; your current shopper profile was not replaced.';
   if (value.contains('INVALID_LOGIN_CREDENTIALS') ||
       value.contains('EMAIL_NOT_FOUND') || value.contains('INVALID_PASSWORD')) {
     return 'Incorrect email or password. Try again or reset your password.';
