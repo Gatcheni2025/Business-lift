@@ -2,6 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const D=require('./domain'),{createService}=require('./service'),C=require('./selfie-crypto');
 const catalogue=require('./catalogue');
+const P=require('./publication');
 const {DAY}=require('./shop-address');
 const addressPlace={id:'address-durban-1',formattedAddress:'12 Main Road, KwaMashu, Durban, South Africa',
  types:['street_address'],location:{latitude:-29.7402,longitude:30.992},addressComponents:[
@@ -42,7 +43,8 @@ class FakeDB {
   async runTransaction(fn){const tx=this.transaction(),result=await fn(tx);await tx.commit();return result;}
   batch(){return this.transaction();}
 }
-const seller={uid:'seller1',category:'spaza',shopName:'Corner Shop',approvalStatus:'approved',listingStatus:'active'};
+const seller={uid:'seller1',category:'spaza',shopName:'Corner Shop',approvalStatus:'approved',
+  listingStatus:'active',listingPlan:'trial',trialStartedAt:1000000,trialEndsAt:1000000+P.TRIAL_MS};
 const shop={sellerUid:'seller1',status:'active',name:'Corner Shop',pickupEnabled:true,deliveryEnabled:true,deliveryFeeCents:1500,
   catalogueEnabled:true,products:[{id:'bread1',name:'Bread',priceCents:1800,stock:5}]};
 const buyer={uid:'buyer1',email_verified:true,email:'buyer@example.test',name:'Buyer'};
@@ -122,6 +124,8 @@ test('Coordinate refresh replaces provider coordinates while preserving the sell
  let now=1000000;const {service,db}=fixture({}, {clock:()=>now});
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  const initial=db.records.get('teyzaShopLocations/seller1');now+=28*DAY;
+ db.records.set('teyzaSellerAccounts/seller1',{...seller,listingPlan:'basic'});
+ db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(now)});
  const result=await service.refreshShopLocations();assert.equal(result.refreshed,1);
  const updated=db.records.get('teyzaShopLocations/seller1');assert(updated.coordinatesExpireAt>initial.coordinatesExpireAt);
  assert.equal(updated.address,initial.address);assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
@@ -133,6 +137,8 @@ test('Provider failure clears cached pins and retains the confirmed suburb witho
  }});
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  now+=31*DAY;down=true;
+ db.records.set('teyzaSellerAccounts/seller1',{...seller,listingPlan:'basic'});
+ db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(now)});
  let entry=(await service.publicDirectory()).entries[0];assert.equal(entry.latitude,null);assert.equal(entry.city,'Durban');
  const result=await service.refreshShopLocations();assert.equal(result.cleared,1);
  assert.equal(db.records.get('teyzaShopLocations/seller1').latitude,null);assert(!('latitude' in db.records.get('teyzaPublicShops/seller1')));
@@ -213,7 +219,7 @@ test('Notification events deduplicate, respect preferences and deliver generic s
  assert.equal(notificationFor('stock',{stockQty:5},{ownerUid:'seller1',status:'draft',stockQty:4},'p'),null);
  assert.equal(notificationFor('stock',{stockQty:6},{ownerUid:'seller1',status:'draft',stockQty:5},'p').category,'stock');
  assert.equal(notificationFor('stock',{stockQty:1},{ownerUid:'seller1',status:'draft',stockQty:0},'p').title,'Product sold out');
- assert.equal(notificationFor('message',null,{sender:'owner'},'thread'),null);
+ assert.equal(notificationFor('message',null,{sender:'owner'},'thread').category,'messages');
  db.records.set('teyzaSellerNotificationPreferences/seller1',{preferences:{orders:false}});
  await notifications.queue('event2',value);
  const all=[...db.records.keys()].filter(k=>k.startsWith('teyzaSellerNotifications/'));assert.equal(all.length,2);
@@ -823,7 +829,8 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  const wholesaleShop={...shop,shopCategory:'wholesale',deliveryFeeCents:0,
    products:[{id:'bulk1',name:'Rice 10kg bulk',priceCents:12500,stock:20}]};
  const spaza={uid:'buyer1',category:'spaza',shopName:'Spaza Buyer',
-   approvalStatus:'approved',listingStatus:'active'};
+   approvalStatus:'approved',listingStatus:'active',listingPlan:'trial',
+   trialStartedAt:1000000,trialEndsAt:1000000+P.TRIAL_MS};
  const spazaShop={sellerUid:'buyer1',status:'active',name:'Spaza Buyer',shopCategory:'spaza',products:[]};
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':supplier,'teyzaPublicShops/seller1':wholesaleShop,
    'teyzaSellerAccounts/buyer1':spaza,'teyzaPublicShops/buyer1':spazaShop});
@@ -834,11 +841,23 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  const rows=await service.execute(buyer,'wholesale_directory');
  assert.equal(rows.entries.length,1);
  assert.equal(rows.entries[0].shopCategory,'wholesale');
- assert.equal(rows.entries[0].products[0].priceCents,12500);
+ assert.deepEqual(rows.entries[0].products,[],
+   'Private supplier prices are hidden until the connection is accepted');
  const req={shopId:'seller1',mode:'delivery',paymentMethod:'cash',
    items:[{id:'bulk1',quantity:2}]};
+ await rejects(service.execute(buyer,'order_quote',req),403);
+ const connection=await service.execute(buyer,'wholesale_connection_request',{supplierUid:'seller1'});
+ assert.equal(connection.status,'pending');
+ await rejects(service.execute(buyer,'order_quote',req),403);
+ await service.execute(owner,'wholesale_connection_respond',{spazaUid:'buyer1',
+   status:'approved',discountPercent:10,deliveryFeeCents:2500});
+ const connected=(await service.execute(buyer,'wholesale_directory')).entries[0];
+ assert.equal(connected.connected,true);
+ assert.equal(connected.discountPercent,10);
+ assert.equal(connected.products[0].priceCents,11250);
  const quote=(await service.execute(buyer,'order_quote',req)).quote;
- assert.equal(quote.deliveryFeeCents,0);
+ assert.equal(quote.deliveryFeeCents,2500);
+ assert.equal(quote.subtotalCents,22500);
  assert.equal(quote.totalCents,25000);
  const order=await service.execute(buyer,'order_request',{...req,requestId:'bulk-order-one',
    phone:'0712345678',address:'12 Main Road KwaMashu Durban',
@@ -848,12 +867,12 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  await rejects(service.execute({uid:'outsider',email_verified:true},'order_quote',req),403);
  await rejects(service.execute({uid:'outsider',email_verified:true},'order_request',
    {...req,requestId:'bulk-order-two',phone:'0712345678',address:'12 Main Road KwaMashu Durban'}),403);
- db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'free'});
+ db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'trial',
+   trialStartedAt:1000000-P.TRIAL_MS,trialEndsAt:1000000});
  await rejects(service.execute(buyer,'wholesale_directory'),403);
  await rejects(service.execute(buyer,'order_quote',req),403);
  db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic'});
  await rejects(service.execute(buyer,'wholesale_directory'),403);
- const P=require('./publication');
  db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:9900,latestPeriod:P.period(1000000)});
  assert.equal((await service.execute(buyer,'wholesale_directory')).entries.length,1,
    'Active paid Basic is eligible for wholesale sourcing');
