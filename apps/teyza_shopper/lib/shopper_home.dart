@@ -305,7 +305,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _sellerInitialTarget=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
       selected=null;directorySelected=null;tab=0;unreadChats=0;
-      deliveryProfile=null;
+      // Keep the guest profile during automatic guest→Firebase session
+      // activation. Never carry it from one signed-in UID to another.
+      if(previousUid!=null||seller)deliveryProfile=null;
       if(_launchReady&&!seller&&widget.initialArea==null){
         WidgetsBinding.instance.addPostFrameCallback((_){
           if(mounted)unawaited(restoreDeliveryProfile());
@@ -410,7 +412,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(!mounted||session.sellerWorkspace||widget.initialArea!=null)return;
     final uid=session.userId,request=++_deliveryProfileRequest;
     ShopperDeliveryProfile? saved;
-    try{saved=await deliveryProfileStore.load(uid);}catch(_){/* prompt if storage unavailable */}
+    try{
+      saved=await deliveryProfileStore.load(uid);
+      // One-time migration of pre-existing guest delivery details into the
+      // newly authenticated shopping identity on the SAME device.
+      if(saved==null&&uid!=null&&session.anonymousShopper)
+        saved=await deliveryProfileStore.load(null);
+    }catch(_){/* prompt if storage unavailable */}
     if(uid!=null&&session.idToken!=null){
       try{
         final result=await TeyzaMobileApi(session).call('shopper_profile_read');
@@ -445,15 +453,24 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         backgroundColor:Colors.white,showDragHandle:true,
         builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:deliveryProfile));
       if(profile==null||!mounted||uid!=session.userId)return;
-      await deliveryProfileStore.save(uid,profile);
-      if(uid!=null&&session.idToken!=null){
-        try{await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());}
-        catch(_){
-          if(mounted)setState(()=>deliveryProfileWarning=
-            'Address saved on this device. Cloud backup will retry when connected.');
-        }
+      // Avoid a second login prompt at basket/checkout: register a secure
+      // persistent Firebase anonymous shopping identity just once.
+      try{if(uid==null)await session.ensureShoppingIdentity();}
+      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text('Could not activate your shopping session. Enable Firebase Anonymous Authentication and retry: ${authMessage(e)}')));return;}
+      final savedUid=session.userId;
+      if(!mounted||savedUid==null||session.sellerWorkspace)return;
+      await deliveryProfileStore.save(savedUid,profile);
+      try{
+        await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());
+        // Clear the legacy guest copy ONLY after cloud persistence succeeds.
+        await deliveryProfileStore.clear(null);
+        if(mounted)setState(()=>deliveryProfileWarning=null);
+      }catch(_){
+        if(mounted)setState(()=>deliveryProfileWarning=
+          'Details saved securely on this phone. Cloud syncing will retry.');
       }
-      if(!mounted||uid!=session.userId)return;
+      if(!mounted||savedUid!=session.userId)return;
       deliveryProfile=profile;
       await chooseArea(Area(profile.area.isNotEmpty?profile.area:profile.city,
         profile.city.isNotEmpty?profile.city:profile.area,
@@ -1012,9 +1029,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   void openBasket()=>navigateToTab(2);
   void openInbox(){
-    if(session.idToken==null||!session.contactVerified){
-      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Sign in and verify your email or mobile number to open Live chat.')));return;
+    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
+      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Save your delivery and contact details once to use chat.')));return;
     }
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
@@ -1780,9 +1797,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   void chatWithShop(Shop shop,{String? message}){
-    if(session.idToken==null||!session.contactVerified){
-      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Sign in and verify your account to chat with this shop.')));return;
+    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
+      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Save your delivery and contact details once to message this shop.')));return;
     }
     Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session,
       initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
@@ -1883,9 +1900,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> requestOrder() async {
     final shop=basketShop;if(shop==null||basketItems.isEmpty)return;
-    if(session.idToken==null||!session.contactVerified){
-      navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Sign in and verify your email or mobile number to send an order request.')));return;
+    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
+      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Save your delivery and contact details once to place orders.')));return;
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
