@@ -108,7 +108,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
       if(shop?.category=='spaza'&&approvalStatus=='approved'&&hasLocation&&
-          !supplierIntroductionChecked&&widget.sellerMode){
+          !supplierIntroductionChecked&&widget.sellerMode&&widget.apiFactory==null){
         supplierIntroductionChecked=true;
         unawaited(showWholesalersFirstTime(uid));
       }
