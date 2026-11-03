@@ -32,11 +32,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const current=await tx.get(ref);
       const value=current.exists?current.data():null;
       if(!value||value.uid!==uid||value.approvalStatus!=='approved')return value;
-      if(!['free',undefined].includes(value.listingPlan)||value.trialStartedAt>0)return value;
-      const at=clock(),updated={...value,listingPlan:'trial',
-        trialStartedAt:at,trialEndsAt:at+P.TRIAL_MS,updatedAt:new Date(at)};
-      tx.update(ref,{listingPlan:updated.listingPlan,trialStartedAt:at,
-        trialEndsAt:updated.trialEndsAt,updatedAt:updated.updatedAt});
+      if(!['free',undefined].includes(value.listingPlan))return value;
+      const at=Number.isFinite(value.trialStartedAt)&&value.trialStartedAt>0?value.trialStartedAt:clock();
+      const end=Number.isFinite(value.trialEndsAt)&&value.trialEndsAt-at===P.TRIAL_MS?
+        value.trialEndsAt:at+P.TRIAL_MS;
+      const updated={...value,listingPlan:'trial',
+        trialStartedAt:at,trialEndsAt:end,updatedAt:new Date(clock())};
+      tx.update(ref,{listingPlan:'trial',trialStartedAt:at,
+        trialEndsAt:end,updatedAt:updated.updatedAt});
       return updated;
     });
   }
@@ -58,11 +61,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
       if(account&&['free',undefined].includes(account.listingPlan)&&
-          account.approvalStatus==='approved'&&!(account.trialStartedAt>0)){
-        const at=clock();account={...account,listingPlan:'trial',trialStartedAt:at,
-          trialEndsAt:at+P.TRIAL_MS};
+          account.approvalStatus==='approved'){
+        const at=Number.isFinite(account.trialStartedAt)&&account.trialStartedAt>0?
+          account.trialStartedAt:clock();
+        const end=Number.isFinite(account.trialEndsAt)&&account.trialEndsAt-at===P.TRIAL_MS?
+          account.trialEndsAt:at+P.TRIAL_MS;
+        account={...account,listingPlan:'trial',trialStartedAt:at,trialEndsAt:end};
         tx.update(accountRef,{listingPlan:'trial',trialStartedAt:at,
-          trialEndsAt:account.trialEndsAt,updatedAt:new Date(at)});
+          trialEndsAt:end,updatedAt:new Date(clock())});
       }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
