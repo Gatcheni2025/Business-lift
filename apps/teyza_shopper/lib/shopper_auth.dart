@@ -97,6 +97,7 @@ class ShopperSession extends ChangeNotifier {
   String? email, name, idToken, userId, phoneNumber;
   bool phoneVerified=false;
   bool appleProviderLinked=false;
+  bool anonymousShopper=false;
   // A UID-bound presentation preference only. Seller permissions still come
   // from authenticated account records and server checks.
   String? _sellerWorkspaceUid;
@@ -170,9 +171,9 @@ class ShopperSession extends ChangeNotifier {
   }
   Future<void> _clear() async {
     _sellerWorkspaceUid=null;
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;anonymousShopper=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
-      for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid']){
+      for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_anonymous_shopper_uid']){
         await _store.delete(key);
       }
     });
@@ -192,12 +193,13 @@ class ShopperSession extends ChangeNotifier {
         final savedEmail=await _store.read('teyza_email');
         final savedName=await _store.read('teyza_name');
         final savedWorkspaceUid=await _store.read('teyza_seller_workspace_uid');
+        final savedAnonymousUid=await _store.read('teyza_anonymous_shopper_uid');
         final data=await _refresh(refresh);
         if(version!=_version||_disposed)return;
         final token=data['id_token']?.toString()??'';
         final uid=data['user_id']?.toString()??'';
         if(token.isEmpty||uid.isEmpty)throw StateError('INVALID_REFRESH_TOKEN');
-        idToken=token;userId=uid;
+        idToken=token;userId=uid;anonymousShopper=savedAnonymousUid==uid;
         _sellerWorkspaceUid=savedWorkspaceUid==uid?uid:null;
         _refreshToken=data['refresh_token']?.toString()??refresh;
         email=savedEmail;name=savedName;
@@ -207,7 +209,7 @@ class ShopperSession extends ChangeNotifier {
       }
     } catch(error) {
       if(version==_version){
-        idToken=null;userId=null;emailVerified=false;phoneVerified=false;phoneNumber=null;
+        idToken=null;userId=null;emailVerified=false;phoneVerified=false;phoneNumber=null;anonymousShopper=false;
         // Retain a securely stored refresh token during a temporary outage.
         if(_expired(error))await _clear();
       }
@@ -223,7 +225,7 @@ class ShopperSession extends ChangeNotifier {
     final uid=data['localId']?.toString()??'';
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
     if(userId!=uid)_sellerWorkspaceUid=null;
-    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;
+    idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;anonymousShopper=false;
     email=data['email']?.toString()??fallbackEmail;
     name=data['displayName']?.toString()??fallbackName;
     try{await _persist();}catch(_){if(version==_version)await _clear();rethrow;}
@@ -289,6 +291,26 @@ class ShopperSession extends ChangeNotifier {
       rethrow;
     }
   }
+  /// Create one persistent Firebase anonymous shopper identity after the
+  /// user confirms their delivery/contact profile. This is not a seller
+  /// registration and never grants merchant or admin permissions.
+  /// Firebase Authentication's Anonymous provider must be enabled.
+  Future<void> ensureShoppingIdentity() async {
+    if(idToken!=null&&userId!=null){await freshIdToken();return;}
+    if(isBusy)throw StateError('Account is still loading. Retry saving your profile.');
+    final version=++_version;
+    isBusy=true;_changed();
+    try {
+      final result=await _post('signUp',{'returnSecureToken':true});
+      await _save(result,'','',version);
+      if(version!=_version||userId==null)throw StateError('Shopping session changed.');
+      anonymousShopper=true;
+      await _persist();
+    } finally {
+      if(version==_version){isBusy=false;isReady=true;_changed();}
+    }
+  }
+
   Future<void> confirmLinkedPhone(String expectedPhone) async {
     final uid=userId,version=_version;
     await freshIdToken();await refreshEmailStatus();
