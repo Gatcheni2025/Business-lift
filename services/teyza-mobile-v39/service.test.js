@@ -99,6 +99,39 @@ test('Seller chat lists customers only and cannot turn a shopper into an owner',
  await rejects(service.execute(buyer,'chat_list',{asOwner:true}),403);
 });
 
+test('Saved first-time shopper details permit secure orders and chat without a second registration',async()=>{
+ const {service,db}=fixture();
+ const guest={uid:'guest1',email_verified:false,phone_number:null};
+ await rejects(service.execute(guest,'order_quote',{shopId:'seller1',
+   mode:'collection',items:[{id:'bread1',quantity:1}]}),403);
+ await rejects(service.execute(guest,'chat_open',{shopId:'seller1'}),403);
+ const fields={address:'12 Main Road, Durban',area:'KwaMashu',city:'Durban',
+   displayName:'New Shopper',email:'guest@example.test',phone:'0712345678',
+   latitude:-29.74,longitude:30.99};
+ const saved=await service.execute(guest,'shopper_profile_save',fields);
+ assert.equal(saved.saved,true);
+ assert.equal(saved.profile.contactEmail,'guest@example.test');
+ assert.equal(saved.profile.emailVerified,false);
+ const quote=(await service.execute(guest,'order_quote',{shopId:'seller1',
+   mode:'delivery',paymentMethod:'cash',items:[{id:'bread1',quantity:1}]})).quote;
+ await rejects(service.execute(guest,'order_request',{shopId:'seller1',
+   mode:'delivery',paymentMethod:'cash',items:[{id:'bread1',quantity:1}],
+   requestId:'wrong-contact',phone:'0712345677',address:fields.address,
+   expectedQuoteId:quote.quoteId}),403);
+ const placed=await service.execute(guest,'order_request',{shopId:'seller1',
+   mode:'delivery',paymentMethod:'cash',items:[{id:'bread1',quantity:1}],
+   requestId:'valid-order',phone:fields.phone,address:fields.address,
+   expectedQuoteId:quote.quoteId});
+ assert.equal(db.records.get('teyzaMobileOrders/'+placed.id).shopperName,'New Shopper');
+ const thread=await service.execute(guest,'chat_open',{shopId:'seller1'});
+ assert.equal(typeof thread.threadId,'string');
+ await service.execute(guest,'chat_send',{threadId:thread.threadId,
+   messageId:'msg-first',message:'Is it open?',senderUid:'seller1'});
+ assert.equal((await service.execute(guest,'chat_list')).threads.length,1);
+ await service.execute(guest,'notification_device_save',{token:'guest-valid-token-1234567890',
+   platform:'android'});
+ assert.equal((await service.execute(guest,'notification_list')).notifications.length,0);
+});
 test('Native seller registration binds the verified actor and cannot approve, activate or replace an existing shop',async()=>{
  const {service,db}=fixture();const data={category:'retail',shopName:'Local Retail',phone:'0712345678',address:'Durban',consent:true,
   uid:'seller1',ownerEmail:'forged@test',approvalStatus:'approved',listingStatus:'active'};
