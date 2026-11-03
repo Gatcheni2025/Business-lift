@@ -886,6 +886,15 @@ test('wholesale directory protects supplier prices and only approved spaza owner
    status:'approved',discountPercent:10,deliveryFeeCents:2500});
  const connected=(await service.execute(buyer,'wholesale_directory')).entries[0];
  assert.equal(connected.connected,true);
+ const chatFromSpaza=await service.execute(buyer,'wholesale_connection_chat_open',
+   {supplierUid:'seller1'});
+ const chatFromWholesaler=await service.execute(owner,'wholesale_connection_chat_open',
+   {spazaUid:'buyer1'});
+ assert.equal(chatFromSpaza.threadId,chatFromWholesaler.threadId);
+ await service.execute(owner,'chat_send',{threadId:chatFromSpaza.threadId,
+   messageId:'partnership-hello',message:'Hello partner'});
+ assert.equal((await service.execute(buyer,'chat_read',
+   {threadId:chatFromSpaza.threadId})).messages[0].text,'Hello partner');
  assert.equal(connected.discountPercent,10);
  assert.equal(connected.products[0].priceCents,11250);
  const quote=(await service.execute(buyer,'order_quote',req)).quote;
