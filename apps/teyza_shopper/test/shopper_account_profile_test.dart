@@ -55,7 +55,8 @@ void main(){
    expect(find.text('Open shop owner workspace'),findsNothing);
    expect(ownerCalls,0);
    final payment=find.text('Payment method');
-   await t.scrollUntilVisible(payment,210,scrollable:find.byType(Scrollable).first);
+   await t.ensureVisible(payment);
+   await t.pumpAndSettle();
    await t.tap(payment);await t.pumpAndSettle();
    await t.tap(find.text('Card at the shop').last);await t.pumpAndSettle();
    expect(await payments.load('shopper-123'),ShopperPaymentPreferenceStore.cardAtShop);
