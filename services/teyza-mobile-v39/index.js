@@ -40,11 +40,26 @@ async function revokeAppleCode(uid,authorizationCode,idToken){
       redirectUri:'https://teyza.co.za'})});
   if(!response.ok)throw new Error('Apple token revocation was not accepted. Account deletion may proceed with manual revocation review.');
 }
+// Firebase sends a standard password reset email to the new account owner.
+// Admins do not see or choose that user's password and cannot mark emails
+// verified. This uses Firebase Authentication templates, not a fake email.
+async function sendSetupEmail(email){
+  const response=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({requestType:'PASSWORD_RESET',email}),
+  });
+  if(!response.ok)throw new Error('Firebase could not deliver the account setup email.');
+}
 const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid),
    deleteAuthUser:uid=>admin.auth().deleteUser(uid),
    disableAuthUser:uid=>admin.auth().updateUser(uid,{disabled:true}),
    revokeAuthTokens:uid=>admin.auth().revokeRefreshTokens(uid),
    revokeAppleToken:revokeAppleCode,
+   listAuthUsers:(limit,pageToken)=>admin.auth().listUsers(limit,pageToken),
+   getAuthUserByEmail:email=>admin.auth().getUserByEmail(email),
+   createAuthUser:values=>admin.auth().createUser(values),
+   updateAuthUser:(uid,values)=>admin.auth().updateUser(uid,values),
+   sendPasswordResetEmail:sendSetupEmail,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
