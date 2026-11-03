@@ -1,6 +1,6 @@
-import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R318';
-import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R317';
-import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R317';
+import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R319';
+import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R319';
+import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R319';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Every shop. One clear view.',billing:'Subscriptions & statements',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError}){
