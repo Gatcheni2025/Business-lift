@@ -1508,6 +1508,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 ])),
               const Icon(Icons.arrow_forward_rounded,color:Colors.white)
             ])))),
+      if(discoveryType=='wholesale')Card(color:const Color(0xFFE5F4ED),child:ListTile(
+        leading:const Icon(Icons.inventory_2_outlined,color:green),
+        title:const Text('Spaza shop owner? Buy stock at wholesale prices',
+          style:TextStyle(fontWeight:FontWeight.w800)),
+        subtitle:const Text('Open your seller dashboard and choose Buy from wholesalers to order from verified suppliers. Map listings are discovery-only.'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:()=>openOwnerWorkspace())),
+      // Nearby shops merges public listings with verified Teyza sellers.
+      if(onlineWarning!=null)Text(onlineWarning!,
+        style:const TextStyle(color:muted,fontSize:12)),
       // Show local Other Businesses on the home page without requiring a
       // category switch, directly below Services offered and above Join Teyza.
       section('Other businesses',
@@ -1525,16 +1535,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Text(area==null?'Add your delivery address to find other businesses nearby.':
           otherBusinessesWarning??'No other businesses found nearby. Try another area.',
           style:const TextStyle(color:muted,fontSize:12))),
-      if(discoveryType=='wholesale')Card(color:const Color(0xFFE5F4ED),child:ListTile(
-        leading:const Icon(Icons.inventory_2_outlined,color:green),
-        title:const Text('Spaza shop owner? Buy stock at wholesale prices',
-          style:TextStyle(fontWeight:FontWeight.w800)),
-        subtitle:const Text('Open your seller dashboard and choose Buy from wholesalers to order from verified suppliers. Map listings are discovery-only.'),
-        trailing:const Icon(Icons.chevron_right),
-        onTap:()=>openOwnerWorkspace())),
-      // Nearby shops merges public listings with verified Teyza sellers.
-      if(onlineWarning!=null)Text(onlineWarning!,
-        style:const TextStyle(color:muted,fontSize:12)),
       Card(color:const Color(0xFFE5F4ED),elevation:0,
         child:ListTile(
           leading:const Icon(Icons.add_business_outlined,color:green),
@@ -1848,7 +1848,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(height:10),
           SizedBox(width:double.infinity,child:FilledButton.icon(
             onPressed:()=>contactListing(merchant:seller,directory:publicPlace),
-            icon:const Icon(Icons.shopping_bag_outlined,size:17),
+            icon:const Icon(Icons.call_outlined,size:17),
             label:const Text('Contact'))),
           if(publicPlace?.origin=='google_places')
             const Text('Google Maps',style:TextStyle(color:muted,fontSize:10)),
