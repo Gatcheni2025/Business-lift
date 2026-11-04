@@ -83,7 +83,10 @@ async function rollback({client,backupPath,log=console.log}){
 }
 async function main(){
   const action=process.argv[2];if(!['deploy','rollback'].includes(action))throw Error('Use deploy or rollback');
-  const client=await connect(),root=path.resolve(__dirname,'../../web/app-first/public'),backupPath=path.resolve(__dirname,'../../teyza-store-links-backup.json');
+  const client=await connect(),repository=path.resolve(__dirname,'../../');
+  const fullSource=path.join(repository,'web/app-first/public');
+  const root=fs.existsSync(path.join(fullSource,'index.html'))?fullSource:path.join(repository,'public');
+  const backupPath=path.join(repository,'teyza-store-links-backup.json');
   if(action==='deploy')await deploy({client,root,backupPath});else await rollback({client,backupPath});
 }
 if(require.main===module)main().catch(e=>{console.error('Teyza store website update stopped:',e.message);process.exitCode=1});
