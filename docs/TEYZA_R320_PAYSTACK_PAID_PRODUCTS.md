@@ -31,6 +31,22 @@ Status: Development PR ONLY. NOT DEPLOYED. Stacked on the Teyza R319 administrat
 - Backend and Flutter tests plus staged Android physical checkout, owner approval, logout, prepaid card failures, account deletion, two-way chat and prior orders.
 - Dependency: stacked PRs #99-#103. Do not merge or deploy automatically. Avoid partial Hosting deploys that overwrite unrelated website pages.
 
+
+## Repair for signed run 41793649417
+
+The November 4, 2026 signed workflow stopped on Firebase preflight. Production was still Teyza Mobile **3.17.0** with `sevenDayTrial=true`, `strictSevenDayMembership=true`, `billingMode=manual_receipt` and missing R319 admin + R320 Paystack flags. This is a **backend deployment/configuration blocker**, not Android or iOS certificate failure.
+
+From the **R320 branch** (not a stale R319 or R315 ZIP) on a trusted Windows terminal with Node.js 22 and Firebase CLI:
+1. In the Paystack **test merchant** dashboard, verify/create a **ZAR 99.00/month** subscription plan. Record its `PLN_...` code, not its API secret.
+2. In PowerShell, at the repository root, run `firebase login`; then `firebase functions:secrets:set TEYZA_PAYSTACK_SECRET_KEY --project business-lift-3c19c`. Enter the test secret into the secure CLI prompt; never paste it into source control, chat, or logs.
+3. Create the private file `services/teyza-mobile-v39/.env.business-lift-3c19c` with just `TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_YOUR_REAL_CODE`. The repository gitignore excludes this file. Verify the plan is for **ZAR** and **monthly**, not daily/weekly.
+4. Review the production-side effects: migrating old trial shop accounts to free and restricting new product catalogues to paid members affects existing sellers. Arrange merchant acceptance testing and a release window before proceeding.
+5. Run `.\DEPLOY-MOBILE.ps1` from PowerShell at the repository root. This runs backend tests and scoped Functions deployment, checks live service health for **3.20.0**, the two disabled trial flags, R319 admin fields, Paystack readiness and the exact prices. It does **not** deploy Firebase Hosting.
+6. Inspect `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile` in a browser; health must show `ok:true`, `version:"3.20.0"`, `billingMode:"paystack_checkout"`, `paystackCheckoutAvailable:true`, `sevenDayTrial:false`. Configure the signed Paystack webhook route as documented above, test it using **test** payments and verify reconciliation and renewals.
+7. Only after staging/business testing passes, re-run the signed workflow from `feat/teyza-free-signup-paystack-products-promotion-20261104` with signed AAB/APK + IPA and TestFlight upload enabled.
+
+**Do not** run the old R315 `DEPLOY-MOBILE.ps1`: its health checks explicitly demand v3.18.0 and a seven-day trial. The updated R320 helper checks v3.20.0 instead. Avoid merging PR #104 or charging real customers before the renewal, webhook, cancellation, Play and Apple billing QA gates are complete.
+
 ## Signed Android + iOS internal distribution — build 41
 
 Release source is draft PR #104, branch `feat/teyza-free-signup-paystack-products-promotion-20261104` and app version `1.0.31+41`. The official workflow is:
