@@ -1936,7 +1936,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(verifiedMerchantFor(shop)!=null)
         section('SHOP ITEMS'),
       if(verifiedMerchantFor(shop)!=null)
-        FilledButton.icon(onPressed:()=>contactListing(directory:shop),
+        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
           icon:const Icon(Icons.shopping_bag_outlined),
           label:const Text('View products and prices')),
       const SizedBox(height:15),
