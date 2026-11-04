@@ -290,8 +290,17 @@ void main(){
     expect(find.text('Local Business details'),findsOneWidget);
     expect(find.text('Business category'),findsOneWidget);
     expect(find.text('Main Road, Durban'),findsWidgets);
+    // Chat and Call are below the photo and business facts on a 390px phone.
+    // Scroll the lazily built details list before asserting or tapping them.
+    final detailsScroll=find.byType(ListView).first;
+    for(var i=0;i<10&&find.widgetWithText(FilledButton,'Chat').evaluate().isEmpty;i++){
+      await tester.drag(detailsScroll,const Offset(0,-150));
+      await tester.pumpAndSettle();
+    }
     expect(find.widgetWithText(FilledButton,'Chat'),findsOneWidget);
     expect(find.widgetWithText(OutlinedButton,'Call'),findsOneWidget);
+    await tester.ensureVisible(find.widgetWithText(FilledButton,'Chat'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton,'Chat'));
     await tester.pumpAndSettle();
     expect(launches.last.host,'wa.me');
@@ -299,6 +308,13 @@ void main(){
     await tester.tap(find.widgetWithText(OutlinedButton,'Call'));
     await tester.pumpAndSettle();
     expect(launches.last.scheme,'tel');
+    for(var i=0;i<10&&find.text('Browse local businesses').evaluate().isEmpty;i++){
+      await tester.drag(detailsScroll,const Offset(0,240));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Browse local businesses'),findsOneWidget);
+    await tester.ensureVisible(find.text('Browse local businesses'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Browse local businesses'));
     await tester.pumpAndSettle();
     expect(find.text('Local Businesses'),findsWidgets);
