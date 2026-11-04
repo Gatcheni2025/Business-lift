@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/teyza-app-first-website]
   pull_request:
-    paths: ['web/app-first/**', 'tools/app-first-release/**', 'scripts/*app_first_website.py', '.github/workflows/teyza-app-first-website.yml']
+    paths: ['web/app-first/**', 'tools/app-first-release/**', 'scripts/*app_first_website.py', 'scripts/package_teyza_premium_website.py', 'DEPLOY-TEYZA-PREMIUM.ps1', '.github/workflows/teyza-app-first-website.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,15 +19,23 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 scripts/check_app_first_website.py
-      - run: node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/store-links.test.cjs
+      - run: node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/store-links.test.cjs tools/app-first-release/premium-site.test.cjs
       - run: node --check tools/app-first-release/store-links-patch.cjs
+      - run: node --check tools/app-first-release/premium-site-patch.cjs
       - run: node --check tools/app-first-release/run.cjs
       - run: python3 scripts/package_app_first_website.py
+      - run: python3 scripts/package_teyza_premium_website.py
       - uses: actions/upload-artifact@v4
         with:
           name: TEYZA-APP-FIRST-WEBSITE
           path: dist/TEYZA_APP_FIRST_WEBSITE_20261029.zip
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TEYZA-PREMIUM-WEBSITE
+          path: dist/TEYZA_PREMIUM_WEBSITE_20261104.zip
+          if-no-files-found: error
+          retention-days: 30
   powershell:
     runs-on: windows-2025
     steps:
@@ -42,4 +50,7 @@ jobs:
           }
           $tokens=$null; $errors=$null
           [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-APP-STORES.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-TEYZA-PREMIUM.ps1",[ref]$tokens,[ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
