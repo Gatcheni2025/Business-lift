@@ -220,3 +220,18 @@ h2{font-size:34px}
 @media(max-width:850px){.demo-layout{gap:35px}.demo-stage{min-height:650px}.demo-steps{grid-template-columns:1fr}}
 @media(max-width:620px){.demo-layout{grid-template-columns:1fr;gap:30px}.demo-copy>h2{font-size:38px}.demo-steps{grid-template-columns:1fr 1fr}.demo-caption{min-height:68px}.demo-stage{min-height:620px;padding:30px 18px 24px;border-radius:26px}.demo-device{width:min(270px,94%)}.demo-stage-label{margin-top:16px}}
 @media(prefers-reduced-motion:reduce){.demo-device.is-playing .demo-touch{animation:none}}
+
+/* Teyza official store destinations. Availability is governed by store review and region. */
+.store-links{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+.store-link{display:inline-flex;align-items:center;gap:12px;min-width:185px;min-height:66px;padding:10px 17px;border:1px solid #44606a;border-radius:14px;background:#0c1c22;color:#fff;text-decoration:none;box-shadow:0 7px 18px #001e2526;transition:background .18s ease,transform .18s ease}
+.store-link:hover{background:#193943;transform:translateY(-2px)}
+.store-link:focus-visible{outline:3px solid #d7f78b;outline-offset:3px}
+.store-link svg{width:30px;height:30px;flex:0 0 30px}
+.store-link-copy{display:flex;flex-direction:column;gap:2px;line-height:1.1}
+.store-link-copy small{font-size:10px;letter-spacing:.06em;font-weight:650;color:#c2d8d5}
+.store-link-copy strong{font-size:18px;font-weight:800;letter-spacing:-.4px;color:#fff}
+.store-links--hero{margin:20px 0 10px}
+.store-links--panel .store-link{width:100%;max-width:280px}
+.store-status{font-size:13px;line-height:1.6;color:#536b6d}
+@media(max-width:620px){.store-links--hero .store-link{flex:1 1 160px;min-width:0;padding:10px 12px}.store-link-copy strong{font-size:16px}.store-links--panel .store-link{max-width:100%}}
+@media(prefers-reduced-motion:reduce){.store-link{transition:none}.store-link:hover{transform:none}}
