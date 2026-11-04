@@ -30,3 +30,18 @@ Status: Development PR ONLY. NOT DEPLOYED. Stacked on the Teyza R319 administrat
 - Verify Firebase rules prohibit clients from granting billing, promotion and public catalogue state, and prevent unauthorised Firestore draft writes from becoming public.
 - Backend and Flutter tests plus staged Android physical checkout, owner approval, logout, prepaid card failures, account deletion, two-way chat and prior orders.
 - Dependency: stacked PRs #99-#103. Do not merge or deploy automatically. Avoid partial Hosting deploys that overwrite unrelated website pages.
+
+## Signed Android + iOS internal distribution — build 41
+
+Release source is draft PR #104, branch `feat/teyza-free-signup-paystack-products-promotion-20261104` and app version `1.0.31+41`. The official workflow is:
+https://github.com/Gatcheni2025/Business-lift/actions/workflows/teyza-mobile-release.yml
+
+**Before generating store-signed files**, deploy and verify Teyza Mobile Firebase service **3.20.0** (using the scoped operations/mobile service deployment kit, not a partial Firebase Hosting deployment). Its health endpoint must report `sevenDayTrial=false`, `strictSevenDayMembership=false`, `billingMode=paystack_checkout`, `paystackCheckoutAvailable=true` and exact ZAR cent prices 4900, 9900 and 2900. Requires the configured **Paystack Secret Manager** secret and monthly R99 Paystack plan. The signed workflow refuses an incompatible or missing backend.
+
+To run **after the above checks pass**, open the workflow → Run workflow → **Use workflow from** `feat/teyza-free-signup-paystack-products-promotion-20261104` → `platforms=all`, `signed_release=true`, `upload_to_testflight=true`, `upload_existing_ios_run` blank. The workflow checks old Android Play upload certificate, Firebase Android OAuth, Apple Sign In certificate/profile, builds signed **.aab** and **.apk**, signs **.ipa** and uploads to **TestFlight** when opt-in and App Store Connect API secrets work. Download artifacts `teyza-android-aab-signed` and `teyza-ios-release-signed` from the successful run; confirm the signed APK is included in the Android artifact's release package.
+
+The regular **Teyza Shopper APK** PR workflow is *separate* and currently requires original PR #97 tester keystore; do not replace or rotate that certificate. The signed store release uses the original Play upload key instead.
+
+**App identity warning:** the existing Play Console-compatible Android package in this repository is `com.asiyedriver.asiye` even though the product is branded Teyza; the iOS bundle is `za.co.teyza.shopper`. Confirm that the targeted existing Play listing is actually Teyza before publishing a new AAB. Do **not** silently rename either identifier or overwrite an unrelated app.
+
+**Store-policy gate:** Apple and Google Play purchases of in-app digital placements/listings require applicable platform billing; the build defaults to disabling Paystack checkout in store distribution. StoreKit and Play Billing aren't implemented in this draft, so the resulting TestFlight is suitable for internal QA, **not approval as a completed paid-feature release**.
