@@ -5,9 +5,22 @@ const NOW=Date.parse('2026-11-04T07:00:00+02:00');
 function fixture(seed={}) {
  const records=new Map(Object.entries({'teyzaSellerAccounts/shop1':{
   uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free'},...seed}));
- const db={doc:path=>({path,get:async()=>({exists:records.has(path),data:()=>records.get(path)}),
-  create:async v=>{if(records.has(path))throw Error('duplicate reference');records.set(path,v);},
-  set:async(v,o)=>records.set(path,o?.merge?{...records.get(path),...v}:v)})};
+ const db={
+  doc:path=>({path,get:async()=>({exists:records.has(path),data:()=>records.get(path)}),
+    create:async v=>{if(records.has(path))throw Error('duplicate reference');records.set(path,v);},
+    set:async(v,o)=>records.set(path,o?.merge?{...records.get(path),...v}:v),
+    update:async v=>{assert(records.has(path));records.set(path,{...records.get(path),...v});}}),
+  runTransaction:async fn=>{
+    const writes=[],tx={
+      get:ref=>ref.get(),set:(ref,v,o)=>writes.push(()=>ref.set(v,o)),
+      update:(ref,v)=>writes.push(()=>ref.update(v)),
+      create:(ref,v)=>writes.push(()=>ref.create(v))
+    };
+    const result=await fn(tx);
+    for(const write of writes)await write();
+    return result;
+  }
+ };
  const requests=[];
  const send=async(url,options)=>{
   requests.push({url,options});
@@ -15,7 +28,14 @@ function fixture(seed={}) {
   if(url.includes('/plan/'))data={plan_code:'PLN_TEST99',amount:9900,interval:'monthly',currency:'ZAR'};
   else if(url.includes('/transaction/initialize'))data={
    authorization_url:'https://checkout.paystack.com/test-payment'};
-  else throw Error('Unexpected Paystack request '+url);
+  else if(url.includes('/transaction/verify/')){
+    const reference=decodeURIComponent(url.split('/').at(-1));
+    const pending=records.get('teyzaPaystackPayments/'+reference);
+    if(!pending)throw Error('Reference is not Teyza-issued');
+    data={reference,status:'success',currency:'ZAR',amount:pending.amountCents,
+      id:12345,customer:{email:'owner@example.test',customer_code:'CUS_TEST'},
+      authorization:{reusable:false}};
+  }else throw Error('Unexpected Paystack request '+url);
   return {ok:true,json:async()=>({status:true,data})};
  };
  const api=createBilling({db,clock:()=>NOW,getSecret:()=> 'sk_test_FAKE',
@@ -61,4 +81,23 @@ test('Expired, wrong-owner and unverified payment cannot unlock checkout',async(
  await assert.rejects(api.execute({...auth,email_verified:false},'billing_checkout'),e=>e.status===403);
  await assert.rejects(api.execute(auth,'promote_checkout'),e=>e.status===403);
  assert.equal(INTRO_CENTS,4900);assert.equal(MONTHLY_CENTS,9900);
+});
+
+test('Only a fresh administrator can verify a Teyza-issued transaction for its original seller',async()=>{
+ const {api,auth,records}=fixture();
+ const checkout=await api.execute(auth,'billing_checkout');
+ const data={sellerUid:'shop1',reference:checkout.reference};
+ const admin={uid:'admin1',email_verified:true,teyzaAdmin:true,auth_time:NOW/1000};
+ await assert.rejects(api.execute({...admin,teyzaAdmin:false},'ops_paystack_confirm',data),e=>e.status===403);
+ await assert.rejects(api.execute({...admin,auth_time:NOW/1000-301},'ops_paystack_confirm',data),e=>e.status===401);
+ await assert.rejects(api.execute(admin,'ops_paystack_confirm',{...data,sellerUid:'other'}),e=>e.status===403);
+ await assert.rejects(api.execute(admin,'ops_paystack_confirm',{...data,reference:'Bank-Receipt'}),e=>e.status===422);
+ assert.equal(records.get('teyzaBilling/shop1'),undefined,'No billing is granted by a pending checkout');
+ const result=await api.execute(admin,'ops_paystack_confirm',data);
+ assert.equal(result.verified,true);
+ assert.equal(records.get('teyzaPaystackPayments/'+checkout.reference).status,'paid');
+ assert.equal(records.get('teyzaBilling/shop1').paymentProvider,'paystack');
+ assert.equal(records.get('teyzaBilling/shop1').paymentEnvironment,'test');
+ assert.equal(records.get('teyzaSellerAccounts/shop1').listingPlan,'basic');
+ assert.equal((await api.execute(admin,'ops_paystack_confirm',data)).alreadyConfirmed,true);
 });
