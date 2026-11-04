@@ -134,7 +134,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
-  const adminOperations=operations.createOperations({db,clock,rate});
+  const adminOperations=operations.createOperations({db,clock,rate,
+    getPaystackMode:()=>getPaystackSecret().startsWith('sk_live_')?'live':'test'});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
@@ -494,8 +495,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {status:'pending_review'};
     }
     if(action==='catalogue_review') {
-      if(auth.teyzaAdmin!==true)D.fail(403,'Teyza administrator access is required.');
+      experience.recentAdmin(auth,clock);
       const sellerUid=D.id(data.sellerUid);
+      if(sellerUid===uid)D.fail(403,'Another administrator must review your own products.');
       return db.runTransaction(async tx=>{
         const accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid),submissionRef=doc('teyzaCatalogueSubmissions/'+sellerUid);
         const [accountSnap,shopSnap,submissionSnap]=await Promise.all([tx.get(accountRef),tx.get(shopRef),tx.get(submissionRef)]);

@@ -4,7 +4,8 @@ const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
 const INTRO_CENTS=4900,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
-const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage']);
+const {recentAdmin}=require('./seller-experience');
+const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage','ops_paystack_confirm']);
 function nextMonth(ms) {
   const d=new Date(ms),day=d.getUTCDate();
   const first=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1,d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()));
@@ -105,7 +106,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
         tx.set(billRef,{ownerUid:uid,status:'paid',introUsed:bill?.introUsed===true||pay.kind==='intro',
           monthlyCents:pay.amountCents,standardMonthlyCents:MONTHLY_CENTS,
           paidUntil,lastReference:reference,latestPeriod:P.period(now),
-          paystackCustomerCode:verified.customer?.customer_code||bill?.paystackCustomerCode||'',
+          paymentProvider:'paystack',paystackCustomerCode:verified.customer?.customer_code||bill?.paystackCustomerCode||'',
           updatedAt:now},{merge:true});
         tx.update(accountRef,{listingPlan:'basic',updatedAt:new Date(now)});
       }
@@ -163,6 +164,18 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
       const reference=D.text(data.reference,'payment reference',70);
       return grant(reference,D.id(auth.uid));
     }
+    if(action==='ops_paystack_confirm') {
+      recentAdmin(auth,clock);
+      const sellerUid=D.id(data.sellerUid);
+      if(sellerUid===auth.uid)D.fail(403,'Another administrator must review your own payment.');
+      const reference=D.text(data.reference,'Paystack membership reference',70);
+      if(!/^TZM_[a-f0-9]{26}$/.test(reference))
+        D.fail(422,'Choose a Teyza-issued Paystack membership reference for this shop.');
+      // Server checks original reference ownership and Paystack's verified
+      // status, currency, amount and customer before granting membership.
+      const result=await grant(reference,sellerUid);
+      return {verified:result.paid===true,reference,alreadyConfirmed:!!result.alreadyConfirmed};
+    }
     D.fail(404,'Unknown billing action.');
   }
   async function webhook(raw,signature,payload) {
@@ -209,7 +222,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
         currency:'ZAR',status:'paid',verifiedAt:now,transactionId:String(verified.id||'')});
       tx.set(billRef,{status:'paid',monthlyCents:MONTHLY_CENTS,standardMonthlyCents:MONTHLY_CENTS,
         paidUntil:nextMonth(base),lastReference:ref,latestPeriod:P.period(now),
-        renewalSetup:'active',updatedAt:now},{merge:true});
+        paymentProvider:'paystack',renewalSetup:'active',updatedAt:now},{merge:true});
     });
     await refresh(uid);return {accepted:true};
   }

@@ -13,8 +13,9 @@ function entitled(uid,account,billing,now=Date.now()) {
  if(account?.listingPlan!=='basic'||billing?.ownerUid!==uid||billing.status!=='paid')return false;
  // Paystack membership is valid for one paid calendar month from charge.
  if(Number.isFinite(billing.paidUntil))return now<billing.paidUntil;
- // Preserve prior verified manual R99 memberships through their recorded period.
- return billing.monthlyCents===9900&&billing.latestPeriod===period(now);
+ // Historical manual invoices and mandates do not prove membership.
+ // Only gateway-verified payments carry a server-computed paidUntil.
+ return false;
 }
 function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
  const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
