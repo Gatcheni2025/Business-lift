@@ -849,6 +849,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   Widget merchantTrust(Shop shop)=>Wrap(spacing:8,runSpacing:4,children:[
+    if(shop.sponsored)const Chip(avatar:Icon(Icons.campaign_rounded,color:Color(0xFF7E5000),size:17),label:Text('Promoted · 7 days')),
     if(shop.identityVerified)const Chip(avatar:Icon(Icons.verified,color:green,size:17),label:Text('Teyza Verified')),
     Chip(avatar:const Icon(Icons.star_rounded,color:Color(0xFFB57800),size:18),
       label:Text(shop.ratingCount>0&&shop.rating!=null
