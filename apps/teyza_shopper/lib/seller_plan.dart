@@ -65,6 +65,21 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   finally{if(mounted)setState(()=>busy=false);}
  }
+ Future<void> manageSubscription() async{
+  if(busy||Platform.isIOS)return;
+  setState((){busy=true;error=null;});
+  try{
+   final response=await api.call('billing_manage');
+   final uri=Uri.tryParse(response['manageUrl']?.toString()??'');
+   if(uri==null||uri.scheme!='https'||uri.host!='paystack.com'){
+    throw StateError('A valid subscription management link is not available.');
+   }
+   if(!await launchUrl(uri,mode:LaunchMode.externalApplication)){
+    throw StateError('Could not open Paystack subscription settings.');
+   }
+  }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+  finally{if(mounted)setState(()=>busy=false);}
+ }
  Widget benefit(String text)=>Padding(padding:const EdgeInsets.symmetric(vertical:6),
   child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
    const Icon(Icons.check_circle_outline,color:Color(0xFF08794E),size:20),
@@ -96,6 +111,10 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     title:const Text('Business membership active'),
     subtitle:Text(paidUntil==null?'You can list products.':
      'Paid through '+DateTime.fromMillisecondsSinceEpoch(paidUntil!).toLocal().toString().split(' ').first))),
+   if(paid&&!Platform.isIOS)Padding(
+    padding:const EdgeInsets.only(bottom:12),
+    child:OutlinedButton(onPressed:busy?null:manageSubscription,
+     child:const Text('Manage or cancel monthly subscription'))),
    if(!paid)planCard(title:'Business membership',price:'R49 first month · then R99/month',
     highlighted:true,benefits:const [
      'Add products, prices and available stock',
