@@ -593,7 +593,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         otherBusinessesWarning=null;});
       return;
     }
-    setState((){loadingOtherBusinesses=true;otherBusinessesWarning=null;});
+    setState((){otherBusinesses=[];loadingOtherBusinesses=true;
+      otherBusinessesWarning=null;});
     try{
       final businesses=widget.directoryLoader!=null
         ?await widget.directoryLoader!(currentArea,'variety',40)
@@ -1347,7 +1348,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<NearbyListing> get nearbyOtherBusinesses {
     if(area==null)return [];
     final verified=live.where((shop)=>shop.shopCategory=='variety'&&
-      shopMatchesArea(shop,area,radiusKm:40)).toList();
+      shopMatchesArea(shop,area,radiusKm:40.0)).toList();
     final publicResults=discoveryType=='variety'&&online.isNotEmpty
       ?online:otherBusinesses;
     return mergeNearbyListings(verified,publicResults,area:area);
@@ -1525,7 +1526,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         action:TextButton(onPressed:() async {
           await setDiscoveryType('variety');
           if(mounted)setState(()=>showAllShops=true);
-        },child:const Text('See all'))),
+        },child:const Text('Explore'))),
       if(nearbyOtherBusinesses.isNotEmpty)
         SizedBox(height:282,child:ListView(scrollDirection:Axis.horizontal,
           children:nearbyOtherBusinesses.take(12).map(nearbyCard).toList()))
