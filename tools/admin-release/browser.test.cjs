@@ -54,7 +54,10 @@ async function main(){
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
-   if(body.action==='ops_seller_detail')result={ok:true,seller:rows[0],billing:{status:'not_started'},verification:{status:'pending_review'},entries:[],
+   if(body.action==='ops_catalogue_queue')result={ok:true,submissions:[{sellerUid:rows[0].sellerUid,shopName:rows[0].shopName,ownerEmail:rows[0].ownerEmail,approvalStatus:'approved',productCount:1,paymentStatus:'not_started',paidMembership:false}],limited:false};
+   if(body.action==='ops_seller_detail')result={ok:true,seller:{...rows[0],listingPlan:'free'},billing:{status:'not_started'},paystackMode:'test',membershipPaid:false,payments:[],
+     catalogue:{status:'pending_review',products:[{id:'catalog_milk',name:'Milk',priceCents:2500,stock:4,category:'Grocery'}]},
+     canApproveCatalogue:false,verification:{status:'pending_review',completed:false},entries:[],
      documents:{identity:{available:true,evidenceId:'doc1',submittedAt:1792910000000},selfie:{available:true,submissionId:'selfie1',submittedAt:1792910000000}}};
    if(body.action==='ops_users')result={ok:true,users:syntheticUsers,next:null};
    if(body.action==='ops_user_create'){
@@ -203,10 +206,18 @@ async function main(){
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
-   await f.page.getByRole('button',{name:'R99 billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('R99 monthly subscription',{exact:true}).waitFor();
-   assert(await f.page.getByRole('button',{name:'Print / save PDF',exact:true}).isVisible());
+   await f.page.getByRole('button',{name:'Paystack billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack membership',{exact:true}).waitFor();
+   await f.page.getByText('Review seller products',{exact:true}).waitFor();
+   assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
+   assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
+   assert(await f.page.getByRole('button',{name:'Approve submitted product catalogue'}).isDisabled());
+   assert(await f.page.getByRole('button',{name:'Print historical statement',exact:true}).isVisible());
    const account=f.page.locator('[data-seller-account]');await account.waitFor();await f.page.waitForFunction(()=>{const r=document.querySelector('[data-seller-account]')?.getBoundingClientRect();return r&&r.top>=-1&&r.top<innerHeight;});assert.equal(await f.page.getByRole('button',{name:'Open account',exact:true}).count(),0);
    await f.page.getByRole('button',{name:'← Back to seller directory',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().waitFor();
+   await f.page.getByRole('button',{name:'Product approvals',exact:true}).click();
+   await f.page.getByRole('button',{name:'Review products'}).first().waitFor();
+   await f.page.getByRole('button',{name:'Review products'}).first().click();
+   await f.page.getByText('Paystack membership',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Support',exact:true}).click();await f.page.getByText('Log a received support request',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
