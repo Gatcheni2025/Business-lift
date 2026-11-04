@@ -49,8 +49,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
-      if(additions.length&&!P.entitled(uid,account,billingSnap.exists?billingSnap.data():null,clock()))
-        D.fail(402,'Upgrade to a paid Teyza membership before adding products.');
+      // Private product drafts are allowed before payment. Only trusted
+      // Paystack membership plus seller approval enable public publication.
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
       const added=[];let alreadyAdded=0;

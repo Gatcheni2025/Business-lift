@@ -106,7 +106,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
         tx.set(billRef,{ownerUid:uid,status:'paid',introUsed:bill?.introUsed===true||pay.kind==='intro',
           monthlyCents:pay.amountCents,standardMonthlyCents:MONTHLY_CENTS,
           paidUntil,lastReference:reference,latestPeriod:P.period(now),
-          paymentProvider:'paystack',paystackCustomerCode:verified.customer?.customer_code||bill?.paystackCustomerCode||'',
+          paymentProvider:'paystack',paymentEnvironment:getSecret().startsWith('sk_live_')?'live':'test',paystackCustomerCode:verified.customer?.customer_code||bill?.paystackCustomerCode||'',
           updatedAt:now},{merge:true});
         tx.update(accountRef,{listingPlan:'basic',updatedAt:new Date(now)});
       }
@@ -222,7 +222,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
         currency:'ZAR',status:'paid',verifiedAt:now,transactionId:String(verified.id||'')});
       tx.set(billRef,{status:'paid',monthlyCents:MONTHLY_CENTS,standardMonthlyCents:MONTHLY_CENTS,
         paidUntil:nextMonth(base),lastReference:ref,latestPeriod:P.period(now),
-        paymentProvider:'paystack',renewalSetup:'active',updatedAt:now},{merge:true});
+        paymentProvider:'paystack',paymentEnvironment:getSecret().startsWith('sk_live_')?'live':'test',renewalSetup:'active',updatedAt:now},{merge:true});
     });
     await refresh(uid);return {accepted:true};
   }
