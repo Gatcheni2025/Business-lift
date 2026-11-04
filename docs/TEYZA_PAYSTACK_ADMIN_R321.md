@@ -21,7 +21,7 @@ Status: reviewed development source, not automatically deployed to Firebase.
 4. Run cd Business-lift and git branch --show-current. Sign into Firebase CLI with firebase login --no-localhost if needed.
    Before publishing, restore the project-local ignored Paystack plan file
    `services/teyza-mobile-v39/.env.business-lift-3c19c`. Example for the already configured **TEST** plan only:
-   `printf 'TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_6nbe4uqvs4cw8ld\\n' > services/teyza-mobile-v39/.env.business-lift-3c19c`
+   `printf 'TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_6nbe4uqvs4cw8ld\n' > services/teyza-mobile-v39/.env.business-lift-3c19c`
    This is a plan *identifier*, not the Paystack secret. Confirm this plan is still the correct R99 ZAR monthly plan in Paystack. Do not substitute it for a LIVE plan; do not publish live shopping from TEST payments.
    The script refuses to deploy when the plan file or any existing project Firebase Secret Manager reference is missing.
 5. Run bash DEPLOY-PAYSTACK-ADMIN.sh.

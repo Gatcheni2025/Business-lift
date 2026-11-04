@@ -40,6 +40,8 @@ jobs:
       - name: Install pinned deployment and browser tooling
         working-directory: tools/admin-release
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Parse scoped Paystack admin Bash deploy helper
+        run: bash -n DEPLOY-PAYSTACK-ADMIN.sh
       - name: Validate admin modules, Hosting preservation and reviewer role handling
         working-directory: tools/admin-release
         run: |
