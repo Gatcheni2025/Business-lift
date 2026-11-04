@@ -34,6 +34,13 @@ const catalogUrl = 'https://teyza.co.za/api/shopper-catalog.php';
 const photos = 'https://teyza.co.za/assets/catalog-real/';
 String rand(int cents) => 'R' + (cents / 100).toStringAsFixed(2);
 
+// Shopper, wholesaler and local-business journeys use separate actions.
+String teyzaBrowseLabel(String type) => type=='wholesale'?'Browse wholesalers':
+  type=='variety'?'Browse local businesses':'Browse all shops';
+String teyzaCategoryHeading(String type) => type=='wholesale'?'Nearby wholesalers':
+  type=='variety'?'Local Businesses':'Nearby shops';
+String teyzaListingAction(String type) => type=='spaza'?'Buy here':'More';
+
 class Product {
   final String id, name, category, picture;
   final int priceCents, stock;
@@ -610,7 +617,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }catch(_){
       if(!mounted||serial!=_otherBusinessRequestSerial)return;
       setState((){loadingOtherBusinesses=false;
-        otherBusinessesWarning='Other businesses are temporarily unavailable.';});
+        otherBusinessesWarning='Local Businesses are temporarily unavailable.';});
     }
   }
 
@@ -944,8 +951,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
           ]),
           const SizedBox(height:8),
-          FilledButton(onPressed:()=>contactListing(directory:place),
-            child:const Text('Contact')),
+          FilledButton(onPressed:()=>selectDirectory(place),
+            child:Text(teyzaListingAction(place.shopCategory))),
           if(place.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(place.phone),
             icon:const Icon(Icons.phone_outlined,size:15),label:Text('Call '+place.phone)),
           if(place.hasPhoto && place.photoAttributions.isNotEmpty)
@@ -996,28 +1003,43 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else if(next<=p.stock)cart[p.id]=next;
     });
   }
-  void openShop(Shop shop) => setState(() {
-    shopProductSearch='';
-    selected = shop;
-    directorySelected = null;
-    showAllShops=true;
-    search = '';
-    category = 'All';
-    tab = 1;
-  });
+  void openShop(Shop shop) {
+    final changed=discoveryType!=shop.shopCategory;
+    setState((){
+      shopProductSearch='';selected=shop;directorySelected=null;
+      showAllShops=true;search='';category='All';
+      discoveryType=shop.shopCategory;tab=1;
+      if(changed)online=[];
+    });
+    if(changed)unawaited(reloadOnline());
+  }
 
   void selectDirectory(OnlineShop shop){
     final request=++_directoryContactRequest;
+    final changed=discoveryType!=shop.shopCategory;
     setState((){
-      directorySelected=shop;selected=null;showAllShops=true;search='';tab=tab==1?1:0;
+      directorySelected=shop;selected=null;showAllShops=true;search='';
+      discoveryType=shop.shopCategory;tab=0;
       selectedDirectoryPhone=shop.phone;
+      if(changed)online=[];
     });
+    if(changed)unawaited(reloadOnline());
     if(shop.origin=='google_places'&&shop.placeId.isNotEmpty){
       teyzaBusinessContact(shop.placeId).then((phone){
         if(mounted&&request==_directoryContactRequest&&directorySelected?.id==shop.id)
           setState(()=>selectedDirectoryPhone=phone);
       });
     }
+  }
+
+  void backToCategory(String type){
+    final changed=discoveryType!=type;
+    setState((){
+      directorySelected=null;selected=null;selectedDirectoryPhone=null;
+      tab=0;showAllShops=true;search='';discoveryType=type;
+      if(changed)online=[];
+    });
+    if(changed)unawaited(reloadOnline());
   }
 
   Widget photo(String url,{double size=92,IconData icon=Icons.storefront_outlined}) {
@@ -1424,8 +1446,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 style:const TextStyle(color:muted,fontSize:10)),
               Padding(padding:const EdgeInsets.only(top:7),
                 child:SizedBox(width:double.infinity,child:FilledButton(
-                  onPressed:()=>contactListing(merchant:merchant,directory:directory),
-                  child:const Text('Contact')))),
+                  onPressed:()=>merchant!=null?openShop(merchant):selectDirectory(directory!),
+                  child:Text(teyzaListingAction(merchant?.shopCategory??directory?.shopCategory??'spaza'))))),
               if(directory?.photoAttributions.isNotEmpty==true)
                 Text('Photo: '+(directory!.photoAttributions.first['name']??''),maxLines:1,
                   overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:9))
@@ -1445,7 +1467,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       onSelected:(_)=>setDiscoveryType('spaza')),
     ChoiceChip(label:const Text('Wholesalers'),selected:discoveryType=='wholesale',
       onSelected:(_)=>setDiscoveryType('wholesale')),
-    ChoiceChip(label:const Text('Other Businesses'),selected:discoveryType=='variety',
+    ChoiceChip(label:const Text('Local Businesses'),selected:discoveryType=='variety',
       onSelected:(_)=>setDiscoveryType('variety')),
   ]);
 
@@ -1470,8 +1492,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(discoveryType=='spaza')groceryAisles(),
       premiumGroceryHero(),
       const SizedBox(height:4),
-      section('Nearby shops',
-        subtitle:area==null?'Choose your area to find nearby shops':
+      section(teyzaCategoryHeading(discoveryType),
+         subtitle:area==null?'Choose your area to find nearby shops':
           'Local shops around '+locationName,
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('See all'))),
@@ -1483,9 +1505,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
         'Use your current location or select a shopping area.')),
       const SizedBox(height:9),
-      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):discoveryType=='wholesale'?'Wholesale suppliers':'Explore other businesses',
+      section(discoveryType=='spaza'?(featured.isNotEmpty?'Popular items':'Everyday essentials'):discoveryType=='wholesale'?'Wholesale suppliers':'Explore local businesses',
         subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
-          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Salons, upholstery, furniture, plumbers and other businesses',
+          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Salons, upholstery, furniture, plumbers and local businesses',
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
       if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
@@ -1519,9 +1541,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       // Nearby shops merges public listings with verified Teyza sellers.
       if(onlineWarning!=null)Text(onlineWarning!,
         style:const TextStyle(color:muted,fontSize:12)),
-      // Show local Other Businesses on the home page without requiring a
+      // Show local Local Businesses on the home page without requiring a
       // category switch, directly below Services offered and above Join Teyza.
-      section('Other businesses',
+      section('Local Businesses',
         subtitle:'Salons, furniture, upholstery, plumbers and local services',
         action:TextButton(onPressed:() async {
           await setDiscoveryType('variety');
@@ -1533,8 +1555,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else if(loadingOtherBusinesses)
         const SizedBox(height:105,child:Center(child:CircularProgressIndicator()))
       else Padding(padding:const EdgeInsets.fromLTRB(4,4,4,10),
-        child:Text(area==null?'Add your delivery address to find other businesses nearby.':
-          otherBusinessesWarning??'No other businesses found nearby. Try another area.',
+        child:Text(area==null?'Add your delivery address to find local businesses nearby.':
+          otherBusinessesWarning??'No local businesses found nearby. Try another area.',
           style:const TextStyle(color:muted,fontSize:12))),
       Card(color:const Color(0xFFE5F4ED),elevation:0,
         child:ListTile(
@@ -1848,9 +1870,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ])),
           const SizedBox(height:10),
           SizedBox(width:double.infinity,child:FilledButton.icon(
-            onPressed:()=>contactListing(merchant:seller,directory:publicPlace),
-            icon:const Icon(Icons.call_outlined,size:17),
-            label:const Text('Contact'))),
+            onPressed:()=>seller!=null?openShop(seller):selectDirectory(publicPlace!),
+            icon:Icon((seller?.shopCategory??publicPlace?.shopCategory)=='spaza'
+              ?Icons.shopping_bag_outlined:Icons.info_outline,size:17),
+            label:Text(teyzaListingAction(seller?.shopCategory??publicPlace?.shopCategory??'spaza')))),
           if(publicPlace?.origin=='google_places')
             const Text('Google Maps',style:TextStyle(color:muted,fontSize:10)),
         ])));
@@ -1861,9 +1884,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       padding:const EdgeInsets.all(16),
       itemCount:nearbyListings.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          section('Nearby shops',
-            subtitle:nearbyListings.length.toString()+' businesses · '+
-              (discoveryType=='spaza'?'Spaza Shops':discoveryType=='wholesale'?'Wholesalers':'Other Businesses')),
+          section(teyzaCategoryHeading(discoveryType),
+             subtitle:nearbyListings.length.toString()+' listings · '+
+               (discoveryType=='spaza'?'Spaza Shops':discoveryType=='wholesale'?'Wholesalers':'Local Businesses')),
           Row(children:[
             Expanded(child:Text('Around '+locationName,style:const TextStyle(color:muted,fontSize:12))),
             TextButton.icon(onPressed:loadingOnline||area==null?null:() async {
@@ -1883,8 +1906,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Widget directoryPage(OnlineShop shop)=>ListView(
     padding:const EdgeInsets.all(18),children:[
-      TextButton.icon(onPressed:()=>setState(()=>directorySelected=null),
-        icon:const Icon(Icons.arrow_back),label:const Text('Browse all shops')),
+      TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
+        icon:const Icon(Icons.arrow_back),
+        label:Text(teyzaBrowseLabel(shop.shopCategory))),
       const SizedBox(height:10),
       SizedBox(width:double.infinity,height:210,
         child:onlinePhoto(shop,width:420,height:210)),
@@ -1983,8 +2007,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(chosen!=null&&mounted)openShop(chosen);
   }
   Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
-    TextButton.icon(onPressed:()=>setState(()=>selected=null),
-      icon:const Icon(Icons.arrow_back),label:const Text('All shops')),
+    TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
+      icon:const Icon(Icons.arrow_back),
+      label:Text(teyzaBrowseLabel(shop.shopCategory))),
     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(shop.name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
@@ -2341,7 +2366,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
             fontSize:25,fontWeight:FontWeight.w900,color:ink)),
           const SizedBox(height:4),
           Text(current==null?'Find a nearby spaza shop by location or suburb.':
-            (currentType=='spaza'?'Spaza shops near ':currentType=='wholesale'?'Wholesalers near ':'Other businesses near ')+current!.label,
+            (currentType=='spaza'?'Spaza shops near ':currentType=='wholesale'?'Wholesalers near ':'Local Businesses near ')+current!.label,
             style:const TextStyle(color:muted,fontSize:13)),
           const SizedBox(height:11),
           Wrap(spacing:8,runSpacing:7,children:[
@@ -2351,7 +2376,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
             ChoiceChip(label:const Text('Wholesalers'),
               selected:currentType=='wholesale',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('wholesale'))),
-            ChoiceChip(label:const Text('Other Businesses'),
+            ChoiceChip(label:const Text('Local Businesses'),
               selected:currentType=='variety',onSelected:busy?null:
                 (_) => _perform(()=>widget.onChooseCategory('variety'))),
           ]),
