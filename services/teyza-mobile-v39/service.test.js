@@ -504,7 +504,8 @@ test('Pending shops save privately and activation publishes only selected names/
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
  const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
- const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop});
+ const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop,
+  'teyzaBilling/seller2':{ownerUid:'seller2',status:'paid',monthlyCents:9900,latestPeriod:P.period(1000000)}});
  await service.execute(owner,'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2500,stockQty:8}]});
  await service.execute({...owner,uid:'seller2'},'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2800,stockQty:3}]});
  for(const [uid,price,stock] of [['seller1',2500,8],['seller2',2800,3]]){
@@ -663,11 +664,12 @@ test('Historical publication repair is bounded, idempotent and never approves pe
  for(let n=0;n<101;n++){const uid='pending'+String(n).padStart(3,'0');assert.equal(db.records.get('teyzaSellerAccounts/'+uid).approvalStatus,'pending');assert.notEqual(db.records.get('teyzaPublicShops/'+uid).status,'active');}
  assert.deepEqual((await service.publicDirectory()).entries.map(s=>s.id),['seller1']);
 });
-test('A new seller registers and prepares private products before email or mobile verification',async()=>{
+test('Free registration prevents adding products or bypassing verification',async()=>{
  const {service,db}=onboardFixture(null);
  await register(service,newOwner,registration);
- const saved=await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
- assert.equal(saved.publication,'private');assert(!db.records.has('teyzaPublicShops/buyer1'));
+ await rejects(service.execute(newOwner,'catalogue_add',{
+  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]}),402);
+ assert(!db.records.has('teyzaPublicShops/buyer1'));
  await rejects(service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true,status:'active'}),409);
 });
 test('Completion requires real linked phone, document and selfie; forged completion fields grant nothing',async()=>{
@@ -913,6 +915,7 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  await rejects(service.execute(buyer,'wholesale_directory'),403);
  await rejects(service.execute(buyer,'order_quote',req),403);
  db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic'});
+  db.records.delete('teyzaBilling/buyer1');
  await rejects(service.execute(buyer,'wholesale_directory'),403);
  db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:9900,latestPeriod:P.period(1000000)});
  assert.equal((await service.execute(buyer,'wholesale_directory')).entries.length,1,
