@@ -4,6 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
+// Store-distributed Android and iOS builds must use store-compliant billing.
+// Only a deliberately configured direct-distribution build may redirect to Paystack.
+const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
 /// Payment is optional and is offered when the seller chooses to add products.
 /// iOS boosts/listings require StoreKit instead of a Paystack redirect.
 class SellerPlanPage extends StatefulWidget {
@@ -19,6 +22,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  String? error,paymentReference;
  int? promotionEndsAt,paidUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
+ bool get paystackAllowed=>!Platform.isIOS&&Platform.isAndroid&&teyzaPaymentChannel=='direct';
+ String get purchaseLabel=>paystackAllowed?'Pay with Paystack':'Store billing coming soon';
  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);refresh();}
  @override void dispose(){WidgetsBinding.instance.removeObserver(this);super.dispose();}
  @override void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -34,7 +39,10 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  }
  Future<void> beginCheckout({required bool promotion}) async {
   if(busy||loading)return;
-  if(Platform.isIOS){setState(()=>error='iPhone purchases require Apple In-App Purchase. This option will be available when the App Store products are approved.');return;}
+  if(!paystackAllowed){
+   setState(()=>error='In-app digital purchases require approved store billing for this app distribution. Your free shop remains available.');
+   return;
+  }
   if(promotion&&!paid){setState(()=>error='Upgrade your membership first.');return;}
   setState((){busy=true;error=null;});
   try{
@@ -66,7 +74,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   finally{if(mounted)setState(()=>busy=false);}
  }
  Future<void> manageSubscription() async{
-  if(busy||Platform.isIOS)return;
+  if(busy||!paystackAllowed)return;
   setState((){busy=true;error=null;});
   try{
    final response=await api.call('billing_manage');
@@ -111,7 +119,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     title:const Text('Business membership active'),
     subtitle:Text(paidUntil==null?'You can list products.':
      'Paid through '+DateTime.fromMillisecondsSinceEpoch(paidUntil!).toLocal().toString().split(' ').first))),
-   if(paid&&!Platform.isIOS)Padding(
+   if(paid&&paystackAllowed)Padding(
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
@@ -122,7 +130,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Receive orders, enquiries, collection and delivery requests',
      'Manage your products from the seller dashboard',
      'R99 monthly renewal after your first discounted month'
-    ],action:Platform.isIOS?'In-app purchase coming soon':'Upgrade for R49 with Paystack',
+    ],action:paystackAllowed?'Upgrade for R49 with Paystack':purchaseLabel,
     onPressed:()=>beginCheckout(promotion:false)),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
@@ -130,7 +138,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Requires an active paid Business membership',
      'Improves visibility without guaranteeing sales'
     ],action:promoted?'Promotion active':!paid?'Upgrade first':
-     Platform.isIOS?'In-app purchase coming soon':'Promote for R29 with Paystack',
+     paystackAllowed?'Promote for R29 with Paystack':purchaseLabel,
     onPressed:promoted||!paid?null:()=>beginCheckout(promotion:true)),
    if(promoted&&promotionEndsAt!=null)Text('Promotion ends '+
     DateTime.fromMillisecondsSinceEpoch(promotionEndsAt!).toLocal().toString().split(' ').first),
@@ -139,7 +147,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      const Text('Finish the secure Paystack checkout in your browser, then return here.'),
      const SizedBox(height:12),
      OutlinedButton(onPressed:busy?null:confirm,child:const Text('I have paid · verify payment'))]))),
-   const Text('No charge at registration. Benefits activate only after server-side payment verification. Recurring billing starts at R99 after the introductory month; cancellation must be available. iPhone purchases require StoreKit.',
+   const Text('No charge at registration. Benefits activate only after server-side payment verification. Recurring billing starts at R99 after the introductory month; cancellation must be available. Store-distributed app purchases require approved store billing.',
     style:TextStyle(fontSize:12,color:Color(0xFF66776A),height:1.5))
   ])),
  );
