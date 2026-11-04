@@ -31,6 +31,9 @@ jobs:
       - name: Generate Flutter platform wrapper
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Remove Flutter template test
+        working-directory: apps/teyza_shopper
+        run: rm -f test/widget_test.dart
       - name: Install dependencies
         working-directory: apps/teyza_shopper
         run: flutter pub get
