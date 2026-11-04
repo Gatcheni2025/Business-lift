@@ -62,7 +62,15 @@ void main(){
   expect(shops.single['shopCategory'],'wholesale');
   expect(shops.single['products'],isEmpty);
  });
- test('Directory reads the approved server projection and rejects stale active-but-pending entries',() async {
+ test('Server verified promotion is preserved, public fallback never self-promotes',()async{
+   final mock=MockClient((_)async=>http.Response(jsonEncode({'ok':true,
+    'entries':[{...apiRow('paidPromo'),'sponsored':true}],'next':null}),200));
+   final results=await fetchTeyzaPublicDirectory(client:mock);
+   expect(results.single['sponsored'],true);
+   final fallback=parseTeyzaPublicDirectory([row('active','Ordinary Shop')]);
+   expect(fallback.single['sponsored'],false);
+  });
+  test('Directory reads the approved server projection and rejects stale active-but-pending entries',() async {
   final mock=MockClient((request) async {
    expect(request.method,'GET');expect(request.url.host,'us-central1-business-lift-3c19c.cloudfunctions.net');
    expect(request.url.path,'/teyzaMobile');expect(request.url.queryParameters['publicShops'],'1');
