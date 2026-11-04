@@ -1,7 +1,7 @@
 name: Teyza app-first website checks and deployment kit
 on:
   push:
-    branches: [feature/teyza-app-first-website]
+    branches: [feature/teyza-app-first-website, feat/teyza-free-signup-paystack-products-promotion-20261104]
   pull_request:
     paths: ['web/app-first/**', 'tools/app-first-release/**', 'scripts/*app_first_website.py', 'scripts/package_teyza_premium_website.py', 'DEPLOY-TEYZA-PREMIUM.ps1', '.github/workflows/teyza-app-first-website.yml']
   workflow_dispatch:
