@@ -1,0 +1,42 @@
+name: Teyza shopper category regression checks
+on:
+  push:
+    branches:
+      - feat/teyza-free-signup-paystack-products-promotion-20261104
+    paths:
+      - 'apps/teyza_shopper/**'
+      - '.github/workflows/teyza-shopper-category-regression.yml'
+  pull_request:
+    paths:
+      - 'apps/teyza_shopper/**'
+      - '.github/workflows/teyza-shopper-category-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flutter_quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate Flutter platform wrapper
+        working-directory: apps/teyza_shopper
+        run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Install dependencies
+        working-directory: apps/teyza_shopper
+        run: flutter pub get
+      - name: Analyze shopper source
+        working-directory: apps/teyza_shopper
+        run: flutter analyze --no-fatal-infos
+      - name: Test all shopper flows including business details and navigation
+        working-directory: apps/teyza_shopper
+        run: flutter test
