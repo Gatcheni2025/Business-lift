@@ -18,3 +18,6 @@ services/teyza-mobile-v39/.env*
 
 # Local Firebase Hosting store-button release rollback metadata.
 teyza-store-links-backup*.json
+
+# Never commit local Firebase Hosting version rollback records.
+teyza-premium-website-backup*.json
