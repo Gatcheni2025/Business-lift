@@ -15,3 +15,6 @@ apps/teyza_shopper/.flutter-plugins*
 
 # Teyza local Firebase/Paystack environment configuration (never commit).
 services/teyza-mobile-v39/.env*
+
+# Local Firebase Hosting store-button release rollback metadata.
+teyza-store-links-backup*.json
