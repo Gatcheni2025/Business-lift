@@ -185,7 +185,7 @@ void main(){
     expect(tester.takeException(),isNull);await capture('login-roles');
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Other businesses appear on home even when Spaza Shops is selected',(tester)async{
+  testWidgets('Local Businesses appear on home even when Spaza Shops is selected',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final requested=<String>[];
@@ -204,16 +204,16 @@ void main(){
     await tester.pumpAndSettle();
     expect(requested,contains('spaza'));
     expect(requested,contains('variety'),
-      reason:'Other businesses must load independently of the current category');
+      reason:'Local Businesses must load independently of the current category');
     // The home body is vertically lazy: scroll the viewport first instead
     // of asking scrollUntilVisible to resolve an as-yet-unbuilt widget.
     final homeScroll=find.byType(ListView).first;
-    for(var n=0;n<15&&find.text('Other businesses').evaluate().isEmpty;n++){
+    for(var n=0;n<15&&find.text('Local Businesses').evaluate().isEmpty;n++){
       await tester.drag(homeScroll,const Offset(0,-200));
       await tester.pumpAndSettle();
     }
-    expect(find.text('Other businesses'),findsOneWidget);
-    await tester.ensureVisible(find.text('Other businesses'));
+    expect(find.text('Local Businesses'),findsOneWidget);
+    await tester.ensureVisible(find.text('Local Businesses'));
     await tester.pumpAndSettle();
     // The nested horizontal cards may not be built until they enter view.
     for(var n=0;n<6&&find.text('Durban Hair Studio').evaluate().isEmpty;n++){
@@ -222,12 +222,12 @@ void main(){
     }
     expect(find.text('Durban Hair Studio'),findsOneWidget);
     final salonCard=find.byKey(const ValueKey('nearby-local-salon'));
-    expect(find.descendant(of:salonCard,matching:find.text('Contact')),findsOneWidget);
+    expect(find.descendant(of:salonCard,matching:find.text('More')),findsOneWidget);
     expect(find.text('Buy here'),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Public business offers Contact without an ordering error',(tester)async{
+  testWidgets('Public shop offers Buy here without an ordering error',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final directory=OnlineShop.fromJson({
@@ -242,13 +242,70 @@ void main(){
     expect(find.text('Ordering not available'),findsNothing);
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
     await tester.ensureVisible(card);await tester.pumpAndSettle();
-    final contact=find.descendant(of:card,matching:find.text('Contact'));
-    await tester.tap(contact);await tester.pumpAndSettle();
+    final buy=find.descendant(of:card,matching:find.text('Buy here'));
+    await tester.tap(buy);await tester.pumpAndSettle();
     expect(find.text('Browse all shops'),findsOneWidget,
-      reason:'When no public phone number is supplied, Contact opens business details');
+      reason:'Buy here opens shop details without inventing products or checkout');
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  test('Discovery labels distinguish spaza, wholesalers and local businesses',(){
+    expect(teyzaListingAction('spaza'),'Buy here');
+    expect(teyzaListingAction('wholesale'),'More');
+    expect(teyzaListingAction('variety'),'More');
+    expect(teyzaBrowseLabel('spaza'),'Browse all shops');
+    expect(teyzaBrowseLabel('wholesale'),'Browse wholesalers');
+    expect(teyzaBrowseLabel('variety'),'Browse local businesses');
+    expect(teyzaCategoryHeading('variety'),'Local Businesses');
+  });
+
+  testWidgets('Local business More opens details, Chat, Call and correct back list',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final launches=<Uri>[];
+    final salon=OnlineShop.fromJson({
+      'id':'salon-biz','name':'Local Hair Studio','shopCategory':'variety',
+      'latitude':-29.8587,'longitude':31.0218,
+      'origin':'openstreetmap','phone':'0315661165',
+      'address':'Main Road, Durban','types':['hair_care'],
+      'websiteUrl':'https://example.com/studio',
+    });
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[],
+      externalLauncher:(uri)async{launches.add(uri);return true;},
+      directoryLoader:(area,type,radius)async=>type=='variety'?[salon]:[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));
+    await tester.pumpAndSettle();
+    final homeScroll=find.byType(ListView).first;
+    final salonCard=find.byKey(const ValueKey('nearby-salon-biz'));
+    for(var i=0;i<18&&salonCard.evaluate().isEmpty;i++){
+      await tester.drag(homeScroll,const Offset(0,-180));
+      await tester.pumpAndSettle();
+    }
+    expect(salonCard,findsOneWidget);
+    await tester.ensureVisible(salonCard);await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of:salonCard,matching:find.text('More')));
+    await tester.pumpAndSettle();
+    expect(find.text('Browse local businesses'),findsOneWidget);
+    expect(find.text('Local Business details'),findsOneWidget);
+    expect(find.text('Business category'),findsOneWidget);
+    expect(find.text('Main Road, Durban'),findsWidgets);
+    expect(find.widgetWithText(FilledButton,'Chat'),findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton,'Call'),findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton,'Chat'));
+    await tester.pumpAndSettle();
+    expect(launches.last.host,'wa.me');
+    expect(launches.last.path,'/27315661165');
+    await tester.tap(find.widgetWithText(OutlinedButton,'Call'));
+    await tester.pumpAndSettle();
+    expect(launches.last.scheme,'tel');
+    await tester.tap(find.text('Browse local businesses'));
+    await tester.pumpAndSettle();
+    expect(find.text('Local Businesses'),findsWidgets);
+    expect(find.text('Browse all shops'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Approved Teyza shop opens even without priced products',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));

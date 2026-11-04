@@ -617,7 +617,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }catch(_){
       if(!mounted||serial!=_otherBusinessRequestSerial)return;
       setState((){loadingOtherBusinesses=false;
-        otherBusinessesWarning='Local Businesses are temporarily unavailable.';});
+        otherBusinessesWarning='Local businesses are temporarily unavailable.';});
     }
   }
 
@@ -1163,7 +1163,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(width:8),
           _shopMode('WHOLESALE','Bulk suppliers',Icons.warehouse_outlined,'wholesale',green),
           const SizedBox(width:8),
-          _shopMode('OTHER BUSINESSES','Salons, furniture & services',Icons.store_mall_directory_rounded,'variety',deep)
+          _shopMode('LOCAL BUSINESSES','Salons, furniture & services',Icons.store_mall_directory_rounded,'variety',deep)
         ])
       ]
     ]));
@@ -1577,7 +1577,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       // Nearby shops merges public listings with verified Teyza sellers.
       if(onlineWarning!=null)Text(onlineWarning!,
         style:const TextStyle(color:muted,fontSize:12)),
-      // Show local Local Businesses on the home page without requiring a
+      // Show local businesses on the home page without requiring a
       // category switch, directly below Services offered and above Join Teyza.
       section('Local Businesses',
         subtitle:'Salons, furniture, upholstery, plumbers and local services',
@@ -2534,7 +2534,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                 child:Padding(padding:const EdgeInsets.all(12),
                   child:Text(error!,style:const TextStyle(color:ink)))),
               const Padding(padding:EdgeInsets.only(top:12,bottom:8),
-                child:Text('NEARBY SHOPS',style:TextStyle(fontSize:13,
+                child:Text('NEARBY LISTINGS',style:TextStyle(fontSize:13,
                   color:ink,fontWeight:FontWeight.w900))),
               for(final entry in combined)Card(color:Colors.white,
                 child:ListTile(
@@ -2567,7 +2567,7 @@ class _NearbySpazaPickerState extends State<_NearbySpazaPicker> {
                     const Icon(Icons.search_off,size:47,color:green),
                     const SizedBox(height:10),
                     Text(term.isNotEmpty?'No matching shop found':
-                      'No nearby shops found right now',
+                      'No nearby listings found right now',
                       textAlign:TextAlign.center,style:const TextStyle(
                         fontWeight:FontWeight.bold,fontSize:17)),
                     const SizedBox(height:8),
