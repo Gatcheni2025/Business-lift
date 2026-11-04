@@ -664,13 +664,16 @@ test('Historical publication repair is bounded, idempotent and never approves pe
  for(let n=0;n<101;n++){const uid='pending'+String(n).padStart(3,'0');assert.equal(db.records.get('teyzaSellerAccounts/'+uid).approvalStatus,'pending');assert.notEqual(db.records.get('teyzaPublicShops/'+uid).status,'active');}
  assert.deepEqual((await service.publicDirectory()).entries.map(s=>s.id),['seller1']);
 });
-test('Free registration prevents adding products or bypassing verification',async()=>{
+test('Free registration permits private drafts but never bypasses identity or publication gates',async()=>{
  const {service,db}=onboardFixture(null);
  await register(service,newOwner,registration);
- await rejects(service.execute(newOwner,'catalogue_add',{
-  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]}),402);
+ const result=await service.execute(newOwner,'catalogue_add',{
+  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ assert.equal(result.publication,'private');
+ assert(db.records.has('teyzaDraftProducts/buyer1/items/catalog_milk-2-l'));
  assert(!db.records.has('teyzaPublicShops/buyer1'));
  await rejects(service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true,status:'active'}),409);
+ assert(!db.records.has('teyzaPublicShops/buyer1'));
 });
 test('Completion requires real linked phone, document and selfie; forged completion fields grant nothing',async()=>{
  const {service,db}=onboardFixture();await register(service,newOwner,registration);
