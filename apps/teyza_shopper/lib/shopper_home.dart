@@ -1392,10 +1392,46 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Future<void> contactBusiness(String rawPhone)async{
     final digits=rawPhone.replaceAll(RegExp(r'[^0-9+]'),'');
     if(digits.isEmpty)return;
-    try{await launchUrl(Uri(scheme:'tel',path:digits),mode:LaunchMode.externalApplication);}
-    catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content:Text('Unable to open the phone dialler.')));}
+    try{
+      final uri=Uri(scheme:'tel',path:digits);
+      final opened=await (widget.externalLauncher?.call(uri)??
+        launchUrl(uri,mode:LaunchMode.externalApplication));
+      if(!opened)throw StateError('Dialler unavailable');
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Unable to open the phone dialler.')));
+    }
   }
+
+  // A verified Teyza business supports native in-app chat when enabled.
+  // A public directory listing is not an in-app chat account. Offer a
+  // WhatsApp handoff only if it has a public phone number.
+  Future<void> chatWithDirectory(OnlineShop shop)async{
+    final linked=verifiedMerchantFor(shop);
+    if(linked!=null&&linked.identityVerified&&linked.liveChat&&
+      ShopperChatApi.isTeyzaShop(linked.id)){
+      chatWithShop(linked);return;
+    }
+    var digits=(selectedDirectoryPhone??shop.phone).replaceAll(RegExp(r'[^0-9]'),'');
+    if(digits.startsWith('0')&&digits.length==10)digits='27'+digits.substring(1);
+    if(digits.length<10||digits.length>15){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('This business has not enabled Teyza chat or a public messaging number.')));
+      return;
+    }
+    final uri=Uri.https('wa.me','/$digits',{
+      'text':'Hello, I found ${shop.name} on Teyza. Can I ask about your services?'
+    });
+    try{
+      final opened=await (widget.externalLauncher?.call(uri)??
+        launchUrl(uri,mode:LaunchMode.externalApplication));
+      if(!opened)throw StateError('WhatsApp unavailable');
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Could not open WhatsApp. This number may not support messaging.')));
+    }
+  }
+
   Widget shopFacts(OnlineShop shop)=>Row(children:[
     if(shop.rating!=null)...[
       const Icon(Icons.star_rounded,color:Color(0xFFF3B929),size:13),
@@ -1934,12 +1970,53 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:const TextStyle(fontSize:14,color:muted)),
       const SizedBox(height:8),
       onlineProviderLabel(shop),
-      if((selectedDirectoryPhone??shop.phone).isNotEmpty)TextButton.icon(
-        onPressed:()=>contactBusiness(selectedDirectoryPhone??shop.phone),
-        icon:const Icon(Icons.call_outlined),
-        label:Text('Call '+(selectedDirectoryPhone??shop.phone))),
-      FilledButton.icon(onPressed:()=>contactListing(directory:shop),
-        icon:const Icon(Icons.call_outlined),label:const Text('Contact')),
+      if(shop.shopCategory=='variety')...[
+         section('Local Business details',
+           subtitle:'Information supplied by the public business directory'),
+         Card(color:Colors.white,child:Column(children:[
+           ListTile(leading:const Icon(Icons.business_outlined,color:green),
+             title:const Text('Business category'),
+             subtitle:Text(shop.types.isEmpty?'Local business':
+               shop.types.first.replaceAll('_',' '))),
+           ListTile(leading:const Icon(Icons.place_outlined,color:green),
+             title:const Text('Address'),
+             subtitle:Text(shop.address.isNotEmpty?shop.address:shop.area)),
+           if(shop.websiteUrl.startsWith('https://'))
+             ListTile(leading:const Icon(Icons.language_outlined,color:green),
+               title:const Text('Website'),
+               subtitle:Text(shop.websiteUrl,maxLines:1,overflow:TextOverflow.ellipsis),
+               onTap:()async{
+                 final uri=Uri.tryParse(shop.websiteUrl);
+                 if(uri!=null&&uri.scheme=='https'){
+                   await (widget.externalLauncher?.call(uri)??
+                     launchUrl(uri,mode:LaunchMode.externalApplication));
+                 }
+               }),
+         ])),
+         const SizedBox(height:12),
+         Wrap(spacing:10,runSpacing:9,children:[
+           FilledButton.icon(onPressed:()=>chatWithDirectory(shop),
+             icon:const Icon(Icons.chat_bubble_outline),
+             label:const Text('Chat')),
+           OutlinedButton.icon(
+             onPressed:(selectedDirectoryPhone??shop.phone).isNotEmpty
+               ?()=>contactBusiness(selectedDirectoryPhone??shop.phone):null,
+             icon:const Icon(Icons.phone_outlined),label:const Text('Call')),
+         ]),
+         const Padding(padding:EdgeInsets.only(top:8,bottom:6),
+           child:Text('Verified Teyza businesses use in-app chat. Public listings may open WhatsApp if the business phone supports messaging.',
+             style:TextStyle(fontSize:12,color:muted))),
+       ]else...[
+         if((selectedDirectoryPhone??shop.phone).isNotEmpty)
+           TextButton.icon(
+             onPressed:()=>contactBusiness(selectedDirectoryPhone??shop.phone),
+             icon:const Icon(Icons.call_outlined),
+             label:Text('Call '+(selectedDirectoryPhone??shop.phone))),
+         if(shop.shopCategory=='spaza'&&verifiedMerchantFor(shop)==null)
+           const Padding(padding:EdgeInsets.symmetric(vertical:8),
+             child:Text('Products can only be ordered from verified participating Teyza shops.',
+               style:TextStyle(color:muted,fontSize:12))),
+       ],
       for(final credit in shop.providerAttributions)
         Align(alignment:Alignment.centerLeft,
           child:TextButton.icon(onPressed:() async {
@@ -1950,19 +2027,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           },icon:const Icon(Icons.open_in_new,size:14),
           label:Text('Data: ${credit['name']??''}'))),
       const SizedBox(height:14),
-      FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.lat,longitude:shop.lng),icon:const Icon(Icons.directions_outlined),
-        label:const Text('Directions to shop')),
-      const SizedBox(height:8),
-      const Padding(padding:EdgeInsets.only(top:9,bottom:6),
-        child:Text('Messaging is available when the shop registers with Teyza.',
-          style:TextStyle(fontSize:12,color:muted))),
-      onlineServices(shop),
-      if(verifiedMerchantFor(shop)!=null)
-        section('SHOP ITEMS'),
-      if(verifiedMerchantFor(shop)!=null)
-        FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
-          icon:const Icon(Icons.shopping_bag_outlined),
-          label:const Text('View products and prices')),
+      FilledButton.icon(
+         onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,
+           latitude:shop.lat,longitude:shop.lng),
+         icon:const Icon(Icons.directions_outlined),
+         label:Text(shop.shopCategory=='variety'?'Directions to business':
+           shop.shopCategory=='wholesale'?'Directions to wholesaler':'Directions to shop')),
+       const SizedBox(height:8),
+       if(shop.shopCategory=='spaza')onlineServices(shop),
+       if(shop.shopCategory=='spaza'&&verifiedMerchantFor(shop)!=null)
+         section('SHOP ITEMS'),
+       if(shop.shopCategory=='spaza'&&verifiedMerchantFor(shop)!=null)
+         FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
+           icon:const Icon(Icons.shopping_bag_outlined),
+           label:const Text('View products and prices')),
+       if(shop.shopCategory=='wholesale')
+         const Text('Wholesale ordering requires an approved Teyza supplier connection.',
+           style:TextStyle(color:muted,fontSize:12)),
       const SizedBox(height:15),
       OutlinedButton.icon(onPressed:() async {
         await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
@@ -2010,7 +2091,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
       icon:const Icon(Icons.arrow_back),
       label:Text(teyzaBrowseLabel(shop.shopCategory))),
-    Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
+    if(shop.shopCategory=='variety')
+       section('Local Business details',
+         subtitle:'Business information and available contact methods'),
+     Row(children:[photo(shop.photo,size:82),const SizedBox(width:12),
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(shop.name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
         Text(shop.area,style:const TextStyle(color:muted,fontSize:12)),
@@ -2019,17 +2103,33 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           style:const TextStyle(color:green,fontSize:11))
       ]))]),
     merchantTrust(shop),
-    if(shop.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(shop.phone),
-      icon:const Icon(Icons.call_outlined),label:Text('Call '+shop.phone)),
+    if(shop.shopCategory=='variety')...[
+       if(shop.address.isNotEmpty)
+         Text(shop.address,style:const TextStyle(color:muted,fontSize:13)),
+       Padding(padding:const EdgeInsets.only(top:12),
+         child:Wrap(spacing:10,runSpacing:8,children:[
+           FilledButton.icon(
+             onPressed:shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id)
+               ?()=>chatWithShop(shop):null,
+             icon:const Icon(Icons.chat_bubble_outline),label:const Text('Chat')),
+           OutlinedButton.icon(
+             onPressed:shop.phone.isNotEmpty?()=>contactBusiness(shop.phone):null,
+             icon:const Icon(Icons.phone_outlined),label:const Text('Call')),
+         ])),
+     ]else if(shop.phone.isNotEmpty)
+       TextButton.icon(onPressed:()=>contactBusiness(shop.phone),
+         icon:const Icon(Icons.call_outlined),label:Text('Call '+shop.phone)),
     Padding(padding:const EdgeInsets.only(top:12),child:Wrap(spacing:8,runSpacing:8,children:[
       FilledButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,area:shop.area,latitude:shop.latitude,longitude:shop.longitude),
         icon:const Icon(Icons.directions_outlined),label:const Text('Directions to shop')),
-      if(shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id))OutlinedButton.icon(
-        icon:const Icon(Icons.chat_bubble_outline),label:const Text('Message shop'),onPressed:()=>chatWithShop(shop)),
+      if(shop.shopCategory!='variety'&&shop.liveChat&&
+         ShopperChatApi.isTeyzaShop(shop.id))
+         OutlinedButton.icon(icon:const Icon(Icons.chat_bubble_outline),
+           label:const Text('Message shop'),onPressed:()=>chatWithShop(shop)),
     ])),
     Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(shopHoursLabel(shop.hours),
       style:const TextStyle(color:green,fontWeight:FontWeight.w700))),
-    merchantServices(shop),
+    if(shop.shopCategory=='spaza')merchantServices(shop),
     if(shop.rangeProducts.isEmpty)
       empty('Products coming soon', 'Ask this shop about its range in Live chat.'),
     if(shop.rangeProducts.isNotEmpty)...[
