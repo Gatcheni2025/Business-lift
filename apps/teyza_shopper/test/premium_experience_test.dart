@@ -213,6 +213,13 @@ void main(){
       await tester.pumpAndSettle();
     }
     expect(find.text('Other businesses'),findsOneWidget);
+    await tester.ensureVisible(find.text('Other businesses'));
+    await tester.pumpAndSettle();
+    // The nested horizontal cards may not be built until they enter view.
+    for(var n=0;n<6&&find.text('Durban Hair Studio').evaluate().isEmpty;n++){
+      await tester.drag(homeScroll,const Offset(0,-145));
+      await tester.pumpAndSettle();
+    }
     expect(find.text('Durban Hair Studio'),findsOneWidget);
     final salonCard=find.byKey(const ValueKey('nearby-local-salon'));
     expect(find.descendant(of:salonCard,matching:find.text('Contact')),findsOneWidget);
