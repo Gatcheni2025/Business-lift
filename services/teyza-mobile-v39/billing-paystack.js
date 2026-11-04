@@ -4,7 +4,7 @@ const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
 const INTRO_CENTS=4900,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
-const actions=new Set(['billing_checkout','billing_confirm','promote_checkout']);
+const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage']);
 function nextMonth(ms) {
   const d=new Date(ms),day=d.getUTCDate();
   const first=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1,d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()));
@@ -45,6 +45,13 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
     if(!isPromo&&P.entitled(uid,account,billing,now))D.fail(409,'Your seller membership is already paid.');
     const plan=getPlanCode();
     if(!isPromo&&!/^PLN_[A-Za-z0-9]+$/.test(plan||''))D.fail(503,'The monthly renewal plan must be configured before checkout.');
+    // Check that the merchant's actual Paystack plan is R99/month in ZAR.
+    if(!isPromo){
+      const setup=await paystack('/plan/'+encodeURIComponent(plan));
+      if(setup.plan_code!==plan||setup.amount!==MONTHLY_CENTS||
+        setup.interval!=='monthly'||setup.currency!=='ZAR')
+        D.fail(503,'The configured Paystack renewal plan does not match R99 monthly in ZAR.');
+    }
     const first=!isPromo&&billing?.introUsed!==true,amount=isPromo?PROMO_CENTS:first?INTRO_CENTS:MONTHLY_CENTS;
     const reference=(isPromo?'TZP_':'TZM_')+crypto.randomBytes(13).toString('hex');
     await doc('teyzaPaystackPayments/'+reference).create({
@@ -141,6 +148,17 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
   async function execute(auth,action,data={}) {
     if(action==='billing_checkout')return checkout(auth,'membership');
     if(action==='promote_checkout')return checkout(auth,'promotion');
+    if(action==='billing_manage'){
+      const uid=D.id(auth.uid);
+      const billing=await read('teyzaBilling/'+uid);
+      if(!billing||billing.ownerUid!==uid||!/^SUB_[A-Za-z0-9]+$/.test(billing.paystackSubscriptionCode||''))
+        D.fail(404,'No recurring subscription is linked to your shop yet.');
+      const result=await paystack('/subscription/'+encodeURIComponent(billing.paystackSubscriptionCode)+'/manage/link');
+      const uri=new URL(result.link||'https://invalid.invalid');
+      if(uri.protocol!=='https:'||uri.hostname!=='paystack.com')
+        D.fail(503,'Paystack returned an unexpected subscription management link.');
+      return {manageUrl:result.link};
+    }
     if(action==='billing_confirm') {
       const reference=D.text(data.reference,'payment reference',70);
       return grant(reference,D.id(auth.uid));
@@ -149,10 +167,51 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
   }
   async function webhook(raw,signature,payload) {
     if(!verifySignature(getSecret(),raw,signature))D.fail(401,'Invalid Paystack webhook signature.');
-    if(payload?.event!=='charge.success')return {accepted:true};
-    const ref=payload?.data?.reference;
-    if(!/^(TZM|TZP)_[a-f0-9]{26}$/.test(String(ref||'')))return {accepted:true};
-    await grant(ref);return {accepted:true};
+    const event=payload?.event,details=payload?.data||{};
+    if(event==='subscription.disable'||event==='invoice.payment_failed'){
+      const code=details.subscription?.subscription_code||details.subscription_code;
+      if(!/^SUB_[A-Za-z0-9]+$/.test(code||''))return {accepted:true};
+      const matched=await db.collection('teyzaBilling').where('paystackSubscriptionCode','==',code).limit(2).get();
+      if(matched.docs.length!==1)return {accepted:true};
+      const bill=matched.docs[0];
+      await bill.ref.set({renewalSetup:event==='subscription.disable'?'cancelled':'payment_failed',
+        updatedAt:clock()},{merge:true});
+      return {accepted:true};
+    }
+    if(event!=='charge.success')return {accepted:true};
+    const ref=details.reference;
+    if(typeof ref!=='string'||!/^[A-Za-z0-9=._-]{4,100}$/.test(ref))return {accepted:true};
+    if(/^(TZM|TZP)_[a-f0-9]{26}$/.test(ref)){await grant(ref);return {accepted:true};}
+    // For recurring charges Paystack uses its own reference; verify the
+    // customer, R99 plan and charge on our integration, never trust webhook alone.
+    const verified=await paystack('/transaction/verify/'+encodeURIComponent(ref));
+    if(verified.reference!==ref||verified.status!=='success'||
+      verified.amount!==MONTHLY_CENTS||verified.currency!=='ZAR'||
+      verified.plan?.plan_code!==getPlanCode()||!verified.customer?.customer_code)
+      return {accepted:true};
+    const customers=await db.collection('teyzaBilling').where('paystackCustomerCode','==',
+      verified.customer.customer_code).limit(2).get();
+    if(customers.docs.length!==1)return {accepted:true};
+    const row=customers.docs[0],uid=row.id;
+    await db.runTransaction(async tx=>{
+      const payment=doc('teyzaPaystackPayments/'+ref),billRef=doc('teyzaBilling/'+uid),
+        ownerRef=doc('teyzaSellerAccounts/'+uid);
+      const [existing,old,shop]=await Promise.all([tx.get(payment),tx.get(billRef),tx.get(ownerRef)]);
+      if(existing.exists)return;
+      const account=shop.exists?shop.data():null,bill=old.exists?old.data():null;
+      if(account?.uid!==uid||account.deletionPending===true||
+        account.listingPlan!=='basic'||bill?.ownerUid!==uid||
+        bill.paystackCustomerCode!==verified.customer.customer_code||
+        !/^SUB_[A-Za-z0-9]+$/.test(bill.paystackSubscriptionCode||''))
+        D.fail(409,'Subscription owner or membership changed.');
+      const now=clock(),base=Math.max(now,Number(bill.paidUntil)||0);
+      tx.create(payment,{reference:ref,ownerUid:uid,kind:'renewal',amountCents:MONTHLY_CENTS,
+        currency:'ZAR',status:'paid',verifiedAt:now,transactionId:String(verified.id||'')});
+      tx.set(billRef,{status:'paid',monthlyCents:MONTHLY_CENTS,standardMonthlyCents:MONTHLY_CENTS,
+        paidUntil:nextMonth(base),lastReference:ref,latestPeriod:P.period(now),
+        renewalSetup:'active',updatedAt:now},{merge:true});
+    });
+    await refresh(uid);return {accepted:true};
   }
   return {execute,webhook,actions,grant};
 }
