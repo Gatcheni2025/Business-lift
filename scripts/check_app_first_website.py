@@ -33,10 +33,18 @@ for p in PUBLIC.glob('*.html'):
  for u in page.links:
   route=urlsplit(u)
   if u.startswith('/') and route.path!='/':assert (PUBLIC/route.path.lstrip('/')).exists() or route.path in ['/privacy.html','/terms.html','/data-deletion.html','/admin'],(p.name,u)
-  if 'apps.apple.com' in u:raise AssertionError('Unreleased Apple listing is linked')
+  if 'apps.apple.com' in u:assert u=='https://apps.apple.com/za/app/id6827037733',(p.name,u)
+  if 'play.google.com/store/apps/details' in u:assert u=='https://play.google.com/store/apps/details?id=com.asiyedriver.asiye',(p.name,u)
  if p.name=='index.html':
   assert page.schemas and 'aggregateRating' not in text
-  assert 'actual' in text.lower() and 'Android early access' in text
+  assert 'actual' in text.lower() and 'store-links--hero' in text
+  assert 'https://apps.apple.com/za/app/id6827037733' in page.links
+  assert 'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye' in page.links
+  assert 'iPhone release coming soon' not in text
+ if p.name=='download.html':
+  assert 'https://apps.apple.com/za/app/id6827037733' in page.links
+  assert 'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye' in page.links
+  assert 'App Store release coming soon' not in text
 sitemap=ET.fromstring((PUBLIC/'sitemap.xml').read_text())
 urls=[e.text for e in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
 assert len(urls)==len(set(urls))==11
