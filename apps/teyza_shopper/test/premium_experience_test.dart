@@ -205,8 +205,14 @@ void main(){
     expect(requested,contains('spaza'));
     expect(requested,contains('variety'),
       reason:'Other businesses must load independently of the current category');
-    await tester.scrollUntilVisible(find.text('Other businesses'),200,
-      scrollable:find.byType(Scrollable).first);
+    // The home body is vertically lazy: scroll the viewport first instead
+    // of asking scrollUntilVisible to resolve an as-yet-unbuilt widget.
+    final homeScroll=find.byType(ListView).first;
+    for(var n=0;n<15&&find.text('Other businesses').evaluate().isEmpty;n++){
+      await tester.drag(homeScroll,const Offset(0,-200));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Other businesses'),findsOneWidget);
     expect(find.text('Durban Hair Studio'),findsOneWidget);
     final salonCard=find.byKey(const ValueKey('nearby-local-salon'));
     expect(find.descendant(of:salonCard,matching:find.text('Contact')),findsOneWidget);
