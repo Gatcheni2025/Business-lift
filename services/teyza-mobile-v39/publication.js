@@ -11,6 +11,9 @@ const TRIAL_MS=7*24*60*60*1000; // historical compatibility only
 const trialActive=()=>false;
 function entitled(uid,account,billing,now=Date.now()) {
  if(account?.listingPlan!=='basic'||billing?.ownerUid!==uid||billing.status!=='paid')return false;
+ // Sandbox transactions are for QA only. Never activate public selling
+ // on the production Firebase project using a Paystack test charge.
+ if(billing.paymentEnvironment==='test')return false;
  // Paystack membership is valid for one paid calendar month from charge.
  if(Number.isFinite(billing.paidUntil))return now<billing.paidUntil;
  // Historical manual invoices and mandates do not prove membership.

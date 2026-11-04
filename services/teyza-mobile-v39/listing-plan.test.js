@@ -30,6 +30,11 @@ test('Paid subscription cannot bypass owner verification or rejection',()=>{
   verifiedPhone:'+27712345678',selfieSubmissionId:'selfie-1'};
  assert.equal(P.state('seller1',basic,setup,null,shop,billing,NOW).canSell,false);
 });
+test('Manual mandates, invoice-only receipts and Paystack sandbox payments cannot activate a public catalogue',()=>{
+ assert.equal(P.entitled('seller1',basic,{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(NOW)},NOW),false);
+ assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'test'},NOW),false);
+ assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'live'},NOW),true);
+});
 test('Seven-day paid promotion is separate from membership',()=>{
  assert.equal(B.PROMO_CENTS,2900);assert.equal(B.PROMO_MS,7*86400000);
  assert.equal(B.validCheckoutUrl('https://checkout.paystack.com/abc123'),true);
