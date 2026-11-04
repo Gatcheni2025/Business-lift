@@ -19,7 +19,7 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'SIGNED AAB + APK + IPA (existing Play/Apple keys); requires compatible Firebase 3.17.0 or 3.18.0'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.20.0'
         type: boolean
         default: true
       upload_to_testflight:
@@ -134,12 +134,20 @@ jobs:
                          'shopLocations','addressAutocomplete','shopServices',
                          'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock',
                          'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery','freeSellerPlans',
-                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices','chatModeration','sevenDayTrial','shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity','twoWayChatNotifications','wholesaleConnections','strictSevenDayMembership')
+                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices','chatModeration',
+                         'shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity',
+                         'twoWayChatNotifications','wholesaleConnections','adminUsers','adminSellerDocuments',
+                         'paystackCheckoutAvailable')
+          required_false=('sevenDayTrial','strictSevenDayMembership')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
+          required_exact={'version':'3.20.0','billingMode':'paystack_checkout',
+                          'subscriptionMonthlyCents':9900,'introductoryFirstMonthCents':4900,
+                          'promotionSevenDaysCents':2900}
           failures=[]
-          if health.get('version') not in ('3.17.0','3.18.0'):
-              failures.append('version (expected 3.17.0 or 3.18.0; received '+repr(health.get('version'))+')')
           failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
+          failures.extend(field+' (expected false)' for field in required_false if health.get(field) is not False)
+          failures.extend(field+' (unexpected value '+repr(health.get(field))+')'
+                          for field,expected in required_exact.items() if health.get(field)!=expected)
           failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
                           if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)
                           or health[field]<minimum)
