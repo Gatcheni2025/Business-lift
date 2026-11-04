@@ -273,6 +273,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   SellerPush? sellerPush;
   StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
+  // Independent home preview: not limited to the currently selected shop tab.
+  List<OnlineShop> otherBusinesses = [];
+  bool loadingOtherBusinesses = false;
+  String? otherBusinessesWarning;
+  int _otherBusinessRequestSerial = 0;
   String? onlineWarning;
   bool loadingOnline = false;
   String discoveryType='spaza';
@@ -579,6 +584,35 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     await reloadOnline();
   }
 
+  Future<void> reloadOtherBusinesses() async {
+    if(!mounted||session.sellerWorkspace)return;
+    final currentArea=area;
+    final serial=++_otherBusinessRequestSerial;
+    if(currentArea==null){
+      setState((){otherBusinesses=[];loadingOtherBusinesses=false;
+        otherBusinessesWarning=null;});
+      return;
+    }
+    setState((){loadingOtherBusinesses=true;otherBusinessesWarning=null;});
+    try{
+      final businesses=widget.directoryLoader!=null
+        ?await widget.directoryLoader!(currentArea,'variety',40)
+        :await findOnlineShops(area:currentArea.label,
+          latitude:currentArea.lat,longitude:currentArea.lng,
+          category:'variety',radiusKm:40);
+      if(!mounted||serial!=_otherBusinessRequestSerial)return;
+      setState((){
+        otherBusinesses=businesses.where((place)=>
+          teyzaMatchesShopCategory(place,'variety')).toList();
+        loadingOtherBusinesses=false;
+      });
+    }catch(_){
+      if(!mounted||serial!=_otherBusinessRequestSerial)return;
+      setState((){loadingOtherBusinesses=false;
+        otherBusinessesWarning='Other businesses are temporarily unavailable.';});
+    }
+  }
+
   Future<void> reloadOnline() async {
     if(session.sellerWorkspace)return;
     if (!mounted) return;
@@ -700,7 +734,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       });
       final prefs=await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area','gps');
-      await reloadOnline();
+      await Future.wait<void>([reloadOnline(),reloadOtherBusinesses()]);
     } catch (e) {
       if (!mounted) return;
       setState(() { locationWarning = e is FormatException ? e.message : 'Could not find your area. Choose it manually.'; });
@@ -726,7 +760,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final prefs=await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area',choice.label);
     }
-    await reloadOnline();
+    await Future.wait<void>([reloadOnline(),reloadOtherBusinesses()]);
   }
   Future<void> areaSheet() async {
     if(widget.initialArea==null){await promptDeliveryProfile();return;}
@@ -856,20 +890,30 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ?'${shop.rating!.toStringAsFixed(1)} (${shop.ratingCount}) · Teyza orders':'No ratings yet')),
   ]);
 
-  void buyHere({Shop? merchant,OnlineShop? directory}){
+  Future<void> contactListing({Shop? merchant,OnlineShop? directory}) async {
     final linked=merchant??(directory==null?null:verifiedMerchantFor(directory));
-    // A genuine Teyza-approved shop is open for browsing immediately;
-    // prices and checkout appear only when that seller publishes real stock.
-    if(linked!=null&&linked.identityVerified){
-      openShop(linked);
+    // Verified Teyza owners can receive in-app messages. Public map entries
+    // are discovery-only and must never pretend to support Teyza chat.
+    if(linked!=null&&linked.identityVerified&&linked.liveChat&&
+      ShopperChatApi.isTeyzaShop(linked.id)){
+      chatWithShop(linked);
       return;
     }
-    showDialog<void>(context:context,builder:(dialogContext)=>AlertDialog(
-      title:const Text('Ordering not available'),
-      content:Text((directory?.name??'This business')+
-        ' is a public map listing, not an approved Teyza seller. You can still view its location and contact details.'),
-      actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),
-        child:const Text('Close'))]));
+    var number=linked?.phone??directory?.phone??'';
+    if(number.isEmpty&&directory!=null&&directory.origin=='google_places'&&
+      directory.placeId.isNotEmpty){
+      // Google Places details fetch is performed only when Contact is tapped.
+      number=await teyzaBusinessContact(directory.placeId);
+    }
+    if(!mounted)return;
+    if(number.isNotEmpty){
+      await contactBusiness(number);
+      return;
+    }
+    if(linked!=null)openShop(linked);
+    else if(directory!=null)selectDirectory(directory);
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:Text('No public phone number is available. View the business details or directions.')));
   }
 
   Widget onlineTile(OnlineShop place)=>Card(color:Colors.white,elevation:0,
@@ -899,8 +943,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               style:const TextStyle(fontSize:11,color:green,fontWeight:FontWeight.w700))
           ]),
           const SizedBox(height:8),
-          FilledButton(onPressed:()=>buyHere(directory:place),
-            child:const Text('Buy here')),
+          FilledButton(onPressed:()=>contactListing(directory:place),
+            child:const Text('Contact')),
           if(place.phone.isNotEmpty)TextButton.icon(onPressed:()=>contactBusiness(place.phone),
             icon:const Icon(Icons.phone_outlined,size:15),label:Text('Call '+place.phone)),
           if(place.hasPhoto && place.photoAttributions.isNotEmpty)
@@ -1300,6 +1344,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]));
 
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
+  List<NearbyListing> get nearbyOtherBusinesses {
+    if(area==null)return [];
+    final verified=live.where((shop)=>shop.shopCategory=='variety'&&
+      shopMatchesArea(shop,area,radiusKm:40)).toList();
+    final publicResults=discoveryType=='variety'&&online.isNotEmpty
+      ?online:otherBusinesses;
+    return mergeNearbyListings(verified,publicResults,area:area);
+  }
   Shop? verifiedMerchantFor(OnlineShop publicPlace){
     String normalized(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
     for(final merchant in live){
@@ -1371,8 +1423,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 style:const TextStyle(color:muted,fontSize:10)),
               Padding(padding:const EdgeInsets.only(top:7),
                 child:SizedBox(width:double.infinity,child:FilledButton(
-                  onPressed:()=>buyHere(merchant:merchant,directory:directory),
-                  child:const Text('Buy here')))),
+                  onPressed:()=>contactListing(merchant:merchant,directory:directory),
+                  child:const Text('Contact')))),
               if(directory?.photoAttributions.isNotEmpty==true)
                 Text('Photo: '+(directory!.photoAttributions.first['name']??''),maxLines:1,
                   overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:9))
@@ -1398,7 +1450,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Widget homePage()=>RefreshIndicator(
     onRefresh:() async {
-      await Future.wait<void>([load(),reloadOnline()]);
+      await Future.wait<void>([load(),reloadOnline(),reloadOtherBusinesses()]);
     },
     child:ListView(key:const PageStorageKey<String>('shopper-home'),
       padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
@@ -1456,6 +1508,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 ])),
               const Icon(Icons.arrow_forward_rounded,color:Colors.white)
             ])))),
+      // Show local Other Businesses on the home page without requiring a
+      // category switch, directly below Services offered and above Join Teyza.
+      section('Other businesses',
+        subtitle:'Salons, furniture, upholstery, plumbers and local services',
+        action:TextButton(onPressed:() async {
+          await setDiscoveryType('variety');
+          if(mounted)setState(()=>showAllShops=true);
+        },child:const Text('See all'))),
+      if(nearbyOtherBusinesses.isNotEmpty)
+        SizedBox(height:282,child:ListView(scrollDirection:Axis.horizontal,
+          children:nearbyOtherBusinesses.take(12).map(nearbyCard).toList()))
+      else if(loadingOtherBusinesses)
+        const SizedBox(height:105,child:Center(child:CircularProgressIndicator()))
+      else Padding(padding:const EdgeInsets.fromLTRB(4,4,4,10),
+        child:Text(area==null?'Add your delivery address to find other businesses nearby.':
+          otherBusinessesWarning??'No other businesses found nearby. Try another area.',
+          style:const TextStyle(color:muted,fontSize:12))),
       if(discoveryType=='wholesale')Card(color:const Color(0xFFE5F4ED),child:ListTile(
         leading:const Icon(Icons.inventory_2_outlined,color:green),
         title:const Text('Spaza shop owner? Buy stock at wholesale prices',
@@ -1778,9 +1847,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ])),
           const SizedBox(height:10),
           SizedBox(width:double.infinity,child:FilledButton.icon(
-            onPressed:()=>buyHere(merchant:seller,directory:publicPlace),
+            onPressed:()=>contactListing(merchant:seller,directory:publicPlace),
             icon:const Icon(Icons.shopping_bag_outlined,size:17),
-            label:const Text('Buy here'))),
+            label:const Text('Contact'))),
           if(publicPlace?.origin=='google_places')
             const Text('Google Maps',style:TextStyle(color:muted,fontSize:10)),
         ])));
@@ -1844,8 +1913,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         onPressed:()=>contactBusiness(selectedDirectoryPhone??shop.phone),
         icon:const Icon(Icons.call_outlined),
         label:Text('Call '+(selectedDirectoryPhone??shop.phone))),
-      FilledButton.icon(onPressed:()=>buyHere(directory:shop),
-        icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Buy here')),
+      FilledButton.icon(onPressed:()=>contactListing(directory:shop),
+        icon:const Icon(Icons.call_outlined),label:const Text('Contact')),
       for(final credit in shop.providerAttributions)
         Align(alignment:Alignment.centerLeft,
           child:TextButton.icon(onPressed:() async {
@@ -1866,7 +1935,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(verifiedMerchantFor(shop)!=null)
         section('SHOP ITEMS'),
       if(verifiedMerchantFor(shop)!=null)
-        FilledButton.icon(onPressed:()=>buyHere(directory:shop),
+        FilledButton.icon(onPressed:()=>contactListing(directory:shop),
           icon:const Icon(Icons.shopping_bag_outlined),
           label:const Text('View products and prices')),
       const SizedBox(height:15),
