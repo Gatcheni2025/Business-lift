@@ -20,7 +20,9 @@ Status: Development PR ONLY. NOT DEPLOYED. Stacked on the Teyza R319 administrat
 
 ## Platform review
 - iOS: purchases of in-app digital advertising/placements normally require Apple In-App Purchase (App Review Guideline 3.1.3(g)). The Flutter screen never sends iPhone users to Paystack; configure StoreKit and server receipt validation separately before iOS paid seller access.
-- Check current Google Play Billing policies for Android digital seller features before any signed store release.
+- Google Play generally requires Play Billing for purchases unlocking digital seller listing functionality and in-app boosts. No Paystack checkout should appear in Google Play store builds absent an applicable exception. Google Play Billing must be implemented before release.
+- Teyza's Flutter checkout uses a compile-time distribution flag. Store builds default to TEYZA_PAYMENT_CHANNEL=store, which disables the external Paystack button; only independent/direct distribution compiled with --dart-define=TEYZA_PAYMENT_CHANNEL=direct enables it. Do not set this flag on Google Play or App Store submissions.
+- iOS and Google Play purchase flows are not yet implemented; test merchant integration is only a staging/independent-distribution option.
 - This branch does not supply a working StoreKit product nor real Paystack merchant credentials. Do not deploy to production until policies, subscriptions and end-to-end payment scenarios pass.
 
 ## Security and release gates
