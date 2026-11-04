@@ -1,5 +1,5 @@
 'use strict';
-// Scoped Firebase Hosting patch: update only Teyza's home, download page and store badge stylesheet.
+// Scoped Firebase Hosting patch: replace seven public premium pages, shared CSS, and sitemap only.
 // Other files and the active Hosting config are cloned unchanged. No plain firebase deploy.
 const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),crypto=require('node:crypto');
 const {connect,PROJECT}=require('./firebase-client.cjs');
