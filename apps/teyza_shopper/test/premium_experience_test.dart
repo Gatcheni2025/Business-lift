@@ -185,26 +185,54 @@ void main(){
     expect(tester.takeException(),isNull);await capture('login-roles');
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Google-only business offers Buy here but no unavailable warning before tap',(tester)async{
+  testWidgets('Other businesses appear on home even when Spaza Shops is selected',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final requested=<String>[];
+    final salon=OnlineShop.fromJson({
+      'id':'local-salon','name':'Durban Hair Studio','shopCategory':'variety',
+      'latitude':-29.8587,'longitude':31.0218,'origin':'openstreetmap',
+      'categorizationVerified':true,
+    });
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[],
+      directoryLoader:(area,type,radius)async{
+        requested.add(type);
+        return type=='variety'?[salon]:<OnlineShop>[];
+      })));
+    await tester.pump();await tester.pump(const Duration(seconds:1));
+    await tester.pumpAndSettle();
+    expect(requested,contains('spaza'));
+    expect(requested,contains('variety'),
+      reason:'Other businesses must load independently of the current category');
+    await tester.scrollUntilVisible(find.text('Other businesses'),200,
+      scrollable:find.byType(Scrollable).first);
+    expect(find.text('Durban Hair Studio'),findsOneWidget);
+    final salonCard=find.byKey(const ValueKey('nearby-local-salon'));
+    expect(find.descendant(of:salonCard,matching:find.text('Contact')),findsOneWidget);
+    expect(find.text('Buy here'),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('Public business offers Contact without an ordering error',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final directory=OnlineShop.fromJson({
       'id':'google-public-shop','name':'Neighbourhood Grocer','shopCategory':'spaza',
-      'latitude':-29.8587,'longitude':31.0218,'origin':'google_places',
+      'latitude':-29.8587,'longitude':31.0218,'origin':'openstreetmap',
       'openNow':true,'categorizationVerified':true
     });
     await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
       enableBackgroundServices:false,catalogueLoader:()async=>[],
-      directoryLoader:(area,type,radius)async=>[directory])));
+      directoryLoader:(area,type,radius)async=>type=='spaza'?[directory]:[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     expect(find.text('Ordering not available'),findsNothing);
-    expect(find.text('Shop'),findsNothing);
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
     await tester.ensureVisible(card);await tester.pumpAndSettle();
-    final buy=find.descendant(of:card,matching:find.text('Buy here'));
-    await tester.tap(buy);await tester.pumpAndSettle();
-    expect(find.text('Ordering not available'),findsOneWidget);
-    await tester.tap(find.text('Close'));await tester.pumpAndSettle();
+    final contact=find.descendant(of:card,matching:find.text('Contact'));
+    await tester.tap(contact);await tester.pumpAndSettle();
+    expect(find.text('Browse all shops'),findsOneWidget,
+      reason:'When no public phone number is supplied, Contact opens business details');
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
