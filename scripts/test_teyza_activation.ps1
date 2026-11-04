@@ -3,6 +3,8 @@ $root = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $fixture 'services/teyza-mobile-v39') -Force | Out-Null
 Copy-Item (Join-Path $root 'services/teyza-mobile-v39/catalogue.json') (Join-Path $fixture 'services/teyza-mobile-v39/catalogue.json')
+# Synthetic PLN code is only for a mocked plan gate; no real Paystack credentials are used.
+[System.IO.File]::WriteAllText((Join-Path $fixture 'services/teyza-mobile-v39/.env.business-lift-3c19c'),"TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_test12345`n")
 $global:calls = [System.Collections.Generic.List[string]]::new()
 $global:badHealth = $false
 function firebase {
@@ -16,7 +18,7 @@ function firebase {
   return '{"status":"success","result":{}}'
 }
 function npm { $global:LASTEXITCODE = 0 }
-function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.18.0';verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=378;catalogueRevision=2;cataloguePhotos=96;shopServices=$true;orderQuotes=$true;orderInboxAlways=$true;accountDeletion=$true;accountDeletionAuthLock=$true;deletedUserReregister=$true;shopperSavedAddresses=$true;approvedFreeDiscovery=$true;freeSellerPlans=$true;paidAreaVisibility=$true;wholesaleSourcing=$true;protectedWholesalePrices=$true;chatModeration=$true;sevenDayTrial=$true;shopperDeletionProfileClear=$true;appleRevocationServer=$true;onceOnlyShopperIdentity=$true;twoWayChatNotifications=$true;wholesaleConnections=$true;strictSevenDayMembership=$true;adminUsers=$true;adminSellerDocuments=$true} }
+function Invoke-RestMethod { if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.20.0';verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=378;catalogueRevision=2;cataloguePhotos=96;shopServices=$true;orderQuotes=$true;orderInboxAlways=$true;accountDeletion=$true;accountDeletionAuthLock=$true;deletedUserReregister=$true;shopperSavedAddresses=$true;approvedFreeDiscovery=$true;freeSellerPlans=$true;paidAreaVisibility=$true;wholesaleSourcing=$true;protectedWholesalePrices=$true;chatModeration=$true;sevenDayTrial=$false;shopperDeletionProfileClear=$true;appleRevocationServer=$true;onceOnlyShopperIdentity=$true;twoWayChatNotifications=$true;wholesaleConnections=$true;strictSevenDayMembership=$false;adminUsers=$true;adminSellerDocuments=$true;billingMode='paystack_checkout';paystackCheckoutAvailable=$true;subscriptionMonthlyCents=9900;introductoryFirstMonthCents=4900;promotionSevenDaysCents=2900} }
 try {
   foreach ($name in @('ACTIVATE-TEYZA.ps1','DEPLOY-MOBILE.ps1','SETUP-VERIFICATION-KEY.ps1')) {
     $errors = $null
