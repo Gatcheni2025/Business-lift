@@ -12,3 +12,6 @@ apps/teyza_shopper/.flutter-plugins*
 *.keystore
 *.p12
 *.mobileprovision
+
+# Teyza local Firebase/Paystack environment configuration (never commit).
+services/teyza-mobile-v39/.env*
