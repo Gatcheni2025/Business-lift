@@ -209,7 +209,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     if(action==='seller_mandate_submit')D.fail(410,
-      'New Teyza debit mandates are discontinued. No bank debit is authorised by a free trial.');
+      'New Teyza debit mandates are discontinued. Use the supported checkout to pay for a seller membership.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
@@ -225,7 +225,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     let shopperProfile=null;
     if(!auth.email_verified&&!auth.phone_number){
       if(isShopperAction)shopperProfile=await registeredShopper(uid);
-      else if(!['seller_register','seller_plan_select','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+      else if(!['seller_register','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
         D.fail(403,'Verify your email or mobile number before using seller services.');
     }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
@@ -755,6 +755,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         Object.assign(projected,offers.exposed(offers.effective(c,shop)));
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
+        // Never leak previously stored products through a stale public listing.
+        if(!P.entitled(uid,a,b,clock())){
+          projected.products=[];projected.productHighlights=[];
+          projected.catalogueEnabled=false;projected.sellingEnabled=false;
+        }
         const publicItem=P.publicRow(uid,projected);
         if(a.category==='wholesale'&&!wholesaleOnly){publicItem.products=[];publicItem.productHighlights=[];}
         return publicItem;
