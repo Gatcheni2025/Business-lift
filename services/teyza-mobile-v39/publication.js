@@ -101,6 +101,13 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  else if(!location&&(!shop?.address||sameAddress(shop.address,account.address))&&typeof shop?.city==='string')next.city=shop.city;
  if(front?.ownerUid===uid&&front.photoId)next.photoUrl=require('./shop-front').publicUrl(uid,front.photoId);
  Object.assign(next,catalogue.range(uid,next,drafts,{enabled:result.canSell,removedProductId}));
+ // New shops require admin catalogue review; legacy reviewed shops retain
+ // existing products until explicitly submitted for fresh R322 review.
+ if(account.catalogueApprovalRequired===true||Array.isArray(shop?.reviewedProductIds)){
+   const approved=new Set(Array.isArray(shop?.reviewedProductIds)?shop.reviewedProductIds:[]);
+   next.products=(next.products||[]).filter(p=>approved.has(p.id));
+   next.productHighlights=(next.productHighlights||[]).filter(p=>approved.has(p.id));
+ }
  return next;
 }
 function publicRow(uid,shop){

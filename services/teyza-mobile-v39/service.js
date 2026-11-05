@@ -498,6 +498,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         D.orderItems([{id:p.id,quantity:1}],[{...p,stock:Math.max(1,p.stock)}]);
       }
       await doc('teyzaCatalogueSubmissions/'+uid).set({ownerUid:uid,status:'pending_review',products,submittedAt:clock()});
+      await doc('teyzaSellerAccounts/'+uid).set({catalogueApprovalRequired:true},{merge:true});
+      await synchronizeCatalogue(uid);
       return {status:'pending_review'};
     }
     if(action==='catalogue_review') {
@@ -525,7 +527,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
             customPhotoApproved:Boolean(p.imageUrl&&p.imageUrl!==currentProduct.imageUrl)}:{...p,stock:current.stockQty};
         });
         const productHighlights=products.map(({priceCents,stock,...p})=>({...p,inStock:stock>0}));
-        tx.update(shopRef,{products:shop.catalogueEnabled===true||shop.sellingEnabled===true?products:[],productHighlights});
+        tx.update(shopRef,{products:shop.catalogueEnabled===true||shop.sellingEnabled===true?products:[],productHighlights,
+          reviewedProductIds:products.map(p=>p.id)});
+        tx.update(accountRef,{catalogueApprovalRequired:true});
         tx.update(submissionRef,{status:'published',reviewedBy:uid,reviewedAt:clock()});
         return {status:'published'};
       });

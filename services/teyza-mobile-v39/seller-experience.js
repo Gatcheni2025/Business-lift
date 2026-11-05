@@ -24,7 +24,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
     ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
-    approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',createdAt:new Date(clock()),updatedAt:new Date(clock())};
+    approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
+    catalogueApprovalRequired:true,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
