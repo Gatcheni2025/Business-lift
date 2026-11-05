@@ -51,7 +51,7 @@ try {
     if ($deployment -notmatch ('functions:teyza-mobile:' + $name)) { throw ('Missing scoped function ' + $name) }
   }
   if ($deployment -match '--only hosting|--only firestore|--force') { throw 'A scoped deploy must not replace unrelated resources.' }
-  Remove-Item -LiteralPath $planFile
+  Remove-Item -LiteralPath $planFile -Force
   $result = Exercise 'ready'
   if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'Missing environment configuration must stop deployment.' }
   Write-Host 'Operations deploy preflight, scoped functions and admin gate passed with mocked commands.'
