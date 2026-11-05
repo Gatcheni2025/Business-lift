@@ -48,7 +48,9 @@ jobs:
                 ('PRIVACY','https://teyza.co.za/privacy.html'),('TERMS','https://teyza.co.za/terms.html'),
                 ('ROBOTS','https://teyza.co.za/robots.txt'),('SITEMAP','https://teyza.co.za/sitemap.xml'),
                 ('PLAY','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye&hl=en&gl=ZA'),
-                ('APPLE','https://itunes.apple.com/lookup?id=6827037733&country=za')]
+                ('APPLE','https://itunes.apple.com/lookup?id=6827037733&country=za'),
+                ('DNSROOT','https://dns.google/resolve?name=teyza.co.za&type=TXT'),
+                ('DNSDMARC','https://dns.google/resolve?name=_dmarc.teyza.co.za&type=TXT')]
           for label,url in urls:
             try:
               req=urllib.request.Request(url,headers={'User-Agent':'Teyza-public-readiness-check/1.0'})
@@ -60,7 +62,8 @@ jobs:
                 fields=['ok','version','billingMode','paystackCheckoutAvailable','subscriptionMonthlyCents',
                   'introductoryFirstMonthCents','adminOperations','adminReview','adminProductReview',
                   'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
-                  'approvalRequired','sellerOnboarding','verificationUploads','addressAutocomplete']
+                  'approvalRequired','sellerOnboarding','verificationUploads','addressAutocomplete',
+                  'sevenDayTrial','strictSevenDayMembership','freeSellerPlans']
                 print('MOBILE_HEALTH '+json.dumps({k:obj.get(k) for k in fields},sort_keys=True))
               elif label in ('HOME','ADMIN','DOWNLOAD','SELLER','PRIVACY','TERMS'):
                 page=Page(); page.feed(data)
@@ -76,7 +79,15 @@ jobs:
               elif label=='APPLE':
                 result=json.loads(data)
                 print('APPLE_LOOKUP '+json.dumps({'resultCount':result.get('resultCount'),
-                  'apps':[{'name':x.get('trackName'),'id':x.get('trackId')} for x in result.get('results',[])]}))
+                  'apps':[{'name':x.get('trackName'),'id':x.get('trackId'),'version':x.get('version'),
+                           'url':x.get('trackViewUrl')} for x in result.get('results',[])]}))
+              elif label in ('DNSROOT','DNSDMARC'):
+                result=json.loads(data); records=[x.get('data','').strip('"') for x in result.get('Answer',[])]
+                spf=[x for x in records if x.lower().startswith('v=spf1')]
+                dmarc=[x for x in records if x.lower().startswith('v=dmarc1')]
+                policy=re.search(r'(?:^|;)\s*p\s*=\s*(none|quarantine|reject)',dmarc[0],re.I) if dmarc else None
+                print(label+'_SUMMARY '+json.dumps({'status':result.get('Status'),'spfRecords':len(spf),
+                  'dmarcRecords':len(dmarc),'dmarcPolicy':policy.group(1) if policy else None}))
               elif label in ('ROBOTS','SITEMAP'):
                 print(label+'_CONTENT '+data[:10000].replace('\n',' '))
             except (HTTPError,URLError,TimeoutError,ValueError) as e:
