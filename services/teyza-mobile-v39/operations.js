@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_complimentary_access','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
+const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
@@ -21,6 +21,27 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   // never activate membership now that Paystack verifies all new charges.
   if(['ops_invoice','ops_payment','ops_payment_reverse'].includes(action))
     D.fail(410,'Manual mandate invoices and receipt activation are retired. Use Paystack checkout and verified transactions.');
+  if(action==='ops_complimentary_revoke'){
+    const target=D.id(data.sellerUid);
+    if(target===uid)D.fail(403,'Another administrator must review your shop access.');
+    const reason=D.text(data.reason,'reason for revoking complimentary access',250);
+    if(reason.length<15||data.confirmed!==true)
+      D.fail(422,'Confirm the revocation and enter a reason of at least 15 characters.');
+    const stamp=clock();
+    await db.runTransaction(async tx=>{
+      const billRef=doc('teyzaBilling/'+target),old=await tx.get(billRef);
+      const saved=old.exists?old.data():null;
+      if(!saved||saved.ownerUid!==target||saved.adminComplimentaryStatus!=='active')
+        D.fail(409,'There is no active complimentary access grant for this shop.');
+      tx.update(billRef,{adminComplimentaryStatus:'revoked',
+        adminComplimentaryRevokedAt:stamp,adminComplimentaryRevokedBy:uid,
+        adminComplimentaryRevocationReason:reason,updatedAt:stamp});
+      audit(tx,auth,'ops_complimentary_revoke',target,{grantId:saved.adminComplimentaryGrantId,
+        reason,previousUntil:saved.adminComplimentaryUntil,noPaymentReversal:true});
+    });
+    await synchronize(target);
+    return {revoked:true,noPaymentReversal:true};
+  }
   if(action==='ops_complimentary_access'){
     const target=D.id(data.sellerUid),duration=Number(data.days);
     if(target===uid)D.fail(403,'Another administrator must grant access to your shop.');

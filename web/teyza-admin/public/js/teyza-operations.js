@@ -43,7 +43,18 @@ export function createOperations({api,onError}){
     ' · Renewal: '+(d.billing?.renewalSetup||'not scheduled')));
   if(d.billing?.paidUntil)
     billing.append(el('p','Paid until: '+new Date(d.billing.paidUntil).toLocaleString('en-ZA')));
-  if(d.complimentaryAccess)billing.append(el('p','Complimentary access ends: '+new Date(d.complimentaryUntil).toLocaleString('en-ZA')+' · Reason: '+(d.complimentaryReason||'')));
+  if(d.complimentaryAccess){
+    billing.append(el('p','Complimentary access ends: '+new Date(d.complimentaryUntil).toLocaleString('en-ZA')+' · Reason: '+(d.complimentaryReason||'')));
+    billing.append(button('Revoke complimentary access',async()=>{
+      const reason=prompt('Enter a reason for revoking temporary access (at least 15 characters):');
+      if(!reason||reason.trim().length<15)throw Error('A revocation reason of at least 15 characters is required.');
+      if(!confirm('Revoke this complimentary grant now? This does not refund any real payment.'))return;
+      await request('ops_complimentary_revoke',{sellerUid:d.seller.sellerUid,
+        reason:reason.trim(),confirmed:true});
+      message('Temporary access revoked and audited. Public product eligibility updated.','success');
+      await choose(selected);
+    }));
+  }
   billing.append(el('p','R49 introductory first month · R99 monthly renewal · R29 optional seven-day promotion. Seller checkout is separate from this administrator screen.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
