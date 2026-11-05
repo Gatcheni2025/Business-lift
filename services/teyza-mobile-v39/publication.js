@@ -67,7 +67,7 @@ function locationFor(uid,account,location,shop,now=Date.now()){
    ...(shop.coordinateSource==='google_places'?{coordinateSource:'google_places',coordinatesExpireAt:shop.coordinatesExpireAt}:{})};
  return null;
 }
-function project(uid,{account,setup={},verification,shop,settings={},front,location,billing=null,drafts=[],removedProductId=null,now=Date.now()}){
+function project(uid,{account,setup={},verification,shop,settings={},front,location,billing=null,drafts=[],photos=[],removedProductId=null,now=Date.now()}){
  if(shop&&shop.sellerUid!==uid)D.fail(409,'This shop listing needs Teyza support to restore it.');
  const result=state(uid,account,setup,verification,shop,billing,now);
  if(!result.registered||(!shop&&!setup.completedAt))return null;
@@ -100,14 +100,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  if(pin)Object.assign(next,pin);
  else if(!location&&(!shop?.address||sameAddress(shop.address,account.address))&&typeof shop?.city==='string')next.city=shop.city;
  if(front?.ownerUid===uid&&front.photoId)next.photoUrl=require('./shop-front').publicUrl(uid,front.photoId);
- Object.assign(next,catalogue.range(uid,next,drafts,{enabled:result.canSell,removedProductId}));
- // New shops require admin catalogue review; legacy reviewed shops retain
- // existing products until explicitly submitted for fresh R322 review.
- if(account.catalogueApprovalRequired===true||Array.isArray(shop?.reviewedProductIds)){
-   const approved=new Set(Array.isArray(shop?.reviewedProductIds)?shop.reviewedProductIds:[]);
-   next.products=(next.products||[]).filter(p=>approved.has(p.id));
-   next.productHighlights=(next.productHighlights||[]).filter(p=>approved.has(p.id));
- }
+ Object.assign(next,catalogue.range(uid,next,drafts,{enabled:result.canSell,removedProductId,photos}));
  return next;
 }
 function publicRow(uid,shop){

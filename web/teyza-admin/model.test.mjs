@@ -31,6 +31,8 @@ test('Account and selection changes invalidate delayed evidence and prevent self
 test('Expired or missing documents cannot be approved and negative outcomes need a note',()=>{
  const state=new ReviewState();state.account('admin');state.select({...row,expired:true});state.viewed('identity');state.viewed('selfie');assert(!state.canApprove());
  assert.throws(()=>state.decision('rejected',''));assert.throws(()=>state.decision('needs_new_photo','  '));
+ assert.throws(()=>state.decision('rejected','Invalid'));
+ assert.equal(state.decision('rejected','Please submit a clear ID.').reason,'Please submit a clear ID.');
  assert.equal(state.decision('needs_new_photo','Please retake in good light.').status,'needs_new_photo');
  assert.throws(()=>state.decision('rejected','x'.repeat(401)));
  state.select({...row,evidenceId:null});state.viewed('identity');state.viewed('selfie');assert(!state.canApprove());
@@ -46,3 +48,4 @@ test('Only bounded JPEG evidence is converted to a temporary preview blob',()=>{
  assert.equal(photoBlob(Buffer.from([255,216,255,1,2,3]).toString('base64')).type,'image/jpeg');
  for(const value of [null,'%%%',Buffer.from('<svg>unsafe</svg>').toString('base64'),'a'.repeat(6000001)])assert.throws(()=>photoBlob(value));
 });
+

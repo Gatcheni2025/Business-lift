@@ -128,12 +128,12 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      complimentaryReason:billing?.adminComplimentaryReason||null,
      canApproveCatalogue:P.state(target,account,setup||{},
        verification,shop,billing,clock()).canSell&&shop?.status==='active',
-     catalogue:submission?.ownerUid===target?{
-       status:submission.status||'not_submitted',submittedAt:submission.submittedAt||null,
-       products:Array.isArray(submission.products)?submission.products.slice(0,200).map(p=>({
+     catalogue:{
+       status:P.state(target,account,setup||{},verification,shop,billing,clock()).canSell?'active':'waiting_for_access',
+       products:Array.isArray(shop?.products)?shop.products.slice(0,200).map(p=>({
          id:p.id,name:p.name,category:p.category||'',stock:p.stock,
          priceCents:p.priceCents,imageUrl:p.imageUrl||''
-       })):[]}:null,
+       })):[]},
      payments:paymentRows,...books,
      verification:{status:verification?.status||'not_submitted',
        phoneVerified:!!setup?.verifiedPhone,completed:!!setup?.completedAt},

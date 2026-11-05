@@ -68,6 +68,11 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})
   .rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).jpeg({quality:82}).toBuffer()});
+function sellerCheckoutConfigured(){
+ const key=paystackKey.value()||'',project=process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'';
+ return Boolean(/^sk_(test|live)_/.test(key)&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE&&
+  (!key.startsWith('sk_test_')||(project&&project!=='business-lift-3c19c')));
+}
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
@@ -100,9 +105,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.21.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.23.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:Boolean(paystackKey.value()&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE),adminProductReview:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -122,8 +127,8 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
 const catalogueTrigger={region:'us-central1',maxInstances:5,retry:true};
 exports.teyzaCatalogueDraftChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaDraftProducts/{sellerUid}/items/{productId}'},async event=>{
-  // Batch catalogue creation already synchronizes in the same transaction.
-  if(!event.data?.before.exists)return;
+  // Also synchronize directly-created custom drafts if the app closes early.
+  if(!event.data)return;
   await service.synchronizeCatalogue(event.params.sellerUid,{
     removedProductId:event.data.after.exists?null:event.params.productId});
 });
@@ -148,7 +153,9 @@ exports.teyzaSellerBillingChanged=onDocumentWritten({...catalogueTrigger,
   if(!event.data?.after.exists)return;
   const before=event.data.before.data()||{},after=event.data.after.data()||{};
   if(event.data.before.exists&&before.status===after.status&&
-    before.latestPeriod===after.latestPeriod&&before.monthlyCents===after.monthlyCents)return;
+    before.latestPeriod===after.latestPeriod&&before.monthlyCents===after.monthlyCents&&before.paidUntil===after.paidUntil&&
+    before.paymentEnvironment===after.paymentEnvironment&&before.adminComplimentaryStatus===after.adminComplimentaryStatus&&
+    before.adminComplimentaryUntil===after.adminComplimentaryUntil)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
 // One bounded pass repairs historical premature live flags. Once complete this

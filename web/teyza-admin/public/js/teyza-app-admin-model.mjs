@@ -36,7 +36,7 @@ export class ReviewState {
     if(!['approved','needs_new_photo','rejected'].includes(status))throw new AdminError('Choose a review decision.');
     if(status==='approved'&&!this.canApprove(now))throw new AdminError('Open and inspect the current identity document and selfie before approving.');
     const note=String(reason||'').trim();
-    if(note.length>400||status!=='approved'&&!note)throw new AdminError('Write a clear review note, up to 400 characters, for the seller.');
+    if(note.length>400||status!=='approved'&&note.length<10)throw new AdminError('Add a recommendation explaining what the seller needs to correct (10–400 characters).');
     return {sellerUid:s.sellerUid,submissionId:s.submissionId,...(s.evidenceId?{evidenceId:s.evidenceId}:{}),status,reason:note};
   }
 }

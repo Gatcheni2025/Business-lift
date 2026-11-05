@@ -1,4 +1,6 @@
-# Activate Teyza mobile 3.13.0
+# Historical Teyza mobile 3.13 notes
+
+> The instructions below describe an older release and include obsolete product-review, pricing, catalogue-size and deployment information. Do not use them to deploy the current draft. For the seller verification and subscription pilot, use `docs/TEYZA_R323_SELLER_APPROVAL_AND_TESTING.md`; real payment testing and store billing remain incomplete.
 
 Start with `ACTIVATE-TEYZA.ps1` in the extracted deployment-kit root. See
 `docs/TEYZA_R313_SELLER_ONBOARDING.md` for native Firebase registration, real SMS

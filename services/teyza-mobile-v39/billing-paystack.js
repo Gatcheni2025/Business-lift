@@ -21,12 +21,19 @@ function verifySignature(secret,body,signature) {
   const expected=crypto.createHmac('sha512',secret).update(body).digest('hex');
   return crypto.timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(signature,'hex'));
 }
-function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',send=fetch,refresh=async()=>{}}) {
+function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',send=fetch,refresh=async()=>{}}) {
   const doc=p=>db.doc(p);
   async function read(path) {const x=await doc(path).get();return x.exists?x.data():null;}
+  function requireSafeMode(key){
+    if(key.startsWith('sk_test_')&&(!getProjectId()||getProjectId()==='business-lift-3c19c'))
+      D.fail(503,'Paystack test payments require an isolated test project.');
+  }
   async function paystack(path,method='GET',body) {
     const key=getSecret();
     if(!key||!/^sk_(test|live)_/.test(key))D.fail(503,'Paystack seller payments are not activated yet.');
+    // A test charge mutates subscription and introductory-offer state. Never
+    // write sandbox payments into the production seller database.
+    requireSafeMode(key);
     const response=await send('https://api.paystack.co'+path,{
       method,headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
       ...(body?{body:JSON.stringify(body)}:{})});
@@ -54,7 +61,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
         D.fail(503,'The configured Paystack renewal plan does not match R99 monthly in ZAR.');
     }
     const first=!isPromo&&billing?.introUsed!==true,amount=isPromo?PROMO_CENTS:first?INTRO_CENTS:MONTHLY_CENTS;
-    const reference=(isPromo?'TZP_':'TZM_')+crypto.randomBytes(13).toString('hex');
+    const reference=(isPromo?'TZP-':'TZM-')+crypto.randomBytes(13).toString('hex');
     await doc('teyzaPaystackPayments/'+reference).create({
       reference,ownerUid:uid,kind:isPromo?'promotion':first?'intro':'monthly',
       amountCents:amount,currency:'ZAR',status:'pending',createdAt:now});
@@ -70,7 +77,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
       promotionDays:isPromo?7:null,requiresReturnVerification:true};
   }
   async function verify(reference) {
-    if(!/^(TZM|TZP)_[a-f0-9]{26}$/.test(String(reference||'')))D.fail(422,'Invalid Teyza payment reference.');
+    if(!/^(TZM|TZP)[_-][a-f0-9]{26}$/.test(String(reference||'')))D.fail(422,'Invalid Teyza payment reference.');
     const data=await paystack('/transaction/verify/'+encodeURIComponent(reference));
     if(data.reference!==reference||data.status!=='success'||data.currency!=='ZAR')D.fail(409,'Paystack has not verified a successful ZAR payment.');
     return data;
@@ -79,7 +86,14 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
     const path='teyzaPaystackPayments/'+reference,entry=await read(path);
     if(!entry)D.fail(404,'Payment reference was not issued by Teyza.');
     if(expectedUid&&entry.ownerUid!==expectedUid)D.fail(403,'This payment belongs to another account.');
-    if(entry.status==='paid')return {paid:true,kind:entry.kind,reference,alreadyConfirmed:true};
+    if(entry.status==='paid'){
+      // Replaying an already verified charge must repair publication if the
+      // first request failed after the billing transaction was committed.
+      await refresh(entry.ownerUid);
+      const saved=await read('teyzaBilling/'+entry.ownerUid);
+      return {paid:true,kind:entry.kind,reference,alreadyConfirmed:true,
+        paymentEnvironment:entry.paymentEnvironment||saved?.paymentEnvironment||'unknown'};
+    }
     if(entry.status!=='pending')D.fail(409,'This payment cannot be activated.');
     const verified=await verify(reference);
     if(verified.amount!==entry.amountCents||verified.customer?.email?.toLowerCase()!==
@@ -110,10 +124,11 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
           updatedAt:now},{merge:true});
         tx.update(accountRef,{listingPlan:'basic',updatedAt:new Date(now)});
       }
-      tx.update(payRef,{status:'paid',verifiedAt:now,transactionId:String(verified.id||'')});
-      return {paid:true,kind:pay.kind,reference,paidUntil:pay.kind==='promotion'?null:nextMonth(Math.max(now,Number(bill?.paidUntil)||0))};
+      const paymentEnvironment=getSecret().startsWith('sk_live_')?'live':'test';
+      tx.update(payRef,{status:'paid',verifiedAt:now,transactionId:String(verified.id||''),paymentEnvironment});
+      return {paid:true,kind:pay.kind,reference,paymentEnvironment,paidUntil:pay.kind==='promotion'?null:nextMonth(Math.max(now,Number(bill?.paidUntil)||0))};
     });
-    if(entry.kind==='intro')await provisionRenewal(uid,verified,result.paidUntil);
+    if(entry.kind==='intro'&&!result.alreadyConfirmed)await provisionRenewal(uid,verified,result.paidUntil);
     await refresh(uid);
     return result;
   }
@@ -169,7 +184,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
       const sellerUid=D.id(data.sellerUid);
       if(sellerUid===auth.uid)D.fail(403,'Another administrator must review your own payment.');
       const reference=D.text(data.reference,'Paystack membership reference',70);
-      if(!/^TZM_[a-f0-9]{26}$/.test(reference))
+      if(!/^TZM[_-][a-f0-9]{26}$/.test(reference))
         D.fail(422,'Choose a Teyza-issued Paystack membership reference for this shop.');
       // Server checks original reference ownership and Paystack's verified
       // status, currency, amount and customer before granting membership.
@@ -180,6 +195,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
   }
   async function webhook(raw,signature,payload) {
     if(!verifySignature(getSecret(),raw,signature))D.fail(401,'Invalid Paystack webhook signature.');
+    requireSafeMode(getSecret());
     const event=payload?.event,details=payload?.data||{};
     if(event==='subscription.disable'||event==='invoice.payment_failed'){
       const code=details.subscription?.subscription_code||details.subscription_code;
@@ -194,7 +210,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',se
     if(event!=='charge.success')return {accepted:true};
     const ref=details.reference;
     if(typeof ref!=='string'||!/^[A-Za-z0-9=._-]{4,100}$/.test(ref))return {accepted:true};
-    if(/^(TZM|TZP)_[a-f0-9]{26}$/.test(ref)){await grant(ref);return {accepted:true};}
+    if(/^(TZM|TZP)[_-][a-f0-9]{26}$/.test(ref)){await grant(ref);return {accepted:true};}
     // For recurring charges Paystack uses its own reference; verify the
     // customer, R99 plan and charge on our integration, never trust webhook alone.
     const verified=await paystack('/transaction/verify/'+encodeURIComponent(ref));

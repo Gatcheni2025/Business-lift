@@ -137,7 +137,7 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
             ]))),
           if(reviewing)SliverPadding(padding:const EdgeInsets.fromLTRB(12,0,12,12),sliver:SliverList.list(children:[
             for(final entry in selected.values)reviewEntry(entry),
-            const Padding(padding:EdgeInsets.all(12),child:Text('Completed seller registrations can publish their selected range. Custom products and uploaded photos continue through catalogue review.',
+            const Padding(padding:EdgeInsets.all(12),child:Text('Products and photos publish automatically after seller verification and active product access.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ]))
           else if(rows.isEmpty)const SliverFillRemaining(hasScrollBody:false,child:Center(child:Text('No matching products. Try another search.')))
@@ -150,3 +150,4 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
         ]);
       }));
 }
+

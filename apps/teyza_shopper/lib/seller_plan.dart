@@ -18,9 +18,9 @@ class SellerPlanPage extends StatefulWidget {
  @override State<SellerPlanPage> createState()=>_SellerPlanState();
 }
 class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver {
- bool busy=false,paid=false,promoted=false,loading=true;
- String? error,paymentReference;
- int? promotionEndsAt,paidUntil;
+ bool busy=false,paid=false,complimentary=false,promoted=false,loading=true,introEligible=false;
+ String? error,paymentReference,renewalSetup;
+ int? promotionEndsAt,paidUntil,complimentaryUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
  bool get paystackAllowed=>!Platform.isIOS&&Platform.isAndroid&&teyzaPaymentChannel=='direct';
  String get purchaseLabel=>paystackAllowed?'Pay with Paystack':'Store billing coming soon';
@@ -32,8 +32,10 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  Future<void> refresh() async {
   try {
    final data=await api.call('seller_summary');
-   if(mounted)setState((){paid=data['listingPaid']==true;promoted=data['promotionActive']==true;
+   if(mounted)setState((){paid=data['listingPaid']==true;complimentary=data['complimentaryAccess']==true;promoted=data['promotionActive']==true;
     paidUntil=(data['paidUntil'] as num?)?.toInt();
+    complimentaryUntil=(data['complimentaryUntil'] as num?)?.toInt();
+    introEligible=data['introEligible']==true;renewalSetup=data['renewalSetup']?.toString();
     promotionEndsAt=(data['promotionEndsAt'] as num?)?.toInt();loading=false;});
   }catch(e){if(mounted)setState((){loading=false;error=mobileError(e);});}
  }
@@ -68,8 +70,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
    final result=await api.call('billing_confirm',{'reference':ref});
    if(result['paid']!=true)throw StateError('Paystack has not verified your payment.');
    paymentReference=null;await refresh();
-   if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content:Text('Payment verified. Your Teyza account is updated.')));
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+    result['paymentEnvironment']=='test'?'Test payment verified. It does not activate live selling.':'Payment verified. Your Teyza account is updated.')));
   }catch(e){if(mounted)setState(()=>error=mobileError(e));}
   finally{if(mounted)setState(()=>busy=false);}
  }
@@ -119,18 +121,25 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     title:const Text('Business membership active'),
     subtitle:Text(paidUntil==null?'You can list products.':
      'Paid through '+DateTime.fromMillisecondsSinceEpoch(paidUntil!).toLocal().toString().split(' ').first))),
+   if(paid&&['action_required','payment_failed','cancelled'].contains(renewalSetup))
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Check your renewal'),
+     subtitle:Text('Automatic renewal is not currently confirmed. Your current access remains available until its paid end date. Contact Teyza support for help.'))),
+   if(complimentary&&!paid)Card(child:ListTile(leading:const Icon(Icons.verified_outlined,color:Color(0xFF078B59)),
+    title:const Text('Temporary product access'),subtitle:Text(complimentaryUntil==null?
+     'An administrator granted temporary access. This is not a payment.':
+     'Access ends '+DateTime.fromMillisecondsSinceEpoch(complimentaryUntil!).toLocal().toString().split(' ').first+'. No payment was recorded.'))),
    if(paid&&paystackAllowed)Padding(
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
-   if(!paid)planCard(title:'Business membership',price:'R49 first month · then R99/month',
+   if(!paid)planCard(title:'Business membership',price:introEligible?'R49 first month · then R99/month':'R99/month',
     highlighted:true,benefits:const [
      'Add products, prices and available stock',
      'Make your verified shop shoppable in your local area',
      'Receive orders, enquiries, collection and delivery requests',
      'Manage your products from the seller dashboard',
-     'R99 monthly renewal after your first discounted month'
-    ],action:paystackAllowed?'Upgrade for R49 with Paystack':purchaseLabel,
+     'Standard renewal is R99 per month'
+    ],action:paystackAllowed?(introEligible?'Upgrade for R49 with Paystack':'Upgrade for R99 with Paystack'):purchaseLabel,
     onPressed:()=>beginCheckout(promotion:false)),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
@@ -147,8 +156,9 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      const Text('Finish the secure Paystack checkout in your browser, then return here.'),
      const SizedBox(height:12),
      OutlinedButton(onPressed:busy?null:confirm,child:const Text('I have paid · verify payment'))]))),
-   const Text('No charge at registration. Benefits activate only after server-side payment verification. Recurring billing starts at R99 after the introductory month; cancellation must be available. Store-distributed app purchases require approved store billing.',
+   const Text('No charge at registration. Benefits activate only after server-side payment verification. The introductory price applies only when eligible; standard renewal is R99 per month. Store-distributed app purchases require approved store billing.',
     style:TextStyle(fontSize:12,color:Color(0xFF66776A),height:1.5))
   ])),
  );
 }
+

@@ -1,6 +1,6 @@
-import {createOperations} from '/js/teyza-operations.js?v=R322';
-import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R322';
-import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R322';
+import {createOperations} from '/js/teyza-operations.js?v=R323';
+import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
+import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
   reauthenticateWithPopup,reauthenticateWithCredential,signOut,setPersistence,browserSessionPersistence}
   from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
@@ -128,7 +128,7 @@ async function decide(status){
   if(status==='approved'&&!$('reviewConfirmed').checked){notice('Confirm that you inspected both verification photos.','error');return;}
   const name=state.selected.shopName;
   if(!window.confirm(status==='approved'?`Approve ${name} and grant the verified owner badge?`:
-    `${status==='needs_new_photo'?'Request a new selfie from':'Reject the registration for'} ${name}? The seller will receive your review note.`))return;
+    `${status==='needs_new_photo'?'Request a new selfie from':'Reject the registration for'} ${name}? The seller will receive your recommendation.`))return;
   const ticket=state.ticket();busy=true;updateControls();
   try{
     await api('admin_seller_review',data);if(!state.current(ticket))return;
