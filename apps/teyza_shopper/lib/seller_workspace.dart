@@ -51,7 +51,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending',listingPlan='trial';int? trialEndsAt;bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -102,7 +102,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'trial';trialEndsAt=(results[0]['trialEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -172,7 +172,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
       photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';hasLocation=false;shopRating=null;ratingCount=0;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';listingPlan='free';listingPaid=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -233,8 +233,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(mounted&&uid==widget.session.userId)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
     }catch(_){/* Product drafting remains available when optional services are offline. */}
   }
+  Future<void> openUpgrade({bool promote=false}) async {
+    final uid=widget.session.userId;
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
+      session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza',showPromotion:promote)));
+    if(mounted&&uid==widget.session.userId)await refreshActivity();
+  }
   Future<void> chooseProducts() async {
     if(busy||draftError!=null)return;
+    if(!listingPaid){await openUpgrade();return;}
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
       session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
@@ -297,6 +304,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
+    if(!listingPaid){await openUpgrade();return;}
     final uid=loadedUid;if(uid==null||uid!=widget.session.userId)return;
     setState(()=>busy=true);
     try{
@@ -343,6 +351,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _edit([SellerDraft? existing]) async{
     if(busy)return;
+    if(!listingPaid){await openUpgrade();return;}
     final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
     final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));
@@ -454,11 +463,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ()=>selectSellerTab(1)),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
-    businessTile(Icons.workspace_premium_outlined,'Your 7-day shop trial',
-      'Trial starts after approval · no bank mandate',
-      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-        SellerPlanPage(session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
-        .then((_){if(mounted)refreshActivity();})),
+    businessTile(Icons.workspace_premium_outlined,'Business membership',
+      listingPaid?'Active paid seller · manage membership':'Free shop · upgrade when adding products',
+      ()=>openUpgrade()),
+    if(listingPaid)businessTile(Icons.campaign_outlined,'Promote your business · R29',
+      promotionActive?'Promotion active for seven days':'Increase local visibility for seven days',
+      ()=>openUpgrade(promote:true)),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
@@ -600,17 +610,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
-          if(listingPlan=='trial')Card(child:ListTile(
-            leading:Icon(trialEndsAt!=null&&trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?
-              Icons.timer_off_outlined:Icons.hourglass_bottom_outlined),
-            title:Text(trialEndsAt==null?'7-day trial starts on approval':
-              trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?'Your trial has expired':
-              '7-day trial active'),
-            subtitle:Text(trialEndsAt==null?
-              'Complete verification and wait for Teyza approval. No bank mandate needed.':
-              trialEndsAt!<=DateTime.now().millisecondsSinceEpoch?
-                'Shop listing and new orders are paused. A compliant paid renewal is required.':
-                'Expires on ${DateTime.fromMillisecondsSinceEpoch(trialEndsAt!).toLocal().toString().split(' ').first}. No automatic debit.'))),
+          if(!listingPaid)const Card(child:ListTile(
+            leading:Icon(Icons.storefront_outlined),
+            title:Text('Your business registration is free'),
+            subtitle:Text('Once approved, your shop can appear nearby. Upgrade for R49 when ready to add products.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -627,7 +630,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text('Plan: ${listingPlan=='basic'?'R99 Basic':listingPlan=='trial'?'7-day trial':'Trial required'}')),
+            label:Text(listingPaid?'Business membership active':'Free shop · upgrade to add products')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),

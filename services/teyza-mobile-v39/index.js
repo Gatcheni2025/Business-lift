@@ -12,6 +12,7 @@ const {defineSecret}=require('firebase-functions/params');
 const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
+const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -61,13 +62,21 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
    updateAuthUser:(uid,values)=>admin.auth().updateUser(uid,values),
    sendPasswordResetEmail:sendSetupEmail,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
+   getPaystackSecret:()=>paystackKey.value(),getPaystackPlanCode:()=>process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE||'',
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})
   .rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).jpeg({quality:82}).toBuffer()});
-exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
+exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
+  if(req.path==='/paystack-webhook'){
+    if(req.method!=='POST'){res.status(405).end();return;}
+    try{await service.paystackWebhook(req.rawBody,req.get('X-Paystack-Signature'),req.body);
+      res.status(200).json({ok:true});}
+    catch(error){res.status(error.status===401?401:503).json({error:'Webhook verification failed.'});}
+    return;
+  }
   if(req.method==='GET'){
     if(req.query.publicShops!==undefined){
       try{res.json({ok:true,...await service.publicDirectory(req.query.after||'')});}
@@ -91,9 +100,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.18.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.21.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:true,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:true,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'manual_receipt',subscriptionMonthlyCents:9900,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionCents:9900,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:Boolean(paystackKey.value()&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE),adminProductReview:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{

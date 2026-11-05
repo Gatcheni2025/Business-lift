@@ -4,24 +4,31 @@ const offers=require('./shop-services');
 const normalizedPhone=value=>String(value||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27');
 const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup','awaiting_subscription'].includes(shop.status)&&
  !(shop.status==='suspended'&&['onboarding','owner_review','approval'].includes(shop.moderationSource)));
-// New sellers choose Free or R99 Basic. A plan selection is not a payment.
-// Existing legacy shops with no plan field retain their previous publication
-// treatment until the business completes an explicit migration.
+// Verified, approved shops can appear for free with no catalogue.
+// Product publishing and orders require a server-verified paid membership.
 function period(now) { return new Date(now+2*3600000).toISOString().slice(0,7); }
-const TRIAL_MS=7*24*60*60*1000;
-function trialActive(account,now=Date.now()){
- return account?.listingPlan==='trial' &&
-   Number.isFinite(account.trialStartedAt) && account.trialStartedAt>0 &&
-   Number.isFinite(account.trialEndsAt) && account.trialEndsAt-account.trialStartedAt===TRIAL_MS &&
-   now>=account.trialStartedAt && now<account.trialEndsAt;
-}
+const TRIAL_MS=7*24*60*60*1000; // historical compatibility only
+const trialActive=()=>false;
 function entitled(uid,account,billing,now=Date.now()) {
- // Existing legacy contracts without a plan are maintained until individually
- // migrated; new registrations MUST use a non-renewable seven-day trial.
- if(!account||!Object.prototype.hasOwnProperty.call(account,'listingPlan'))return false;
- if(trialActive(account,now))return true;
- return account.listingPlan==='basic'&&billing?.ownerUid===uid&&billing.status==='paid'&&
-   billing.monthlyCents===9900&&billing.latestPeriod===period(now);
+ if(account?.listingPlan!=='basic'||billing?.ownerUid!==uid||billing.status!=='paid')return false;
+ // Sandbox transactions are for QA only. Never activate public selling
+ // on the production Firebase project using a Paystack test charge.
+ if(billing.paymentEnvironment==='test')return false;
+ // Paystack membership is valid for one paid calendar month from charge.
+ if(Number.isFinite(billing.paidUntil))return now<billing.paidUntil;
+ // Historical manual invoices and mandates do not prove membership.
+ // Only gateway-verified payments carry a server-computed paidUntil.
+ return false;
+}
+function complimentary(uid,account,billing,now=Date.now()){
+ return account?.uid===uid&&account.approvalStatus==='approved'&&
+  billing?.ownerUid===uid&&billing.adminComplimentaryStatus==='active'&&
+  typeof billing.adminComplimentaryReason==='string'&&billing.adminComplimentaryReason.length>=15&&
+  typeof billing.adminComplimentaryBy==='string'&&billing.adminComplimentaryBy!==uid&&
+  Number.isFinite(billing.adminComplimentaryUntil)&&now<billing.adminComplimentaryUntil;
+}
+function eligible(uid,account,billing,now=Date.now()){
+ return entitled(uid,account,billing,now)||complimentary(uid,account,billing,now);
 }
 function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
  const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
@@ -33,16 +40,16 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
  const reviewed=(!modern&&!verification)||(verification?.ownerUid===uid&&verification.status==='approved');
  const approved=registered&&account.approvalStatus==='approved'&&reviewed;
  const blocked=held(shop)||setup.moderationBlocked===true||account?.approvalStatus==='rejected';
- const hasListing=entitled(uid,account,billing,now);
- // Listing access is derived server-side on every directory read and order.
- // An expired trial cannot remain visible merely because its stored shop
- // projection is still marked active. Approval itself is not a paid entitlement.
- const live=Boolean(ready&&approved&&!blocked&&hasListing);
- return {registered,ready,approved,hasListing,live,status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':!hasListing?'awaiting_subscription':'active'};
+ const hasListing=eligible(uid,account,billing,now);
+ // Verified business discovery is free. Catalogue checkout is a separate entitlement.
+ const live=Boolean(ready&&approved&&!blocked),canSell=Boolean(live&&hasListing);
+ return {registered,ready,approved,hasListing,live,canSell,
+   status:blocked?'suspended':!ready?'pending_setup':!approved?'pending_review':'active'};
 }
 function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
- if(!state(uid,account,setup,verification,shop,billing,now).live)D.fail(409,'This shop is awaiting approval or verification.');
+ if(!state(uid,account,setup,verification,shop,billing,now).canSell)
+   D.fail(409,'This shop needs seller approval and an active Paystack membership or recorded time-limited complimentary access before accepting orders.');
  return shop;
 }
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
@@ -67,8 +74,8 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  const next={...(shop||{}),sellerUid:uid,name:account.shopName,address:account.address||'',
   area:shop?.address&&sameAddress(shop.address,account.address)?shop.area||account.address:account.address||'',
   shopCategory:account.category,status:result.status,approvalStatus:result.approved?'approved':'pending',
-  sponsored:result.live&&entitled(uid,account,billing,now)&&account.listingPlan==='basic',
-  sellingEnabled:result.live&&(setup.requiredVersion===2||shop?.sellingEnabled===true),
+  sponsored:false, // Only independently purchased R29 promotions are sponsored.
+  sellingEnabled:result.canSell&&(setup.requiredVersion===2||shop?.sellingEnabled===true),
   identityVerified:result.approved,verificationStatus:result.approved?'approved':'pending_review',
   catalogueEnabled:shop?.catalogueEnabled===true,
   pickupEnabled:settings.pickupEnabled??shop?.pickupEnabled??true,
@@ -93,7 +100,14 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  if(pin)Object.assign(next,pin);
  else if(!location&&(!shop?.address||sameAddress(shop.address,account.address))&&typeof shop?.city==='string')next.city=shop.city;
  if(front?.ownerUid===uid&&front.photoId)next.photoUrl=require('./shop-front').publicUrl(uid,front.photoId);
- Object.assign(next,catalogue.range(uid,next,drafts,{enabled:result.live,removedProductId}));
+ Object.assign(next,catalogue.range(uid,next,drafts,{enabled:result.canSell,removedProductId}));
+ // New shops require admin catalogue review; legacy reviewed shops retain
+ // existing products until explicitly submitted for fresh R322 review.
+ if(account.catalogueApprovalRequired===true||Array.isArray(shop?.reviewedProductIds)){
+   const approved=new Set(Array.isArray(shop?.reviewedProductIds)?shop.reviewedProductIds:[]);
+   next.products=(next.products||[]).filter(p=>approved.has(p.id));
+   next.productHighlights=(next.productHighlights||[]).filter(p=>approved.has(p.id));
+ }
  return next;
 }
 function publicRow(uid,shop){
@@ -107,4 +121,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,trialActive,TRIAL_MS};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,eligible,complimentary,trialActive,TRIAL_MS};

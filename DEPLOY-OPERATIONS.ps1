@@ -10,7 +10,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Backend tests failed; nothing has been deploye
 node .\tools\admin-release\node_modules\firebase-tools\lib\bin\firebase.js deploy --config .\firebase.teyza-mobile-v39.json --only functions:teyza-mobile:teyzaMobile --project business-lift-3c19c
 if ($LASTEXITCODE -ne 0) { throw 'Operations backend deployment failed; admin website was not changed.' }
 $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile' -TimeoutSec 30
-if ($health.version -ne '3.18.0' -or $health.adminUsers -ne $true -or $health.adminSellerDocuments -ne $true -or $health.sellerMandates -ne $true -or $health.adminOperations -ne $true -or $health.subscriptionMonthlyCents -ne 9900) { throw 'Operations backend capability check failed.' }
+if ($health.adminOperations -ne $true -or $health.adminProductReview -ne $true -or $health.adminPaystackVerify -ne $true -or $health.manualReceiptsRetired -ne $true -or $health.billingMode -ne 'paystack_checkout') { throw 'Paystack admin backend capability check failed; do not publish the updated admin website.' }
 node .\tools\admin-release\run.cjs deploy
 if ($LASTEXITCODE -ne 0) { throw 'Admin publication stopped; read the message above.' }
 Write-Host 'Open https://teyza.co.za/admin and use your authorised administrator account.'

@@ -6,7 +6,6 @@ import 'seller_onboarding.dart';
 import 'seller_firestore.dart';
 import 'seller_phone.dart';
 import 'shop_address.dart';
-import 'seller_plan.dart';
 
 class SellerRegistrationPage extends StatefulWidget {
   final ShopperSession session;
@@ -41,9 +40,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
-      // Everyone registers for free first; choose whether to request visibility.
-      await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(session:widget.session,api:widget.api,businessType:category)));
-      if(!mounted||uid!=widget.session.userId)return;
+      // Free registration proceeds directly to identity and phone verification.
       await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,api:widget.api,legalType:legalType,
         shop:SellerShop(name.text.trim(),category,'${unit.text.trim().isEmpty?'':unit.text.trim()+', '}${selected.address}','pending','not_listed',phone:normalizeMobile(phone.text),
           companyName:data['companyName'] as String,registrationNumber:data['registrationNumber'] as String))));
@@ -61,7 +58,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           Wrap(spacing:12,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
             Text('1  Shop details',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
             Icon(Icons.arrow_forward_rounded,color:Color(0xFF83D9AE),size:17),
-            Text('2  Choose plan · verify owner',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
+            Text('2  Verify owner · free',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5))])])),
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -91,7 +88,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           title:const Text('I confirm that these are my shop’s details and shoppers may see this business address and map location.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
-        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After verification, an active paid listing can be discovered. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
+        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After approval your shop can appear nearby for free. Upgrade only when adding products; promotions are optional for paid members. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));

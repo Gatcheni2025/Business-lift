@@ -1,6 +1,15 @@
 name: Teyza operations admin R319
 
 on:
+  push:
+    branches:
+      - feat/teyza-free-signup-paystack-products-promotion-20261104
+    paths:
+      - 'web/teyza-admin/**'
+      - 'tools/admin-release/**'
+      - 'services/teyza-mobile-v39/**'
+      - 'docs/TEYZA_PAYSTACK_ADMIN_R321.md'
+      - '.github/workflows/teyza-admin-approvals.yml'
   pull_request:
     paths:
       - 'web/teyza-admin/**'
@@ -31,6 +40,8 @@ jobs:
       - name: Install pinned deployment and browser tooling
         working-directory: tools/admin-release
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Parse scoped Paystack admin Bash deploy helper
+        run: bash -n DEPLOY-PAYSTACK-ADMIN.sh
       - name: Validate admin modules, Hosting preservation and reviewer role handling
         working-directory: tools/admin-release
         run: |

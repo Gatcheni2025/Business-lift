@@ -31,12 +31,77 @@ const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
 const invoice={sellerUid:'seller1',period:'2026-10',consentReference:'Recorded mandate A',consentConfirmed:true};
 const payment={sellerUid:'seller1',period:'2026-10',amountCents:9900,reference:'Bank-TXN-001',receiptVerified:true};
 test('Operations reject sellers, stale admins, phone bootstrap tokens and unverified reviewers',async()=>{const f=setup();for(const actor of [{uid:'seller1',email_verified:true},{...admin,auth_time:now/1000-301},{...admin,teyzaPhoneBootstrap:true},{...admin,email_verified:false}])await rejects(f.call('ops_sellers',{},actor),actor.teyzaAdmin&&actor.email_verified?401:403);});
-test('Invoice requires approval and consent and is idempotent per seller/month',async()=>{const f=setup();await rejects(f.call('ops_invoice',{...invoice,consentConfirmed:false}),422);await rejects(f.call('ops_invoice',{...invoice,sellerUid:'seller2'}),409);await f.call('ops_invoice',invoice);assert((await f.call('ops_invoice',invoice)).alreadyCreated);const data=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(data.entries.length,1);assert.equal(data.entries[0].balanceCents,9900);assert.equal(data.billing.monthlyCents,9900);});
-test('Payments need an invoice, a verified receipt and exact integer cents',async()=>{const f=setup();await rejects(f.call('ops_payment',payment),409);await f.call('ops_invoice',invoice);await rejects(f.call('ops_payment',{...payment,receiptVerified:false}),422);await rejects(f.call('ops_payment',{...payment,amountCents:99.5}),422);await rejects(f.call('ops_payment',{...payment,amountCents:9901}),409);});
-test('Partial payment, duplicate receipt retry and full payment reconcile without double credit',async()=>{const f=setup();await f.call('ops_invoice',invoice);const partial={...payment,amountCents:4000};await f.call('ops_payment',partial);assert((await f.call('ops_payment',partial)).alreadyRecorded);await rejects(f.call('ops_payment',payment),409);await f.call('ops_payment',{...payment,amountCents:5900,reference:'Bank-TXN-002'});const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(d.entries.length,3);assert.equal(d.entries.at(-1).balanceCents,0);assert.equal(d.billing.status,'paid');});
-test('Receipt references cannot be reassigned to another seller',async()=>{const f=setup();await f.call('ops_invoice',invoice);await f.call('ops_payment',payment);await rejects(f.call('ops_payment',{...payment,sellerUid:'seller2'}),409);});
-test('Corrections retain the original entry, restore invoice balance and cannot repeat',async()=>{const f=setup();await f.call('ops_invoice',invoice);await f.call('ops_payment',payment);const d=await f.call('ops_seller_detail',{sellerUid:'seller1'}),p=d.entries.find(e=>e.kind==='payment');await f.call('ops_payment_reverse',{sellerUid:'seller1',paymentId:p.id,reason:'Recorded against the wrong receipt'});await rejects(f.call('ops_payment_reverse',{sellerUid:'seller1',paymentId:p.id,reason:'Repeat'}),409);const next=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(next.entries.at(-1).balanceCents,9900);assert.equal(next.entries.length,3);assert.equal(next.billing.status,'needs_reconciliation');});
-test('Seller statements are bound to the authenticated owner even if another UID is supplied',async()=>{const f=setup();await f.call('ops_invoice',invoice);const d=await f.call('seller_billing_statement',{sellerUid:'seller1'},{uid:'seller2',email_verified:true});assert.equal(d.seller.sellerUid,'seller2');assert.equal(d.entries.length,0);});
+test('Legacy mandate and manual payment endpoints refuse to change billing',async()=>{
+ const f=setup();
+ const before=structuredClone([...f.db.records]);
+ for(const [action,data] of [['ops_invoice',invoice],['ops_payment',payment],
+   ['ops_payment_reverse',{sellerUid:'seller1',paymentId:'payment_a',reason:'undo'}]])
+   await rejects(f.call(action,data),410);
+ assert.deepEqual([...f.db.records],before,'Manual payment actions must never create a paid entitlement');
+});
+test('Product approvals queue shows a verified Paystack seller and submitted catalogue',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',sellingEnabled:true});
+ f.db.records.set('teyzaSellerOnboarding/seller1',{completedAt:now});
+ f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',status:'approved'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',
+   paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:now+86400000});
+ f.db.records.set('teyzaCatalogueSubmissions/seller1',{ownerUid:'seller1',
+   status:'pending_review',products:[{id:'catalog_milk',name:'Milk',category:'Dairy',priceCents:2500,stock:3}]});
+ const ref='TZM_'+('1'.repeat(26));
+ f.db.records.set('teyzaPaystackPayments/'+ref,{ownerUid:'seller1',status:'pending',
+   kind:'intro',amountCents:4900,createdAt:now});
+ const q=await f.call('ops_catalogue_queue');
+ assert.equal(q.submissions.length,1);assert.equal(q.submissions[0].productCount,1);
+ assert.equal(q.submissions[0].paidMembership,true);
+ const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.membershipPaid,true);assert.equal(d.canApproveCatalogue,true);
+ assert.equal(d.catalogue.products[0].name,'Milk');
+ assert.equal(d.payments[0].reference,ref);assert.equal(d.paystackMode,'test');
+ assert.equal(d.mandate,undefined,'Bank mandate information must not be returned to new admin billing');
+});
+test('Product approvals queue and seller detail never treat bank receipts or sandbox payments as paid',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaCatalogueSubmissions/seller1',{ownerUid:'seller1',
+   status:'pending_review',products:[]});
+ f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:'2026-10'});
+ let q=await f.call('ops_catalogue_queue');assert.equal(q.submissions[0].paidMembership,false);
+ let d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.membershipPaid,false);assert.equal(d.canApproveCatalogue,false);
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentEnvironment:'test'});
+ q=await f.call('ops_catalogue_queue');assert.equal(q.submissions[0].paidMembership,false);
+ d=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(d.membershipPaid,false);
+});
+test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
+ const f=setup(),input={sellerUid:'seller1',days:7,
+  reason:'Approved small business community launch demonstration',confirmed:true};
+ await rejects(f.call('ops_complimentary_access',input,{...admin,teyzaAdmin:false}),403);
+ await rejects(f.call('ops_complimentary_access',input,{...admin,auth_time:now/1000-301}),401);
+ await rejects(f.call('ops_complimentary_access',{...input,confirmed:false}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,reason:'brief'}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,days:365}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,sellerUid:'seller2'}),409);
+ const result=await f.call('ops_complimentary_access',input);
+ assert.equal(result.granted,true);assert.equal(result.paid,false);
+ assert.equal(result.until,now+7*86400000);
+ const billing=f.db.records.get('teyzaBilling/seller1');
+ assert.equal(billing.status,undefined,'Complimentary access must not falsify paid billing');
+ assert.equal(billing.adminComplimentaryBy,'admin1');
+ assert.equal(billing.adminComplimentaryUntil,result.until);
+ assert([...f.db.records.keys()].some(p=>p.startsWith('teyzaOperationsAudit/')));
+ await rejects(f.call('ops_complimentary_access',input),409);
+ const detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.membershipPaid,false);
+ assert.equal(detail.complimentaryAccess,true);
+ const previous=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...previous,approvalStatus:'rejected'});
+ const blocked=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(blocked.complimentaryAccess,false,'A revoked shop identity approval blocks complimentary access');
+});
+test('Seller statements are bound to the authenticated owner even when another UID is supplied',async()=>{const f=setup();f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-10',{ownerUid:'seller1',kind:'subscription_invoice',createdAt:now,debitCents:9900,creditCents:0});const d=await f.call('seller_billing_statement',{sellerUid:'seller1'},{uid:'seller2',email_verified:true});assert.equal(d.seller.sellerUid,'seller2');assert.equal(d.entries.length,0);});
 test('Finance decisions require consent, approved seller, expected status and capped amounts',async()=>{const f=setup(),path='teyzaCreditEnquiries/seller1/requests/r1';f.db.records.set(path,{ownerUid:'seller1',amountCents:100000,purpose:'Stock',status:'enquiry_received',consent:true});const data={path,expectedStatus:'enquiry_received',status:'approved_in_principle',approvedAmountCents:50000,note:'Manual review complete; subject to lender terms',reviewConfirmed:true};await rejects(f.call('ops_finance_decide',{...data,approvedAmountCents:100001}),409);await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'under_review'}),409);await f.call('ops_finance_decide',data);assert.equal(f.db.records.get(path).disbursementStatus,'not_disbursed');await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'approved_in_principle'}),409);});
 test('Finance cannot approve own application or read arbitrary document paths',async()=>{const f=setup();await rejects(f.call('ops_finance_decide',{path:'users/seller1',note:'x',status:'declined'}),422);await rejects(f.call('ops_finance_decide',{path:'teyzaCreditEnquiries/admin1/requests/r1',note:'x',status:'declined',expectedStatus:'enquiry_received'}),403);});
 test('Support updates protect concurrent edits and keep internal notes separate from seller replies',async()=>{const f=setup();const c=await f.call('ops_support_create',{sellerUid:'seller1',subject:'Login issue',message:'User reported a sign-in problem'});await f.call('ops_support_update',{ticketId:c.ticketId,revision:0,status:'in_progress',priority:'high',note:'Investigating'});await rejects(f.call('ops_support_update',{ticketId:c.ticketId,revision:0,status:'resolved',priority:'normal',note:'Old edit'}),409);const d=await f.call('ops_support_detail',{ticketId:c.ticketId});assert.equal(d.notes[0].note,'Investigating');const own=await f.call('seller_support_list',{}, {uid:'seller1',email_verified:true});assert(!JSON.stringify(own).includes('Investigating'));});

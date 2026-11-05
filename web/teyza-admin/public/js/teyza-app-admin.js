@@ -1,6 +1,6 @@
-import {createOperations} from '/js/teyza-operations.js?v=R319';
-import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R319';
-import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R319';
+import {createOperations} from '/js/teyza-operations.js?v=R322';
+import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R322';
+import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R322';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
   reauthenticateWithPopup,reauthenticateWithCredential,signOut,setPersistence,browserSessionPersistence}
   from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
@@ -42,7 +42,8 @@ function updateControls(){
   $('viewSelfie').disabled||=!s||own||s.expired;
   $('rejectSeller').disabled||=!s||own;
   $('requestPhoto').disabled||=!s||own;
-  $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked;
+  $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||
+    (s?.phoneVerificationRequired===true&&s?.phoneVerified===false);
   $('loadMore').hidden=!state.next;
   for(const [key,id] of [['identity','Identity'],['selfie','Selfie']]){
     const done=state.views.has(key);$('view'+id).classList.toggle('viewed',done);
@@ -90,7 +91,8 @@ function selectSeller(row){
   set('sellerStatus',row.expired?'New selfie needed':'Awaiting review');
   $('decisionHint').textContent=row.expired?'This selfie expired. Add a note and request a new selfie.':!row.evidenceId?
     'No current identity document was found. The seller must submit their ID, passport or company document.':
-    'Open both photos to enable approval. Verified mobile registration is checked by the server.';
+    row.phoneVerificationRequired===true&&row.phoneVerified===false?'The seller must first verify the registered mobile number using SMS OTP. ID and selfie review alone cannot complete approval.':
+    'Open the current ID/passport and selfie. The server checks both view receipts before approval.';
   drawQueue();
 }
 function showIdentityDetails(details){
@@ -133,7 +135,12 @@ async function decide(status){
     resetDetails();state.select(null);busy=false;
     notice(status==='approved'?'Seller approved. The owner will receive a notification.':'Review saved. The owner will receive your note.','success');
     await loadQueue();
-  }catch(error){if(state.current(ticket)){clearViews();failed(error);if(error.status===409){busy=false;await loadQueue();}}}
+  }catch(error){if(state.current(ticket)){
+    clearViews();failed(error);
+    if(error.status===409){busy=false;await loadQueue();
+      notice(error.message+' Review the current evidence and registered phone OTP, then retry.','error');
+    }
+  }}
   finally{if(state.current(ticket)){busy=false;updateControls();}}
 }
 async function authorise(user){

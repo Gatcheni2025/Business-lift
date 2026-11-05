@@ -5,29 +5,38 @@ r=Path(__file__).resolve().parents[1];out=r/'dist/TEYZA_APP_FIRST_WEBSITE_202610
 entries={}
 for p in (r/'web/app-first/public').rglob('*'):
  if p.is_file():entries['public/'+p.relative_to(r/'web/app-first/public').as_posix()]=p.read_bytes()
-for name in ['firebase-client.cjs','hosting-patch.cjs','check-live-seo.cjs','paths.json','run.cjs','package.json','package-lock.json']:
+for name in ['firebase-client.cjs','hosting-patch.cjs','check-live-seo.cjs','paths.json','run.cjs','store-links-patch.cjs','store-links.test.cjs','package.json','package-lock.json']:
  entries['tools/app-first-release/'+name]=(r/'tools/app-first-release'/name).read_bytes()
 for name in ['DEPLOY-WEBSITE.ps1','ROLLBACK-WEBSITE.ps1']:entries[name]=(r/'tools/app-first-release'/name).read_bytes()
-entries['START-HERE.txt']=('''TEYZA SPAZA + WHOLESALE WEBSITE UPDATE — 2 NOVEMBER 2026
+entries['DEPLOY-APP-STORES.ps1']=(r/'DEPLOY-APP-STORES.ps1').read_bytes()
+entries['STORE-LINKS-README.md']=(r/'docs/TEYZA_STORES_WEBSITE.md').read_bytes()
+entries['START-HERE.txt']=('''TEYZA GOOGLE PLAY + APP STORE WEBSITE UPDATE — 4 NOVEMBER 2026
 
-1. Extract this ZIP to a folder on your PC.
-2. Install Node.js 22 or newer if needed.
-3. Open PowerShell in the extracted folder.
+1. Extract this ZIP into a new folder (do not run from the ZIP archive).
+2. Use Node.js 22 or newer and your authorized Firebase CLI account.
+3. Open PowerShell in the extracted folder containing DEPLOY-APP-STORES.ps1.
 4. Run: firebase login
-5. Run: Unblock-File -LiteralPath '.\\DEPLOY-WEBSITE.ps1'
-6. Run: .\\DEPLOY-WEBSITE.ps1
+5. Run: .\\DEPLOY-APP-STORES.ps1
 
-The helper uses your authorized Firebase CLI account for project business-lift-3c19c. It clones the current live site, changes only the reviewed marketing pages/images and registration redirects, verifies that unrelated files remain intact, and publishes. This website overlay does not deploy mobile builds, Google Places or wholesale Functions, account deletion code, or Firebase security rules. Deploy the new wholesale backend separately before inviting spaza owners to place stock orders.
+This scoped helper clones the current LIVE teyza.co.za Firebase Hosting version.
+It updates ONLY three files: /index.html, /download.html and /assets/app-first.css.
+It verifies all other files are unchanged and preserves ALL existing rewrites, routes, security headers, admin pages, backend functions and user accounts.
 
-IMPORTANT: Do not run plain firebase deploy with this partial public folder.
+Do NOT run plain "firebase deploy --only hosting": this archive is a partial website overlay.
+Do NOT run the legacy DEPLOY-WEBSITE.ps1 for this store-button-only update; it manages many more pages.
 
-This package includes the refreshed spaza-to-wholesaler website, new business-type registration descriptions, and private B2B pricing safeguards. The public store listings were not confirmed live when packaged. Android is labelled early access for approved testers; iPhone is labelled coming soon. Update these labels/links when the public store releases are available. Website registration moves to app instructions; existing admin and authenticated workspace pages are preserved.
+Play listing: https://play.google.com/store/apps/details?id=com.asiyedriver.asiye
+App Store: https://apps.apple.com/za/app/id6827037733
+Android test track: https://play.google.com/apps/testing/com.asiyedriver.asiye
 
-After success, check the homepage, /download.html, /register.html and /sitemap.xml. Verify both www.teyza.co.za and teyza.co.za. Submit the sitemap in Google Search Console and Bing Webmaster Tools after verifying domain ownership. Search engines decide when to index and rank pages; rankings are not guaranteed.
+Store link visibility is distinct from public release approval. Some links may return not-found or unavailable until each store completes its review and regional publication.
+After publishing, check https://teyza.co.za/ and https://teyza.co.za/download.html.
 
-Rollback (only if this deployment is still live): .\\ROLLBACK-WEBSITE.ps1
-Keep hosting-backup-app-first.json after publishing; it identifies the preceding release.
-''').encode()
+Rollback if this remains the latest live website release:
+    node .\\tools\\app-first-release\\store-links-patch.cjs rollback
+Keep the generated local teyza-store-links-backup.json.
+See STORE-LINKS-README.md for detailed instructions.
+''' ).encode()
 entries['IMPLEMENTATION-NOTES.md']=(r/'docs/TEYZA_APP_FIRST_WEBSITE.md').read_bytes()
 entries['FILE-HASHES.json']=(json.dumps({name:hashlib.sha256(data).hexdigest() for name,data in entries.items()},indent=2)+'\n').encode()
 with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:

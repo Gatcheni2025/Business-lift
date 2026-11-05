@@ -2,6 +2,16 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 firebase functions:secrets:get TEYZA_GOOGLE_PLACES_KEY --project business-lift-3c19c | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'The existing Google Places server key is not available. Check TEYZA_GOOGLE_PLACES_KEY in this Firebase project before deploying. Keep the existing verification encryption key.' }
+firebase functions:secrets:get TEYZA_PAYSTACK_SECRET_KEY --project business-lift-3c19c | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Configure TEYZA_PAYSTACK_SECRET_KEY in Firebase Secret Manager before deploying. Never put the secret in Git or chat.' }
+$planEnvFile = Join-Path $PSScriptRoot 'services/teyza-mobile-v39/.env.business-lift-3c19c'
+if (-not (Test-Path -LiteralPath $planEnvFile)) {
+  throw 'Create a local services/teyza-mobile-v39/.env.business-lift-3c19c with TEYZA_PAYSTACK_MONTHLY_PLAN_CODE set to the verified ZAR R99 monthly Paystack test plan code.'
+}
+$planFileText = Get-Content -LiteralPath $planEnvFile -Raw
+if ($planFileText -notmatch '(?m)^TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_[A-Za-z0-9]+\s*$') {
+  throw 'The local Paystack plan setting must contain a valid PLN_ identifier. No payment keys belong in the env file.'
+}
 npm ci --prefix .\services\teyza-mobile-v39 --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 npm test --prefix .\services\teyza-mobile-v39
@@ -12,15 +22,20 @@ $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudf
 $catalogue = Get-Content -LiteralPath '.\services\teyza-mobile-v39\catalogue.json' -Raw | ConvertFrom-Json
 $expectedProducts = @($catalogue.products).Count
 $expectedPhotos = @($catalogue.photos.PSObject.Properties).Count
-if ($health.ok -ne $true -or $health.version -ne '3.18.0' -or $health.sellerOnboarding -ne $true -or
+if ($health.ok -ne $true -or $health.version -ne '3.20.0' -or $health.sellerOnboarding -ne $true -or
     $health.catalogueProducts -ne $expectedProducts -or $health.catalogueRevision -ne $catalogue.version -or $health.cataloguePhotos -ne $expectedPhotos) {
   throw 'Deployment returned unexpected service health. Do not distribute the app as connected.'
 }
 if ($health.verificationUploads -ne $true) { throw ('Photo storage is not ready (' + $health.uploadStatus + '). Open Firebase Storage for business-lift-3c19c, choose Get started, US-CENTRAL1 and production mode, then retry. Keep the existing encryption key.') }
 if ($health.adminUsers -ne $true -or $health.adminSellerDocuments -ne $true) { throw 'Administrator user and document capabilities did not activate.' }
 if ($health.shopFrontPhotos -ne $true) { throw 'Shop-front photo service was not activated.' }
-if ($health.chatModeration -ne $true -or $health.sevenDayTrial -ne $true -or $health.shopperDeletionProfileClear -ne $true -or $health.appleRevocationServer -ne $true -or $health.onceOnlyShopperIdentity -ne $true -or $health.twoWayChatNotifications -ne $true -or $health.wholesaleConnections -ne $true -or $health.strictSevenDayMembership -ne $true) { throw 'New Apple review requirements are not active in Firebase yet.' }
+if ($health.chatModeration -ne $true -or $health.sevenDayTrial -ne $false -or $health.shopperDeletionProfileClear -ne $true -or $health.appleRevocationServer -ne $true -or $health.onceOnlyShopperIdentity -ne $true -or $health.twoWayChatNotifications -ne $true -or $health.wholesaleConnections -ne $true -or $health.strictSevenDayMembership -ne $false) { throw 'New Apple review requirements are not active in Firebase yet.' }
 if ($health.accountDeletion -ne $true -or $health.accountDeletionAuthLock -ne $true -or $health.deletedUserReregister -ne $true -or $health.shopperSavedAddresses -ne $true -or $health.approvedFreeDiscovery -ne $true -or $health.freeSellerPlans -ne $true -or $health.paidAreaVisibility -ne $true -or $health.wholesaleSourcing -ne $true -or $health.protectedWholesalePrices -ne $true) { throw 'Updated deletion, Free/Basic plans and paid discovery are not active. Keep the app out of release.' }
 if ($health.approvalRequired -ne $true -or $health.shopLocations -ne $true -or $health.addressAutocomplete -ne $true -or
     $health.shopServices -ne $true -or $health.orderQuotes -ne $true -or $health.orderInboxAlways -ne $true) { throw 'The current approval, shop-service, order quote and order inbox features were not activated. Deploy this latest kit before building the current app release.' }
+if ($health.billingMode -ne 'paystack_checkout' -or $health.paystackCheckoutAvailable -ne $true -or
+    $health.subscriptionMonthlyCents -ne 9900 -or $health.introductoryFirstMonthCents -ne 4900 -or
+    $health.promotionSevenDaysCents -ne 2900) {
+  throw 'R320 Paystack configuration is not ready. Verify the test secret, R99 plan and R49/R29 prices. Do not distribute a payment-enabled build.'
+}
 Write-Host "Teyza is responding with approval-required publication, full-address autocomplete, shop locations, $expectedProducts catalogue products and $expectedPhotos reference photos."

@@ -96,7 +96,7 @@ Future<List<Map<String,dynamic>>> fetchTeyzaPublicDirectory({http.Client? client
           row['status']!='active'||row['approvalStatus']!='approved'||row['identityVerified']!=true||
           row['name'] is! String||(row['name'] as String).trim().length<2)continue;
         shops.add({...row,'shopCategory':row['shopCategory']=='wholesale'?'wholesale':['retail','variety','other-retail'].contains(row['shopCategory'])?'variety':'spaza',
-          'photoUrl':publishedMerchantPhoto(row),'whatsappPhone':'','sponsored':false});
+          'photoUrl':publishedMerchantPhoto(row),'whatsappPhone':'','sponsored':row['sponsored']==true});
       }
       final next=data['next'];if(next==null||next=='')break;
       if(next is! String||next==cursor)throw const FormatException('Shop directory pagination did not advance.');
