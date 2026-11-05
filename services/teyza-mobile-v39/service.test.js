@@ -615,7 +615,7 @@ test('Approval recreates a missing listing with the prepared products, services,
  const listing=(await service.publicDirectory()).entries.find(s=>s.id==='buyer1');
  assert.equal(listing.latitude,-29.7402);assert.equal(listing.longitude,30.992);assert.equal(listing.area,'KwaMashu');assert.equal(listing.city,'Durban');
  assert.equal(listing.products.length,0,'Identity review must not publish product drafts');
- await service.execute(newOwner,'catalogue_submit');
+ await service.execute({...newOwner,email_verified:true},'catalogue_submit');
  await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
  const approved=(await service.publicDirectory()).entries.find(x=>x.id==='buyer1');
  assert.equal(approved.products[0].priceCents,3000);
@@ -649,7 +649,7 @@ test('Pausing for a new owner review preserves approved product photos and the r
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
  await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
- await service.execute(newOwner,'catalogue_submit');
+ await service.execute({...newOwner,email_verified:true},'catalogue_submit');
  await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
  const order=await service.execute({...buyer,uid:'customer2'},'order_request',{shopId:'buyer1',requestId:'reserved',mode:'collection',phone:'0712345678',items:[{id:'catalog_milk-2-l',quantity:1}]});
  await service.execute({...newOwner,email_verified:true},'order_update',{orderId:order.id,status:'confirmed'});
@@ -708,7 +708,7 @@ test('Completing setup and seller identity review still require separate product
  await approve(service,db);
  shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(shop.status,'active');
  assert.equal(shop.products.length,0,'Unreviewed catalogue cannot appear after identity approval');
- await service.execute(newOwner,'catalogue_submit');
+ await service.execute({...newOwner,email_verified:true},'catalogue_submit');
  assert.equal(db.records.get('teyzaPublicShops/buyer1').products.length,0);
  await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
  shop=db.records.get('teyzaPublicShops/buyer1');
