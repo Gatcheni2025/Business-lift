@@ -39,7 +39,9 @@ for p in PUBLIC.glob('*.html'):
   assert page.schemas and 'aggregateRating' not in text
   assert 'actual' in text.lower() and 'class="p-hero"' in text
   assert 'p-cta-band' in text and 'p-feature-grid' in text
-  assert 'Field team' not in text and 'href="/agents.html"' not in text
+  before_footer,footer=text.split('<footer ',1)
+  assert 'For field agents' not in before_footer and 'href="/agents.html"' not in before_footer
+  assert '<a href="/agents.html">Vacancy</a>' in footer
   assert 'Get the Teyza app ↗' not in text
   assert 'https://apps.apple.com/za/app/id6827037733' in page.links
   assert 'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye' in page.links
@@ -58,3 +60,4 @@ assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_
 for p in PUBLIC.rglob('*'):
  if p.is_file():assert p.read_bytes()==(ROOT/p.relative_to(PUBLIC)).read_bytes(),p
 print('Marketing pages, links, image metadata, JSON-LD, sitemap, registration removal and root/overlay parity pass.')
+

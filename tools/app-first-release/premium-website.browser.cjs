@@ -32,9 +32,10 @@ async function main(){
    const layout=await page.evaluate(()=>{
     const el=document.documentElement;
     return {viewport:innerWidth,scrollWidth:el.scrollWidth,h1:document.querySelectorAll('h1').length,
-      fieldLinks:[...document.querySelectorAll('a')].filter(x=>/Field team|Vacancy/i.test(x.textContent)).length};
+      footerVacancies:document.querySelectorAll('footer a[href="/agents.html"]').length,
+      fieldLinksOutsideFooter:[...document.querySelectorAll('a[href="/agents.html"]')].filter(x=>!x.closest('footer')).length};
    });
-   if(errors.length||layout.h1!==1||layout.fieldLinks||layout.scrollWidth>layout.viewport+4){
+   if(errors.length||layout.h1!==1||layout.footerVacancies!==1||layout.fieldLinksOutsideFooter||layout.scrollWidth>layout.viewport+4){
     throw Error(file+': '+JSON.stringify({errors,...layout}));
    }
    if(pagePath==='/' && await page.locator('[data-teyza-demo][data-enhanced="true"]').count()!==1)
@@ -52,3 +53,4 @@ async function main(){
  }finally{await browser.close();server.close();}
 }
 main().catch(e=>{server.close();console.error(e);process.exitCode=1});
+

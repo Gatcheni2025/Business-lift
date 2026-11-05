@@ -6,7 +6,7 @@ $hasWebsite = (Test-Path -LiteralPath '.\web\app-first\public\download.html') -o
               (Test-Path -LiteralPath '.\public\download.html')
 if (-not $hasWebsite -or
     -not (Test-Path -LiteralPath '.\tools\app-first-release\premium-site-patch.cjs')) {
-  throw 'Run from the current Teyza R320 repository containing the reviewed premium website.'
+  throw 'Run from the extracted Teyza website update kit containing the reviewed pages.'
 }
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix .\tools\app-first-release
 if ($LASTEXITCODE -ne 0) { throw 'Scoped website deployment dependencies failed to install.' }

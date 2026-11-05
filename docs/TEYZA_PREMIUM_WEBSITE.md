@@ -1,50 +1,28 @@
-# Teyza premium public website — November 2026
+# Teyza store website update — 5 November 2026
 
-A comprehensive Teyza-colour redesign of the public marketing experience, loosely informed by the confident hierarchy of leading South African digital-service websites, with its own original visual language.
+The public website links to Teyza on Google Play and the App Store without saying that both listings are awaiting review. Store availability can depend on the customer's region, device and account. The website does not label a test build as a public release.
 
-## What's replaced
-- Home: dramatic photographic hero, local commerce platform cards, shopper journey, wholesale flow, real interactive app preview, membership teaser, FAQ and official store badges.
-- Download: polished Google Play/App Store links, test-track guidance, real Teyza app screenshots.
-- How it works: shopper and wholesale paths.
-- For business: spaza, wholesaler and other business journeys, validation, order and stock features.
-- Seller plans: free registration, R49 introductory first month, R99/month thereafter, R29 seven-day promotion with appropriate eligibility/review caveats.
-- Support: contact options, security guidance and common account questions.
-- Register: clear in-app registration instructions.
-- Shared stylesheet and public sitemap. All 7 pages use a consistent navigation/footer, responsive CSS, local photos and accessible HTML.
+Business registration remains free. The seller-plan information describes the R49 introductory first month and R99 monthly price thereafter, subject to eligibility, shop approval and supported checkout availability. This website release does not enable or collect payments.
 
-Public navigation and sitemap no longer promote Field Team. Existing /agents.html, /work.html and associated private operations routes are **not deleted**. Administrator tools, APIs, Firestore data, Firebase functions, existing legal-policy files and unrelated Hosting assets are unchanged.
+The footer includes Teyza's address, support contacts and a Vacancy link. The public field-team page no longer promises the old onboarding commission. The field work portal and its backend are not updated by this package; some portal screens can still show previous terms until the separate field-team release is deployed.
 
-## Publish only the premium public pages
+## Publish the reviewed pages
 
-Use the successful GitHub Actions artifact **TEYZA-PREMIUM-WEBSITE**. It contains a ZIP named **TEYZA_PREMIUM_WEBSITE_20261104.zip**.
-
-1. Extract both ZIP layers into a new folder (do not run commands from a compressed archive).
-2. Open PowerShell inside the folder that contains DEPLOY-TEYZA-PREMIUM.ps1.
-3. Ensure Node.js 22+ and the Firebase CLI are installed, and authenticate with a Firebase user authorized for business-lift-3c19c.
-4. Run:
+Download the **TEYZA-STORE-WEBSITE** artifact from the successful website workflow. Extract `TEYZA_STORE_WEBSITE_20261105.zip` to a new folder. With Node.js 22 or newer and an authorised Firebase CLI account for `business-lift-3c19c`, run PowerShell from that folder:
 
 ```powershell
 firebase login
 .\DEPLOY-TEYZA-PREMIUM.ps1
 ```
 
-The helper clones the live Firebase Hosting version, overlays only 9 approved paths, checks byte hashes of all preserved live files, retains redirects, rewrites and headers untouched, and prevents publication if the live version changed during preparation.
+The helper clones the current live Hosting version and replaces eight reviewed public HTML pages only. It checks that unrelated files remain unchanged, preserves the existing Hosting configuration, and stops if another live version appears during the update. The eight target pages are replaced with the reviewed copies from this kit. Admin, work-portal pages, payment services, Firebase Functions and app binaries are not replaced.
 
-**Do not run `firebase deploy --only hosting` or the older DEPLOY-WEBSITE.ps1** from a partial ZIP. Those workflows have a larger scope.
+Do not run `firebase deploy --only hosting` from this partial kit. After the helper reports success, check the home page, download page, business pages and Vacancy link on desktop and mobile. Google Play visibility should also be checked using a customer account and a South African device.
 
-When the helper reports publication, inspect https://teyza.co.za/, https://teyza.co.za/download.html and other navigation links on desktop and mobile. The app-store links can remain temporarily unavailable during store review.
-
-A local `teyza-premium-website-backup.json` records the prior live version. Roll back only if this release is still the active live website:
+Keep the generated `teyza-premium-website-backup.json`. To roll back only while this update remains the current live release:
 
 ```powershell
 node .\tools\app-first-release\premium-site-patch.cjs rollback
 ```
 
-## QA
-
-- `python3 scripts/check_app_first_website.py`
-- `node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/premium-site.test.cjs`
-- PowerShell parser check for DEPLOY-TEYZA-PREMIUM.ps1
-- CI ZIP file-by-file hash verification
-
-This is a public website design update. It does not change Play/App Store review status, implement in-app payment channels, or redeploy backend services.
+This update does not publish a new mobile app version, change App Store descriptions, enable store billing or change the Paystack key.

@@ -32,8 +32,8 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: TEYZA-PREMIUM-WEBSITE
-          path: dist/TEYZA_PREMIUM_WEBSITE_20261104.zip
+          name: TEYZA-STORE-WEBSITE
+          path: dist/TEYZA_STORE_WEBSITE_20261105.zip
           if-no-files-found: error
           retention-days: 30
   powershell:
@@ -78,3 +78,4 @@ jobs:
           path: premium-site-previews/*.png
           if-no-files-found: warn
           retention-days: 30
+
