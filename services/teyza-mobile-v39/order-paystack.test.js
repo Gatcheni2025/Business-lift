@@ -51,7 +51,7 @@ function fixture({live=true,discount=0,status='confirmed'}={}){
   }else if(url.includes('/transaction/verify/')){
    const ref=decodeURIComponent(url.split('/').at(-1));
    const row=db.records.get('teyzaOrderPayments/'+ref);
-   data={id:9001,reference:ref,status:'success',currency:'ZAR',amount:row.amountCents,
+   data={id:9001,reference:ref,status:'success',currency:'ZAR',domain:live?'live':'test',amount:row.amountCents,
     customer:{email:row.customerEmail},
     subaccount:{subaccount_code:invalidSplit?'ACCT_other12345':sub}};
   }else throw Error('Unexpected Paystack path '+url);
