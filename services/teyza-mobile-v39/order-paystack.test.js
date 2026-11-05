@@ -29,7 +29,12 @@ function fixture({live=true,discount=0,status='confirmed'}={}){
  db.records.set('teyzaSellerAccounts/seller1',seller);
  db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',sellingEnabled:true});
  db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',
-  paymentEnvironment:live?'live':'test',paidUntil:NOW+86400000});
+  paymentEnvironment:live?'live':'test',paidUntil:NOW+86400000,
+  ...(live?{}:{
+    adminComplimentaryStatus:'active',adminComplimentaryUntil:NOW+86400000,
+    adminComplimentaryBy:'admin1',
+    adminComplimentaryReason:'Verified QA shop, seven day complimentary test access'
+  })});
  db.records.set('teyzaSellerPayouts/seller1',{ownerUid:'seller1',code:sub,enabled:true,
   mode:live?'live':'test',verifiedWithPaystack:true});
  db.records.set('teyzaMobileOrders/order1',{ownerUid:'seller1',shopperUid:'buyer1',
