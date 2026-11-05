@@ -40,3 +40,15 @@ DO NOT run firebase deploy --only hosting using this partial repository output. 
 ## Rollback
 Use the admin Hosting rollback only while this release is still the active live website: node tools/admin-release/run.cjs rollback
 Backend rollback requires redeploying the previously reviewed backend commit separately; never roll back the whole website over newer changes.
+
+## R322 additions — identity, temporary access and physical-shop payments
+- **Approve seller** now shows whether the registered mobile number is verified by the exact Firebase account. A server-side 409 still needs the stated condition corrected; opening an ID photo or selfie alone never replaces linked SMS OTP.
+- **View user** scrolls to the selected account record so it is visible immediately.
+- Admin can issue a **7/14/30-day complimentary grant** only for a previously approved seller, using a recently verified admin session, an explicit confirmation and a reason of at least 15 characters. This is auditable and expires automatically. It is NOT counted as Paystack revenue, and it never bypasses identity approval.
+- For orders of tangible goods, an administrator can link a **verified Paystack subaccount** to an approved seller; the shopper can pay a confirmed order through Paystack Checkout. Seller settlement uses Paystack's configured subaccount percentage. No Teyza commission percentage is silently invented. Cash remains available.
+- Paystack online-order checkout is possible only after the seller's subaccount matches the integration environment and the shop is active/eligible. A confirmed order has an immutable server-computed payment amount, verified buyer and owner UID, and no cash-only discount. The app never handles card details or secret keys.
+- Online-order payment is marked real PAID only after a matching Paystack verification of reference, ZAR amount, customer email, environment and subaccount. TEST payments remain distinctly TEST; a cancelled order after charging enters refund review instead of being reported fulfilled.
+- A lost initialization response keeps the order reference locked rather than permitting accidental duplicate charges. A manual support reconciliation flow will be necessary before production rollout.
+- The server has sandbox/unit test coverage for merchant payouts and checkout but **live money movement, Paystack webhook compatibility and physical-device flows still require QA before activation**.
+- Flutter app version for these changes: **1.0.33+43**. Signed APK/AAB and iOS/TestFlight releases are NOT generated automatically by this source commit.
+- Apple/Google storefront rules: physical goods purchased for delivery/collection can use payment methods other than IAP; seller listing boosts and digital membership upgrades require separate platform-compliant treatment.

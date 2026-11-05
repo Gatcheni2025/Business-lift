@@ -57,7 +57,8 @@ node - <<'NODE'
   if(!r.ok)throw Error('Teyza mobile backend health request failed');
   const s=await r.json();
   for(const key of ['adminOperations','adminReview','adminUsers','adminSellerDocuments',
-    'adminProductReview','adminPaystackVerify','manualReceiptsRetired']){
+    'adminProductReview','adminPaystackVerify','manualReceiptsRetired',
+    'adminPhonePrecheck','adminComplimentaryAccess','physicalGoodsPaystack','sellerPaystackSubaccounts']){
     if(s[key]!==true)throw Error('Missing Paystack admin backend capability: '+key);
   }
   if(s.billingMode!=='paystack_checkout')throw Error('Paystack billing mode is not enabled');
