@@ -1,10 +1,10 @@
 'use strict';
-// Scoped Firebase Hosting patch: replace seven public premium pages, shared CSS, and sitemap only.
+// Scoped Firebase Hosting patch: replace reviewed public HTML pages only.
 // Other files and the active Hosting config are cloned unchanged. No plain firebase deploy.
 const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),crypto=require('node:crypto');
 const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
-const BASE='sites/'+PROJECT,FILES=["/index.html","/download.html","/how-it-works.html","/for-shop-owners.html","/seller-subscriptions.html","/support.html","/register.html","/assets/app-first.css","/sitemap.xml"];
+const BASE='sites/'+PROJECT,FILES=["/index.html","/download.html","/how-it-works.html","/for-shop-owners.html","/seller-subscriptions.html","/support.html","/register.html","/agents.html"];
 const APP_URL='https://apps.apple.com/za/app/id6827037733';
 const PLAY_URL='https://play.google.com/store/apps/details?id=com.asiyedriver.asiye';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -14,14 +14,18 @@ function overlay(root){
   for(const name of FILES){
     const file=path.join(root,name.slice(1));
     const raw=fs.readFileSync(file);
-    if(name.endsWith('.html')){
-      if(!raw.includes('class="p-site"')||!raw.includes('p-footer')||raw.includes('href="/agents.html"'))
-        throw Error('Not the reviewed premium Teyza public page: '+name);
+    if(name==='/agents.html'){
+      if(!raw.includes('Teyza Field Agents')||!raw.includes('Support local shops')||
+         !raw.includes('href="/work.html"')||raw.includes('R99 once per eligible shop'))
+        throw Error('Not the reviewed field-team information page.');
+    } else {
+      const html=raw.toString('utf8'),footer=html.indexOf('<footer '),vacancy=html.indexOf('href="/agents.html"');
+      if(!html.includes('class="p-site"')||footer<0||vacancy<footer||
+         html.indexOf('href="/agents.html"',vacancy+1)!==-1)
+        throw Error('Expected the reviewed premium page with one footer vacancy link: '+name);
     }
     if(['/index.html','/download.html'].includes(name)&&(!raw.includes(APP_URL)||!raw.includes(PLAY_URL)))
       throw Error('Official app store links are missing from '+name);
-    if(name==='/sitemap.xml'&&(raw.includes('/agents.html')||raw.includes('/work-privacy.html')))
-      throw Error('Public sitemap still includes hidden field-work pages');
     const bytes=zlib.gzipSync(raw,{level:9});
     files.set(name,{bytes,hash:crypto.createHash('sha256').update(bytes).digest('hex')});
   }
@@ -71,7 +75,7 @@ async function deploy({client,root,backupPath,wait=sleep,log=console.log}){
   assertPreserved(before,await allFiles(client,version),files);
   await client.hosting('PATCH','/'+version,{status:'FINALIZED'},{updateMask:'status'});
   if(await current(client)!==source)throw Error('A newer website release appeared. Nothing was published; retry from the latest live version.');
-  const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza premium public website redesign'},{versionName:version});
+  const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza store availability and public information update'},{versionName:version});
   if(await current(client)!==version)throw Error('Hosting did not confirm the new live version');
   backup.releaseName=release.name;backup.publishedAt=new Date().toISOString();
   fs.writeFileSync(backupPath,JSON.stringify(backup,null,2),{mode:0o600});

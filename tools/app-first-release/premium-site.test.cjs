@@ -5,7 +5,7 @@ const root=path.resolve(__dirname,'../../web/app-first/public');
 const base='sites/business-lift-3c19c/versions/';
 function setup(opts={}){
   const original=base+'base',patched=base+'cloned';
-  const data=new Map([['/index.html','old-0'],['/download.html','old-1'],['/how-it-works.html','old-2'],['/for-shop-owners.html','old-3'],['/seller-subscriptions.html','old-4'],['/support.html','old-5'],['/register.html','old-6'],['/assets/app-first.css','old-7'],['/sitemap.xml','old-8'],['/admin.html','admin-private'],['/js/seller.js','seller-js'],['/work.html','field-private']]);
+  const data=new Map([['/index.html','old-0'],['/download.html','old-1'],['/how-it-works.html','old-2'],['/for-shop-owners.html','old-3'],['/seller-subscriptions.html','old-4'],['/support.html','old-5'],['/register.html','old-6'],['/agents.html','old-agents'],['/assets/app-first.css','old-7'],['/sitemap.xml','old-8'],['/admin.html','admin-private'],['/js/seller.js','seller-js'],['/work.html','field-private']]);
   const versions=new Map([[original,new Map(data)]]),calls=[],work=fs.mkdtempSync(path.join(os.tmpdir(),'store-links-test-'));
   let live=original;
   const client={
@@ -26,18 +26,26 @@ function setup(opts={}){
   };
   return {client,root,backupPath:path.join(work,'backup.json'),wait:async()=>{},log:()=>{},calls,versions,original,patched,data,live:()=>live};
 }
-test('Premium website links are present on both pages, with nine scoped public files',()=>{
-  assert.deepEqual(FILES,["/index.html","/download.html","/how-it-works.html","/for-shop-owners.html","/seller-subscriptions.html","/support.html","/register.html","/assets/app-first.css","/sitemap.xml"]);
+test('Store links and footer vacancy are present on eight scoped public pages',()=>{
+  assert.deepEqual(FILES,["/index.html","/download.html","/how-it-works.html","/for-shop-owners.html","/seller-subscriptions.html","/support.html","/register.html","/agents.html"]);
   const o=overlay(root);
-  assert.equal(o.size,9);
+  assert.equal(o.size,8);
   const home=fs.readFileSync(path.join(root,'index.html'),'utf8');
   const download=fs.readFileSync(path.join(root,'download.html'),'utf8');
   for(const page of [home,download]){assert(page.includes(APP_URL));assert(page.includes(PLAY_URL));}
   assert(!home.includes('iPhone release coming soon'));
-  for(const f of FILES.filter(p=>p.endsWith('.html')))assert(fs.readFileSync(path.join(root,f.slice(1)),'utf8').includes('class="p-site"'));
-  assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('agents.html'));
+  for(const f of FILES.filter(p=>p!=='/agents.html')){
+    const page=fs.readFileSync(path.join(root,f.slice(1)),'utf8');
+    assert(page.includes('class="p-site"'));
+    assert(page.indexOf('href="/agents.html"')>page.indexOf('<footer '));
+    assert(page.includes('40 Courtown Crescent'));
+  }
+  const agents=fs.readFileSync(path.join(root,'agents.html'),'utf8');
+  assert(agents.includes('Support local shops'));
+  assert(!agents.includes('R99 once per eligible shop'));
+  assert(!download.includes('until Google and Apple complete review'));
 });
-test('Hosting clone updates only premium pages, CSS and sitemap; unrelated file hashes remain unchanged',async()=>{
+test('Hosting clone updates only the reviewed pages; CSS, sitemap and private files remain unchanged',async()=>{
   const a=setup(),b=await deploy(a);
   assert.equal(a.live(),a.patched);assert.equal(b.sourceVersion,a.original);
   for(const [name,hash] of a.data)if(!FILES.includes(name))assert.equal(a.versions.get(a.patched).get(name),hash);

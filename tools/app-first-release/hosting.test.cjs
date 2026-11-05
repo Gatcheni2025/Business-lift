@@ -59,7 +59,7 @@ test('Marketing assets are scoped and registration redirects precede legacy catc
  const download=fs.readFileSync(path.join(root,'download.html'),'utf8');
  assert(download.includes('https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'));assert(download.includes('https://apps.apple.com/za/app/id6827037733'));
  assert(!download.includes('App Store release coming soon'));
- assert(html.includes('class="demo-stage"'));assert(html.includes('/assets/app-demo.js'));assert(html.includes('p-feature-grid'));assert(html.includes('p-store-row'));assert(!html.includes('href="/agents.html"'));assert(!html.includes('<h3>For field agents</h3>'));
+ assert(html.includes('class="demo-stage"'));assert(html.includes('/assets/app-demo.js'));assert(html.includes('p-feature-grid'));assert(html.includes('p-store-row'));assert(html.indexOf('<a href="/agents.html">Vacancy</a>')>html.indexOf('<footer '));assert(!html.includes('<h3>For field agents</h3>'));
 });
 
 test('Inherited noindex is removed from public pages while old private files and work pages stay excluded',()=>{
@@ -71,3 +71,4 @@ test('Inherited noindex is removed from public pages while old private files and
  for(const page of ['/','/index.html','/how-it-works.html','/agents.html','/sitemap.xml'])assert(c.headers.some(h=>h.glob===page&&h.headers['X-Robots-Tag']?.startsWith('index')));
  for(const page of ['/work.html','/owner-confirm.html','/legacy-account.html'])assert(c.headers.some(h=>h.glob===page&&h.headers['X-Robots-Tag']==='noindex, nofollow'));
 });
+
