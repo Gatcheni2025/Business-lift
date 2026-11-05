@@ -106,6 +106,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Test signed QA preview isolation from production release gating
+        run: python3 scripts/test_teyza_signed_qa.py
       - name: Declare release signing mode and reject contradictory TestFlight requests
         env:
           REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
