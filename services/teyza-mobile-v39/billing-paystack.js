@@ -25,7 +25,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
   const doc=p=>db.doc(p);
   async function read(path) {const x=await doc(path).get();return x.exists?x.data():null;}
   function requireSafeMode(key){
-    if(key.startsWith('sk_test_')&&getProjectId()==='business-lift-3c19c')
+    if(key.startsWith('sk_test_')&&(!getProjectId()||getProjectId()==='business-lift-3c19c'))
       D.fail(503,'Paystack test payments require an isolated test project.');
   }
   async function paystack(path,method='GET',body) {

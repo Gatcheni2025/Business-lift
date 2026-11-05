@@ -47,7 +47,7 @@ function fixture(seed={},options={}) {
   return {ok:true,json:async()=>({status:true,data})};
  };
  const api=createBilling({db,clock:()=>NOW,getSecret:()=> 'sk_test_FAKE',
-  getPlanCode:()=> 'PLN_TEST99',send,...options});
+  getPlanCode:()=> 'PLN_TEST99',getProjectId:()=> 'teyza-isolated-test',send,...options});
  const auth={uid:'shop1',email:'owner@example.test',email_verified:true};
  return {api,auth,records,requests};
 }
@@ -126,6 +126,8 @@ test('Sandbox checkout cannot alter the production seller database',async()=>{
  const {api,auth,records}=fixture({}, {getProjectId:()=> 'business-lift-3c19c'});
  await assert.rejects(api.execute(auth,'billing_checkout'),e=>e.status===503);
  assert.equal(records.size,1);assert.equal(records.has('teyzaBilling/shop1'),false);
+ const unknown=fixture({}, {getProjectId:()=> ''});
+ await assert.rejects(unknown.api.execute(unknown.auth,'billing_checkout'),e=>e.status===503);
 });
 test('Verified renewal extends the membership once; duplicate or wrong-plan events do not',async()=>{
  const ref='recurring-payment-1',paidUntil=NOW+86400000;
