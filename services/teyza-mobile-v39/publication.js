@@ -20,6 +20,16 @@ function entitled(uid,account,billing,now=Date.now()) {
  // Only gateway-verified payments carry a server-computed paidUntil.
  return false;
 }
+function complimentary(uid,account,billing,now=Date.now()){
+ return account?.uid===uid&&account.approvalStatus==='approved'&&
+  billing?.ownerUid===uid&&billing.adminComplimentaryStatus==='active'&&
+  typeof billing.adminComplimentaryReason==='string'&&billing.adminComplimentaryReason.length>=15&&
+  typeof billing.adminComplimentaryBy==='string'&&billing.adminComplimentaryBy!==uid&&
+  Number.isFinite(billing.adminComplimentaryUntil)&&now<billing.adminComplimentaryUntil;
+}
+function eligible(uid,account,billing,now=Date.now()){
+ return entitled(uid,account,billing,now)||complimentary(uid,account,billing,now);
+}
 function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
  const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
  const modern=setup.requiredVersion===2;
@@ -30,7 +40,7 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
  const reviewed=(!modern&&!verification)||(verification?.ownerUid===uid&&verification.status==='approved');
  const approved=registered&&account.approvalStatus==='approved'&&reviewed;
  const blocked=held(shop)||setup.moderationBlocked===true||account?.approvalStatus==='rejected';
- const hasListing=entitled(uid,account,billing,now);
+ const hasListing=eligible(uid,account,billing,now);
  // Verified business discovery is free. Catalogue checkout is a separate entitlement.
  const live=Boolean(ready&&approved&&!blocked),canSell=Boolean(live&&hasListing);
  return {registered,ready,approved,hasListing,live,canSell,
@@ -39,7 +49,7 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
 function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
  if(!state(uid,account,setup,verification,shop,billing,now).canSell)
-   D.fail(409,'This shop must be approved and have an active paid membership before accepting orders.');
+   D.fail(409,'This shop needs seller approval and an active Paystack membership or recorded time-limited complimentary access before accepting orders.');
  return shop;
 }
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
@@ -104,4 +114,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,trialActive,TRIAL_MS};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,eligible,complimentary,trialActive,TRIAL_MS};

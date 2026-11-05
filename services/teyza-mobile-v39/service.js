@@ -70,7 +70,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
         front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
          billing:billingSnap.exists?billingSnap.data():null,drafts:entries,removedProductId,now:clock()});
-      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.entitled(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
+      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
       if(next){
         const listing=eligible?'active':'not_listed';
         if(account.listingStatus!==listing)tx.update(accountRef,{listingStatus:listing,updatedAt:new Date(clock())});
@@ -96,7 +96,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(!state.ready||!state.approved)D.fail(403,'Complete your spaza registration and seller approval to access wholesale prices.');
     // Previously activated merchants are migrated separately; new free or unpaid
     // accounts cannot unlock the R99 Basic wholesale stock benefit.
-    if(!P.entitled(uid,a,b,clock()))D.fail(403,'Your R99 Basic membership must be active before you can see wholesale stock prices.');
+    if(!P.eligible(uid,a,b,clock()))D.fail(403,'Your shop needs a current Paystack membership or a valid time-limited admin access grant to view wholesale prices.');
     return a;
   }
   function wholesalePair(spazaUid,supplierUid){
@@ -135,7 +135,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
   const adminOperations=operations.createOperations({db,clock,rate,
-    getPaystackMode:()=>getPaystackSecret().startsWith('sk_live_')?'live':'test'});
+    getPaystackMode:()=>getPaystackSecret().startsWith('sk_live_')?'live':'test',
+    synchronize:synchronizeCatalogue});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
@@ -372,6 +373,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
+        complimentaryAccess:P.complimentary(uid,account,billing,clock()),
         paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,
         promotionEndsAt:promotion?.endsAt||null,
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
@@ -758,7 +760,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         delete projected.latitude;delete projected.longitude;if(pin)Object.assign(projected,pin);
         if(f?.ownerUid===uid&&f.photoId)projected.photoUrl=require('./shop-front').publicUrl(uid,f.photoId);
         // Never leak previously stored products through a stale public listing.
-        if(!P.entitled(uid,a,b,clock())){
+        if(!P.eligible(uid,a,b,clock())){
           projected.products=[];projected.productHighlights=[];
           projected.catalogueEnabled=false;projected.sellingEnabled=false;
         }

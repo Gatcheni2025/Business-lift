@@ -36,16 +36,33 @@ export function createOperations({api,onError}){
   // Seller ID approval is independent from Paystack purchase confirmation.
   const billing=card('Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
-  billing.append(tag(d.membershipPaid?'paid — products eligible':'not paid'));
+  billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Complimentary temporary access':'Not paid'));
   billing.append(el('p','Mode: '+(d.paystackMode==='live'?'Live Paystack':'Paystack TEST — not real money')));
   billing.append(el('p','Membership: '+(d.billing?.status||'not started')+
     ' · Plan: '+(d.seller.listingPlan||'free')+
     ' · Renewal: '+(d.billing?.renewalSetup||'not scheduled')));
   if(d.billing?.paidUntil)
     billing.append(el('p','Paid until: '+new Date(d.billing.paidUntil).toLocaleString('en-ZA')));
+  if(d.complimentaryAccess)billing.append(el('p','Complimentary access ends: '+new Date(d.complimentaryUntil).toLocaleString('en-ZA')+' · Reason: '+(d.complimentaryReason||'')));
   billing.append(el('p','R49 introductory first month · R99 monthly renewal · R29 optional seven-day promotion. Seller checkout is separate from this administrator screen.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
+  if(d.seller.approvalStatus==='approved'&&!d.membershipPaid&&!d.complimentaryAccess){
+    const exception=el('form',undefined,'ops-form');
+    choice(exception,'Temporary complimentary access','days',[[7,'7 days'],[14,'14 days'],[30,'30 days']],7);
+    field(exception,'Reason for exception (audited)','reason','textarea');
+    const confirmText=check(exception,'This is a time-limited complimentary grant, not a Paystack payment.','confirmed');
+    submit(exception,'Grant temporary access',async fd=>{
+      const reason=String(fd.get('reason')||'').trim();
+      if(reason.length<15)throw Error('Enter a reason of at least 15 characters.');
+      if(!confirm('Grant complimentary product-selling eligibility without recording any payment? Seller identity and shop verification remain mandatory.'))return;
+      await request('ops_complimentary_access',{sellerUid:d.seller.sellerUid,
+        days:Number(fd.get('days')),reason});
+      message('Complimentary membership granted with an audit record and expiry. No payment was recorded.','success');
+      await choose(selected);
+    });
+    billing.append(exception);
+  }
   root.append(billing);
   const payment=card('Payment references','Only references issued for this seller are eligible for confirmation. The server independently verifies payment with Paystack.');
   payment.append(table(['Reference','Type','Amount','Status','Action'],
@@ -72,7 +89,7 @@ export function createOperations({api,onError}){
     const blockers=[];
     if(d.seller.approvalStatus!=='approved'||d.verification.status!=='approved')
       blockers.push('seller identity/approval');
-    if(!d.membershipPaid)blockers.push('verified Paystack membership');
+    if(!d.membershipPaid&&!d.complimentaryAccess)blockers.push('verified Paystack membership or temporary complimentary access');
     if(!d.verification.completed)blockers.push('completed seller onboarding');
     if(blockers.length)catalogue.append(el('p','Approval blocked: '+blockers.join(', ')+'.','notice warning'));
     const approve=button('Approve submitted product catalogue',async()=>{
@@ -97,7 +114,7 @@ export function createOperations({api,onError}){
    root.append(table(['Shop','Products','Seller approval','Paystack','Action'],
      catalogueQueue.map(row=>[
        row.shopName+' · '+row.ownerEmail,row.productCount,tag(row.approvalStatus),
-       tag(row.paidMembership?'verified membership':row.paymentStatus),
+       tag(row.paidMembership?'verified Paystack':row.complimentaryAccess?'temporary complimentary access':row.paymentStatus),
        button('Review products',()=>choose(row))
      ])));
    if(!catalogueQueue.length)

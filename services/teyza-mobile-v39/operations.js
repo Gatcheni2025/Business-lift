@@ -1,13 +1,13 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
+const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_complimentary_access','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
 function amount(value){if(!Number.isSafeInteger(value)||value<=0||value>50000000)D.fail(422,'Enter a valid amount in cents.');return value;}
 function statement(entries){let balance=0;return entries.sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)).map(e=>({...e,balanceCents:balance+=(e.debitCents||0)-(e.creditCents||0)}));}
 function financePath(value){if(!/^teyzaCreditEnquiries\/[A-Za-z0-9_-]{1,128}\/requests\/[A-Za-z0-9_-]{1,128}$/.test(value||''))D.fail(422,'Choose a valid stock finance request.');return value;}
-function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test'}){
+function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',synchronize=async()=>{}}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  const owner=async uid=>D.seller(await read('teyzaSellerAccounts/'+uid),uid);
  function audit(tx,auth,action,target,details){tx.set(doc('teyzaOperationsAudit/'+crypto.randomUUID()),{actorUid:auth.uid,action,target,details,createdAt:clock()});}
@@ -21,6 +21,36 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test'}){
   // never activate membership now that Paystack verifies all new charges.
   if(['ops_invoice','ops_payment','ops_payment_reverse'].includes(action))
     D.fail(410,'Manual mandate invoices and receipt activation are retired. Use Paystack checkout and verified transactions.');
+  if(action==='ops_complimentary_access'){
+    const target=D.id(data.sellerUid),duration=Number(data.days);
+    if(target===uid)D.fail(403,'Another administrator must grant access to your shop.');
+    if(![7,14,30].includes(duration))D.fail(422,'Choose 7, 14 or 30 days of complimentary access.');
+    const reason=D.text(data.reason,'complimentary access reason',250);
+    if(reason.length<15)D.fail(422,'Provide a meaningful reason of at least 15 characters.');
+    const account=await owner(target);
+    if(account.approvalStatus!=='approved'||account.deletionPending===true)
+      D.fail(409,'Verify and approve this shop before granting a temporary payment exception.');
+    const previous=await read('teyzaBilling/'+target);
+    const now=clock(),grantId=crypto.randomUUID(),until=now+duration*86400000;
+    await db.runTransaction(async tx=>{
+      const ref=doc('teyzaBilling/'+target),saved=await tx.get(ref);
+      const current=saved.exists?saved.data():null;
+      const accountSnap=await tx.get(doc('teyzaSellerAccounts/'+target));
+      if(!accountSnap.exists||accountSnap.data().approvalStatus!=='approved')
+        D.fail(409,'Shop approval changed. Refresh the seller record.');
+      if(current?.ownerUid&&current.ownerUid!==target)D.fail(403,'Billing account does not match this seller.');
+      if(P.complimentary(target,accountSnap.data(),current,now))
+        D.fail(409,'A complimentary membership is already active; revoke it before issuing another.');
+      tx.set(ref,{ownerUid:target,adminComplimentaryStatus:'active',
+        adminComplimentaryUntil:until,adminComplimentaryBy:uid,
+        adminComplimentaryReason:reason,adminComplimentaryGrantedAt:now,
+        adminComplimentaryGrantId:grantId,updatedAt:now},{merge:true});
+      audit(tx,auth,'ops_complimentary_access',target,{grantId,days:duration,until,reason,
+        paystackCharge:false,doesNotProvePayment:true});
+    });
+    await synchronize(target);
+    return {granted:true,grantId,until,paid:false,provider:'complimentary_admin'};
+  }
   if(action==='ops_catalogue_queue'){
     const result=await db.collection('teyzaCatalogueSubmissions')
       .where('status','==','pending_review').limit(50).get();
@@ -35,6 +65,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test'}){
         productCount:Array.isArray(submission.products)?submission.products.length:0,
         submittedAt:submission.submittedAt||0,
         paidMembership:P.entitled(target,account,billing,clock()),
+        complimentaryAccess:P.complimentary(target,account,billing,clock()),
         paymentStatus:billing?.status||'not_started'};
     }));
     return {submissions:rows.filter(Boolean),limited:result.docs.length===50};
@@ -66,7 +97,10 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test'}){
      phone:account.phone||'',address:account.address||'',
      approvalStatus:account.approvalStatus,listingPlan:account.listingPlan||'free'},
      billing:billingView,paystackMode:getPaystackMode()==='live'?'live':'test',
-     membershipPaid,canApproveCatalogue:P.state(target,account,setup||{},
+     membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
+     complimentaryUntil:billing?.adminComplimentaryUntil||null,
+     complimentaryReason:billing?.adminComplimentaryReason||null,
+     canApproveCatalogue:P.state(target,account,setup||{},
        verification,shop,billing,clock()).canSell&&shop?.status==='active',
      catalogue:submission?.ownerUid===target?{
        status:submission.status||'not_submitted',submittedAt:submission.submittedAt||null,
