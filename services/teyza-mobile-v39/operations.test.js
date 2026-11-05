@@ -75,6 +75,32 @@ test('Product approvals queue and seller detail never treat bank receipts or san
  q=await f.call('ops_catalogue_queue');assert.equal(q.submissions[0].paidMembership,false);
  d=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(d.membershipPaid,false);
 });
+test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
+ const f=setup(),input={sellerUid:'seller1',days:7,
+  reason:'Approved small business community launch demonstration',confirmed:true};
+ await rejects(f.call('ops_complimentary_access',input,{...admin,teyzaAdmin:false}),403);
+ await rejects(f.call('ops_complimentary_access',input,{...admin,auth_time:now/1000-301}),401);
+ await rejects(f.call('ops_complimentary_access',{...input,confirmed:false}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,reason:'brief'}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,days:365}),422);
+ await rejects(f.call('ops_complimentary_access',{...input,sellerUid:'seller2'}),409);
+ const result=await f.call('ops_complimentary_access',input);
+ assert.equal(result.granted,true);assert.equal(result.paid,false);
+ assert.equal(result.until,now+7*86400000);
+ const billing=f.db.records.get('teyzaBilling/seller1');
+ assert.equal(billing.status,undefined,'Complimentary access must not falsify paid billing');
+ assert.equal(billing.adminComplimentaryBy,'admin1');
+ assert.equal(billing.adminComplimentaryUntil,result.until);
+ assert([...f.db.records.keys()].some(p=>p.startsWith('teyzaOperationsAudit/')));
+ await rejects(f.call('ops_complimentary_access',input),409);
+ const detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.membershipPaid,false);
+ assert.equal(detail.complimentaryAccess,true);
+ const previous=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...previous,approvalStatus:'rejected'});
+ const blocked=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(blocked.complimentaryAccess,false,'A revoked shop identity approval blocks complimentary access');
+});
 test('Seller statements are bound to the authenticated owner even when another UID is supplied',async()=>{const f=setup();f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-10',{ownerUid:'seller1',kind:'subscription_invoice',createdAt:now,debitCents:9900,creditCents:0});const d=await f.call('seller_billing_statement',{sellerUid:'seller1'},{uid:'seller2',email_verified:true});assert.equal(d.seller.sellerUid,'seller2');assert.equal(d.entries.length,0);});
 test('Finance decisions require consent, approved seller, expected status and capped amounts',async()=>{const f=setup(),path='teyzaCreditEnquiries/seller1/requests/r1';f.db.records.set(path,{ownerUid:'seller1',amountCents:100000,purpose:'Stock',status:'enquiry_received',consent:true});const data={path,expectedStatus:'enquiry_received',status:'approved_in_principle',approvedAmountCents:50000,note:'Manual review complete; subject to lender terms',reviewConfirmed:true};await rejects(f.call('ops_finance_decide',{...data,approvedAmountCents:100001}),409);await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'under_review'}),409);await f.call('ops_finance_decide',data);assert.equal(f.db.records.get(path).disbursementStatus,'not_disbursed');await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'approved_in_principle'}),409);});
 test('Finance cannot approve own application or read arbitrary document paths',async()=>{const f=setup();await rejects(f.call('ops_finance_decide',{path:'users/seller1',note:'x',status:'declined'}),422);await rejects(f.call('ops_finance_decide',{path:'teyzaCreditEnquiries/admin1/requests/r1',note:'x',status:'declined',expectedStatus:'enquiry_received'}),403);});

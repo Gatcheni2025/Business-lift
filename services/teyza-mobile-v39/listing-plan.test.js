@@ -35,6 +35,20 @@ test('Manual mandates, invoice-only receipts and Paystack sandbox payments canno
  assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'test'},NOW),false);
  assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'live'},NOW),true);
 });
+test('Administrator complimentary access is temporary and is not Paystack revenue',()=>{
+ const grant={ownerUid:'seller1',adminComplimentaryStatus:'active',
+  adminComplimentaryUntil:NOW+7*86400000,adminComplimentaryBy:'admin2',
+  adminComplimentaryReason:'Community launch demonstration for approved sellers'};
+ assert.equal(P.entitled('seller1',free,grant,NOW),false);
+ assert.equal(P.complimentary('seller1',free,grant,NOW),true);
+ assert.equal(P.eligible('seller1',free,grant,NOW),true);
+ assert.equal(P.state('seller1',free,{},null,shop,grant,NOW).canSell,true);
+ assert.equal(P.eligible('seller1',free,grant,grant.adminComplimentaryUntil),false);
+ assert.equal(P.eligible('seller1',free,{...grant,adminComplimentaryBy:'seller1'},NOW),false);
+ assert.equal(P.eligible('seller1',{...free,approvalStatus:'rejected'},grant,NOW),false);
+ assert.equal(P.eligible('seller1',free,{...grant,adminComplimentaryStatus:'revoked'},NOW),false);
+ assert.equal(P.eligible('seller1',free,{...grant,adminComplimentaryReason:'short'},NOW),false);
+});
 test('Seven-day paid promotion is separate from membership',()=>{
  assert.equal(B.PROMO_CENTS,2900);assert.equal(B.PROMO_MS,7*86400000);
  assert.equal(B.validCheckoutUrl('https://checkout.paystack.com/abc123'),true);
