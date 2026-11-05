@@ -88,3 +88,5 @@ jobs:
           $tokens=$null; $errors=$null
           [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-OPERATIONS.ps1",[ref]$tokens,[ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          ./scripts/test_teyza_operations_deploy.ps1
+

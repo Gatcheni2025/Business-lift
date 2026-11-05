@@ -1,7 +1,17 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
+const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
+test('Admin release requires the automatic-publication backend, not the old manual product queue',()=>{
+ const ready={ok:true,version:'3.23.0',adminOperations:true,adminReview:true,adminProductReview:false,
+   automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
+   manualReceiptsRetired:true,billingMode:'paystack_checkout'};
+ assert.doesNotThrow(()=>assertAdminBackend(ready));
+ for(const stale of [{...ready,version:'3.20.0'},{...ready,adminProductReview:true},
+   {...ready,automaticProductPublication:false},{...ready,adminComplimentaryAccess:false},
+   {...ready,billingMode:'manual_receipt'}])assert.throws(()=>assertAdminBackend(stale));
+});
 function setup(options={}){
  const source=base+'original',next=base+'patched',existing=new Map([['/index.html','home-hash'],['/shops.html','shops-hash'],['/js/firebase-r2.js','existing-auth-hash'],['/admin-sellers.html','old-admin']]);
  const config={cleanUrls:true,trailingSlashBehavior:'REMOVE',rewrites:[{glob:'/api/**',function:'existingApi'},{glob:'**',path:'/404.html'}],
@@ -55,4 +65,5 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
 });
+
 

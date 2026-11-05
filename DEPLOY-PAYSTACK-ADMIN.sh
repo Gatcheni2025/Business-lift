@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Safely deploy ONLY the Teyza Paystack product-approval backend and admin pages.
+# Safely deploy the current seller-verification backend and admin pages.
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 PROJECT=business-lift-3c19c
-BRANCH=feat/teyza-free-signup-paystack-products-promotion-20261104
+BRANCH=feat/teyza-seller-approval-subscription-pilot-20261105
 
 if [[ ! -f web/teyza-admin/public/admin.html || ! -f firebase.teyza-mobile-v39.json ]]; then
   echo "Run from the Teyza Git checkout root. Nothing changed." >&2; exit 1
@@ -44,10 +44,28 @@ for name in TEYZA_PAYSTACK_SECRET_KEY TEYZA_VERIFICATION_ENCRYPTION_KEY TEYZA_GO
   fi
 done
 
-echo "2/5: Deploy only the existing teyza-mobile:teyzaMobile function."
+node - <<'NODE'
+const {spawnSync}=require('node:child_process');
+const fs=require('node:fs');
+(async()=>{
+  const r=spawnSync(process.execPath,['tools/admin-release/node_modules/firebase-tools/lib/bin/firebase.js',
+    'functions:secrets:access','TEYZA_PAYSTACK_SECRET_KEY','--project','business-lift-3c19c'],
+    {encoding:'utf8',stdio:['ignore','pipe','ignore']});
+  const key=r.stdout.trim(),plan=fs.readFileSync('services/teyza-mobile-v39/.env.business-lift-3c19c','utf8')
+    .match(/^TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=(PLN_[A-Za-z0-9]+)\s*$/m)?.[1];
+  if(r.status!==0||!key.startsWith('sk_live_')||!plan)throw Error('Production key or plan is unavailable');
+  const response=await fetch('https://api.paystack.co/plan/'+encodeURIComponent(plan),{
+    headers:{Authorization:'Bearer '+key},signal:AbortSignal.timeout(30000)});
+  const result=await response.json();
+  if(!response.ok||result.status!==true||result.data?.plan_code!==plan||result.data.amount!==9900||
+    result.data.currency!=='ZAR'||result.data.interval!=='monthly')throw Error('Incorrect monthly plan');
+})().catch(()=>{console.error('The production Paystack key or R99 monthly ZAR plan could not be verified. Nothing was deployed.');process.exit(1);});
+NODE
+
+echo "2/5: Deploy only seller-verification and catalogue synchronization functions."
 node tools/admin-release/node_modules/firebase-tools/lib/bin/firebase.js deploy \
   --config firebase.teyza-mobile-v39.json \
-  --only functions:teyza-mobile:teyzaMobile \
+  --only functions:teyza-mobile:teyzaMobile,functions:teyza-mobile:teyzaCatalogueDraftChanged,functions:teyza-mobile:teyzaCatalogueShopChanged,functions:teyza-mobile:teyzaCatalogueApprovalChanged,functions:teyza-mobile:teyzaSellerBillingChanged \
   --project "$PROJECT"
 
 echo "3/5: Verify live backend Paystack-admin capabilities before touching Hosting."
@@ -56,8 +74,10 @@ node - <<'NODE'
   const r=await fetch('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile');
   if(!r.ok)throw Error('Teyza mobile backend health request failed');
   const s=await r.json();
-  for(const key of ['adminOperations','adminReview','adminUsers','adminSellerDocuments',
-    'adminProductReview','adminPaystackVerify','manualReceiptsRetired',
+  require('./tools/admin-release/run.cjs').assertAdminBackend(s);
+  for(const key of ['verificationUploads','sellerOnboarding','approvalRequired','paystackCheckoutAvailable',
+    'adminOperations','adminReview','adminUsers','adminSellerDocuments',
+    'automaticProductPublication','adminPaystackVerify','manualReceiptsRetired',
     'adminPhonePrecheck','adminComplimentaryAccess','physicalGoodsPaystack','sellerPaystackSubaccounts']){
     if(s[key]!==true)throw Error('Missing Paystack admin backend capability: '+key);
   }
@@ -69,4 +89,5 @@ NODE
 echo "4/5: Clone live Hosting and publish ONLY admin aliases and admin CSS/JS."
 node tools/admin-release/run.cjs deploy
 echo "5/5: Admin update published. Sign out/in at https://teyza.co.za/admin.html"
-echo "Check Product approvals, Paystack billing and the absence of manual receipts."
+echo "Check Seller verification, automatic product publication and subscription exceptions."
+

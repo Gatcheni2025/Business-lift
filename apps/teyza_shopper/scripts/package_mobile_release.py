@@ -25,7 +25,7 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
                (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
             'appleLoginImplemented': platform == 'ios',
-            'mobileBackendVersionRequired': '3.17.0', 'shopFrontPhotoImplemented': True,
+            'mobileBackendVersionRequired': '3.23.0', 'shopFrontPhotoImplemented': True,
             'sellerNotificationsImplemented': True, 'adminSellerReviewImplemented': True,
             'nativeSellerRegistration': True, 'sellerIdentityDocuments': True, 'sellerPhoneOtpImplemented': True,
             'deviceOtpVerified': False, 'sellingAfterCompletedSetup': True,
@@ -78,4 +78,5 @@ manifest['sha256'] = {file.name:hashlib.sha256(file.read_bytes()).hexdigest()
 guide = root/'../../docs/TEYZA_MOBILE_RELEASE.md'
 shutil.copy2(guide, out/'README-RELEASE.md')
 print(platform+' '+version+' '+mode+' release artifact prepared.')
+
 
