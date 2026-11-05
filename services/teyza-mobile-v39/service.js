@@ -40,8 +40,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
       const setupRef=doc('teyzaSellerOnboarding/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap]=await Promise.all([
-        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid)),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201))]);
       let account=accountSnap.exists?accountSnap.data():null;
       // Migrate old trials to free without billing or resetting trial dates.
       if(account?.listingPlan==='trial'){
@@ -70,7 +70,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const verification=verificationSnap.exists?verificationSnap.data():null;
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
         front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
-         billing:billingSnap.exists?billingSnap.data():null,drafts:entries,removedProductId,now:clock()});
+         billing:billingSnap.exists?billingSnap.data():null,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
       const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
       if(next){
         const listing=eligible?'active':'not_listed';
@@ -378,7 +378,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
         complimentaryAccess:P.complimentary(uid,account,billing,clock()),
-        paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,
+        complimentaryUntil:P.complimentary(uid,account,billing,clock())?billing.adminComplimentaryUntil:null,
+        paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,introEligible:billing?.introUsed!==true,
         promotionEndsAt:promotion?.endsAt||null,
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
@@ -467,6 +468,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         metadata:{metadata:{firebaseStorageDownloadTokens:token}}});
       const url='https://firebasestorage.googleapis.com/v0/b/'+bucket.name+'/o/'+encodeURIComponent(path)+'?alt=media&token='+token;
       await doc('teyzaProductPhotos/'+uid+'/items/'+productId).set({ownerUid:uid,url,objectPath:path,updatedAt:stamp});
+      await synchronizeCatalogue(uid);
       return {url};
     }
     if(action==='verification_review')D.fail(409,'Use the current seller review screen to review a submission.');
@@ -485,10 +487,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='catalogue_submit') {
       await owner(uid);await rate(uid,'catalogue',10,3600000);
       const [drafts,photos]=await Promise.all([db.collection('teyzaDraftProducts/'+uid+'/items').limit(200).get(),db.collection('teyzaProductPhotos/'+uid+'/items').get()]);
-      const images=Object.fromEntries(photos.docs.map(x=>[x.id,x.data().url]));
+      const images=new Map(photos.docs.map(x=>[x.id,catalogue.uploadedPhoto(uid,x.id,x.data())]));
       const products=drafts.docs.filter(x=>x.data().ownerUid===uid&&x.data().status==='draft').map(x=>{
-        const p=x.data(),template=catalogue.templateFor(x.id);return {id:x.id,name:p.name,category:p.category,priceCents:p.priceCents,stock:p.stockQty,
-          imageUrl:images[x.id]||(template?catalogue.photoUrl(template.photo):'')};
+        const entry={id:x.id,data:x.data()},p=catalogue.canonical(uid,entry)||catalogue.custom(uid,entry);
+        if(!p)D.fail(422,'Check the name, category, price and stock on each product.');
+        return {...p,imageUrl:images.get(x.id)||p.imageUrl||''};
       });
       if(!products.length)D.fail(422,'Add at least one product before submitting your catalogue.');
       // Validate stored drafts again. A client cannot publish a pending shop or enable priced listings.
@@ -497,10 +500,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         D.text(p.category,'product category',60);
         D.orderItems([{id:p.id,quantity:1}],[{...p,stock:Math.max(1,p.stock)}]);
       }
-      await doc('teyzaCatalogueSubmissions/'+uid).set({ownerUid:uid,status:'pending_review',products,submittedAt:clock()});
-      await doc('teyzaSellerAccounts/'+uid).set({catalogueApprovalRequired:true},{merge:true});
-      await synchronizeCatalogue(uid);
-      return {status:'pending_review'};
+      // Older apps may still submit a catalogue. Synchronize it immediately;
+      // seller identity and payment remain separate server-enforced gates.
+      const result=await synchronizeCatalogue(uid);
+      const status=result.publication==='live'?'published':'waiting_for_access';
+      await doc('teyzaCatalogueSubmissions/'+uid).set({ownerUid:uid,status,products,submittedAt:clock()});
+      return {status};
     }
     if(action==='catalogue_review') {
       experience.recentAdmin(auth,clock);

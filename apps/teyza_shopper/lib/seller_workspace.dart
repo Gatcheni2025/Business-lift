@@ -51,7 +51,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
+  bool get hasProductAccess=>listingPaid||complimentaryAccess;
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -102,7 +103,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -172,7 +173,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
       photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';listingPlan='free';listingPaid=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -241,7 +242,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> chooseProducts() async {
     if(busy||draftError!=null)return;
-    if(!listingPaid){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade();return;}
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
       session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
@@ -249,7 +250,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     await load();
     if(mounted&&widget.sellerMode)setState((){sellerTab=1;productsView=true;});
     if(mounted){setState(()=>rangeStatus=result['publication']=='live'?
-      shop?.category=='wholesale'?'Your wholesale range is available only to approved spaza owners.':'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller registration to start selling.');
+      shop?.category=='wholesale'?'Your wholesale range is available only to approved spaza owners.':'Your selected range is visible to shoppers.':result['serviceUnavailable']==true?'Products saved privately. Contact Teyza support to activate shop services before publishing.':'Products saved privately. Complete seller verification and activate product access to start selling.');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
@@ -257,7 +258,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
       if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller registration is complete.');
+        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller verification and product access are complete.');
     }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
   }
   Future<void> productPhoto(SellerDraft product) async {
@@ -282,13 +283,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     }catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(error))));}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  Future<void> submitCatalogue() async {
-    if(busy)return;setState(()=>busy=true);
-    try{await mobile.call('catalogue_submit');
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Catalogue submitted for review. Your drafts are not public yet.')));
-    }catch(error){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(mobileError(error))));}
-    finally{if(mounted)setState(()=>busy=false);}
-  }
   Future<void> openTool(SellerTool tool) async{
     if(tool==SellerTool.verification&&shop!=null){
       await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:widget.session,shop:shop!,api:widget.mobileApi)));
@@ -304,7 +298,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
-    if(!listingPaid){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade();return;}
     final uid=loadedUid;if(uid==null||uid!=widget.session.userId)return;
     setState(()=>busy=true);
     try{
@@ -314,7 +308,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       await loadAfterSave();
       await syncRange();
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content:Text('Product saved as a private draft.')));
+        SnackBar(content:Text(rangeStatus??'Product saved.')));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content:Text(e.toString().replaceFirst('Bad state: ',''))));}
     finally{if(mounted)setState(()=>busy=false);}
@@ -351,7 +345,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _edit([SellerDraft? existing]) async{
     if(busy)return;
-    if(!listingPaid){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade();return;}
     final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
     final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));
@@ -371,7 +365,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               style:Theme.of(ctx).textTheme.headlineSmall),
             const SizedBox(height:10),
             Text(fromCatalogue?'Update your price and stock. Your active shop’s range updates for shoppers.':
-              'Custom products are saved privately and submitted for review.'),
+              'Products publish automatically when your registration is approved and product access is active.'),
             const SizedBox(height:16),
             TextFormField(controller:name,maxLength:120,readOnly:fromCatalogue,
               decoration:const InputDecoration(labelText:'Product name',border:OutlineInputBorder()),
@@ -464,7 +458,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Active paid seller · manage membership':'Free shop · upgrade when adding products',
+      listingPaid?'Active paid seller · manage membership':complimentaryAccess?'Temporary product access active':'Free shop · upgrade when adding products',
       ()=>openUpgrade()),
     if(listingPaid)businessTile(Icons.campaign_outlined,'Promote your business · R29',
       promotionActive?'Promotion active for seven days':'Increase local visibility for seven days',
@@ -495,9 +489,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(draftError!),
         TextButton(onPressed:load,child:const Text('Retry products'))])),
       productList(),const SizedBox(height:12),
-      FilledButton.icon(onPressed:busy||draftError!=null||drafts.isEmpty?null:submitCatalogue,
-        icon:const Icon(Icons.publish_outlined),label:const Text('Submit custom products for review')),
-      const Padding(padding:EdgeInsets.all(12),child:Text('Selected products appear after shop setup. Custom products and replacement photos need review.',
+      const Padding(padding:EdgeInsets.all(12),child:Text('Products and photos publish automatically once your registration and product access are active.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
     2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
@@ -538,7 +530,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                       cataloguePhotoForDraft(item.id)!=null?CataloguePhoto(photoKey:cataloguePhotoForDraft(item.id)!,size:48):null,
                   title:Text(item.name),
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
-                    (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Private draft')),
+                    (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Custom product')),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
                   onTap:busy?null:()=>_edit(item)),
                 Wrap(alignment:WrapAlignment.end,children:[
@@ -610,10 +602,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
-          if(!listingPaid)const Card(child:ListTile(
+          if(!hasProductAccess)const Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
-            subtitle:Text('Once approved, your shop can appear nearby. Upgrade for R49 when ready to add products.'))),
+            subtitle:Text('Once approved, your shop can appear nearby. Check your membership options when ready to add products.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -630,7 +622,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business membership active':'Free shop · upgrade to add products')),
+            label:Text(listingPaid?'Business membership active':complimentaryAccess?'Temporary product access active':'Free shop · upgrade to add products')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
@@ -648,9 +640,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           const SizedBox(height:12),
           if(productsView)...[
             OutlinedButton.icon(onPressed:editProfile,icon:const Icon(Icons.edit_outlined),label:const Text('Edit shop profile')),
-            FilledButton.icon(onPressed:busy||drafts.isEmpty?null:submitCatalogue,icon:const Icon(Icons.publish_outlined),
-              label:const Text('Submit catalogue for review')),
-            const Padding(padding:EdgeInsets.all(12),child:Text('Complete seller registration to publish your selected range. Custom products and replacement product photos are reviewed separately.',
+            const Padding(padding:EdgeInsets.all(12),child:Text('Products and photos publish automatically once your registration and product access are active.',
               style:TextStyle(fontSize:12,color:Color(0xFF6C7880))))
           ],
         ]
@@ -658,3 +648,4 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     })));
   }
 }
+

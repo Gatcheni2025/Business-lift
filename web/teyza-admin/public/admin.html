@@ -4,7 +4,7 @@
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#010F1C">
 <meta name="teyza-admin-release" content="R321">
 <title>Operations · Teyza Admin</title>
-<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R322">
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R323">
 </head><body>
 <header class="topbar"><a href="/" class="brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="128" height="48"><span>Admin workspace</span></a>
 <div class="account"><span id="accountEmail">Secure seller review</span><button id="signOut" class="button quiet" hidden>Sign out</button></div></header>
@@ -22,9 +22,9 @@
   </div>
  </section>
  <section id="workspace" hidden>
-<nav class="admin-nav" aria-label="Admin workspaces"><button type="button" data-admin-view="overview">Overview</button><button type="button" data-admin-view="sellers">Sellers</button><button type="button" data-admin-view="users">Users &amp; access</button><button type="button" data-admin-view="approvals">Approvals & images</button><button type="button" data-admin-view="products">Product approvals</button><button type="button" data-admin-view="billing">Paystack billing</button><button type="button" data-admin-view="support">Support</button><button type="button" data-admin-view="finance">Stock finance</button><button type="button" data-admin-view="field">HR &amp; field team</button></nav>
+<nav class="admin-nav" aria-label="Admin workspaces"><button type="button" data-admin-view="approvals">Seller verification</button><button type="button" data-admin-view="sellers">Sellers &amp; exceptions</button><button type="button" data-admin-view="overview">Overview</button><button type="button" data-admin-view="users">Users &amp; access</button><button type="button" data-admin-view="billing">Subscriptions</button><button type="button" data-admin-view="support">Support</button><button type="button" data-admin-view="finance">Stock finance</button><button type="button" data-admin-view="field">HR &amp; field team</button></nav>
 <div id="operationsPanel"></div><div id="approvalView" hidden>
-  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Seller approvals</h2></div><div class="session"><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet">Renew session</button></div></div>
+  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Verify seller registrations</h2><p>Review the documents and approve the seller, or explain what they need to fix. Products publish automatically when access is active.</p></div><div class="session"><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet">Renew session</button></div></div>
   <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
   <div class="review-layout">
    <section class="panel queue-panel" aria-labelledby="queueTitle"><div class="panel-heading"><div><h3 id="queueTitle">Waiting for your review</h3><p>New and resubmitted owner photos.</p></div><button id="refreshQueue" class="button quiet small">Refresh</button></div>
@@ -41,14 +41,14 @@
      <button type="button" id="enlargePhoto" class="button quiet">Enlarge current image</button><div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
      <dl id="identityDetails" class="identity-details" hidden></dl>
      <div class="review-decision"><h3>Your review</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
-      <label>Review note<textarea id="reason" rows="3" maxlength="400" placeholder="Explain any changes the seller needs to make."></textarea></label>
+      <label>Recommendation for the seller<textarea id="reason" rows="3" maxlength="400" placeholder="Required when rejecting or requesting a new selfie. Explain what to correct and how to resubmit."></textarea></label>
       <p id="decisionHint" class="footnote">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
       <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
-      <p class="footnote">Approval adds the verified owner badge. Completed registration controls selling access.</p>
+      <p class="footnote">Once verified, products publish automatically with an active subscription or an administrator's temporary exception.</p>
      </div>
     </div>
    </section>
   </div>
  </div></section>
  <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Paystack Admin R321</small></footer>
-</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R322"></script></body></html>
+</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R323"></script></body></html>

@@ -461,12 +461,12 @@ test('Closing times and duplicate products do not silently become invalid orders
  assert.notEqual(D.threadId('ab','c'),D.threadId('a','bc'));
 });
 
-test('Publishing a reviewed catalogue cannot restore stock already reserved by an order',async()=>{
+test('Automatic publication cannot restore stock already reserved by an order',async()=>{
  const {service,db}=fixture({'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',name:'Bread',category:'Groceries',priceCents:1800,stockQty:5}});
  const order=await service.execute(buyer,'order_request',{shopId:'seller1',requestId:'reservation',mode:'collection',phone:'0712345678',items:[{id:'bread1',quantity:2}]});
  await service.execute(owner,'order_update',{orderId:order.id,status:'confirmed'});
  await service.execute(owner,'catalogue_submit');
- await service.execute({...buyer,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'seller1'});
+ await service.synchronizeCatalogue('seller1');
  assert.equal(db.records.get('teyzaPublicShops/seller1').products[0].stock,3);
  assert.equal(db.records.get('teyzaDraftProducts/seller1/items/bread1').stockQty,3);
 });
@@ -543,19 +543,18 @@ test('Invalid selections and forged draft contents cannot publish a made-up cata
  await service.synchronizeCatalogue('seller1');
  assert(!db.records.get('teyzaPublicShops/seller1').products.some(p=>p.id==='catalog_milk-2-l'));
 });
-test('Reviewed replacement photos persist and catalogue review uses the current template price and stock',async()=>{
+test('Uploaded replacement photos publish automatically with current template price and stock',async()=>{
  const {service,db}=fixture();
  await service.execute(owner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
- const url='https://example.test/reviewed-owner-photo.jpg';
- db.records.set('teyzaProductPhotos/seller1/items/catalog_milk-2-l',{ownerUid:'seller1',url});
+ const {url}=await service.execute(owner,'product_photo',{productId:'catalog_milk-2-l',consent:true,imageBase64:jpeg});
  await service.execute(owner,'catalogue_submit');
  const key='teyzaDraftProducts/seller1/items/catalog_milk-2-l';
  db.records.set(key,{...db.records.get(key),priceCents:3200,stockQty:2});
- await service.execute({...owner,uid:'admin',teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'seller1'});
  await service.synchronizeCatalogue('seller1');
  const published=db.records.get('teyzaPublicShops/seller1');
- assert.equal(published.products[0].imageUrl,url);assert.equal(published.products[0].priceCents,3200);assert.equal(published.products[0].stock,2);
- assert.equal(published.productHighlights[0].imageUrl,url);
+ const milk=published.products.find(p=>p.id==='catalog_milk-2-l');
+ assert.equal(milk.imageUrl,url);assert.equal(milk.priceCents,3200);assert.equal(milk.stock,2);
+ assert.equal(published.productHighlights.find(p=>p.id==='catalog_milk-2-l').imageUrl,url);
  await service.synchronizeCatalogue('seller1');assert.deepEqual(db.records.get('teyzaPublicShops/seller1'),published);
 });
 
@@ -614,9 +613,7 @@ test('Approval recreates a missing listing with the prepared products, services,
  await approve(service,db);
  const listing=(await service.publicDirectory()).entries.find(s=>s.id==='buyer1');
  assert.equal(listing.latitude,-29.7402);assert.equal(listing.longitude,30.992);assert.equal(listing.area,'KwaMashu');assert.equal(listing.city,'Durban');
- assert.equal(listing.products.length,0,'Identity review must not publish product drafts');
- await service.execute({...newOwner,email_verified:true},'catalogue_submit');
- await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
+ assert.equal(listing.products.length,1,'A paid seller publishes automatically when identity is approved');
  const approved=(await service.publicDirectory()).entries.find(x=>x.id==='buyer1');
  assert.equal(approved.products[0].priceCents,3000);
  assert.equal(listing.services.liveChat,true);assert.equal(listing.deliveryEnabled,true);
@@ -649,8 +646,6 @@ test('Pausing for a new owner review preserves approved product photos and the r
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
  await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
- await service.execute({...newOwner,email_verified:true},'catalogue_submit');
- await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
  const order=await service.execute({...buyer,uid:'customer2'},'order_request',{shopId:'buyer1',requestId:'reserved',mode:'collection',phone:'0712345678',items:[{id:'catalog_milk-2-l',quantity:1}]});
  await service.execute({...newOwner,email_verified:true},'order_update',{orderId:order.id,status:'confirmed'});
  const ref='teyzaPublicShops/buyer1',published=db.records.get(ref),url='https://example.test/approved-product.jpg';
@@ -693,7 +688,7 @@ test('Completion requires real linked phone, document and selfie; forged complet
   assert(!f.db.records.has('teyzaPublicShops/buyer1'));
  }
 });
-test('Completing setup and seller identity review still require separate product catalogue approval',async()=>{
+test('Paid products publish on seller verification without a second approval',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
  await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  const result=await service.execute(newOwner,'seller_onboarding_complete',{ownerUid:'seller1',catalogueEnabled:true,approvalStatus:'approved'});
@@ -707,10 +702,8 @@ test('Completing setup and seller identity review still require separate product
  assert.equal((await service.execute(newOwner,'seller_onboarding_complete')).sellingStatus,'pending_approval');
  await approve(service,db);
  shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(shop.status,'active');
- assert.equal(shop.products.length,0,'Unreviewed catalogue cannot appear after identity approval');
- await service.execute({...newOwner,email_verified:true},'catalogue_submit');
- assert.equal(db.records.get('teyzaPublicShops/buyer1').products.length,0);
- await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
+ assert.equal(shop.products.length,1,'Verified paid sellers publish products without another review');
+ assert.equal((await service.execute({...newOwner,email_verified:true},'catalogue_submit')).status,'published');
  shop=db.records.get('teyzaPublicShops/buyer1');
  assert.equal(shop.products[0].priceCents,3000);assert.equal(shop.products.length,1);
  assert.equal(shop.approvalStatus,'approved');assert.equal(shop.identityVerified,true);assert.equal(shop.sellingEnabled,true);
@@ -741,6 +734,18 @@ test('Identity numbers and document images are encrypted, private, consented and
  const opened=await service.execute(reviewer,'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId});
  assert.equal(opened.details.documentNumber,personal.documentNumber);assert.equal(opened.imageBase64,jpeg);
  await rejects(service.execute({...newOwner,teyzaAdmin:true,auth_time:1000},'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId}),403);
+});
+test('A missing document can be rejected with a clear recommendation, but never approved',async()=>{
+ const {service,db}=onboardFixture();await ready(service);db.records.delete('teyzaSellerIdentity/buyer1');
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const decision={sellerUid:'buyer1',submissionId:db.records.get('teyzaMobileVerification/buyer1').submissionId};
+ await rejects(service.execute(reviewer,'admin_seller_review',{...decision,status:'approved'}),409);
+ await rejects(service.execute(reviewer,'admin_seller_review',{...decision,status:'rejected',reason:'Missing'}),422);
+ await service.execute(reviewer,'admin_seller_review',{...decision,status:'rejected',reason:'Please upload a clear identity document.'});
+ const summary=await service.execute(newOwner,'seller_summary');
+ assert.equal(summary.verification.status,'rejected');
+ assert.equal(summary.verification.reviewNote,'Please upload a clear identity document.');
+ assert.equal(summary.sellingEnabled,false);
 });
 test('Version 2 admin approval requires both current private views and actual OTP, then adds the badge',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);await service.execute(newOwner,'seller_onboarding_complete');
@@ -875,13 +880,44 @@ test('Unpaid sellers can prepare private products but cannot publish them before
   products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  assert.equal(draft.publication,'private');
  assert.equal(db.records.has('teyzaDraftProducts/seller1/items/catalog_milk-2-l'),true);
- assert.equal((await service.execute(owner,'catalogue_submit')).status,'pending_review');
+ assert.equal((await service.execute(owner,'catalogue_submit')).status,'waiting_for_access');
  await rejects(service.execute({...buyer,teyzaAdmin:true,auth_time:1000},
   'catalogue_review',{sellerUid:'seller1'}),409);
- assert.equal(db.records.get('teyzaCatalogueSubmissions/seller1').status,'pending_review');
+ assert.equal(db.records.get('teyzaCatalogueSubmissions/seller1').status,'waiting_for_access');
  const pub=await service.publicDirectory();
  const entry=pub.entries.find(x=>x.id==='seller1');
  assert(!entry||!entry.products.some(x=>x.id==='catalog_milk-2-l'));
+});
+test('Custom products publish automatically with a paid plan or a recorded temporary exception',async()=>{
+ const draft={ownerUid:'seller1',status:'draft',name:'Local jam',category:'Groceries',description:'Small jar',priceCents:2300,stockQty:6};
+ const f=fixture({'teyzaSellerAccounts/seller1':{...seller,listingPlan:'free',catalogueApprovalRequired:true},
+  'teyzaPublicShops/seller1':{...shop,products:[],reviewedProductIds:[]},
+  'teyzaBilling/seller1':{ownerUid:'seller1',status:'unpaid'},
+  'teyzaDraftProducts/seller1/items/jam1':draft});
+ await f.service.synchronizeCatalogue('seller1');
+ assert.equal(f.db.records.get('teyzaPublicShops/seller1').products.length,0);
+ const admin={...buyer,teyzaAdmin:true,auth_time:1000};
+ await f.service.execute(admin,'ops_complimentary_access',{sellerUid:'seller1',days:7,
+  reason:'Pilot seller testing exception',confirmed:true});
+ const product=f.db.records.get('teyzaPublicShops/seller1').products.find(p=>p.id==='jam1');
+ assert.equal(product.priceCents,2300);assert.equal(product.stock,6);
+ const summary=await f.service.execute(owner,'seller_summary');
+ assert.equal(summary.complimentaryAccess,true);assert.equal(summary.listingPaid,false);
+ await f.service.execute(admin,'ops_complimentary_revoke',{sellerUid:'seller1',
+  reason:'Pilot testing is now complete',confirmed:true});
+ assert.equal(f.db.records.get('teyzaPublicShops/seller1').products.length,0);
+ assert.equal(f.db.records.get('teyzaDraftProducts/seller1/items/jam1').name,'Local jam');
+ assert.equal((await f.service.execute(owner,'seller_summary')).complimentaryAccess,false);
+});
+test('Only valid owner drafts and server-stored product photos are published',async()=>{
+ const f=fixture({'teyzaPublicShops/seller1':{...shop,products:[]},
+  'teyzaDraftProducts/seller1/items/good':{ownerUid:'seller1',status:'draft',name:'Soap',category:'Essentials',priceCents:1200,stockQty:2},
+  'teyzaDraftProducts/seller1/items/other':{ownerUid:'somebody_else',status:'draft',name:'Injected',category:'Essentials',priceCents:1200,stockQty:2},
+  'teyzaDraftProducts/seller1/items/bad':{ownerUid:'seller1',status:'draft',name:'Bad price',category:'Essentials',priceCents:-1,stockQty:2},
+  'teyzaProductPhotos/seller1/items/good':{ownerUid:'seller1',objectPath:'teyza/product-photos/seller1/good/fake.jpg',url:'https://evil.example/photo'}});
+ await f.service.synchronizeCatalogue('seller1');
+ const products=f.db.records.get('teyzaPublicShops/seller1').products;
+ assert.deepEqual(products.map(x=>x.id),['good']);assert.equal(products[0].imageUrl,undefined);
 });
 test('wholesale directory protects supplier prices and only approved spaza owners can request stock',async()=>{
  const supplier={...seller,category:'wholesale',shopName:'KwaMashu Bulk Depot'};

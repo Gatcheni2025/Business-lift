@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {createBilling,verifySignature,validCheckoutUrl,nextMonth,INTRO_CENTS,MONTHLY_CENTS,PROMO_CENTS}=require('./billing-paystack');
 const NOW=Date.parse('2026-11-04T07:00:00+02:00');
-function fixture(seed={}) {
+function fixture(seed={},options={}) {
  const records=new Map(Object.entries({'teyzaSellerAccounts/shop1':{
   uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free'},...seed}));
  const db={
@@ -10,6 +10,14 @@ function fixture(seed={}) {
     create:async v=>{if(records.has(path))throw Error('duplicate reference');records.set(path,v);},
     set:async(v,o)=>records.set(path,o?.merge?{...records.get(path),...v}:v),
     update:async v=>{assert(records.has(path));records.set(path,{...records.get(path),...v});}}),
+  collection:path=>{
+   let field,wanted,max=Infinity;
+   const q={where:(key,op,value)=>{assert.equal(op,'==');field=key;wanted=value;return q;},
+    limit:n=>{max=n;return q;},get:async()=>({docs:[...records].filter(([key,value])=>
+      key.startsWith(path+'/')&&!key.slice(path.length+1).includes('/')&&value[field]===wanted)
+      .slice(0,max).map(([key,value])=>({id:key.split('/').at(-1),data:()=>value,ref:db.doc(key)}))})};
+   return q;
+  },
   runTransaction:async fn=>{
     const writes=[],tx={
       get:ref=>ref.get(),set:(ref,v,o)=>writes.push(()=>ref.set(v,o)),
@@ -39,7 +47,7 @@ function fixture(seed={}) {
   return {ok:true,json:async()=>({status:true,data})};
  };
  const api=createBilling({db,clock:()=>NOW,getSecret:()=> 'sk_test_FAKE',
-  getPlanCode:()=> 'PLN_TEST99',send});
+  getPlanCode:()=> 'PLN_TEST99',send,...options});
  const auth={uid:'shop1',email:'owner@example.test',email_verified:true};
  return {api,auth,records,requests};
 }
@@ -50,6 +58,7 @@ test('R49 introductory checkout is server-priced and only occurs when requested'
  assert.equal(result.amountCents,INTRO_CENTS);
  assert.equal(result.monthlyCents,MONTHLY_CENTS);
  assert.equal(result.introductory,true);
+ assert.match(result.reference,/^TZM-[a-f0-9]{26}$/,'Reference must use Paystack-supported characters');
  assert(validCheckoutUrl(result.checkoutUrl));
  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).status,'pending');
  const payload=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
@@ -100,4 +109,40 @@ test('Only a fresh administrator can verify a Teyza-issued transaction for its o
  assert.equal(records.get('teyzaBilling/shop1').paymentEnvironment,'test');
  assert.equal(records.get('teyzaSellerAccounts/shop1').listingPlan,'basic');
  assert.equal((await api.execute(admin,'ops_paystack_confirm',data)).alreadyConfirmed,true);
+});
+
+test('A verified payment can repair a failed publication without charging or extending twice',async()=>{
+ let attempts=0;
+ const {api,auth,records}=fixture({}, {refresh:async()=>{if(++attempts===1)throw Error('temporary publication outage');}});
+ const checkout=await api.execute(auth,'billing_checkout');
+ await assert.rejects(api.execute(auth,'billing_confirm',{reference:checkout.reference}),/temporary publication outage/);
+ const paidUntil=records.get('teyzaBilling/shop1').paidUntil;
+ const retry=await api.execute(auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(retry.alreadyConfirmed,true);assert.equal(retry.paymentEnvironment,'test');
+ assert.equal(records.get('teyzaBilling/shop1').paidUntil,paidUntil);
+ assert.equal(attempts,2);
+});
+test('Sandbox checkout cannot alter the production seller database',async()=>{
+ const {api,auth,records}=fixture({}, {getProjectId:()=> 'business-lift-3c19c'});
+ await assert.rejects(api.execute(auth,'billing_checkout'),e=>e.status===503);
+ assert.equal(records.size,1);assert.equal(records.has('teyzaBilling/shop1'),false);
+});
+test('Verified renewal extends the membership once; duplicate or wrong-plan events do not',async()=>{
+ const ref='recurring-payment-1',paidUntil=NOW+86400000;
+ let plan='PLN_TEST99',refreshes=0;
+ const send=async()=>({ok:true,json:async()=>({status:true,data:{reference:ref,status:'success',currency:'ZAR',
+  amount:9900,id:100,plan:{plan_code:plan},customer:{customer_code:'CUS_TEST'}}})});
+ const {api,records}=fixture({
+  'teyzaSellerAccounts/shop1':{uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'basic'},
+  'teyzaBilling/shop1':{ownerUid:'shop1',status:'paid',paidUntil,paystackCustomerCode:'CUS_TEST',paystackSubscriptionCode:'SUB_TEST'}
+ },{send,refresh:async()=>{refreshes++;}});
+ const payload={event:'charge.success',data:{reference:ref}},raw=Buffer.from(JSON.stringify(payload));
+ const signature=crypto.createHmac('sha512','sk_test_FAKE').update(raw).digest('hex');
+ plan='PLN_WRONG';await api.webhook(raw,signature,payload);
+ assert.equal(records.get('teyzaBilling/shop1').paidUntil,paidUntil);
+ plan='PLN_TEST99';await api.webhook(raw,signature,payload);
+ assert.equal(records.get('teyzaBilling/shop1').paidUntil,nextMonth(paidUntil));
+ await api.webhook(raw,signature,payload);
+ assert.equal(records.get('teyzaBilling/shop1').paidUntil,nextMonth(paidUntil));
+ assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });

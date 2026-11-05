@@ -89,7 +89,7 @@ async function main(){
   });
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
-  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Approvals & images',exact:true});await nav.waitFor({state:'visible'});await nav.click();}
+  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});await nav.click();}
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
@@ -122,7 +122,7 @@ async function main(){
   });
   await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
     const f=await pageFor();
-    await f.page.getByRole('button',{name:'Sellers',exact:true}).click();
+    await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByRole('heading',{name:'Verification documents'}).waitFor();
     await f.page.getByRole('button',{name:'View private document'}).first().click();
@@ -206,18 +206,15 @@ async function main(){
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
-   await f.page.getByRole('button',{name:'Paystack billing',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack membership',{exact:true}).waitFor();
-   await f.page.getByText('Review seller products',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Subscriptions',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack membership',{exact:true}).waitFor();
+   await f.page.getByText('Seller products',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
-   assert(await f.page.getByRole('button',{name:'Approve submitted product catalogue'}).isDisabled());
+   assert.equal(await f.page.getByRole('button',{name:'Approve submitted product catalogue'}).count(),0);
    assert(await f.page.getByRole('button',{name:'Print historical statement',exact:true}).isVisible());
    const account=f.page.locator('[data-seller-account]');await account.waitFor();await f.page.waitForFunction(()=>{const r=document.querySelector('[data-seller-account]')?.getBoundingClientRect();return r&&r.top>=-1&&r.top<innerHeight;});assert.equal(await f.page.getByRole('button',{name:'Open account',exact:true}).count(),0);
    await f.page.getByRole('button',{name:'← Back to seller directory',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().waitFor();
-   await f.page.getByRole('button',{name:'Product approvals',exact:true}).click();
-   await f.page.getByRole('button',{name:'Review products'}).first().waitFor();
-   await f.page.getByRole('button',{name:'Review products'}).first().click();
-   await f.page.getByText('Paystack membership',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('button',{name:'Product approvals',exact:true}).count(),0);
    await f.page.getByRole('button',{name:'Support',exact:true}).click();await f.page.getByText('Log a received support request',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
@@ -228,7 +225,7 @@ async function main(){
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-login-phone.png'),fullPage:true});
    await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();
-   await f.page.getByRole('button',{name:'Approvals & images',exact:true}).click();
+   await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
    await f.page.locator('.seller-row').first().waitFor();assert.equal(await f.page.locator('#password').inputValue(),'');assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Current ID and selfie, explicit confirmation and exact backend approval payload',async()=>{
@@ -292,3 +289,4 @@ async function main(){
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
+

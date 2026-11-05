@@ -25,7 +25,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
-    catalogueApprovalRequired:true,createdAt:new Date(clock()),updatedAt:new Date(clock())};
+    catalogueApprovalRequired:false,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
@@ -65,18 +65,19 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    if(uid===sellerUid)D.fail(403,'Another administrator must review your own shop.');
    if(!['approved','needs_new_photo','rejected'].includes(data.status))D.fail(422,'Choose a review decision.');
    const reason=D.text(data.reason||'','review note',400,data.status!=='approved');
+   if(data.status!=='approved'&&reason.length<10)D.fail(422,'Add a recommendation of at least 10 characters explaining what the seller should correct.');
    const authUser=await getAuthUser(sellerUid);
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaMobileVerification/'+sellerUid),accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid);
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
     const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
-    const [v,a,s,view,o,i,c,f,l,b,drafts]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
+    const [v,a,s,view,o,i,c,f,l,b,drafts,photos]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
       tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),tx.get(doc('teyzaBilling/'+sellerUid)),
-      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201))]);
+      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201)),tx.get(db.collection('teyzaProductPhotos/'+sellerUid+'/items').limit(201))]);
     const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
     const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
     if(setup.requiredVersion===2){
-      if(!identity||data.evidenceId!==identity.evidenceId)D.fail(409,'View the current identity document and refresh this review.');
+      if((identity&&data.evidenceId!==identity.evidenceId)||(!identity&&data.status==='approved'))D.fail(409,'View the current identity document and refresh this review.');
       if(data.status==='approved'){
         require('./onboarding').checkedPhone(authUser,a.exists?a.data().phone:'');
         if(!require('./onboarding').current(identity,sellerUid,clock)||!identityView?.exists||identityView.data().sellerUid!==sellerUid||clock()-identityView.data().viewedAt>300000)
@@ -98,7 +99,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
     const next=P.project(sellerUid,{account:updatedAccount,setup:nextSetup,verification:updatedVerification,
       shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
-      location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
+      location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),photos:photos.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,
       listingPlan:updatedAccount.listingPlan,

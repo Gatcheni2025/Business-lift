@@ -1,14 +1,14 @@
-import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R322';
-import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R322';
-import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R322';
+import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
+import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
+import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Every shop. One clear view.',products:'Product approvals',billing:'Verified Paystack payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Verified Paystack payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  let mandatePhotoUrl=null;
  function clearMandatePhoto(){if(mandatePhotoUrl){document.getElementById('largePhoto').removeAttribute('src');URL.revokeObjectURL(mandatePhotoUrl);mandatePhotoUrl=null;}}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,
+ let generation=0,ready=false,view='approvals',sellers=[],next=null,selected=null,detail=null,
      users=[],usersNext=null,userSelected=null,userDetail=null,
      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,
      moreFinance=null,moreTickets=null,busy=false;
@@ -28,7 +28,7 @@ export function createOperations({api,onError}){
  function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
  function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;heading();if(!ready)return;
   if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
- function overview(){const stats=el('div',undefined,'metrics');for(const [label,n,note] of [['Seller records loaded',sellers.length,next?'More sellers available':'Current registry page'],['Awaiting approval',sellers.filter(s=>s.approvalStatus==='pending').length,'Among loaded sellers'],['Monthly subscription',money(9900),'Per enrolled seller / month']]){const c=el('article');c.append(el('span',label,'metric-label'),el('strong',String(n)),el('small',note));stats.append(c);}root.append(stats);const cards=el('div',undefined,'ops-grid');for(const [v,title,desc] of [['approvals','Build a trusted marketplace','Inspect current ID or company evidence and the owner selfie before approval.'],['users','Manage user accounts','Create shopper or seller accounts, send private setup emails and suspend accounts when needed.'],['products','Approve paid seller catalogues','Review submitted products after verification and Paystack membership confirmation.'],['billing','See verified Paystack payments','Review payment status, reconcile issued references and view historical statements.'],['support','Keep every request moving','Track open cases, priority and internal review notes.'],['finance','Review stock finance','Manually review enquiries and record approval in principle. No automatic disbursement.']]){const c=card(title,desc);c.append(button('Open workspace →',()=>navigate(v)));cards.append(c);}root.append(cards);root.append(el('p','Product-selling access follows verified Paystack membership and seller approval. No manual mandates or receipt activation.','notice warning'));}
+ function overview(){const stats=el('div',undefined,'metrics');for(const [label,n,note] of [['Seller records loaded',sellers.length,next?'More sellers available':'Current registry page'],['Awaiting approval',sellers.filter(s=>s.approvalStatus==='pending').length,'Among loaded sellers'],['Monthly subscription',money(9900),'Standard monthly renewal']]){const c=el('article');c.append(el('span',label,'metric-label'),el('strong',String(n)),el('small',note));stats.append(c);}root.append(stats);const cards=el('div',undefined,'ops-grid');for(const [v,title,desc] of [['approvals','Verify seller registrations','Inspect the current identity document and selfie, then approve or give a clear recommendation.'],['sellers','Sellers and access exceptions','View seller accounts and grant a recorded temporary payment exception when needed.'],['users','Manage user accounts','Create shopper or seller accounts, send private setup emails and suspend accounts when needed.'],['billing','See verified Paystack payments','Review payment status, reconcile issued references and view historical statements.'],['support','Keep every request moving','Track open cases, priority and internal review notes.'],['finance','Review stock finance','Manually review enquiries and record approval in principle. No automatic disbursement.']]){const c=card(title,desc);c.append(button('Open workspace →',()=>navigate(v)));cards.append(c);}root.append(cards);root.append(el('p','Products publish automatically once seller verification and subscription access are complete.','notice warning'));}
  async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
  function registry(){const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[s.shopName+' · '+s.ownerEmail,tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);root.append(el('p','Select a seller to view their account, subscription and statement.','footnote'));return;}
@@ -79,7 +79,7 @@ export function createOperations({api,onError}){
   payment.append(table(['Reference','Type','Amount','Status','Action'],
     (d.payments||[]).map(row=>[
       row.reference,row.kind,money(row.amountCents),tag(row.status),
-      row.status==='pending'&&row.reference.startsWith('TZM_')?
+      row.status==='pending'&&/^TZM[_-]/.test(row.reference)?
         button('Verify with Paystack',async()=>{
           await request('ops_paystack_confirm',{sellerUid:d.seller.sellerUid,reference:row.reference});
           await choose(selected);
@@ -105,29 +105,14 @@ export function createOperations({api,onError}){
     await choose(selected);
   });
   settlement.append(payoutForm);root.append(settlement);
-  const catalogue=card('Review seller products','An approved shop and current Paystack membership are both required before products can be published.');
+  const catalogue=card('Seller products','Products publish automatically when registration is approved and subscription or temporary access is active.');
   const submitted=d.catalogue?.products||[];
   catalogue.append(tag(d.catalogue?.status||'not submitted'));
-  catalogue.append(el('p',submitted.length+' products submitted for review.'));
+  catalogue.append(el('p',submitted.length+' products in the current listing.'));
   catalogue.append(table(['Product','Category','Price','Stock'],submitted.map(p=>[
     p.name||p.id,p.category||'Other',money(p.priceCents||0),p.stock??'Not supplied'
   ])));
-  if(d.catalogue?.status==='pending_review'){
-    const blockers=[];
-    if(d.seller.approvalStatus!=='approved'||d.verification.status!=='approved')
-      blockers.push('seller identity/approval');
-    if(!d.membershipPaid&&!d.complimentaryAccess)blockers.push('verified Paystack membership or temporary complimentary access');
-    if(!d.verification.completed)blockers.push('completed seller onboarding');
-    if(blockers.length)catalogue.append(el('p','Approval blocked: '+blockers.join(', ')+'.','notice warning'));
-    const approve=button('Approve submitted product catalogue',async()=>{
-      if(!confirm('Approve '+submitted.length+' submitted products for '+d.seller.shopName+'? This publishes the verified catalogue once the shop is eligible.'))return;
-      await request('catalogue_review',{sellerUid:d.seller.sellerUid});
-      await choose(selected);
-      message('Catalogue reviewed and published. Paystack and shop eligibility remain enforced by the server.','success');
-    },'primary');
-    approve.disabled=!d.canApproveCatalogue||!submitted.length;
-    catalogue.append(approve);
-  }else catalogue.append(el('p','The seller must submit a product catalogue in their dashboard before an administrator can approve it.','footnote'));
+  if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller verification and subscription access are complete.','notice warning'));
   root.append(catalogue);
   const statement=card('Historical seller statement','Existing manual invoices and receipts are kept for audit only. They no longer enable product selling.');
   statement.append(button('Print historical statement',()=>printStatement(d)));

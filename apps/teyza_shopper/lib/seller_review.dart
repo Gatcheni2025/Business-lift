@@ -49,7 +49,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
   Future<void> decide(String status) async{
     final seller=selected;if(seller==null||busy||uid!=widget.session.userId)return;
     if(status=='approved'&&(!reviewed||photo==null||(documentRequired&&document==null))){setState(()=>error='View the current selfie and required identity document, then confirm your review.');return;}
-    if(status!='approved'&&note.text.trim().isEmpty){setState(()=>error='Write a short note explaining what the seller should do next.');return;}
+    if(status!='approved'&&note.text.trim().length<10){setState(()=>error='Write a recommendation of at least 10 characters explaining what the seller should do next.');return;}
     final yes=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:Text(status=='approved'?'Approve this seller?':'Send this review outcome?'),
       content:Text('${seller['shopName']}\n${status=='approved'?'This grants the verified owner badge. Seller setup completion controls access to selling.':note.text.trim()}'),
       actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Cancel')),
@@ -104,7 +104,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
         ],
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:reviewed,onChanged:busy||photo==null||(documentRequired&&document==null)?null:(v)=>setState(()=>reviewed=v==true),
           title:const Text('I have reviewed this selfie and the shop registration.')),
-        TextField(controller:note,maxLength:400,maxLines:3,enabled:!busy,decoration:const InputDecoration(labelText:'Review note to seller',border:OutlineInputBorder())),
+        TextField(controller:note,maxLength:400,maxLines:3,enabled:!busy,decoration:const InputDecoration(labelText:'Recommendation to seller',border:OutlineInputBorder())),
         const SizedBox(height:16),FilledButton.icon(onPressed:busy||!reviewed||photo==null||(documentRequired&&document==null)?null:()=>decide('approved'),icon:const Icon(Icons.verified_user_outlined),label:const Text('Approve seller')),
         OutlinedButton(onPressed:busy?null:()=>decide('needs_new_photo'),child:const Text('Request a new selfie')),
         TextButton(onPressed:busy?null:()=>decide('rejected'),child:const Text('Reject registration')),
@@ -112,3 +112,4 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
       ]
     ])));
 }
+

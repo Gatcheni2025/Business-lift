@@ -42,7 +42,8 @@ test('Legacy mandate and manual payment endpoints refuse to change billing',asyn
 test('Product approvals queue shows a verified Paystack seller and submitted catalogue',async()=>{
  const f=setup();
  f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
- f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',sellingEnabled:true});
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',sellingEnabled:true,
+   products:[{id:'catalog_milk',name:'Milk',category:'Dairy',priceCents:2500,stock:3}]});
  f.db.records.set('teyzaSellerOnboarding/seller1',{completedAt:now});
  f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',status:'approved'});
  f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',
