@@ -42,7 +42,8 @@ function updateControls(){
   $('viewSelfie').disabled||=!s||own||s.expired;
   $('rejectSeller').disabled||=!s||own;
   $('requestPhoto').disabled||=!s||own;
-  $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||s?.phoneVerified===false;
+  $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||
+    (s?.phoneVerificationRequired===true&&s?.phoneVerified===false);
   $('loadMore').hidden=!state.next;
   for(const [key,id] of [['identity','Identity'],['selfie','Selfie']]){
     const done=state.views.has(key);$('view'+id).classList.toggle('viewed',done);
@@ -90,7 +91,7 @@ function selectSeller(row){
   set('sellerStatus',row.expired?'New selfie needed':'Awaiting review');
   $('decisionHint').textContent=row.expired?'This selfie expired. Add a note and request a new selfie.':!row.evidenceId?
     'No current identity document was found. The seller must submit their ID, passport or company document.':
-    row.phoneVerified===false?'The seller must first verify the registered mobile number using SMS OTP. ID and selfie review alone cannot complete approval.':
+    row.phoneVerificationRequired===true&&row.phoneVerified===false?'The seller must first verify the registered mobile number using SMS OTP. ID and selfie review alone cannot complete approval.':
     'Open the current ID/passport and selfie. The server checks both view receipts before approval.';
   drawQueue();
 }

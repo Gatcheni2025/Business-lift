@@ -46,6 +46,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const result=await query.get(),rows=result.docs.slice(0,30);
    const shops=await Promise.all(rows.map(r=>doc('teyzaSellerAccounts/'+r.id).get()));
    const identities=await Promise.all(rows.map(r=>doc('teyzaSellerIdentity/'+r.id).get()));
+   const onboardings=await Promise.all(rows.map(r=>doc('teyzaSellerOnboarding/'+r.id).get()));
    const ownerUsers=await Promise.all(rows.map(r=>getAuthUser(r.id).catch(()=>null)));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};
     let phoneVerified=false;
@@ -53,7 +54,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     return {
     sellerUid:r.id,evidenceId:identities[i].exists?identities[i].data().evidenceId:null,evidenceKind:identities[i].exists?identities[i].data().kind:null,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
     phone:a.phone||'',ownerEmail:a.ownerEmail||'',companyName:a.companyName||'',registrationNumber:a.registrationNumber||'',
-    approvalStatus:a.approvalStatus||'pending',listingStatus:a.listingStatus||'not_listed',phoneVerified,
+    approvalStatus:a.approvalStatus||'pending',listingStatus:a.listingStatus||'not_listed',
+    phoneVerified,phoneVerificationRequired:onboardings[i].exists&&onboardings[i].data().requiredVersion===2,
     submissionId:v.submissionId||'legacy_'+v.submittedAt,submittedAt:v.submittedAt,expired:!v.objectPath||v.expiresAt<=clock()};}),
     next:result.docs.length>30?rows.at(-1).id:null};
   }
