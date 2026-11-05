@@ -117,7 +117,7 @@ jobs:
               echo '::error::QA signing requires a manual signed_release=true request.'
               exit 1
             fi
-            echo 'Signed QA/TestFlight preview ONLY. Existing production Firebase is unchanged; Paystack checkout stays disabled in store builds. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Signed QA/TestFlight preview ONLY. This build still uses the existing production Firebase accounts/data; use dedicated test accounts. Paystack checkout stays disabled in store builds. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
           elif [ "$SIGNING_MODE" = signed ]; then
             echo "This is a SIGNED production candidate. All existing backend health and billing checks still apply." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -127,7 +127,7 @@ jobs:
             echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
             exit 1
           fi
-      - name: Require read-only backend identity for isolated QA signing
+      - name: Read-only backend identity for QA-only signed preview
         if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true
         env:
           REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
@@ -146,7 +146,7 @@ jobs:
               raise SystemExit('::error::QA signing still requires a responding Teyza backend. No Firebase resources were modified.')
           print('QA-only signing against the unchanged Firebase project. Backend version:',
                 health.get('version','unknown'))
-          print('No Paystack checkout will be exposed by the store-channel Flutter binaries.')
+          print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
           print('Do not use the QA binaries as production-ready or claim R323 seller approval is live.')
           PY_QA
       - name: Require current seller service before a signed store build
@@ -317,7 +317,7 @@ jobs:
           python3 scripts/make_launcher_icon.py
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
       - name: Verify merged bundle has no advertising permissions
         working-directory: apps/teyza_shopper
         run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
