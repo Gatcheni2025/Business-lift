@@ -1,7 +1,7 @@
 name: Teyza Android and iOS Release
 # PR runs only check compilation and are intentionally unsigned. Manually running
 # this workflow defaults to signed distribution and requires original secrets.
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'Teyza SIGNED distribution' || 'Teyza UNSIGNED PR preview' }} - ${{ github.ref_name }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'Teyza SIGNED QA preview' || github.event_name == 'workflow_dispatch' && inputs.signed_release && 'Teyza SIGNED distribution' || 'Teyza UNSIGNED PR preview' }} - ${{ github.ref_name }}
 
 on:
   pull_request:
@@ -19,9 +19,13 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.23.0'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.23.0 in production mode'
         type: boolean
         default: true
+      qa_signing_only:
+        description: 'QA-only signed APK, AAB and IPA; does not require live R323; leaves Paystack checkout disabled in store builds'
+        type: boolean
+        default: false
       upload_to_testflight:
         description: 'Upload the SIGNED iOS IPA to TestFlight after successful checks (optional)'
         type: boolean
@@ -60,6 +64,7 @@ env:
   TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
   SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
+  QA_SIGNING_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'true' || 'false' }}
 
 jobs:
   upload_existing_ios:
@@ -84,7 +89,7 @@ jobs:
             }
       - uses: actions/download-artifact@v4
         with:
-          name: teyza-ios-release-signed
+          name: teyza-ios-release-${{ inputs.qa_signing_only && 'qa-signed' || 'signed' }}
           path: apple-upload
           run-id: ${{ inputs.upload_existing_ios_run }}
           github-token: ${{ github.token }}
@@ -101,14 +106,22 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Test signed QA preview isolation from production release gating
+        run: python3 scripts/test_teyza_signed_qa.py
       - name: Declare release signing mode and reject contradictory TestFlight requests
         env:
           REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
         shell: bash
         run: |
           echo "### Teyza build mode: $SIGNING_MODE" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$SIGNING_MODE" = signed ]; then
-            echo "This is a SIGNED distribution request. The existing Play upload certificate and Apple distribution identity will be validated before any signed artifacts are published." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$QA_SIGNING_ONLY" = true ]; then
+            if [ "$SIGNING_MODE" != signed ] || [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+              echo '::error::QA signing requires a manual signed_release=true request.'
+              exit 1
+            fi
+            echo 'Signed QA/TestFlight preview ONLY. This build still uses the existing production Firebase accounts/data; use dedicated test accounts. Paystack checkout stays disabled in store builds. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$SIGNING_MODE" = signed ]; then
+            echo "This is a SIGNED production candidate. All existing backend health and billing checks still apply." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "This is an UNSIGNED code-validation preview. Its AAB and iOS archive are NOT ready for Play Console or TestFlight. Use Actions > Run workflow > signed_release=true to produce store artifacts." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -116,8 +129,30 @@ jobs:
             echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
             exit 1
           fi
+      - name: Read-only backend identity for QA-only signed preview
+        if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true
+        env:
+          REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
+          TARGET_PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$TARGET_PLATFORMS" = android ]; then
+            echo '::error::TestFlight requires the iOS platform.'
+            exit 1
+          fi
+          python3 - <<'PY_QA'
+          import json, urllib.request
+          url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
+          with urllib.request.urlopen(url, timeout=30) as response:
+              health=json.load(response)
+          if health.get('ok') is not True or health.get('service') != 'teyza-mobile':
+              raise SystemExit('::error::QA signing still requires a responding Teyza backend. No Firebase resources were modified.')
+          print('QA-only signing against the unchanged Firebase project. Backend version:',
+                health.get('version','unknown'))
+          print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
+          print('Do not use the QA binaries as production-ready or claim R323 seller approval is live.')
+          PY_QA
       - name: Require current seller service before a signed store build
-        if: env.SIGNING_MODE == 'signed'
+        if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
         env:
           TEYZA_RELEASE_PLATFORMS: ${{ inputs.platforms }}
         run: |
@@ -284,7 +319,7 @@ jobs:
           python3 scripts/make_launcher_icon.py
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
       - name: Verify merged bundle has no advertising permissions
         working-directory: apps/teyza_shopper
         run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
@@ -301,14 +336,14 @@ jobs:
         if: env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload verified signed Android APK for direct device testing
         if: env.SIGNING_MODE == 'signed'
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-android-apk-signed
+          name: teyza-android-apk-${{ inputs.qa_signing_only && 'qa-signed' || 'signed' }}
           path: apps/teyza_shopper/build/release/teyza-*-signed.apk
           if-no-files-found: error
           retention-days: 30
@@ -319,7 +354,7 @@ jobs:
           # Debug APK is installable for smoke tests, but not Play upload signed.
           # Keep it separate from the unsigned release AAB.
           python3 scripts/prepare_mobile_release.py android --signing test
-          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID"
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
       - name: Upload installable Android test APK
         if: env.SIGNING_MODE != 'signed'
@@ -332,7 +367,7 @@ jobs:
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-android-aab-${{ env.SIGNING_MODE }}
+          name: teyza-android-aab-${{ inputs.qa_signing_only && 'qa-signed' || env.SIGNING_MODE }}
           path: apps/teyza_shopper/build/release/*
           if-no-files-found: error
           retention-days: 30
@@ -446,16 +481,16 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
-            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID"
+            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           fi
           python3 scripts/package_mobile_release.py ios
       - name: Upload iOS release archive
         uses: actions/upload-artifact@v4
         with:
-          name: teyza-ios-release-${{ env.SIGNING_MODE }}
+          name: teyza-ios-release-${{ inputs.qa_signing_only && 'qa-signed' || env.SIGNING_MODE }}
           path: apps/teyza_shopper/build/release/*
           if-no-files-found: error
           retention-days: 30
@@ -505,6 +540,6 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-infos
           flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
-          flutter build apk --debug
+          flutter build apk --debug --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
 
