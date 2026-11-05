@@ -378,13 +378,15 @@ void main(){
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final card=find.byKey(const ValueKey('essential-product-corner-milk'));
-    await tester.scrollUntilVisible(card,200,scrollable:find.byType(Scrollable).first);
+    final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
+      matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(card,200,scrollable:homeScroll);
     await tester.tap(card);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('change-shop')),findsOneWidget);
     expect(find.text('Corner Spaza'),findsWidgets);
     await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
     final add=find.byKey(const ValueKey('add-essential-corner-milk'));
-    await tester.ensureVisible(add);await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(add,200,scrollable:homeScroll);await tester.pumpAndSettle();
     await tester.tap(add);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('floating-cart')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
@@ -411,7 +413,9 @@ void main(){
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final first=find.byKey(const ValueKey('add-essential-one-bread'));
-    await tester.scrollUntilVisible(first,200,scrollable:find.byType(Scrollable).first);
+    final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
+      matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(first,200,scrollable:homeScroll);
     await tester.tap(first);await tester.pumpAndSettle();
     final second=find.byKey(const ValueKey('add-essential-two-milk'));
     await tester.ensureVisible(second);await tester.pumpAndSettle();
@@ -437,7 +441,9 @@ void main(){
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final add=find.byKey(const ValueKey('find-essential-milk'));
-    await tester.scrollUntilVisible(add,200,scrollable:find.byType(Scrollable).first);
+    final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
+      matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(add,200,scrollable:homeScroll);
     await tester.tap(add);await tester.pumpAndSettle();
     expect(find.text('No matching products'),findsOneWidget);
     expect(find.byKey(const ValueKey('floating-cart')),findsNothing);
