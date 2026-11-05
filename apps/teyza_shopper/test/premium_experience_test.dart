@@ -373,6 +373,7 @@ void main(){
     final shop=Shop.fromJson({'id':'corner','name':'Corner Spaza','area':'Durban',
       'latitude':-29.8587,'longitude':31.0218,'pickupEnabled':true,
       'products':[{'id':'milk','name':'Fresh Milk 1L','priceCents':2500,'stock':3}]});
+    expect(shop.pickup,isTrue);expect(shop.products.single.stock,3);
     await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
       enableBackgroundServices:false,catalogueLoader:()async=>[shop],
       directoryLoader:(area,type,radius)async=>[])));
@@ -381,12 +382,15 @@ void main(){
     final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
       matching:find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(card,200,scrollable:homeScroll);
+    await tester.ensureVisible(card);await tester.pumpAndSettle();
     await tester.tap(card);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('change-shop')),findsOneWidget);
     expect(find.text('Corner Spaza'),findsWidgets);
     await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
     final add=find.byKey(const ValueKey('add-essential-corner-milk'));
     await tester.scrollUntilVisible(add,200,scrollable:homeScroll);await tester.pumpAndSettle();
+    await tester.ensureVisible(add);await tester.pumpAndSettle();
+    expect(tester.widget<IconButton>(add).onPressed,isNotNull);
     await tester.tap(add);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('floating-cart')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
@@ -408,6 +412,7 @@ void main(){
         'latitude':-29.8588,'longitude':31.0218,
         'products':[{'id':'milk','name':'Fresh Milk','priceCents':2500,'stock':3}]})
     ];
+    expect(shops.first.pickup,isTrue);expect(shops.first.products.single.stock,4);
     await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
       enableBackgroundServices:false,catalogueLoader:()async=>shops,
       directoryLoader:(area,type,radius)async=>[])));
@@ -416,6 +421,8 @@ void main(){
     final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
       matching:find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(first,200,scrollable:homeScroll);
+    await tester.ensureVisible(first);await tester.pumpAndSettle();
+    expect(tester.widget<IconButton>(first).onPressed,isNotNull);
     await tester.tap(first);await tester.pumpAndSettle();
     final second=find.byKey(const ValueKey('add-essential-two-milk'));
     await tester.ensureVisible(second);await tester.pumpAndSettle();

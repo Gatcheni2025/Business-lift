@@ -100,6 +100,18 @@ void main(){
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
+  testWidgets('A free seller choosing Add product sees the price without starting a payment',(tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
+      initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
+      catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
+    expect(find.text('R49 first month · then R99/month'),findsOneWidget);
+    expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  });
   testWidgets('A delayed seller lookup cannot switch the app back after logout',(tester) async {
     SharedPreferences.setMockInitialValues({});final session=SellerSession();final result=Completer<SellerShop?>();
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,

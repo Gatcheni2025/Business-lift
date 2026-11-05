@@ -1588,7 +1588,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
           child:const Text('See all'))),
       if(displayedOnline.isNotEmpty||displayShops.isNotEmpty)
-        SizedBox(height:282,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:282,child:ListView(key:const PageStorageKey<String>('home-nearby-shops'),scrollDirection:Axis.horizontal,
           children:nearbyListings.take(30).map(nearbyCard).toList()))
       else if(loadingOnline)const SizedBox(height:106,
         child:Center(child:CircularProgressIndicator()))
@@ -1641,7 +1641,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           if(mounted)setState(()=>showAllShops=true);
         },child:const Text('Explore'))),
       if(nearbyOtherBusinesses.isNotEmpty)
-        SizedBox(height:282,child:ListView(scrollDirection:Axis.horizontal,
+        SizedBox(height:282,child:ListView(key:const PageStorageKey<String>('home-local-businesses'),scrollDirection:Axis.horizontal,
           children:nearbyOtherBusinesses.take(12).map(nearbyCard).toList()))
       else if(loadingOtherBusinesses)
         const SizedBox(height:105,child:Center(child:CircularProgressIndicator()))
@@ -1656,10 +1656,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             fontWeight:FontWeight.w800,fontSize:13)),
           subtitle:const Text('Spaza owners receive priority application review.'),
           trailing:const Icon(Icons.open_in_new_rounded,size:18),
-          onTap:() async {
-            await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
-              mode:LaunchMode.externalApplication);
-          })),
+          onTap:()=>openOwnerWorkspace())),
       const SizedBox(height:9),
       if(online.any((shop)=>shop.origin=='google_places'))
         const Text('Google Maps · Business information supplied by Google.',
@@ -1845,7 +1842,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final matching=items.where((x)=>category=='All'||x.$3==category).toList();
     if(matching.isEmpty)return empty('Find '+category.toLowerCase()+' nearby',
       'Open a participating shop to view its published products.');
-    return SizedBox(height:178,child:ListView(scrollDirection:Axis.horizontal,
+    return SizedBox(height:178,child:ListView(key:const PageStorageKey<String>('home-essential-categories'),scrollDirection:Axis.horizontal,
       children:matching.map((x)=>
         Container(width:132,margin:const EdgeInsets.only(right:11),
           child:Material(color:Colors.white,borderRadius:BorderRadius.circular(20),
@@ -1890,7 +1887,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Widget productShelf(List<ShopProduct> items) {
     if(items.isEmpty)return empty('No products to display','Choose another category or area.');
-    return SizedBox(height:256,child:ListView(scrollDirection:Axis.horizontal,
+    return SizedBox(height:240+MediaQuery.textScalerOf(context).scale(40),
+      child:ListView(key:const PageStorageKey<String>('home-featured-products'),scrollDirection:Axis.horizontal,
       children:items.take(18).map((entry){
         final p=entry.product;
         final added=basketShop?.id==entry.shop.id?(cart[p.id]??0):0;
