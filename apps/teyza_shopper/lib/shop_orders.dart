@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'shopper_chat.dart';
 import 'teyza_mobile_api.dart';
@@ -53,6 +54,42 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
     if(yes!=true||!mounted)return;setState(()=>working=true);
     try{await api.call('order_update',{'orderId':order['id'],'status':status});await load();}
     catch(e){if(mounted)setState(()=>error=mobileError(e));}
+    finally{if(mounted)setState(()=>working=false);}
+  }
+  Future<void> payWithPaystack(Map<String,dynamic> order)async{
+    if(working||uid!=widget.session.userId)return;
+    setState(()=>working=true);
+    try{
+      final reply=await api.call('order_paystack_checkout',{'orderId':order['id']});
+      final raw=reply['checkoutUrl']?.toString()??'';
+      final link=Uri.tryParse(raw);
+      if(link==null||link.scheme!='https'||link.host!='checkout.paystack.com')
+        throw StateError('Paystack checkout returned an invalid address.');
+      if(!mounted||uid!=widget.session.userId)return;
+      final opened=await launchUrl(link,mode:LaunchMode.externalApplication);
+      if(!opened)throw StateError('Unable to open the Paystack payment page.');
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+        reply['paymentEnvironment']=='test'?
+        'TEST MODE: no real payment is collected. Return to Teyza and tap Check Paystack payment.':
+        'After paying, return to Teyza and tap Check Paystack payment.')));
+      await load(quiet:true);
+    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+    finally{if(mounted)setState(()=>working=false);}
+  }
+  Future<void> verifyPaystack(Map<String,dynamic> order)async{
+    if(working||uid!=widget.session.userId)return;
+    final reference=order['paymentReference']?.toString()??'';
+    if(reference.isEmpty)return;
+    setState(()=>working=true);
+    try{
+      final result=await api.call('order_paystack_verify',{'reference':reference});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+        result['status']=='paid'?'Paystack confirmed this order was paid.':
+        result['status']=='test_paid'?'Paystack test payment verified; no real funds were transferred.':
+        result['status']=='refund_review'?'Payment requires Teyza refund review.':
+        'The payment is not confirmed yet.')));
+      await load(quiet:true);
+    }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>working=false);}
   }
   Future<void> chat(Map<String,dynamic> order) async {
@@ -114,10 +151,23 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
             Text(order['paymentMethod']=='card_at_shop'?'Card at shop · no extra card charge':order['paymentMethod']=='cash'?'Cash payment':'Payment to be arranged with shop'),
             const SizedBox(height:8),Row(children:[const Expanded(child:Text('Total',style:TextStyle(fontWeight:FontWeight.w700))),
               Text(money((order['totalCents'] as num? ??0).toInt()),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))]),
-            const SizedBox(height:7),const Text('Payment arranged with the shop. No online payment has been taken.',style:TextStyle(fontSize:11,color:Color(0xFF6C7880))),
+            const SizedBox(height:7),Text(switch(order['paymentStatus']){
+              'paid'=>'Paystack payment verified. Funds follow the seller settlement schedule.',
+              'test_paid'=>'Paystack TEST payment only. No real funds were collected.',
+              'checkout_pending'=>'Paystack payment opened. Check payment after returning to Teyza.',
+              'refund_review'=>'Payment needs Teyza refund review. Contact support.',
+              _=>'No online payment has been taken. Confirm with the shop before paying.'
+            },style:const TextStyle(fontSize:11,color:Color(0xFF6C7880))),
             Wrap(spacing:7,children:[for(final status in nextSteps(order))TextButton(onPressed:working?null:()=>update(order,status),
               child:Text(switch(status){'confirmed'=>'Confirm order','preparing'=>'Start preparing','ready'=>'Ready to collect',
                 'out_for_delivery'=>'Out for delivery','completed'=>'Mark completed',_=>'Cancel'})),
+              if(!widget.asOwner&&['confirmed','preparing','ready','out_for_delivery'].contains(order['status'])&&
+                 !['paid','test_paid','refund_review','checkout_pending'].contains(order['paymentStatus']))
+                FilledButton.icon(onPressed:working?null:()=>payWithPaystack(order),
+                  icon:const Icon(Icons.credit_card_outlined,size:17),label:const Text('Pay with Paystack')),
+              if(!widget.asOwner&&order['paymentStatus']=='checkout_pending')
+                OutlinedButton.icon(onPressed:working?null:()=>verifyPaystack(order),
+                  icon:const Icon(Icons.verified_outlined,size:17),label:const Text('Check Paystack payment')),
               TextButton.icon(onPressed:working?null:()=>chat(order),icon:const Icon(Icons.chat_bubble_outline,size:17),label:const Text('Message')),
               if(!widget.asOwner&&order['status']=='completed')TextButton.icon(onPressed:working?null:()=>rateShop(order),
                 icon:const Icon(Icons.star_outline,size:17),label:const Text('Rate shop'))])

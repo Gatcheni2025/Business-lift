@@ -78,6 +78,22 @@ export function createOperations({api,onError}){
   if(!(d.payments||[]).length)
     payment.append(el('p','No Paystack checkout reference has been recorded for this seller. The seller must use a supported checkout channel.','footnote'));
   root.append(payment);
+  const settlement=card('Shopper order payments · Paystack','Paystack checkout for physical goods uses a verified seller subaccount. This is separate from Teyza seller membership fees.');
+  if(d.payout?.connected)settlement.append(tag('Connected '+d.payout.mode),
+    el('p',d.payout.businessName+' · '+d.payout.subaccountCode+' · Platform percentage configured at Paystack: '+d.payout.percentageCharge+'%'));
+  else settlement.append(el('p','No settlement subaccount linked for this shop. Buyers cannot pay this seller through Paystack yet.','notice warning'));
+  const payoutForm=el('form',undefined,'ops-form');
+  field(payoutForm,'Verified Paystack subaccount code (ACCT_)','subaccountCode','text',d.payout?.subaccountCode||'');
+  check(payoutForm,'I inspected this approved shop beneficiary and its bank settlement information in Paystack.','confirmed');
+  submit(payoutForm,'Verify and connect Paystack',async fd=>{
+    const code=String(fd.get('subaccountCode')||'').trim();
+    if(!confirm('Link Paystack '+code+' to '+d.seller.shopName+' after verification? No debit or transfer will be initiated.'))return;
+    const result=await request('ops_order_subaccount',{sellerUid:d.seller.sellerUid,
+      subaccountCode:code,confirmed:true});
+    message('Seller Paystack subaccount '+result.subaccountCode+' verified in '+result.mode+' mode.','success');
+    await choose(selected);
+  });
+  settlement.append(payoutForm);root.append(settlement);
   const catalogue=card('Review seller products','An approved shop and current Paystack membership are both required before products can be published.');
   const submitted=d.catalogue?.products||[];
   catalogue.append(tag(d.catalogue?.status||'not submitted'));

@@ -17,6 +17,7 @@ const locations=require('./shop-location');
 const addresses=require('./shop-address');
 const deletion=require('./account-deletion');
 const billingCheckout=require('./billing-paystack');
+const orderPaystack=require('./order-paystack');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackPlanCode=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
@@ -141,6 +142,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
     getPlanCode:getPaystackPlanCode,send:paystackFetch,refresh:synchronizeCatalogue});
+  const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,
+    send:paystackFetch,rate});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
@@ -213,6 +216,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='seller_mandate_submit')D.fail(410,
       'New Teyza debit mandates are discontinued. Use the supported checkout to pay for a seller membership.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
+    if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
@@ -786,7 +790,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     await ref.set({after:rows.docs.at(-1)?.id||'',...(complete?{completedAt:clock()}:{}),updatedAt:clock()});
     return {complete,checked:rows.docs.length};
   }
-  return {execute,paystackWebhook:sellerBilling.webhook,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
+  async function paystackWebhook(raw,signature,event){
+    if(event?.event==='charge.success'&&/^TZO_[a-f0-9]{26}$/.test(event?.data?.reference||''))
+      return shopperOrderPayments.webhook(raw,signature,event);
+    return sellerBilling.webhook(raw,signature,event);
+  }
+  return {execute,paystackWebhook,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
     publicShopPhoto:shopFront.publicPhoto};
 }
 module.exports = {createService};

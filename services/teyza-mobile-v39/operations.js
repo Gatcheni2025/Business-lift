@@ -77,12 +77,12 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
-       .where('ownerUid','==',target).limit(50).get()]);
+       .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
@@ -97,6 +97,10 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      phone:account.phone||'',address:account.address||'',
      approvalStatus:account.approvalStatus,listingPlan:account.listingPlan||'free'},
      billing:billingView,paystackMode:getPaystackMode()==='live'?'live':'test',
+     payout:payout?.ownerUid===target?{
+       connected:!!payout.enabled,mode:payout.mode||'test',subaccountCode:payout.code||'',
+       businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
+     }:null,
      membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
      complimentaryUntil:billing?.adminComplimentaryUntil||null,
      complimentaryReason:billing?.adminComplimentaryReason||null,
