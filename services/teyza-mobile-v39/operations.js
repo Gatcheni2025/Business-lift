@@ -25,6 +25,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
     const target=D.id(data.sellerUid),duration=Number(data.days);
     if(target===uid)D.fail(403,'Another administrator must grant access to your shop.');
     if(![7,14,30].includes(duration))D.fail(422,'Choose 7, 14 or 30 days of complimentary access.');
+    if(data.confirmed!==true)D.fail(422,'Confirm this is complimentary access, not a Paystack payment.');
     const reason=D.text(data.reason,'complimentary access reason',250);
     if(reason.length<15)D.fail(422,'Provide a meaningful reason of at least 15 characters.');
     const account=await owner(target);

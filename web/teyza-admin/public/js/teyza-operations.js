@@ -57,7 +57,7 @@ export function createOperations({api,onError}){
       if(reason.length<15)throw Error('Enter a reason of at least 15 characters.');
       if(!confirm('Grant complimentary product-selling eligibility without recording any payment? Seller identity and shop verification remain mandatory.'))return;
       await request('ops_complimentary_access',{sellerUid:d.seller.sellerUid,
-        days:Number(fd.get('days')),reason});
+        days:Number(fd.get('days')),reason,confirmed:true});
       message('Complimentary membership granted with an audit record and expiry. No payment was recorded.','success');
       await choose(selected);
     });

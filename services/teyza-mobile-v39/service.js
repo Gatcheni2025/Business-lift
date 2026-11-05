@@ -791,7 +791,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return {complete,checked:rows.docs.length};
   }
   async function paystackWebhook(raw,signature,event){
-    if(event?.event==='charge.success'&&/^TZO_[a-f0-9]{26}$/.test(event?.data?.reference||''))
+    if(event?.event==='charge.success'&&/^TZO-[a-f0-9]{26}$/.test(event?.data?.reference||''))
       return shopperOrderPayments.webhook(raw,signature,event);
     return sellerBilling.webhook(raw,signature,event);
   }

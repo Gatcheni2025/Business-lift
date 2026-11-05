@@ -6,7 +6,7 @@ const {recentAdmin}=require('./seller-experience');
 const {verifySignature,validCheckoutUrl}=require('./billing-paystack');
 const actions=new Set(['ops_order_subaccount','order_paystack_checkout','order_paystack_verify']);
 const allowedStatuses=new Set(['confirmed','preparing','ready','out_for_delivery']);
-const refPattern=/^TZO_[a-f0-9]{26}$/;
+const refPattern=/^TZO-[a-f0-9]{26}$/;
 const subPattern=/^ACCT_[A-Za-z0-9]{6,48}$/;
 const mode=key=>key.startsWith('sk_live_')?'live':'test';
 function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate=async()=>{}}){
@@ -106,7 +106,7 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
       !subPattern.test(payout.code)||payout.mode!==mode(getSecret())||
       payout.verifiedWithPaystack!==true)
     D.fail(409,'This seller has not enabled verified Paystack payments yet.');
-  const reference='TZO_'+crypto.randomBytes(13).toString('hex');
+  const reference='TZO-'+crypto.randomBytes(13).toString('hex');
   await db.runTransaction(async tx=>{
    const orderRef=doc('teyzaMobileOrders/'+orderId),snapshot=await tx.get(orderRef);
    const current=snapshot.exists?snapshot.data():null;
@@ -134,13 +134,12 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
    await doc('teyzaOrderPayments/'+reference).set({checkoutUrl:checkout.authorization_url,
     checkoutCreatedAt:clock()},{merge:true});
   }catch(error){
-   await db.runTransaction(async tx=>{
-    const payRef=doc('teyzaOrderPayments/'+reference),orderRef=doc('teyzaMobileOrders/'+orderId);
-    const [p,o]=await Promise.all([tx.get(payRef),tx.get(orderRef)]);
-    if(p.exists&&p.data().status==='pending')tx.update(payRef,{status:'initialization_failed',updatedAt:clock()});
-    if(o.exists&&o.data().paymentReference===reference&&o.data().paymentStatus==='checkout_pending')
-      tx.update(orderRef,{paymentStatus:'arrange_with_shop',paymentReference:null,updatedAt:clock()});
-   });
+   // A timeout can occur AFTER Paystack creates a chargeable checkout.
+   // Never release this reference automatically: that could start a second
+   // payment for the same order. Reconcile before permitting another charge.
+   await doc('teyzaOrderPayments/'+reference).set({
+     initializationUncertain:true,lastInitializationErrorAt:clock()
+   },{merge:true});
    throw error;
   }
   return {checkoutUrl:checkout.authorization_url,reference,
@@ -156,7 +155,7 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
   if(stored.status!=='pending')D.fail(409,'This Paystack payment is not pending.');
   const verified=await paystack('/transaction/verify/'+encodeURIComponent(reference));
   if(verified.reference!==reference||verified.status!=='success'||verified.currency!=='ZAR'||
-    verified.amount!==stored.amountCents||
+    verified.domain!==stored.environment||verified.amount!==stored.amountCents||
     verified.customer?.email?.toLowerCase()!==stored.customerEmail.toLowerCase())
    D.fail(409,'Paystack has not verified the expected order amount, currency and shopper.');
   const receivedSubaccount=typeof verified.subaccount==='string'?verified.subaccount:
