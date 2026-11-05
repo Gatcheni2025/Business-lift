@@ -31,6 +31,10 @@ jobs:
                 else:
                   m=re.search(r'<meta\\s+name=["\\x27]teyza-admin-release["\\x27]\\s+content=["\\x27]([^"\\x27]+)',data,re.I)
                   print('ADMIN_RELEASE '+(m.group(1) if m else 'release metadata not found'))
+                  title=re.search(r'<title[^>]*>([^<]+)',data,re.I)
+                  print('ADMIN_PAGE_TITLE '+(title.group(1)[:120] if title else 'not found'))
+                  for marker in ['Seller verification','Approvals & images','Product approvals','R323','R321','admin.html']:
+                    print('ADMIN_MARKER '+marker+': '+str(marker in data))
             except (HTTPError,URLError,TimeoutError,ValueError) as e:
               print(label.upper()+'_CHECK_FAILED '+type(e).__name__)
               raise SystemExit(1)
