@@ -1,0 +1,37 @@
+name: Teyza read-only release readiness
+on:
+  push:
+    branches: [chore/teyza-readonly-release-check-20261105]
+    paths: [.github/workflows/teyza-readonly-release-check.yml]
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check the public mobile health and admin release
+        run: |
+          python3 - <<'PY'
+          import json,re,urllib.request
+          from urllib.error import HTTPError,URLError
+          urls=[
+            ('mobile','https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'),
+            ('admin','https://teyza.co.za/admin.html')]
+          for label,url in urls:
+            try:
+              with urllib.request.urlopen(url,timeout=25) as r:
+                data=r.read(200000).decode('utf-8')
+                if label=='mobile':
+                  obj=json.loads(data)
+                  fields=['ok','version','billingMode','paystackCheckoutAvailable','subscriptionMonthlyCents',
+                    'introductoryFirstMonthCents','adminOperations','adminReview','adminProductReview',
+                    'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
+                    'approvalRequired','sellerOnboarding']
+                  print('MOBILE_HEALTH '+json.dumps({k:obj.get(k) for k in fields},sort_keys=True))
+                else:
+                  m=re.search(r'<meta\\s+name=["\\x27]teyza-admin-release["\\x27]\\s+content=["\\x27]([^"\\x27]+)',data,re.I)
+                  print('ADMIN_RELEASE '+(m.group(1) if m else 'release metadata not found'))
+            except (HTTPError,URLError,TimeoutError,ValueError) as e:
+              print(label.upper()+'_CHECK_FAILED '+type(e).__name__)
+              raise SystemExit(1)
+          PY
