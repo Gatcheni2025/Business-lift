@@ -463,9 +463,9 @@ test('Closing times and duplicate products do not silently become invalid orders
 
 test('Publishing a reviewed catalogue cannot restore stock already reserved by an order',async()=>{
  const {service,db}=fixture({'teyzaDraftProducts/seller1/items/bread1':{ownerUid:'seller1',status:'draft',name:'Bread',category:'Groceries',priceCents:1800,stockQty:5}});
- await service.execute(owner,'catalogue_submit');
  const order=await service.execute(buyer,'order_request',{shopId:'seller1',requestId:'reservation',mode:'collection',phone:'0712345678',items:[{id:'bread1',quantity:2}]});
  await service.execute(owner,'order_update',{orderId:order.id,status:'confirmed'});
+ await service.execute(owner,'catalogue_submit');
  await service.execute({...buyer,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'seller1'});
  assert.equal(db.records.get('teyzaPublicShops/seller1').products[0].stock,3);
  assert.equal(db.records.get('teyzaDraftProducts/seller1/items/bread1').stockQty,3);
@@ -614,7 +614,12 @@ test('Approval recreates a missing listing with the prepared products, services,
  await approve(service,db);
  const listing=(await service.publicDirectory()).entries.find(s=>s.id==='buyer1');
  assert.equal(listing.latitude,-29.7402);assert.equal(listing.longitude,30.992);assert.equal(listing.area,'KwaMashu');assert.equal(listing.city,'Durban');
- assert.equal(listing.products[0].priceCents,3000);assert.equal(listing.services.liveChat,true);assert.equal(listing.deliveryEnabled,true);
+ assert.equal(listing.products.length,0,'Identity review must not publish product drafts');
+ await service.execute(newOwner,'catalogue_submit');
+ await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
+ const approved=(await service.publicDirectory()).entries.find(x=>x.id==='buyer1');
+ assert.equal(approved.products[0].priceCents,3000);
+ assert.equal(listing.services.liveChat,true);assert.equal(listing.deliveryEnabled,true);
  assert(listing.photoUrl.includes('shopPhoto=buyer1'));assert(!('ownerEmail' in listing));assert(!('phone' in listing));
  assert(!JSON.stringify(listing).includes('PRIVATE-PASSPORT'));
 });
@@ -644,6 +649,8 @@ test('Pausing for a new owner review preserves approved product photos and the r
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
  await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
+ await service.execute(newOwner,'catalogue_submit');
+ await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
  const order=await service.execute({...buyer,uid:'customer2'},'order_request',{shopId:'buyer1',requestId:'reserved',mode:'collection',phone:'0712345678',items:[{id:'catalog_milk-2-l',quantity:1}]});
  await service.execute({...newOwner,email_verified:true},'order_update',{orderId:order.id,status:'confirmed'});
  const ref='teyzaPublicShops/buyer1',published=db.records.get(ref),url='https://example.test/approved-product.jpg';
@@ -686,7 +693,7 @@ test('Completion requires real linked phone, document and selfie; forged complet
   assert(!f.db.records.has('teyzaPublicShops/buyer1'));
  }
 });
-test('Completing setup never publishes before approval, and approval automatically publishes the prepared products',async()=>{
+test('Completing setup and seller identity review still require separate product catalogue approval',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
  await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  const result=await service.execute(newOwner,'seller_onboarding_complete',{ownerUid:'seller1',catalogueEnabled:true,approvalStatus:'approved'});
@@ -699,7 +706,13 @@ test('Completing setup never publishes before approval, and approval automatical
  assert.equal((await service.execute(newOwner,'seller_summary')).publicationStatus,'pending_review');
  assert.equal((await service.execute(newOwner,'seller_onboarding_complete')).sellingStatus,'pending_approval');
  await approve(service,db);
- shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(shop.status,'active');assert.equal(shop.products[0].priceCents,3000);assert.equal(shop.products.length,1);
+ shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(shop.status,'active');
+ assert.equal(shop.products.length,0,'Unreviewed catalogue cannot appear after identity approval');
+ await service.execute(newOwner,'catalogue_submit');
+ assert.equal(db.records.get('teyzaPublicShops/buyer1').products.length,0);
+ await service.execute({...owner,teyzaAdmin:true,auth_time:1000},'catalogue_review',{sellerUid:'buyer1'});
+ shop=db.records.get('teyzaPublicShops/buyer1');
+ assert.equal(shop.products[0].priceCents,3000);assert.equal(shop.products.length,1);
  assert.equal(shop.approvalStatus,'approved');assert.equal(shop.identityVerified,true);assert.equal(shop.sellingEnabled,true);
  assert((await service.publicDirectory()).entries.some(s=>s.id==='buyer1'));
  assert(!JSON.stringify(shop).includes('PRIVATE-PASSPORT'));assert(!('phone' in shop));assert(!('objectPath' in shop));assert(!('detailsEncrypted' in shop));
