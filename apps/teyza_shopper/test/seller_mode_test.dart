@@ -87,7 +87,7 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('seller-nav-0')));await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Sign out'));await tester.pumpAndSettle();
     expect(session.sellerWorkspace,isFalse);expect(find.byType(SellerNavigation),findsNothing);
-    expect(find.text('Home'),findsOneWidget);expect(find.text('Shop'),findsNothing);expect(find.text('Cart'),findsOneWidget);expect(publicReads,greaterThan(0));
+    expect(find.text('Home'),findsOneWidget);expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);expect(find.text('Cart'),findsNothing);expect(publicReads,greaterThan(0));
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
@@ -106,7 +106,7 @@ void main(){
       initialArea:areas.first,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()=>result.future),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pump();await session.signOut();result.complete(savedShop);await tester.pumpAndSettle();
-    expect(session.sellerWorkspace,isFalse);expect(find.byType(SellerNavigation),findsNothing);expect(find.text('Home'),findsOneWidget);expect(find.text('Shop'),findsNothing);
+    expect(session.sellerWorkspace,isFalse);expect(find.byType(SellerNavigation),findsNothing);expect(find.text('Home'),findsOneWidget);expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
   testWidgets('Ending a seller session closes finance and returns to shopper navigation',(tester) async {
@@ -117,7 +117,7 @@ void main(){
     await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-nav-4')));await tester.pumpAndSettle();
     await tester.tap(find.text('Apply for stock finance'));await tester.pumpAndSettle();expect(find.text('Need help funding stock?'),findsOneWidget);
     await session.signOut();await tester.pumpAndSettle();
-    expect(find.text('Need help funding stock?'),findsNothing);expect(find.text('Home'),findsOneWidget);expect(find.text('Shop'),findsNothing);
+    expect(find.text('Need help funding stock?'),findsNothing);expect(find.text('Home'),findsOneWidget);expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     expect(find.byType(SellerNavigation),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

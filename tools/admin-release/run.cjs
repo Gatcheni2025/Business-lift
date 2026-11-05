@@ -2,7 +2,7 @@
 const path=require('node:path'),fs=require('node:fs');
 const {connect}=require('./firebase-client.cjs'),{patch,rollback}=require('./hosting-patch.cjs'),{reviewer}=require('./reviewer.cjs');
 function assertAdminBackend(health){
- if(health?.ok!==true||health.version!=='3.23.0'||health.adminOperations!==true||health.adminReview!==true||
+ if(health?.ok!==true||health.version!=='3.24.0'||health.agentCommissionEnabled!==false||health.adminOperations!==true||health.adminReview!==true||
     health.adminProductReview!==false||health.automaticProductPublication!==true||health.adminPaystackVerify!==true||
     health.adminComplimentaryAccess!==true||health.manualReceiptsRetired!==true||health.billingMode!=='paystack_checkout')
   throw new Error('The current seller-verification and automatic-product backend is not deployed yet. Publish it before the admin website.');
@@ -26,4 +26,5 @@ async function main(){
 }
 if(require.main===module)main().catch(error=>{console.error('Teyza admin setup stopped:',error.message);process.exitCode=1;});
 module.exports={main,assertAdminBackend};
+
 

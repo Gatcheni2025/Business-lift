@@ -1,6 +1,6 @@
 # Teyza Work and search readiness — 29 October 2026
 
-This update extends the existing Business-lift Firebase project and current mobile service. The current Android candidate is 1.0.24 (34), targeting the existing com.asiyedriver.asiye Play listing; the uploaded iOS build remains 1.0.23 (33). It includes the seller logout fix found during the release audit. Seller approval requirements and the expanded 378-choice catalogue remain in place.
+This document describes the Business-lift field-work workflow. The current changes are a release candidate and have not been deployed by creating this kit. Production deployment requires independently verified live-payment readiness; the production scripts intentionally reject a Paystack test key. Keep using the test key while completing isolated sandbox and store-billing tests.
 
 ## Activate
 
@@ -22,7 +22,7 @@ After activation:
 
 - `/agents.html`: public programme explanation and application entry.
 - `/work.html`: agent application, sign-in, guided visits and administrator work review.
-- `/owner-confirm.html#<one-time-link-token>`: the owner's private confirmation and mandate journey. Tokens expire after seven days; generating a new link replaces the old link.
+- `/owner-confirm.html#<one-time-link-token>`: the owner's private visit confirmation. Tokens expire after seven days; generating a new link replaces the old link.
 - `/how-it-works.html` and `/for-shop-owners.html`: clear public shopper/seller guides.
 - `/work-privacy.html`: evidence use, access, consent and retention notice.
 
@@ -36,9 +36,9 @@ Approved agents and recently authenticated admins can search by current device p
 
 The agent creates a shop visit with the owner's permission, records a fresh device location (accuracy at most 100 m), takes a shop-front photo and an in-shop selfie through the live camera, and shares the owner confirmation link. A fresh capture session expires after three minutes. Coordinates must be fresh within 60 seconds when submitted. A new location resets photo completion so old photos cannot silently represent a later visit.
 
-The owner signs in using the same account used to register their shop in the app. Confirmation is bound to that account and to one agent visit, with self-referral and duplicate attribution blocked. Owners complete their own verification and R99 mandate. Existing current ID evidence is reused only with owner consent. Agents never see the owner's bank-account or identity details. An owner without a current verified ID is directed to complete it in the app before signing.
+The owner signs in using the same account used to register their shop in the app. Confirmation is bound to that account and to one agent visit, with self-referral and duplicate attribution blocked. Confirmation does not collect bank details, create a mandate or start a payment. Seller verification continues separately in the app. Agents cannot see the owner's private identity or banking details.
 
-The agent submits after the two current photos, location, owner confirmation and mandate consent are recorded. Work remains pending. A separate recent administrator must open both current photos, inspect the location and owner evidence and confirm review before approving. Work approval does not approve the seller, publish a shop or collect a payment.
+The agent submits after the two current photos, location and owner confirmation are recorded. Work remains pending. A separate recent administrator must open both current photos, inspect the location and owner evidence and confirm review before approving. Work approval does not approve the seller, publish a shop or collect a payment.
 
 Camera images, timestamps and device GPS can be spoofed; the portal does not claim facial recognition, automatic liveness, geofenced attendance proof or guaranteed physical presence. Capture sessions, duplicate-image detection, owner confirmation and manual review provide layered checks. Review the reported position against the owner's saved shop pin and request changes when evidence is inconsistent.
 
@@ -48,11 +48,11 @@ Evidence is encrypted with the existing server verification key before private s
 
 Agent visit responses expose progress and photo metadata, not storage paths, bank accounts, owner ID numbers or other agents' records. Private evidence views are tied to reviewer, visit revision and image and expire after five minutes for approval. Audit records are separate from public shop data. Visit, attribution and accounting records remain for relationship administration and disputes; privacy requests go to support@teyza.co.za.
 
-## R99 commission and debit orders
+## Membership and work records
 
-A new shop's once-off R99 onboarding commission becomes eligible only after approved work, seller approval, current mandate consent and the first fully paid R99 subscription invoice. Existing invoices created before the visit and later renewals do not create another commission. Duplicate payouts and reused payout references are blocked; reversed payments or withdrawn consent block unpaid eligibility. A paid commission whose underlying eligibility changes is flagged for manual review, without an automatic clawback.
+Agent commission tracking has been retired. Existing historical records are retained, and older clients cannot record a new commission payout. Agree any separate work arrangements directly with Teyza.
 
-**This release records mandate consent and verified payment/payout receipts. It does not initiate debit-order collections or agent bank transfers.** The existing mandate state remains `signed_pending_activation`, and `collectionActive` remains false. A payment-provider integration, merchant activation and any bank authentication are still needed before automated debit orders can run. Never treat a signed mandate as a successful collection. Do not record a receipt until independently verified in the bank or provider account.
+Shop registration and owner visit confirmation are free. Product-selling membership is presented when the owner chooses to add products: R49 for the first eligible month, then R99 per month. A product action or opening a membership page never starts a charge by itself. Paystack remains in test mode, and store-compliant in-app billing and isolated end-to-end payment testing still need to be completed. No test payment is treated as live paid access.
 
 ## Search audit and repair
 

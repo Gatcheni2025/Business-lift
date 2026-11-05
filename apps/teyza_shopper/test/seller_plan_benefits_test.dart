@@ -6,12 +6,13 @@ import 'package:teyza_shopper/teyza_mobile_api.dart';
 
 class _PlanApi extends TeyzaMobileApi {
  _PlanApi(super.session,{this.introEligible=true});
- final bool introEligible;
+ final bool? introEligible;
  final calls=<String>[];
  @override
  Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
   calls.add(action);
-  if(action=='seller_summary')return {'ok':true,'listingPaid':false,'promotionActive':false,'introEligible':introEligible};
+  if(action=='seller_summary')return {'ok':true,'listingPaid':false,'promotionActive':false,
+    if(introEligible!=null)'introEligible':introEligible};
   return {'ok':true};
  }
 }
@@ -31,6 +32,15 @@ void main(){
     reason:'Opening upgrade information must not create a charge or subscription');
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
+ testWidgets('viewing membership does not offer checkout until a product action',(tester)async{
+   final session=ShopperSession(),api=_PlanApi(session);
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
+   await tester.pumpAndSettle();
+   final button=tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Add a product to upgrade'));
+   expect(button.onPressed,isNull);
+   expect(api.calls,equals(['seller_summary']));
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
  testWidgets('returning sellers see the actual R99 price rather than the introductory offer',(tester)async{
    await tester.binding.setSurfaceSize(const Size(420,860));
    addTearDown(()=>tester.binding.setSurfaceSize(null));
@@ -39,6 +49,14 @@ void main(){
    await tester.pumpAndSettle();
    expect(find.text('R99/month'),findsOneWidget);
    expect(find.textContaining('R49 first month'),findsNothing);
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ testWidgets('older services still explain the R49 introductory offer without initiating checkout',(tester)async{
+   final session=ShopperSession(),api=_PlanApi(session,introEligible:null);
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
+   await tester.pumpAndSettle();
+   expect(find.text('R49 first month · then R99/month'),findsOneWidget);
+   expect(api.calls,equals(['seller_summary']));
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
 }

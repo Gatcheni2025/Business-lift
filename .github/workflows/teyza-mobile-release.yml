@@ -19,11 +19,11 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.23.0 in production mode'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.24.0 in production mode'
         type: boolean
         default: true
       qa_signing_only:
-        description: 'QA-only signed APK, AAB and IPA; does not require live R323; leaves Paystack checkout disabled in store builds'
+        description: 'QA-only signed APK, AAB and IPA; does not require live R324; leaves Paystack checkout disabled in store builds'
         type: boolean
         default: false
       upload_to_testflight:
@@ -149,7 +149,7 @@ jobs:
           print('QA-only signing against the unchanged Firebase project. Backend version:',
                 health.get('version','unknown'))
           print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
-          print('Do not use the QA binaries as production-ready or claim R323 seller approval is live.')
+          print('Do not use the QA binaries as production-ready or claim R324 seller approval is live.')
           PY_QA
       - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
@@ -174,9 +174,9 @@ jobs:
                          'twoWayChatNotifications','wholesaleConnections','adminUsers','adminSellerDocuments',
                          'automaticProductPublication','adminComplimentaryAccess',
                          'paystackCheckoutAvailable')
-          required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview')
+          required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
-          required_exact={'version':'3.23.0','billingMode':'paystack_checkout',
+          required_exact={'version':'3.24.0','billingMode':'paystack_checkout',
                           'subscriptionMonthlyCents':9900,'introductoryFirstMonthCents':4900,
                           'promotionSevenDaysCents':2900}
           failures=[]
@@ -542,4 +542,5 @@ jobs:
           flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
           flutter build apk --debug --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+
 

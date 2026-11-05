@@ -33,21 +33,20 @@ void main(){
   testWidgets('All five shopper destinations navigate and Sell is absent',(tester) async {
     final visited=<int>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(
-      bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,cartCount:2,onSelect:visited.add))));
-    for(final label in ['Home','Shop','Cart','Orders','Account']){
-      await tester.tap(find.text(label));
+      bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,onSelect:visited.add))));
+    for(final label in ['home','shops','shop','orders','account']){
+      await tester.tap(find.byKey(ValueKey('nav-'+label)));
     }
-    expect(visited,[0,1,2,3,4]);
+    expect(visited,[0,5,1,3,4]);
     expect(find.text('Sell'),findsNothing);
     expect(tester.takeException(),isNull);
   });
-  testWidgets('Shop tab is omitted when no published products exist',(tester)async{
+  testWidgets('Shop tab remains available when no products exist',(tester)async{
     await tester.pumpWidget(MaterialApp(home:Scaffold(
-      bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,cartCount:0,
-        showShop:false,onSelect:(_){}))));
-    expect(find.text('Shop'),findsNothing);
+      bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,onSelect:(_){}))));
+    expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     expect(find.text('Home'),findsOneWidget);
-    expect(find.text('Cart'),findsOneWidget);
+    expect(find.text('Cart'),findsNothing);
     expect(tester.takeException(),isNull);
   });
   testWidgets('Navigation fits a narrow screen with larger text',(tester) async {
@@ -56,8 +55,8 @@ void main(){
     await tester.pumpWidget(MaterialApp(home:MediaQuery(
       data:const MediaQueryData(size:Size(320,700),textScaler:TextScaler.linear(1.5)),
       child:Scaffold(bottomNavigationBar:PremiumShopperNavigation(
-        selectedIndex:4,cartCount:101,onSelect:(_){})))));
-    expect(find.text('99+'),findsOneWidget);
+        selectedIndex:4,onSelect:(_){})))));
+    expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     expect(tester.takeException(),isNull);
   });
   for(final role in ['Shopper','Shop Owner']){
@@ -103,9 +102,9 @@ void main(){
     expect(add.hitTestable(),findsOneWidget);
     await tester.tap(add.hitTestable());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Home'));await tester.pumpAndSettle();
-    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
-    await tester.tap(find.text('Cart'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
     expect(find.text('Items from Corner Grocer'),findsOneWidget);
     expect(find.text('Fresh bread'),findsOneWidget);
     expect(find.text('Unit R18.00'),findsOneWidget);
@@ -113,10 +112,10 @@ void main(){
       'latitude':-29.8587,'longitude':31.0218,'products':[
         {'id':'bread','name':'Fresh bread','priceCents':1900,'stock':8}
       ]});
-    await tester.tap(find.text('Home'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
     final refreshed=tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator).first).show();
     await tester.pumpAndSettle();await refreshed;
-    await tester.tap(find.text('Cart'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
     expect(find.text('Unit R19.00'),findsOneWidget);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -342,7 +341,7 @@ void main(){
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Shop tab shows all published products and disappears when catalogue empties',(tester)async{
+  testWidgets('Shop tab shows all published products and explains an empty catalogue',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     var shops=[Shop.fromJson({'id':'shop-1','name':'Corner Spaza','area':'Durban',
@@ -355,15 +354,94 @@ void main(){
       enableBackgroundServices:false,catalogueLoader:()async=>shops,
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
     expect(find.text('Fresh Milk 1L'),findsOneWidget);
     expect(find.text('Laundry Soap'),findsOneWidget);
     expect(find.text('R25.00'),findsOneWidget);
     shops=[];
     final refresh=tester.state<RefreshIndicatorState>(find.byType(RefreshIndicator).first).show();
     await tester.pumpAndSettle();await refresh;
-    expect(find.text('Shop'),findsNothing);
+    expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
+    expect(find.text('No matching products'),findsOneWidget);
     expect(find.text('Home'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('An essential opens its shop and its plus adds the real product to the cart',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final shop=Shop.fromJson({'id':'corner','name':'Corner Spaza','area':'Durban',
+      'latitude':-29.8587,'longitude':31.0218,'pickupEnabled':true,
+      'products':[{'id':'milk','name':'Fresh Milk 1L','priceCents':2500,'stock':3}]});
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[shop],
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    final card=find.byKey(const ValueKey('essential-product-corner-milk'));
+    await tester.scrollUntilVisible(card,200,scrollable:find.byType(Scrollable).first);
+    await tester.tap(card);await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('change-shop')),findsOneWidget);
+    expect(find.text('Corner Spaza'),findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
+    final add=find.byKey(const ValueKey('add-essential-corner-milk'));
+    await tester.ensureVisible(add);await tester.pumpAndSettle();
+    await tester.tap(add);await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('floating-cart')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
+    expect(find.text('Items from Corner Spaza'),findsOneWidget);
+    expect(find.text('Fresh Milk 1L'),findsOneWidget);
+    expect(find.text('Unit R25.00'),findsOneWidget);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Adding an item from another shop asks before replacing the basket',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final shops=[
+      Shop.fromJson({'id':'one','name':'One Spaza','area':'Durban','pickupEnabled':true,
+        'latitude':-29.8587,'longitude':31.0218,
+        'products':[{'id':'bread','name':'Fresh Bread','priceCents':1800,'stock':4}]}),
+      Shop.fromJson({'id':'two','name':'Two Spaza','area':'Durban','pickupEnabled':true,
+        'latitude':-29.8588,'longitude':31.0218,
+        'products':[{'id':'milk','name':'Fresh Milk','priceCents':2500,'stock':3}]})
+    ];
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>shops,
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    final first=find.byKey(const ValueKey('add-essential-one-bread'));
+    await tester.scrollUntilVisible(first,200,scrollable:find.byType(Scrollable).first);
+    await tester.tap(first);await tester.pumpAndSettle();
+    final second=find.byKey(const ValueKey('add-essential-two-milk'));
+    await tester.ensureVisible(second);await tester.pumpAndSettle();
+    await tester.tap(second);await tester.pumpAndSettle();
+    expect(find.text('Start a new basket?'),findsOneWidget);
+    await tester.tap(find.text('Keep basket'));await tester.pumpAndSettle();
+    expect(find.text('One Spaza'),findsWidgets);
+    await tester.tap(second);await tester.pumpAndSettle();
+    await tester.tap(find.text('Start new basket'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
+    expect(find.text('Items from Two Spaza'),findsOneWidget);
+    expect(find.text('Fresh Milk'),findsOneWidget);
+    expect(find.text('Fresh Bread'),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('A category without a real product searches rather than inventing cart stock',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(initialArea:areas.first,
+      enableBackgroundServices:false,catalogueLoader:()async=>[],
+      directoryLoader:(area,type,radius)async=>[])));
+    await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
+    final add=find.byKey(const ValueKey('find-essential-milk'));
+    await tester.scrollUntilVisible(add,200,scrollable:find.byType(Scrollable).first);
+    await tester.tap(add);await tester.pumpAndSettle();
+    expect(find.text('No matching products'),findsOneWidget);
+    expect(find.byKey(const ValueKey('floating-cart')),findsNothing);
+    expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -386,7 +464,7 @@ void main(){
       enableBackgroundServices:false,catalogueLoader:()async=>shops,
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-    await tester.tap(find.text('Shop'));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
     final firstBuy=find.widgetWithText(FilledButton,'Buy').first;
     await tester.tap(firstBuy);await tester.pumpAndSettle();
     expect(find.text('Change shop'),findsOneWidget);

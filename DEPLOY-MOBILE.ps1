@@ -37,11 +37,12 @@ $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudf
 $catalogue = Get-Content -LiteralPath '.\services\teyza-mobile-v39\catalogue.json' -Raw | ConvertFrom-Json
 $expectedProducts = @($catalogue.products).Count
 $expectedPhotos = @($catalogue.photos.PSObject.Properties).Count
-if ($health.ok -ne $true -or $health.version -ne '3.23.0' -or $health.sellerOnboarding -ne $true -or
+if ($health.ok -ne $true -or $health.version -ne '3.24.0' -or $health.sellerOnboarding -ne $true -or
     $health.catalogueProducts -ne $expectedProducts -or $health.catalogueRevision -ne $catalogue.version -or $health.cataloguePhotos -ne $expectedPhotos) {
   throw 'Deployment returned unexpected service health. Do not distribute the app as connected.'
 }
 if ($health.verificationUploads -ne $true) { throw ('Photo storage is not ready (' + $health.uploadStatus + '). Open Firebase Storage for business-lift-3c19c, choose Get started, US-CENTRAL1 and production mode, then retry. Keep the existing encryption key.') }
+if ($health.agentCommissionEnabled -ne $false) { throw 'Agent commission retirement has not been activated.' }
 if ($health.adminUsers -ne $true -or $health.adminSellerDocuments -ne $true -or $health.automaticProductPublication -ne $true -or $health.adminProductReview -ne $false -or $health.adminComplimentaryAccess -ne $true) { throw 'Administrator verification and automatic-product capabilities did not activate.' }
 if ($health.shopFrontPhotos -ne $true) { throw 'Shop-front photo service was not activated.' }
 if ($health.chatModeration -ne $true -or $health.sevenDayTrial -ne $false -or $health.shopperDeletionProfileClear -ne $true -or $health.appleRevocationServer -ne $true -or $health.onceOnlyShopperIdentity -ne $true -or $health.twoWayChatNotifications -ne $true -or $health.wholesaleConnections -ne $true -or $health.strictSevenDayMembership -ne $false) { throw 'New Apple review requirements are not active in Firebase yet.' }
@@ -54,4 +55,5 @@ if ($health.billingMode -ne 'paystack_checkout' -or $health.paystackCheckoutAvai
   throw 'Paystack configuration is not ready. Verify the existing production secret, R99 plan and R49/R29 prices. Never use a test key on the production project.'
 }
 Write-Host "Teyza is responding with approval-required publication, full-address autocomplete, shop locations, $expectedProducts catalogue products and $expectedPhotos reference photos."
+
 
