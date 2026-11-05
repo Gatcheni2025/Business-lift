@@ -20,10 +20,11 @@ jobs:
           class Page(HTMLParser):
             def __init__(self):
               super().__init__(); self.title=''; self.in_title=False; self.headings=[]; self.heading=None
-              self.meta={}; self.canonical=''; self.links=[]; self.images=[]; self.scripts=[]
+              self.meta={}; self.canonical=''; self.links=[]; self.images=[]; self.scripts=[]; self.bodytext=[]; self.hidden=0
             def handle_starttag(self,tag,attrs):
               a=dict(attrs)
               if tag=='title': self.in_title=True
+              if tag in ('script','style'): self.hidden+=1
               if tag in ('h1','h2'): self.heading=[tag,'']
               if tag=='meta' and (a.get('name') or a.get('property')):
                 self.meta[(a.get('name') or a.get('property')).lower()]=a.get('content','')
@@ -34,14 +35,20 @@ jobs:
             def handle_data(self,data):
               if self.in_title: self.title+=data
               if self.heading is not None: self.heading[1]+=data
+              if not self.hidden and data.strip(): self.bodytext.append(data.strip())
             def handle_endtag(self,tag):
               if tag=='title': self.in_title=False
+              if tag in ('script','style'): self.hidden=max(0,self.hidden-1)
               if self.heading is not None and tag==self.heading[0]:
                 self.headings.append(self.heading); self.heading=None
 
           urls=[('MOBILE','https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'),
                 ('HOME','https://teyza.co.za/'),('ADMIN','https://teyza.co.za/admin.html'),
-                ('ROBOTS','https://teyza.co.za/robots.txt'),('SITEMAP','https://teyza.co.za/sitemap.xml')]
+                ('DOWNLOAD','https://teyza.co.za/download.html'),('SELLER','https://teyza.co.za/seller-subscriptions.html'),
+                ('PRIVACY','https://teyza.co.za/privacy.html'),('TERMS','https://teyza.co.za/terms.html'),
+                ('ROBOTS','https://teyza.co.za/robots.txt'),('SITEMAP','https://teyza.co.za/sitemap.xml'),
+                ('PLAY','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye&hl=en&gl=ZA'),
+                ('APPLE','https://itunes.apple.com/lookup?id=6827037733&country=za')]
           for label,url in urls:
             try:
               req=urllib.request.Request(url,headers={'User-Agent':'Teyza-public-readiness-check/1.0'})
@@ -55,17 +62,22 @@ jobs:
                   'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
                   'approvalRequired','sellerOnboarding','verificationUploads','addressAutocomplete']
                 print('MOBILE_HEALTH '+json.dumps({k:obj.get(k) for k in fields},sort_keys=True))
-              elif label in ('HOME','ADMIN'):
+              elif label in ('HOME','ADMIN','DOWNLOAD','SELLER','PRIVACY','TERMS'):
                 page=Page(); page.feed(data)
                 print(label+'_PAGE '+json.dumps({'title':page.title.strip(),
                   'description':page.meta.get('description'),'robots':page.meta.get('robots'),
                   'canonical':page.canonical,'headings':page.headings[:12],
                   'release':page.meta.get('teyza-admin-release'),
+                  'textPreview':(' '.join(page.bodytext)[:2500] if label in ('DOWNLOAD','SELLER') else None),
                   'images':len(page.images),'imagesMissingAlt':sum(x['alt'] is None or not x['alt'].strip() for x in page.images),
                   'links':[urljoin(r.geturl(),x) for x in page.links if any(t in x.lower() for t in ('play.google.com','apps.apple.com','testflight.apple.com','privacy','terms','mailto:','tel:','download','agents','vacanc'))],
                   'scripts':[x for x in page.scripts if 'admin' in x.lower()],
                   'markers':{m:(m.lower() in data.lower()) for m in ['Seller verification','Approvals & images','Product approvals','R323','R321','support@teyza.co.za','0315661165']}},ensure_ascii=False))
-              else:
+              elif label=='APPLE':
+                result=json.loads(data)
+                print('APPLE_LOOKUP '+json.dumps({'resultCount':result.get('resultCount'),
+                  'apps':[{'name':x.get('trackName'),'id':x.get('trackId')} for x in result.get('results',[])]}))
+              elif label in ('ROBOTS','SITEMAP'):
                 print(label+'_CONTENT '+data[:10000].replace('\n',' '))
             except (HTTPError,URLError,TimeoutError,ValueError) as e:
               print(label+'_CHECK_FAILED '+type(e).__name__+' '+str(getattr(e,'code','')))
