@@ -35,9 +35,8 @@ async function visit(f,id='visit1'){
  for(const kind of ['shop','selfie']){const c=await f.call('agent_capture_begin',{visitId:id,kind});await f.call('agent_photo_submit',{visitId:id,captureId:c.captureId,consent:true,imageBase64:Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,kind==='shop'?1:2)]).toString('base64')});}
  const link=await f.call('agent_owner_link',{visitId:id});const token=link.url.split('#')[1];return {id,token};
 }
-async function submitted(f){const v=await visit(f);await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);f.db.records.set('teyzaSellerMandates/seller1',{ownerUid:'seller1',status:'signed_pending_activation'});await f.call('agent_visit_submit',{visitId:v.id,revision:4});return v;}
+async function submitted(f){const v=await visit(f);await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);await f.call('agent_visit_submit',{visitId:v.id,revision:4});return v;}
 async function approved(f){const v=await submitted(f);for(const kind of ['shop','selfie'])await f.call('agent_admin_photo',{visitId:v.id,kind},admin);await f.call('agent_admin_visit_decide',{visitId:v.id,revision:5,status:'approved',reviewConfirmed:true},admin);return v;}
-function paidInvoice(f){f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-11',{kind:'subscription_invoice',debitCents:9900,paidCents:9900,createdAt:start+1000});f.db.records.set('teyzaSellerAccounts/seller1',{uid:'seller1',category:'spaza',approvalStatus:'approved'});}
 test('Agent applications bind the verified caller, ignore forged approval and need a separate fresh admin',async()=>{
  const f=setup(),pdf=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(120,32)]).toString('base64'),photo=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(125,32)]).toString('base64');
   const input={name:'New Agent',phone:'0712345678',province:'Gauteng',area:'Soweto',consent:true,status:'approved',uid:'someone',identityType:'sa_id',identityNumber:'9001011234088',identityFile:{name:'id.jpg',mime:'image/jpeg',base64:photo},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:pdf}};
@@ -136,10 +135,18 @@ test('Rotated or expired owner links cannot claim another shop',async()=>{
  const f=setup(),v=await visit(f);const link=await f.call('agent_owner_link',{visitId:v.id});await rejects(f.call('agent_owner_confirm',{token:v.token,consent:true},owner),403);
  f.tick(8*86400000);await rejects(f.call('agent_owner_confirm',{token:link.url.split('#')[1],consent:true},owner),410);
 });
-test('Submission requires both photos, owner confirmation and mandate consent without charging or approving a seller',async()=>{
- const f=setup(),v=await visit(f);await rejects(f.call('agent_visit_submit',{visitId:v.id,revision:3}),409);await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);
- await rejects(f.call('agent_visit_submit',{visitId:v.id,revision:4}),409);f.db.records.set('teyzaSellerMandates/seller1',{status:'signed_pending_activation'});
- await f.call('agent_visit_submit',{visitId:v.id,revision:4});const r=await f.call('agent_visit_get',{visitId:v.id});assert.equal(r.visit.status,'submitted');assert.equal(r.visit.progress.collectionActive,false);assert.equal(r.visit.progress.commission,'not_eligible');assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaBilling/')));
+test('Work submission requires owner confirmation and both photos, but no membership payment or mandate',async()=>{
+ const f=setup(),v=await visit(f);
+ await rejects(f.call('agent_visit_submit',{visitId:v.id,revision:3}),409);
+ await f.call('agent_owner_confirm',{token:v.token,consent:true},owner);
+ const row=f.db.records.get('teyzaAgentVisits/'+v.id),selfie=row.photos.selfie;
+ delete row.photos.selfie;await rejects(f.call('agent_visit_submit',{visitId:v.id,revision:4}),409);
+ row.photos.selfie=selfie;
+ await f.call('agent_visit_submit',{visitId:v.id,revision:4});
+ const result=await f.call('agent_visit_get',{visitId:v.id});
+ assert.equal(result.visit.status,'submitted');assert.equal(result.visit.progress.collectionActive,false);
+ assert.equal(result.visit.progress.commission,undefined);
+ assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaBilling/')||k.startsWith('teyzaSellerMandates/')));
 });
 test('Work approval requires a separate fresh administrator to open both current private photos',async()=>{
  const f=setup(),v=await submitted(f),decision={visitId:v.id,revision:5,status:'approved',reviewConfirmed:true};await rejects(f.call('agent_admin_visit_decide',decision,admin),409);
@@ -148,26 +155,14 @@ test('Work approval requires a separate fresh administrator to open both current
  await f.call('agent_admin_visit_decide',decision,admin);assert.equal(f.db.records.get('teyzaAgentVisits/visit1').status,'approved');assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');
  await rejects(f.call('agent_admin_visit_decide',decision,admin),409);
 });
-test('A signed mandate and approved work alone never earn commission; the first full R99 invoice must be paid',async()=>{
- const f=setup(),v=await approved(f);const payout={visitId:v.id,revision:6,reference:'EFT-001',transferVerified:true};await rejects(f.call('agent_admin_commission_paid',payout,admin),409);
- paidInvoice(f);f.db.records.get('teyzaBilling/seller1/entries/invoice_2026-11').paidCents=4000;await rejects(f.call('agent_admin_commission_paid',payout,admin),409);
- f.db.records.get('teyzaBilling/seller1/entries/invoice_2026-11').paidCents=9900;assert.equal((await f.call('agent_visit_get',{visitId:v.id})).visit.progress.commission,'eligible');
- await rejects(f.call('agent_admin_commission_paid',{...payout,transferVerified:false},admin),422);await f.call('agent_admin_commission_paid',payout,admin);
- assert.equal(f.db.records.get('teyzaAgentCommissions/seller1').amountCents,9900);assert((await f.call('agent_admin_commission_paid',payout,admin)).alreadyRecorded);
- await rejects(f.call('agent_admin_commission_paid',{...payout,reference:'different'},admin),409);
-});
-test('Older paid subscriptions and later renewals cannot produce a second onboarding commission',async()=>{
- const f=setup(),v=await approved(f);paidInvoice(f);f.db.records.get('teyzaBilling/seller1/entries/invoice_2026-11').createdAt=start-1000;
- f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-12',{kind:'subscription_invoice',debitCents:9900,paidCents:9900,createdAt:start+5000});
- await rejects(f.call('agent_admin_commission_paid',{visitId:v.id,revision:6,reference:'EFT-001',transferVerified:true},admin),409);
- assert.equal((await f.call('agent_visit_get',{visitId:v.id})).visit.progress.commission,'existing_subscription');
-});
-test('Withdrawn mandates, suspended agents and reversed first invoices block unpaid commissions; paid disputes are flagged',async()=>{
- const f=setup(),v=await approved(f);paidInvoice(f);const payout={visitId:v.id,revision:6,reference:'EFT-001',transferVerified:true};
- f.db.records.get('teyzaSellerMandates/seller1').status='withdrawn';await rejects(f.call('agent_admin_commission_paid',payout,admin),409);f.db.records.get('teyzaSellerMandates/seller1').status='signed_pending_activation';
- f.db.records.get('teyzaFieldAgents/agent1').status='suspended';await rejects(f.call('agent_admin_commission_paid',payout,admin),409);f.db.records.get('teyzaFieldAgents/agent1').status='approved';
- await f.call('agent_admin_commission_paid',payout,admin);f.db.records.get('teyzaBilling/seller1/entries/invoice_2026-11').paidCents=0;
- assert.equal((await f.call('agent_visit_get',{visitId:v.id})).visit.progress.commission,'paid_needs_review');
+test('Retired commission endpoint cannot add or alter historical payout records',async()=>{
+ const f=setup(),v=await approved(f);
+ const previous={visitId:v.id,sellerUid:'seller1',amountCents:9900,reference:'historic'};
+ f.db.records.set('teyzaAgentCommissions/seller1',structuredClone(previous));
+ await rejects(f.call('agent_admin_commission_paid',{visitId:v.id,revision:6,reference:'new',transferVerified:true},admin),410);
+ assert.deepEqual(f.db.records.get('teyzaAgentCommissions/seller1'),previous);
+ assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaAgentPayoutReferences/')));
+ assert.equal((await f.call('agent_visit_get',{visitId:v.id})).visit.progress.commission,undefined);
 });
 test('Expired private work photos are purged without deleting another storage prefix',async()=>{
  const f=setup();await visit(f);f.tick(91*86400000);await purgeAgentEvidence({db:f.db,bucket:f.bucket,clock:()=>start+91*86400000});assert.equal(f.files.size,0);assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaAgentCaptures/')||k.startsWith('teyzaAgentClaims/')));

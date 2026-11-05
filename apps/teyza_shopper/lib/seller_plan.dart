@@ -14,11 +14,13 @@ class SellerPlanPage extends StatefulWidget {
  final TeyzaMobileApi? api;
  final String businessType;
  final bool showPromotion;
- const SellerPlanPage({super.key,required this.session,this.api,this.businessType='spaza',this.showPromotion=false});
+ final bool fromProductAction;
+ const SellerPlanPage({super.key,required this.session,this.api,this.businessType='spaza',this.showPromotion=false,this.fromProductAction=false});
  @override State<SellerPlanPage> createState()=>_SellerPlanState();
 }
 class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver {
- bool busy=false,paid=false,complimentary=false,promoted=false,loading=true,introEligible=false;
+ bool busy=false,paid=false,complimentary=false,promoted=false,loading=true;
+ bool? introEligible;
  String? error,paymentReference,renewalSetup;
  int? promotionEndsAt,paidUntil,complimentaryUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
@@ -35,12 +37,17 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
    if(mounted)setState((){paid=data['listingPaid']==true;complimentary=data['complimentaryAccess']==true;promoted=data['promotionActive']==true;
     paidUntil=(data['paidUntil'] as num?)?.toInt();
     complimentaryUntil=(data['complimentaryUntil'] as num?)?.toInt();
-    introEligible=data['introEligible']==true;renewalSetup=data['renewalSetup']?.toString();
+    introEligible=data['introEligible'] is bool?data['introEligible'] as bool:null;
+    renewalSetup=data['renewalSetup']?.toString();
     promotionEndsAt=(data['promotionEndsAt'] as num?)?.toInt();loading=false;});
   }catch(e){if(mounted)setState((){loading=false;error=mobileError(e);});}
  }
  Future<void> beginCheckout({required bool promotion}) async {
   if(busy||loading)return;
+  if(!promotion&&!widget.fromProductAction){
+   setState(()=>error='Choose Add a product in your seller dashboard when you are ready to activate product access.');
+   return;
+  }
   if(!paystackAllowed){
    setState(()=>error='In-app digital purchases require approved store billing for this app distribution. Your free shop remains available.');
    return;
@@ -112,7 +119,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
    const Text('Grow your business, on your terms.',style:TextStyle(fontSize:26,fontWeight:FontWeight.w800)),
    const SizedBox(height:9),
-   const Text('Business registration and verification are free. Upgrade only when you are ready to list products.',
+   const Text('Registration and verification are free. Choose membership only when you are ready to add products. Your first eligible month is R49, then R99 per month.',
     style:TextStyle(height:1.4,color:Color(0xFF52685B))),const SizedBox(height:20),
    if(loading)const LinearProgressIndicator(),
    if(error!=null)Padding(padding:const EdgeInsets.only(bottom:15),
@@ -132,15 +139,16 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
-   if(!paid)planCard(title:'Business membership',price:introEligible?'R49 first month · then R99/month':'R99/month',
+   if(!paid)planCard(title:'Business membership',price:introEligible==false?'R99/month':'R49 first month · then R99/month',
     highlighted:true,benefits:const [
      'Add products, prices and available stock',
      'Make your verified shop shoppable in your local area',
      'Receive orders, enquiries, collection and delivery requests',
      'Manage your products from the seller dashboard',
      'Standard renewal is R99 per month'
-    ],action:paystackAllowed?(introEligible?'Upgrade for R49 with Paystack':'Upgrade for R99 with Paystack'):purchaseLabel,
-    onPressed:()=>beginCheckout(promotion:false)),
+    ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Upgrade for R49 with Paystack':
+      introEligible==false?'Upgrade for R99 with Paystack':'Check price with Paystack'):purchaseLabel,
+    onPressed:widget.fromProductAction?()=>beginCheckout(promotion:false):null),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
      'Seven days of promotion after verified payment',
@@ -156,7 +164,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      const Text('Finish the secure Paystack checkout in your browser, then return here.'),
      const SizedBox(height:12),
      OutlinedButton(onPressed:busy?null:confirm,child:const Text('I have paid · verify payment'))]))),
-   const Text('No charge at registration. Benefits activate only after server-side payment verification. The introductory price applies only when eligible; standard renewal is R99 per month. Store-distributed app purchases require approved store billing.',
+   const Text('No charge at registration or when opening this page. Membership starts only after you choose a supported checkout and the payment is verified. The introductory price applies to the first eligible month; renewal is R99 per month.',
     style:TextStyle(fontSize:12,color:Color(0xFF66776A),height:1.5))
   ])),
  );

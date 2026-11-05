@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 
 /// Shopper destinations. Merchant access lives in the account role selector.
 class PremiumShopperNavigation extends StatelessWidget {
-  final int selectedIndex, cartCount;
-  final bool showShop;
+  final int selectedIndex;
   final ValueChanged<int> onSelect;
   const PremiumShopperNavigation({super.key,required this.selectedIndex,
-    required this.cartCount,required this.onSelect,this.showShop=true});
+    required this.onSelect});
   static const green=Color(0xFF3BB77E),ink=Color(0xFF010F1C),muted=Color(0xFF89929B);
 
   Widget destination(int index,String label,IconData active,IconData idle){
     final selected=selectedIndex==index;
     return Expanded(child:Semantics(button:true,selected:selected,label:label,
-      child:InkWell(onTap:()=>onSelect(index),borderRadius:BorderRadius.circular(20),
+      child:InkWell(key:ValueKey('nav-${label.toLowerCase()}'),
+        onTap:()=>onSelect(index),borderRadius:BorderRadius.circular(20),
         child:ConstrainedBox(constraints:const BoxConstraints(minHeight:56),
           child:Padding(padding:const EdgeInsets.symmetric(vertical:7),
             child:Column(mainAxisSize:MainAxisSize.min,children:[
@@ -38,20 +38,20 @@ class PremiumShopperNavigation extends StatelessWidget {
         child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(27),
           child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
             destination(0,'Home',Icons.home_rounded,Icons.home_outlined),
-            if(showShop)destination(1,'Shop',Icons.shopping_bag_rounded,Icons.shopping_bag_outlined),
-            Expanded(child:Semantics(button:true,selected:selectedIndex==2,label:'Cart',
-              child:InkWell(onTap:()=>onSelect(2),borderRadius:BorderRadius.circular(24),
+            destination(5,'Shops',Icons.storefront_rounded,Icons.storefront_outlined),
+            Expanded(child:Semantics(button:true,selected:selectedIndex==1,label:'Shop',
+              child:InkWell(key:const ValueKey('nav-shop'),
+                onTap:()=>onSelect(1),borderRadius:BorderRadius.circular(24),
                 child:Padding(padding:const EdgeInsets.symmetric(vertical:7),
                   child:Column(mainAxisSize:MainAxisSize.min,children:[
                     Container(width:48,height:48,
                       decoration:const BoxDecoration(color:green,shape:BoxShape.circle,
                         boxShadow:[BoxShadow(color:Color(0x303BB77E),blurRadius:12,offset:Offset(0,4))]),
-                      child:Center(child:Badge(isLabelVisible:cartCount>0,
-                        label:Text(cartCount>99?'99+':cartCount.toString()),
-                        child:const Icon(Icons.shopping_cart_outlined,color:Colors.white,size:24)))),
+                      child:const Center(child:Icon(Icons.shopping_bag_outlined,
+                        color:Colors.white,size:24))),
                     const SizedBox(height:2),
-                    Text('Cart',style:TextStyle(fontSize:10,
-                      fontWeight:FontWeight.w700,color:selectedIndex==2?green:muted))
+                    Text('Shop',style:TextStyle(fontSize:10,
+                      fontWeight:FontWeight.w700,color:selectedIndex==1?green:muted))
                   ]))))),
             destination(3,'Orders',Icons.receipt_long_rounded,Icons.receipt_long_outlined),
             destination(4,'Account',Icons.person_rounded,Icons.person_outline_rounded)

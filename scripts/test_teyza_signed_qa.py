@@ -16,9 +16,10 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("default: false", self.workflow)
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true", self.workflow)
         self.assertIn("if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true", self.workflow)
-        self.assertIn("required_exact={'version':'3.23.0'", self.workflow)
+        self.assertIn("required_exact={'version':'3.24.0'", self.workflow)
         self.assertIn("automaticProductPublication", self.workflow)
         self.assertIn("adminComplimentaryAccess", self.workflow)
+        self.assertIn("'agentCommissionEnabled'", self.workflow)
 
     def test_signed_builds_compile_only_store_payment_channel(self):
         for line in self.workflow.splitlines():
@@ -38,3 +39,4 @@ class SignedQaWorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

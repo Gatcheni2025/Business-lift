@@ -234,15 +234,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(mounted&&uid==widget.session.userId)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
     }catch(_){/* Product drafting remains available when optional services are offline. */}
   }
-  Future<void> openUpgrade({bool promote=false}) async {
+  Future<void> openUpgrade({bool promote=false,bool fromProductAction=false}) async {
     final uid=widget.session.userId;
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
-      session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza',showPromotion:promote)));
+      session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza',showPromotion:promote,fromProductAction:fromProductAction)));
     if(mounted&&uid==widget.session.userId)await refreshActivity();
   }
   Future<void> chooseProducts() async {
     if(busy||draftError!=null)return;
-    if(!hasProductAccess){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
       session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
@@ -298,7 +298,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
-    if(!hasProductAccess){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final uid=loadedUid;if(uid==null||uid!=widget.session.userId)return;
     setState(()=>busy=true);
     try{
@@ -345,7 +345,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _edit([SellerDraft? existing]) async{
     if(busy)return;
-    if(!hasProductAccess){await openUpgrade();return;}
+    if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final uid=widget.session.userId;
     final name=TextEditingController(text:existing?.name??'');
     final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));

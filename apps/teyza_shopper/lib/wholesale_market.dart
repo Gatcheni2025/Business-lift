@@ -55,7 +55,7 @@ class _WholesaleMarketState extends State<WholesaleMarketPage> {
       }
       suppliers=rows;
     }catch(e){
-      memberNotice='Wholesale connections require approved Teyza spaza registration and an active seven-day trial or R99 membership.';
+      memberNotice='Wholesale connections require an approved Teyza spaza registration and active product access. Membership is R49 for the first eligible month, then R99 per month.';
     }
     try{
       if(widget.businessAddress.trim().isEmpty)throw StateError('Add your shop address to discover nearby wholesalers.');

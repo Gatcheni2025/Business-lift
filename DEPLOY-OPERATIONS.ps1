@@ -37,8 +37,9 @@ $functions = 'functions:teyza-mobile:teyzaMobile,functions:teyza-mobile:teyzaCat
 & node $firebaseCli deploy --config .\firebase.teyza-mobile-v39.json --only $functions --project business-lift-3c19c
 if ($LASTEXITCODE -ne 0) { throw 'Operations backend deployment failed; admin website was not changed.' }
 $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile' -TimeoutSec 30
-if ($health.ok -ne $true -or $health.version -ne '3.23.0' -or $health.verificationUploads -ne $true -or $health.sellerOnboarding -ne $true -or $health.approvalRequired -ne $true -or $health.paystackCheckoutAvailable -ne $true -or $health.adminOperations -ne $true -or $health.adminReview -ne $true -or $health.adminProductReview -ne $false -or $health.automaticProductPublication -ne $true -or $health.adminComplimentaryAccess -ne $true -or $health.adminPaystackVerify -ne $true -or $health.manualReceiptsRetired -ne $true -or $health.billingMode -ne 'paystack_checkout') { throw 'Seller verification and automatic-product backend health check failed; do not publish the updated admin website.' }
+if ($health.ok -ne $true -or $health.version -ne '3.24.0' -or $health.agentCommissionEnabled -ne $false -or $health.verificationUploads -ne $true -or $health.sellerOnboarding -ne $true -or $health.approvalRequired -ne $true -or $health.paystackCheckoutAvailable -ne $true -or $health.adminOperations -ne $true -or $health.adminReview -ne $true -or $health.adminProductReview -ne $false -or $health.automaticProductPublication -ne $true -or $health.adminComplimentaryAccess -ne $true -or $health.adminPaystackVerify -ne $true -or $health.manualReceiptsRetired -ne $true -or $health.billingMode -ne 'paystack_checkout') { throw 'Seller verification and automatic-product backend health check failed; do not publish the updated admin website.' }
 node .\tools\admin-release\run.cjs deploy
 if ($LASTEXITCODE -ne 0) { throw 'Admin publication stopped; read the message above.' }
 Write-Host 'Open https://teyza.co.za/admin and use your authorised administrator account.'
+
 

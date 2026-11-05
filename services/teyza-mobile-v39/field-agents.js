@@ -36,21 +36,18 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  function own(v,uid){if(!v||v.agentUid!==uid)D.fail(404,'Visit not found.');return v;}
  function audit(tx,uid,action,target,details={}){tx.set(doc('teyzaAgentAudit/'+crypto.randomUUID()),{actorUid:uid,action,target,details,createdAt:clock()});}
  async function status(id,v){
-  if(!v.sellerUid)return {sellerApproval:'awaiting_owner',mandate:'not_linked',payment:'not_received',commission:'not_eligible',commissionCents:9900,collectionActive:false};
+  if(!v.sellerUid)return {sellerApproval:'awaiting_owner',collectionActive:false};
   const uid=v.sellerUid;
-  const [a,m,c,location,inv,agentProfile]=await Promise.all([read('teyzaSellerAccounts/'+uid),read('teyzaSellerMandates/'+uid),read('teyzaAgentCommissions/'+uid),read('teyzaShopLocations/'+uid),db.collection('teyzaBilling/'+uid+'/entries').where('kind','==','subscription_invoice').limit(501).get(),read('teyzaFieldAgents/'+v.agentUid)]);
-  if(inv.docs.length>500)D.fail(409,'This subscription history needs an administrator reconciliation.');
-  const bill=inv.docs.map(s=>s.data()).sort((a,b)=>a.createdAt-b.createdAt)[0],paid=!!bill&&bill.debitCents===9900&&bill.paidCents>=9900,newShop=!!bill&&bill.createdAt>=v.createdAt;
-  const consent=m?.status==='signed_pending_activation';
-  const eligible=v.status==='approved'&&agentProfile?.status==='approved'&&a?.approvalStatus==='approved'&&consent&&paid&&newShop;
-  return {sellerApproval:a?.approvalStatus||'pending',mandate:consent?'signed_pending_activation':m?.status||'not_signed',payment:paid?'first_invoice_paid':bill?'awaiting_payment':'not_invoiced',
-   commission:c?.paidAt?(eligible?'paid':'paid_needs_review'):eligible?'eligible':paid&&!newShop?'existing_subscription':'not_eligible',commissionCents:9900,collectionActive:false,
-   registeredShop:{name:a?.shopName||'',address:a?.address||''},distanceFromShopMeters:distance(v.location,location),payoutAt:c?.paidAt||null};
+  const [a,location]=await Promise.all([read('teyzaSellerAccounts/'+uid),read('teyzaShopLocations/'+uid)]);
+  return {sellerApproval:a?.approvalStatus||'pending',collectionActive:false,
+   registeredShop:{name:a?.shopName||'',address:a?.address||''},distanceFromShopMeters:distance(v.location,location)};
  }
  async function execute(auth,action,data={}){
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);
   await rate(uid,'field-agent',80,60000);
-  if(action==='agent_profile')return {profile:profileView(await read('teyzaFieldAgents/'+uid)),provinces,commissionCents:9900};
+  // Retire the old write route for cached clients; retain historical records.
+  if(action==='agent_admin_commission_paid')D.fail(410,'Agent commission tracking has been retired.');
+  if(action==='agent_profile')return {profile:profileView(await read('teyzaFieldAgents/'+uid)),provinces};
   if(action==='agent_apply'){
    if(data.consent!==true)D.fail(422,'Agree to the work evidence privacy notice.');
    const values={name:D.text(data.name,'full name',120),phone:require('./onboarding').phone(data.phone),email:String(auth.email||'').slice(0,254),address:D.text(data.address||'','home address',350,false),province:data.province,area:D.text(data.area,'working town or area',120)};
@@ -208,9 +205,9 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
     tx.set(doc('teyzaAgentClaims/'+claimHash),{visitId:id,agentUid:uid,expiresAt:clock()+7*DAY});tx.update(ref,{claimHash});return {url:'https://teyza.co.za/owner-confirm.html#'+token,expiresAt:clock()+7*DAY};});
   }
   if(action==='agent_visit_submit'){
-   const progress=await status(id,v);if(!v.sellerUid||progress.mandate!=='signed_pending_activation')D.fail(409,'Ask the owner to confirm the visit and sign their membership mandate first.');
-   return db.runTransaction(async tx=>{const s=await tx.get(ref),current=own(s.data(),uid),m=await tx.get(doc('teyzaSellerMandates/'+v.sellerUid));editable(current);
-    if(current.revision!==data.revision)D.fail(409,'Visit changed. Refresh before submitting.');if(!current.location||!['shop','selfie'].every(k=>current.photos[k]?.expiresAt>clock())||m.data()?.status!=='signed_pending_activation')D.fail(409,'Complete the current location, both photos and owner mandate first.');
+   if(!v.sellerUid)D.fail(409,'Ask the owner to confirm the visit first.');
+   return db.runTransaction(async tx=>{const s=await tx.get(ref),current=own(s.data(),uid);editable(current);
+    if(current.revision!==data.revision||current.sellerUid!==v.sellerUid)D.fail(409,'Visit changed. Refresh before submitting.');if(!current.location||!['shop','selfie'].every(k=>current.photos[k]?.expiresAt>clock()))D.fail(409,'Complete the current location and both photos first.');
     tx.update(ref,{status:'submitted',submittedAt:clock(),revision:current.revision+1});audit(tx,uid,action,id);return {submitted:true};});
   }
   if(action==='agent_admin_photo'){
@@ -224,16 +221,6 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
     if(current.revision!==data.revision||current.status!=='submitted')D.fail(409,'This work changed or was already reviewed. Refresh first.');
     if(data.status==='approved'&&(p.data()?.status!=='approved'||data.reviewConfirmed!==true||!current.sellerUid||!current.location||![['shop',shopView],['selfie',selfView]].every(([k,view])=>view.exists&&view.data().revision===current.revision&&view.data().evidenceId===current.photos?.[k]?.id&&view.data().viewedAt>clock()-5*60000&&current.photos[k].expiresAt>clock())))D.fail(409,'Open both current photos and confirm the location and owner evidence before approving.');
     tx.update(ref,{status:data.status,reviewNote:note,reviewedBy:uid,reviewedAt:clock(),revision:current.revision+1});audit(tx,uid,action,id,{status:data.status});return {saved:true};
-   });
-  }
-  if(action==='agent_admin_commission_paid'){
-   if(v.agentUid===uid||v.sellerUid===uid)D.fail(403,'Another administrator must record this payout.');if(data.transferVerified!==true)D.fail(422,'Verify the completed R99 bank transfer first.');const reference=D.text(data.reference,'verified payout reference',180),receipt=doc('teyzaAgentPayoutReferences/'+hash(reference.trim().toUpperCase()));
-   return db.runTransaction(async tx=>{
-    const [s,a,m,c,r,bills,p]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+D.id(v.sellerUid))),tx.get(doc('teyzaSellerMandates/'+v.sellerUid)),tx.get(doc('teyzaAgentCommissions/'+v.sellerUid)),tx.get(receipt),tx.get(db.collection('teyzaBilling/'+v.sellerUid+'/entries').where('kind','==','subscription_invoice').limit(501)),tx.get(doc('teyzaFieldAgents/'+v.agentUid))]);
-    if(c.exists&&c.data().paidAt){if(c.data().visitId===id&&c.data().reference===reference)return {recorded:true,alreadyRecorded:true};D.fail(409,'This shop’s once-off commission was already recorded.');}
-    if(bills.docs.length>500)D.fail(409,'Reconcile this subscription history first.');const current=s.data(),invoice=bills.docs.map(s=>s.data()).sort((a,b)=>a.createdAt-b.createdAt)[0];if(current.revision!==data.revision||current.status!=='approved'||a.data()?.approvalStatus!=='approved'||p.data()?.status!=='approved'||m.data()?.status!=='signed_pending_activation'||!invoice||invoice.debitCents!==9900||invoice.paidCents<9900||invoice.createdAt<current.createdAt)D.fail(409,'Approved work, an approved seller, current consent and the first fully paid R99 invoice are required.');
-    if(r.exists)D.fail(409,'That payout reference was already used.');const payout={visitId:id,sellerUid:v.sellerUid,agentUid:v.agentUid,amountCents:9900,currency:'ZAR',reference,paidAt:clock(),recordedBy:uid};
-    tx.set(doc('teyzaAgentCommissions/'+v.sellerUid),payout);tx.set(receipt,{visitId:id,sellerUid:v.sellerUid});audit(tx,uid,action,id,{amountCents:9900});return {recorded:true};
    });
   }
   D.fail(404,'Unknown agent action.');
