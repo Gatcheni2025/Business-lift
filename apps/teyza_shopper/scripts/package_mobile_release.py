@@ -20,6 +20,10 @@ version = next(line.split(':', 1)[1].strip() for line in
                (root/'pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
 catalogue = json.loads((root/'assets/catalogue/product-catalogue.json').read_text())
 manifest = {'platform': platform, 'version': version, 'signing': mode,
+            'releasePurpose': 'qa_preview_only' if os.environ.get('QA_SIGNING_ONLY') == 'true' else 'production_candidate',
+            'paymentChannel': 'store', 'inAppDigitalSubscriptionPurchasesEnabled': False,
+            'productionBackendGateVerified': os.environ.get('QA_SIGNING_ONLY') != 'true' and mode == 'signed',
+            'productionFirebaseAccountsAndData': True,
             'commit': os.environ.get('GITHUB_SHA', ''),
             'emailPasswordLogin': True,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
@@ -77,6 +81,14 @@ manifest['sha256'] = {file.name:hashlib.sha256(file.read_bytes()).hexdigest()
 (out/'release-manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
 guide = root/'../../docs/TEYZA_MOBILE_RELEASE.md'
 shutil.copy2(guide, out/'README-RELEASE.md')
+if os.environ.get('QA_SIGNING_ONLY') == 'true':
+    (out/'README-QA-ONLY.txt').write_text(
+        'Teyza signed QA preview, not production release.\\n'
+        'Uses existing production Firebase accounts/data. Use dedicated test accounts.\\n'
+        'The store-channel app does not offer Paystack checkout or implemented StoreKit/Play Billing.\\n'
+        'Backend 3.23 may not be live, so seller approvals and publication are not certified.\\n'
+        'An uploaded IPA requires Apple processing and separate tester assignment.\\n'
+        'Do not submit this AAB to a public Play track.\\n')
 print(platform+' '+version+' '+mode+' release artifact prepared.')
 
 
