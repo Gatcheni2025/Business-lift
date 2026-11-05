@@ -22,7 +22,7 @@ function firebase {
 function npm { $global:LASTEXITCODE = 0 }
 function Invoke-RestMethod { param($Uri,$Headers,$TimeoutSec)
   if ($Uri -like 'https://api.paystack.co/plan/*') { return @{status=$true;data=@{plan_code='PLN_test12345';amount=9900;currency='ZAR';interval='monthly'}} }
-  if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.23.0';verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=378;catalogueRevision=2;cataloguePhotos=96;shopServices=$true;orderQuotes=$true;orderInboxAlways=$true;accountDeletion=$true;accountDeletionAuthLock=$true;deletedUserReregister=$true;shopperSavedAddresses=$true;approvedFreeDiscovery=$true;freeSellerPlans=$true;paidAreaVisibility=$true;wholesaleSourcing=$true;protectedWholesalePrices=$true;chatModeration=$true;sevenDayTrial=$false;shopperDeletionProfileClear=$true;appleRevocationServer=$true;onceOnlyShopperIdentity=$true;twoWayChatNotifications=$true;wholesaleConnections=$true;strictSevenDayMembership=$false;adminUsers=$true;adminSellerDocuments=$true;automaticProductPublication=$true;adminProductReview=$false;adminComplimentaryAccess=$true;billingMode='paystack_checkout';paystackCheckoutAvailable=$true;subscriptionMonthlyCents=9900;introductoryFirstMonthCents=4900;promotionSevenDaysCents=2900} }
+  if ($global:badHealth) { return @{ok=$true;version='3.12.0'} };return @{ok=$true;version='3.24.0';agentCommissionEnabled=$false;verificationUploads=$true;shopFrontPhotos=$true;approvalRequired=$true;shopLocations=$true;addressAutocomplete=$true;sellerOnboarding=$true;catalogueProducts=378;catalogueRevision=2;cataloguePhotos=96;shopServices=$true;orderQuotes=$true;orderInboxAlways=$true;accountDeletion=$true;accountDeletionAuthLock=$true;deletedUserReregister=$true;shopperSavedAddresses=$true;approvedFreeDiscovery=$true;freeSellerPlans=$true;paidAreaVisibility=$true;wholesaleSourcing=$true;protectedWholesalePrices=$true;chatModeration=$true;sevenDayTrial=$false;shopperDeletionProfileClear=$true;appleRevocationServer=$true;onceOnlyShopperIdentity=$true;twoWayChatNotifications=$true;wholesaleConnections=$true;strictSevenDayMembership=$false;adminUsers=$true;adminSellerDocuments=$true;automaticProductPublication=$true;adminProductReview=$false;adminComplimentaryAccess=$true;billingMode='paystack_checkout';paystackCheckoutAvailable=$true;subscriptionMonthlyCents=9900;introductoryFirstMonthCents=4900;promotionSevenDaysCents=2900} }
 try {
   foreach ($name in @('ACTIVATE-TEYZA.ps1','DEPLOY-MOBILE.ps1','SETUP-VERIFICATION-KEY.ps1')) {
     $errors = $null
@@ -50,4 +50,5 @@ try {
   Remove-Item $fixture -Recurse -Force
   Remove-Item function:firebase,function:npm,function:Invoke-RestMethod
 }
+
 

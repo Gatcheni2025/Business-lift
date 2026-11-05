@@ -1865,7 +1865,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 constraints:const BoxConstraints(minWidth:32,minHeight:32),
                 padding:EdgeInsets.zero,icon:const Icon(Icons.add_circle_outline,color:green,size:20))
             ])
-          ]))))).toList()));
+          ])))))).toList()));
   }
 
   Widget quickShop(Shop s)=>InkWell(onTap:()=>openShop(s),
