@@ -1,6 +1,6 @@
-import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R319';
-import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R319';
-import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R319';
+import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R322';
+import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R322';
+import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R322';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Every shop. One clear view.',products:'Product approvals',billing:'Verified Paystack payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError}){
@@ -108,7 +108,13 @@ export function createOperations({api,onError}){
  async function chooseUser(user){
   userSelected=user.uid;userDetail=null;
   userDetail=(await request('ops_user_detail',{userUid:user.uid}));
-  if(view==='users')show();
+  if(view==='users'){
+    show();
+    const accountCard=root.querySelector('[data-user-detail]');
+    accountCard?.setAttribute('tabindex','-1');
+    accountCard?.scrollIntoView({block:'start',behavior:'instant'});
+    accountCard?.focus({preventScroll:true});
+  }
  }
  function userManagement(){
   root.append(el('p','Create shoppers or sellers using a private Firebase account setup email. Newly invited sellers still must verify their phone, upload documents and pass the normal administrator review. Administrator privileges are granted separately by the project owner.','footnote'));
@@ -154,6 +160,7 @@ export function createOperations({api,onError}){
   const {user,seller}=userDetail,
     view=card(user.displayName||user.email||'Account',user.uid);
   view.dataset.userDetail=user.uid;
+  view.append(button('← Back to users',()=>{userSelected=null;userDetail=null;show();root.querySelector('[aria-label="Search loaded Firebase users"]')?.focus();}));
   view.append(el('p',user.email||'No email linked'),
     el('p','Email: '+(user.verified?'verified':'not verified')+
       ' · Account: '+(user.disabled?'suspended':'active')+
