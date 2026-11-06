@@ -8,7 +8,8 @@ const $=id=>document.getElementById(id);
 export const mandateAmountCents=9900;
 export const bankBranch=(banks,name)=>(banks.find(b=>b.name===name)||{}).branchCode||'';
 export function nextFirstOfMonth(now=new Date()){
-  return new Date(now.getFullYear(),now.getMonth()+1,1).toISOString().slice(0,10);
+  const d=new Date(now.getFullYear(),now.getMonth()+1,1);
+  return String(d.getFullYear())+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
 }
 export function canSignMandate({config,identity,consent,idConsent,account,bank,firstName,surname,holder,firstDate}){
   return config?.termsVersion&&identity?.evidenceId&&['id','passport'].includes(identity.kind)&&
@@ -30,6 +31,7 @@ async function start(){
   function render(){
     const signed=Boolean(auth?.currentUser);
     hide('mandateLogin',!signed);hide('mandateAccount',signed);
+    hide('mandateWithdraw',signed&&Boolean(info?.mandate)&&info.mandate.status!=='withdrawn');
     $('mandateSign').disabled=busy||!signed||!info||!canSignMandate({
       config:info,identity:info.identity,consent:$('mandateConsent').checked,
       idConsent:$('mandateIdentityConsent').checked,bank:$('mandateBank').value,
@@ -138,6 +140,14 @@ async function start(){
       catch(e){status(e.message||'Apple sign-in was unsuccessful.','error');}};
     $('mandateLogout').onclick=()=>sdk.signOut(auth);
     $('mandateReload').onclick=load;
+    $('mandateWithdraw').onclick=async()=>{
+      if(busy||!info?.mandate||!confirm('Withdraw this pending mandate request? Existing collection-provider agreements require separate cancellation.'))return;
+      busy=true;render();
+      try{await api('seller_mandate_withdraw',{mandateId:info.mandate.mandateId});
+        busy=false;await load();status('Your mandate request has been withdrawn. No debit has been initiated.','success');}
+      catch(e){status(e.message||'Could not withdraw the mandate.','error');}
+      finally{busy=false;render();}
+    };
     $('mandateForm').onsubmit=submit;
     $('mandateBank').onchange=()=>{
       const bank=$('mandateBank').value;
