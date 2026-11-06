@@ -208,10 +208,26 @@ export function createOperations({api,onError}){
     el('p','Email: '+(user.verified?'verified':'not verified')+
       ' · Account: '+(user.disabled?'suspended':'active')+
       ' · Authentication: '+(user.providers.length?user.providers.join(', '):'email / anonymous')),
-    el('p',seller?'Seller: '+seller.shopName+' · '+seller.category+' · '+seller.approvalStatus:
+    el('p',seller?'Seller: '+seller.shopName+' · '+seller.category+' · Account approval: '+seller.approvalStatus:
       'Shopper / no registered seller profile'),
     el('p',user.invitationStatus?
       'Invitation: '+user.invitationStatus:'Account invitation not created through admin.'));
+  if(seller){
+    const identityReviewed=seller.verifiedOwner===true;
+    const onboardingReady=seller.registrationReady===true;
+    const membership=seller.membershipPaid?'Verified live Paystack membership':
+      seller.complimentaryAccess?'Time-limited administrator access':'No verified product membership';
+    view.append(el('p','Owner verification: '+(seller.verificationStatus||'not submitted')+
+      ' · Onboarding: '+(onboardingReady?'complete':'incomplete')+
+      ' · Product selling: '+(seller.sellingUnlocked===true?'enabled':'locked')));
+    view.append(el('p','Product membership: '+membership,'footnote'));
+    if(seller.sellingUnlocked!==true)view.append(el('p',!identityReviewed?
+      'Account approval alone does not complete seller verification. Open the approval desk to check the current ID and selfie.':
+      !onboardingReady?'The seller must finish onboarding, including verified mobile registration, before selling.':
+      'Seller verification is complete. Products require a verified Paystack membership or a recorded administrator exception.',
+      'notice warning'));
+    view.append(button('Open seller verification',()=>navigate('approvals')));
+  }
   if(!user.admin){
     if(user.email)view.append(button('Send password setup email',async()=>{
       if(!confirm('Send a password reset/setup email to '+user.email+'?'))return;
