@@ -356,3 +356,28 @@ test('A new pending selfie after checkout does not activate a verified digital m
  assert.equal(records.get('teyzaPaystackPayments/'+checkout.reference).status,'refund_review');
  assert.equal(records.has('teyzaBilling/shop1'),false);
 });
+
+test('Website membership checkout returns to the fixed Teyza domain, never a client-supplied redirect',async()=>{
+ const {api,auth,requests,records}=fixture();
+ const response=await api.execute(auth,'billing_checkout',{
+  ...consent,checkoutChannel:'web',callback_url:'https://evil.example/collect'
+ });
+ const init=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
+ assert.equal(init.callback_url,'https://teyza.co.za/seller-subscriptions.html?payment=return');
+ assert.equal(init.amount,4900);
+ assert.equal(records.get('teyzaPaystackPayments/'+response.reference).checkoutChannel,'web');
+ assert.equal(init.metadata.teyzaUid,'shop1');
+});
+test('Website checkout refuses an unsupported channel before calling Paystack',async()=>{
+ const {api,auth,requests}=fixture();
+ await assert.rejects(api.execute(auth,'billing_checkout',{
+  ...consent,checkoutChannel:'https://evil.example'
+ }),e=>e.status===422);
+ assert.equal(requests.length,0);
+});
+test('Direct-distribution Android retains its existing callback',async()=>{
+ const {api,auth,requests}=fixture();
+ await api.execute(auth,'billing_checkout',consent);
+ const init=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
+ assert.equal(init.callback_url,'https://www.teyza.co.za/?payment=return');
+});
