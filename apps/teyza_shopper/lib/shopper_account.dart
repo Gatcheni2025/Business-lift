@@ -92,8 +92,12 @@ class _AccountState extends State<ShopperAccountPanel> {
           title:const Text('Card at the shop'),
           subtitle:const Text('Available only for collection where the seller accepts cards'),
           onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cardAtShop)),
+        ListTile(leading:const Icon(Icons.credit_card_rounded),
+          title:const Text('Pay online by card'),
+          subtitle:const Text('Only for sellers who accept card payments. Pay securely via Paystack after the seller confirms.'),
+          onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cardOnline)),
         const Padding(padding:EdgeInsets.all(12),
-          child:Text('Teyza does not collect or store your card number. This is a checkout preference, not an online payment.',
+          child:Text('Teyza does not collect or store card numbers. Online card payments use Paystack after an eligible seller confirms your order.',
             textAlign:TextAlign.center,style:TextStyle(fontSize:12))),
       ])));
     if(selected==null||!mounted||uid!=widget.session.userId)return;
