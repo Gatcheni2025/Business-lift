@@ -84,13 +84,13 @@ class SellerSellingDashboard extends StatelessWidget {
       if(!hasLocation)Card(color:const Color(0xFFFFF3D8),child:ListTile(leading:const Icon(Icons.location_on_outlined),
         title:const Text('Help shoppers find your shop'),subtitle:const Text('Save your shop pin and suburb for nearby search.'),
         onTap:onLocation??onBusiness,trailing:const Icon(Icons.chevron_right))),
-      if(onEnableAlerts!=null)...[
-        const SizedBox(height:12),Material(color:const Color(0xFFE1F2E8),borderRadius:BorderRadius.circular(18),
-          child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-            const Text('An alert for every order',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:5),
-            const Text('Every order appears in your inbox. Phone alerts need notification permission.',style:TextStyle(fontSize:12,color:_muted)),
-            TextButton.icon(onPressed:onEnableAlerts,icon:Icon(phoneAlertsEnabled?Icons.notifications_active_outlined:Icons.notifications_none),
-              label:Text(phoneAlertsEnabled?'Manage order alerts':'Enable order alerts'))]))),
+      if(onNotifications!=null)...[
+        const SizedBox(height:12),
+        Card(color:const Color(0xFFE1F2E8),elevation:0,child:ListTile(
+          leading:const Icon(Icons.notifications_active_outlined,color:_green),
+          title:const Text('Order alerts are available',style:TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:const Text('Orders and messages appear automatically in your inbox. Phone alerts depend on device permission.'),
+          onTap:onNotifications)),
       ],
       if(serviceControls!=null)...[const SizedBox(height:16),serviceControls!],
       const SizedBox(height:22),const Text('Your selling tools',style:TextStyle(color:_ink,fontSize:21,fontWeight:FontWeight.w800)),
