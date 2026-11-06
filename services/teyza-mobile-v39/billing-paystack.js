@@ -59,6 +59,11 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
        D.fail(409,'Complete seller verification and resolve any shop hold before paying for product access.');
     }
     const isPromo=kind==='promotion';
+    // Website checkout uses a fixed, canonical Paystack return route.
+    // Never accept a customer-supplied arbitrary callback URL.
+    if(data.checkoutChannel!=null&&!['web','direct'].includes(data.checkoutChannel))
+      D.fail(422,'Choose a supported checkout channel.');
+    const webCheckout=data.checkoutChannel==='web';
     if(!isPromo&&(data.recurringConsent!==true||data.termsVersion!==SUBSCRIPTION_TERMS_VERSION))
       D.fail(422,'Confirm the monthly renewal terms before starting payment.');
     if(isPromo&&!P.entitled(uid,account,billing,now))D.fail(403,'Upgrade your seller membership before promoting your business.');
@@ -104,7 +109,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
         D.fail(409,'A payment is already being prepared. Please contact support before trying another checkout.');
       }
       tx.create(newPayment,{reference,ownerUid:uid,kind:isPromo?'promotion':first?'intro':'monthly',
-        customerEmail:auth.email.toLowerCase(),environment:mode,previousSubscriptionCode:billing?.paystackSubscriptionCode||'',
+        customerEmail:auth.email.toLowerCase(),environment:mode,checkoutChannel:webCheckout?'web':'direct',
+        previousSubscriptionCode:billing?.paystackSubscriptionCode||'',
         renewalStrategy:isPromo?'none':'delayed_plan',
         ...(isPromo?{}:{recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION,consentedAt:now}),
         amountCents:amount,currency:'ZAR',status:'pending',createdAt:now});
@@ -115,7 +121,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       amountCents:old.amountCents,introductory:old.kind==='intro',monthlyCents:MONTHLY_CENTS,
       promotionDays:isPromo?7:null,requiresReturnVerification:true,alreadyStarted:true};}
     const payload={email:auth.email,amount,currency:'ZAR',channels:['card'],reference,
-      callback_url:'https://www.teyza.co.za/?payment=return',
+      callback_url:webCheckout?'https://teyza.co.za/seller-subscriptions.html?payment=return':
+        'https://www.teyza.co.za/?payment=return',
       metadata:{teyzaUid:uid,teyzaKind:isPromo?'promotion':'membership'}};
     // Charge the exact initial amount once; schedule the R99 plan only after
     // verification so the first debit and the later renewal remain distinct.
