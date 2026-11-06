@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   defender_source_scan:
     runs-on: windows-latest
@@ -102,6 +103,38 @@ jobs:
           }
           Write-Host 'No recent Defender detection was recorded for this source scan.'
           Write-Host 'This does not scan the original ZIP and is not a Microsoft analyst verdict or release authorization.'
+      - name: Scan the exact reported GitHub artifact without extracting it
+        shell: pwsh
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $preference = Get-MpPreference
+          if ($preference.DisableArchiveScanning) {
+            throw 'Defender archive scanning is disabled. No archive scan was performed.'
+          }
+          $start = (Get-Date).AddMinutes(-10)
+          $path = Join-Path $env:RUNNER_TEMP 'reported-teyza-artifact.zip'
+          $url = 'https://api.github.com/repos/Gatcheni2025/Business-lift/actions/artifacts/13510067984/zip'
+          $headers = @{ Authorization = "Bearer $env:GH_READ_TOKEN"; Accept = 'application/vnd.github+json' }
+          Invoke-WebRequest -Uri $url -Headers $headers -OutFile $path -ErrorAction Stop
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw 'The original artifact was unavailable or quarantined. No clean archive result.'
+          }
+          $expected = '5EF2FDD15A8A89CCBF9A0098DA774445EEAAC1DC25E8389689779476BD3535ED'
+          if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
+            throw 'The downloaded artifact does not match GitHub metadata. No archive scan was performed.'
+          }
+          Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
+          $detections = @(Get-MpThreatDetection | Where-Object {
+            $_.InitialDetectionTime -ge $start -or $_.LastThreatStatusChangeTime -ge $start
+          })
+          if ($detections.Count -gt 0 -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
+            throw 'Defender detected or removed a review item. The archive is not cleared.'
+          }
+          Write-Host 'Defender recorded no recent detection for the original GitHub artifact.'
+          Write-Host 'A nested archive may be treated differently across Defender configurations. An analyst verdict is still required.'
       - name: Report recent Defender detections when review stops
         if: failure()
         shell: pwsh

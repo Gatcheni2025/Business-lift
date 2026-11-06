@@ -41,6 +41,13 @@ failed checkout, stale signatures or detected threat is **not** a clean result.
 Even a clean source scan is not a scan of the original ZIP and is not Microsoft's
 final analyst determination.
 
+The workflow also attempts to download the exact reported GitHub Actions
+artifact into the disposable Windows runner and scan it without extracting or
+executing the ZIP. It verifies the outer GitHub artifact's SHA-256 first and
+stops if archive scanning is disabled, a hash differs, or Defender reports a
+threat. Nothing is uploaded as a release artifact. A clean scan is still not
+an analyst verdict, and nested-archive handling can vary between machines.
+
 ## Questions for Apple and Google review
 
 The current seller subscription is an optional, recurring **R49 eligible first
