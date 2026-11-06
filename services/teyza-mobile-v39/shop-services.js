@@ -19,8 +19,9 @@ function quote(shop,saved,data){
  const settings=effective(saved,shop),mode=data.mode,paymentMethod=data.paymentMethod||'arrange_with_shop';
  if(!['collection','delivery'].includes(mode))D.fail(422,'Choose delivery or collection.');
  if(!(mode==='delivery'?settings.deliveryEnabled:settings.pickupEnabled))D.fail(409,'This fulfilment option is not enabled by the shop.');
- if(!['cash','card_at_shop','arrange_with_shop'].includes(paymentMethod))D.fail(422,'Choose an available payment method.');
+ if(!['cash','card_at_shop','card_online','arrange_with_shop'].includes(paymentMethod))D.fail(422,'Choose an available payment method.');
  if(paymentMethod==='card_at_shop'&&(!settings.cardPayments||mode!=='collection'))D.fail(409,'Card payment at the shop is available only for collection from a shop that accepts cards.');
+ if(paymentMethod==='card_online'&&!settings.cardPayments)D.fail(409,'Online card payments are only available when this seller has enabled card payments.');
  const items=D.orderItems(data.items,shop.products||[]),subtotalCents=items.reduce((sum,p)=>sum+p.priceCents*p.quantity,0);
  const deliveryFeeCents=mode==='delivery'?settings.deliveryFeeCents:0;
  const cashDiscountPercent=paymentMethod==='cash'?settings.cashDiscountPercent:0;
