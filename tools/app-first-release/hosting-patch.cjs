@@ -32,6 +32,7 @@ function servingConfig(original,existingPaths=[]){
  config.headers=[...originalHeaders,
   ...['/','/index.html','/download{,/,.html}','/support{,/,.html}','/seller-subscriptions{,/,.html}','/robots.txt','/sitemap.xml','/assets/app-first.css'].map(glob=>({glob,headers:{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'}})),
   {glob:'/assets/app/**',headers:{'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'}},
+  {glob:'/js/seller-web-billing.mjs',headers:{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'}},
   ...publicPaths.map(glob=>({glob,headers:{'X-Robots-Tag':'index, follow, max-image-preview:large','Cache-Control':'no-cache'}})),
   ...[...new Set([...privateFiles,...privateRoutes,'/admin{,/**,.html,-*.html}','/dashboard{,/**,.html,-*.html}','/workspace{,/**,.html}','/js/work*','/js/owner-confirm*'])].map(glob=>({glob,headers:{'X-Robots-Tag':'noindex, nofollow','Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}}))];
  return config;
