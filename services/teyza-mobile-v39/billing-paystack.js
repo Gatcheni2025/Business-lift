@@ -6,7 +6,7 @@ const P=require('./publication');
 const INTRO_CENTS=4900,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
 const SUBSCRIPTION_TERMS_VERSION='seller-r49-r99-2026-11';
 const {recentAdmin}=require('./seller-experience');
-const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage','ops_paystack_confirm','ops_paystack_refund_confirm']);
+const actions=new Set(['billing_checkout','billing_confirm','billing_status','promote_checkout','billing_manage','ops_paystack_confirm','ops_paystack_refund_confirm']);
 function nextMonth(ms) {
   const d=new Date(ms),day=d.getUTCDate();
   const first=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1,d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()));
@@ -117,7 +117,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
         previousSubscriptionCode:billing?.paystackSubscriptionCode||'',
         renewalStrategy:isPromo?'none':'delayed_plan',
         ...(isPromo?{}:{recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION,consentedAt:now}),
-        amountCents:amount,currency:'ZAR',status:'pending',createdAt:now});
+        amountCents:amount,currency:'ZAR',status:'pending',createdAt:now,
+         paymentState:'awaiting_customer',nextCheckAt:now+60000});
       tx.set(lockRef,{ownerUid:uid,reference,status:'preparing',environment:mode,createdAt:now});
       return {existing:null};
     });
@@ -138,7 +139,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
         const [lockSnap,paySnap]=await Promise.all([tx.get(lockRef),tx.get(newPayment)]);
         if(!lockSnap.exists||lockSnap.data().reference!==reference||!paySnap.exists||paySnap.data().status!=='pending')
           D.fail(409,'Payment state changed. Contact support before paying.');
-        tx.update(newPayment,{checkoutUrl:result.authorization_url});
+        tx.update(newPayment,{checkoutUrl:result.authorization_url,paymentState:'awaiting_paystack',updatedAt:clock()});
         tx.update(lockRef,{status:'pending',updatedAt:clock()});
       });
     }catch(error){
@@ -308,8 +309,73 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       await doc('teyzaBilling/'+uid).set({renewalSetup:'action_required'},{merge:true});
     }
   }
+  // Seller-visible membership status is derived only from the authenticated UID.
+  // Neither a callback URL nor a browser "paid" flag can activate membership.
+  async function status(auth,data={}) {
+    const uid=D.id(auth.uid);
+    const account=await read('teyzaSellerAccounts/'+uid);
+    D.seller(account,uid);
+    const lock=await read('teyzaPaystackCheckoutLocks/'+uid+'_membership');
+    const requested=data.reference==null?'':D.text(data.reference,'payment reference',70);
+    if(requested&&!/^TZM-[a-f0-9]{26}$/.test(requested))D.fail(422,'Invalid membership reference.');
+    const reference=requested||lock?.reference||'';
+    const payment=reference?await read('teyzaPaystackPayments/'+reference):null;
+    if(requested&&(!payment||payment.ownerUid!==uid||!['intro','monthly'].includes(payment.kind)))
+      D.fail(404,'This membership payment was not found for your account.');
+    if(payment&&payment.ownerUid!==uid)D.fail(403,'This membership payment belongs to another account.');
+    if(payment&&['intro','monthly'].includes(payment.kind)&&payment.status==='pending'&&data.checkNow===true){
+      try{await grant(reference,uid);}
+      catch(error){
+        // Paystack does not issue success webhooks for still-pending charges.
+        // These states must never be converted to paid by a client poll.
+        if(error.status!==409)throw error;
+      }
+    }
+    const current=reference?await read('teyzaPaystackPayments/'+reference):null;
+    const billing=await read('teyzaBilling/'+uid);
+    const active=P.entitled(uid,account,billing,clock());
+    const owned=current?.ownerUid===uid&&['intro','monthly'].includes(current.kind);
+    const state=active?'active':!owned?'none':
+      current.status==='pending'?'pending':current.status==='paid'?'awaiting_approval':
+      current.status==='refund_review'?'review_required':current.status==='refunded'?'refunded':'needs_attention';
+    return {membershipStatus:state,paymentStatus:owned?current.status:'none',
+      reference:owned?reference:null,paidUntil:active?billing?.paidUntil||null:null,
+      renewalSetup:active?billing?.renewalSetup||null:null,
+      // A pending checkout does not imply any paid entitlement.
+      accessGranted:active,paymentPending:owned&&current.status==='pending',
+      statusCheckedAt:clock()};
+  }
+  // Cloud Scheduler fallback: the signed webhook is the primary activation path.
+  // A missed webhook cannot strand a payment permanently in pending.
+  async function reconcilePending({limit=40}={}){
+    const max=Math.min(40,Math.max(1,Number.isInteger(limit)?limit:40));
+    const rows=await db.collection('teyzaPaystackPayments').where('status','==','pending').limit(max).get();
+    let checked=0,activated=0,unresolved=0,errors=0;
+    for(const row of rows.docs){
+      const pay=row.data(),reference=row.id;
+      if(pay.ownerUid==null||!['intro','monthly','promotion'].includes(pay.kind)||
+         !/^(TZM|TZP)-[a-f0-9]{26}$/.test(reference)||pay.environment!==environment()||
+         !Number.isFinite(pay.createdAt)||clock()-pay.createdAt<60000)continue;
+      // Do not hammer Paystack when a payment takes a while to settle.
+      if(Number(pay.lastReconcileAt)>clock()-60000)continue;
+      checked++;
+      try{
+        const result=await grant(reference,pay.ownerUid);
+        if(result.paid)activated++;
+        else unresolved++;
+      }catch(error){
+        if(error.status===409)unresolved++;
+        else {errors++;console.warn('TEYZA_MEMBERSHIP_RECONCILIATION_FAILED',
+          {status:error.status||503,kind:pay.kind});}
+      }
+      // Preserve pending status and lock for later webhook/reconciliation.
+      await row.ref.set({lastReconcileAt:clock()},{merge:true});
+    }
+    return {checked,activated,unresolved,errors,hasMore:rows.docs.length===max};
+  }
   async function execute(auth,action,data={}) {
     if(action==='billing_checkout')return checkout(auth,'membership',data);
+    if(action==='billing_status')return status(auth,data);
     if(action==='promote_checkout')return checkout(auth,'promotion');
     if(action==='billing_manage'){
       const uid=D.id(auth.uid);
@@ -434,7 +500,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     });
     await refresh(uid);return {accepted:true};
   }
-  return {execute,webhook,actions,grant};
+  return {execute,webhook,actions,grant,reconcilePending};
 }
 module.exports={createBilling,actions,nextMonth,verifySignature,validCheckoutUrl,
   INTRO_CENTS,MONTHLY_CENTS,PROMO_CENTS,PROMO_MS,SUBSCRIPTION_TERMS_VERSION};
