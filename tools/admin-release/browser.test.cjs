@@ -120,7 +120,31 @@ async function main(){
     assert.equal(f.errors.length,0);
     await f.context.close();
   });
-  await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
+  await check('Users and access distinguishes account approval from pending ID and selfie verification',async()=>{
+     const f=await pageFor({api:async(route,body)=>{
+       if(body.action==='ops_user_detail'&&body.data.userUid==='shopper2'){
+         await route.fulfill({json:{ok:true,
+           user:{uid:'shopper2',email:'shopper@example.test',displayName:'Existing Shopper',
+             verified:false,disabled:false,admin:false,providers:['password']},
+           seller:{shopName:'Pilot Spaza',category:'spaza',approvalStatus:'approved',
+             verificationStatus:'pending_review',verifiedOwner:false,registrationReady:false,
+             sellingUnlocked:false,membershipPaid:false,complimentaryAccess:false}}});
+         return true;
+       }
+       return false;
+     }});
+     await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
+     const row=f.page.getByRole('row').filter({hasText:'shopper@example.test'});
+     await row.getByRole('button',{name:'View user'}).click();
+     await f.page.getByText('Account approval: approved',{exact:false}).waitFor();
+     await f.page.getByText('Owner verification: pending_review',{exact:false}).waitFor();
+     await f.page.getByText('Product selling: locked',{exact:false}).waitFor();
+     await f.page.getByRole('button',{name:'Open seller verification'}).click();
+     await f.page.getByRole('button',{name:'Seller verification',exact:true}).waitFor();
+     assert.equal(f.errors.length,0);
+     await f.context.close();
+   });
+   await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
@@ -262,7 +286,7 @@ async function main(){
    await f.page.screenshot({path:path.join(output,'admin-review-desktop.png'),fullPage:true});
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-review-phone.png'),fullPage:true});
-   await f.page.locator('#approveSeller').click();await f.page.locator('#notice').getByText('Seller approved. No WhatsApp message was requested. The in-app update remains available.').waitFor();
+   await f.page.locator('#approveSeller').click();await f.page.locator('#notice').getByText('Seller verification approved. Products require an active verified membership or an administrator exception.').waitFor();
    assert.deepEqual(f.calls.find(c=>c.action==='admin_seller_review').data,{sellerUid:'seller1',submissionId:'selfie1',evidenceId:'doc1',status:'approved',reason:''});
    await f.page.locator('.seller-row').filter({hasText:'Corner Spaza'}).waitFor({state:'detached'});assert(await f.page.locator('#identityDetails').isHidden());assert.deepEqual(f.errors,[]);await f.context.close();
   });
