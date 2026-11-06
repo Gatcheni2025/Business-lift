@@ -80,7 +80,7 @@ export function createOperations({api,onError}){
      el('p','First date: '+m.firstDate+' · recurring day '+m.collectionDay),
      el('p','Collection provider: NOT CONNECTED · no debit submitted'),
      button('View complete private mandate (audited)',()=>inspectMandate(m)));
-   if(['signed_pending_activation','needs_correction','reviewed_pending_provider'].includes(m.status)){
+   if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
      const form=el('form',undefined,'ops-form');
      choice(form,'Mandate review outcome','decision',[
        ['reviewed_pending_provider','Reviewed — awaiting collection provider'],
