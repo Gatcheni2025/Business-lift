@@ -336,7 +336,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     const active=P.entitled(uid,account,billing,clock());
     const owned=current?.ownerUid===uid&&['intro','monthly'].includes(current.kind);
     const state=active?'active':!owned?'none':
-      current.status==='pending'?'pending':current.status==='paid'?'awaiting_approval':
+      current.status==='pending'?'pending':current.status==='paid'?(current.environment==='test'?'test_paid':'awaiting_approval'):
       current.status==='refund_review'?'review_required':current.status==='refunded'?'refunded':'needs_attention';
     return {membershipStatus:state,paymentStatus:owned?current.status:'none',
       reference:owned?reference:null,paidUntil:active?billing?.paidUntil||null:null,
