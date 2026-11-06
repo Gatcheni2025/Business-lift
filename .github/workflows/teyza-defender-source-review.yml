@@ -111,7 +111,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $preference = Get-MpPreference
           if ($preference.DisableArchiveScanning) {
-            throw 'Defender archive scanning is disabled. No archive scan was performed.'
+            # Increase protection only on this disposable runner; never change
+            # the owner's machine or weaken Defender settings.
+            Set-MpPreference -DisableArchiveScanning $false -ErrorAction Stop
+            $preference = Get-MpPreference
+            if ($preference.DisableArchiveScanning) {
+              throw 'Defender archive scanning is disabled. No archive scan was performed.'
+            }
+            Write-Host 'Enabled archive scanning on the disposable runner.'
           }
           $start = (Get-Date).AddMinutes(-10)
           $path = Join-Path $env:RUNNER_TEMP 'reported-teyza-artifact.zip'

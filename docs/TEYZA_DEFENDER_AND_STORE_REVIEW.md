@@ -44,7 +44,8 @@ final analyst determination.
 The workflow also attempts to download the exact reported GitHub Actions
 artifact into the disposable Windows runner and scan it without extracting or
 executing the ZIP. It verifies the outer GitHub artifact's SHA-256 first and
-stops if archive scanning is disabled, a hash differs, or Defender reports a
+enables Defender archive scanning if necessary **only on that runner**. It
+stops if archive scanning remains disabled, a hash differs, or Defender reports a
 threat. Nothing is uploaded as a release artifact. A clean scan is still not
 an analyst verdict, and nested-archive handling can vary between machines.
 
