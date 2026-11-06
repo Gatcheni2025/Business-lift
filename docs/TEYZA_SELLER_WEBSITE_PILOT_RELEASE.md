@@ -2,6 +2,9 @@
 
 **Release candidate only. No production deployment or payment has been performed by this kit.**
 
+> **SECURITY HOLD (6 November 2026):** The old `TEYZA-SELLER-WEBSITE-PILOT` GitHub Actions ZIP and earlier `teyza-admin-r319-users-kit` were detected by Microsoft Defender as `Trojan:JS/Tisifi.A`. Do **not** download, restore, unzip or execute those archived artifacts. The earlier ZIP/PowerShell steps below are suspended. The new reduced security-review candidate is **not published** for download until independent Microsoft analysis is completed; see `docs/TEYZA_SELLER_SECURITY_REVIEW.md` and Issue #114. A clean structural, test, or ClamAV result cannot override this hold.
+
+
 Target: `business-lift-3c19c` and `https://teyza.co.za/seller-subscriptions.html`.
 Scope: approval-only seller billing; R49 first eligible month, R99 recurring monthly;
 product creation/publication only after verification and a legitimate paid entitlement
@@ -52,9 +55,13 @@ or separately audited temporary complimentary grant.
 
 ## Safe starting commands (Windows PowerShell)
 
-Download the **TEYZA-SELLER-WEBSITE-PILOT** artifact from the GitHub Actions
-run on PR #113. Extract it to a fresh folder under Downloads, open PowerShell
-there and run:
+**SUSPENDED: do not execute these commands with the previously flagged artifact.**
+
+After a documented **favorable Microsoft security verdict**, fresh signed-off
+source audit and a Windows Defender scan of the newly built candidate, the
+approved owner may obtain the **reduced, test-fixture-free** candidate from a
+separately reviewed release. Then open PowerShell in that verified extracted
+folder and run:
 
 ```powershell
 .\CHECK-PILOT.ps1
