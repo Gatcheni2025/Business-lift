@@ -98,12 +98,17 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const publicRef=doc('teyzaPublicShops/'+uid);
         const mandateRef=doc('teyzaSellerMandates/'+uid);
         const billingRef=doc('teyzaBilling/'+uid);
+        const renewalRef=doc('teyzaPaystackRenewal/'+uid);
+        const membershipCheckout=doc('teyzaPaystackCheckoutLocks/'+uid+'_membership');
+        const promotionCheckout=doc('teyzaPaystackCheckoutLocks/'+uid+'_promotion');
         const shopperProfileRef=doc('teyzaShopperProfiles/'+uid);
         const appleRevocationRef=doc('teyzaAppleRevocations/'+uid);
         const claimRef=doc('teyzaShopClaims/'+uid),whatsappRef=doc('teyzaWhatsAppPreferences/'+uid);
-        const [old,a,shop,m,b,shopperProfile,appleRevocation,claim,pref]=await Promise.all([
+        const [old,a,shop,m,b,shopperProfile,appleRevocation,claim,pref,renewal,membershipLock,promotionLock]=await Promise.all([
           tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),
           tx.get(billingRef),tx.get(shopperProfileRef),tx.get(appleRevocationRef),tx.get(claimRef),tx.get(whatsappRef),
+          tx.get(renewalRef),
+          tx.get(membershipCheckout),tx.get(promotionCheckout),
         ]);
         if(old.exists)return old.data();
         const claimValue=claim.exists&&claim.data().ownerUid===uid?claim.data():null;
@@ -111,12 +116,23 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const index=indexRef?await tx.get(indexRef):null;
         const isSeller=a.exists&&a.data().uid===uid;
         const reference='TZ-DEL-'+crypto.randomBytes(6).toString('hex').toUpperCase();
+        const bill=b.exists&&b.data().ownerUid===uid?b.data():null;
+        const needsPaystackCancellation=isSeller&&bill?.paymentProvider==='paystack'&&
+          (Boolean(bill.paystackSubscriptionCode)||['pending','scheduled','active','action_required'].includes(bill.renewalSetup)||
+           (renewal.exists&&['processing','needs_attention'].includes(renewal.data().status)));
+        const hasOpenCheckout=[membershipLock,promotionLock].some(s=>s.exists&&
+          ['preparing','pending','refund_review'].includes(s.data().status));
         const record={uid,reference,status:'pending_review',seller:isSeller,
           requestedAt:stamp,completeBy:stamp+COMPLETE_BY_MS,
-          needsBillingReview:isSeller&&(m.exists||b.exists),
+          needsBillingReview:isSeller&&(m.exists||b.exists||hasOpenCheckout),
+          needsPaystackCancellation,
           needsAppleTokenReview:!(appleRevocation.exists&&
             appleRevocation.data().ownerUid===uid&&appleRevocation.data().status==='revoked')};
         tx.set(requestRef,record);
+        if(needsPaystackCancellation)tx.set(doc('teyzaPaystackCancellations/'+uid),{
+          ownerUid:uid,status:'pending',environment:bill.paymentEnvironment||'',
+          customerCode:bill.paystackCustomerCode||'',requestedAt:stamp,updatedAt:stamp
+        });
         // Delete the shopper's saved delivery address and contact profile as
         // part of the closure transaction, independently of seller approval.
         // Order and tax records remain subject to the documented erasure review.
@@ -154,11 +170,17 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
       if(data.after)query=query.startAfter(D.id(data.after));
       const rows=await query.get();
       const page=rows.docs.slice(0,pageSize);
-      return {requests:page.filter(x=>x.data().status!=='completed')
-        .map(x=>({uid:x.id,reference:x.data().reference,status:x.data().status,
+      const open=page.filter(x=>x.data().status!=='completed');
+      const requests=await Promise.all(open.map(async x=>{
+        const cancellation=x.data().needsPaystackCancellation===true?
+          await get(doc('teyzaPaystackCancellations/'+x.id)):null;
+        return {uid:x.id,reference:x.data().reference,status:x.data().status,
           signInBlocked:x.data().authDisabledAt>0,canRegisterAgain:x.data().authDeletedAt>0,
           requestedAt:x.data().requestedAt,completeBy:x.data().completeBy,
-          seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true})),
+          seller:x.data().seller===true,needsBillingReview:x.data().needsBillingReview===true,
+          paystackCancellationStatus:cancellation?.status||null};
+      }));
+      return {requests,
         nextAfter:rows.docs.length>pageSize?page[page.length-1].id:null};
     }
     if(action==='ops_account_deletion_complete') {
@@ -171,6 +193,16 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
       const ref=doc('teyzaAccountDeletionRequests/'+target),r=await get(ref);
       if(!r)D.fail(404,'Deletion request not found.');
       if(r.status==='completed')return {completed:true,reference:r.reference};
+      if(r.needsPaystackCancellation===true){
+        const cancellation=await get(doc('teyzaPaystackCancellations/'+target));
+        if(!cancellation||cancellation.status!=='completed')
+          D.fail(409,'Paystack subscription cancellation is not yet confirmed. Resolve it before completing deletion.');
+      }
+      for(const suffix of ['membership','promotion']){
+        const checkout=await get(doc('teyzaPaystackCheckoutLocks/'+target+'_'+suffix));
+        if(checkout&&['preparing','pending','refund_review'].includes(checkout.status))
+          D.fail(409,'Reconcile the open Paystack checkout before completing deletion.');
+      }
       // Check every order, not just the first page; a merchant may have
       // hundreds of completed orders and one remaining open delivery.
       for(const field of ['ownerUid','shopperUid']) {

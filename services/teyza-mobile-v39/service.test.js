@@ -50,7 +50,7 @@ const shop={sellerUid:'seller1',status:'active',name:'Corner Shop',pickupEnabled
 const buyer={uid:'buyer1',email_verified:true,email:'buyer@example.test',name:'Buyer'};
 const owner={uid:'seller1',email_verified:true,email:'owner@example.test'};
 function fixture(extra={},options={}){const db=new FakeDB({'teyzaSellerAccounts/seller1':seller,'teyzaPublicShops/seller1':shop,
-  'teyzaBilling/seller1':{ownerUid:'seller1',status:'paid',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)},...extra});
+  'teyzaBilling/seller1':{ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)},...extra});
  const files=new Map(),secret=Buffer.alloc(32,7).toString('base64');
  const bucket={name:'test-bucket',file:path=>({save:async bytes=>files.set(path,bytes),download:async()=>[files.get(path)]})};
  return {db,files,service:createService({db,bucket,clock:()=>1000000,sanitizeImage:async bytes=>bytes,
@@ -159,7 +159,7 @@ test('Coordinate refresh replaces provider coordinates while preserving the sell
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  const initial=db.records.get('teyzaShopLocations/seller1');now+=28*DAY;
  db.records.set('teyzaSellerAccounts/seller1',{...db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
- db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,paidUntil:now+31*DAY,latestPeriod:P.period(now)});
+ db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:now+31*DAY,latestPeriod:P.period(now)});
  const result=await service.refreshShopLocations();assert.equal(result.refreshed,1);
  const updated=db.records.get('teyzaShopLocations/seller1');assert(updated.coordinatesExpireAt>initial.coordinatesExpireAt);
  assert.equal(updated.address,initial.address);assert.equal(db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
@@ -172,7 +172,7 @@ test('Provider failure clears cached pins and retains the confirmed suburb witho
  await service.execute(owner,'seller_location_save',{...await chosen(service,owner),consent:true});
  now+=31*DAY;down=true;
  db.records.set('teyzaSellerAccounts/seller1',{...db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
- db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',monthlyCents:9900,paidUntil:now+31*DAY,latestPeriod:P.period(now)});
+ db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:now+31*DAY,latestPeriod:P.period(now)});
  let entry=(await service.publicDirectory()).entries[0];assert.equal(entry.latitude,null);assert.equal(entry.city,'Durban');
  const result=await service.refreshShopLocations();assert.equal(result.cleared,1);
  assert.equal(db.records.get('teyzaShopLocations/seller1').latitude,null);assert(!('latitude' in db.records.get('teyzaPublicShops/seller1')));
@@ -506,7 +506,7 @@ test('Pending shops cannot add products; approval and product access publish sel
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
  const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
  const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop,
-  'teyzaBilling/seller2':{ownerUid:'seller2',status:'paid',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
+  'teyzaBilling/seller2':{ownerUid:'seller2',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
  await service.execute(owner,'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2500,stockQty:8}]});
  await service.execute({...owner,uid:'seller2'},'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2800,stockQty:3}]});
  for(const [uid,price,stock] of [['seller1',2500,8],['seller2',2800,3]]){
@@ -627,7 +627,7 @@ test('A stale active flag cannot expose an unapproved shop, accept an order or o
 });
 // A verified Paystack payment is simulated by trusted server-owned billing records.
 const paidForTest=async(service,db)=>{
- db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:4900,
+ db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:4900,
    paidUntil:Date.now()+100*DAY,latestPeriod:P.period(1000000)});
  db.records.set('teyzaSellerAccounts/buyer1',{...db.records.get('teyzaSellerAccounts/buyer1'),
    listingPlan:'basic'});
@@ -961,7 +961,7 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  const spazaShop={sellerUid:'buyer1',status:'active',name:'Spaza Buyer',shopCategory:'spaza',products:[]};
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':supplier,'teyzaPublicShops/seller1':wholesaleShop,
    'teyzaSellerAccounts/buyer1':spaza,'teyzaPublicShops/buyer1':spazaShop,
-    'teyzaBilling/buyer1':{ownerUid:'buyer1',status:'paid',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
+    'teyzaBilling/buyer1':{ownerUid:'buyer1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
  const publicSupplier=(await service.publicDirectory()).entries.find(p=>p.id==='seller1');
  assert(publicSupplier,'Approved wholesalers should appear with other nearby businesses');
  assert.deepEqual(publicSupplier.products,[]);
@@ -1010,7 +1010,7 @@ test('wholesale directory protects supplier prices and only approved spaza owner
  db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic'});
   db.records.delete('teyzaBilling/buyer1');
  await rejects(service.execute(buyer,'wholesale_directory'),403);
- db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)});
+ db.records.set('teyzaBilling/buyer1',{ownerUid:'buyer1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)});
  assert.equal((await service.execute(buyer,'wholesale_directory')).entries.length,1,
    'Active paid Basic is eligible for wholesale sourcing');
  db.records.set('teyzaSellerAccounts/buyer1',{...spaza,listingPlan:'basic',approvalStatus:'pending'});

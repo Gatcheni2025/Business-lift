@@ -106,7 +106,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
@@ -204,6 +204,16 @@ exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',tim
  const rows=await db.collection('teyzaWhatsAppApprovalOutbox')
   .where('status','in',['queued','configuration_required']).limit(30).get();
  for(const row of rows.docs)await whatsappApproval.deliver(row.id);
+});
+const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});
+exports.teyzaPaystackCancellationCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
+ document:'teyzaPaystackCancellations/{sellerUid}',secrets:[paystackKey]},
+ event=>paystackCancellation.process(event.params.sellerUid));
+exports.teyzaPaystackCancellationRetry=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',
+ region:'us-central1',maxInstances:1,timeoutSeconds:540,secrets:[paystackKey]},async()=>{
+ const rows=await db.collection('teyzaPaystackCancellations')
+  .where('status','in',['pending','processing']).limit(10).get();
+ for(const row of rows.docs)await paystackCancellation.process(row.id);
 });
 exports.teyzaFieldAgentCleanup=onSchedule({schedule:'every 60 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'256MiB',timeoutSeconds:180},
   ()=>require('./field-agents').purgeAgentEvidence({db,bucket}));

@@ -228,6 +228,31 @@ async function main(){
    await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
    await f.page.locator('.seller-row').first().waitFor();assert.equal(await f.page.locator('#password').inputValue(),'');assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Subscriptions shows closure reviews and verifies a processed full refund',async()=>{
+   const ref='TZM-0123456789abcdef0123456789';
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='ops_account_deletion_queue'){
+     await route.fulfill({json:{ok:true,requests:[{uid:'seller1',reference:'TZ-DEL-TEST',seller:true,
+      needsBillingReview:true,paystackCancellationStatus:'needs_attention'}],nextAfter:null}});return true;
+    }
+    if(body.action==='ops_seller_detail'){
+     await route.fulfill({json:{ok:true,seller:{...rows[0],listingPlan:'free'},billing:{status:'closure_review'},
+      paystackMode:'test',membershipPaid:false,payments:[{reference:ref,kind:'intro',amountCents:4900,status:'refund_review'}],
+      catalogue:{status:'waiting_for_access',products:[]},verification:{status:'pending'},entries:[],documents:{}}});return true;
+    }
+    return false;
+   }});
+   await f.page.getByRole('button',{name:'Subscriptions',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Account closures and payment review'}).waitFor();
+   await f.page.getByText('needs attention',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Open seller payment review'}).click();
+   f.page.removeAllListeners('dialog');f.page.on('dialog',d=>d.accept('345'));
+   await f.page.getByRole('button',{name:'Verify processed refund'}).click();
+   await f.page.locator('#notice').getByText('Paystack confirmed the full refund was processed.').waitFor();
+   assert.deepEqual(f.calls.find(c=>c.action==='ops_paystack_refund_confirm').data,
+    {sellerUid:'seller1',reference:ref,refundId:'345'});
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Current ID and selfie, explicit confirmation and exact backend approval payload',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();assert(await f.page.locator('#approveSeller').isDisabled());
    await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();

@@ -121,6 +121,33 @@ test('seller deletion suspends public shop and flags billing and mandate review'
   assert.equal(db.records.get('teyzaBilling/seller1').status,'closure_review');
   assert.equal(db.records.get('teyzaAccountDeletionRequests/seller1').needsBillingReview,true);
 });
+test('deleting a seller queues Paystack cancellation without blocking account closure',async()=>{
+ const {service,db,deleted}=instance({
+  'teyzaSellerAccounts/seller1':{uid:'seller1',approvalStatus:'approved'},
+  'teyzaBilling/seller1':{ownerUid:'seller1',status:'paid',paymentProvider:'paystack',
+   paymentEnvironment:'live',paystackCustomerCode:'CUS_TEST',paystackSubscriptionCode:'SUB_TEST',renewalSetup:'active'},
+ });
+ const result=await service.execute(seller,'account_deletion_request',{confirmation:'DELETE'});
+ assert.equal(result.signInBlocked,true);assert.deepEqual(deleted,['seller1']);
+ assert.equal(db.records.get('teyzaAccountDeletionRequests/seller1').needsPaystackCancellation,true);
+ assert.deepEqual(db.records.get('teyzaPaystackCancellations/seller1'),{
+  ownerUid:'seller1',status:'pending',environment:'live',customerCode:'CUS_TEST',requestedAt:now,updatedAt:now
+ });
+ const queue=await service.execute(admin,'ops_account_deletion_queue');
+ assert.equal(queue.requests[0].paystackCancellationStatus,'pending');
+ await fail(service.execute(admin,'ops_account_deletion_complete',{uid:'seller1',confirmedDataErased:true,
+  confirmedBillingResolved:true,confirmedProviderRevocation:true}),409);
+});
+test('an open Paystack checkout is kept for review when a seller closes the account',async()=>{
+ const {service,db}=instance({
+  'teyzaSellerAccounts/seller1':{uid:'seller1',approvalStatus:'approved'},
+  'teyzaPaystackCheckoutLocks/seller1_membership':{ownerUid:'seller1',reference:'pending-ref',status:'pending'},
+ });
+ await service.execute(seller,'account_deletion_request',{confirmation:'DELETE'});
+ assert.equal(db.records.get('teyzaAccountDeletionRequests/seller1').needsBillingReview,true);
+ await fail(service.execute(admin,'ops_account_deletion_complete',{uid:'seller1',confirmedDataErased:true,
+  confirmedBillingResolved:true,confirmedProviderRevocation:true}),409);
+});
 test('Closing a seller account removes WhatsApp consent and releases only their own Google claim',async()=>{
   const crypto=require('node:crypto'),placeId='google-place-123',key=crypto.createHash('sha256').update(placeId).digest('hex');
   for(const mappedOwner of ['seller1','anotherSeller']){

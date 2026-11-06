@@ -12,10 +12,13 @@ match /teyzaDraftProducts/{sellerId}/items/{itemId} {
   function hasProductAccess() {
     let account = get(/databases/$(database)/documents/teyzaSellerAccounts/$(sellerId)).data;
     let billing = get(/databases/$(database)/documents/teyzaBilling/$(sellerId)).data;
-    return draftOwner() && account.get('approvalStatus', '') == 'approved'
+    return draftOwner() && account.get('uid', '') == sellerId
+      && account.get('approvalStatus', '') == 'approved'
+      && account.get('deletionPending', false) != true
       && billing.get('ownerUid', '') == sellerId
       && ((account.get('listingPlan', '') == 'basic' && billing.get('status', '') == 'paid'
-        && billing.get('paymentEnvironment', '') != 'test'
+        && billing.get('paymentProvider', '') == 'paystack'
+        && billing.get('paymentEnvironment', '') == 'live'
         && billing.get('paidUntil', 0) is number && billing.get('paidUntil', 0) > request.time.toMillis())
        || (billing.get('adminComplimentaryStatus', '') == 'active'
         && billing.get('adminComplimentaryReason', '') is string && billing.get('adminComplimentaryReason', '').size() >= 15

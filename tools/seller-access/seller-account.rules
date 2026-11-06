@@ -7,18 +7,21 @@ match /teyzaSellerAccounts/{uid} {
     return request.resource.data[key] is string
       && request.resource.data[key].size() <= maxLen;
   }
-  function validShape() {
+  // Server-managed fields (approval, plan, verification) may be present on
+  // existing accounts. Owners may not modify them: the update allowlist
+  // below is enforced against the original document.
+  function validShape(isCreate) {
     return request.resource.data.keys().hasAll([
        'uid','category','shopName','ownerEmail','phone','address',
        'companyName','registrationNumber','approvalStatus','listingStatus',
        'createdAt','updatedAt'
-    ]) && request.resource.data.keys().hasOnly([
+    ]) && (!isCreate || request.resource.data.keys().hasOnly([
        'uid','category','shopName','ownerEmail','phone','address',
        'companyName','registrationNumber','approvalStatus','listingStatus',
        'createdAt','updatedAt'
-    ])
+    ]))
     && request.resource.data.uid == uid
-    && request.resource.data.category in ['spaza','retail']
+    && request.resource.data.category in ['spaza','retail','wholesale']
     && validText('shopName', 120)
     && request.resource.data.shopName.size() >= 2
     && validText('phone',25)
@@ -29,14 +32,15 @@ match /teyzaSellerAccounts/{uid} {
   }
   allow get: if signedOwner();
   allow list: if false;
-  allow create: if signedOwner() && validShape()
+  allow create: if signedOwner() && validShape(true)
+     && request.resource.data.category in ['spaza','retail']
      && request.resource.data.ownerEmail == request.auth.token.get('email','')
      && request.resource.data.approvalStatus == 'pending'
      && request.resource.data.listingStatus == 'not_listed'
      && request.resource.data.createdAt == request.time
      && request.resource.data.updatedAt == request.time;
   // Category and approval remain immutable from seller browser clients.
-  allow update: if signedOwner() && validShape()
+  allow update: if signedOwner() && validShape(false)
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
        'shopName','phone','address','companyName','registrationNumber','updatedAt'
      ])

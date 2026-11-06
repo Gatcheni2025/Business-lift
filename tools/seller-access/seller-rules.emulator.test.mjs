@@ -3,14 +3,19 @@ import assert from 'node:assert/strict';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
 import {doc,getDoc,getDocs,collection,setDoc,updateDoc,deleteDoc,serverTimestamp,Timestamp} from 'firebase/firestore';
 import fs from 'node:fs';
-import {repairRules} from './repair-seller-rules.mjs';
+import {gateProductRules} from './gate-seller-products.mjs';
 let env;
 const account=(uid,category='spaza')=>({uid,category,shopName:'KZN Market',ownerEmail:uid+'@example.test',phone:'0311234567',
   address:'Durban',companyName:'',registrationNumber:'',approvalStatus:'pending',listingStatus:'not_listed',createdAt:Timestamp.fromMillis(1000),updatedAt:Timestamp.fromMillis(1000)});
 const product=uid=>({ownerUid:uid,name:'Bread',category:'Groceries',description:'',priceCents:1800,stockQty:10,status:'draft',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
 const db=uid=>env.authenticatedContext(uid,{email:uid+'@example.test',email_verified:true}).firestore();
 before(async()=>{
-  const rules=repairRules(fs.readFileSync(new URL('emulator.rules',import.meta.url),'utf8')).rules;
+  // Start from the two known production rule blocks, then exercise the
+  // actual candidate transformation rather than testing a blank ruleset.
+  const accountRules=fs.readFileSync(new URL('seller-account-legacy.rules',import.meta.url),'utf8');
+  const draftRules=fs.readFileSync(new URL('seller-drafts-legacy.rules',import.meta.url),'utf8');
+  const source=`rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { ${accountRules}\n${draftRules}\n } }`;
+  const rules=gateProductRules(source).rules;
   env=await initializeTestEnvironment({projectId:'demo-teyza-seller-access',firestore:{rules}});
   await env.withSecurityRulesDisabled(async context=>{
     for(const [uid,type] of [['owner1','spaza'],['owner2','retail']]){
@@ -38,7 +43,13 @@ test('Anonymous and unrelated accounts cannot read private shop or product docum
 test('Owners may edit profile details but cannot grant approval, activation, category or public writes',async()=>{
   const own=db('owner1'),ref=doc(own,'teyzaSellerAccounts','owner1');
   await assertSucceeds(updateDoc(ref,{shopName:'Updated Market',updatedAt:serverTimestamp()}));
-  for(const data of [{approvalStatus:'approved'},{listingStatus:'active'},{category:'retail'}])
+  await env.withSecurityRulesDisabled(async context=>{
+    await updateDoc(doc(context.firestore(),'teyzaSellerAccounts','owner1'),{listingPlan:'free',catalogueApprovalRequired:false});
+    await setDoc(doc(context.firestore(),'teyzaSellerAccounts','wholesale1'),{...account('wholesale1','wholesale'),listingPlan:'free'});
+  });
+  await assertSucceeds(updateDoc(ref,{shopName:'Updated after review',updatedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(doc(db('wholesale1'),'teyzaSellerAccounts','wholesale1'),{phone:'0319876543',updatedAt:serverTimestamp()}));
+  for(const data of [{approvalStatus:'approved'},{listingStatus:'active'},{category:'retail'},{listingPlan:'basic'},{unreviewedFlag:true}])
     await assertFails(updateDoc(ref,{...data,updatedAt:serverTimestamp()}));
   await assertFails(setDoc(doc(own,'teyzaPublicShops','owner1'),{status:'active'}));
 });
@@ -47,7 +58,14 @@ test('Product writes require approval and paid or complimentary access; owner ca
   await assertFails(setDoc(ref,product('owner1')));
   await env.withSecurityRulesDisabled(async context=>{
     await updateDoc(doc(context.firestore(),'teyzaSellerAccounts','owner1'),{approvalStatus:'approved',listingPlan:'basic'});
-    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',status:'paid',paymentEnvironment:'live',paidUntil:Date.now()+86400000});
+  });
+  await assertFails(setDoc(ref,product('owner1'))); // approved, but unpaid
+  await env.withSecurityRulesDisabled(async context=>{
+    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:Date.now()-1});
+  });
+  await assertFails(setDoc(ref,product('owner1'))); // paid period expired
+  await env.withSecurityRulesDisabled(async context=>{
+    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:Date.now()+86400000});
   });
   await assertSucceeds(setDoc(ref,product('owner1')));
   await assertSucceeds(updateDoc(ref,{stockQty:8,updatedAt:serverTimestamp()}));
@@ -62,6 +80,10 @@ test('Product writes require approval and paid or complimentary access; owner ca
   });
   await assertFails(setDoc(ref,product('owner1')));
   await env.withSecurityRulesDisabled(async context=>{
+    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',status:'paid',paidUntil:Date.now()+86400000});
+  });
+  await assertFails(setDoc(ref,product('owner1')));
+  await env.withSecurityRulesDisabled(async context=>{
     await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',adminComplimentaryStatus:'active',
       adminComplimentaryReason:'Approved pilot access',adminComplimentaryBy:'reviewer1',adminComplimentaryUntil:Date.now()+86400000});
   });
@@ -71,6 +93,14 @@ test('Product writes require approval and paid or complimentary access; owner ca
   });
   await assertFails(updateDoc(ref,{stockQty:3,updatedAt:serverTimestamp()}));
   await assertSucceeds(deleteDoc(ref));
+});
+
+test('Clients cannot grant themselves paid, complimentary, or verified payment state',async()=>{
+ const own=db('owner1');
+ for(const name of ['teyzaBilling','teyzaPaystackPayments','teyzaPaystackCheckoutLocks','teyzaPaystackRenewal','teyzaPaystackCancellation']){
+  await assertFails(getDoc(doc(own,name,'owner1')));
+  await assertFails(setDoc(doc(own,name,'owner1'),{ownerUid:'owner1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:Date.now()+86400000}));
+ }
 });
 test('A missing own account returns a missing document; drafts still require registered ownership',async()=>{
   const own=db('newowner');assert.equal((await assertSucceeds(getDoc(doc(own,'teyzaSellerAccounts','newowner')))).exists(),false);
