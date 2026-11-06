@@ -181,7 +181,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
  assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });
 
-function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=4900,mode='test',project='teyza-isolated-test'}={}){
+function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=4900,mode='test',project='teyza-isolated-test',paidAt=NOW}={}){
  let records;const calls=[];
  const send=async(url,options)=>{
   calls.push({url,options});let data;
@@ -191,7 +191,7 @@ function recurringFixture({failInitialization=false,failSubscription=false,verif
    data={authorization_url:'https://checkout.paystack.com/synthetic'};
   }else if(url.includes('/transaction/verify/')){
    const reference=decodeURIComponent(url.split('/').at(-1)),pending=records.get('teyzaPaystackPayments/'+reference);
-   data={reference,status:'success',currency:'ZAR',domain:verifiedDomain||mode,paid_at:new Date(NOW).toISOString(),
+   data={reference,status:'success',currency:'ZAR',domain:verifiedDomain||mode,paid_at:new Date(paidAt).toISOString(),
     amount:pending.amountCents,id:12345,customer:{email:'owner@example.test',customer_code:'CUS_TEST'},
     authorization:{reusable:true,authorization_code:'AUTH_TEST'}};
   }else if(url.endsWith('/subscription/SUB_PREV')){
@@ -267,6 +267,13 @@ test('An uncertain recurring subscription request is flagged instead of retried'
  assert.equal(f.records.get('teyzaPaystackRenewal/shop1').status,'needs_attention');
  await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
  assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,1);
+});
+
+test('A payment confirmed after its paid month never schedules a debit in the past',async()=>{
+ const f=recurringFixture({paidAt:NOW-45*86400000}),checkout=await f.api.execute(f.auth,'billing_checkout',consent);
+ await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(f.records.get('teyzaBilling/shop1').renewalSetup,'action_required');
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,0);
 });
 
 test('A verified payment from the wrong Paystack environment never grants access',async()=>{

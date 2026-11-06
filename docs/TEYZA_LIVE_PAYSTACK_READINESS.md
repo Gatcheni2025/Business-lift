@@ -26,7 +26,8 @@ its own seller-subaccount and settlement prerequisites.
   confirms its amount, customer, reference, currency and environment, the
   backend schedules the R99 monthly plan from the end of the paid period.
   Missing reusable authorisation or uncertain subscription creation is marked
-  `action_required`; it is not silently retried.
+  `action_required`; it is not silently retried. A late-confirmed payment
+  never schedules a renewal in the past.
 - Before a direct-distribution seller checkout, the app discloses the first
   payment, R99 renewal and cancellation. The server requires affirmative
   consent to the current terms and records the version with the transaction.

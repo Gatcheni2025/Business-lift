@@ -228,7 +228,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
   async function provisionRenewal(uid,verified,startsAt,entry) {
     const code=getPlanCode();
     if(!/^PLN_[A-Za-z0-9]+$/.test(code||'')||!verified.authorization?.reusable||
-       !verified.authorization?.authorization_code||!verified.customer?.customer_code||!Number.isFinite(startsAt)) {
+       !verified.authorization?.authorization_code||!verified.customer?.customer_code||!Number.isFinite(startsAt)||
+       startsAt<=clock()+300000) {
       await doc('teyzaBilling/'+uid).set({renewalSetup:'action_required'},{merge:true});
       return;
     }
