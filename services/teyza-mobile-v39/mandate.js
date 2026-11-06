@@ -1,11 +1,11 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{phone,current}=require('./onboarding'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage');
 const actions=new Set(['seller_mandate_status','seller_mandate_submit','seller_mandate_withdraw','ops_mandate_image','ops_mandate_queue','ops_mandate_detail','ops_mandate_review']);
-const VERSION='teyza-membership-v1',PRICE=9900;
+const VERSION='teyza-debit-request-v2',PRICE=9900;
 // Universal codes: https://support.peachpayments.com/support/solutions/articles/47001207209
 const banks=[['Absa','632005'],['Capitec','470010'],['Capitec Business','450105'],['FNB','250655'],['Nedbank','198765'],['Standard Bank','051001'],['African Bank','430000'],['Investec','580105'],['Discovery Bank','679000'],['TymeBank','678910'],['Other','']].map(([name,branchCode])=>({name,branchCode}));
 const benefits=['Visibility on Teyza','Priority placement in your area, subject to eligibility and availability','Discounts on stock from participating wholesalers','Discounted delivery on selected products','Access to shop finance, subject to separate application and approval','Free bookkeeping support'];
-function terms(firstDate,day){return `I authorise Teyza to collect R99.00 per month from the bank account I provide, starting on ${firstDate}, then on day ${day} of each month, for my shop membership. Collection may start only after seller approval and payment-provider activation, including any bank authentication required. No collection is made when this form is submitted. A change to the amount or collection date requires a new authorisation. I confirm I am the account holder or authorised signatory. I can withdraw this authorisation in the app or contact support@teyza.co.za; withdrawal does not cancel amounts already due. Partner discounts, priority placement and delivery offers depend on availability. Finance requires separate approval.`;}
+function terms(firstDate,day){return `I request that Teyza prepare a formal bank-authenticated R99.00 monthly debit-order mandate with a proposed first collection date of ${firstDate} and thereafter day ${day} each month. I authorise Teyza to process my bank details securely and submit them to an authorised collection provider for verification and mandate authentication. I understand that completing this request is not itself a bank-approved debit-order mandate and no debit or paid entitlement results from submission or administrator review. A debit may be presented only after any bank-required authentication and collection-provider activation. No increase in the R99.00 monthly amount or change of collection date is allowed without a fresh authorisation. I confirm I own the bank account or am an authorised signatory, and may withdraw this request before provider activation or contact support@teyza.co.za; existing provider mandates must separately be cancelled through Teyza or the provider. Partner offers depend on eligibility and availability.`;}
 function publicMandate(m){return m?{mandateId:m.mandateId,status:m.status,amountCents:m.amountCents,firstDate:m.firstDate,collectionDay:m.collectionDay,bankName:m.bankName,accountLast4:m.accountLast4,branchCode:m.branchCode,acceptedAt:m.acceptedAt,withdrawnAt:m.withdrawnAt||null,termsVersion:m.termsVersion,terms:m.terms,identityExpiresAt:m.identityExpiresAt,shopName:m.shopName||'',shopAddress:m.shopAddress||'',providerStatus:m.providerStatus||'not_configured',collectionActive:false}:null;}
 function schedule(date,day,clock){const today=new Date(clock()+2*3600000).toISOString().slice(0,10);if(typeof date!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date<today||date>new Date(clock()+366*86400000).toISOString().slice(0,10)||!Number.isInteger(day)||day<1||day>28||Number(date.slice(-2))!==day)D.fail(422,'Choose a first collection date within the next year, on day 1–28.');}
 function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock,rate}){
@@ -49,7 +49,7 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return db.runTransaction(async tx=>{
       const snap=await tx.get(doc('teyzaSellerMandates/'+target));
       if(!snap.exists||snap.data().ownerUid!==target||snap.data().mandateId!==mandateId||
-         !['signed_pending_activation','reviewed_pending_provider','needs_correction'].includes(snap.data().status))
+         !['signed_pending_activation','pending_provider_authentication','reviewed_pending_provider','needs_correction'].includes(snap.data().status))
         D.fail(409,'Mandate was withdrawn, replaced or already changed.');
       const now=clock();
       tx.update(doc('teyzaSellerMandates/'+target),{status:decision,
@@ -127,7 +127,7 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
    const [h,v,a,idNow]=await Promise.all([tx.get(head),tx.get(versionRef),tx.get(doc('teyzaSellerAccounts/'+uid)),tx.get(doc('teyzaSellerIdentity/'+uid))]);if(data.identityEvidenceId&&(!idNow.exists||!current(idNow.data(),uid,clock)||idNow.data().evidenceId!==data.identityEvidenceId))D.fail(409,'Your ID attachment changed. Refresh and review the form.');D.seller(a.exists?a.data():null,uid);
    if(v.exists){if(v.data().fingerprint!==fingerprint)D.fail(409,'Reopen the mandate form.');return {mandate:publicMandate(v.data()),alreadySubmitted:true};}
    if((h.exists?h.data().mandateId:null)!==(data.expectedMandateId||null))D.fail(409,'The mandate changed. Refresh and review it before signing.');
-   const record={ownerUid:uid,mandateId:requestId,status:'signed_pending_activation',
+   const record={ownerUid:uid,mandateId:requestId,status:'pending_provider_authentication',
     amountCents:PRICE,currency:'ZAR',firstDate:data.firstDate,collectionDay:data.collectionDay,
     bankName:bank.name,branchCode,accountLast4:values.accountNumber.slice(-4),
     shopName:a.data().shopName||'',shopAddress:a.data().address||'',
