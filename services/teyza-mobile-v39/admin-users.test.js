@@ -117,3 +117,36 @@ test('Suspend and reinstate regular users, revoke tokens and protect admins and 
  assert.deepEqual(revoked,['shopper1']);
  await reject(service.execute(admin,'ops_user_invite',{userUid:'admin1'}),403);
 });
+
+test('Users and access distinguishes approved account, pending verification and active product selling',async()=>{
+  const {service,db}=fixture();
+  db.rows.set('teyzaSellerAccounts/shopper1',{
+    uid:'shopper1',category:'spaza',shopName:'Pilot Spaza',phone:'+27712345678',
+    approvalStatus:'approved',listingPlan:'basic'
+  });
+  db.rows.set('teyzaMobileVerification/shopper1',{
+    ownerUid:'shopper1',status:'pending_review',submissionId:'selfie1'
+  });
+  db.rows.set('teyzaBilling/shopper1',{
+    ownerUid:'shopper1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',
+    paidUntil:now+86400000
+  });
+  let result=await service.execute(admin,'ops_user_detail',{userUid:'shopper1'});
+  assert.equal(result.seller.approvalStatus,'approved');
+  assert.equal(result.seller.verificationStatus,'pending_review');
+  assert.equal(result.seller.membershipPaid,true);
+  assert.equal(result.seller.verifiedOwner,false);
+  assert.equal(result.seller.sellingUnlocked,false);
+  db.rows.set('teyzaMobileVerification/shopper1',{
+    ownerUid:'shopper1',status:'approved',submissionId:'selfie1'
+  });
+  db.rows.set('teyzaSellerOnboarding/shopper1',{
+    requiredVersion:2,completedAt:now,moderationBlocked:false,
+    sellingStatus:'pending_approval',verifiedPhone:'+27712345678',selfieSubmissionId:'selfie1'
+  });
+  result=await service.execute(admin,'ops_user_detail',{userUid:'shopper1'});
+  assert.equal(result.seller.verificationStatus,'approved');
+  assert.equal(result.seller.registrationReady,true);
+  assert.equal(result.seller.verifiedOwner,true);
+  assert.equal(result.seller.sellingUnlocked,true);
+});
