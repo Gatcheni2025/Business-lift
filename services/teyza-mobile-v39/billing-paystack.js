@@ -185,15 +185,26 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     const result=await db.runTransaction(async tx=>{
       const payRef=doc(path),billRef=doc('teyzaBilling/'+uid),promoRef=doc('teyzaPromotions/'+uid),accountRef=doc('teyzaSellerAccounts/'+uid),
         lockRef=doc('teyzaPaystackCheckoutLocks/'+uid+'_'+(entry.kind==='promotion'?'promotion':'membership'));
-      const [paySnap,billSnap,promoSnap,accountSnap,lockSnap]=await Promise.all([tx.get(payRef),tx.get(billRef),tx.get(promoRef),tx.get(accountRef),tx.get(lockRef)]);
+      const [paySnap,billSnap,promoSnap,accountSnap,lockSnap,setupSnap,verificationSnap,shopSnap]=await Promise.all([
+        tx.get(payRef),tx.get(billRef),tx.get(promoRef),tx.get(accountRef),tx.get(lockRef),
+        tx.get(doc('teyzaSellerOnboarding/'+uid)),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaPublicShops/'+uid))
+      ]);
       const pay=paySnap.exists?paySnap.data():null,bill=billSnap.exists?billSnap.data():null,account=accountSnap.exists?accountSnap.data():null;
       if(!pay||pay.ownerUid!==uid)D.fail(409,'The payment owner changed.');
       if(pay.status==='paid')return {paid:true,kind:pay.kind,reference,alreadyConfirmed:true};
       if(pay.status!=='pending')D.fail(409,'This payment cannot be activated.');
       D.seller(account,uid);
-      if(account.deletionPending===true){
+      // Approval and identity evidence can change after checkout starts.
+      // A subsequent charge must be recorded for refund review, not unlock products.
+      const current=P.state(uid,account,setupSnap.exists?setupSnap.data():{},
+        verificationSnap.exists?verificationSnap.data():null,
+        shopSnap.exists?shopSnap.data():null,bill,now);
+      const accessChanged=account.approvalStatus!=='approved'||!current.ready||
+        !current.approved||current.status==='suspended';
+      if(account.deletionPending===true||accessChanged){
         tx.update(payRef,{status:'refund_review',verifiedAt:now,transactionId:String(verified.id||''),
-          paymentEnvironment:entry.environment,reviewReason:'account_closed_after_checkout'});
+          paymentEnvironment:entry.environment,reviewReason:account.deletionPending===true?
+            'account_closed_after_checkout':'seller_verification_changed_after_checkout'});
         if(lockSnap.exists&&lockSnap.data().reference===reference)tx.update(lockRef,{status:'refund_review',updatedAt:now});
         return {paid:false,kind:pay.kind,reference,refundReviewRequired:true};
       }
