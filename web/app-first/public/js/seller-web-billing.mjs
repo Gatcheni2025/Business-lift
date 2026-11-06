@@ -84,6 +84,8 @@ async function startup(){
       view('Payment confirmed by Paystack. Your membership is active'+(until?' until '+until:'')+'.','success');
     }else if(status?.paymentPending){
       view('Payment pending. Your shop remains on its current plan until Paystack confirms the charge. This page checks automatically.','warning');
+    }else if(status?.membershipStatus==='test_paid'){
+      view('Paystack test payment verified. No live seller membership was activated.','warning');
     }else if(status?.membershipStatus==='review_required'){
       view('Payment received but verification or shop approval changed. Contact Teyza support for a review.','warning');
     }else if(status?.membershipStatus==='awaiting_approval'){
