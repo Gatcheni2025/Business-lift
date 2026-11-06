@@ -3,6 +3,7 @@
 // Teyza's digital seller membership subscription and promotion billing.
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const {recentAdmin}=require('./seller-experience');
+const offers=require('./shop-services');
 const {verifySignature,validCheckoutUrl}=require('./billing-paystack');
 const actions=new Set(['ops_order_subaccount','order_paystack_checkout','order_paystack_verify']);
 const allowedStatuses=new Set(['confirmed','preparing','ready','out_for_delivery']);
@@ -78,6 +79,7 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
    D.fail(403,'Verify your account email address before making a Paystack payment.');
   await rate(auth.uid,'shopper-paystack-checkout',6,3600000);
   const order=await loadOrderForShopper(auth,orderId);
+  if(order.orderType==='wholesale_stock'||order.paymentMethod!=='card_online')D.fail(409,'Online card payment must be selected at checkout for a participating seller.');
   if(!allowedStatuses.has(order.status))D.fail(409,'Wait for the shop to confirm the order before paying online.');
   if(order.paymentStatus==='paid'||order.paymentStatus==='test_paid')
    D.fail(409,'This order already has a confirmed Paystack payment.');
@@ -93,15 +95,17 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
     order.totalCents>5000000)D.fail(422,'The order amount cannot be collected online.');
   if((order.cashDiscountCents||0)!==0)
    D.fail(409,'This order has a cash-only discount. Request a new order without a cash discount to pay online.');
-  const [seller,setup,verified,shop,billing,payout]=await Promise.all([
+  const [seller,setup,verified,shop,billing,payout,services]=await Promise.all([
    read('teyzaSellerAccounts/'+order.ownerUid),
    read('teyzaSellerOnboarding/'+order.ownerUid),
    read('teyzaMobileVerification/'+order.ownerUid),
    read('teyzaPublicShops/'+order.ownerUid),
    read('teyzaBilling/'+order.ownerUid),
-   read('teyzaSellerPayouts/'+order.ownerUid)
+   read('teyzaSellerPayouts/'+order.ownerUid),
+   read('teyzaShopSettings/'+order.ownerUid)
   ]);
   P.assertLive(order.ownerUid,seller,setup||{},verified,shop,billing,clock());
+  if(!offers.effective(services,shop).cardPayments)D.fail(409,'This shop has disabled online card payments. Choose another payment method.');
   if(!payout?.enabled||payout.ownerUid!==order.ownerUid||
       !subPattern.test(payout.code)||payout.mode!==mode(getSecret())||
       payout.verifiedWithPaystack!==true)
