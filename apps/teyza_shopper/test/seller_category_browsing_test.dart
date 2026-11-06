@@ -21,7 +21,7 @@ void main(){
     expect(teyzaProductCategory('Baby Care'),'Baby Care');
   });
 
-  testWidgets('Seller circles use real approved shops and filter by business type',(tester)async{
+  testWidgets('Seller circles distinguish Teyza-verified and publicly listed sellers by business type',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     await start(tester,[seller('spaza1','Corner Shop','spaza'),
@@ -31,7 +31,7 @@ void main(){
     expect(find.byKey(const ValueKey('seller-story-spaza1')),findsOneWidget);
     expect(find.byKey(const ValueKey('seller-story-retail1')),findsOneWidget);
     expect(find.byKey(const ValueKey('seller-story-bulk1')),findsOneWidget);
-    expect(find.byKey(const ValueKey('seller-story-unverified')),findsNothing);
+    expect(find.byKey(const ValueKey('seller-story-unverified')),findsOneWidget);
     await tester.ensureVisible(find.byKey(const ValueKey('business-filter-spaza')));
     await tester.tap(find.byKey(const ValueKey('business-filter-spaza')));await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-story-spaza1')),findsOneWidget);
