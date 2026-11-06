@@ -83,6 +83,10 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   });
   if(action!=='seller_mandate_submit')D.fail(404,'Unknown mandate action.');
   if(!auth.email_verified&&!auth.phone_number)D.fail(403,'Verify your email or phone before signing.');
+  const previousBilling=await read('teyzaBilling/'+uid);
+  // Never allow two independently recurring instructions against one seller.
+  if(previousBilling?.paystackSubscriptionCode)
+    D.fail(409,'An existing Paystack recurring agreement is on file. Ask Teyza administration to confirm its cancellation before starting debit-order migration.');
   if(data.consent!==true||data.identityConsent!==true||data.termsVersion!==VERSION||data.amountCents!==PRICE)D.fail(422,'Review and accept the current R99 mandate and private ID submission.');
   const requestId=D.id(data.requestId),bank=banks.find(b=>b.name===data.bankName);if(!bank)D.fail(422,'Select your bank.');
   schedule(data.firstDate,data.collectionDay,clock);
