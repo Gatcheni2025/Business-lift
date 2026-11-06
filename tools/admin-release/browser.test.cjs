@@ -237,9 +237,37 @@ async function main(){
    await f.page.screenshot({path:path.join(output,'admin-review-desktop.png'),fullPage:true});
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-review-phone.png'),fullPage:true});
-   await f.page.locator('#approveSeller').click();await f.page.locator('#notice').getByText('Seller approved. The owner will receive a notification.').waitFor();
+   await f.page.locator('#approveSeller').click();await f.page.locator('#notice').getByText('Seller approved. No WhatsApp message was requested. The in-app update remains available.').waitFor();
    assert.deepEqual(f.calls.find(c=>c.action==='admin_seller_review').data,{sellerUid:'seller1',submissionId:'selfie1',evidenceId:'doc1',status:'approved',reason:''});
    await f.page.locator('.seller-row').filter({hasText:'Corner Spaza'}).waitFor({state:'detached'});assert(await f.page.locator('#identityDetails').isHidden());assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('A Google claim needs explicit review and WhatsApp is reported as queued',async()=>{
+   let approved=false;
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='admin_seller_queue'){
+     await route.fulfill({json:{ok:true,sellers:approved?[]:[{...rows[0],googlePlaceId:'synthetic-place-id'}],next:null}});
+     return true;
+    }
+    if(body.action==='admin_seller_review'){
+     approved=true;
+     await route.fulfill({json:{ok:true,status:'approved',whatsappStatus:'queued'}});
+     return true;
+    }
+    return false;
+   }});
+   await f.page.locator('.seller-row').first().click();
+   assert(await f.page.locator('#claimReview').isVisible());
+   assert((await f.page.locator('#claimMapLink').getAttribute('href')).includes('synthetic-place-id'));
+   await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();
+   await f.page.locator('#viewSelfie').click();await f.page.locator('#selfieState').getByText('Viewed in this review').waitFor();
+   await f.page.locator('#reviewConfirmed').check();
+   assert(await f.page.locator('#approveSeller').isDisabled());
+   await f.page.locator('#claimConfirmed').check();
+   assert(await f.page.locator('#approveSeller').isEnabled());
+   await f.page.locator('#approveSeller').click();
+   await f.page.locator('#notice').getByText('Seller approved. WhatsApp is queued, subject to provider setup and delivery.').waitFor();
+   assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.claimConfirmed,true);
+   assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Pagination, retail company label, search and self-review denial',async()=>{
    const f=await pageFor({pagination:true});await f.page.locator('#loadMore').click();await f.page.locator('.seller-row').filter({hasText:'Last Page Shop'}).waitFor();
