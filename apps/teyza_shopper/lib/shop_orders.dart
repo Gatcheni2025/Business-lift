@@ -148,7 +148,7 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
             Text('Items: '+money((order['subtotalCents'] as num? ??0).toInt())),
             if(order['mode']=='delivery')Text('Delivery: '+money((order['deliveryFeeCents'] as num? ??0).toInt())),
             if((order['cashDiscountCents'] as num? ??0)>0)Text('Cash discount: −'+money((order['cashDiscountCents'] as num).toInt())),
-            Text(order['paymentMethod']=='card_at_shop'?'Card at shop · no extra card charge':order['paymentMethod']=='cash'?'Cash payment':'Payment to be arranged with shop'),
+            Text(order['paymentMethod']=='card_online'?'Online card · Paystack after confirmation':order['paymentMethod']=='paystack'?'Online card payment':order['paymentMethod']=='card_at_shop'?'Card at shop · no extra card charge':order['paymentMethod']=='cash'?'Cash payment':'Payment to be arranged with shop'),
             const SizedBox(height:8),Row(children:[const Expanded(child:Text('Total',style:TextStyle(fontWeight:FontWeight.w700))),
               Text(money((order['totalCents'] as num? ??0).toInt()),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))]),
             const SizedBox(height:7),Text(switch(order['paymentStatus']){
@@ -161,7 +161,8 @@ class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
             Wrap(spacing:7,children:[for(final status in nextSteps(order))TextButton(onPressed:working?null:()=>update(order,status),
               child:Text(switch(status){'confirmed'=>'Confirm order','preparing'=>'Start preparing','ready'=>'Ready to collect',
                 'out_for_delivery'=>'Out for delivery','completed'=>'Mark completed',_=>'Cancel'})),
-              if(!widget.asOwner&&['confirmed','preparing','ready','out_for_delivery'].contains(order['status'])&&
+              if(!widget.asOwner&&order['paymentMethod']=='card_online'&&order['orderType']!='wholesale_stock'&&
+                 ['confirmed','preparing','ready','out_for_delivery'].contains(order['status'])&&
                  !['paid','test_paid','refund_review','checkout_pending'].contains(order['paymentStatus']))
                 FilledButton.icon(onPressed:working?null:()=>payWithPaystack(order),
                   icon:const Icon(Icons.credit_card_outlined,size:17),label:const Text('Pay with Paystack')),
@@ -206,7 +207,10 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
     try{
       final saved=await ShopperPaymentPreferenceStore().load(current);
       if(!mounted||current!=widget.session.userId)return;
-      if(saved==ShopperPaymentPreferenceStore.cardAtShop&&mode=='collection'&&widget.acceptsCard){
+      if(saved==ShopperPaymentPreferenceStore.cardOnline&&widget.acceptsCard){
+        setState(()=>paymentMethod=ShopperPaymentPreferenceStore.cardOnline);
+        await loadQuote();
+      }else if(saved==ShopperPaymentPreferenceStore.cardAtShop&&mode=='collection'&&widget.acceptsCard){
         setState(()=>paymentMethod=ShopperPaymentPreferenceStore.cardAtShop);
         await loadQuote();
       }
@@ -258,7 +262,7 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
       Text(widget.shopName,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),const SizedBox(height:18),
       if(hasOptions)SegmentedButton<String>(segments:[if(widget.collection)const ButtonSegment(value:'collection',label:Text('Collect'),icon:Icon(Icons.shopping_bag_outlined)),
         if(widget.delivery)const ButtonSegment(value:'delivery',label:Text('Delivery'),icon:Icon(Icons.local_shipping_outlined))],selected:{mode},
-        onSelectionChanged:working||uid!=widget.session.userId?null:(v){setState((){mode=v.first;if(mode=='delivery')paymentMethod=widget.wholesale?'arrange_with_shop':'cash';});loadQuote();}),
+        onSelectionChanged:working||uid!=widget.session.userId?null:(v){setState((){mode=v.first;if(mode=='delivery'&&paymentMethod==ShopperPaymentPreferenceStore.cardAtShop)paymentMethod='cash';});loadQuote();}),
       const SizedBox(height:20),Text(widget.wholesale?'Payment with wholesaler':'Payment with the shop',style:const TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
       const SizedBox(height:8),Wrap(spacing:8,runSpacing:8,children:[
         if(widget.wholesale)ChoiceChip(label:const Text('Arrange with supplier'),selected:paymentMethod=='arrange_with_shop',
@@ -267,8 +271,12 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
           onSelected:working||uid!=widget.session.userId?null:(_)=>selectPayment('cash')),
         if(mode=='collection'&&widget.acceptsCard)ChoiceChip(label:const Text('Card at the shop'),selected:paymentMethod=='card_at_shop',
           onSelected:working||uid!=widget.session.userId?null:(_)=>selectPayment('card_at_shop')),
+        if(!widget.wholesale&&widget.acceptsCard)ChoiceChip(
+          label:const Text('Pay online by card'),selected:paymentMethod=='card_online',
+          onSelected:working||uid!=widget.session.userId?null:(_)=>selectPayment('card_online')),
       ]),
       if(paymentMethod=='card_at_shop')const Padding(padding:EdgeInsets.only(top:8),child:Text('No extra card charge. Pay the shop’s advertised price.')),
+      if(paymentMethod=='card_online')const Padding(padding:EdgeInsets.only(top:8),child:Text('After the seller confirms your order, open My orders to pay securely on Paystack. No card details are kept in Teyza.')),
       const SizedBox(height:20),TextField(controller:phone,enabled:!working&&uid==widget.session.userId,keyboardType:TextInputType.phone,autofillHints:const [AutofillHints.telephoneNumber],
         decoration:const InputDecoration(labelText:'Contact number',border:OutlineInputBorder())),const SizedBox(height:16),
       if(mode=='delivery')...[
@@ -286,6 +294,7 @@ class _CheckoutState extends State<ShopperCheckoutPage>{
       ],
       const SizedBox(height:15),Text(widget.wholesale?
          'The wholesaler confirms stock and delivery. This is a wholesale request, not a payment. After receipt, add stock and set retail prices in My Products.':
+         paymentMethod=='card_online'?'The shop must confirm your order before the Paystack card-payment link becomes available.':
          'The shop will confirm stock and delivery availability. Payment is arranged directly with the shop.'),
       if(error!=null)Padding(padding:const EdgeInsets.symmetric(vertical:14),child:Text(error!,style:const TextStyle(color:Colors.red))),
       TextButton.icon(onPressed:checking||working||uid!=widget.session.userId?null:loadQuote,icon:const Icon(Icons.refresh),label:const Text('Refresh order total')),
