@@ -216,6 +216,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     // Mandate signing is not payment or permission to activate product selling.
+    // Seller Paystack membership checkout is retired. Legacy verification /
+    // cancellation remains available for existing contracts; Paystack order
+    // payments for physical shopper purchases remain completely independent.
+    if(action==='billing_checkout'||action==='promote_checkout')D.fail(410,
+      'New seller Paystack subscriptions are closed. Complete the R99 debit-order mandate on the Teyza website.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
     if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
