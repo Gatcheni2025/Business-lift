@@ -28,7 +28,7 @@ SKIP = ("uploads/", "private_html/", "node_modules/", ".git/", "apps/", ".github
 MANAGED = (
     "Every top-level .html page",
     "All assets/** shared CSS, SVG and frontend assets",
-    "All js/*.js including required public Firebase client configuration",
+    "All js/*.js and js/*.mjs including public Firebase login and seller checkout modules",
     "A classic favicon.ico generated from the same growing-Y SVG",
     "All api/*.php except existing server authentication helper",
     "Public top-level PHP endpoints, robots.txt, and sitemap.xml",
@@ -39,6 +39,8 @@ def public_paths() -> list[Path]:
     candidates.extend(ROOT.glob("*.php"))
     for directory, pattern in [("assets", "*"), ("js", "*.js"), ("api", "*.php")]:
         candidates.extend(p for p in ((ROOT / directory).rglob(pattern) if directory == "assets" else (ROOT / directory).glob(pattern)) if p.is_file())
+    # Authenticated website payments are ES modules, not classic .js scripts.
+    candidates.extend(p for p in (ROOT / "js").glob("*.mjs") if p.is_file())
     candidates.extend([ROOT / "robots.txt", ROOT / "sitemap.xml"])
     return sorted({p.relative_to(ROOT) for p in candidates if p.exists()
         and p.relative_to(ROOT).as_posix() not in EXCLUDE
@@ -50,7 +52,7 @@ def bust_local_assets(html: str) -> str:
     rx = re.compile(r'(?P<pre>(?:href|src)\s*=\s*["\'])(?P<url>(?:assets|js)/[^"\'<>\s]+)(?P<post>["\'])')
     def rewrite(match: re.Match[str]) -> str:
         uri = urlsplit(match.group("url"))
-        if not uri.path.lower().endswith((".css", ".js", ".svg", ".png", ".jpg", ".webp")):
+        if not uri.path.lower().endswith((".css", ".js", ".mjs", ".svg", ".png", ".jpg", ".webp")):
             return match.group(0)
         qs = [(key, val) for key, val in parse_qsl(uri.query, keep_blank_values=True) if key != "teyza_release"]
         qs.append(("teyza_release", RELEASE))
