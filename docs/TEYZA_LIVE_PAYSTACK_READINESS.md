@@ -60,6 +60,15 @@ its own seller-subaccount and settlement prerequisites.
    activate product entitlement in this code, even in the isolated project:
    validate the billing record and renewal separately; a complimentary grant
    can exercise product screens but does not prove payment works end-to-end.
+   For a first provider check without a second Firebase project, the operations
+   kit includes `tools/paystack/RUN-SANDBOX-CHECK.ps1`. It uses the previous
+   Firebase secret version only if it is an `sk_test_` key, holds the synthetic
+   seller and billing records in memory, creates a separate test-mode R99 plan,
+   asks for a test-card checkout, confirms R49 and the scheduled R99 renewal,
+   then attempts to cancel the test subscription. It never writes Firebase
+   data or uses a live key. This check does not replace device, Firestore,
+   webhook-delivery or an actual subsequent renewal test. If cancellation or
+   creation is uncertain, review the Paystack **test** dashboard manually.
 3. Test the introductory card charge and scheduled renewal, callback,
    duplicate webhooks, abandoned/failed checkout, cancellation, account
    deletion, a payment arriving after deletion, refunds, and provider outages.
