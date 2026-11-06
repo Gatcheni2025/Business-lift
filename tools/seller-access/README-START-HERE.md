@@ -1,8 +1,10 @@
 # Teyza seller approval and product access rules
 
-Sellers write product drafts directly to Firestore. Deploying the app and mobile function alone does **not** stop an older app or another client from writing drafts if the live Firestore rules still allow it. The current production rules have not been inspected by this kit.
+Sellers write product drafts directly to Firestore. Deploying the app and mobile function alone does **not** stop an older app or another client from writing drafts if the live Firestore rules still allow it. The owner supplied a copy of the production rules on 6 November 2026; the running rules must be rechecked at preparation and again before publication.
 
-1. In Firebase Console, open the **(default)** Firestore database for `business-lift-3c19c`. Copy the entire current published rules into `current-firestore.rules` in this folder. Keep a separate backup.
+For the reviewed 6 November rules, `PREPARE-CURRENT-RULES.ps1` uses the Firebase CLI already installed in the owner's earlier release kit to read the default database's current published rules. It checks they still match the reviewed copy, then saves a local backup and a candidate in this folder without deploying anything. It stops if the rules changed. Review and test the candidate before any publication.
+
+1. Alternatively, in Firebase Console, open the **(default)** Firestore database for `business-lift-3c19c`. Copy the entire current published rules into `current-firestore.rules` in this folder. Keep a separate backup.
 2. Run `.\DEPLOY-SELLER-ACCESS.ps1`. This only creates `firestore.seller-approval.candidate.rules`; it does not publish. It supports the known prior Teyza product block and refuses custom or potentially overlapping recursive write rules.
 3. Compare the candidate with the current rules. In particular, check all overlapping wildcard/nested matches and ensure sellers cannot modify their own approval, billing, claim or WhatsApp records. Firestore grants access if *any* matching allow rule succeeds. Resolve any unknown rules manually rather than replacing the whole ruleset.
 4. Test the candidate in a separate Firebase project or the Firestore Emulator: pending and rejected sellers cannot create or update a product; approved unpaid sellers cannot create or update one; current paid or valid administrator-complimentary sellers can; cross-account and anonymous writes fail; sellers can still delete their own private drafts. Check existing registration, seller profile and other project features too.
