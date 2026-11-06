@@ -7,7 +7,7 @@ const shop={sellerUid:'seller1',status:'active',name:'Local Shop',sellingEnabled
 const free={...seller,listingPlan:'free'};
 const basic={...seller,listingPlan:'basic'};
 const legacyTrial={...seller,listingPlan:'trial',trialStartedAt:NOW,trialEndsAt:NOW+P.TRIAL_MS};
-const billing={ownerUid:'seller1',status:'paid',monthlyCents:4900,paidUntil:B.nextMonth(NOW)};
+const billing={ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:4900,paidUntil:B.nextMonth(NOW)};
 test('Registration and historical trials are never paid entitlements',()=>{
  for(const a of [free,legacyTrial,{...seller}]){
   assert.equal(P.entitled('seller1',a,null,NOW),false);
@@ -33,6 +33,9 @@ test('Paid subscription cannot bypass owner verification or rejection',()=>{
 test('Manual mandates, invoice-only receipts and Paystack sandbox payments cannot activate a public catalogue',()=>{
  assert.equal(P.entitled('seller1',basic,{ownerUid:'seller1',status:'paid',monthlyCents:9900,latestPeriod:P.period(NOW)},NOW),false);
  assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'test'},NOW),false);
+ assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:undefined},NOW),false);
+ assert.equal(P.entitled('seller1',basic,{...billing,paymentProvider:undefined},NOW),false);
+ assert.equal(P.entitled('seller1',basic,{...billing,paymentProvider:'manual'},NOW),false);
  assert.equal(P.entitled('seller1',basic,{...billing,paymentEnvironment:'live'},NOW),true);
 });
 test('Administrator complimentary access is temporary and is not Paystack revenue',()=>{

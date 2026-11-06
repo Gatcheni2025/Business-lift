@@ -28,7 +28,7 @@ function fixture({live=true,discount=0,status='confirmed'}={}){
   approvalStatus:'approved',listingPlan:'basic'};
  db.records.set('teyzaSellerAccounts/seller1',seller);
  db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',sellingEnabled:true});
- db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',
+ db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paymentProvider:'paystack',
   paymentEnvironment:live?'live':'test',paidUntil:NOW+86400000,
   ...(live?{}:{
     adminComplimentaryStatus:'active',adminComplimentaryUntil:NOW+86400000,

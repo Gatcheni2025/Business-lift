@@ -98,7 +98,7 @@ test('Only current paid member may purchase R29 seven-day promotion',async()=>{
  const {api,auth,records,requests}=fixture();
  await assert.rejects(api.execute(auth,'promote_checkout'),e=>e.status===403);
  records.set('teyzaSellerAccounts/shop1',{...records.get('teyzaSellerAccounts/shop1'),listingPlan:'basic'});
- records.set('teyzaBilling/shop1',{ownerUid:'shop1',status:'paid',
+ records.set('teyzaBilling/shop1',{ownerUid:'shop1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',
   monthlyCents:4900,paidUntil:nextMonth(NOW),introUsed:true});
  const response=await api.execute(auth,'promote_checkout',{amount:1});
  assert.equal(response.amountCents,PROMO_CENTS);

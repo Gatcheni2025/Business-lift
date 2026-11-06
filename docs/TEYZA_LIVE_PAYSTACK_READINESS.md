@@ -5,12 +5,12 @@ Seller registration is free. An approved seller may choose product access:
 R49 for the first eligible month, then R99 per month. A returning seller who
 already used the introductory offer pays R99. No agent commission is added.
 
-The business owner supplied live plan code `PLN_ud5m0sza4kmr31f`. It has not
-yet been independently verified. From the release kit, run
-`./tools/paystack/CHECK-LIVE-PLAN.ps1` to check the plan using a hidden live
-key prompt. The check performs a read-only Paystack API request; it does not
-write to Firebase, create a subscription or collect money. Only the result,
-never the key, should be shared with support.
+The owner verified live plan `PLN_ud5m0sza4kmr31f` on 6 November 2026:
+ZAR 99 monthly with no fixed invoice limit. The read-only plan check did not
+charge or modify anything. A new version of the Firebase Paystack secret was
+then created and immediate redeployment was declined; the running function
+still uses its previous version. The value of the newly saved version and the
+full payment path have not been independently verified by this checkout.
 
 ## Distribution and current payment availability
 
@@ -75,14 +75,17 @@ its own seller-subaccount and settlement prerequisites.
    switching keys. This integration uses the **same** Firebase Paystack secret
    for seller subscriptions and physical-goods orders. Changing it changes
    the environment for both, and outstanding test events cannot be verified
-   with the live secret. Do not mix test and live plans or subaccounts.
+   with the live secret. Do not mix test and live plans or subaccounts. Paid
+   records must explicitly identify the live Paystack environment and provider;
+   reconcile legitimate older records missing those values with Paystack before
+   rollout, rather than silently granting or removing access.
 6. Only after those checks, create/verify a **live** monthly plan in Paystack:
    amount 9900 cents, ZAR, interval monthly, no fixed invoice limit. Record
    its `PLN_...` code. Preserve the other values in the existing private
    `services/teyza-mobile-v39/.env.business-lift-3c19c` file and set
    `TEYZA_PAYSTACK_MONTHLY_PLAN_CODE` to that live plan. The deployment
    helper verifies the plan's live domain, amount, currency and interval.
-7. Set the **live** secret with the protected Firebase CLI prompt:
+7. If the **live** secret has not already been staged, set it with the protected Firebase CLI prompt:
 
    ```powershell
    firebase functions:secrets:set TEYZA_PAYSTACK_SECRET_KEY --project business-lift-3c19c
@@ -91,6 +94,8 @@ its own seller-subaccount and settlement prerequisites.
    Enter the key at the prompt. Do not put it in chat, Git, the public website,
    a command argument or a screenshot. Rotate and redeploy any affected
    Firebase Functions according to Firebase's secret management procedure.
+   If the CLI offers to redeploy immediately, choose No until the rules,
+   payment tests, provider webhook and deployment are ready together.
 8. Configure the live Paystack webhook at:
    `https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile/paystack-webhook`
    and enable `charge.success`, `invoice.update`, `invoice.payment_failed`,
@@ -126,4 +131,5 @@ Account deletion cannot be marked complete while a checkout/refund review or
 cancellation remains unresolved.
 
 Changing the production secret, plan, webhook, or application deployment can
-affect real customers. Nothing in this document has changed those settings.
+affect real customers. The newly created secret version is staged; the running
+function has not been deliberately switched by this review.
