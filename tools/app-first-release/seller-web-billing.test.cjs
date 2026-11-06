@@ -44,7 +44,9 @@ test('Website includes a consent-gated, authenticated payment form with return v
   assert(html.includes('id="'+id+'"'),'Missing '+id);
  }
  assert(html.includes('seller-web-billing.mjs'));
- assert(js.includes('billing_checkout')&&js.includes('billing_confirm')&&js.includes('seller_summary'));
+ assert(js.includes('billing_checkout')&&js.includes('billing_status')&&js.includes('seller_summary'));
+ assert(js.includes('paymentPending')&&js.includes('setInterval')&&js.includes('checkNow:true'));
+ assert(!js.includes("post('billing_confirm'"),'Customer never needs to manually mark payment paid');
  assert(js.includes('getIdToken()')&&js.includes('checkoutChannel:\'web\''));
  assert(!html.includes('sk_live_')&&!js.includes('sk_live_'));
  assert(!html.includes('sk_test_')&&!js.includes('sk_test_'));
