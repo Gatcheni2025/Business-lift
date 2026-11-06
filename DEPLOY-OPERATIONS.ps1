@@ -24,7 +24,7 @@ if ($VerifiedCiPackage) {
   if ($LASTEXITCODE -ne 0 -or -not $?) {
     throw 'Pilot source integrity and live health preflight failed. No Firebase resources were changed.'
   }
-  foreach ($source in @(Get-ChildItem -Path .\services\teyza-mobile-v39 -Recurse -File -Filter '*.js')) {
+  foreach ($source in @(Get-ChildItem -Path .\services\teyza-mobile-v39 -File -Filter '*.js')) {
     & node --check $source.FullName
     if ($LASTEXITCODE -ne 0) {
       throw ('Backend JavaScript failed syntax verification: ' + $source.Name)
