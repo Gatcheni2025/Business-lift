@@ -417,8 +417,8 @@ test('Signed charge.success activates a pending seller membership once, without 
   await f.api.webhook(raw,signature,payload);
   await f.api.webhook(raw,signature,payload);
   const state=await f.api.execute(f.auth,'billing_status',{reference:started.reference});
-  assert.equal(state.membershipStatus,'active');
-  assert.equal(state.accessGranted,true);
+  assert.equal(state.membershipStatus,'test_paid');
+  assert.equal(state.accessGranted,false,'sandbox charges must not activate the production plan');
   assert.equal(f.records.get('teyzaPaystackPayments/'+started.reference).status,'paid');
   assert.equal(f.records.get('teyzaBilling/shop1').lastReference,started.reference);
 });
