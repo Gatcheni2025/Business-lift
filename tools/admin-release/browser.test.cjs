@@ -243,6 +243,43 @@ async function main(){
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
   });
+  await check('Confidential R99 PDF exports require an audited administrator action',async()=>{
+    const reference='mandate_synthetic_1',mandate={
+      mandateId:reference,status:'pending_provider_authentication',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',
+      shopAddress:'12 Market Street, Durban',firstDate:'2026-12-01',
+      collectionDay:1,amountCents:9900,termsVersion:'teyza-debit-request-v2',
+      acceptedAt:Date.UTC(2026,10,6),collectionActive:false,
+      terms:'I request a R99 monthly debit order pending bank authentication.'
+    };
+    const full={ok:true,mandate,sellerUid:'seller1',shopName:'Corner Spaza',
+      shopAddress:'12 Market Street, Durban',ownerEmail:'seller@example.test',
+      sensitive:{firstName:'Test',surname:'Seller',phone:'+27711234567',
+        documentKind:'id',documentNumber:'9001015009087',
+        accountHolder:'Test Seller',bankName:'FNB',branchCode:'250655',
+        accountNumber:'12345678901',accountType:'current'}};
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_mandate_queue'){
+        await route.fulfill({json:{ok:true,mandates:[{sellerUid:'seller1',...mandate}]}});return true;
+      }
+      if(['ops_mandate_detail','ops_mandate_export'].includes(body.action)){
+        await route.fulfill({json:full});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByRole('button',{name:'View complete private mandate (audited)'}).click();
+    await f.page.getByRole('dialog').getByText('Account number: 12345678901').waitFor();
+    const event=f.page.waitForEvent('download',{timeout:15000});
+    await f.page.getByRole('dialog').getByRole('button',
+      {name:'Download confidential PDF for Netcash review'}).click();
+    const downloaded=await event;
+    assert.equal(downloaded.suggestedFilename(),'Teyza_R99_Mandate_Request_'+reference+'.pdf');
+    assert(f.calls.some(v=>v.action==='ops_mandate_export'&&v.data.mandateId===reference));
+    assert(!f.calls.some(v=>v.action==='billing_checkout'));
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
    await f.page.screenshot({path:path.join(output,'admin-login-desktop.png'),fullPage:true});
