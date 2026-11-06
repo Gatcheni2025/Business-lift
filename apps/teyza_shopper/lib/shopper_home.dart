@@ -550,35 +550,24 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         backgroundColor:Colors.white,showDragHandle:true,
         builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:deliveryProfile));
       if(profile==null||!mounted||uid!=session.userId)return;
-      // Avoid a second login prompt at basket/checkout: register a secure
-      // persistent Firebase anonymous shopping identity just once.
-      try{if(uid==null)await session.ensureShoppingIdentity();}
-      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:Text('Could not activate your shopping session. Enable Firebase Anonymous Authentication and retry: ${authMessage(e)}')));return;}
-      final savedUid=session.userId;
-      if(!mounted||savedUid==null||session.sellerWorkspace)return;
-      await deliveryProfileStore.save(savedUid,profile);
+      // Browsing only needs a locally stored location, not a registered account.
       rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(profile);
       try{await deliveryProfileStore.saveDeviceLocation(profile);}
-      catch(_){/* Retain the user's chosen location in memory until retry. */}
-      try{
-        await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());
-        // Clear the legacy guest copy ONLY after cloud persistence succeeds.
-        await deliveryProfileStore.clear(null);
-        if(mounted)setState(()=>deliveryProfileWarning=null);
-      }catch(_){
-        if(mounted)setState(()=>deliveryProfileWarning=
-          'Details saved securely on this phone. Cloud syncing will retry.');
+      catch(_){if(mounted)setState(()=>deliveryProfileWarning='Could not save this address on this phone.');}
+      if(uid!=null&&!session.anonymousShopper){
+        await deliveryProfileStore.save(uid,profile);
+        if(profile.displayName.trim().isNotEmpty&&profile.email.trim().isNotEmpty&&profile.phone.trim().isNotEmpty){
+          try{await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());}
+          catch(_){if(mounted)setState(()=>deliveryProfileWarning='Address saved on this phone. Account sync will retry.');}
+        }
       }
-      if(!mounted||savedUid!=session.userId)return;
+      if(!mounted||uid!=session.userId)return;
       deliveryProfile=profile;
-      ++_deliveryProfileRequest; // invalidate a queued first-login prompt
+      ++_deliveryProfileRequest;
       await chooseArea(Area(profile.area.isNotEmpty?profile.area:profile.city,
         profile.city.isNotEmpty?profile.city:profile.area,
         profile.latitude,profile.longitude),persist:false);
-      if(mounted)setState((){
-        locationName=profile.address;_usingGps=false;locationWarning=null;
-      });
+      if(mounted)setState((){locationName=profile.address;_usingGps=false;locationWarning=null;});
     }finally{_deliverySheetOpen=false;}
   }
 
@@ -851,7 +840,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<Shop> get nearbySellers {
     if(area==null)return [];
     final q=search.trim().toLowerCase();
-    return nearbyReal.where((shop)=>shop.identityVerified&&
+    return nearbyReal.where((shop)=>
       (sellerFilter=='all'||shop.shopCategory==sellerFilter)&&
       (q.isEmpty||(shop.name+' '+shop.area).toLowerCase().contains(q))).toList();
   }
@@ -1611,13 +1600,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget sellerStories(){
     final sellers=nearbySellers;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Sellers near you',subtitle:'Verified Teyza businesses in your area',
+      section('Sellers near you',subtitle:'Green verified · yellow awaiting verification',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
         Padding(padding:const EdgeInsets.only(bottom:12),child:Text(
           area==null?'Choose your area to discover nearby sellers.':
-            loading?'Finding sellers nearby…':'No verified sellers in this category nearby yet.',
+            loading?'Finding sellers nearby…':'No listed sellers in this category nearby yet.',
           style:const TextStyle(color:muted,fontSize:12)))
       else SizedBox(height:76+MediaQuery.textScalerOf(context).scale(33),
         child:ListView.builder(key:const PageStorageKey<String>('nearby-seller-stories'),
@@ -1628,7 +1617,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 borderRadius:BorderRadius.circular(18),
                 child:SizedBox(width:86,child:Column(children:[
                   Container(padding:const EdgeInsets.all(3),decoration:BoxDecoration(shape:BoxShape.circle,
-                    border:Border.all(color:green,width:2)),
+                    border:Border.all(color:shop.identityVerified?green:const Color(0xFFE7B31F),width:3)),
                     child:ClipOval(child:photo(shop.photo,size:58))),
                   const SizedBox(height:5),
                   Text(shop.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
@@ -1646,7 +1635,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       itemCount:sellers.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           businessFilters(),
-          section('All nearby sellers',subtitle:'Verified Teyza businesses around '+locationName),
+          section('All nearby sellers',subtitle:'Listed Teyza businesses around '+locationName),
           if(sellers.isEmpty)empty('No sellers in this category yet',
             'Choose another business type or shopping area.')
         ]);
@@ -1665,10 +1654,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(deliveryProfileWarning!=null)Card(color:const Color(0xFFFFF2DE),
         child:Padding(padding:const EdgeInsets.all(12),
           child:Text(deliveryProfileWarning!))),
-      if(deliveryProfile==null&&widget.initialArea==null)
+      if(deliveryProfile==null&&rememberedLocation==null&&widget.initialArea==null)
         Card(child:ListTile(leading:const Icon(Icons.place_outlined,color:green),
           title:const Text('Add your delivery address'),
-          subtitle:const Text('Enter your street address and contact details to see shops near you.'),
+          subtitle:const Text('Enter your delivery address to see local shops. No registration needed.'),
           onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
@@ -2345,8 +2334,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
       deliveryFeeCents:shop.deliveryFeeCents,acceptsCard:shop.acceptsCard==true,
-      savedDeliveryAddress:deliveryProfile?.address??'',
-      savedPhone:deliveryProfile?.phone??'',
+      savedDeliveryAddress:deliveryProfile?.address??rememberedLocation?.address??'',
+      savedPhone:deliveryProfile?.phone??session.phoneNumber??'',
       cashDiscountPercent:shop.cashDiscountPercent,items:basketItems.map((p)=>{
         'id':p.id,'name':p.name,'quantity':cart[p.id]??0,'priceCents':p.priceCents}).toList())));
     if(done==true&&mounted){setState((){cart.clear();basketShop=null;});navigateToTab(3);}
