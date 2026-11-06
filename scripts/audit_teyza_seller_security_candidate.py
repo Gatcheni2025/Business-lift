@@ -36,7 +36,9 @@ with zipfile.ZipFile(archive) as z:
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js" in src
     assert "u.hostname==='checkout.paystack.com'" in src
-    assert not re.search(r'(?i)\\b(eval\\s*\\(|new\\s+Function\\s*\\(|document\\.write\\s*\\(|child_process|javascript:|data:text/html)',src)
+    normalized=re.sub(r'\s+', '', src.lower())
+    for token in ('eval(', 'newfunction(', 'document.write(', 'child_process', 'javascript:', 'data:text/html'):
+        assert token not in normalized, 'Unexpected high-risk browser source token: '+token
     assert "sk_live_" not in src and "sk_test_" not in src
     assert z.read('services/teyza-mobile-v39/billing-paystack.js')
     assert 'DEPLOY-OPERATIONS.ps1' in entries and 'CHECK-PILOT.ps1' in entries
