@@ -39,7 +39,7 @@ async function startup(){
   const $=id=>document.getElementById(id),root=$('teyza-web-membership');
   if(!root)return;
   const view=(message,level='')=>{$('webCheckoutStatus').textContent=message;root.dataset.status=level;};
-  let sdk,auth,health=null,summary=null,activeUid=null,pending=false,returnProcessed=null;
+  let sdk,auth,health=null,summary=null,billingState=null,activeUid=null,pending=false;
   const set=(id,visible)=>{$(id).hidden=!visible;};
   function render(){
     const user=auth?.currentUser||null,logged=Boolean(user),decision=eligibility(summary,user?.emailVerified===true,backendReady(health));
@@ -50,10 +50,10 @@ async function startup(){
     $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'First eligible month, then R99 monthly';
     set('webVerifyEmail',logged&&user?.emailVerified!==true&&Boolean(user?.email));
     set('webManage',logged&&Boolean(summary?.listingPaid));
-    set('webConfirm',logged&&Boolean(readReceipt(user?.uid)));
-    $('webCheckout').disabled=pending||!decision.eligible||!$('webTerms').checked;
+    set('webConfirm',logged&&Boolean(billingState?.paymentPending||readReceipt(user?.uid)));
+    $('webCheckout').disabled=pending||billingState?.paymentPending===true||!decision.eligible||!$('webTerms').checked;
     $('webRefresh').disabled=pending;
-    $('webCheckout').textContent=pending?'Checking…':'Pay securely with Paystack';
+    $('webCheckout').textContent=pending?'Checking…':billingState?.paymentPending?'Payment pending confirmation':'Pay securely with Paystack';
   }
   function readReceipt(uid){
     if(!uid)return null;
@@ -78,52 +78,74 @@ async function startup(){
     if(!response.ok||payload.ok!==true)throw Error(payload.error||'The Teyza service could not complete the request.');
     return payload;
   }
+  function showPaymentStatus(status){
+    if(status?.membershipStatus==='active'){
+      const until=status.paidUntil?new Date(status.paidUntil).toLocaleDateString('en-ZA'):'';
+      view('Payment confirmed by Paystack. Your membership is active'+(until?' until '+until:'')+'.','success');
+    }else if(status?.paymentPending){
+      view('Payment pending. Your shop remains on its current plan until Paystack confirms the charge. This page checks automatically.','warning');
+    }else if(status?.membershipStatus==='review_required'){
+      view('Payment received but verification or shop approval changed. Contact Teyza support for a review.','warning');
+    }else if(status?.membershipStatus==='awaiting_approval'){
+      view('Payment recorded; membership access awaits final shop eligibility checks.','warning');
+    }else if(status?.membershipStatus==='refunded'){
+      view('The previous payment was refunded. No membership was activated.','warning');
+    }else view('Seller and payment status updated.');
+  }
   async function sync(){
     if(!auth?.currentUser)return;
     const uid=auth.currentUser.uid;
-    pending=true;render();view('Checking seller approval and payment status…');
+    pending=true;render();view('Checking your seller account and membership…');
     try{
       await auth.currentUser.reload();
-      const fetched=await Promise.all([
+      const [serverHealth,serverSummary]=await Promise.all([
         fetch(SERVICE_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
         post('seller_summary')
       ]);
       if(auth.currentUser?.uid!==uid)return;
-      health=fetched[0];summary=fetched[1];view('Seller status updated.');render();
-      const isReturn=new URLSearchParams(location.search).get('payment')==='return';
-      if(isReturn&&returnProcessed!==uid&&readReceipt(uid)){
-        returnProcessed=uid;await confirmPayment();
-      }else if(isReturn&&!readReceipt(uid)){
-        view('Returned from Paystack. Refresh your seller status; if payment is missing, contact Teyza support with your Paystack receipt.');
+      health=serverHealth;summary=serverSummary;
+      // The server derives status from UID-scoped records and Paystack verification.
+      billingState=await post('billing_status',{checkNow:true});
+      if(billingState.membershipStatus==='active'){
+        sessionStorage.removeItem(receiptKey(uid));
+        summary=await post('seller_summary');
       }
-    }catch(error){if(auth.currentUser?.uid===uid){summary=null;view(error.message||'Unable to check membership.','error');}}
-    finally{pending=false;render();}
+      if(new URLSearchParams(location.search).get('payment')==='return'){
+        history.replaceState(null,'',location.pathname);
+      }
+      showPaymentStatus(billingState);render();
+    }catch(error){if(auth.currentUser?.uid===uid){
+      view(error.message||'Unable to check membership. Try again.','error');
+    }}finally{pending=false;render();}
   }
   async function confirmPayment(){
-    const uid=auth?.currentUser?.uid,reference=readReceipt(uid);if(!reference){view('No pending browser payment receipt was found.','warning');return;}
-    pending=true;render();view('Verifying the payment directly with Paystack…');
+    const uid=auth?.currentUser?.uid;
+    if(!uid||pending)return;
+    pending=true;render();
+    view('Checking Paystack for confirmation without making another payment…');
     try{
-      const result=await post('billing_confirm',{reference});
-      if(!result.paid){view('Payment cannot activate access yet. Contact support for payment review.','warning');return;}
-      sessionStorage.removeItem(receiptKey(uid));
-      summary=await post('seller_summary');
-      view(summary.listingPaid===true?
-        'Payment verified. Your active membership is available to your approved shop.':
-        'Payment confirmed, but live membership is not active. Contact support before adding products.',
-        summary.listingPaid===true?'success':'warning');
-      history.replaceState(null,'',location.pathname);
-    }catch(error){view(error.message||'Payment not yet confirmed. Use Check payment after Paystack completes.','error');}
+      const reference=readReceipt(uid)||billingState?.reference;
+      const status=await post('billing_status',{checkNow:true,...(reference?{reference}:{})});
+      if(auth.currentUser?.uid!==uid)return;
+      billingState=status;
+      if(status.membershipStatus==='active'){
+        sessionStorage.removeItem(receiptKey(uid));
+        summary=await post('seller_summary');
+      }
+      showPaymentStatus(status);
+    }catch(error){view(error.message||'Paystack status is temporarily unavailable. Your payment will be checked automatically.','error');}
     finally{pending=false;render();}
   }
   async function checkout(){
     const user=auth?.currentUser,decision=eligibility(summary,user?.emailVerified===true,backendReady(health));
-    if(pending||!decision.eligible||!$('webTerms').checked){view('Complete your approval and accept the recurring terms first.','warning');return;}
+    if(pending||billingState?.paymentPending||!decision.eligible||!$('webTerms').checked){view('An existing checkout is pending, or your membership requirements are incomplete.','warning');return;}
     pending=true;render();view('Preparing a secure, one-time Paystack checkout…');
     try{
       const result=await post('billing_checkout',{checkoutChannel:'web',recurringConsent:true,termsVersion:TERMS_VERSION});
       if(!validCheckoutUrl(result.checkoutUrl)||!validReceipt(result.reference)||![4900,9900].includes(result.amountCents)||
         result.monthlyCents!==9900)throw Error('Checkout details failed validation. Nothing was opened.');
       saveReceipt(user.uid,result.reference);
+      billingState={membershipStatus:'pending',paymentPending:true,paymentStatus:'pending',reference:result.reference};
       window.location.assign(result.checkoutUrl);
     }catch(error){pending=false;render();view(error.message||'Checkout could not be started.','error');}
   }
@@ -136,7 +158,7 @@ async function startup(){
     auth=sdk.getAuth(app.getApps()[0]||app.initializeApp(firebaseConfig));
     await sdk.setPersistence(auth,sdk.browserSessionPersistence);
     sdk.onAuthStateChanged(auth,async user=>{
-      activeUid=user?.uid||null;summary=null;health=null;pending=false;render();
+      activeUid=user?.uid||null;summary=null;health=null;billingState=null;pending=false;render();
       if(user)await sync();
       else view('Sign in with the same verified email, Google or Apple account used to register your Teyza shop.');
     });
@@ -160,6 +182,12 @@ async function startup(){
       try{await sdk.sendEmailVerification(auth.currentUser);view('Verification email requested. Open your inbox, verify it, then refresh your seller status.');}
       catch(e){view(e.message||'Unable to request verification email.','error');}
     });
+    // A closed Paystack tab never blocks activation; the backend webhook is primary.
+    // Poll only while this authenticated page is visible and a checkout is pending.
+    setInterval(()=>{
+      if(auth?.currentUser&&billingState?.paymentPending&&!pending&&document.visibilityState==='visible')
+        void confirmPayment();
+    },30000);
     $('webRefresh').addEventListener('click',sync);
     $('webCheckout').addEventListener('click',checkout);
     $('webConfirm').addEventListener('click',confirmPayment);
