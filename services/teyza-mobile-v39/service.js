@@ -217,7 +217,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     if(action==='seller_mandate_submit')D.fail(410,
       'New Teyza debit mandates are discontinued. Use the supported checkout to pay for a seller membership.');
-    if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
+    if(billingCheckout.actions.has(action)){
+      if(action==='billing_status')await rate(uid,'billing-status',8,60000);
+      return sellerBilling.execute(auth,action,data);
+    }
     if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
@@ -810,7 +813,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return shopperOrderPayments.webhook(raw,signature,event);
     return sellerBilling.webhook(raw,signature,event);
   }
-  return {execute,paystackWebhook,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
+  return {execute,paystackWebhook,reconcilePendingMemberships:()=>sellerBilling.reconcilePending(),
+    synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
     publicShopPhoto:shopFront.publicPhoto};
 }
 module.exports = {createService};
