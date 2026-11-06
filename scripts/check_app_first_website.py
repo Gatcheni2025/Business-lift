@@ -29,7 +29,14 @@ for p in PUBLIC.glob('*.html'):
  assert page.headings==1,p.name
  assert page.meta['description'] and page.canonical.startswith('https://teyza.co.za/'),p.name
  assert page.meta.get('og:image')=='https://teyza.co.za/assets/app/social-preview.jpg'
- assert not any(s in text for s in ['data-open-register','landing-auth.js','<form','auth=register']),p.name
+ if p.name=='seller-subscriptions.html':
+  # Payment is a separate verified-owner flow; it must never reintroduce
+  # removed public seller registration or an unauthenticated payment form.
+  assert 'id="webEmailForm"' in text and 'id="webCheckout"' in text
+  assert 'seller-web-billing.mjs' in text
+  assert not any(s in text for s in ['data-open-register','landing-auth.js','auth=register']),p.name
+ else:
+  assert not any(s in text for s in ['data-open-register','landing-auth.js','<form','auth=register']),p.name
  for u in page.links:
   route=urlsplit(u)
   if u.startswith('/') and route.path!='/':assert (PUBLIC/route.path.lstrip('/')).exists() or route.path in ['/privacy.html','/terms.html','/data-deletion.html','/admin'],(p.name,u)
