@@ -1,8 +1,9 @@
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
+import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Verified Paystack payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  let mandatePhotoUrl=null;
@@ -10,11 +11,11 @@ export function createOperations({api,onError}){
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
  let generation=0,ready=false,view='approvals',sellers=[],next=null,selected=null,detail=null,
      users=[],usersNext=null,userSelected=null,userDetail=null,
-      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,closures=[],closuresNext=null,
+      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,closures=[],closuresNext=null,mandates=[],
      moreFinance=null,moreTickets=null,busy=false;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
- function clear(){fieldAdmin.clear();clearMandatePhoto();generation++;ready=false;sellers=[];next=null;selected=null;detail=null;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;closures=[];closuresNext=null;moreFinance=null;moreTickets=null;busy=false;root.replaceChildren();}
+ function clear(){fieldAdmin.clear();clearMandatePhoto();generation++;ready=false;sellers=[];next=null;selected=null;detail=null;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;closures=[];closuresNext=null;mandates=[];moreFinance=null;moreTickets=null;busy=false;root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -28,10 +29,86 @@ export function createOperations({api,onError}){
  function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
  function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;heading();if(!ready)return;
   if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
- function overview(){const stats=el('div',undefined,'metrics');for(const [label,n,note] of [['Seller records loaded',sellers.length,next?'More sellers available':'Current registry page'],['Awaiting approval',sellers.filter(s=>s.approvalStatus==='pending').length,'Among loaded sellers'],['Monthly subscription',money(9900),'Standard monthly renewal']]){const c=el('article');c.append(el('span',label,'metric-label'),el('strong',String(n)),el('small',note));stats.append(c);}root.append(stats);const cards=el('div',undefined,'ops-grid');for(const [v,title,desc] of [['approvals','Verify seller registrations','Inspect the current identity document and selfie, then approve or give a clear recommendation.'],['sellers','Sellers and access exceptions','View seller accounts and grant a recorded temporary payment exception when needed.'],['users','Manage user accounts','Create shopper or seller accounts, send private setup emails and suspend accounts when needed.'],['billing','See verified Paystack payments','Review payment status, reconcile issued references and view historical statements.'],['support','Keep every request moving','Track open cases, priority and internal review notes.'],['finance','Review stock finance','Manually review enquiries and record approval in principle. No automatic disbursement.']]){const c=card(title,desc);c.append(button('Open workspace →',()=>navigate(v)));cards.append(c);}root.append(cards);root.append(el('p','Products publish automatically once seller verification and subscription access are complete.','notice warning'));}
+ function overview(){const stats=el('div',undefined,'metrics');for(const [label,n,note] of [['Seller records loaded',sellers.length,next?'More sellers available':'Current registry page'],['Awaiting approval',sellers.filter(s=>s.approvalStatus==='pending').length,'Among loaded sellers'],['Monthly subscription',money(9900),'Standard monthly renewal']]){const c=el('article');c.append(el('span',label,'metric-label'),el('strong',String(n)),el('small',note));stats.append(c);}root.append(stats);const cards=el('div',undefined,'ops-grid');for(const [v,title,desc] of [['approvals','Verify seller registrations','Inspect the current identity document and selfie, then approve or give a clear recommendation.'],['sellers','Sellers and access exceptions','View seller accounts and grant a recorded temporary payment exception when needed.'],['users','Manage user accounts','Create shopper or seller accounts, send private setup emails and suspend accounts when needed.'],['billing','Review debit-order mandates','Review submitted R99 consent and prepare it for accredited collections. No debit is initiated here.'],['support','Keep every request moving','Track open cases, priority and internal review notes.'],['finance','Review stock finance','Manually review enquiries and record approval in principle. No automatic disbursement.']]){const c=card(title,desc);c.append(button('Open workspace →',()=>navigate(v)));cards.append(c);}root.append(cards);root.append(el('p','Products publish automatically once seller verification and subscription access are complete.','notice warning'));}
  async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[s.shopName+' · '+s.ownerEmail,tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, subscription and statement.','footnote'));return;}
+ function registry(){const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[s.shopName+' · '+s.ownerEmail,tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing'){mandateQueue();closureReview();}root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+
+ function mandateQueue(){
+   const box=card('R99 monthly mandates — admin inbox',
+     'These are signed authorisations awaiting review or collection-provider registration, not successful debits.');
+   box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
+     mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
+       m.bankName||'—',tag(m.status),
+       button('Open mandate',()=>choose(sellers.find(s=>s.sellerUid===m.sellerUid)||
+         {sellerUid:m.sellerUid,shopName:m.shopName||'Seller'}))])));
+   if(!mandates.length)box.append(el('p','No mandates have been submitted.','footnote'));
+   root.append(box);
+ }
+ async function inspectMandate(m){
+   if(!m||!selected)return;
+   const info=await request('ops_mandate_detail',{sellerUid:selected.sellerUid,mandateId:m.mandateId});
+   const dialog=el('dialog');dialog.className='ops-mandate-dialog';
+   const content=el('div',undefined,'ops-mandate-content');
+   content.append(el('h3','Signed R99 monthly debit-order mandate'),
+     el('p','Shop: '+info.shopName+' · '+info.shopAddress),
+     el('p','Seller email: '+(info.ownerEmail||'—')),
+     el('p','Status: '+info.mandate.status+' · No debit has been collected by Teyza.'),
+     el('p','Bank: '+info.mandate.bankName+' · Branch: '+info.mandate.branchCode),
+     el('p','Account holder: '+info.sensitive.accountHolder),
+     el('p','Account number: '+info.sensitive.accountNumber),
+     el('p','Account type: '+info.sensitive.accountType),
+     el('p','Contact: '+info.sensitive.firstName+' '+info.sensitive.surname+' · '+info.sensitive.phone),
+     el('p','Owner ID: '+info.sensitive.documentKind+' '+info.sensitive.documentNumber),
+     el('p','Mandate reference: '+info.mandate.mandateId),
+     el('p','First collection: '+info.mandate.firstDate+' · day '+info.mandate.collectionDay+' monthly'),
+     el('p','Accepted: '+new Date(info.mandate.acceptedAt).toLocaleString('en-ZA')),
+     el('p','Consent text: '+info.mandate.terms),
+     el('p','Sensitive details are displayed only to authorised administrators and this view is audited.',
+       'notice warning'));
+   const exportedSellerUid=info.sellerUid,exportedId=info.mandate.mandateId;
+   const download=button('Download confidential PDF for Netcash review',async()=>{
+     if(!confirm('This PDF contains full bank and identity details. Save and transmit only through an approved secure Netcash channel. It is NOT bank-authenticated. Continue?'))return;
+     const exportData=await request('ops_mandate_export',{
+       sellerUid:exportedSellerUid,mandateId:exportedId});
+     downloadMandateRequestPdf(exportData);
+     message('Confidential mandate request downloaded. Obtain the provider-approved mandate and bank authentication before collecting.','success');
+   },'primary');
+   content.append(download,el('p','Includes seller consent, shop address, bank details and R99 dates. This is a pending request, not evidence of completed DebiCheck authentication.','footnote'));
+   const close=el('button','Close and clear details','button primary');
+   close.type='button';close.onclick=()=>dialog.close();
+   content.append(close);dialog.append(content);
+   dialog.addEventListener('close',()=>{dialog.replaceChildren();dialog.remove();});
+   document.body.append(dialog);dialog.showModal();
+ }
+ function mandateReview(m){
+   const box=card('Debit-order mandate · R99/month',
+     'Admin review of the seller authorisation. Provider onboarding and bank verification are still required.');
+   box.append(tag(m.status),el('p',m.bankName+' · account ending '+m.accountLast4+
+     ' · branch '+m.branchCode),
+     el('p','Shop address: '+(m.shopAddress||'—')),
+     el('p','First date: '+m.firstDate+' · recurring day '+m.collectionDay),
+     el('p','Collection provider: NOT CONNECTED · no debit submitted'),
+     button('View complete private mandate (audited)',()=>inspectMandate(m)));
+   if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
+     const form=el('form',undefined,'ops-form');
+     choice(form,'Mandate review outcome','decision',[
+       ['reviewed_pending_provider','Reviewed — awaiting collection provider'],
+       ['needs_correction','Needs corrected details']
+     ],'reviewed_pending_provider');
+     field(form,'Reason / review note','reason','textarea');
+     check(form,'I understand this review does not activate a subscription or debit a bank account.','confirmed');
+     submit(form,'Save mandate review',async fd=>{
+       if(!confirm('Save this review? No debit order or paid membership will be activated.'))return;
+       await request('ops_mandate_review',{sellerUid:selected.sellerUid,mandateId:m.mandateId,
+         decision:fd.get('decision'),reason:String(fd.get('reason')||''),confirmed:true});
+       const response=await request('ops_mandate_queue');mandates=response.mandates||[];
+       message('Mandate review saved. Collection remains inactive.','success');show();
+     });
+     box.append(form);
+   }
+   root.append(box);
+ }
  function closureReview(){const box=card('Account closures and payment review','Cancellation is complete only when Paystack confirms it. Investigate needs-attention items and any checkout or refund still open.');
   const relevant=closures.filter(x=>x.seller&&x.needsBillingReview);
   box.append(table(['Seller ID','Deletion reference','Paystack cancellation',''],relevant.map(x=>[
@@ -42,7 +119,7 @@ export function createOperations({api,onError}){
  }
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));account.append(button('Open approval desk',()=>navigate('approvals')));root.append(account);sellerDocuments();
   // Seller ID approval is independent from Paystack purchase confirmation.
-  const billing=card('Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
+  const billing=card('Legacy Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
   billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Complimentary temporary access':'Not paid'));
   billing.append(el('p','Mode: '+(d.paystackMode==='live'?'Live Paystack':'Paystack TEST — not real money')));
@@ -63,7 +140,7 @@ export function createOperations({api,onError}){
       await choose(selected);
     }));
   }
-  billing.append(el('p','R49 introductory first month · R99 monthly renewal · R29 optional seven-day promotion. Seller checkout is separate from this administrator screen.','footnote'));
+  billing.append(el('p','Existing Paystack memberships are displayed only for reconciliation and cancellation. New sellers must complete R99 debit-order mandate requests and provider bank authentication.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
   if(d.seller.approvalStatus==='approved'&&!d.membershipPaid&&!d.complimentaryAccess){
@@ -83,6 +160,8 @@ export function createOperations({api,onError}){
     billing.append(exception);
   }
   root.append(billing);
+  const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
+  if(sellerMandate)mandateReview(sellerMandate);
   const payment=card('Payment references','Only references issued for this seller are eligible for confirmation. The server independently verifies payment with Paystack.');
   payment.append(table(['Reference','Type','Amount','Status','Action'],
     (d.payments||[]).map(row=>[
@@ -275,7 +354,7 @@ export function createOperations({api,onError}){
  function printStatement(d){const w=window.open('','_blank');if(!w)throw Error('Allow popups to print the statement.');const doc=w.document;doc.title='Teyza seller statement';const style=doc.createElement('style');style.textContent='body{font:13px system-ui;padding:30px;color:#183c43}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}h1{font-size:28px}@media print{button{display:none}}';doc.head.append(style);const body=doc.body;body.append(el('h1','Teyza · Seller statement'),el('p',d.seller.shopName+' · '+d.seller.sellerUid),el('p',d.seller.ownerEmail),el('p','Generated '+new Date().toLocaleString('en-ZA')+' · Currency ZAR'),table(['Date','Description','Month','Reference','Charge','Payment','Balance'],statementRows(d.entries)),el('p','Closing balance: '+money(d.entries.at(-1)?.balanceCents||0)),el('p','Subscription ledger. Not a bank statement or a VAT tax invoice.'));const b=el('button','Print / save PDF');b.onclick=()=>w.print();body.append(b);w.focus();}
  function support(){const create=card('Log a received support request','Use this for a request received by email or another support channel. Notes saved here are internal; this screen does not send emails.'),f=el('form',undefined,'ops-form');sellerPicker(f);field(f,'Subject','subject');field(f,'Request details','message','textarea');submit(f,'Create support case',async fd=>{await request('ops_support_create',Object.fromEntries(fd));await refresh();message('Support case created.','success');});create.append(f);root.append(create);for(const t of tickets){const c=card(t.subject,t.ownerUid+' · '+new Date(t.createdAt).toLocaleString('en-ZA'));c.append(el('p',t.message),tag(t.status));const notes=el('div');c.append(button('View internal notes',async()=>{const r=await request('ops_support_detail',{ticketId:t.id});notes.replaceChildren(...r.notes.map(n=>el('p',new Date(n.createdAt).toLocaleString('en-ZA')+' · '+n.note)));if(!r.notes.length)notes.append(el('p','No internal notes yet.'));}),notes);const form=el('form',undefined,'ops-form');choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved'].map(v=>[v,v.replaceAll('_',' ')]),t.status);choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);field(form,'Internal note','note','textarea');submit(form,'Save case update',async fd=>{await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});await refresh();message('Support update saved. No email was sent.','success');});c.append(form);root.append(c);}if(!tickets.length)root.append(el('p','No support cases loaded.','footnote'));if(moreTickets)root.append(button('Load more cases',async()=>{const r=await request('ops_support_list',{after:moreTickets});tickets.push(...r.tickets);moreTickets=r.next;show();}));}
  function financeView(){root.append(el('p','Finance decisions require a manual review. Approval in principle does not create a loan agreement or release funds.','notice warning'));for(const a of finance){const c=card('Stock finance · '+money(a.amountCents),a.ownerUid+' · '+new Date(a.createdAt).toLocaleDateString('en-ZA'));c.append(tag(a.status),el('p',a.purpose),el('p','Contact: '+a.phone));if(a.reviewNote)c.append(el('p','Review note: '+a.reviewNote));if(!['approved_in_principle','declined'].includes(a.status)){const f=el('form',undefined,'ops-form');choice(f,'Review outcome','status',[['under_review','Under review'],['more_information','Request more information'],['approved_in_principle','Approve in principle'],['declined','Decline']],a.status==='enquiry_received'?'under_review':a.status);field(f,'Approved amount (R) — only for approval','approved','text',String((a.amountCents||0)/100),false);field(f,'Review note / conditions','note','textarea');check(f,'I completed the manual review and checked the seller’s approval and supporting information.','reviewConfirmed');submit(f,'Save finance review',async fd=>{if(!confirm('Save this stock finance review outcome? No funds will be disbursed.'))return;await request('ops_finance_decide',{path:a.path,expectedStatus:a.status,status:fd.get('status'),approvedAmountCents:fd.get('status')==='approved_in_principle'?cents(fd.get('approved')):0,note:fd.get('note'),reviewConfirmed:true});await refresh();message('Finance review saved. Funds have not been disbursed.','success');});c.append(f);}else c.append(el('p','Reviewed outcome · '+money(a.approvedAmountCents||0)+' · Not disbursed','footnote'));root.append(c);}if(!finance.length)root.append(el('p','No stock finance requests loaded.','footnote'));if(moreFinance)root.append(button('Load more finance requests',async()=>{const r=await request('ops_finance_queue',{after:moreFinance});finance.push(...r.requests);moreFinance=r.next;show();}));}
- async function refresh(){if(view==='field'){await fieldAdmin.refresh();show();return;}if(view==='users'){const page=await request('ops_users');users=page.users;usersNext=page.next;if(userSelected)userDetail=await request('ops_user_detail',{userUid:userSelected});}else if(view==='support'){const r=await request('ops_support_list');tickets=r.tickets;moreTickets=r.next;}else if(view==='finance'){const r=await request('ops_finance_queue');finance=r.requests;moreFinance=r.next;}else if(view==='products'){const r=await request('ops_catalogue_queue');catalogueQueue=r.submissions;catalogueLimited=r.limited;}else{const r=await request('ops_sellers');sellers=r.sellers;next=r.next;if(view==='billing'){const q=await request('ops_account_deletion_queue');closures=q.requests||[];closuresNext=q.nextAfter||null;}if(selected)detail=await request('ops_seller_detail',{sellerUid:selected.sellerUid});}show();}
+ async function refresh(){if(view==='field'){await fieldAdmin.refresh();show();return;}if(view==='users'){const page=await request('ops_users');users=page.users;usersNext=page.next;if(userSelected)userDetail=await request('ops_user_detail',{userUid:userSelected});}else if(view==='support'){const r=await request('ops_support_list');tickets=r.tickets;moreTickets=r.next;}else if(view==='finance'){const r=await request('ops_finance_queue');finance=r.requests;moreFinance=r.next;}else if(view==='products'){const r=await request('ops_catalogue_queue');catalogueQueue=r.submissions;catalogueLimited=r.limited;}else{const r=await request('ops_sellers');sellers=r.sellers;next=r.next;if(view==='billing'){const [q,m]=await Promise.all([request('ops_account_deletion_queue'),request('ops_mandate_queue')]);closures=q.requests||[];closuresNext=q.nextAfter||null;mandates=m.mandates||[];}if(selected)detail=await request('ops_seller_detail',{sellerUid:selected.sellerUid});}show();}
  async function navigate(v){
   if(!ready)return;
   fieldAdmin.hideSensitive();clearMandatePhoto();

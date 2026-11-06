@@ -132,7 +132,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
-  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,clock,rate});
+  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate});
   const agentWorkspace=fieldAgents.createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getPlacesKey,fetchImpl:addressFetch,clock,rate});
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
@@ -215,8 +215,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
-    if(action==='seller_mandate_submit')D.fail(410,
-      'New Teyza debit mandates are discontinued. Use the supported checkout to pay for a seller membership.');
+    // Mandate signing is not payment or permission to activate product selling.
+    // Seller Paystack membership checkout is retired. Legacy verification /
+    // cancellation remains available for existing contracts; Paystack order
+    // payments for physical shopper purchases remain completely independent.
+    if(action==='billing_checkout'||action==='promote_checkout')D.fail(410,
+      'New seller Paystack subscriptions are closed. Complete the R99 debit-order mandate on the Teyza website.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
     if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);

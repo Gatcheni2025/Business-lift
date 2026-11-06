@@ -115,7 +115,7 @@ void main(){
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('R49 first month · then R99/month'),findsOneWidget);
+    expect(find.text('R99 / month'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

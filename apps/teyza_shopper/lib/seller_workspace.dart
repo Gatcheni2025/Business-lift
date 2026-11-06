@@ -444,11 +444,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Active paid seller · manage membership':complimentaryAccess?'Temporary product access active':'Free shop · upgrade when adding products',
+      listingPaid?'Existing paid seller membership':complimentaryAccess?'Temporary product access active':'Free shop · membership status and mandate',
       ()=>openUpgrade()),
-    if(listingPaid)businessTile(Icons.campaign_outlined,'Promote your business · R29',
-      promotionActive?'Promotion active for seven days':'Increase local visibility for seven days',
-      ()=>openUpgrade(promote:true)),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
@@ -607,7 +604,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business membership active':complimentaryAccess?'Temporary product access active':'Free shop · upgrade to add products')),
+            label:Text(listingPaid?'Business membership active':complimentaryAccess?'Temporary product access active':'Membership status · R99 debit mandate')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
