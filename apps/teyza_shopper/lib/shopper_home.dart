@@ -1178,10 +1178,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   void openBasket()=>navigateToTab(2);
-  void openBellNotifications(){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());return;
+  Future<void> openBellNotifications() async{
+    // The inbox does not require a manually enabled phone-alert setting.
+    if(session.idToken==null){
+      try{await session.ensureShoppingIdentity();}
+      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Unable to open alerts: '+authMessage(e))));return;}
     }
+    if(!mounted)return;
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>SellerNotificationsPage(
       session:session,asShopper:true,onOpen:(target){
         if(target=='chat')openInbox();
@@ -1189,9 +1193,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       })));
   }
   void openInbox(){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to use chat.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register to use chat. Your delivery address stays saved.')));return;
     }
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
@@ -2207,9 +2212,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   void chatWithShop(Shop shop,{String? message}){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to message this shop.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register to contact this seller.')));return;
     }
     Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session,
       initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
@@ -2327,9 +2333,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> requestOrder() async {
     final shop=basketShop;if(shop==null||basketItems.isEmpty)return;
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to place orders.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register before checkout. Your address stays saved.')));return;
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
