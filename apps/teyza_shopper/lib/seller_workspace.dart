@@ -10,7 +10,6 @@ import 'account_deletion_page.dart';
 import 'seller_plan.dart';
 import 'wholesale_market.dart';
 import 'wholesale_connections.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -46,7 +45,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   List<SellerDraft> drafts=[];
   SellerFirestore? api;
   String? loadedUid,error,draftError,accessReference;
-  bool loading=false,busy=false,productsView=false,supplierIntroductionChecked=false;
+  bool loading=false,busy=false,productsView=false;
   int sellerTab=0;
   Map<String,String> productPhotos={};
   String? rangeStatus;
@@ -77,22 +76,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     if(state==AppLifecycleState.resumed){refreshActivity();startActivity();}else{activityWatch?.cancel();}
   }
-  Future<void> showWholesalersFirstTime(String uid)async{
-    try{
-      final prefs=await SharedPreferences.getInstance();
-      final key='teyza_spaza_first_wholesalers_'+uid;
-      if(prefs.getBool(key)==true||!mounted||widget.session.userId!=uid)return;
-      // Only after real approval. First-time login shows nearby suppliers.
-      await prefs.setBool(key,true);
-      if(!mounted||widget.session.userId!=uid||shop?.category!='spaza')return;
-      WidgetsBinding.instance.addPostFrameCallback((_){
-        if(!mounted||widget.session.userId!=uid)return;
-        Navigator.push(context,MaterialPageRoute(builder:(_)=>
-          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,
-            businessAddress:shop?.address??'')));
-      });
-    }catch(_){/* Dashboard remains usable if local preferences are unavailable. */}
-  }
   void startActivity(){activityWatch?.cancel();if(liveUpdates)activityWatch=Timer.periodic(const Duration(seconds:25),(_)=>refreshActivity());}
   Future<void> refreshActivity() async{
     if(!liveUpdates||activityLoading||shop==null||loadedUid!=widget.session.userId)return;
@@ -110,11 +93,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
-      if(shop?.category=='spaza'&&approvalStatus=='approved'&&hasLocation&&
-          !supplierIntroductionChecked&&widget.sellerMode&&widget.apiFactory==null){
-        supplierIntroductionChecked=true;
-        unawaited(showWholesalersFirstTime(uid));
-      }
       if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:Text(fresh.length==1?fresh.first['title']?.toString()??'New order update':'${fresh.length} new order updates'),
         action:SnackBarAction(label:'View orders',onPressed:()=>openDestination('orders'))));
@@ -455,10 +433,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'Approve connections, set real discounts and delivery fees, then chat',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
         WholesaleConnectionsPage(session:widget.session,api:widget.mobileApi)))),
-    if(shop?.category=='spaza')businessTile(Icons.warehouse_outlined,'Nearby wholesalers · Connect',
-      'Request a connection, chat, and unlock agreed stock discounts and delivery fees',
-      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-        WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??'')))),
     if(shop?.category=='spaza')businessTile(Icons.receipt_long_outlined,'My wholesale stock orders',
       'Follow up orders and deliveries from your suppliers',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
@@ -515,7 +489,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       serviceControls:SellerServiceControls(key:ValueKey('services-${widget.session.userId}'),session:widget.session,api:widget.mobileApi,
         settings:shopServices,enabled:servicesReady,onSaved:refreshActivity),
       onAdd:busy||draftError!=null?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
-      onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
+      onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+         WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
+       onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -565,10 +541,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
-          if(shop?.category=='spaza')IconButton(tooltip:'Buy wholesale stock',
-            onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-              WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))),
-            icon:const Icon(Icons.warehouse_outlined)),
           if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
             icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
