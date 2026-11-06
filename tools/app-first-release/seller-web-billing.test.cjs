@@ -37,15 +37,32 @@ test('Client refuses wrong checkout host and non-Teyza payment references',async
  assert.equal(validReceipt('TZP-'+ 'f'.repeat(26)),false);
  assert.equal(validReceipt('TZM-a'),false);
 });
-test('Website includes a consent-gated, authenticated payment form with return verification',()=>{
+test('Website seller membership is a debit-order mandate form, not Paystack checkout',()=>{
  const html=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
- const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
- for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple','webTerms','webCheckout','webConfirm','webRefresh','webManage']){
-  assert(html.includes('id="'+id+'"'),'Missing '+id);
+ const js=fs.readFileSync(path.join(web,'js/seller-debit-order.mjs'),'utf8');
+ for(const id of ['teyza-web-membership','mandateEmailForm','mandateGoogle','mandateApple',
+   'mandateBank','mandateBranch','mandateAccountNumber','mandateDate','mandateTerms',
+   'mandateConsent','mandateIdentityConsent','mandateSign','mandateStatus']){
+  assert(html.includes('id="'+id+'"'),'Missing mandate form '+id);
  }
- assert(html.includes('seller-web-billing.mjs'));
- assert(js.includes('billing_checkout')&&js.includes('billing_confirm')&&js.includes('seller_summary'));
- assert(js.includes('getIdToken()')&&js.includes('checkoutChannel:\'web\''));
+ assert(html.includes('seller-debit-order.mjs'));
+ assert(!html.includes('src="/js/seller-web-billing.mjs"'));
+ assert(!html.includes('Pay securely with Paystack'));
+ assert(js.includes("seller_mandate_submit")&&js.includes("seller_mandate_status"));
+ assert(js.includes('getIdToken()')&&js.includes('9900'));
+ assert(!js.includes("billing_checkout")&&!js.includes("promote_checkout"));
  assert(!html.includes('sk_live_')&&!js.includes('sk_live_'));
  assert(!html.includes('sk_test_')&&!js.includes('sk_test_'));
+});
+test('Bank branch codes must come from the backend list and monthly consent cannot be bypassed',async()=>{
+ const {bankBranch,canSignMandate,mandateAmountCents}=await import(path.join(web,'js/seller-debit-order.mjs'));
+ assert.equal(mandateAmountCents,9900);
+ assert.equal(bankBranch([{name:'FNB',branchCode:'250655'}],'FNB'),'250655');
+ const good={config:{termsVersion:'teyza-membership-v1'},identity:{evidenceId:'current',kind:'id'},
+   consent:true,idConsent:true,account:'12345678901',bank:'FNB',
+   firstName:'Test',surname:'Owner',holder:'Test Owner',firstDate:'2026-12-01'};
+ assert(canSignMandate(good));
+ assert(!canSignMandate({...good,consent:false}));
+ assert(!canSignMandate({...good,identity:null}));
+ assert(!canSignMandate({...good,account:'123'}));
 });
