@@ -1,5 +1,6 @@
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
+import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
@@ -65,6 +66,15 @@ export function createOperations({api,onError}){
      el('p','Consent text: '+info.mandate.terms),
      el('p','Sensitive details are displayed only to authorised administrators and this view is audited.',
        'notice warning'));
+   const exportedSellerUid=info.sellerUid,exportedId=info.mandate.mandateId;
+   const download=button('Download confidential PDF for Netcash review',async()=>{
+     if(!confirm('This PDF contains full bank and identity details. Save and transmit only through an approved secure Netcash channel. It is NOT bank-authenticated. Continue?'))return;
+     const exportData=await request('ops_mandate_export',{
+       sellerUid:exportedSellerUid,mandateId:exportedId});
+     downloadMandateRequestPdf(exportData);
+     message('Confidential mandate request downloaded. Obtain the provider-approved mandate and bank authentication before collecting.','success');
+   },'primary');
+   content.append(download,el('p','Includes seller consent, shop address, bank details and R99 dates. This is a pending request, not evidence of completed DebiCheck authentication.','footnote'));
    const close=el('button','Close and clear details','button primary');
    close.type='button';close.onclick=()=>dialog.close();
    content.append(close);dialog.append(content);
@@ -109,7 +119,7 @@ export function createOperations({api,onError}){
  }
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));account.append(button('Open approval desk',()=>navigate('approvals')));root.append(account);sellerDocuments();
   // Seller ID approval is independent from Paystack purchase confirmation.
-  const billing=card('Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
+  const billing=card('Legacy Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
   billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Complimentary temporary access':'Not paid'));
   billing.append(el('p','Mode: '+(d.paystackMode==='live'?'Live Paystack':'Paystack TEST — not real money')));
@@ -130,7 +140,7 @@ export function createOperations({api,onError}){
       await choose(selected);
     }));
   }
-  billing.append(el('p','R49 introductory first month · R99 monthly renewal · R29 optional seven-day promotion. Seller checkout is separate from this administrator screen.','footnote'));
+  billing.append(el('p','Existing Paystack memberships are displayed only for reconciliation and cancellation. New sellers must complete R99 debit-order mandate requests and provider bank authentication.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
   if(d.seller.approvalStatus==='approved'&&!d.membershipPaid&&!d.complimentaryAccess){
