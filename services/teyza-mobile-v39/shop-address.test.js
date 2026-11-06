@@ -54,3 +54,29 @@ test('Short queries do not call Google, invalid sessions are rejected and outage
  await assert.rejects(api.execute('owner','seller_address_suggest',{query:'12 Main',sessionToken:'reuse'}),e=>e.status===422);
  const unavailable=fixture({fail:true});await assert.rejects(pick(unavailable.api),e=>e.status===503&&!e.message.includes('private-server-key'));
 });
+test('A Google business claim is signed for one user, pre-fills a full address, and is never proof of ownership',async()=>{
+ const {api,requests,advance}=fixture({place:{...full,displayName:{text:'Corner Shop'},businessStatus:'OPERATIONAL'}});
+ const result=await api.execute('owner','seller_claim_suggest',{query:'Corner Shop Durban',sessionToken:token});
+ assert.deepEqual(JSON.parse(requests[0].options.body).includedPrimaryTypes,['establishment']);
+ const selected=await api.execute('owner','seller_claim_select',{predictionToken:result.suggestions[0].predictionToken});
+ assert.equal(selected.claim.name,'Corner Shop');assert.equal(api.claim('owner',selected.claim.claimSelection),full.id);
+ assert.equal(api.location('owner',{addressSelection:selected.claim.addressSelection.addressSelection}).address,full.formattedAddress);
+ assert.throws(()=>api.claim('another',selected.claim.claimSelection),e=>e.status===422);
+ assert.throws(()=>api.claim('owner',selected.claim.claimSelection+'x'),e=>e.status===422);
+ advance(31*60000);assert.throws(()=>api.claim('owner',selected.claim.claimSelection),e=>e.status===422);
+});
+test('A business without a precise street address keeps its claim and asks for an address separately',async()=>{
+ const incomplete={...full,displayName:{text:'Shop'},types:['store'],addressComponents:full.addressComponents.filter(x=>!x.types.includes('street_number'))};
+ const {api}=fixture({place:incomplete});
+ const result=await api.execute('owner','seller_claim_suggest',{query:'Shop Durban',sessionToken:token});
+ const selection=await api.execute('owner','seller_claim_select',{predictionToken:result.suggestions[0].predictionToken});
+ assert.equal(selection.claim.addressSelection,null);assert.equal(api.claim('owner',selection.claim.claimSelection),full.id);
+});
+test('A listing opened from discovery is fetched from Google and bound to the authenticated owner',async()=>{
+ const {api,requests}=fixture({place:{...full,displayName:{text:'Corner Shop'}}});
+ const selected=await api.execute('owner','seller_claim_by_id',{placeId:full.id,name:'Forged name'});
+ assert.equal(selected.claim.name,'Corner Shop');assert.equal(api.claim('owner',selected.claim.claimSelection),full.id);
+ assert.equal(requests.length,1);assert(requests[0].url.includes('/places/'+full.id));
+ await assert.rejects(api.execute('owner','seller_claim_by_id',{placeId:'../bad'}),e=>e.status===422);
+ assert.throws(()=>api.claim('another',selected.claim.claimSelection),e=>e.status===422);
+});

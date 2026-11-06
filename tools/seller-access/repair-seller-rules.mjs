@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 
 // Mask strings/comments while preserving source offsets. Never rewrite a full
 // project's rules from a bundled snapshot: the input must be its current rules.
-function mask(source){
+export function mask(source){
   const chars=source.split('');let mode='',quote='';
   for(let i=0;i<source.length;i++){
     const c=source[i],n=source[i+1];
@@ -26,7 +26,7 @@ function mask(source){
   if(mode==='block'||mode==='string')throw Error('Unclosed rules comment or string. No output written.');
   return chars.join('');
 }
-function endBlock(clean,start){
+export function endBlock(clean,start){
   let depth=0;
   for(let i=start;i<clean.length;i++){
     if(clean[i]==='{')depth++;
@@ -34,7 +34,7 @@ function endBlock(clean,start){
   }
   throw Error('Unbalanced rules braces. No output written.');
 }
-function rootBlock(clean){
+export function rootBlock(clean){
   if(!/\bservice\s+cloud\.firestore\s*\{/.test(clean))throw Error('Expected Cloud Firestore rules, not Storage rules.');
   const roots=[...clean.matchAll(/\bmatch\s+\/databases\/\{([A-Za-z_]\w*)\}\/documents\s*\{/g)];
   if(roots.length!==1)throw Error('Expected exactly one Firestore database match. No output written.');

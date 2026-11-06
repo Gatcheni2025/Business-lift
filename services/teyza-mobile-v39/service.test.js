@@ -488,13 +488,14 @@ test('Catalogue selection binds the actor and ignores submitted names, photos, o
  assert.equal(publicProduct.priceCents,3000);assert.equal(publicProduct.imageUrl,catalogue.photoUrl('milk'));
  assert.equal(db.records.has('teyzaDraftProducts/victim/items/'+id),false);
 });
-test('Pending shops save privately and activation publishes only selected names/photos on basic plans',async()=>{
+test('Pending shops cannot add products; approval and product access publish selected items',async()=>{
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending'}});
  const input={products:[{templateId:'white-bread-700-g',priceCents:1800,stockQty:2}]};
- assert.equal((await service.execute(owner,'catalogue_add',input)).publication,'private');
- assert(!db.records.get('teyzaPublicShops/seller1').productHighlights.some(p=>p.id==='catalog_white-bread-700-g'));
+ await rejects(service.execute(owner,'catalogue_add',input),403);
+ assert(!db.records.has('teyzaDraftProducts/seller1/items/catalog_white-bread-700-g'));
  db.records.set('teyzaSellerAccounts/seller1',seller);
  db.records.set('teyzaPublicShops/seller1',{...shop,catalogueEnabled:false});
+ await service.execute(owner,'catalogue_add',input);
  await service.synchronizeCatalogue('seller1');
  const publicShop=db.records.get('teyzaPublicShops/seller1');
  assert.equal(publicShop.products.length,0);
@@ -578,6 +579,41 @@ async function approve(service,db,uid='buyer1'){
  await service.execute(reviewer,'verification_read',decision);await service.execute(reviewer,'seller_identity_read',decision);
  return service.execute(reviewer,'admin_seller_review',decision);
 }
+test('Google claim requires explicit reviewer confirmation, links the approved place and queues only opted-in WhatsApp',async()=>{
+ const fetchBusiness=async(url)=>({ok:true,json:async()=>url.includes('places:autocomplete')?
+  {suggestions:[{placePrediction:{placeId:addressPlace.id,text:{text:'New Local Shop, Durban'}}}]}:
+  {...structuredClone(addressPlace),displayName:{text:'New Local Shop'},businessStatus:'OPERATIONAL'}});
+ const {service,db}=fixture({}, {getAuthUser:async()=>phoneUser,addressFetch:fetchBusiness});
+ const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
+ const selected=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
+ await service.execute(newOwner,'seller_register',{...registration,locationConsent:true,whatsappConsent:true,
+  googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection});
+ await service.execute(newOwner,'seller_identity_submit',personal);await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await service.execute(newOwner,'seller_onboarding_complete');
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const v=db.records.get('teyzaMobileVerification/buyer1'),id=db.records.get('teyzaSellerIdentity/buyer1');
+ const decision={sellerUid:'buyer1',submissionId:v.submissionId,evidenceId:id.evidenceId,status:'approved'};
+ assert.equal((await service.execute(reviewer,'admin_seller_queue')).sellers[0].googlePlaceId,addressPlace.id);
+ await service.execute(reviewer,'verification_read',decision);await service.execute(reviewer,'seller_identity_read',decision);
+ await rejects(service.execute(reviewer,'admin_seller_review',decision),409);
+ const result=await service.execute(reviewer,'admin_seller_review',{...decision,claimConfirmed:true});
+ assert.equal(result.whatsappStatus,'queued');assert.equal(db.records.get('teyzaShopClaims/buyer1').status,'approved');
+ assert.equal(db.records.get('teyzaWhatsAppApprovalOutbox/'+v.submissionId).status,'queued');
+ assert.equal((await service.publicDirectory()).entries.find(x=>x.id==='buyer1').googlePlaceId,addressPlace.id);
+ assert.equal([...db.records].filter(([k])=>k.startsWith('teyzaClaimedPlaces/')).length,1);
+});
+test('A previously approved Google claim cannot be taken by another owner',async()=>{
+ const fetchBusiness=async(url)=>({ok:true,json:async()=>url.includes('places:autocomplete')?
+  {suggestions:[{placePrediction:{placeId:addressPlace.id,text:{text:'New Local Shop, Durban'}}}]}:
+  {...structuredClone(addressPlace),displayName:{text:'New Local Shop'}}});
+ const crypto=require('node:crypto'),hash=crypto.createHash('sha256').update(addressPlace.id).digest('hex');
+ const {service,db}=fixture({['teyzaClaimedPlaces/'+hash]:{sellerUid:'differentSeller',placeId:addressPlace.id}}, {addressFetch:fetchBusiness});
+ const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
+ const claim=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
+ await rejects(service.execute(newOwner,'seller_register',{...registration,locationConsent:true,googleClaimSelection:claim.claimSelection,
+  addressSelection:claim.addressSelection.addressSelection}),409);
+ assert(!db.records.has('teyzaSellerAccounts/buyer1'));
+});
 test('A stale active flag cannot expose an unapproved shop, accept an order or open customer chat',async()=>{
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,approvalStatus:'pending'},
   'teyzaPublicShops/seller1':{...shop,sellingEnabled:true,identityVerified:true,approvalStatus:'approved'}});
@@ -596,6 +632,10 @@ const paidForTest=async(service,db)=>{
  db.records.set('teyzaSellerAccounts/buyer1',{...db.records.get('teyzaSellerAccounts/buyer1'),
    listingPlan:'basic'});
 };
+function seedHistoricalDraft(db,uid,templateId='milk-2-l'){
+ const row=catalogue.selection([{templateId,priceCents:3000,stockQty:4}])[0];
+ db.records.set('teyzaDraftProducts/'+uid+'/items/'+row.id,{...row,ownerUid:uid});
+}
 test('Approval before completion stays private, then completing the approved setup publishes it',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);await approve(service,db);
  assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'approved');
@@ -608,7 +648,7 @@ test('Approval recreates a missing listing with the prepared products, services,
  await service.execute({...newOwner,email_verified:true},'save_services',services);
  await service.execute(newOwner,'seller_location_save',{...await chosen(service,newOwner),consent:true});
  await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
- await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ seedHistoricalDraft(db,'buyer1'); // A private draft from an older app must not be lost.
  await service.execute(newOwner,'seller_onboarding_complete');db.records.delete('teyzaPublicShops/buyer1');
  await approve(service,db);
  const listing=(await service.publicDirectory()).entries.find(s=>s.id==='buyer1');
@@ -644,8 +684,8 @@ test('An unrelated administrator hold cannot be lifted by replacing evidence or 
 });
 test('Pausing for a new owner review preserves approved product photos and the reserved stock',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
- await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
+ await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
  const order=await service.execute({...buyer,uid:'customer2'},'order_request',{shopId:'buyer1',requestId:'reserved',mode:'collection',phone:'0712345678',items:[{id:'catalog_milk-2-l',quantity:1}]});
  await service.execute({...newOwner,email_verified:true},'order_update',{orderId:order.id,status:'confirmed'});
  const ref='teyzaPublicShops/buyer1',published=db.records.get(ref),url='https://example.test/approved-product.jpg';
@@ -666,13 +706,12 @@ test('Historical publication repair is bounded, idempotent and never approves pe
  for(let n=0;n<101;n++){const uid='pending'+String(n).padStart(3,'0');assert.equal(db.records.get('teyzaSellerAccounts/'+uid).approvalStatus,'pending');assert.notEqual(db.records.get('teyzaPublicShops/'+uid).status,'active');}
  assert.deepEqual((await service.publicDirectory()).entries.map(s=>s.id),['seller1']);
 });
-test('Free registration permits private drafts but never bypasses identity or publication gates',async()=>{
+test('Free registration cannot add products or bypass identity and publication gates',async()=>{
  const {service,db}=onboardFixture(null);
  await register(service,newOwner,registration);
- const result=await service.execute(newOwner,'catalogue_add',{
-  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
- assert.equal(result.publication,'private');
- assert(db.records.has('teyzaDraftProducts/buyer1/items/catalog_milk-2-l'));
+ await rejects(service.execute(newOwner,'catalogue_add',{
+  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]}),403);
+ assert(!db.records.has('teyzaDraftProducts/buyer1/items/catalog_milk-2-l'));
  assert(!db.records.has('teyzaPublicShops/buyer1'));
  await rejects(service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true,status:'active'}),409);
  assert(!db.records.has('teyzaPublicShops/buyer1'));
@@ -690,7 +729,7 @@ test('Completion requires real linked phone, document and selfie; forged complet
 });
 test('Paid products publish on seller verification without a second approval',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
- await service.execute(newOwner,'catalogue_add',{products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
+ seedHistoricalDraft(db,'buyer1'); // Existing data from before this rule remains recoverable.
  const result=await service.execute(newOwner,'seller_onboarding_complete',{ownerUid:'seller1',catalogueEnabled:true,approvalStatus:'approved'});
  let shop=db.records.get('teyzaPublicShops/buyer1');assert.equal(result.sellingStatus,'pending_approval');assert.equal(shop.sellerUid,'buyer1');
  assert.equal(shop.identityVerified,false);assert.equal(shop.catalogueEnabled,false);assert.equal(shop.status,'pending_review');
@@ -874,19 +913,13 @@ test('New business registration is free and no trial is activated',async()=>{
  assert.equal(legacy.db.records.get('teyzaSellerAccounts/seller1').listingPlan,'free');
  assert.equal(legacy.db.records.get('teyzaSellerAccounts/seller1').trialStartedAt,undefined);
 });
-test('Unpaid sellers can prepare private products but cannot publish them before Paystack',async()=>{
+test('Approved unpaid sellers need product access before adding items',async()=>{
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,listingPlan:'free'}});
- const draft=await service.execute(owner,'catalogue_add',{
-  products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]});
- assert.equal(draft.publication,'private');
- assert.equal(db.records.has('teyzaDraftProducts/seller1/items/catalog_milk-2-l'),true);
- assert.equal((await service.execute(owner,'catalogue_submit')).status,'waiting_for_access');
- await rejects(service.execute({...buyer,teyzaAdmin:true,auth_time:1000},
-  'catalogue_review',{sellerUid:'seller1'}),409);
- assert.equal(db.records.get('teyzaCatalogueSubmissions/seller1').status,'waiting_for_access');
- const pub=await service.publicDirectory();
- const entry=pub.entries.find(x=>x.id==='seller1');
- assert(!entry||!entry.products.some(x=>x.id==='catalog_milk-2-l'));
+ const input={products:[{templateId:'milk-2-l',priceCents:3000,stockQty:4}]};
+ await rejects(service.execute(owner,'catalogue_add',input),403);
+ assert.equal(db.records.has('teyzaDraftProducts/seller1/items/catalog_milk-2-l'),false);
+ db.records.set('teyzaSellerAccounts/seller1',seller);
+ assert.equal((await service.execute(owner,'catalogue_add',input)).publication,'live');
 });
 test('Custom products publish automatically with a paid plan or a recorded temporary exception',async()=>{
  const draft={ownerUid:'seller1',status:'draft',name:'Local jam',category:'Groceries',description:'Small jar',priceCents:2300,stockQty:6};

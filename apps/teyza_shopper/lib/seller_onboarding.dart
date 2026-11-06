@@ -85,6 +85,14 @@ class _OnboardingState extends State<SellerOnboardingPage> {
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPhonePage(session:widget.session,phone:progress['phone']?.toString()??widget.shop.phone)));
     if(mounted&&!changed)load();
   }
+  Future<void> setWhatsApp(bool enabled) async {
+    if(busy||changed)return;setState((){busy=true;error=null;});
+    try{await api.call('seller_whatsapp_preferences',{'enabled':enabled});
+      if(mounted&&uid==widget.session.userId)setState((){progress={...progress,'whatsappOptedIn':enabled};
+        message=enabled?'WhatsApp approval updates enabled.':'WhatsApp approval updates disabled.';});
+    }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
   Future<void> location() async {
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerLocationPage(session:widget.session,api:api,shopAddress:widget.shop.address)));
     if(mounted&&!changed)load();
@@ -157,7 +165,9 @@ class _OnboardingState extends State<SellerOnboardingPage> {
           card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('3','Mobile number & OTP',phoneDone),const SizedBox(height:12),
             Text(progress['phone']?.toString()??widget.shop.phone,style:const TextStyle(fontSize:18,fontWeight:FontWeight.w700)),const SizedBox(height:8),
             const Text('Confirm that you own this number using the SMS code. Your current account and shop stay together.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),const SizedBox(height:14),
-            OutlinedButton.icon(onPressed:busy?null:phone,icon:const Icon(Icons.sms_outlined),label:Text(phoneDone?'Verify mobile again':'Verify mobile number'))])),
+            OutlinedButton.icon(onPressed:busy?null:phone,icon:const Icon(Icons.sms_outlined),label:Text(phoneDone?'Verify mobile again':'Verify mobile number')),
+            CheckboxListTile(contentPadding:EdgeInsets.zero,value:progress['whatsappOptedIn']==true,onChanged:busy||loading?null:(v)=>setWhatsApp(v==true),
+              title:const Text('Send my approval update on WhatsApp'),subtitle:const Text('Optional. We use the registered mobile number for the approval update and getting-started link.'))])),
           card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             heading('+','Shop-front photo',progress['shopFront'] is Map),const SizedBox(height:12),
             const Text('Help customers recognise your entrance. This photo appears on your published shop listing; your identity documents stay private.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),
@@ -170,7 +180,7 @@ class _OnboardingState extends State<SellerOnboardingPage> {
           if(progress['moderationBlocked']==true)const Padding(padding:EdgeInsets.only(bottom:16),child:Text('An administrator needs to review your registration before selling can resume.',style:TextStyle(color:Color(0xFF9A3412)))),
           if(progress['sellingStatus']=='pending_approval')const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your setup is complete and awaiting Teyza approval.')),
           FilledButton.icon(onPressed:busy||loading||!allDone||progress['moderationBlocked']==true?null:complete,icon:const Icon(Icons.storefront_outlined),label:Text(busy?'Please wait…':'Finish setup & submit for review')),
-          const SizedBox(height:12),const Text('The verified badge is added after an administrator checks your documents and selfie. You can prepare private products at any time.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF6C7880),fontSize:12,height:1.5))
+          const SizedBox(height:12),const Text('An administrator reviews your documents and selfie first. Once approved, you can activate product access and add products.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF6C7880),fontSize:12,height:1.5))
         ]
       ])));
   }

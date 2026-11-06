@@ -16,7 +16,7 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("default: false", self.workflow)
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true", self.workflow)
         self.assertIn("if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true", self.workflow)
-        self.assertIn("required_exact={'version':'3.24.0'", self.workflow)
+        self.assertIn("required_exact={'version':'3.25.0'", self.workflow)
         self.assertIn("automaticProductPublication", self.workflow)
         self.assertIn("adminComplimentaryAccess", self.workflow)
         self.assertIn("'agentCommissionEnabled'", self.workflow)

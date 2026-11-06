@@ -47,7 +47,15 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     const account=await read('teyzaSellerAccounts/'+uid);
     D.seller(account,uid);
     if(account.deletionPending===true)D.fail(409,'Your shop account is being closed.');
+    if(account.approvalStatus!=='approved')D.fail(403,'Your seller registration must be approved before you can pay for product access.');
     const billing=await read('teyzaBilling/'+uid),now=clock();
+    const setup=await read('teyzaSellerOnboarding/'+uid);
+    if(setup?.requiredVersion===2){
+      const [verification,shop]=await Promise.all([read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid)]);
+      const state=P.state(uid,account,setup,verification,shop,billing,now);
+      if(!state.ready||!state.approved||state.status==='suspended')
+       D.fail(409,'Complete seller verification and resolve any shop hold before paying for product access.');
+    }
     const isPromo=kind==='promotion';
     if(isPromo&&!P.entitled(uid,account,billing,now))D.fail(403,'Upgrade your seller membership before promoting your business.');
     if(!isPromo&&P.entitled(uid,account,billing,now))D.fail(409,'Your seller membership is already paid.');

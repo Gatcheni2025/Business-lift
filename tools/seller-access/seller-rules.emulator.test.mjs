@@ -42,8 +42,13 @@ test('Owners may edit profile details but cannot grant approval, activation, cat
     await assertFails(updateDoc(ref,{...data,updatedAt:serverTimestamp()}));
   await assertFails(setDoc(doc(own,'teyzaPublicShops','owner1'),{status:'active'}));
 });
-test('Product create/edit/delete stays owner-only, private and schema-validated',async()=>{
+test('Product writes require approval and paid or complimentary access; owner can still remove a draft',async()=>{
   const own=db('owner1'),ref=doc(own,'teyzaDraftProducts','owner1','items','new-bread');
+  await assertFails(setDoc(ref,product('owner1')));
+  await env.withSecurityRulesDisabled(async context=>{
+    await updateDoc(doc(context.firestore(),'teyzaSellerAccounts','owner1'),{approvalStatus:'approved',listingPlan:'basic'});
+    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',status:'paid',paymentEnvironment:'live',paidUntil:Date.now()+86400000});
+  });
   await assertSucceeds(setDoc(ref,product('owner1')));
   await assertSucceeds(updateDoc(ref,{stockQty:8,updatedAt:serverTimestamp()}));
   await assertFails(updateDoc(ref,{ownerUid:'owner2',updatedAt:serverTimestamp()}));
@@ -51,6 +56,20 @@ test('Product create/edit/delete stays owner-only, private and schema-validated'
   await assertFails(updateDoc(ref,{stockQty:-1,updatedAt:serverTimestamp()}));
   await assertFails(updateDoc(ref,{createdAt:Timestamp.fromMillis(0),updatedAt:serverTimestamp()}));
   await assertFails(deleteDoc(doc(db('owner2'),'teyzaDraftProducts','owner1','items','new-bread')));
+  await assertSucceeds(deleteDoc(ref));
+  await env.withSecurityRulesDisabled(async context=>{
+    await updateDoc(doc(context.firestore(),'teyzaBilling','owner1'),{paymentEnvironment:'test'});
+  });
+  await assertFails(setDoc(ref,product('owner1')));
+  await env.withSecurityRulesDisabled(async context=>{
+    await setDoc(doc(context.firestore(),'teyzaBilling','owner1'),{ownerUid:'owner1',adminComplimentaryStatus:'active',
+      adminComplimentaryReason:'Approved pilot access',adminComplimentaryBy:'reviewer1',adminComplimentaryUntil:Date.now()+86400000});
+  });
+  await assertSucceeds(setDoc(ref,product('owner1')));
+  await env.withSecurityRulesDisabled(async context=>{
+    await updateDoc(doc(context.firestore(),'teyzaSellerAccounts','owner1'),{approvalStatus:'pending'});
+  });
+  await assertFails(updateDoc(ref,{stockQty:3,updatedAt:serverTimestamp()}));
   await assertSucceeds(deleteDoc(ref));
 });
 test('A missing own account returns a missing document; drafts still require registered ownership',async()=>{
@@ -61,11 +80,11 @@ test('A missing own account returns a missing document; drafts still require reg
   await assertSucceeds(getDocs(collection(own,'teyzaDraftProducts','newowner','items')));
 });
 
-test('Unverified email accounts can register and prepare privately while identity evidence and completion stay server-only',async()=>{
+test('Unverified email accounts can register but cannot add products before approval',async()=>{
   const own=env.authenticatedContext('phoneowner',{email:'phoneowner@example.test',email_verified:false}).firestore();
   await assertSucceeds(setDoc(doc(own,'teyzaSellerAccounts','phoneowner'),{...account('phoneowner'),createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
-  await assertSucceeds(setDoc(doc(own,'teyzaDraftProducts','phoneowner','items','bread'),product('phoneowner')));
-  for(const name of ['teyzaSellerIdentity','teyzaSellerOnboarding','teyzaMobileVerification']){
+  await assertFails(setDoc(doc(own,'teyzaDraftProducts','phoneowner','items','bread'),product('phoneowner')));
+  for(const name of ['teyzaSellerIdentity','teyzaSellerOnboarding','teyzaMobileVerification','teyzaShopClaims','teyzaClaimedPlaces','teyzaWhatsAppPreferences','teyzaWhatsAppApprovalOutbox']){
     await assertFails(getDoc(doc(own,name,'phoneowner')));
     await assertFails(setDoc(doc(own,name,'phoneowner'),{sellingStatus:'active',phoneVerified:true,status:'approved'}));
   }

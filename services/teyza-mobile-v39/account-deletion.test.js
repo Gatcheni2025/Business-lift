@@ -121,6 +121,21 @@ test('seller deletion suspends public shop and flags billing and mandate review'
   assert.equal(db.records.get('teyzaBilling/seller1').status,'closure_review');
   assert.equal(db.records.get('teyzaAccountDeletionRequests/seller1').needsBillingReview,true);
 });
+test('Closing a seller account removes WhatsApp consent and releases only their own Google claim',async()=>{
+  const crypto=require('node:crypto'),placeId='google-place-123',key=crypto.createHash('sha256').update(placeId).digest('hex');
+  for(const mappedOwner of ['seller1','anotherSeller']){
+   const {service,db}=instance({
+    'teyzaSellerAccounts/seller1':{uid:'seller1',approvalStatus:'approved',listingStatus:'active'},
+    'teyzaShopClaims/seller1':{ownerUid:'seller1',placeId,status:'approved'},
+    ['teyzaClaimedPlaces/'+key]:{sellerUid:mappedOwner,placeId},
+    'teyzaWhatsAppPreferences/seller1':{ownerUid:'seller1',optedIn:true,phone:'+27712345678'}
+   });
+   await service.execute(seller,'account_deletion_request',{confirmation:'DELETE'});
+   assert.equal(db.records.has('teyzaWhatsAppPreferences/seller1'),false);
+   assert.equal(db.records.has('teyzaShopClaims/seller1'),false);
+   assert.equal(db.records.has('teyzaClaimedPlaces/'+key),mappedOwner!=='seller1');
+  }
+});
 
 test('Legacy deletion requests are blocked when status is checked and retry is idempotent',async()=>{
  const {service,db,deleted,disabled,revoked}=instance({

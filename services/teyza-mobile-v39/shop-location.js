@@ -17,7 +17,12 @@ function createShopLocation({db,clock,rate,synchronize,shopAddress}){
   const location=shopAddress.location(uid,data);
   await rate(uid,'shop-location',20,3600000);
   await db.runTransaction(async tx=>{
-   const current=await tx.get(accountRef);D.seller(current.exists?current.data():null,uid);
+   const [current,prior]=await Promise.all([tx.get(accountRef),tx.get(locationRef)]);D.seller(current.exists?current.data():null,uid);
+   const old=prior.exists?prior.data():null;
+   // Preserve the reviewed business link only when the owner reselects the same address.
+   if(old?.ownerUid===uid&&old.googleClaimApproved===true&&old.address===location.address){
+    location.googleClaimApproved=true;location.googleClaimPlaceId=old.googleClaimPlaceId;
+   }
    tx.set(locationRef,location);
    // These are existing business-profile fields; approval and category are never accepted from the client.
    tx.update(accountRef,{address:location.address,updatedAt:new Date(clock())});

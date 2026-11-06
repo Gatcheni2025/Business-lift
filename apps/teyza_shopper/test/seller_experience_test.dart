@@ -37,6 +37,11 @@ class ExperienceApi extends TeyzaMobileApi{
   return switch(action){
    'seller_address_suggest'=>{'suggestions':[{'placeId':addressFixture['placeId'],'label':addressFixture['address'],'predictionToken':'prediction-receipt'}]},
    'seller_address_select'=>{'selection':addressFixture},
+   'seller_claim_suggest'=>{'suggestions':[{'label':'Neighbourhood Market, Durban','predictionToken':'claim-prediction'}]},
+   'seller_claim_select'=>{'claim':{'name':'Neighbourhood Market','displayAddress':addressFixture['address'],
+    'claimSelection':'claim-receipt','addressSelection':addressFixture}},
+   'seller_claim_by_id'=>{'claim':{'name':'Neighbourhood Market','displayAddress':addressFixture['address'],
+    'claimSelection':'claim-receipt','addressSelection':addressFixture}},
    'notification_list'=>{'notifications':[{'id':'notice','title':'New order request','body':'Open your orders to respond.','read':false,'target':'orders'}]},
    'admin_seller_queue'=>{'sellers':[{'sellerUid':'seller1','submissionId':'submission1','shopName':'Durban Corner Shop','category':'spaza',
     'address':'KwaMashu, Durban','phone':'0712345678','ownerEmail':'owner@example.test','approvalStatus':'pending','listingStatus':'not_listed'}]},
@@ -122,6 +127,35 @@ void main(){
   expect(api.calls.any((r)=>r.action=='seller_plan_select'),false,
     reason:'Registration must never activate a trial or subscription');
   expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('A Google business claim pre-fills the shop and address but still requires seller verification',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('Already on Google Maps? Find your business'));
+  final search=find.byKey(const ValueKey('seller-claim-search'));await tester.enterText(search,'Neighbourhood Market');
+  tester.testTextInput.hide();await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
+  await visibleTap(tester,find.widgetWithText(ListTile,'Neighbourhood Market, Durban'));
+  expect(find.text('Shop address from Google Maps'),findsOneWidget);
+  final phone=find.widgetWithText(TextFormField,'Contact number');await tester.ensureVisible(phone);await tester.enterText(phone,'0712345678');
+  tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I am authorised to represent this business, and shoppers may see its address and map location.'));
+  await visibleTap(tester,find.text('Send my approval update and getting-started link on WhatsApp'));
+  await visibleTap(tester,find.text('Continue to seller verification'));
+  final request=api.calls.firstWhere((r)=>r.action=='seller_register');
+  expect(request.data['shopName'],'Neighbourhood Market');expect(request.data['googleClaimSelection'],'claim-receipt');
+  expect(request.data['addressSelection'],'address-receipt');expect(request.data['whatsappConsent'],true);
+  expect(find.text('ID or passport'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Registration opened from a Google listing resolves it server-side before prefilling',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,initialGooglePlaceId:'place-123')));
+  await tester.pumpAndSettle();
+  expect(api.calls.first.action,'seller_claim_by_id');expect(api.calls.first.data['placeId'],'place-123');
+  expect(find.text('Google Maps: Neighbourhood Market'),findsOneWidget);
+  expect(find.text('Shop address from Google Maps'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{

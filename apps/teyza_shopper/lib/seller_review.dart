@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -15,11 +16,11 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
   List<Map<String,dynamic>> sellers=[];
   Map<String,dynamic>? selected,identityDetails;Uint8List? photo,document;
   final note=TextEditingController();
-  String? error,next;bool busy=false,reviewed=false;int generation=0;
+  String? error,next;bool busy=false,reviewed=false,claimReviewed=false;int generation=0;
   @override void initState(){super.initState();uid=widget.session.userId;WidgetsBinding.instance.addObserver(this);widget.session.addListener(changed);load();}
   @override void dispose(){generation++;photo=null;document=null;identityDetails=null;note.dispose();widget.session.removeListener(changed);WidgetsBinding.instance.removeObserver(this);super.dispose();}
   void changed(){if(mounted&&uid!=widget.session.userId)setState((){generation++;photo=null;document=null;identityDetails=null;sellers=[];selected=null;error='Your account changed. Close this page.';});}
-  @override void didChangeAppLifecycleState(AppLifecycleState state){if(state!=AppLifecycleState.resumed&&mounted)setState((){generation++;photo=null;document=null;identityDetails=null;reviewed=false;});}
+  @override void didChangeAppLifecycleState(AppLifecycleState state){if(state!=AppLifecycleState.resumed&&mounted)setState((){generation++;photo=null;document=null;identityDetails=null;reviewed=false;claimReviewed=false;});}
   Future<void> load({bool more=false}) async{
     if(busy||uid!=widget.session.userId)return;setState((){busy=true;error=null;});
     try{final r=await api.call('admin_seller_queue',{if(more&&next!=null)'after':next});
@@ -49,6 +50,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
   Future<void> decide(String status) async{
     final seller=selected;if(seller==null||busy||uid!=widget.session.userId)return;
     if(status=='approved'&&(!reviewed||photo==null||(documentRequired&&document==null))){setState(()=>error='View the current selfie and required identity document, then confirm your review.');return;}
+    if(status=='approved'&&seller['googlePlaceId']!=null&&!claimReviewed){setState(()=>error='Review the Google Maps listing and the applicant’s authority first.');return;}
     if(status!='approved'&&note.text.trim().length<10){setState(()=>error='Write a recommendation of at least 10 characters explaining what the seller should do next.');return;}
     final yes=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:Text(status=='approved'?'Approve this seller?':'Send this review outcome?'),
       content:Text('${seller['shopName']}\n${status=='approved'?'This grants the verified owner badge. Seller setup completion controls access to selling.':note.text.trim()}'),
@@ -57,9 +59,9 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
     if(yes!=true||!mounted||uid!=widget.session.userId)return;
     if(status=='approved'&&(!reviewed||photo==null||(documentRequired&&document==null))){setState(()=>error='Re-open the selfie before approving.');return;}
     setState((){busy=true;error=null;});
-    try{await api.call('admin_seller_review',{'sellerUid':seller['sellerUid'],'submissionId':seller['submissionId'],if(seller['evidenceId']!=null)'evidenceId':seller['evidenceId'],'status':status,'reason':note.text.trim()});
+    try{await api.call('admin_seller_review',{'sellerUid':seller['sellerUid'],'submissionId':seller['submissionId'],if(seller['evidenceId']!=null)'evidenceId':seller['evidenceId'],if(seller['googlePlaceId']!=null)'claimConfirmed':claimReviewed,'status':status,'reason':note.text.trim()});
       if(!mounted||uid!=widget.session.userId)return;
-      setState((){selected=null;photo=null;document=null;identityDetails=null;reviewed=false;note.clear();});
+      setState((){selected=null;photo=null;document=null;identityDetails=null;reviewed=false;claimReviewed=false;note.clear();});
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Review saved. The seller will receive an update.')));
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
@@ -84,7 +86,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
           leading:const CircleAvatar(backgroundColor:Color(0xFFE1F6EB),child:Icon(Icons.storefront_outlined,color:Color(0xFF169F68))),
           title:Text(s['shopName'].toString(),style:const TextStyle(fontWeight:FontWeight.w700)),
           subtitle:Text('${s['category']=='spaza'?'Spaza shop':'Retail / wholesale'}\n${s['address']}\n${s['expired']==true?'Photo expired · request another':'Awaiting owner review'}'),
-          trailing:const Icon(Icons.chevron_right),onTap:busy?null:()=>setState((){selected=s;photo=null;document=null;identityDetails=null;reviewed=false;note.clear();}))),
+          trailing:const Icon(Icons.chevron_right),onTap:busy?null:()=>setState((){selected=s;photo=null;document=null;identityDetails=null;reviewed=false;claimReviewed=false;note.clear();}))),
         if(next!=null)OutlinedButton(onPressed:busy?null:()=>load(more:true),child:const Text('Load more sellers'))
       ]else...[
         Card(color:Colors.white,child:Padding(padding:const EdgeInsets.all(20),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -92,6 +94,11 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
           for(final key in ['address','ownerEmail','phone','companyName','registrationNumber'])if(selected![key]?.toString().isNotEmpty==true)
             Padding(padding:const EdgeInsets.only(bottom:8),child:Text(selected![key].toString())),
           Text('Owner: ${selected!['approvalStatus']} · Listing: ${selected!['listingStatus']}')]))),
+        if(selected!['googlePlaceId']!=null)Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
+          const Text('Google Maps claim: independently confirm this applicant is authorised to represent the business.'),
+          TextButton.icon(onPressed:() async{final link=Uri.https('www.google.com','/maps/search/',{'api':'1','query':selected!['shopName'].toString(),'query_place_id':selected!['googlePlaceId'].toString()});
+            if(!await launchUrl(link,mode:LaunchMode.externalApplication)&&mounted)setState(()=>error='Could not open Google Maps.');},icon:const Icon(Icons.map_outlined),label:const Text('Open Google Maps listing')),
+          CheckboxListTile(value:claimReviewed,onChanged:busy?null:(v)=>setState(()=>claimReviewed=v==true),title:const Text('I reviewed the listing and applicant authority.'))]))),
         const SizedBox(height:12),if(photo!=null)ClipRRect(borderRadius:BorderRadius.circular(22),child:Image.memory(photo!,height:300,fit:BoxFit.contain,
           errorBuilder:(_,__,___)=>const Text('This photo could not be displayed. Request a new photo.'))),
         OutlinedButton.icon(onPressed:busy||selected!['expired']==true?null:view,icon:const Icon(Icons.lock_outline),label:const Text('View private selfie')),
@@ -105,7 +112,7 @@ class _ReviewState extends State<SellerReviewPage> with WidgetsBindingObserver{
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:reviewed,onChanged:busy||photo==null||(documentRequired&&document==null)?null:(v)=>setState(()=>reviewed=v==true),
           title:const Text('I have reviewed this selfie and the shop registration.')),
         TextField(controller:note,maxLength:400,maxLines:3,enabled:!busy,decoration:const InputDecoration(labelText:'Recommendation to seller',border:OutlineInputBorder())),
-        const SizedBox(height:16),FilledButton.icon(onPressed:busy||!reviewed||photo==null||(documentRequired&&document==null)?null:()=>decide('approved'),icon:const Icon(Icons.verified_user_outlined),label:const Text('Approve seller')),
+        const SizedBox(height:16),FilledButton.icon(onPressed:busy||!reviewed||photo==null||(documentRequired&&document==null)||(selected!['googlePlaceId']!=null&&!claimReviewed)?null:()=>decide('approved'),icon:const Icon(Icons.verified_user_outlined),label:const Text('Approve seller')),
         OutlinedButton(onPressed:busy?null:()=>decide('needs_new_photo'),child:const Text('Request a new selfie')),
         TextButton(onPressed:busy?null:()=>decide('rejected'),child:const Text('Reject registration')),
         const SizedBox(height:12),const Text('Photos clear when the app leaves the foreground. Re-open the selfie and document before approving. This is a manual review, not an automated face match.',style:TextStyle(color:Color(0xFF6C7880),height:1.5))

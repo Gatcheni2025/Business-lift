@@ -25,7 +25,7 @@ function Invoke-RestMethod { param($Uri,$Headers,$TimeoutSec)
     return @{status=$true;data=@{plan_code='PLN_test12345';amount=$amount;currency='ZAR';interval='monthly'}}
   }
   if ($global:operationsScenario -eq 'old-health') { return @{ok=$true;version='3.20.0'} }
-  return @{ok=$true;version='3.24.0';agentCommissionEnabled=$false;verificationUploads=$true;sellerOnboarding=$true;
+  return @{ok=$true;version='3.25.0';googlePlaceClaims=$true;sellerApprovalBeforeCheckout=$true;agentCommissionEnabled=$false;verificationUploads=$true;sellerOnboarding=$true;
     approvalRequired=$true;paystackCheckoutAvailable=$true;adminOperations=$true;adminReview=$true;
     adminProductReview=$false;automaticProductPublication=$true;adminComplimentaryAccess=$true;
     adminPaystackVerify=$true;manualReceiptsRetired=$true;billingMode='paystack_checkout'}

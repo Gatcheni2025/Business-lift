@@ -20,8 +20,8 @@ function clearPhoto(){
   $('imageHint').hidden=false;$('imageHint').textContent='Choose a document or selfie above.';
   $('identityDetails').replaceChildren();$('identityDetails').hidden=true;
 }
-function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;updateControls();}
-function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('reason').value='';}
+function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;updateControls();}
+function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;$('claimReview').hidden=true;$('reason').value='';}
 function lock(message,kind='error'){
   operations.clear();state.clear();busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
   $('workspace').hidden=true;$('loginPanel').hidden=false;
@@ -43,7 +43,7 @@ function updateControls(){
   $('rejectSeller').disabled||=!s||own;
   $('requestPhoto').disabled||=!s||own;
   $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||
-    (s?.phoneVerificationRequired===true&&s?.phoneVerified===false);
+    (s?.phoneVerificationRequired===true&&s?.phoneVerified===false)||(Boolean(s?.googlePlaceId)&&!$('claimConfirmed').checked);
   $('loadMore').hidden=!state.next;
   for(const [key,id] of [['identity','Identity'],['selfie','Selfie']]){
     const done=state.views.has(key);$('view'+id).classList.toggle('viewed',done);
@@ -86,6 +86,8 @@ function selectSeller(row){
   set('submittedAt',row.submittedAt?'Submitted '+new Date(row.submittedAt).toLocaleString('en-ZA'):'Submission date unavailable');
   set('sellerEmail',row.ownerEmail);set('sellerPhone',row.phone);set('sellerAddress',row.address);
   set('sellerCompany',[row.companyName,row.registrationNumber].filter(Boolean).join(' · ')||'Individual shop owner');
+  $('claimReview').hidden=!row.googlePlaceId;
+  if(row.googlePlaceId){const u=new URL('https://www.google.com/maps/search/');u.searchParams.set('api','1');u.searchParams.set('query',row.shopName||'Shop');u.searchParams.set('query_place_id',row.googlePlaceId);$('claimMapLink').href=u.href;}
   set('identityLabel',row.evidenceKind==='company'?'Company registration':row.evidenceKind==='passport'?'Passport':'ID / passport');
   $('selfReview').hidden=row.sellerUid!==state.uid;
   set('sellerStatus',row.expired?'New selfie needed':'Awaiting review');
@@ -125,15 +127,16 @@ async function viewEvidence(kind){
 async function decide(status){
   if(busy||!authorised)return;let data;
   try{data=state.decision(status,$('reason').value);}catch(error){failed(error);return;}
+  if(status==='approved'&&state.selected.googlePlaceId){if(!$('claimConfirmed').checked){notice('Review the Google Maps claim first.','error');return;}data.claimConfirmed=true;}
   if(status==='approved'&&!$('reviewConfirmed').checked){notice('Confirm that you inspected both verification photos.','error');return;}
   const name=state.selected.shopName;
   if(!window.confirm(status==='approved'?`Approve ${name} and grant the verified owner badge?`:
     `${status==='needs_new_photo'?'Request a new selfie from':'Reject the registration for'} ${name}? The seller will receive your recommendation.`))return;
   const ticket=state.ticket();busy=true;updateControls();
   try{
-    await api('admin_seller_review',data);if(!state.current(ticket))return;
+    const result=await api('admin_seller_review',data);if(!state.current(ticket))return;
     resetDetails();state.select(null);busy=false;
-    notice(status==='approved'?'Seller approved. The owner will receive a notification.':'Review saved. The owner will receive your note.','success');
+    notice(status==='approved'?(result.whatsappStatus==='queued'?'Seller approved. WhatsApp is queued, subject to provider setup and delivery.':'Seller approved. No WhatsApp message was requested. The in-app update remains available.'):'Review saved. The owner will receive your note.','success');
     await loadQueue();
   }catch(error){if(state.current(ticket)){
     clearViews();failed(error);
@@ -185,6 +188,7 @@ $('refreshQueue').addEventListener('click',()=>loadQueue());$('loadMore').addEve
 $('search').addEventListener('input',drawQueue);$('category').addEventListener('change',drawQueue);
 $('viewIdentity').addEventListener('click',()=>viewEvidence('identity'));$('viewSelfie').addEventListener('click',()=>viewEvidence('selfie'));
 $('reviewConfirmed').addEventListener('change',updateControls);
+$('claimConfirmed').addEventListener('change',updateControls);
 $('approveSeller').addEventListener('click',()=>decide('approved'));$('rejectSeller').addEventListener('click',()=>decide('rejected'));
 $('requestPhoto').addEventListener('click',()=>decide('needs_new_photo'));
 document.addEventListener('teyza-admin-view-change',clearViews);

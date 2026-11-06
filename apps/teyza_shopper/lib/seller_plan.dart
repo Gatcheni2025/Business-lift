@@ -19,7 +19,7 @@ class SellerPlanPage extends StatefulWidget {
  @override State<SellerPlanPage> createState()=>_SellerPlanState();
 }
 class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver {
- bool busy=false,paid=false,complimentary=false,promoted=false,loading=true;
+ bool busy=false,paid=false,complimentary=false,promoted=false,loading=true,approved=false;
  bool? introEligible;
  String? error,paymentReference,renewalSetup;
  int? promotionEndsAt,paidUntil,complimentaryUntil;
@@ -34,7 +34,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  Future<void> refresh() async {
   try {
    final data=await api.call('seller_summary');
-   if(mounted)setState((){paid=data['listingPaid']==true;complimentary=data['complimentaryAccess']==true;promoted=data['promotionActive']==true;
+   if(mounted)setState((){approved=data['approvalStatus']=='approved';paid=data['listingPaid']==true;complimentary=data['complimentaryAccess']==true;promoted=data['promotionActive']==true;
     paidUntil=(data['paidUntil'] as num?)?.toInt();
     complimentaryUntil=(data['complimentaryUntil'] as num?)?.toInt();
     introEligible=data['introEligible'] is bool?data['introEligible'] as bool:null;
@@ -44,6 +44,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  }
  Future<void> beginCheckout({required bool promotion}) async {
   if(busy||loading)return;
+  if(!approved){setState(()=>error='Your seller registration must be approved before paying for product access.');return;}
   if(!promotion&&!widget.fromProductAction){
    setState(()=>error='Choose Add a product in your seller dashboard when you are ready to activate product access.');
    return;
@@ -119,7 +120,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
    const Text('Grow your business, on your terms.',style:TextStyle(fontSize:26,fontWeight:FontWeight.w800)),
    const SizedBox(height:9),
-   const Text('Registration and verification are free. Choose membership only when you are ready to add products. Your first eligible month is R49, then R99 per month.',
+   const Text('Registration and verification are free. Once approved, choose membership only when you are ready to add products. Your first eligible month is R49, then R99 per month.',
     style:TextStyle(height:1.4,color:Color(0xFF52685B))),const SizedBox(height:20),
    if(loading)const LinearProgressIndicator(),
    if(error!=null)Padding(padding:const EdgeInsets.only(bottom:15),
@@ -139,6 +140,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
+   if(!approved&&!loading)const Card(child:ListTile(leading:Icon(Icons.hourglass_empty),title:Text('Seller approval needed'),subtitle:Text('Product access and payment are available after Teyza approves your registration.'))),
    if(!paid)planCard(title:'Business membership',price:introEligible==false?'R99/month':'R49 first month · then R99/month',
     highlighted:true,benefits:const [
      'Add products, prices and available stock',
@@ -148,7 +150,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Standard renewal is R99 per month'
     ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Upgrade for R49 with Paystack':
       introEligible==false?'Upgrade for R99 with Paystack':'Check price with Paystack'):purchaseLabel,
-    onPressed:widget.fromProductAction?()=>beginCheckout(promotion:false):null),
+    onPressed:approved&&widget.fromProductAction?()=>beginCheckout(promotion:false):null),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
      'Seven days of promotion after verified payment',
@@ -156,7 +158,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Improves visibility without guaranteeing sales'
     ],action:promoted?'Promotion active':!paid?'Upgrade first':
      paystackAllowed?'Promote for R29 with Paystack':purchaseLabel,
-    onPressed:promoted||!paid?null:()=>beginCheckout(promotion:true)),
+    onPressed:!approved||promoted||!paid?null:()=>beginCheckout(promotion:true)),
    if(promoted&&promotionEndsAt!=null)Text('Promotion ends '+
     DateTime.fromMillisecondsSinceEpoch(promotionEndsAt!).toLocal().toString().split(' ').first),
    if(paymentReference!=null)Card(child:Padding(padding:const EdgeInsets.all(16),
