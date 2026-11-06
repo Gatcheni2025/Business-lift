@@ -64,6 +64,10 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     if(data.checkoutChannel!=null&&!['web','direct'].includes(data.checkoutChannel))
       D.fail(422,'Choose a supported checkout channel.');
     const webCheckout=data.checkoutChannel==='web';
+    // The website channel is for current, fully verified owners only:
+    // legacy account-level approval is not sufficient proof of SMS/ID/selfie.
+    if(webCheckout&&setup?.requiredVersion!==2)
+      D.fail(409,'Complete this shop’s current phone OTP and identity onboarding before website checkout.');
     if(!isPromo&&(data.recurringConsent!==true||data.termsVersion!==SUBSCRIPTION_TERMS_VERSION))
       D.fail(422,'Confirm the monthly renewal terms before starting payment.');
     if(isPromo&&!P.entitled(uid,account,billing,now))D.fail(403,'Upgrade your seller membership before promoting your business.');
