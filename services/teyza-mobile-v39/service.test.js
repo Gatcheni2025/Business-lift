@@ -905,7 +905,7 @@ test('New business registration is free and no trial is activated',async()=>{
  await service.execute(buyer,'seller_register',data);
  assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
  await rejects(service.execute(buyer,'seller_plan_select',{plan:'trial'}),410);
- await rejects(service.execute(buyer,'seller_mandate_submit',{}),410);
+ await rejects(service.execute(buyer,'seller_mandate_submit',{}),422);
  assert.equal(db.records.has('teyzaBilling/buyer1'),false);
  // Existing trials cannot recur or unlock private catalogues.
  const legacy=fixture({'teyzaSellerAccounts/seller1':{...seller,listingPlan:'trial'}});
