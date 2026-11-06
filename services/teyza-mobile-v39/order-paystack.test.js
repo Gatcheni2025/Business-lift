@@ -35,10 +35,11 @@ function fixture({live=true,discount=0,status='confirmed'}={}){
     adminComplimentaryBy:'admin1',
     adminComplimentaryReason:'Verified QA shop, seven day complimentary test access'
   })});
+ db.records.set('teyzaShopSettings/seller1',{cardPayments:true});
  db.records.set('teyzaSellerPayouts/seller1',{ownerUid:'seller1',code:sub,enabled:true,
   mode:live?'live':'test',verifiedWithPaystack:true});
  db.records.set('teyzaMobileOrders/order1',{ownerUid:'seller1',shopperUid:'buyer1',
-  status,totalCents:2500,cashDiscountCents:discount,paymentMethod:'arrange_with_shop',
+  status,totalCents:2500,cashDiscountCents:discount,paymentMethod:'card_online',
   paymentStatus:'arrange_with_shop'});
  let lastInit,invalidSplit=false;
  const send=async(url,options)=>{
@@ -135,4 +136,15 @@ test('Webhook must use Paystack signed raw payload',async()=>{
  const signature=crypto.createHmac('sha512','sk_live_12345').update(payload).digest('hex');
  const r=await f.api.webhook(payload,signature,{event:'charge.success',data:{reference:p.reference}});
  assert.equal(r.status,'paid');
+});
+test('Online card checkout requires shopper selection and an enabled seller card setting',async()=>{
+ const cash=fixture();
+ cash.db.records.get('teyzaMobileOrders/order1').paymentMethod='cash';
+ await rejects(cash.api.execute(cash.buyer,'order_paystack_checkout',{orderId:'order1'}),409);
+ const noCards=fixture();
+ noCards.db.records.get('teyzaShopSettings/seller1').cardPayments=false;
+ await rejects(noCards.api.execute(noCards.buyer,'order_paystack_checkout',{orderId:'order1'}),409);
+ const wholesale=fixture();
+ wholesale.db.records.get('teyzaMobileOrders/order1').orderType='wholesale_stock';
+ await rejects(wholesale.api.execute(wholesale.buyer,'order_paystack_checkout',{orderId:'order1'}),409);
 });

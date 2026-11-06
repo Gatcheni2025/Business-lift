@@ -9,7 +9,7 @@ import 'session_test.dart' show MemoryStore;
 class ProfileShopperSession extends ShopperSession {
   ProfileShopperSession(SessionStore store):super(store:store){
     isReady=true;userId='shopper-123';idToken='test-id';
-    email=null;name=null;emailVerified=false;anonymousShopper=true;
+    email=null;name=null;emailVerified=false;anonymousShopper=false;
   }
 }
 
@@ -35,7 +35,7 @@ void main(){
    expect(await ShopperPaymentPreferenceStore(vault:vault).load('a-different-user'),
      ShopperPaymentPreferenceStore.cash);
  });
- testWidgets('Anonymous shopper account displays saved details, verification and no owner shortcut',(t)async{
+ testWidgets('Registered shopper account displays saved details, verification and no owner shortcut',(t)async{
    await t.binding.setSurfaceSize(const Size(400,900));
    addTearDown(()=>t.binding.setSurfaceSize(null));
    final vault=MemoryStore(),session=ProfileShopperSession(vault),
@@ -60,6 +60,9 @@ void main(){
    await t.tap(payment);await t.pumpAndSettle();
    await t.tap(find.text('Card at the shop').last);await t.pumpAndSettle();
    expect(await payments.load('shopper-123'),ShopperPaymentPreferenceStore.cardAtShop);
+   await t.tap(find.text('Payment method'));await t.pumpAndSettle();
+   await t.tap(find.text('Pay online by card').last);await t.pumpAndSettle();
+   expect(await payments.load('shopper-123'),ShopperPaymentPreferenceStore.cardOnline);
    final terms=find.text('Terms of Service');
    await t.scrollUntilVisible(terms,180,scrollable:find.byType(Scrollable).first);
    expect(terms,findsOneWidget);
@@ -82,4 +85,15 @@ void main(){
    await t.pumpWidget(const SizedBox.shrink());
    session.dispose();
  });
+ testWidgets('Anonymous browsing identity is invited to register at the account tab',(t)async{
+   final vault=MemoryStore(),session=ProfileShopperSession(vault);
+   session.anonymousShopper=true;
+   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
+   await t.pumpAndSettle();
+   expect(find.text('My Teyza account'),findsNothing);
+   expect(find.text('Continue as Shopper'),findsOneWidget);
+   await t.pumpWidget(const SizedBox.shrink());
+   session.dispose();
+ });
+
 }

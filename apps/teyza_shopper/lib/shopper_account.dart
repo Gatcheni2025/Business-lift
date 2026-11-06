@@ -81,7 +81,7 @@ class _AccountState extends State<ShopperAccountPanel> {
     final uid=widget.session.userId;
     if(uid==null)return;
     final selected=await showModalBottomSheet<String>(context:context,showDragHandle:true,
-      builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      builder:(ctx)=>SafeArea(child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
         const Padding(padding:EdgeInsets.all(14),
           child:Text('Preferred payment method',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800))),
         ListTile(leading:const Icon(Icons.payments_outlined),
@@ -92,10 +92,14 @@ class _AccountState extends State<ShopperAccountPanel> {
           title:const Text('Card at the shop'),
           subtitle:const Text('Available only for collection where the seller accepts cards'),
           onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cardAtShop)),
+        ListTile(leading:const Icon(Icons.credit_card_rounded),
+          title:const Text('Pay online by card'),
+          subtitle:const Text('Only for sellers who accept card payments. Pay securely via Paystack after the seller confirms.'),
+          onTap:()=>Navigator.pop(ctx,ShopperPaymentPreferenceStore.cardOnline)),
         const Padding(padding:EdgeInsets.all(12),
-          child:Text('Teyza does not collect or store your card number. This is a checkout preference, not an online payment.',
+          child:Text('Teyza does not collect or store card numbers. Online card payments use Paystack after an eligible seller confirms your order.',
             textAlign:TextAlign.center,style:TextStyle(fontSize:12))),
-      ])));
+      ]))));
     if(selected==null||!mounted||uid!=widget.session.userId)return;
     try{
       await _payments.save(uid,selected);
@@ -283,7 +287,7 @@ class _AccountState extends State<ShopperAccountPanel> {
   Widget build(BuildContext context)=>AnimatedBuilder(
     animation:widget.session,
     builder:(context,child){
-      final logged=widget.session.idToken!=null;
+      final logged=widget.session.idToken!=null&&!widget.session.anonymousShopper;
       return ListView(padding:const EdgeInsets.fromLTRB(20,22,20,36),children:[
         Container(alignment:Alignment.center,padding:const EdgeInsets.symmetric(vertical:17),
           child:Column(children:[

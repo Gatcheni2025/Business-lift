@@ -24,10 +24,19 @@ class SellerPush {
   Timer? renewal;DateTime? registeredAt,lastChatVibration;
   Future<void> initialize() async{await NativeFirebase.ensure();}
   Future<void> restore() async{
-    if(disposed||starting||stopping||session.userId==null||(!session.contactVerified&&!session.anonymousShopper))return;
+    if(disposed||starting||stopping||session.userId==null)return;
     if(owner==session.userId&&registeredAt!=null&&DateTime.now().difference(registeredAt!)<const Duration(days:1))return;
     starting=true;
-    try{final prefs=await SharedPreferences.getInstance();if(prefs.getString('teyza_seller_push_uid')==session.userId)await enable(request:false);}
+    try{
+      await initialize();
+      final settings=await FirebaseMessaging.instance.getNotificationSettings();
+      if(settings.authorizationStatus==AuthorizationStatus.notDetermined){
+        await enable(request:true);
+      }else if(settings.authorizationStatus==AuthorizationStatus.authorized||
+          settings.authorizationStatus==AuthorizationStatus.provisional){
+        await enable(request:false);
+      }
+    }
     catch(_){/* Inbox works independently of push or its device configuration. */}
     finally{starting=false;}
   }
@@ -37,7 +46,7 @@ class SellerPush {
     if(!disposed)unawaited(restore());
   }
   Future<void> enable({bool request=true}) async{
-    final uid=session.userId;if(uid==null||(!session.contactVerified&&!session.anonymousShopper))throw StateError('Save your shopper details or sign in first.');
+    final uid=session.userId;if(uid==null)throw StateError('A shopping session is needed for personal phone alerts.');
     await initialize();
     final messaging=FirebaseMessaging.instance;
     final settings=request?await messaging.requestPermission(alert:true,badge:true,sound:true):await messaging.getNotificationSettings();

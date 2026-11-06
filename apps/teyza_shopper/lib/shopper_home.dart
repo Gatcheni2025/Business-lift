@@ -550,35 +550,24 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         backgroundColor:Colors.white,showDragHandle:true,
         builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:deliveryProfile));
       if(profile==null||!mounted||uid!=session.userId)return;
-      // Avoid a second login prompt at basket/checkout: register a secure
-      // persistent Firebase anonymous shopping identity just once.
-      try{if(uid==null)await session.ensureShoppingIdentity();}
-      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:Text('Could not activate your shopping session. Enable Firebase Anonymous Authentication and retry: ${authMessage(e)}')));return;}
-      final savedUid=session.userId;
-      if(!mounted||savedUid==null||session.sellerWorkspace)return;
-      await deliveryProfileStore.save(savedUid,profile);
+      // Browsing only needs a locally stored location, not a registered account.
       rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(profile);
       try{await deliveryProfileStore.saveDeviceLocation(profile);}
-      catch(_){/* Retain the user's chosen location in memory until retry. */}
-      try{
-        await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());
-        // Clear the legacy guest copy ONLY after cloud persistence succeeds.
-        await deliveryProfileStore.clear(null);
-        if(mounted)setState(()=>deliveryProfileWarning=null);
-      }catch(_){
-        if(mounted)setState(()=>deliveryProfileWarning=
-          'Details saved securely on this phone. Cloud syncing will retry.');
+      catch(_){if(mounted)setState(()=>deliveryProfileWarning='Could not save this address on this phone.');}
+      if(uid!=null&&!session.anonymousShopper){
+        await deliveryProfileStore.save(uid,profile);
+        if(profile.displayName.trim().isNotEmpty&&profile.email.trim().isNotEmpty&&profile.phone.trim().isNotEmpty){
+          try{await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());}
+          catch(_){if(mounted)setState(()=>deliveryProfileWarning='Address saved on this phone. Account sync will retry.');}
+        }
       }
-      if(!mounted||savedUid!=session.userId)return;
+      if(!mounted||uid!=session.userId)return;
       deliveryProfile=profile;
-      ++_deliveryProfileRequest; // invalidate a queued first-login prompt
+      ++_deliveryProfileRequest;
       await chooseArea(Area(profile.area.isNotEmpty?profile.area:profile.city,
         profile.city.isNotEmpty?profile.city:profile.area,
         profile.latitude,profile.longitude),persist:false);
-      if(mounted)setState((){
-        locationName=profile.address;_usingGps=false;locationWarning=null;
-      });
+      if(mounted)setState((){locationName=profile.address;_usingGps=false;locationWarning=null;});
     }finally{_deliverySheetOpen=false;}
   }
 
@@ -851,7 +840,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<Shop> get nearbySellers {
     if(area==null)return [];
     final q=search.trim().toLowerCase();
-    return nearbyReal.where((shop)=>shop.identityVerified&&
+    return nearbyReal.where((shop)=>
       (sellerFilter=='all'||shop.shopCategory==sellerFilter)&&
       (q.isEmpty||(shop.name+' '+shop.area).toLowerCase().contains(q))).toList();
   }
@@ -1189,10 +1178,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
 
   void openBasket()=>navigateToTab(2);
-  void openBellNotifications(){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());return;
+  Future<void> openBellNotifications() async{
+    // The inbox does not require a manually enabled phone-alert setting.
+    if(session.idToken==null){
+      try{await session.ensureShoppingIdentity();}
+      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Unable to open alerts: '+authMessage(e))));return;}
     }
+    if(!mounted)return;
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>SellerNotificationsPage(
       session:session,asShopper:true,onOpen:(target){
         if(target=='chat')openInbox();
@@ -1200,9 +1193,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       })));
   }
   void openInbox(){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to use chat.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register to use chat. Your delivery address stays saved.')));return;
     }
     Navigator.of(context).push(MaterialPageRoute(builder:(_)=>
       ShopperChatPage(session:session)));
@@ -1608,30 +1602,47 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         onSelected:(_)=>selectSellerFilter(option.$1)))
     ]));
 
+  // Public directory listings may appear in yellow; only verified Teyza
+  // merchants show green. Never use private or unapproved seller records here.
+  List<NearbyListing> get nearbySellerEntries {
+    if(area==null)return [];
+    final query=search.trim().toLowerCase();
+    final mapListings=displayedOnline.where((s)=>
+      (sellerFilter=='all'||s.shopCategory==sellerFilter)&&
+      s.lat!=null&&s.lng!=null&&
+      km(area!.lat,area!.lng,s.lat!,s.lng!)<=searchRadiusKm&&
+      (query.isEmpty||(s.name+' '+s.area+' '+s.address).toLowerCase().contains(query))
+    ).toList();
+    return mergeNearbyListings(nearbySellers,mapListings,area:area).take(35).toList();
+  }
   Widget sellerStories(){
-    final sellers=nearbySellers;
+    final sellers=nearbySellerEntries;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Sellers near you',subtitle:'Verified Teyza businesses in your area',
+      section('Sellers near you',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
         Padding(padding:const EdgeInsets.only(bottom:12),child:Text(
           area==null?'Choose your area to discover nearby sellers.':
-            loading?'Finding sellers nearby…':'No verified sellers in this category nearby yet.',
+            loading?'Finding sellers nearby…':'No listed sellers in this category nearby yet.',
           style:const TextStyle(color:muted,fontSize:12)))
       else SizedBox(height:76+MediaQuery.textScalerOf(context).scale(33),
         child:ListView.builder(key:const PageStorageKey<String>('nearby-seller-stories'),
           scrollDirection:Axis.horizontal,itemCount:sellers.length,itemBuilder:(context,index){
-            final shop=sellers[index];
-            return Semantics(button:true,label:'Open ${shop.name}',
-              child:InkWell(key:ValueKey('seller-story-${shop.id}'),onTap:()=>openShop(shop),
+            final entry=sellers[index],merchant=entry.merchant,directory=entry.directory;
+            final verified=merchant?.identityVerified==true;
+            final key=merchant?.id??directory!.id;
+            return Semantics(button:true,label:'Open ${entry.name} · ${verified?'Teyza verified':'Not Teyza verified'}',
+              child:InkWell(key:ValueKey('seller-story-$key'),
+                onTap:()=>merchant!=null?openShop(merchant):selectDirectory(directory!),
                 borderRadius:BorderRadius.circular(18),
                 child:SizedBox(width:86,child:Column(children:[
                   Container(padding:const EdgeInsets.all(3),decoration:BoxDecoration(shape:BoxShape.circle,
-                    border:Border.all(color:green,width:2)),
-                    child:ClipOval(child:photo(shop.photo,size:58))),
+                    border:Border.all(color:verified?green:const Color(0xFFE7B31F),width:3)),
+                    child:ClipOval(child:merchant!=null?
+                      photo(merchant.photo,size:58):onlinePhoto(directory!,width:58,height:58))),
                   const SizedBox(height:5),
-                  Text(shop.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
+                  Text(entry.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
                     style:const TextStyle(color:ink,fontSize:11,fontWeight:FontWeight.w700))
                 ]))));
           }))
@@ -1639,18 +1650,18 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Widget allSellersPage(){
-    final sellers=nearbySellers;
+    final sellers=nearbySellerEntries;
     return RefreshIndicator(onRefresh:()=>load(),child:ListView.builder(
       key:const PageStorageKey<String>('all-nearby-sellers-page'),
       physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),
       itemCount:sellers.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           businessFilters(),
-          section('All nearby sellers',subtitle:'Verified Teyza businesses around '+locationName),
+          section('All nearby sellers',subtitle:'Teyza verified and public directory listings around '+locationName),
           if(sellers.isEmpty)empty('No sellers in this category yet',
             'Choose another business type or shopping area.')
         ]);
-        return shopTile(sellers[index-1]);
+        return nearbyListingTile(sellers[index-1]);
       }));
   }
 
@@ -1665,10 +1676,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(deliveryProfileWarning!=null)Card(color:const Color(0xFFFFF2DE),
         child:Padding(padding:const EdgeInsets.all(12),
           child:Text(deliveryProfileWarning!))),
-      if(deliveryProfile==null&&widget.initialArea==null)
+      if(deliveryProfile==null&&rememberedLocation==null&&widget.initialArea==null)
         Card(child:ListTile(leading:const Icon(Icons.place_outlined,color:green),
           title:const Text('Add your delivery address'),
-          subtitle:const Text('Enter your street address and contact details to see shops near you.'),
+          subtitle:const Text('Enter your delivery address to see local shops. No registration needed.'),
           onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
@@ -2218,9 +2229,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]);
 
   void chatWithShop(Shop shop,{String? message}){
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to message this shop.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register to contact this seller.')));return;
     }
     Navigator.push(context,MaterialPageRoute(builder:(_)=>ShopperChatPage(session:session,
       initialShop:ShopperConversation(shop.id,shop.name),initialMessage:message)));
@@ -2338,15 +2350,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Future<void> requestOrder() async {
     final shop=basketShop;if(shop==null||basketItems.isEmpty)return;
-    if(session.idToken==null||(!session.contactVerified&&deliveryProfile==null)){
-      unawaited(promptDeliveryProfile());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Save your delivery and contact details once to place orders.')));return;
+    if(session.idToken==null||session.anonymousShopper){
+      navigateToTab(4);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Sign in or register before checkout. Your address stays saved.')));return;
     }
     final done=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>ShopperCheckoutPage(
       session:session,shopId:shop.id,shopName:shop.name,delivery:shop.delivery,collection:shop.pickup,
       deliveryFeeCents:shop.deliveryFeeCents,acceptsCard:shop.acceptsCard==true,
-      savedDeliveryAddress:deliveryProfile?.address??'',
-      savedPhone:deliveryProfile?.phone??'',
+      savedDeliveryAddress:deliveryProfile?.address??rememberedLocation?.address??'',
+      savedPhone:deliveryProfile?.phone??session.phoneNumber??'',
       cashDiscountPercent:shop.cashDiscountPercent,items:basketItems.map((p)=>{
         'id':p.id,'name':p.name,'quantity':cart[p.id]??0,'priceCents':p.priceCents}).toList())));
     if(done==true&&mounted){setState((){cart.clear();basketShop=null;});navigateToTab(3);}
