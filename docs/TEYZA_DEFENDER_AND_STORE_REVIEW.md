@@ -75,3 +75,9 @@ existing Play upload and Apple distribution credentials and its own safeguards.
 Do not bypass the backend-health gate, relabel a QA build as production, upload
 to TestFlight, deploy the payment backend, or start a real charge while the
 security hold and release gates remain unresolved.
+
+The separate read-only release-preflight workflow checks the public production
+mobile-service health against the current signed-build backend gate. It does not
+access secrets, change the backend, determine whether the active Paystack key is
+live or test, or prove that webhooks and actual payments work. A passed health
+check is not a security or store-policy approval.
