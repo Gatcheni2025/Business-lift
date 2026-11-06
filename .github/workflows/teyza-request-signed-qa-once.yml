@@ -13,7 +13,9 @@ permissions:
 
 jobs:
   request_signed_qa:
-    if: github.repository == 'Gatcheni2025/Business-lift' && github.event.head_commit.message == 'ci: request app-only signed QA preview'
+    if: >-
+      github.repository == 'Gatcheni2025/Business-lift' &&
+      github.event.head_commit.message == 'ci: request app-only signed QA preview'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
