@@ -314,7 +314,7 @@ async function main(){
    await f.page.locator('#claimConfirmed').check();
    assert(await f.page.locator('#approveSeller').isEnabled());
    await f.page.locator('#approveSeller').click();
-   await f.page.locator('#notice').getByText('Seller approved. WhatsApp is queued, subject to provider setup and delivery.').waitFor();
+   await f.page.locator('#notice').getByText('Seller verification approved. WhatsApp is queued, subject to provider setup and delivery.').waitFor();
    assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.claimConfirmed,true);
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
