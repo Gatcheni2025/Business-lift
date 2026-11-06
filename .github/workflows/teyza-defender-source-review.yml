@@ -1,0 +1,155 @@
+name: Teyza Defender source review
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/teyza-defender-source-review.yml'
+      - 'docs/TEYZA_DEFENDER_AND_STORE_REVIEW.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  defender_source_scan:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check the hosted runner has active Defender
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) {
+            throw 'No Microsoft Defender cmdlets on this runner. No Microsoft scan was performed.'
+          }
+          $status = Get-MpComputerStatus
+          if (-not $status.AMServiceEnabled -or -not $status.AntivirusEnabled) {
+            throw 'Microsoft Defender Antivirus is not active on this runner. No Microsoft scan was performed.'
+          }
+          # The disposable GitHub-hosted Windows image may exclude whole local
+          # drives. Remove only those broad exclusions on this runner, so the
+          # requested on-demand scan can actually inspect the source files.
+          # Never add exclusions or change the user's computer.
+          $preference = Get-MpPreference
+          foreach ($path in @($preference.ExclusionPath)) {
+            if ($path -in @('C:\', 'D:\')) {
+              Write-Host ('Removing broad exclusion from this disposable runner: ' + $path)
+              Remove-MpPreference -ExclusionPath $path -ErrorAction Stop
+            }
+          }
+          $preference = Get-MpPreference
+          $exclusions = @($preference.ExclusionPath; $preference.ExclusionExtension; $preference.ExclusionProcess) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          if (@($exclusions).Count -gt 0) {
+            $exclusions | ForEach-Object { Write-Host ('Remaining runner exclusion: ' + $_) }
+            throw 'This runner has Defender exclusions. No conclusive source scan was performed.'
+          }
+          try { Update-MpSignature -ErrorAction Stop | Out-Null }
+          catch { Write-Warning 'Could not update signatures; checking their age before any scan.' }
+          $status = Get-MpComputerStatus
+          if (-not $status.AntivirusSignatureLastUpdated -or
+              $status.AntivirusSignatureLastUpdated -lt (Get-Date).AddDays(-3)) {
+            throw 'Microsoft Defender signatures are missing or older than 3 days. No current scan was performed.'
+          }
+          Write-Host ('Engine: ' + $status.AMEngineVersion)
+          Write-Host ('Signatures: ' + $status.AntivirusSignatureVersion)
+          Write-Host ('Signatures updated: ' + $status.AntivirusSignatureLastUpdated.ToUniversalTime().ToString('o'))
+      - name: Preserve original source bytes during checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { throw 'Could not configure exact checkout bytes.' }
+      - name: Check out only the three files for review
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /web/app-first/public/js/seller-web-billing.mjs
+            /services/teyza-mobile-v39/billing-paystack.test.js
+            /tools/app-first-release/seller-web-billing.test.cjs
+      - name: Verify hashes and scan source as data
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $start = (Get-Date).AddMinutes(-10)
+          $samples = @(
+            @{ Path = 'web/app-first/public/js/seller-web-billing.mjs'; Sha256 = '82F8E042D9346A34AB410FBE75F858A32C71BA8C190E3B44BC9E243F4D07506E' },
+            @{ Path = 'services/teyza-mobile-v39/billing-paystack.test.js'; Sha256 = '0A348D6373F61EF4A222FD217813DEA9ED31F14B105F6FFBC9588534E0A19EF3' },
+            @{ Path = 'tools/app-first-release/seller-web-billing.test.cjs'; Sha256 = '72D6C4A1C4B57DC34AAB2C9DEDDEFA8AC7AECB32D0B592995C83EBF9D8411BAB' }
+          )
+          foreach ($sample in $samples) {
+            $path = Join-Path $env:GITHUB_WORKSPACE $sample.Path
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw ('Review file missing or quarantined: ' + $sample.Path)
+            }
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            if ($actual -ne $sample.Sha256) {
+              throw ('File differs from the reported sample: ' + $sample.Path + ' SHA-256 ' + $actual)
+            }
+            Write-Host ('Scanning exact sample: ' + $sample.Path)
+            Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw ('File was removed or quarantined during scan: ' + $sample.Path)
+            }
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $sample.Sha256) {
+              throw ('File changed during scan: ' + $sample.Path)
+            }
+          }
+          $detections = @(Get-MpThreatDetection | Where-Object {
+            $_.InitialDetectionTime -ge $start -or $_.LastThreatStatusChangeTime -ge $start
+          })
+          if ($detections.Count -gt 0) {
+            $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
+            throw 'Defender recorded a recent threat on this runner. Review the result; do not release.'
+          }
+          Write-Host 'No recent Defender detection was recorded for this source scan.'
+          Write-Host 'This does not scan the original ZIP and is not a Microsoft analyst verdict or release authorization.'
+      - name: Scan the exact reported GitHub artifact without extracting it
+        shell: pwsh
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $preference = Get-MpPreference
+          if ($preference.DisableArchiveScanning) {
+            # Increase protection only on this disposable runner; never change
+            # the owner's machine or weaken Defender settings.
+            Set-MpPreference -DisableArchiveScanning $false -ErrorAction Stop
+            $preference = Get-MpPreference
+            if ($preference.DisableArchiveScanning) {
+              throw 'Defender archive scanning is disabled. No archive scan was performed.'
+            }
+            Write-Host 'Enabled archive scanning on the disposable runner.'
+          }
+          $start = (Get-Date).AddMinutes(-10)
+          $path = Join-Path $env:RUNNER_TEMP 'reported-teyza-artifact.zip'
+          $url = 'https://api.github.com/repos/Gatcheni2025/Business-lift/actions/artifacts/13510067984/zip'
+          $headers = @{ Authorization = "Bearer $env:GH_READ_TOKEN"; Accept = 'application/vnd.github+json' }
+          Invoke-WebRequest -Uri $url -Headers $headers -OutFile $path -ErrorAction Stop
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw 'The original artifact was unavailable or quarantined. No clean archive result.'
+          }
+          $expected = '5EF2FDD15A8A89CCBF9A0098DA774445EEAAC1DC25E8389689779476BD3535ED'
+          if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
+            throw 'The downloaded artifact does not match GitHub metadata. No archive scan was performed.'
+          }
+          Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
+          $detections = @(Get-MpThreatDetection | Where-Object {
+            $_.InitialDetectionTime -ge $start -or $_.LastThreatStatusChangeTime -ge $start
+          })
+          if ($detections.Count -gt 0 -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
+            throw 'Defender detected or removed a review item. The archive is not cleared.'
+          }
+          Write-Host 'Defender recorded no recent detection for the original GitHub artifact.'
+          Write-Host 'A nested archive may be treated differently across Defender configurations. An analyst verdict is still required.'
+      - name: Report recent Defender detections when review stops
+        if: failure()
+        shell: pwsh
+        run: |
+          $since = (Get-Date).AddMinutes(-15)
+          $detections = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object {
+            $_.InitialDetectionTime -ge $since -or $_.LastThreatStatusChangeTime -ge $since
+          })
+          if ($detections.Count -gt 0) {
+            $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
+          } else { Write-Host 'No recent Defender detection was reported; the failure is not a clean scan.' }
