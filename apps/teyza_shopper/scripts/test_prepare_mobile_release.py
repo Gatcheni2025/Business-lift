@@ -38,6 +38,12 @@ class NativePermissionTests(unittest.TestCase):
             self.assertNotIn(key+'taskAffinity',activity.attrib)
             self.assertEqual(activity.get(key+'launchMode'),'singleTop')
             self.assertEqual(activity.get(key+'name'),'za.co.teyza.teyza_shopper.MainActivity')
+            routes=[entry for intent in activity.findall('intent-filter') for entry in intent.findall('data')]
+            self.assertEqual([(entry.get(key+'scheme'),entry.get(key+'host')) for entry in routes],[('teyza','open')])
+            route_filter=activity.find('intent-filter')
+            self.assertEqual(route_filter.find('action').get(key+'name'),'android.intent.action.VIEW')
+            self.assertEqual({v.get(key+'name') for v in route_filter.findall('category')},
+              {'android.intent.category.DEFAULT','android.intent.category.BROWSABLE'})
             self.assertIn('applicationId = "com.asiyedriver.asiye"',gradle.read_text())
             values=ET.parse(prepare.ROOT/'android/app/src/main/res/values/teyza_firebase.xml').getroot()
             self.assertEqual({v.get('name'):v.text for v in values}['google_app_id'],'1:983479810697:android:aabbcc')
@@ -50,6 +56,7 @@ class NativePermissionTests(unittest.TestCase):
             (prepare.ROOT/'ios/Podfile').write_text("# platform :ios, '13.0'\nflutter_additional_ios_build_settings(target)")
             prepare.ios();info=plistlib.loads((runner/'Info.plist').read_bytes())
             self.assertIn('app-1-983479810697-ios-aabbcc', [s for v in info['CFBundleURLTypes'] for s in v['CFBundleURLSchemes']]);
+            self.assertIn('teyza', [s for v in info['CFBundleURLTypes'] for s in v['CFBundleURLSchemes']])
             self.assertIn('NSCameraUsageDescription',info);self.assertIn('remote-notification',info['UIBackgroundModes'])
             self.assertFalse(info['FirebaseMessagingAutoInitEnabled']);self.assertEqual(info['TeyzaFirebaseAppId'],'1:983479810697:ios:aabbcc')
             self.assertEqual(plistlib.loads((runner/'Runner.entitlements').read_bytes())['aps-environment'],'production')
