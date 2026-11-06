@@ -18,6 +18,7 @@ class ShopperPaymentPreferenceStore {
     await _vault.write(_key(uid),preference);
   }
   Future<void> clear(String uid)=>_vault.delete(_key(uid));
-  static String label(String preference)=>preference==cardAtShop?
+  static String label(String preference)=>preference==cardOnline?
+    'Online card via Paystack (seller approval required)':preference==cardAtShop?
     'Card at the shop (collection only)':'Cash on delivery / collection';
 }
