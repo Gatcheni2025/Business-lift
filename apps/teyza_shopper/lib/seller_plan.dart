@@ -37,7 +37,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  int? promotionEndsAt,paidUntil,complimentaryUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
  bool get paystackAllowed=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
- String get purchaseLabel=>paystackAllowed?'Continue on the website':'Store billing coming soon';
+ String get purchaseLabel=>paystackAllowed?'Continue on the website':'In-app subscription unavailable';
  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);refresh();}
  @override void dispose(){WidgetsBinding.instance.removeObserver(this);super.dispose();}
  @override void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -159,6 +159,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
+   OutlinedButton.icon(onPressed:busy?null:refresh,icon:const Icon(Icons.refresh),
+     label:const Text('Refresh membership status')),
    if(!approved&&!loading)const Card(child:ListTile(leading:Icon(Icons.hourglass_empty),title:Text('Seller approval needed'),subtitle:Text('Product access and payment are available after Teyza approves your registration.'))),
    if(!paid)planCard(title:'Business membership',price:introEligible==false?'R99/month':'R49 first month · then R99/month',
     highlighted:true,benefits:const [
@@ -169,7 +171,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Standard renewal is R99 per month'
     ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Continue on website · R49':
       introEligible==false?'Continue on website · R99':'Check price on website'):purchaseLabel,
-    onPressed:approved&&widget.fromProductAction?()=>beginCheckout(promotion:false):null),
+    onPressed:approved&&widget.fromProductAction&&paystackAllowed?()=>beginCheckout(promotion:false):null),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
      'Seven days of promotion after verified payment',
@@ -177,7 +179,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Improves visibility without guaranteeing sales'
     ],action:promoted?'Promotion active':!paid?'Upgrade first':
      paystackAllowed?'Promote for R29 with Paystack':purchaseLabel,
-    onPressed:!approved||promoted||!paid?null:()=>beginCheckout(promotion:true)),
+    onPressed:!approved||promoted||!paid||!paystackAllowed?null:()=>beginCheckout(promotion:true)),
    if(promoted&&promotionEndsAt!=null)Text('Promotion ends '+
     DateTime.fromMillisecondsSinceEpoch(promotionEndsAt!).toLocal().toString().split(' ').first),
    if(paymentReference!=null)Card(child:Padding(padding:const EdgeInsets.all(16),
@@ -185,6 +187,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      const Text('Finish the secure Paystack checkout in your browser, then return here.'),
      const SizedBox(height:12),
      OutlinedButton(onPressed:busy?null:confirm,child:const Text('I have paid · verify payment'))]))),
+   if(!paystackAllowed)const Text('Store-distributed builds do not activate external subscription checkout. Any existing membership is shown after account verification and refresh.',
+     style:TextStyle(fontSize:12,color:Color(0xFF66776A))),
    const Text('No charge at registration or when opening this page. Membership starts only after you choose a supported checkout and the payment is verified. The introductory price applies to the first eligible month; renewal is R99 per month.',
     style:TextStyle(fontSize:12,color:Color(0xFF66776A),height:1.5))
   ])),
