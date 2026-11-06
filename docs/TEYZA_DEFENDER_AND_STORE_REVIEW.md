@@ -33,7 +33,10 @@ Suggested factual description for each submission:
 
 The GitHub workflow `teyza-defender-source-review.yml` attempts to scan the
 three source files with Defender on an ephemeral Windows runner, after checking
-their hashes and the scanner's status and signature age. An unavailable scanner,
+their hashes and the scanner's status and signature age. If the hosted image
+has broad C: or D: exclusions, the workflow removes those exclusions **only on
+that disposable runner** so Defender can scan the files; it never changes the
+owner's computer or adds exclusions. Any other exclusions stop the job. An unavailable scanner,
 failed checkout, stale signatures or detected threat is **not** a clean result.
 Even a clean source scan is not a scan of the original ZIP and is not Microsoft's
 final analyst determination.

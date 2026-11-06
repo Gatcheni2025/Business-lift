@@ -23,10 +23,22 @@ jobs:
           if (-not $status.AMServiceEnabled -or -not $status.AntivirusEnabled) {
             throw 'Microsoft Defender Antivirus is not active on this runner. No Microsoft scan was performed.'
           }
+          # The disposable GitHub-hosted Windows image may exclude whole local
+          # drives. Remove only those broad exclusions on this runner, so the
+          # requested on-demand scan can actually inspect the source files.
+          # Never add exclusions or change the user's computer.
+          $preference = Get-MpPreference
+          foreach ($path in @($preference.ExclusionPath)) {
+            if ($path -in @('C:\', 'D:\')) {
+              Write-Host ('Removing broad exclusion from this disposable runner: ' + $path)
+              Remove-MpPreference -ExclusionPath $path -ErrorAction Stop
+            }
+          }
           $preference = Get-MpPreference
           $exclusions = @($preference.ExclusionPath; $preference.ExclusionExtension; $preference.ExclusionProcess) |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           if (@($exclusions).Count -gt 0) {
+            $exclusions | ForEach-Object { Write-Host ('Remaining runner exclusion: ' + $_) }
             throw 'This runner has Defender exclusions. No conclusive source scan was performed.'
           }
           try { Update-MpSignature -ErrorAction Stop | Out-Null }
