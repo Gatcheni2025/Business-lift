@@ -98,6 +98,8 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       D.fail(409,'Choose your current verified owner ID or passport.');
     linkedIdentity=JSON.parse((await decryptSelfie(Buffer.from(identityRecord.detailsEncrypted,'base64'))).toString('utf8'));
   }
+  if(linkedIdentity&&data.documentNumber&&data.documentNumber!==linkedIdentity.documentNumber)
+    D.fail(422,'The entered ID/passport number does not match your linked verified document.');
   const values={firstName:D.text(data.firstName,'name',80),surname:D.text(data.surname,'surname',80),
    phone:phone(seller.phone),documentKind:linkedIdentity?.kind||data.documentKind,
    documentNumber:D.text(linkedIdentity?.documentNumber||data.documentNumber,'ID or passport number',50),
