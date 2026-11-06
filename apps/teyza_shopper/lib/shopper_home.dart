@@ -1602,10 +1602,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         onSelected:(_)=>selectSellerFilter(option.$1)))
     ]));
 
+  // Public directory listings may appear in yellow; only verified Teyza
+  // merchants show green. Never use private or unapproved seller records here.
+  List<NearbyListing> get nearbySellerEntries {
+    if(area==null)return [];
+    final query=search.trim().toLowerCase();
+    final mapListings=displayedOnline.where((s)=>
+      (sellerFilter=='all'||s.shopCategory==sellerFilter)&&
+      s.lat!=null&&s.lng!=null&&
+      km(area!.lat,area!.lng,s.lat!,s.lng!)<=searchRadiusKm&&
+      (query.isEmpty||(s.name+' '+s.area+' '+s.address).toLowerCase().contains(query))
+    ).toList();
+    return mergeNearbyListings(nearbySellers,mapListings,area:area).take(35).toList();
+  }
   Widget sellerStories(){
-    final sellers=nearbySellers;
+    final sellers=nearbySellerEntries;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Sellers near you',subtitle:'Green verified · yellow awaiting verification',
+      section('Sellers near you',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
@@ -1616,16 +1629,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else SizedBox(height:76+MediaQuery.textScalerOf(context).scale(33),
         child:ListView.builder(key:const PageStorageKey<String>('nearby-seller-stories'),
           scrollDirection:Axis.horizontal,itemCount:sellers.length,itemBuilder:(context,index){
-            final shop=sellers[index];
-            return Semantics(button:true,label:'Open ${shop.name}',
-              child:InkWell(key:ValueKey('seller-story-${shop.id}'),onTap:()=>openShop(shop),
+            final entry=sellers[index],merchant=entry.merchant,directory=entry.directory;
+            final verified=merchant?.identityVerified==true;
+            final key=merchant?.id??directory!.id;
+            return Semantics(button:true,label:'Open ${entry.name} · ${verified?'Teyza verified':'Not Teyza verified'}',
+              child:InkWell(key:ValueKey('seller-story-$key'),
+                onTap:()=>merchant!=null?openShop(merchant):selectDirectory(directory!),
                 borderRadius:BorderRadius.circular(18),
                 child:SizedBox(width:86,child:Column(children:[
                   Container(padding:const EdgeInsets.all(3),decoration:BoxDecoration(shape:BoxShape.circle,
-                    border:Border.all(color:shop.identityVerified?green:const Color(0xFFE7B31F),width:3)),
-                    child:ClipOval(child:photo(shop.photo,size:58))),
+                    border:Border.all(color:verified?green:const Color(0xFFE7B31F),width:3)),
+                    child:ClipOval(child:merchant!=null?
+                      photo(merchant.photo,size:58):onlinePhoto(directory!,width:58,height:58))),
                   const SizedBox(height:5),
-                  Text(shop.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
+                  Text(entry.name,maxLines:2,textAlign:TextAlign.center,overflow:TextOverflow.ellipsis,
                     style:const TextStyle(color:ink,fontSize:11,fontWeight:FontWeight.w700))
                 ]))));
           }))
@@ -1633,18 +1650,18 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Widget allSellersPage(){
-    final sellers=nearbySellers;
+    final sellers=nearbySellerEntries;
     return RefreshIndicator(onRefresh:()=>load(),child:ListView.builder(
       key:const PageStorageKey<String>('all-nearby-sellers-page'),
       physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),
       itemCount:sellers.length+1,itemBuilder:(context,index){
         if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           businessFilters(),
-          section('All nearby sellers',subtitle:'Listed Teyza businesses around '+locationName),
+          section('All nearby sellers',subtitle:'Teyza verified and public directory listings around '+locationName),
           if(sellers.isEmpty)empty('No sellers in this category yet',
             'Choose another business type or shopping area.')
         ]);
-        return shopTile(sellers[index-1]);
+        return nearbyListingTile(sellers[index-1]);
       }));
   }
 
