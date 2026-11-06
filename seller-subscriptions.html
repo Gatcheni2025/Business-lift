@@ -115,7 +115,7 @@
     <label class="teyza-billing-terms"><input id="mandateConsent" type="checkbox" required> I have read and authorise the R99.00 monthly debit-order mandate, including the first date, collection day and the bank account above. I understand this request does not initiate a debit.</label>
     <button type="submit" id="mandateSign" class="p-button p-button--lime" disabled>Sign &amp; submit mandate to Teyza admin</button>
    </form>
-   <div class="teyza-billing-actions"><button type="button" id="mandateReload" class="p-button p-button--outline">Refresh my mandate</button></div>
+   <div class="teyza-billing-actions"><button type="button" id="mandateReload" class="p-button p-button--outline">Refresh my mandate</button><button type="button" id="mandateWithdraw" class="p-button p-button--outline" hidden>Withdraw pending mandate request</button></div>
   </div>
   <p id="mandateStatus" role="status" aria-live="polite">Loading secure seller authorisation…</p>
   <p class="p-fine-print">This website saves your mandate securely and queues it for authorised Teyza administrators. A collection provider must independently register or validate it (including any bank authentication); a confirmed successful collection is required before debit-order-funded benefits can activate. Paystack remains the payment gateway for eligible shopper orders for physical goods.</p>
