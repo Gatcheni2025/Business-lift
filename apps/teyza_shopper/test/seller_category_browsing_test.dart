@@ -36,7 +36,9 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('business-filter-spaza')));await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-story-spaza1')),findsOneWidget);
     expect(find.byKey(const ValueKey('seller-story-retail1')),findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('business-filter-all')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('business-filter-all')));await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-story-retail1')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('all-nearby-sellers')));await tester.pumpAndSettle();
     expect(find.text('All nearby sellers'),findsOneWidget);
     expect(find.text('Corner Shop'),findsWidgets);
@@ -60,6 +62,24 @@ void main(){
     expect(find.text('Teyza Verified'),findsWidgets);
     expect(find.text('Followers'),findsNothing);
     expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Shop filters products by the selected business type',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[
+      seller('corner','Corner Shop','spaza',products:[
+        {'id':'bread','name':'Shop bread','category':'Bakery','priceCents':1400,'stock':4}]),
+      seller('salon','Local Salon','variety',products:[
+        {'id':'soap','name':'Salon soap','category':'Personal Care','priceCents':2000,'stock':4}]),
+    ]);
+    await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
+    final local=find.byKey(const ValueKey('business-filter-variety'));
+    await tester.ensureVisible(local);await tester.pumpAndSettle();
+    await tester.tap(local);await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shop-product-salon-soap')),findsOneWidget);
+    expect(find.byKey(const ValueKey('shop-product-corner-bread')),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

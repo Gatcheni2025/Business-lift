@@ -1003,8 +1003,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   List<ShopProduct> get allPublishedProducts => [
     for(final shop in nearbyReal)
-      for(final p in shop.rangeProducts)
-        if(p.priceCents>0)ShopProduct(shop,p)
+      if(sellerFilter=='all'||shop.shopCategory==sellerFilter)
+        for(final p in shop.rangeProducts)
+          if(p.priceCents>0)ShopProduct(shop,p)
   ];
   List<ShopProduct> get featured {
     return discoverShopProducts(nearbyReal,type:discoveryType,category:category,query:search);
@@ -1351,6 +1352,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const SizedBox(height:5),
           const Text('Products published by participating Teyza shops.',
             style:TextStyle(color:muted,fontSize:12)),
+          const SizedBox(height:14),businessFilters(),
           const SizedBox(height:14),
           TextField(controller:productTabController,
             onChanged:(value)=>setState(()=>productTabSearch=value),
@@ -2246,7 +2248,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ])));
     if(chosen!=null&&mounted)openShop(chosen);
   }
-  Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
+  Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(key:PageStorageKey<String>('shop-profile-${shop.id}'),physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
     TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
       icon:const Icon(Icons.arrow_back),
       label:Text(teyzaBrowseLabel(shop.shopCategory))),
@@ -2279,7 +2281,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               label:const Text('Message shop'),onPressed:()=>chatWithShop(shop)),
           OutlinedButton.icon(onPressed:()=>openDirections(name:shop.name,address:shop.address,
             area:shop.area,latitude:shop.latitude,longitude:shop.longitude),
-            icon:const Icon(Icons.directions_outlined),label:const Text('Directions')),
+            icon:const Icon(Icons.directions_outlined),label:const Text('Directions to shop')),
           if(shop.phone.isNotEmpty)OutlinedButton.icon(onPressed:()=>contactBusiness(shop.phone),
             icon:const Icon(Icons.phone_outlined),label:const Text('Call'))
         ])

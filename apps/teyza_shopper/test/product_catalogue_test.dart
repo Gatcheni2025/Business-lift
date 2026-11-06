@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'shopper_ui_helpers.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:teyza_shopper/product_catalogue.dart';
@@ -135,10 +136,13 @@ void main(){
       initialArea:areas.first,enableBackgroundServices:false,catalogueLoader:() async=>[shop],directoryLoader:(a,t,r) async=>[]))));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final card=find.byKey(const ValueKey('nearby-photo-shop'));
-    await tester.scrollUntilVisible(card,180,scrollable:find.byType(Scrollable).first);await tester.tap(card);await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first,const Offset(0,-400));await tester.pumpAndSettle();
+    await revealShopperHome(tester,card);await tester.tap(card);await tester.pumpAndSettle();
+    final profile=find.byKey(const PageStorageKey<String>('shop-profile-photo-shop'));
+    final profileScroll=find.descendant(of:profile,matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('White bread · 700 g'),180,scrollable:profileScroll);
     expect(find.text('White bread · 700 g'),findsOneWidget);expect(find.text('R0.00'),findsNothing);
     expect(tester.takeException(),isNull);await capture('shopper-selected-range');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
 }
+

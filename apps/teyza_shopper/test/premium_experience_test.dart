@@ -9,6 +9,7 @@ import 'package:teyza_shopper/shopper_account.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/shopper_home.dart';
 import 'package:teyza_shopper/shopper_discovery.dart';
+import 'shopper_ui_helpers.dart';
 
 class FakeSession extends ShopperSession {
   FakeSession(){isReady=true;}
@@ -96,7 +97,7 @@ void main(){
       directoryLoader:(area,type,radius) async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final store=find.byKey(const ValueKey('nearby-test-store'));
-    await tester.scrollUntilVisible(store,180,scrollable:find.byType(Scrollable).first);
+    await revealShopperHome(tester,store);
     await tester.tap(store);await tester.pumpAndSettle();
     final add=find.text('+ Add');
     // The product grid is intentionally non-scrollable inside the shop list.
@@ -246,8 +247,8 @@ void main(){
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     expect(find.text('Ordering not available'),findsNothing);
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
-    await tester.ensureVisible(card);await tester.pumpAndSettle();
     final buy=find.descendant(of:card,matching:find.text('Buy here'));
+    await revealShopperHome(tester,buy);
     await tester.tap(buy);await tester.pumpAndSettle();
     expect(find.text('Browse all shops'),findsOneWidget,
       reason:'Buy here opens shop details without inventing products or checkout');
@@ -338,7 +339,7 @@ void main(){
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final card=find.byKey(const ValueKey('nearby-approved-no-prices'));
-    await tester.ensureVisible(card);await tester.pumpAndSettle();
+    await revealShopperHome(tester,card);
     await tester.tap(card);await tester.pumpAndSettle();
     expect(find.text('Verified Spaza'),findsWidgets);
     await tester.scrollUntilVisible(find.text('Products coming soon'),200,
@@ -454,9 +455,7 @@ void main(){
       directoryLoader:(area,type,radius)async=>[])));
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     final add=find.byKey(const ValueKey('find-essential-milk'));
-    final homeScroll=find.descendant(of:find.byKey(const PageStorageKey<String>('shopper-home')),
-      matching:find.byType(Scrollable)).first;
-    await tester.scrollUntilVisible(add,200,scrollable:homeScroll);
+    await revealShopperHome(tester,add);
     await tester.tap(add);await tester.pumpAndSettle();
     expect(find.text('No matching products'),findsOneWidget);
     expect(find.byKey(const ValueKey('floating-cart')),findsNothing);
