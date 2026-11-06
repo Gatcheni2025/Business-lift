@@ -283,7 +283,7 @@ class _AccountState extends State<ShopperAccountPanel> {
   Widget build(BuildContext context)=>AnimatedBuilder(
     animation:widget.session,
     builder:(context,child){
-      final logged=widget.session.idToken!=null;
+      final logged=widget.session.idToken!=null&&!widget.session.anonymousShopper;
       return ListView(padding:const EdgeInsets.fromLTRB(20,22,20,36),children:[
         Container(alignment:Alignment.center,padding:const EdgeInsets.symmetric(vertical:17),
           child:Column(children:[
