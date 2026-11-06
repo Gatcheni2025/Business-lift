@@ -230,7 +230,7 @@ async function main(){
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
-   await f.page.getByRole('button',{name:'Subscriptions',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack membership',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Legacy Paystack membership',{exact:true}).waitFor();
    await f.page.getByText('Seller products',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
@@ -266,7 +266,7 @@ async function main(){
     }
     return false;
    }});
-   await f.page.getByRole('button',{name:'Subscriptions',exact:true}).click();
+   await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
    await f.page.getByRole('heading',{name:'Account closures and payment review'}).waitFor();
    await f.page.getByText('needs attention',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Open seller payment review'}).click();
