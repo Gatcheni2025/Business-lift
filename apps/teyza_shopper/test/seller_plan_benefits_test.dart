@@ -35,8 +35,8 @@ void main(){
    expect(find.textContaining('Pay securely with Paystack'),findsNothing);
    expect(find.textContaining('R49'),findsNothing);
    expect(api.calls,contains('seller_summary'));
-   expect(api.calls,never(contains('billing_checkout')));
-   expect(api.calls,never(contains('promote_checkout')));
+   expect(api.calls,isNot(contains('billing_checkout')));
+   expect(api.calls,isNot(contains('promote_checkout')));
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Membership status reload is read-only and never initiates a debit',(tester)async{
