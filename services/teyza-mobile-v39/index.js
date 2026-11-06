@@ -205,6 +205,15 @@ exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',tim
   .where('status','in',['queued','configuration_required']).limit(30).get();
  for(const row of rows.docs)await whatsappApproval.deliver(row.id);
 });
+// Backup payment confirmation if a customer closes the browser or a
+// Paystack webhook is delayed. Never treat a client redirect as proof of payment.
+exports.teyzaMembershipPaymentReconcile=onSchedule({
+  schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',
+  maxInstances:1,timeoutSeconds:240,memory:'256MiB',secrets:[paystackKey]
+},async()=>{
+  const result=await service.reconcilePendingMemberships();
+  if(result.checked||result.errors)console.log('TEYZA_MEMBERSHIP_RECONCILE',result);
+});
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});
 exports.teyzaPaystackCancellationCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaPaystackCancellations/{sellerUid}',secrets:[paystackKey]},
