@@ -27,7 +27,8 @@ class SignedQaWorkflowTests(unittest.TestCase):
                     ("flutter build appbundle", "flutter build apk", "flutter build ipa")):
                 self.assertIn("--dart-define=TEYZA_PAYMENT_CHANNEL=store", line)
         self.assertIn("defaultValue:'store'", self.plan)
-        self.assertIn("!Platform.isIOS&&Platform.isAndroid&&teyzaPaymentChannel=='direct'", self.plan)
+        self.assertIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
+        self.assertIn("isAndroid&&channel=='direct'", self.plan)
 
     def test_qa_artifacts_are_distinct_and_manifest_is_truthful(self):
         for marker in ("teyza-android-apk-", "teyza-android-aab-", "teyza-ios-release-"):
@@ -39,4 +40,5 @@ class SignedQaWorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
