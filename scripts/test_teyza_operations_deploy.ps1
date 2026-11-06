@@ -22,10 +22,13 @@ function npm { $global:LASTEXITCODE = 0 }
 function Invoke-RestMethod { param($Uri,$Headers,$TimeoutSec)
   if ($Uri -like 'https://api.paystack.co/plan/*') {
     $amount = if ($global:operationsScenario -eq 'wrong-plan') { 4900 } else { 9900 }
-    return @{status=$true;data=@{plan_code='PLN_test12345';amount=$amount;currency='ZAR';interval='monthly'}}
+    $domain = if ($global:operationsScenario -eq 'wrong-domain') { 'test' } else { 'live' }
+    $invoiceLimit = if ($global:operationsScenario -eq 'limited-plan') { 1 } else { 0 }
+    return @{status=$true;data=@{plan_code='PLN_test12345';domain=$domain;amount=$amount;currency='ZAR';interval='monthly';invoice_limit=$invoiceLimit}}
   }
   if ($global:operationsScenario -eq 'old-health') { return @{ok=$true;version='3.20.0'} }
   return @{ok=$true;version='3.25.0';googlePlaceClaims=$true;sellerApprovalBeforeCheckout=$true;agentCommissionEnabled=$false;verificationUploads=$true;sellerOnboarding=$true;
+    paystackCheckoutLock=$true;paystackRenewalInvoiceVerification=$true;paystackDeletionCancellationSupport=$true;
     approvalRequired=$true;paystackCheckoutAvailable=$true;adminOperations=$true;adminReview=$true;
     adminProductReview=$false;automaticProductPublication=$true;adminComplimentaryAccess=$true;
     adminPaystackVerify=$true;manualReceiptsRetired=$true;billingMode='paystack_checkout'}
@@ -42,12 +45,16 @@ try {
   if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'Test keys must stop before production changes.' }
   $result = Exercise 'wrong-plan'
   if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'An incorrect live plan must stop before production changes.' }
+  $result = Exercise 'wrong-domain'
+  if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'A test-domain plan must stop before production changes.' }
+  $result = Exercise 'limited-plan'
+  if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'A limited renewal plan must stop before production changes.' }
   $result = Exercise 'old-health'
   if (-not $result.failed -or $result.functions.Count -ne 1 -or $result.website.Count) { throw 'An old backend must prevent the admin overlay.' }
   $result = Exercise 'ready'
   if ($result.failed -or $result.functions.Count -ne 1 -or $result.website.Count -ne 1) { throw 'Validated scoped deploy did not complete.' }
   $deployment = $result.functions[0]
-  foreach ($name in @('teyzaMobile','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerBillingChanged')) {
+  foreach ($name in @('teyzaMobile','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerBillingChanged','teyzaPaystackCancellationCreated','teyzaPaystackCancellationRetry')) {
     if ($deployment -notmatch ('functions:teyza-mobile:' + $name)) { throw ('Missing scoped function ' + $name) }
   }
   if ($deployment -match '--only hosting|--only firestore|--force') { throw 'A scoped deploy must not replace unrelated resources.' }

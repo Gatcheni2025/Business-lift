@@ -17,6 +17,19 @@ class _PlanApi extends TeyzaMobileApi {
  }
 }
 void main(){
+ testWidgets('recurring prices are shown before a seller agrees to checkout',(tester)async{
+  bool? agreed;
+  await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:
+   TextButton(onPressed:()async{agreed=await showDialog<bool>(context:context,
+    builder:(_)=>const SellerSubscriptionTermsDialog());},child:const Text('Open terms'))))));
+  await tester.tap(find.text('Open terms'));await tester.pumpAndSettle();
+  expect(find.textContaining('R49'),findsOneWidget);
+  expect(find.textContaining('R99 each month'),findsOneWidget);
+  expect(find.textContaining('until you cancel'),findsOneWidget);
+  await tester.tap(find.text('Not now'));await tester.pumpAndSettle();expect(agreed,false);
+  await tester.tap(find.text('Open terms'));await tester.pumpAndSettle();
+  await tester.tap(find.text('Agree and continue'));await tester.pumpAndSettle();expect(agreed,true);
+ });
  testWidgets('free signup prompts upgrade only on product action and offers R49, R99, and paid-only promotion',
   (tester)async{
    await tester.binding.setSurfaceSize(const Size(420,860));

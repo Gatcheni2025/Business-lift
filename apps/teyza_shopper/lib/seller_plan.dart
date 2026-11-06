@@ -7,6 +7,15 @@ import 'teyza_mobile_api.dart';
 // Store-distributed Android and iOS builds must use store-compliant billing.
 // Only a deliberately configured direct-distribution build may redirect to Paystack.
 const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
+const sellerSubscriptionTermsVersion='seller-r49-r99-2026-11';
+class SellerSubscriptionTermsDialog extends StatelessWidget {
+ const SellerSubscriptionTermsDialog({super.key});
+ @override Widget build(BuildContext context)=>AlertDialog(
+  title:const Text('Confirm monthly renewal'),
+  content:const Text('Your first eligible month costs R49; otherwise the first payment is R99. After that, your card is charged R99 each month until you cancel. You can manage or cancel the subscription through Paystack.'),
+  actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('Not now')),
+   FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text('Agree and continue'))]);
+}
 /// Payment is optional and is offered when the seller chooses to add products.
 /// iOS boosts/listings require StoreKit instead of a Paystack redirect.
 class SellerPlanPage extends StatefulWidget {
@@ -56,7 +65,12 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   if(promotion&&!paid){setState(()=>error='Upgrade your membership first.');return;}
   setState((){busy=true;error=null;});
   try{
-   final result=await api.call(promotion?'promote_checkout':'billing_checkout');
+   if(!promotion){
+    final consent=await showDialog<bool>(context:context,builder:(_)=>const SellerSubscriptionTermsDialog());
+    if(consent!=true||!mounted)return;
+   }
+   final result=await api.call(promotion?'promote_checkout':'billing_checkout',promotion?{}:
+    {'recurringConsent':true,'termsVersion':sellerSubscriptionTermsVersion});
    if(!mounted)return;
    final raw=result['checkoutUrl']?.toString()??'';
    final uri=Uri.tryParse(raw);
@@ -136,7 +150,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
     title:const Text('Temporary product access'),subtitle:Text(complimentaryUntil==null?
      'An administrator granted temporary access. This is not a payment.':
      'Access ends '+DateTime.fromMillisecondsSinceEpoch(complimentaryUntil!).toLocal().toString().split(' ').first+'. No payment was recorded.'))),
-   if(paid&&paystackAllowed)Padding(
+   if(paystackAllowed&&(paid||['scheduled','active','payment_failed'].contains(renewalSetup)))Padding(
     padding:const EdgeInsets.only(bottom:12),
     child:OutlinedButton(onPressed:busy?null:manageSubscription,
      child:const Text('Manage or cancel monthly subscription'))),
