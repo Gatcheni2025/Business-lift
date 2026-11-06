@@ -33,7 +33,7 @@ class SellerPlanPage extends StatefulWidget {
 class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver {
  bool busy=false,paid=false,complimentary=false,promoted=false,loading=true,approved=false;
  bool? introEligible;
- String? error,paymentReference,renewalSetup;
+ String? error,paymentReference,renewalSetup,membershipStatus;
  int? promotionEndsAt,paidUntil,complimentaryUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
  bool get paystackAllowed=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
@@ -45,12 +45,19 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  }
  Future<void> refresh() async {
   try {
+   // Website/direct Android membership checks are safe, server-verified and do
+   // not start a purchase. Store-distributed builds remain IAP-policy gated.
+   Map<String,dynamic>? payment;
+   if(paystackAllowed){
+     try{payment=await api.call('billing_status',{'checkNow':true});}
+     catch(_){/* Keep seller summary available during payment-provider outages. */}
+   }
    final data=await api.call('seller_summary');
    if(mounted)setState((){approved=data['approvalStatus']=='approved';paid=data['listingPaid']==true;complimentary=data['complimentaryAccess']==true;promoted=data['promotionActive']==true;
     paidUntil=(data['paidUntil'] as num?)?.toInt();
     complimentaryUntil=(data['complimentaryUntil'] as num?)?.toInt();
     introEligible=data['introEligible'] is bool?data['introEligible'] as bool:null;
-    renewalSetup=data['renewalSetup']?.toString();
+    renewalSetup=data['renewalSetup']?.toString();membershipStatus=payment?['membershipStatus']?.toString();
     promotionEndsAt=(data['promotionEndsAt'] as num?)?.toInt();loading=false;});
   }catch(e){if(mounted)setState((){loading=false;error=mobileError(e);});}
  }
@@ -144,6 +151,14 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
    if(loading)const LinearProgressIndicator(),
    if(error!=null)Padding(padding:const EdgeInsets.only(bottom:15),
     child:Text(error!,style:const TextStyle(color:Color(0xFF9C3412)))),
+   if(paystackAllowed&&membershipStatus=='pending')const Card(child:ListTile(
+     leading:Icon(Icons.schedule_outlined,color:Color(0xFFB57510)),
+     title:Text('Membership payment pending'),
+     subtitle:Text('Paystack is processing your payment. Teyza will activate membership automatically once confirmed. Use Refresh membership status to check again.'))),
+   if(paystackAllowed&&membershipStatus=='review_required')const Card(child:ListTile(
+     leading:Icon(Icons.info_outline,color:Color(0xFFB57510)),
+     title:Text('Payment requires review'),
+     subtitle:Text('Payment was received but eligibility changed. Contact support before paying again.'))),
    if(paid)Card(child:ListTile(leading:const Icon(Icons.verified,color:Color(0xFF078B59)),
     title:const Text('Business membership active'),
     subtitle:Text(paidUntil==null?'You can list products.':
@@ -171,7 +186,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Standard renewal is R99 per month'
     ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Continue on website · R49':
       introEligible==false?'Continue on website · R99':'Check price on website'):purchaseLabel,
-    onPressed:approved&&widget.fromProductAction&&paystackAllowed?()=>beginCheckout(promotion:false):null),
+    onPressed:approved&&widget.fromProductAction&&paystackAllowed&&membershipStatus!='pending'?()=>beginCheckout(promotion:false):null),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',
      'Seven days of promotion after verified payment',
