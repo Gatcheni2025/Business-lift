@@ -196,11 +196,16 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       D.seller(account,uid);
       // Approval and identity evidence can change after checkout starts.
       // A subsequent charge must be recorded for refund review, not unlock products.
-      const current=P.state(uid,account,setupSnap.exists?setupSnap.data():{},
-        verificationSnap.exists?verificationSnap.data():null,
-        shopSnap.exists?shopSnap.data():null,bill,now);
-      const accessChanged=account.approvalStatus!=='approved'||!current.ready||
-        !current.approved||current.status==='suspended';
+      const setup=setupSnap.exists?setupSnap.data():{};
+      const selfie=verificationSnap.exists?verificationSnap.data():null;
+      // Legacy approved accounts may predate the modern onboarding record.
+      // Keep their supported path, but never accept an outstanding selfie review.
+      const modern=setup.requiredVersion===2;
+      const current=modern?P.state(uid,account,setup,selfie,
+        shopSnap.exists?shopSnap.data():null,bill,now):null;
+      const accessChanged=account.approvalStatus!=='approved'||
+        (selfie!=null&&selfie.status!=='approved')||
+        (modern&&(!current.ready||!current.approved||current.status==='suspended'));
       if(account.deletionPending===true||accessChanged){
         tx.update(payRef,{status:'refund_review',verifiedAt:now,transactionId:String(verified.id||''),
           paymentEnvironment:entry.environment,reviewReason:account.deletionPending===true?
