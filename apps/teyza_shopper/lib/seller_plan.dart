@@ -8,6 +8,9 @@ import 'teyza_mobile_api.dart';
 // Only a deliberately configured direct-distribution build may redirect to Paystack.
 const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
 const sellerSubscriptionTermsVersion='seller-r49-r99-2026-11';
+final Uri teyzaSellerMembershipPage=Uri.https('teyza.co.za','/seller-subscriptions.html');
+bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>
+  isAndroid&&channel=='direct';
 class SellerSubscriptionTermsDialog extends StatelessWidget {
  const SellerSubscriptionTermsDialog({super.key});
  @override Widget build(BuildContext context)=>AlertDialog(
@@ -33,8 +36,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  String? error,paymentReference,renewalSetup;
  int? promotionEndsAt,paidUntil,complimentaryUntil;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
- bool get paystackAllowed=>!Platform.isIOS&&Platform.isAndroid&&teyzaPaymentChannel=='direct';
- String get purchaseLabel=>paystackAllowed?'Pay with Paystack':'Store billing coming soon';
+ bool get paystackAllowed=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
+ String get purchaseLabel=>paystackAllowed?'Continue on the website':'Store billing coming soon';
  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);refresh();}
  @override void dispose(){WidgetsBinding.instance.removeObserver(this);super.dispose();}
  @override void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -66,11 +69,13 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
   setState((){busy=true;error=null;});
   try{
    if(!promotion){
-    final consent=await showDialog<bool>(context:context,builder:(_)=>const SellerSubscriptionTermsDialog());
-    if(consent!=true||!mounted)return;
+    // The website authenticates the same seller, presents the recurring terms,
+    // and verifies the transaction server-side. No account token is in the URL.
+    if(!await launchUrl(teyzaSellerMembershipPage,mode:LaunchMode.externalApplication))
+      throw StateError('Could not open the Teyza membership page. Try again.');
+    return;
    }
-   final result=await api.call(promotion?'promote_checkout':'billing_checkout',promotion?{}:
-    {'recurringConsent':true,'termsVersion':sellerSubscriptionTermsVersion});
+   final result=await api.call('promote_checkout');
    if(!mounted)return;
    final raw=result['checkoutUrl']?.toString()??'';
    final uri=Uri.tryParse(raw);
@@ -162,8 +167,8 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      'Receive orders, enquiries, collection and delivery requests',
      'Manage your products from the seller dashboard',
      'Standard renewal is R99 per month'
-    ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Upgrade for R49 with Paystack':
-      introEligible==false?'Upgrade for R99 with Paystack':'Check price with Paystack'):purchaseLabel,
+    ],action:!widget.fromProductAction?'Add a product to upgrade':paystackAllowed?(introEligible==true?'Continue on website · R49':
+      introEligible==false?'Continue on website · R99':'Check price on website'):purchaseLabel,
     onPressed:approved&&widget.fromProductAction?()=>beginCheckout(promotion:false):null),
    planCard(title:'Promote your business',price:'R29 for 7 days',benefits:const [
      'Display a clearly labelled promoted business in relevant local results',

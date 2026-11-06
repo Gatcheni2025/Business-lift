@@ -5,6 +5,7 @@ import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/shopper_discovery.dart';
 import 'package:teyza_shopper/shopper_home.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
+import 'shopper_ui_helpers.dart';
 
 class _Session extends ShopperSession {
  _Session({bool signedIn=true}){isReady=true;if(signedIn){userId='owner';idToken='token';emailVerified=true;}}
@@ -37,7 +38,7 @@ void main(){
    enableBackgroundServices:false,sellerMobileApi:api,sellerApiFactory:(uid,token)=>_ShopRepo(uid:uid,token:token),
    catalogueLoader:() async=>[],directoryLoader:(_,type,__) async=>type=='spaza'?[place]:[])));
   await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-  final card=find.byKey(const ValueKey('nearby-google-1'));await tester.ensureVisible(card);await tester.tap(card);await tester.pumpAndSettle();
+  final card=find.byKey(const ValueKey('nearby-google-1'));await revealShopperHome(tester,card);await tester.tap(card);await tester.pumpAndSettle();
   final claim=find.text('Own this shop? Claim it on Teyza');
   for(var i=0;i<12&&claim.evaluate().isEmpty;i++){
    await tester.drag(find.byType(ListView).first,const Offset(0,-220));await tester.pumpAndSettle();
@@ -58,7 +59,7 @@ void main(){
    enableBackgroundServices:false,sellerMobileApi:api,sellerApiFactory:(uid,token)=>_ShopRepo(uid:uid,token:token),
    catalogueLoader:() async=>[],directoryLoader:(_,type,__) async=>type=='spaza'?[place]:[])));
   await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
-  final card=find.byKey(const ValueKey('nearby-google-1'));await tester.ensureVisible(card);await tester.tap(card);await tester.pumpAndSettle();
+  final card=find.byKey(const ValueKey('nearby-google-1'));await revealShopperHome(tester,card);await tester.tap(card);await tester.pumpAndSettle();
   final claim=find.text('Own this shop? Claim it on Teyza');
   for(var i=0;i<12&&claim.evaluate().isEmpty;i++){await tester.drag(find.byType(ListView).first,const Offset(0,-220));await tester.pumpAndSettle();}
   await tester.ensureVisible(claim);await tester.tap(claim);await tester.pumpAndSettle();
@@ -68,3 +69,4 @@ void main(){
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
 }
+

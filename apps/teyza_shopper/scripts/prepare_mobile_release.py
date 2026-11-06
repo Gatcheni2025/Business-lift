@@ -86,6 +86,17 @@ def android(signing):
     # return to the same Flutter activity; do not intercept that URI in Dart.
     if main.get(key + "taskAffinity") == "":
         del main.attrib[key + "taskAffinity"]
+    # A token-free return link opens the app after a website visit. It grants no
+    # access and carries no payment reference; the server remains authoritative.
+    existing_return = any(
+        data.get(key + 'scheme') == 'teyza' and data.get(key + 'host') == 'open'
+        for item in main.findall('intent-filter') for data in item.findall('data'))
+    if not existing_return:
+        intent = ET.SubElement(main, 'intent-filter')
+        ET.SubElement(intent, 'action', {key + 'name': 'android.intent.action.VIEW'})
+        ET.SubElement(intent, 'category', {key + 'name': 'android.intent.category.DEFAULT'})
+        ET.SubElement(intent, 'category', {key + 'name': 'android.intent.category.BROWSABLE'})
+        ET.SubElement(intent, 'data', {key + 'scheme': 'teyza', key + 'host': 'open'})
     for name, value in [("firebase_messaging_auto_init_enabled", "false"),
                         ("firebase_analytics_collection_enabled", "false")]:
         ET.SubElement(manifest.find("application"), "meta-data", {key + "name": name, key + "value": value})
@@ -276,6 +287,9 @@ def ios(signing='unsigned'):
         "FirebaseMessagingAutoInitEnabled": False,
         "FirebaseAnalyticsCollectionEnabled": False,
     })
+    url_types = info.setdefault("CFBundleURLTypes", [])
+    if not any("teyza" in item.get("CFBundleURLSchemes", []) for item in url_types if isinstance(item, dict)):
+        url_types.append({"CFBundleTypeRole":"Viewer", "CFBundleURLSchemes":["teyza"]})
     app_id = native_app_id("ios")
     if app_id:
         info["TeyzaFirebaseAppId"] = app_id

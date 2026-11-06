@@ -17,6 +17,15 @@ class _PlanApi extends TeyzaMobileApi {
  }
 }
 void main(){
+ test('website checkout is available only to explicitly direct-distributed Android builds',(){
+  expect(teyzaCanOpenMembershipPage(isAndroid:true,channel:'direct'),isTrue);
+  expect(teyzaCanOpenMembershipPage(isAndroid:true,channel:'store'),isFalse);
+  expect(teyzaCanOpenMembershipPage(isAndroid:false,channel:'direct'),isFalse);
+  expect(teyzaCanOpenMembershipPage(isAndroid:false,channel:'store'),isFalse);
+  expect(teyzaSellerMembershipPage.scheme,'https');
+  expect(teyzaSellerMembershipPage.host,'teyza.co.za');
+  expect(teyzaSellerMembershipPage.query,isEmpty);
+ });
  testWidgets('recurring prices are shown before a seller agrees to checkout',(tester)async{
   bool? agreed;
   await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:
