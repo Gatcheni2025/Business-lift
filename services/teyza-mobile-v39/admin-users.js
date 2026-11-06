@@ -1,6 +1,7 @@
 'use strict';
 const crypto=require('node:crypto');
 const D=require('./domain');
+const P=require('./publication');
 const {recentAdmin}=require('./seller-experience');
 
 // Only privileged server-side Firebase Admin SDK functions are used. Never
@@ -52,15 +53,30 @@ function createAdminUsers({db,clock=Date.now,rate,
   }
   if(action==='ops_user_detail'){
    const target=D.id(data.userUid),user=await requireSupport(getAuthUser)(target);
-   const [provision,seller]=await Promise.all([
+   const [provision,seller,verification,onboarding,shop,billing]=await Promise.all([
      doc('teyzaAdminProvisionedUsers/'+target).get(),
-     doc('teyzaSellerAccounts/'+target).get()
+     doc('teyzaSellerAccounts/'+target).get(),
+     doc('teyzaMobileVerification/'+target).get(),
+     doc('teyzaSellerOnboarding/'+target).get(),
+     doc('teyzaPublicShops/'+target).get(),
+     doc('teyzaBilling/'+target).get()
    ]);
+   const account=seller.exists?seller.data():null;
+   const selfie=verification.exists?verification.data():null;
+   const bill=billing.exists?billing.data():null;
+   const publication=account?P.state(target,account,onboarding.exists?onboarding.data():{},
+     selfie,shop.exists?shop.data():null,bill,clock()):null;
    return {user:clean(user,provision.exists?provision.data():null),
-     seller:seller.exists?{
-       shopName:seller.data().shopName||'',
-       category:seller.data().category||'',
-       approvalStatus:seller.data().approvalStatus||'pending',
+     seller:account?{
+       shopName:account.shopName||'',
+       category:account.category||'',
+       approvalStatus:account.approvalStatus||'pending',
+       verificationStatus:selfie?.status||'not_submitted',
+       verifiedOwner:publication.approved,
+       registrationReady:publication.ready,
+       sellingUnlocked:publication.canSell,
+       membershipPaid:P.entitled(target,account,bill,clock()),
+       complimentaryAccess:P.complimentary(target,account,bill,clock()),
      }:null};
   }
   if(action==='ops_user_create'){

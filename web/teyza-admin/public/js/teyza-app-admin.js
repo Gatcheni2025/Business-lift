@@ -35,6 +35,21 @@ function failed(error){
   if(error.status===403){lock(error.message+' Administrator access must be assigned by the Teyza project owner.');return;}
   notice(error.message||'The request could not be completed. Please try again.','error');
 }
+function approvalHint(){
+  const s=state.selected;
+  if(!s)return 'Select a seller to review.';
+  if(!authorised)return 'Renew your administrator session to continue the review.';
+  if(s.sellerUid===state.uid)return 'Another administrator must review your own seller registration.';
+  if(s.expired)return 'This selfie has expired. Request a new selfie before approval.';
+  if(!s.evidenceId)return 'The seller must submit their current ID, passport or company document in the app.';
+  if(s.phoneVerificationRequired===true&&s.phoneVerified===false)return 'The seller must verify their registered phone number by SMS OTP before approval.';
+  if(!state.views.has('identity'))return 'Step 1 of 3: Open and inspect the current ID or passport document above.';
+  if(!state.views.has('selfie'))return 'Step 2 of 3: Open and inspect the current owner selfie above.';
+  if(!$('reviewConfirmed').checked)return 'Step 3 of 3: Confirm that you compared both documents with the shop owner.';
+  if(s.googlePlaceId&&!$('claimConfirmed').checked)return 'Confirm the Google Maps business claim before approval.';
+  if(!state.canApprove())return 'The five-minute evidence review period expired. Open both documents again.';
+  return 'All review checks are complete. You may approve this seller.';
+}
 function updateControls(){
   const s=state.selected,own=s?.sellerUid===state.uid;
   for(const id of controls)$(id).disabled=busy||!authorised;
@@ -45,6 +60,7 @@ function updateControls(){
   $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||
     (s?.phoneVerificationRequired===true&&s?.phoneVerified===false)||(Boolean(s?.googlePlaceId)&&!$('claimConfirmed').checked);
   $('loadMore').hidden=!state.next;
+  if(s){$('decisionHint').textContent=approvalHint();$('approveSeller').title=$('approveSeller').disabled?approvalHint():'Approve the verified seller';}
   for(const [key,id] of [['identity','Identity'],['selfie','Selfie']]){
     const done=state.views.has(key);$('view'+id).classList.toggle('viewed',done);
     set(key+'State',done?'Viewed in this review':key==='identity'?'Open document':'Open photo');
@@ -90,11 +106,8 @@ function selectSeller(row){
   if(row.googlePlaceId){const u=new URL('https://www.google.com/maps/search/');u.searchParams.set('api','1');u.searchParams.set('query',row.shopName||'Shop');u.searchParams.set('query_place_id',row.googlePlaceId);$('claimMapLink').href=u.href;}
   set('identityLabel',row.evidenceKind==='company'?'Company registration':row.evidenceKind==='passport'?'Passport':'ID / passport');
   $('selfReview').hidden=row.sellerUid!==state.uid;
-  set('sellerStatus',row.expired?'New selfie needed':'Awaiting review');
-  $('decisionHint').textContent=row.expired?'This selfie expired. Add a note and request a new selfie.':!row.evidenceId?
-    'No current identity document was found. The seller must submit their ID, passport or company document.':
-    row.phoneVerificationRequired===true&&row.phoneVerified===false?'The seller must first verify the registered mobile number using SMS OTP. ID and selfie review alone cannot complete approval.':
-    'Open the current ID/passport and selfie. The server checks both view receipts before approval.';
+  set('sellerStatus',row.expired?'New selfie needed':row.approvalStatus==='approved'?
+    'Account approved · selfie review pending':'Awaiting ID/selfie review');
   drawQueue();
 }
 function showIdentityDetails(details){
@@ -136,7 +149,7 @@ async function decide(status){
   try{
     const result=await api('admin_seller_review',data);if(!state.current(ticket))return;
     resetDetails();state.select(null);busy=false;
-    notice(status==='approved'?(result.whatsappStatus==='queued'?'Seller approved. WhatsApp is queued, subject to provider setup and delivery.':'Seller approved. No WhatsApp message was requested. The in-app update remains available.'):'Review saved. The owner will receive your note.','success');
+    notice(status==='approved'?(result.whatsappStatus==='queued'?'Seller verification approved. WhatsApp is queued, subject to provider setup and delivery.':'Seller verification approved. Products require an active verified membership or an administrator exception.'):'Review saved. The owner will receive your note.','success');
     await loadQueue();
   }catch(error){if(state.current(ticket)){
     clearViews();failed(error);
