@@ -28,7 +28,7 @@ class FakeDB {
 const now=Date.parse('2026-10-27T08:00:00Z'),secret=crypto.randomBytes(32).toString('base64');
 const actor={uid:'owner',email_verified:true},admin={uid:'admin',teyzaAdmin:true,email_verified:true,auth_time:now/1000};
 const data={requestId:'request1',expectedMandateId:null,amountCents:9900,termsVersion:VERSION,firstDate:'2026-11-01',collectionDay:1,firstName:'Test',surname:'Owner',phone:'0712345678',documentKind:'id',documentNumber:'9001015009087',accountHolder:'Test Owner',bankName:'FNB',branchCode:'000000',accountNumber:'12345678901',accountType:'current',consent:true,identityConsent:true,imageBase64:Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(120)]).toString('base64')};
-function setup(){const db=new FakeDB({'teyzaSellerAccounts/owner':{uid:'owner',category:'spaza',approvalStatus:'pending'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>[files.get(p)]})};const svc=createMandate({db,bucket,sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret),clock:()=>now,rate:async()=>{}});return {db,files,call:(action,d={},a=actor)=>svc.execute(a,action,d)};}
+function setup(){const db=new FakeDB({'teyzaSellerAccounts/owner':{uid:'owner',category:'spaza',approvalStatus:'pending',phone:'+27712345678',shopName:'Test Shop',address:'12 Main Road, Durban'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>[files.get(p)]})};const svc=createMandate({db,bucket,sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret),getAuthUser:async()=>({displayName:'Test Owner'}),clock:()=>now,rate:async()=>{}});return {db,files,call:(action,d={},a=actor)=>svc.execute(a,action,d)};}
 const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
 test('A signed mandate encrypts ID and banking data and never approves, charges or activates the shop',async()=>{const f=setup(),r=await f.call('seller_mandate_submit',data);assert.equal(r.mandate.status,'signed_pending_activation');assert.equal(r.mandate.collectionActive,false);assert.equal(r.mandate.branchCode,'250655');const raw=f.db.records.get('teyzaSellerMandates/owner');assert(!JSON.stringify([...f.db.records]).includes(data.accountNumber));assert(!JSON.stringify(r).includes(data.documentNumber));assert.equal(JSON.parse(cipher.decrypt(Buffer.from(raw.detailsEncrypted,'base64'),secret)).accountNumber,data.accountNumber);assert.equal(f.db.records.get('teyzaSellerAccounts/owner').approvalStatus,'pending');assert.equal(f.files.size,1);assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaBilling/')));assert.equal(raw.terms,terms(data.firstDate,1));});
 test('Exact amount, current terms, explicit consent, ID attachment, dates and bank fields are enforced',async()=>{for(const patch of [{amountCents:1},{termsVersion:'old'},{consent:false},{identityConsent:false},{imageBase64:''},{firstDate:'2026-11-31'},{collectionDay:31},{firstDate:'2026-10-01'},{accountNumber:'bank'},{documentNumber:'short'},{bankName:'forged'}]){const f=setup();await assert.rejects(f.call('seller_mandate_submit',{...data,...patch}),e=>e.status>=400);assert(!f.db.records.has('teyzaSellerMandates/owner'));}});
@@ -38,3 +38,36 @@ test('Only a fresh trusted other administrator can view a current mandate ID and
 test('A reused ID must belong to this seller, remain current and match the entered document number',async()=>{const f=setup();f.db.records.set('teyzaSellerIdentity/owner',{ownerUid:'owner',kind:'id',evidenceId:'doc1',objectPath:'teyza-private/mobile-verification/owner/doc1.enc',expiresAt:now+86400000,detailsEncrypted:cipher.encrypt(Buffer.from(JSON.stringify({documentNumber:data.documentNumber})),secret).toString('base64')});await rejects(f.call('seller_mandate_submit',{...data,imageBase64:undefined,identityEvidenceId:'doc1',documentNumber:'9001015009088'}),422);await f.call('seller_mandate_submit',{...data,imageBase64:undefined,identityEvidenceId:'doc1'});assert.equal(f.files.size,0);});
 test('Unregistered, bootstrap and unverified accounts cannot submit a mandate',async()=>{const f=setup();await rejects(f.call('seller_mandate_submit',data,{uid:'unknown',email_verified:true}),403);await rejects(f.call('seller_mandate_submit',data,{...actor,teyzaPhoneBootstrap:true}),403);await rejects(f.call('seller_mandate_submit',data,{uid:'owner'}),403);});
 test('Collection date must be real, upcoming and on the agreed monthly day',()=>{schedule('2026-11-01',1,()=>now);for(const [date,day] of [['2026-11-31',1],['2026-11-01',2],['2026-12-29',29],['2026-09-01',1],['2028-11-01',1]])assert.throws(()=>schedule(date,day,()=>now));});
+
+test('Mandate status prefills the seller address, verified contact and known holder name without exposing account numbers',async()=>{
+ const f=setup(),status=await f.call('seller_mandate_status');
+ assert.equal(status.seller.shopAddress,'12 Main Road, Durban');
+ assert.equal(status.seller.phone,'+27712345678');
+ assert.equal(status.seller.firstName,'Test');
+ assert.equal(status.seller.surname,'Owner');
+ assert(!JSON.stringify(status).includes(data.accountNumber));
+ assert.equal(status.amountCents,9900);
+});
+test('Signed mandate appears in admin inbox; sensitive details are only returned on audited explicit admin request',async()=>{
+ const f=setup();
+ const signed=await f.call('seller_mandate_submit',data);
+ const inbox=await f.call('ops_mandate_queue',{},admin);
+ assert.equal(inbox.mandates.length,1);
+ assert.equal(inbox.mandates[0].shopAddress,'12 Main Road, Durban');
+ assert(!JSON.stringify(inbox).includes(data.accountNumber));
+ await rejects(f.call('ops_mandate_detail',{sellerUid:'owner',mandateId:signed.mandate.mandateId}),403);
+ const detail=await f.call('ops_mandate_detail',{sellerUid:'owner',mandateId:signed.mandate.mandateId},admin);
+ assert.equal(detail.sensitive.accountNumber,data.accountNumber);
+ assert.equal(detail.mandate.collectionActive,false);
+ assert([...f.db.records.values()].some(v=>v.action==='ops_mandate_detail'));
+ const review=await f.call('ops_mandate_review',{sellerUid:'owner',mandateId:signed.mandate.mandateId,
+   decision:'reviewed_pending_provider',reason:'Bank authentication needs accredited debit collection provider.',confirmed:true},admin);
+ assert.equal(review.collectionActive,false);
+ assert.equal(f.db.records.get('teyzaSellerMandates/owner').status,'reviewed_pending_provider');
+ assert.equal(f.db.records.get('teyzaBilling/owner'),undefined);
+});
+test('Seller cannot replace registered contact phone in a signed mandate',async()=>{
+ const f=setup();
+ await rejects(f.call('seller_mandate_submit',{...data,phone:'+27825550111'}),409);
+ assert(!f.db.records.has('teyzaSellerMandates/owner'));
+});
