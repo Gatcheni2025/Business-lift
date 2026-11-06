@@ -71,3 +71,16 @@ test('Seller cannot replace registered contact phone in a signed mandate',async(
  await rejects(f.call('seller_mandate_submit',{...data,phone:'+27825550111'}),409);
  assert(!f.db.records.has('teyzaSellerMandates/owner'));
 });
+
+test('Exporting a complete provider-review mandate requires fresh administrator credentials and is separately audited',async()=>{
+ const f=setup();await f.call('seller_mandate_submit',data);
+ const target={sellerUid:'owner',mandateId:'request1'};
+ await rejects(f.call('ops_mandate_export',target),403);
+ await rejects(f.call('ops_mandate_export',target,{...admin,auth_time:now/1000-301}),401);
+ const result=await f.call('ops_mandate_export',target,admin);
+ assert.equal(result.sensitive.accountNumber,data.accountNumber);
+ assert.equal(result.mandate.collectionActive,false);
+ assert([...f.db.records.values()].some(v=>v.action==='ops_mandate_export'));
+ await f.call('seller_mandate_withdraw',{mandateId:'request1'});
+ await rejects(f.call('ops_mandate_export',{...target,mandateId:'old'},admin),409);
+});
