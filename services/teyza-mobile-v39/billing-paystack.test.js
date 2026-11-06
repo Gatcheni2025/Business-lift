@@ -396,3 +396,58 @@ test('Website checkout refuses legacy account approval without current SMS onboa
  }),e=>e.status===409&&/phone OTP/.test(e.message));
  assert.equal(requests.length,0);
 });
+
+test('Seller sees pending membership without client-side activation or another charge',async()=>{
+  const f=fixture(),started=await f.api.execute(f.auth,'billing_checkout',consent);
+  const state=await f.api.execute(f.auth,'billing_status',{reference:started.reference});
+  assert.equal(state.membershipStatus,'pending');
+  assert.equal(state.paymentPending,true);
+  assert.equal(state.accessGranted,false);
+  assert.equal(f.records.has('teyzaBilling/shop1'),false);
+  assert.equal(f.requests.filter(x=>x.url.includes('/transaction/initialize')).length,1);
+  f.records.set('teyzaSellerAccounts/shop2',{uid:'shop2',category:'spaza',approvalStatus:'approved'});
+  await assert.rejects(f.api.execute({...f.auth,uid:'shop2'},'billing_status',
+    {reference:started.reference}),e=>e.status===404);
+});
+test('Signed charge.success activates a pending seller membership once, without browser return',async()=>{
+  const f=fixture(),started=await f.api.execute(f.auth,'billing_checkout',consent);
+  const payload={event:'charge.success',data:{reference:started.reference,domain:'test'}};
+  const raw=Buffer.from(JSON.stringify(payload));
+  const signature=crypto.createHmac('sha512','sk_test_FAKE').update(raw).digest('hex');
+  await f.api.webhook(raw,signature,payload);
+  await f.api.webhook(raw,signature,payload);
+  const state=await f.api.execute(f.auth,'billing_status',{reference:started.reference});
+  assert.equal(state.membershipStatus,'test_paid');
+  assert.equal(state.accessGranted,false,'sandbox charges must not activate the production plan');
+  assert.equal(f.records.get('teyzaPaystackPayments/'+started.reference).status,'paid');
+  assert.equal(f.records.get('teyzaBilling/shop1').lastReference,started.reference);
+});
+test('Reconciliation leaves processing charges pending, then activates only a verified charge',async()=>{
+  let now=NOW,settled=false,fixtureRef;
+  const send=async(url,opts)=>{
+    let data;
+    if(url.includes('/plan/'))data={plan_code:'PLN_TEST99',amount:9900,interval:'monthly',currency:'ZAR',domain:'test'};
+    else if(url.includes('/transaction/initialize'))data={authorization_url:'https://checkout.paystack.com/test-pending'};
+    else if(url.includes('/transaction/verify/')){
+      const reference=decodeURIComponent(url.split('/').at(-1)),payment=fixtureRef.records.get('teyzaPaystackPayments/'+reference);
+      data={reference,status:settled?'success':'ongoing',currency:'ZAR',domain:'test',
+        paid_at:settled?new Date(NOW).toISOString():null,amount:payment.amountCents,id:77881,
+        customer:{email:'owner@example.test',customer_code:'CUS_TEST'},authorization:{reusable:false}};
+    }else throw Error('Unexpected Paystack request '+url);
+    return {ok:true,json:async()=>({status:true,data})};
+  };
+  fixtureRef=fixture({}, {send,clock:()=>now});
+  const f=fixtureRef,started=await f.api.execute(f.auth,'billing_checkout',consent);
+  now+=75000;
+  const first=await f.api.reconcilePending();
+  assert.equal(first.checked,1);
+  assert.equal(first.activated,0);
+  assert.equal(f.records.get('teyzaPaystackPayments/'+started.reference).status,'pending');
+  assert.equal(f.records.has('teyzaBilling/shop1'),false);
+  settled=true;now+=75000;
+  const second=await f.api.reconcilePending();
+  assert.equal(second.activated,1);
+  assert.equal(f.records.get('teyzaBilling/shop1').status,'paid');
+  const again=await f.api.reconcilePending();
+  assert.equal(again.activated,0);
+});
