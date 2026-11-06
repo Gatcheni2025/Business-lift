@@ -7,6 +7,11 @@ $planFile = Join-Path $fixture 'services/teyza-mobile-v39/.env.business-lift-3c1
 [System.IO.File]::WriteAllText($planFile, "TEYZA_PAYSTACK_MONTHLY_PLAN_CODE=PLN_test12345`n")
 $global:operationsCalls = [System.Collections.Generic.List[string]]::new()
 $global:operationsScenario = 'ready'
+$global:planCheckKey = 'sk_live_SYNTHETIC'
+function Read-Host { param($Prompt,[switch]$AsSecureString)
+  if (-not $AsSecureString) { throw 'Secret input must be hidden.' }
+  return (ConvertTo-SecureString $global:planCheckKey -AsPlainText -Force)
+}
 function node {
   $line = $args -join ' '
   $global:operationsCalls.Add($line)
@@ -19,8 +24,9 @@ function node {
   return
 }
 function npm { $global:LASTEXITCODE = 0 }
-function Invoke-RestMethod { param($Uri,$Headers,$TimeoutSec)
+function Invoke-RestMethod { param($Uri,$Headers,$TimeoutSec,$Method)
   if ($Uri -like 'https://api.paystack.co/plan/*') {
+    if ($Method -and ($Method -ne 'Get' -or $Headers.Authorization -ne 'Bearer sk_live_SYNTHETIC')) { throw 'Plan preflight must make one read-only authenticated request.' }
     $amount = if ($global:operationsScenario -eq 'wrong-plan') { 4900 } else { 9900 }
     $domain = if ($global:operationsScenario -eq 'wrong-domain') { 'test' } else { 'live' }
     $invoiceLimit = if ($global:operationsScenario -eq 'limited-plan') { 1 } else { 0 }
@@ -41,6 +47,20 @@ function Exercise([string]$Scenario) {
   return @{failed=$failed;functions=$functionCalls;website=$websiteCalls}
 }
 try {
+  $planHelper = Join-Path $root 'tools/paystack/CHECK-LIVE-PLAN.ps1'
+  $global:operationsScenario = 'ready'
+  $checked = & $planHelper -PlanCode 'PLN_test12345'
+  if ($checked -notmatch 'RESULT: VERIFIED' -or $checked -match 'sk_live') { throw 'Read-only live plan check failed or disclosed its key.' }
+  $global:operationsScenario = 'wrong-domain'
+  $checkFailed = $false
+  try { & $planHelper -PlanCode 'PLN_test12345' } catch { $checkFailed = $true }
+  if (-not $checkFailed) { throw 'Read-only plan check accepted a test plan.' }
+  $global:planCheckKey = 'sk_test_SYNTHETIC'
+  $global:operationsScenario = 'ready'
+  $checkFailed = $false
+  try { & $planHelper -PlanCode 'PLN_test12345' } catch { $checkFailed = $true }
+  if (-not $checkFailed) { throw 'Read-only plan check accepted a test key.' }
+  $global:planCheckKey = 'sk_live_SYNTHETIC'
   $result = Exercise 'test-key'
   if (-not $result.failed -or $result.functions.Count -or $result.website.Count) { throw 'Test keys must stop before production changes.' }
   $result = Exercise 'wrong-plan'
@@ -65,6 +85,7 @@ try {
 } finally {
   Set-Location $root
   Remove-Item $fixture -Recurse -Force
-  Remove-Item function:node,function:npm,function:Invoke-RestMethod
+  Remove-Item function:node,function:npm,function:Invoke-RestMethod,function:Read-Host
+  Remove-Variable planCheckKey -Scope Global -ErrorAction SilentlyContinue
 }
 

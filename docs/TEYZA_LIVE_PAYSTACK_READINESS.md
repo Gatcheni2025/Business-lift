@@ -5,6 +5,13 @@ Seller registration is free. An approved seller may choose product access:
 R49 for the first eligible month, then R99 per month. A returning seller who
 already used the introductory offer pays R99. No agent commission is added.
 
+The business owner supplied live plan code `PLN_ud5m0sza4kmr31f`. It has not
+yet been independently verified. From the release kit, run
+`./tools/paystack/CHECK-LIVE-PLAN.ps1` to check the plan using a hidden live
+key prompt. The check performs a read-only Paystack API request; it does not
+write to Firebase, create a subscription or collect money. Only the result,
+never the key, should be shared with support.
+
 ## Distribution and current payment availability
 
 The Android and iPhone store builds still set `TEYZA_PAYMENT_CHANNEL=store`.
