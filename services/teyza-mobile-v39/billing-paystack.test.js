@@ -324,3 +324,35 @@ test('A partial refund cannot clear payment review as a full refund',async()=>{
  await assert.rejects(f.api.execute(admin,'ops_paystack_refund_confirm',{sellerUid:'shop1',reference:checkout.reference,refundId:'345'}),e=>e.status===409);
  assert.equal(f.records.get('teyzaPaystackCheckoutLocks/shop1_membership').status,'refund_review');
 });
+
+test('Payment confirmed after seller approval is withdrawn requires refund review instead of unlocking products',async()=>{
+ const {api,auth,records}=fixture();
+ const checkout=await api.execute(auth,'billing_checkout',consent);
+ records.set('teyzaSellerAccounts/shop1',{...records.get('teyzaSellerAccounts/shop1'),approvalStatus:'pending'});
+ const result=await api.execute(auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(result.paid,false);
+ assert.equal(result.refundReviewRequired,true);
+ const payment=records.get('teyzaPaystackPayments/'+checkout.reference);
+ assert.equal(payment.status,'refund_review');
+ assert.equal(payment.reviewReason,'seller_verification_changed_after_checkout');
+ assert.equal(records.has('teyzaBilling/shop1'),false);
+ assert.equal(records.get('teyzaSellerAccounts/shop1').listingPlan,'free');
+});
+test('A new pending selfie after checkout does not activate a verified digital membership',async()=>{
+ const account={uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free',
+  phone:'+27712345678',approvalStatus:'approved'};
+ const setup={requiredVersion:2,completedAt:NOW,moderationBlocked:false,sellingStatus:'pending_approval',
+  verifiedPhone:'+27712345678',selfieSubmissionId:'selfie1'};
+ const {api,auth,records}=fixture({
+  'teyzaSellerAccounts/shop1':account,
+  'teyzaSellerOnboarding/shop1':setup,
+  'teyzaMobileVerification/shop1':{ownerUid:'shop1',status:'approved',submissionId:'selfie1'}
+ });
+ const checkout=await api.execute(auth,'billing_checkout',consent);
+ records.set('teyzaMobileVerification/shop1',{ownerUid:'shop1',status:'pending_review',submissionId:'selfie2'});
+ const result=await api.execute(auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(result.paid,false);
+ assert.equal(result.refundReviewRequired,true);
+ assert.equal(records.get('teyzaPaystackPayments/'+checkout.reference).status,'refund_review');
+ assert.equal(records.has('teyzaBilling/shop1'),false);
+});
