@@ -4,7 +4,7 @@ const {createBilling,verifySignature,validCheckoutUrl,nextMonth,INTRO_CENTS,MONT
 const NOW=Date.parse('2026-11-04T07:00:00+02:00');
 function fixture(seed={},options={}) {
  const records=new Map(Object.entries({'teyzaSellerAccounts/shop1':{
-  uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free'},...seed}));
+  uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free',approvalStatus:'approved'},...seed}));
  const db={
   doc:path=>({path,get:async()=>({exists:records.has(path),data:()=>records.get(path)}),
     create:async v=>{if(records.has(path))throw Error('duplicate reference');records.set(path,v);},
@@ -65,6 +65,20 @@ test('R49 introductory checkout is server-priced and only occurs when requested'
  assert.equal(payload.amount,4900);assert.equal(payload.currency,'ZAR');
  assert.equal(payload.plan,undefined,'First month must not bill R99 accidentally');
  assert.equal(records.has('teyzaBilling/shop1'),false,'Checkout is not payment verification');
+});
+test('Pending and rejected sellers cannot start either membership or promotion checkout',async()=>{
+ for(const status of ['pending','rejected']){
+  const {api,auth,records,requests}=fixture();
+  records.set('teyzaSellerAccounts/shop1',{...records.get('teyzaSellerAccounts/shop1'),approvalStatus:status});
+  for(const action of ['billing_checkout','promote_checkout'])
+   await assert.rejects(api.execute(auth,action),e=>e.status===403&&/approved/.test(e.message));
+  assert.equal(requests.length,0);
+ }
+});
+test('A modern approved seller with incomplete verification or a hold cannot be charged',async()=>{
+ const {api,auth,records,requests}=fixture({'teyzaSellerOnboarding/shop1':{requiredVersion:2,sellingStatus:'not_started'}});
+ await assert.rejects(api.execute(auth,'billing_checkout'),e=>e.status===409);
+ assert.equal(requests.length,0);assert.equal(records.has('teyzaBilling/shop1'),false);
 });
 test('Only current paid member may purchase R29 seven-day promotion',async()=>{
  const {api,auth,records,requests}=fixture();

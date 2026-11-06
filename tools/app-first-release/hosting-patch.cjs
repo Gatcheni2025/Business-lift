@@ -12,7 +12,7 @@ function overlay(root){
  }
  return files;
 }
-const publicPaths=['/','/index.html','/download','/download/','/download.html','/how-it-works','/how-it-works/','/how-it-works.html','/for-shop-owners','/for-shop-owners/','/for-shop-owners.html','/agents','/agents/','/agents.html','/work-privacy','/work-privacy/','/work-privacy.html','/support','/support/','/support.html','/seller-subscriptions','/seller-subscriptions/','/seller-subscriptions.html','/privacy.html','/terms.html','/data-deletion.html','/robots.txt','/sitemap.xml'];
+const publicPaths=['/','/index.html','/download','/download/','/download.html','/how-it-works','/how-it-works/','/how-it-works.html','/for-shop-owners','/for-shop-owners/','/for-shop-owners.html','/seller-getting-started.html','/agents','/agents/','/agents.html','/work-privacy','/work-privacy/','/work-privacy.html','/support','/support/','/support.html','/seller-subscriptions','/seller-subscriptions/','/seller-subscriptions.html','/privacy.html','/terms.html','/data-deletion.html','/robots.txt','/sitemap.xml'];
 const privateRoutes=['/work','/work/','/work.html','/owner-confirm','/owner-confirm/','/owner-confirm.html'];
 function servingConfig(original,existingPaths=[]){
  const config=structuredClone(original||{});

@@ -41,6 +41,13 @@ class SellerApi extends TeyzaMobileApi {
     };
   }
 }
+class PendingSellerApi extends SellerApi {
+ PendingSellerApi(super.session);
+ @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
+  if(action=='seller_summary')return {'approvalStatus':'pending','publicationStatus':'pending_review','settings':{},'credit':[],'photos':[]};
+  return super.call(action,data);
+ }
+}
 Future<void> capture(WidgetTester tester,GlobalKey key,String name) async {
   if(Platform.environment['TEYZA_CAPTURE_UI']!='1')return;
   await tester.runAsync(() async {
@@ -109,6 +116,17 @@ void main(){
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
     expect(find.text('R49 first month · then R99/month'),findsOneWidget);
+    expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  });
+  testWidgets('A pending seller cannot open product checkout from Add product',(tester) async {
+    SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=PendingSellerApi(SellerSession());
+    const pending=SellerShop('Market','spaza','Durban','pending','not_listed');
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
+      initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()async=>pending),
+      catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
+    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pump();
+    expect(find.textContaining('must be approved before you can pay'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

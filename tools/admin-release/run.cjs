@@ -2,7 +2,7 @@
 const path=require('node:path'),fs=require('node:fs');
 const {connect}=require('./firebase-client.cjs'),{patch,rollback}=require('./hosting-patch.cjs'),{reviewer}=require('./reviewer.cjs');
 function assertAdminBackend(health){
- if(health?.ok!==true||health.version!=='3.24.0'||health.agentCommissionEnabled!==false||health.adminOperations!==true||health.adminReview!==true||
+ if(health?.ok!==true||health.version!=='3.25.0'||health.googlePlaceClaims!==true||health.sellerApprovalBeforeCheckout!==true||health.agentCommissionEnabled!==false||health.adminOperations!==true||health.adminReview!==true||
     health.adminProductReview!==false||health.automaticProductPublication!==true||health.adminPaystackVerify!==true||
     health.adminComplimentaryAccess!==true||health.manualReceiptsRetired!==true||health.billingMode!=='paystack_checkout')
   throw new Error('The current seller-verification and automatic-product backend is not deployed yet. Publish it before the admin website.');

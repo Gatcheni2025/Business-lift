@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const DAY=86400000,COORDINATE_TTL=30*DAY,SELECTION_TTL=30*60000;
-const actions=new Set(['seller_address_suggest','seller_address_select']);
+const actions=new Set(['seller_address_suggest','seller_address_select','seller_claim_suggest','seller_claim_select','seller_claim_by_id']);
 const validPlaceId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{4,256}$/.test(value);
 const session=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DETAILS='id,formattedAddress,addressComponents,location,types';
@@ -49,34 +49,53 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
    return await response.json();
   }catch(_){D.fail(503,'Address search is temporarily unavailable. Please retry.');}
  }
- async function details(placeId,sessionToken){
+ async function details(placeId,sessionToken,claim=false){
   if(!validPlaceId(placeId))D.fail(422,'Select an address from the suggestions.');
   const query=new URLSearchParams({languageCode:'en',regionCode:'ZA',...(sessionToken?{sessionToken}:{})});
-  const place=await request('places/'+placeId+'?'+query,{fields:DETAILS});
+  const place=await request('places/'+placeId+'?'+query,{fields:DETAILS+(claim?',displayName,businessStatus':'')});
   if(place.id!==placeId)D.fail(422,'That address changed. Search and select it again.');
-  return addressDetails(place);
+  return claim?place:addressDetails(place);
  }
  async function execute(uid,action,data){
-  if(action==='seller_address_suggest'){
+  const directClaim=action==='seller_claim_by_id';
+  const claiming=action==='seller_claim_suggest'||action==='seller_claim_select'||directClaim;
+  if(action==='seller_address_suggest'||action==='seller_claim_suggest'){
    const input=D.text(data.query,'address search',180);
    if(input.length<4)return {suggestions:[]};
    if(!session(data.sessionToken))D.fail(422,'Start a new address search.');
    await rate(uid,'address-search',120,600000);
    const result=await request('places:autocomplete',{fields:'suggestions.placePrediction.placeId,suggestions.placePrediction.text',
     body:{input,sessionToken:data.sessionToken,includedRegionCodes:['za'],languageCode:'en',regionCode:'ZA',
-      includedPrimaryTypes:['street_address','premise','subpremise'],includeQueryPredictions:false}});
+      includedPrimaryTypes:claiming?['establishment']:['street_address','premise','subpremise'],includeQueryPredictions:false}});
    const issuedAt=clock(),expiresAt=issuedAt+SELECTION_TTL;
    return {suggestions:(Array.isArray(result.suggestions)?result.suggestions:[]).slice(0,5).flatMap(row=>{
     const p=row.placePrediction;
     if(!validPlaceId(p?.placeId)||typeof p.text?.text!=='string'||!p.text.text.trim()||p.text.text.length>350)return [];
-    return [{placeId:p.placeId,label:p.text.text,predictionToken:seal({v:1,purpose:'prediction',uid,issuedAt,expiresAt,
+    return [{placeId:p.placeId,label:p.text.text,predictionToken:seal({v:1,purpose:claiming?'claim_prediction':'prediction',uid,issuedAt,expiresAt,
       placeId:p.placeId,sessionToken:data.sessionToken})}];
    })};
   }
-  const prediction=open(data.predictionToken,uid,'prediction');
+  if(directClaim&&!validPlaceId(data.placeId))D.fail(422,'Choose a Google Maps business to claim.');
+  const prediction=directClaim?{placeId:data.placeId,sessionToken:null}:open(data.predictionToken,uid,claiming?'claim_prediction':'prediction');
   await rate(uid,'address-select',30,3600000);
-  const selected=await details(prediction.placeId,prediction.sessionToken),issuedAt=clock();
+  const place=await details(prediction.placeId,prediction.sessionToken,claiming),issuedAt=clock();
+  if(claiming){
+   const country=place.addressComponents?.find(p=>p.types?.includes('country'))?.shortText;
+   if(country!=='ZA'||place.businessStatus==='CLOSED_PERMANENTLY')D.fail(422,'Choose a currently operating business in South Africa.');
+   const name=D.text(place.displayName?.text||'','business name',120);
+   let selected=null;
+   try{selected=addressDetails(place);}catch(error){if(error.status!==422)throw error;}
+   return {claim:{name,displayAddress:typeof place.formattedAddress==='string'?place.formattedAddress:'',
+    claimSelection:seal({v:1,purpose:'claim',uid,placeId:prediction.placeId,issuedAt,expiresAt:issuedAt+SELECTION_TTL}),
+    addressSelection:selected?{...selected,addressSelection:seal({v:1,purpose:'selection',uid,issuedAt,expiresAt:issuedAt+SELECTION_TTL,...selected})}:null}};
+  }
+  const selected=place;
   return {selection:{...selected,addressSelection:seal({v:1,purpose:'selection',uid,issuedAt,expiresAt:issuedAt+SELECTION_TTL,...selected})}};
+ }
+ function claim(uid,receipt){
+  const selection=open(receipt,uid,'claim');
+  if(!validPlaceId(selection.placeId))D.fail(422,'Search for your business again.');
+  return selection.placeId;
  }
  function location(uid,data){
   const selected=open(data.addressSelection,uid,'selection');
@@ -88,6 +107,6 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
    latitude:selected.latitude,longitude:selected.longitude,resolvedAt:selected.issuedAt,
    coordinatesExpireAt:selected.issuedAt+COORDINATE_TTL,coordinatesRefreshAt:selected.issuedAt+27*DAY,consentAt:clock(),updatedAt:clock()};
  }
- return {execute,location,refresh:placeId=>details(placeId)};
+ return {execute,location,claim,refresh:placeId=>details(placeId)};
 }
 module.exports={actions,createShopAddress,addressDetails,COORDINATE_TTL,DAY};

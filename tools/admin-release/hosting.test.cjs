@@ -4,7 +4,7 @@ const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patc
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
 test('Admin release requires the automatic-publication backend, not the old manual product queue',()=>{
- const ready={ok:true,version:'3.24.0',agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
+ const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
    manualReceiptsRetired:true,billingMode:'paystack_checkout'};
  assert.doesNotThrow(()=>assertAdminBackend(ready));
@@ -61,7 +61,7 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
  const files=overlay(root);assert.equal(files.size,16);
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R323"'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R325"'));
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
 });

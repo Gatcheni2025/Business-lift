@@ -13,6 +13,7 @@ const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
+const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -105,7 +106,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.24.0',sellerOnboarding:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
@@ -188,6 +189,22 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
+const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
+ getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
+ getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+  apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
+  language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||''})});
+exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
+ document:'teyzaWhatsAppApprovalOutbox/{reference}',secrets:[whatsappToken]},
+ event=>whatsappApproval.deliver(event.params.reference));
+// If the provider was not configured when approval happened, retry only those
+// entries that have never been submitted to WhatsApp.
+exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',
+ region:'us-central1',maxInstances:1,secrets:[whatsappToken]},async()=>{
+ const rows=await db.collection('teyzaWhatsAppApprovalOutbox')
+  .where('status','in',['queued','configuration_required']).limit(30).get();
+ for(const row of rows.docs)await whatsappApproval.deliver(row.id);
+});
 exports.teyzaFieldAgentCleanup=onSchedule({schedule:'every 60 minutes',timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,memory:'256MiB',timeoutSeconds:180},
   ()=>require('./field-agents').purgeAgentEvidence({db,bucket}));
 // Recover account-deletion requests created by older app versions that only

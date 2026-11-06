@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const actions=new Set(['seller_register','seller_plan_select','admin_access','admin_seller_queue','admin_seller_review',
-  'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete']);
+  'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete','seller_whatsapp_preferences']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
 function recentAdmin(auth,clock){
   if(auth.teyzaAdmin!==true||auth.email_verified!==true)D.fail(403,'Teyza administrator access is required.');
@@ -27,17 +27,33 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
     catalogueApprovalRequired:false,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
+   const claimedPlaceId=data.googleClaimSelection?shopAddress.claim(uid,data.googleClaimSelection):null;
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
     if(snap.exists){D.seller(snap.data(),uid);return {registered:true,alreadyRegistered:true};}
     if(data.locationConsent!==true)D.fail(422,'Confirm that shoppers may see this business address and shop location.');
     const location=shopAddress.location(uid,data);
+    if(claimedPlaceId){
+     const existing=await tx.get(doc('teyzaClaimedPlaces/'+crypto.createHash('sha256').update(claimedPlaceId).digest('hex')));
+     if(existing.exists&&existing.data().sellerUid!==uid)D.fail(409,'This business is already linked to another Teyza shop. Contact Teyza support.');
+     tx.set(doc('teyzaShopClaims/'+uid),{ownerUid:uid,placeId:claimedPlaceId,status:'pending',createdAt:clock()});
+    }
+    if(data.whatsappConsent===true)tx.set(doc('teyzaWhatsAppPreferences/'+uid),{
+      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approval-v1',consentAt:clock()});
     tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
     tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
   }
   if(action==='seller_plan_select')D.fail(410,
    'The seven-day trial has ended. Registration is free; upgrade when adding products.');
+  if(action==='seller_whatsapp_preferences'){
+   const account=await owner(uid),ref=doc('teyzaWhatsAppPreferences/'+uid);
+   if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want approval updates on WhatsApp.');
+   await rate(uid,'whatsapp-preference',20,3600000);
+   await ref.set({ownerUid:uid,optedIn:data.enabled,phone:data.enabled?require('./onboarding').phone(account.phone):'',
+    consentVersion:'seller-approval-v1',consentAt:clock()});
+   return {saved:true,enabled:data.enabled};
+  }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
   if(action==='admin_seller_queue'){
    recentAdmin(auth,clock);await rate(uid,'reviewqueue',30,60000);
@@ -47,6 +63,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const shops=await Promise.all(rows.map(r=>doc('teyzaSellerAccounts/'+r.id).get()));
    const identities=await Promise.all(rows.map(r=>doc('teyzaSellerIdentity/'+r.id).get()));
    const onboardings=await Promise.all(rows.map(r=>doc('teyzaSellerOnboarding/'+r.id).get()));
+   const claims=await Promise.all(rows.map(r=>doc('teyzaShopClaims/'+r.id).get()));
    const ownerUsers=await Promise.all(rows.map(r=>getAuthUser(r.id).catch(()=>null)));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};
     let phoneVerified=false;
@@ -54,6 +71,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     return {
     sellerUid:r.id,evidenceId:identities[i].exists?identities[i].data().evidenceId:null,evidenceKind:identities[i].exists?identities[i].data().kind:null,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
     phone:a.phone||'',ownerEmail:a.ownerEmail||'',companyName:a.companyName||'',registrationNumber:a.registrationNumber||'',
+    googlePlaceId:claims[i].exists&&claims[i].data().ownerUid===r.id?claims[i].data().placeId:null,
     approvalStatus:a.approvalStatus||'pending',listingStatus:a.listingStatus||'not_listed',
     phoneVerified,phoneVerificationRequired:onboardings[i].exists&&onboardings[i].data().requiredVersion===2,
     submissionId:v.submissionId||'legacy_'+v.submittedAt,submittedAt:v.submittedAt,expired:!v.objectPath||v.expiresAt<=clock()};}),
@@ -71,11 +89,15 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     const ref=doc('teyzaMobileVerification/'+sellerUid),accountRef=doc('teyzaSellerAccounts/'+sellerUid),shopRef=doc('teyzaPublicShops/'+sellerUid);
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
     const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
-    const [v,a,s,view,o,i,c,f,l,b,drafts,photos]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
+    const claimRef=doc('teyzaShopClaims/'+sellerUid),prefRef=doc('teyzaWhatsAppPreferences/'+sellerUid);
+    const [v,a,s,view,o,i,c,f,l,b,drafts,photos,claimSnap,prefSnap]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
       tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),tx.get(doc('teyzaBilling/'+sellerUid)),
-      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201)),tx.get(db.collection('teyzaProductPhotos/'+sellerUid+'/items').limit(201))]);
+      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201)),tx.get(db.collection('teyzaProductPhotos/'+sellerUid+'/items').limit(201)),tx.get(claimRef),tx.get(prefRef)]);
     const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
     const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
+    const claim=claimSnap.exists&&claimSnap.data().ownerUid===sellerUid?claimSnap.data():null;
+    const claimIndexRef=claim?doc('teyzaClaimedPlaces/'+crypto.createHash('sha256').update(claim.placeId).digest('hex')):null;
+    const claimed=claimIndexRef?await tx.get(claimIndexRef):null;
     if(setup.requiredVersion===2){
       if((identity&&data.evidenceId!==identity.evidenceId)||(!identity&&data.status==='approved'))D.fail(409,'View the current identity document and refresh this review.');
       if(data.status==='approved'){
@@ -91,15 +113,29 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(data.status==='approved'&&(!view.exists||view.data().sellerUid!==sellerUid||clock()-view.data().viewedAt>300000))
      D.fail(409,'View the current private selfie before approving this seller.');
     const approved=data.status==='approved';
+    if(approved&&claim){
+     if(data.claimConfirmed!==true)D.fail(409,'Review the Google Maps listing and confirm the applicant is authorised to claim this business.');
+     if(claimed.exists&&claimed.data().sellerUid!==sellerUid)D.fail(409,'This Google business is already linked to another Teyza shop.');
+     if(!l.exists||l.data().ownerUid!==sellerUid)D.fail(409,'The seller must save their shop location before this claim can be approved.');
+    }
     const existing=a.data();
     const updatedAccount={...existing,approvalStatus:data.status==='needs_new_photo'?'pending':data.status,
        listingPlan:existing.listingPlan==='trial'?'free':existing.listingPlan||'free'};
      const updatedVerification={...record,status:data.status};
     const nextSetup={...setup,moderationBlocked:data.status!=='approved',
       sellingStatus:data.status==='approved'&&setup.completedAt?'pending_approval':data.status==='approved'?'not_started':'paused'};
+    const location=l.exists?{...l.data(),...(approved&&claim?{googleClaimPlaceId:claim.placeId,googleClaimApproved:true}:{})}:null;
     const next=P.project(sellerUid,{account:updatedAccount,setup:nextSetup,verification:updatedVerification,
       shop:s.exists?s.data():null,settings:c.exists?c.data():{},front:f.exists?f.data():null,
-      location:l.exists?l.data():null,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),photos:photos.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
+      location,billing:b.exists?b.data():null,drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),photos:photos.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
+    if(claim){
+     tx.set(claimRef,{status:approved?'approved':data.status,reviewedAt:clock(),reviewedBy:uid},{merge:true});
+     if(approved){tx.set(claimIndexRef,{sellerUid,placeId:claim.placeId,approvedAt:clock()});tx.set(doc('teyzaShopLocations/'+sellerUid),location);}
+    }
+    const pref=prefSnap.exists?prefSnap.data():null;
+    const whatsappQueued=approved&&pref?.ownerUid===sellerUid&&pref.optedIn===true&&pref.phone===existing.phone;
+    if(whatsappQueued)tx.set(doc('teyzaWhatsAppApprovalOutbox/'+submissionId),{
+     sellerUid,submissionId,status:'queued',createdAt:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});
     tx.update(accountRef,{approvalStatus:updatedAccount.approvalStatus,
       listingPlan:updatedAccount.listingPlan,
@@ -108,7 +144,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(setup.requiredVersion===2)tx.set(setupRef,{...nextSetup,
       sellingStatus:next?.status==='active'?'active':data.status!=='approved'?'paused':setup.completedAt?'pending_approval':'not_started',updatedAt:clock()});
     tx.set(doc('teyzaSellerReviewAudit/'+submissionId),{sellerUid,submissionId,status:data.status,reason,reviewedBy:uid,reviewedAt:clock()});
-    return {status:data.status,publicationStatus:next?.status||'not_listed'};
+    return {status:data.status,publicationStatus:next?.status||'not_listed',whatsappStatus:whatsappQueued?'queued':'not_requested'};
    });
   }
   if(['notification_list','notification_read','notification_preferences',

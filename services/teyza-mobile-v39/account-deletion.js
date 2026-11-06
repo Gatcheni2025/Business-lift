@@ -100,11 +100,15 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         const billingRef=doc('teyzaBilling/'+uid);
         const shopperProfileRef=doc('teyzaShopperProfiles/'+uid);
         const appleRevocationRef=doc('teyzaAppleRevocations/'+uid);
-        const [old,a,shop,m,b,shopperProfile,appleRevocation]=await Promise.all([
+        const claimRef=doc('teyzaShopClaims/'+uid),whatsappRef=doc('teyzaWhatsAppPreferences/'+uid);
+        const [old,a,shop,m,b,shopperProfile,appleRevocation,claim,pref]=await Promise.all([
           tx.get(requestRef),tx.get(sellerRef),tx.get(publicRef),tx.get(mandateRef),
-          tx.get(billingRef),tx.get(shopperProfileRef),tx.get(appleRevocationRef),
+          tx.get(billingRef),tx.get(shopperProfileRef),tx.get(appleRevocationRef),tx.get(claimRef),tx.get(whatsappRef),
         ]);
         if(old.exists)return old.data();
+        const claimValue=claim.exists&&claim.data().ownerUid===uid?claim.data():null;
+        const indexRef=claimValue?.placeId?doc('teyzaClaimedPlaces/'+crypto.createHash('sha256').update(claimValue.placeId).digest('hex')):null;
+        const index=indexRef?await tx.get(indexRef):null;
         const isSeller=a.exists&&a.data().uid===uid;
         const reference='TZ-DEL-'+crypto.randomBytes(6).toString('hex').toUpperCase();
         const record={uid,reference,status:'pending_review',seller:isSeller,
@@ -118,6 +122,9 @@ function createAccountDeletion({db,getAuthUser,deleteAuthUser,disableAuthUser,re
         // Order and tax records remain subject to the documented erasure review.
         if(shopperProfile.exists&&shopperProfile.data().ownerUid===uid)
           tx.delete(shopperProfileRef);
+        if(pref.exists&&pref.data().ownerUid===uid)tx.delete(whatsappRef);
+        if(claimValue)tx.delete(claimRef);
+        if(index?.exists&&index.data().sellerUid===uid)tx.delete(indexRef);
         // Immediately remove pending-closure sellers from public discovery and
         // stop new orders or new Teyza-managed invoices.
         if(isSeller)tx.update(sellerRef,{deletionPending:true,

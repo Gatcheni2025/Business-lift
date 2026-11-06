@@ -53,11 +53,11 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    return {uid,token:await createPhoneToken(uid)};
   }
   if(action==='seller_onboarding'){
-   const [saved,id,selfie,shop,user,front,location,billing]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
-    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid),read('teyzaBilling/'+uid)]);
+   const [saved,id,selfie,shop,user,front,location,billing,whatsapp]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
+    read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid),read('teyzaBilling/'+uid),read('teyzaWhatsAppPreferences/'+uid)]);
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
-    shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
+    shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,whatsappOptedIn:whatsapp?.ownerUid===uid&&whatsapp.optedIn===true&&whatsapp.phone===account.phone,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
     locationSaved:Boolean(P.locationFor(uid,account,location,shop,clock())),

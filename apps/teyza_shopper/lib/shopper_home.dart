@@ -55,7 +55,7 @@ class Product {
 }
 class Shop {
   final String id, name, area, photo, phone;
-  final String address,city;
+  final String address,city,googlePlaceId;
   final bool pickup, delivery;
   final double? latitude, longitude;
   final List<Product> products;
@@ -74,7 +74,7 @@ class Shop {
   }.values.toList();
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
-    {this.latitude, this.longitude,this.shopCategory='spaza',this.address='',this.city='',
+    {this.latitude, this.longitude,this.shopCategory='spaza',this.address='',this.city='',this.googlePlaceId='',
     this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.highlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
@@ -87,7 +87,7 @@ class Shop {
         p.priceCents > 0 && p.stock >= 0).toList(),
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
-    address:(x['address']??'').toString(),city:(x['city']??'').toString(),
+    address:(x['address']??'').toString(),city:(x['city']??'').toString(),googlePlaceId:(x['googlePlaceId']??'').toString(),
     shopCategory:x['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
@@ -141,8 +141,9 @@ List<NearbyListing> mergeNearbyListings(List<Shop> merchants,List<OnlineShop> di
   String normal(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
   for(final shop in directory){
     final match=entries.indexWhere((entry)=>entry.merchant!=null&&
-      normal(entry.name)==normal(shop.name)&&entry.lat!=null&&entry.lng!=null&&
-      shop.lat!=null&&shop.lng!=null&&km(entry.lat!,entry.lng!,shop.lat!,shop.lng!)<.15);
+      ((shop.origin=='google_places'&&shop.placeId.isNotEmpty&&entry.merchant!.googlePlaceId==shop.placeId)||
+      (normal(entry.name)==normal(shop.name)&&entry.lat!=null&&entry.lng!=null&&
+      shop.lat!=null&&shop.lng!=null&&km(entry.lat!,entry.lng!,shop.lat!,shop.lng!)<.15)));
     if(match>=0){entries[match]=NearbyListing(merchant:entries[match].merchant,directory:shop);}
     else{entries.add(NearbyListing(directory:shop));}
   }
@@ -276,6 +277,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String? _observedUid,_checkedSellerUid;
   bool _wasSeller=false;
   String? _sellerInitialTarget;
+  String? _pendingClaimPlaceId;
   int _sellerEntry=0;
   Future<void>? _workspaceResolution;
   SellerPush? sellerPush;
@@ -346,7 +348,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
       _observedUid=uid;_checkedSellerUid=null;
       _workspaceResolution=null;
-      _sellerInitialTarget=null;
+      _sellerInitialTarget=null;if(previousUid!=null)_pendingClaimPlaceId=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
       selected=null;directorySelected=null;tab=0;unreadChats=0;
       // Keep the guest profile during automatic guest→Firebase session
@@ -1210,6 +1212,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(notification)_sellerEntry++;
     session.useSellerWorkspace();
   }
+  Future<void> claimDirectoryListing(OnlineShop listing) async {
+    _pendingClaimPlaceId=listing.origin=='google_places'&&listing.placeId.isNotEmpty?listing.placeId:null;
+    if(session.idToken==null){navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:Text('Sign in or register as a shop owner to claim your business on Teyza.')));return;}
+    await openOwnerWorkspace();
+  }
   void browseNearby()=>setState((){
     tab=0;selected=null;directorySelected=null;showAllShops=true;
   });
@@ -1260,7 +1268,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if(session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
       session:session,sellerMode:true,apiFactory:widget.sellerApiFactory,mobileApi:widget.sellerMobileApi,
-      initialTarget:_sellerInitialTarget,
+      initialTarget:_sellerInitialTarget,initialClaimPlaceId:_pendingClaimPlaceId,
       openLogin:(){if(mounted)setState(()=>tab=0);});
     if(!_launchReady)return const ShopperLaunchScreen();
     return Scaffold(
@@ -1432,6 +1440,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Shop? verifiedMerchantFor(OnlineShop publicPlace){
     String normalized(String value)=>value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
     for(final merchant in live){
+      if(merchant.identityVerified&&publicPlace.origin=='google_places'&&publicPlace.placeId.isNotEmpty&&merchant.googlePlaceId==publicPlace.placeId)return merchant;
       if(!merchant.identityVerified||normalized(merchant.name)!=normalized(publicPlace.name))continue;
       // Verified listings with no pin can still match the shop address/city.
       if(merchant.latitude!=null&&merchant.longitude!=null&&publicPlace.lat!=null&&publicPlace.lng!=null){
@@ -2113,11 +2122,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
          const Text('Wholesale ordering requires an approved Teyza supplier connection.',
            style:TextStyle(color:muted,fontSize:12)),
       const SizedBox(height:15),
-      OutlinedButton.icon(onPressed:() async {
-        await launchUrl(Uri.parse('https://teyza.co.za/?auth=register'),
-          mode:LaunchMode.externalApplication);
-      },icon:const Icon(Icons.add_business_outlined),
-        label:const Text('Own this shop? Claim your listing')),
+      if(verifiedMerchantFor(shop)==null)OutlinedButton.icon(onPressed:()=>claimDirectoryListing(shop),
+        icon:const Icon(Icons.add_business_outlined),
+        label:Text(shop.origin=='google_places'&&shop.placeId.isNotEmpty?'Own this shop? Claim it on Teyza':'Register your business on Teyza')),
       const SizedBox(height:13),
       const Text('Public listings do not imply a Teyza partnership. Ordering requires a verified participating merchant.',
         textAlign:TextAlign.center,

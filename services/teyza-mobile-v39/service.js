@@ -50,8 +50,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
-      // Private product drafts are allowed before payment. Only trusted
-      // Paystack membership plus seller approval enable public publication.
+      if(additions.length&&account.approvalStatus!=='approved')
+        D.fail(403,'Your seller registration must be approved before adding products.');
+      if(additions.length&&!P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()))
+        D.fail(403,'Activate product access before adding products, or ask an administrator about complimentary access.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
       const added=[];let alreadyAdded=0;
@@ -231,7 +233,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     let shopperProfile=null;
     if(!auth.email_verified&&!auth.phone_number){
       if(isShopperAction)shopperProfile=await registeredShopper(uid);
-      else if(!['seller_register','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+      else if(!['seller_register','seller_whatsapp_preferences','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
         D.fail(403,'Verify your email or mobile number before using seller services.');
     }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
@@ -433,7 +435,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {id:ref.id,status:values.status};
     }
     if(action==='verification_selfie'||action==='product_photo') {
-      await owner(uid);
+      const account=await owner(uid);
+      if(action==='product_photo'){
+        if(account.approvalStatus!=='approved')D.fail(403,'Your seller registration must be approved before adding product photos.');
+        if(!P.eligible(uid,account,await read('teyzaBilling/'+uid),clock()))D.fail(403,'Activate product access before adding product photos.');
+      }
       if(data.consent!==true)D.fail(422,'Confirm that you want to submit this photo.');
       const bytes=D.imageBytes(data.imageBase64);
       await rate(uid,action,action==='verification_selfie'?5:30,3600000);

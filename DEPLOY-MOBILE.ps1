@@ -4,6 +4,8 @@ firebase functions:secrets:get TEYZA_GOOGLE_PLACES_KEY --project business-lift-3
 if ($LASTEXITCODE -ne 0) { throw 'The existing Google Places server key is not available. Check TEYZA_GOOGLE_PLACES_KEY in this Firebase project before deploying. Keep the existing verification encryption key.' }
 firebase functions:secrets:get TEYZA_PAYSTACK_SECRET_KEY --project business-lift-3c19c | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Configure TEYZA_PAYSTACK_SECRET_KEY in Firebase Secret Manager before deploying. Never put the secret in Git or chat.' }
+firebase functions:secrets:get TEYZA_WHATSAPP_ACCESS_TOKEN --project business-lift-3c19c | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'The WhatsApp workers require TEYZA_WHATSAPP_ACCESS_TOKEN. Configure the sender and approved template first; see docs/TEYZA_SELLER_CLAIMS_AND_APPROVAL_WHATSAPP.md. Nothing deployed.' }
 $planEnvFile = Join-Path $PSScriptRoot 'services/teyza-mobile-v39/.env.business-lift-3c19c'
 if (-not (Test-Path -LiteralPath $planEnvFile)) {
   throw 'Restore services/teyza-mobile-v39/.env.business-lift-3c19c with the existing verified ZAR R99 monthly Paystack plan code before deploying. Test keys must not be used in the production project.'
@@ -37,7 +39,7 @@ $health = Invoke-RestMethod -Uri 'https://us-central1-business-lift-3c19c.cloudf
 $catalogue = Get-Content -LiteralPath '.\services\teyza-mobile-v39\catalogue.json' -Raw | ConvertFrom-Json
 $expectedProducts = @($catalogue.products).Count
 $expectedPhotos = @($catalogue.photos.PSObject.Properties).Count
-if ($health.ok -ne $true -or $health.version -ne '3.24.0' -or $health.sellerOnboarding -ne $true -or
+if ($health.ok -ne $true -or $health.version -ne '3.25.0' -or $health.sellerOnboarding -ne $true -or
     $health.catalogueProducts -ne $expectedProducts -or $health.catalogueRevision -ne $catalogue.version -or $health.cataloguePhotos -ne $expectedPhotos) {
   throw 'Deployment returned unexpected service health. Do not distribute the app as connected.'
 }

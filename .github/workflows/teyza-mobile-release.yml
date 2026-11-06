@@ -19,11 +19,11 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.24.0 in production mode'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.25.0 in production mode'
         type: boolean
         default: true
       qa_signing_only:
-        description: 'QA-only signed APK, AAB and IPA; does not require live R324; leaves Paystack checkout disabled in store builds'
+        description: 'QA-only signed APK, AAB and IPA; does not require the latest live backend; leaves Paystack checkout disabled in store builds'
         type: boolean
         default: false
       upload_to_testflight:
@@ -173,10 +173,10 @@ jobs:
                          'shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity',
                          'twoWayChatNotifications','wholesaleConnections','adminUsers','adminSellerDocuments',
                          'automaticProductPublication','adminComplimentaryAccess',
-                         'paystackCheckoutAvailable')
+                         'paystackCheckoutAvailable','sellerApprovalBeforeCheckout','googlePlaceClaims','whatsappApprovalOptIn')
           required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
-          required_exact={'version':'3.24.0','billingMode':'paystack_checkout',
+          required_exact={'version':'3.25.0','billingMode':'paystack_checkout',
                           'subscriptionMonthlyCents':9900,'introductoryFirstMonthCents':4900,
                           'promotionSevenDaysCents':2900}
           failures=[]

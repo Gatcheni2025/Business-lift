@@ -9,6 +9,20 @@ match /teyzaDraftProducts/{sellerId}/items/{itemId} {
       && request.auth.uid == sellerId
       && exists(/databases/$(database)/documents/teyzaSellerAccounts/$(sellerId));
   }
+  function hasProductAccess() {
+    let account = get(/databases/$(database)/documents/teyzaSellerAccounts/$(sellerId)).data;
+    let billing = get(/databases/$(database)/documents/teyzaBilling/$(sellerId)).data;
+    return draftOwner() && account.get('approvalStatus', '') == 'approved'
+      && billing.get('ownerUid', '') == sellerId
+      && ((account.get('listingPlan', '') == 'basic' && billing.get('status', '') == 'paid'
+        && billing.get('paymentEnvironment', '') != 'test'
+        && billing.get('paidUntil', 0) is number && billing.get('paidUntil', 0) > request.time.toMillis())
+       || (billing.get('adminComplimentaryStatus', '') == 'active'
+        && billing.get('adminComplimentaryReason', '') is string && billing.get('adminComplimentaryReason', '').size() >= 15
+        && billing.get('adminComplimentaryBy', '') is string && billing.get('adminComplimentaryBy', '') != ''
+        && billing.get('adminComplimentaryBy', '') != sellerId
+        && billing.get('adminComplimentaryUntil', 0) is number && billing.get('adminComplimentaryUntil', 0) > request.time.toMillis()));
+  }
   function validProduct() {
     return request.resource.data.keys().hasAll([
       'ownerUid','name','category','description','priceCents',
@@ -37,10 +51,10 @@ match /teyzaDraftProducts/{sellerId}/items/{itemId} {
     && request.resource.data.updatedAt is timestamp;
   }
   allow get, list: if draftOwner();
-  allow create: if draftOwner() && validProduct()
+  allow create: if hasProductAccess() && validProduct()
     && request.resource.data.createdAt == request.time
     && request.resource.data.updatedAt == request.time;
-  allow update: if draftOwner() && validProduct()
+  allow update: if hasProductAccess() && validProduct()
     && resource.data.ownerUid == sellerId
     && resource.data.status == 'draft'
     && request.resource.data.createdAt == resource.data.createdAt

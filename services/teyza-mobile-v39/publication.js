@@ -95,6 +95,9 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  if(Object.keys(reviewed).length)next.reviewedProductPhotos=reviewed;
  if(!shop||['onboarding','owner_review','approval'].includes(shop.moderationSource))next.moderationSource='approval';
  const pin=locationFor(uid,account,location,shop,now);
+ delete next.googlePlaceId;
+ if(result.approved&&locationMatches(uid,account,location)&&location.googleClaimApproved===true&&typeof location.googleClaimPlaceId==='string')
+  next.googlePlaceId=location.googleClaimPlaceId;
  delete next.latitude;delete next.longitude;delete next.city;delete next.coordinateSource;delete next.coordinatesExpireAt;
  if(locationMatches(uid,account,location)){next.area=location.area||next.area;next.city=location.city||'';}
  if(pin)Object.assign(next,pin);
@@ -105,7 +108,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
 }
 function publicRow(uid,shop){
  return {id:uid,sellerUid:uid,name:shop.name,area:shop.area||'',city:shop.city||'',address:shop.address||'',
-  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,sponsored:shop.sponsored===true,
+  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,sponsored:shop.sponsored===true,googlePlaceId:shop.googlePlaceId||'',
   photoUrl:shop.photoUrl||'',latitude:coordinates(shop.latitude,shop.longitude)?shop.latitude:null,
   longitude:coordinates(shop.latitude,shop.longitude)?shop.longitude:null,
   pickupEnabled:shop.pickupEnabled===true,deliveryEnabled:shop.deliveryEnabled===true,

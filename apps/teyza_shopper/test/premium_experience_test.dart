@@ -30,6 +30,12 @@ void main(){
     expect(merged.first.merchant,same(merchant));
     expect(merged.first.directory,same(directory.first));
   });
+  test('A reviewed Google claim links a listing even when its Teyza name is different',(){
+    final merchant=Shop.fromJson({'id':'seller','name':'My Trading Name','googlePlaceId':'place-123','identityVerified':true});
+    final google=OnlineShop.fromJson({'id':'google-1','name':'Old Google Name','placeId':'place-123','origin':'google_places'});
+    final combined=mergeNearbyListings([merchant],[google]);
+    expect(combined,hasLength(1));expect(combined.single.merchant,merchant);expect(combined.single.directory,google);
+  });
   testWidgets('All five shopper destinations navigate and Sell is absent',(tester) async {
     final visited=<int>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(

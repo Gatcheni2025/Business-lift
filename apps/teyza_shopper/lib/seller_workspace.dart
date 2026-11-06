@@ -36,8 +36,9 @@ class SellerWorkspacePage extends StatefulWidget{
   final SellerFirestore Function(String uid,String token)? apiFactory;
   final TeyzaMobileApi? mobileApi;
   final String? initialTarget;
+  final String? initialClaimPlaceId;
   final bool sellerMode;
-  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory,this.mobileApi,this.initialTarget,this.sellerMode=false});
+  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory,this.mobileApi,this.initialTarget,this.initialClaimPlaceId,this.sellerMode=false});
   @override State<SellerWorkspacePage> createState()=>_SellerWorkspaceState();
 }
 class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindingObserver{
@@ -49,10 +50,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   int sellerTab=0;
   Map<String,String> productPhotos={};
   String? rangeStatus;
-  int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false;
+  int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false,openedClaim=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
   String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
-  bool get hasProductAccess=>listingPaid||complimentaryAccess;
+  bool get sellerApproved=>approvalStatus=='approved';
+  bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -148,7 +150,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> registerShop() async{
-    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerRegistrationPage(session:widget.session,api:widget.mobileApi)));
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerRegistrationPage(session:widget.session,api:widget.mobileApi,initialGooglePlaceId:widget.initialClaimPlaceId)));
     if(mounted)load();
   }
   void openDestination(String target){
@@ -212,6 +214,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       });
       if(mounted&&widget.session.userId==uid){refreshActivity();startActivity();
 
+        if(!openedClaim&&widget.initialClaimPlaceId!=null){openedClaim=true;
+          WidgetsBinding.instance.addPostFrameCallback((_){if(!mounted)return;
+            if(nextShop==null)registerShop();else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content:Text('This account already has a shop. Contact Teyza support to link a Google Maps business.')));});}
+
         if(widget.initialTarget!=null&&!openedInitial&&nextShop!=null){openedInitial=true;
           WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)openDestination(widget.initialTarget!);});}}
     }catch(e){
@@ -242,6 +249,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> chooseProducts() async {
     if(busy||draftError!=null)return;
+    if(!sellerApproved){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your registration must be approved before you can pay for product access or add products.')));
+      return;
+    }
     if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
@@ -298,6 +309,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> _save(SellerDraft p) async{
     if(api==null || busy)return;
+    if(!sellerApproved){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Wait for seller approval before adding products.')));return;}
     if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final uid=loadedUid;if(uid==null||uid!=widget.session.userId)return;
     setState(()=>busy=true);
@@ -507,6 +519,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
             Row(children:[
               const Expanded(child:Text('My products',style:TextStyle(fontSize:20,
                 fontWeight:FontWeight.bold))),
