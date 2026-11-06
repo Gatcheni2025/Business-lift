@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{phone,current}=require('./onboarding'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage');
-const actions=new Set(['seller_mandate_status','seller_mandate_submit','seller_mandate_withdraw','ops_mandate_image','ops_mandate_queue','ops_mandate_detail','ops_mandate_review']);
+const actions=new Set(['seller_mandate_status','seller_mandate_submit','seller_mandate_withdraw','ops_mandate_image','ops_mandate_queue','ops_mandate_detail','ops_mandate_export','ops_mandate_review']);
 const VERSION='teyza-debit-request-v2',PRICE=9900;
 // Universal codes: https://support.peachpayments.com/support/solutions/articles/47001207209
 const banks=[['Absa','632005'],['Capitec','470010'],['Capitec Business','450105'],['FNB','250655'],['Nedbank','198765'],['Standard Bank','051001'],['African Bank','430000'],['Investec','580105'],['Discovery Bank','679000'],['TymeBank','678910'],['Other','']].map(([name,branchCode])=>({name,branchCode}));
@@ -19,7 +19,7 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return {mandates:rows.docs.map(row=>({sellerUid:row.id,...publicMandate(row.data())})),
       limited:rows.docs.length===50};
   }
-  if(action==='ops_mandate_detail'){
+  if(action==='ops_mandate_detail'||action==='ops_mandate_export'){
     recentAdmin(auth,clock);await rate(uid,'mandate-review',15,60000);
     const target=D.id(data.sellerUid),mandateId=D.id(data.mandateId);
     if(target===uid)D.fail(403,'Another administrator must review your mandate.');
@@ -29,7 +29,7 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const values=JSON.parse((await decryptSelfie(Buffer.from(record.detailsEncrypted,'base64'))).toString('utf8'));
     // Never leak full banking details in lists, public Firestore documents or emails.
     await doc('teyzaOperationsAudit/'+crypto.randomUUID()).set({actorUid:uid,
-      action:'ops_mandate_detail',target,mandateId,createdAt:clock()});
+      action:action==='ops_mandate_export'?'ops_mandate_export':'ops_mandate_detail',target,mandateId,createdAt:clock()});
     const seller=await read('teyzaSellerAccounts/'+target);
     return {mandate:publicMandate(record),sellerUid:target,shopName:seller?.shopName||'',
       shopAddress:record.shopAddress||seller?.address||'',ownerEmail:seller?.ownerEmail||'',
