@@ -60,6 +60,10 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run test:browser
+      - name: Validate website seller subscription security and Hosting overlay
+        run: |
+          npm test --prefix tools/app-first-release
+          node --input-type=module --check < web/app-first/public/js/seller-web-billing.mjs
       - name: Parse PowerShell activation helpers
         shell: pwsh
         run: |
