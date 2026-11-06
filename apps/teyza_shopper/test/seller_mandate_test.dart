@@ -7,8 +7,8 @@ class MandateApi extends TeyzaMobileApi {
  MandateApi(super.session);
  final submissions=<Map<String,dynamic>>[];
  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async {
-  if(action=='seller_mandate_status')return {'amountCents':9900,'termsVersion':'teyza-membership-v1','termsTemplate':'Authorise R99.00 starting {firstDate}, monthly day {collectionDay}.','banks':[{'name':'FNB','branchCode':'250655'}],'benefits':['Visibility on Teyza'],'identity':{'kind':'id','evidenceId':'current-id'}};
-  if(action=='seller_mandate_submit'){submissions.add(data);return {'mandate':{'mandateId':data['requestId'],'status':'signed_pending_activation','bankName':'FNB','accountLast4':'8901','collectionDay':data['collectionDay'],'firstDate':data['firstDate'],'terms':'R99 consent'}};}
+  if(action=='seller_mandate_status')return {'amountCents':9900,'termsVersion':'teyza-debit-request-v2','termsTemplate':'Authorise R99.00 starting {firstDate}, monthly day {collectionDay}.','banks':[{'name':'FNB','branchCode':'250655'}],'benefits':['Visibility on Teyza'],'identity':{'kind':'id','evidenceId':'current-id'},'seller':{'shopName':'Example spaza','shopAddress':'12 Shop Road, Durban','phone':'0712345678','firstName':'Test','surname':'Owner','accountHolder':'Test Owner'}};
+  if(action=='seller_mandate_submit'){submissions.add(data);return {'mandate':{'mandateId':data['requestId'],'status':'pending_provider_authentication','bankName':'FNB','accountLast4':'8901','collectionDay':data['collectionDay'],'firstDate':data['firstDate'],'terms':'R99 consent'}};}
   return {};
  }
 }
@@ -28,14 +28,18 @@ void main(){
  testWidgets('The exact R99 date, current ID and explicit consents are submitted; account changes clear private fields',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
-  for(final entry in {'Name':'Test','Surname':'Owner','Phone number':'0712345678','ID / passport number':'9001015009087','Account holder / authorised signatory':'Test Owner'}.entries){await fill(t,entry.key,entry.value);}
+  expect(t.widget<TextField>(field('Registered contact number')).controller!.text,'0712345678');
+  expect(t.widget<TextField>(field('Name')).controller!.text,'Test');
+  expect(field('ID / passport number'),findsNothing,
+    reason:'Verified ID is reused without retyping its number');
+  await fill(t,'Account holder / authorised signatory','Test Owner');
   final bank=find.byType(DropdownButtonFormField<String>).at(1);await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
   await fill(t,'Account number','12345678901');
-  await fixtures.visibleTap(t,find.text('Choose first collection date'));await t.pumpAndSettle();await t.tap(find.text('OK'));await t.pumpAndSettle();
+  await fixtures.visibleTap(t,find.byKey(const ValueKey('mandate-collection-date')));await t.pumpAndSettle();await t.tap(find.text('OK'));await t.pumpAndSettle();
   await fixtures.visibleTap(t,find.text('I consent to Teyza processing this private ID/passport for owner verification.'));
   await fixtures.visibleTap(t,find.text('I have read and authorise the exact amount, dates and bank account above.'));
   await fixtures.visibleTap(t,find.text('Sign & submit R99 mandate'));await t.pumpAndSettle();
-  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);expect(find.text('Mandate saved. No payment has been collected.'),findsOneWidget);
+  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);expect(find.text('Mandate securely submitted for administrator review. No debit has been collected.'),findsOneWidget);
   session.switchAccount();await t.pumpAndSettle();expect(find.text('Your account changed. Close this form and sign in again.'),findsOneWidget);expect(find.textContaining('8901'),findsNothing);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
