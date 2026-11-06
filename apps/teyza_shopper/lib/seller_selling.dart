@@ -35,7 +35,7 @@ class SellerSellingDashboard extends StatelessWidget {
   final VoidCallback? onLocation;
   final Uint8List? shopPhoto;
   final bool photoLoading,phoneAlertsEnabled;
-  final VoidCallback? onPhoto,onNotifications,onEnableAlerts;
+  final VoidCallback? onPhoto,onNotifications,onEnableAlerts,onShop;
   final int unread;
   final Widget? serviceControls;
   final int? productCount;
@@ -45,7 +45,7 @@ class SellerSellingDashboard extends StatelessWidget {
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
-    this.onPhoto,this.onNotifications,this.onEnableAlerts,this.phoneAlertsEnabled=false,this.unread=0,this.serviceControls});
+    this.onPhoto,this.onNotifications,this.onEnableAlerts,this.onShop,this.phoneAlertsEnabled=false,this.unread=0,this.serviceControls});
   bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
   bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
   String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
@@ -65,6 +65,8 @@ class SellerSellingDashboard extends StatelessWidget {
             if(verified)_pill('Teyza verified',Icons.verified_outlined),
           ])]))])),
       const SizedBox(height:12),Wrap(spacing:8,runSpacing:8,children:[
+        if(onShop!=null)FilledButton.tonalIcon(key:const ValueKey('seller-shop-wholesale'),onPressed:onShop,
+          icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Shop')),
         FilledButton.tonalIcon(onPressed:onOrders,icon:const Icon(Icons.receipt_long_outlined),label:const Text('Orders')),
         FilledButton.tonalIcon(onPressed:onChat,icon:const Icon(Icons.chat_bubble_outline),label:const Text('Messages')),
         if(onNotifications!=null)FilledButton.tonalIcon(onPressed:onNotifications,icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),
