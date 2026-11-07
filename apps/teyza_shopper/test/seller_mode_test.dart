@@ -120,7 +120,8 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.text('Start selling'),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('R99 / month'),findsOneWidget);
+    expect(find.text('Explore business tools'),findsOneWidget);
+    expect(find.text('R99 / month'),findsNothing);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
@@ -130,7 +131,8 @@ void main(){
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ProductsUnavailableRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('R99 / month'),findsOneWidget);
+    expect(find.text('Explore business tools'),findsOneWidget);
+    expect(find.text('R99 / month'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('A pending seller sees benefits but cannot begin checkout',(tester) async {
@@ -140,8 +142,8 @@ void main(){
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()async=>pending),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.textContaining('wait for approval'),350);
-    expect(find.textContaining('wait for approval'),findsOneWidget);
+    await tester.scrollUntilVisible(find.textContaining('Product publishing requires'),350);
+    expect(find.textContaining('Product publishing requires'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
