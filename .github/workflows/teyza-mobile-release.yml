@@ -253,11 +253,12 @@ jobs:
           name: teyza-existing-play-setup
           path: build/teyza-existing-play-setup/
           retention-days: 30
+      # This kit includes the files awaiting Microsoft Defender review.
       - name: Package mobile service deployment kit
-        if: env.QA_SIGNING_ONLY != 'true'
+        if: env.QA_SIGNING_ONLY != 'true' && github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         run: python3 scripts/package_teyza_mobile.py
       - uses: actions/upload-artifact@v4
-        if: env.QA_SIGNING_ONLY != 'true'
+        if: env.QA_SIGNING_ONLY != 'true' && github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         with:
           name: teyza-mobile-r315-deploy-kit
           path: build/teyza-mobile-deploy/
@@ -643,5 +644,3 @@ jobs:
           }
           Write-Host 'No recent Defender detection was recorded for the signed app binaries.'
           Write-Host 'This is not a Microsoft analyst verdict on the separately flagged website files.'
-
-

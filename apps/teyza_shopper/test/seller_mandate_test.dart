@@ -18,7 +18,7 @@ void main(){
  testWidgets('Bank selection fills the branch code while the personal account number stays empty',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
-  final bank=find.byType(DropdownButtonFormField<String>).at(1);
+  final bank=find.byKey(const ValueKey('mandate-bank'));
   await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
   expect(t.widget<TextField>(field('Branch code (filled when bank is selected)')).controller!.text,'250655');
   expect(t.widget<TextField>(field('Account number')).controller!.text,isEmpty);
@@ -28,12 +28,12 @@ void main(){
  testWidgets('The exact R99 date, current ID and explicit consents are submitted; account changes clear private fields',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
-  expect(t.widget<TextField>(field('Registered contact number')).controller!.text,'0712345678');
-  expect(t.widget<TextField>(field('Name')).controller!.text,'Test');
+  await t.scrollUntilVisible(find.text('Test Owner · 0712345678'),250);
+  expect(find.text('Test Owner · 0712345678'),findsOneWidget);
   expect(field('ID / passport number'),findsNothing,
     reason:'Verified ID is reused without retyping its number');
-  await fill(t,'Account holder / authorised signatory','Test Owner');
-  final bank=find.byType(DropdownButtonFormField<String>).at(1);await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
+  final bank=find.byKey(const ValueKey('mandate-bank'));await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
+  expect(find.text('Account holder: Test Owner'),findsOneWidget);
   await fill(t,'Account number','12345678901');
   await fixtures.visibleTap(t,find.byKey(const ValueKey('mandate-collection-date')));await t.pumpAndSettle();await t.tap(find.text('OK'));await t.pumpAndSettle();
   await fixtures.visibleTap(t,find.text('I consent to Teyza processing this private ID/passport for owner verification.'));

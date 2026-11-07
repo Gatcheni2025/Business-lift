@@ -41,7 +41,7 @@ async function main(){
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port;
  let browser;try{browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.TEYZA_ADMIN_CHROMIUM?{executablePath:process.env.TEYZA_ADMIN_CHROMIUM}:{})});}
  catch(error){server.close();throw error;}let count=0;
- async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false}={}){
+ async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false,startView='approvals'}={}){
   const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows),legacyUploaded=false;
   let syntheticUsers=[{uid:'admin1',email:'reviewer@example.test',displayName:'Reviewer',verified:true,disabled:false,admin:true,providers:['google.com']},
     {uid:'shopper2',email:'shopper@example.test',displayName:'Existing Shopper',verified:false,disabled:false,admin:false,providers:['password']}];
@@ -89,11 +89,49 @@ async function main(){
   });
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
-  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});await nav.click();}
+  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
+   const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});
+   if(startView==='approvals')await nav.click();
+  }
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('Overview uses loaded counts and the sidebar opens mandate and seller reviews on desktop and phone',async()=>{
+    const f=await pageFor({startView:'overview'});
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    assert(await f.page.getByRole('button',{name:'Seller verification 3 Loaded review queue Open →'}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Seller records 3 Loaded seller records Open →'}).isVisible());
+    assert.equal(await f.page.getByText('Total revenue',{exact:false}).count(),0);
+    await f.page.locator('#sectionSearch').fill('mandate');
+    assert(await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isHidden());
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor();
+    assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
+    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isVisible());
+    const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
+    assert(order.indexOf('R99 monthly mandates — admin inbox')<order.indexOf('Seller directory'));
+    await f.page.getByRole('button',{name:'Overview',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
+    await f.page.setViewportSize({width:393,height:852});
+    assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await f.page.screenshot({path:path.join(output,'admin-overview-phone.png'),fullPage:true});
+    await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
+    await f.page.locator('.seller-row').first().waitFor();
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Unavailable review data is not represented as zero applications',async()=>{
+    const f=await pageFor({startView:'overview',api:async(route,body)=>{
+      if(body.action==='admin_seller_queue'){await route.fulfill({status:503,json:{ok:false,error:'Review queue unavailable'}});return true;}
+      return false;
+    }});
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    assert(await f.page.getByRole('button',{name:'Seller verification — Queue unavailable — open to retry Open →'}).isVisible());
+    assert(await f.page.getByText('Review queue unavailable').isVisible());
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('User management creates a non-admin account, sends setup email and suspends without changing claims',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
@@ -278,6 +316,12 @@ async function main(){
     assert.equal(downloaded.suggestedFilename(),'Teyza_R99_Mandate_Request_'+reference+'.pdf');
     assert(f.calls.some(v=>v.action==='ops_mandate_export'&&v.data.mandateId===reference));
     assert(!f.calls.some(v=>v.action==='billing_checkout'));
+    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await f.page.locator('.ops-mandate-dialog').waitFor({state:'detached'});
+    assert(!await f.page.content().then(content=>content.includes('12345678901')));
+    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+    await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor();
+    assert(!await f.page.content().then(content=>content.includes('12345678901')));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{

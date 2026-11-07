@@ -4,18 +4,23 @@ import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
-export function createOperations({api,onError}){
+export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
+ const navButtons=[...document.querySelectorAll('[data-admin-view]')];
+ const enableNavigation=enabled=>{for(const item of navButtons)item.disabled=!enabled;};
  let mandatePhotoUrl=null;
  function clearMandatePhoto(){if(mandatePhotoUrl){document.getElementById('largePhoto').removeAttribute('src');URL.revokeObjectURL(mandatePhotoUrl);mandatePhotoUrl=null;}}
+ function clearMandateDialogs(){for(const dialog of document.querySelectorAll('.ops-mandate-dialog')){
+  if(dialog.open)dialog.close();dialog.replaceChildren();dialog.remove();
+ }}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='approvals',sellers=[],next=null,selected=null,detail=null,
+ let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,closures=[],closuresNext=null,mandates=[],
      moreFinance=null,moreTickets=null,busy=false;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
- function clear(){fieldAdmin.clear();clearMandatePhoto();generation++;ready=false;sellers=[];next=null;selected=null;detail=null;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;closures=[];closuresNext=null;mandates=[];moreFinance=null;moreTickets=null;busy=false;root.replaceChildren();}
+ function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;closures=[];closuresNext=null;mandates=[];moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -25,14 +30,80 @@ export function createOperations({api,onError}){
  function check(form,label,name){const l=el('label',undefined,'confirm-check'),i=el('input');i.type='checkbox';i.name=name;i.required=true;l.append(i,el('span',label));form.append(l);return i;}
  function submit(form,text,fn){const b=el('button',text,'button primary');b.type='submit';form.append(b);form.onsubmit=e=>{e.preventDefault();if(form.reportValidity())safely(()=>fn(new FormData(form)));};}
  function table(headers,rows){const wrap=el('div',undefined,'table-wrap'),t=el('table'),head=el('thead'),h=el('tr'),body=el('tbody');for(const v of headers)h.append(el('th',v));head.append(h);for(const values of rows){const tr=el('tr');for(const v of values){const td=el('td');td.append(v instanceof Node?v:document.createTextNode(String(v??'')));tr.append(td);}body.append(tr);}if(!rows.length){const tr=el('tr'),td=el('td','No records to display.');td.colSpan=headers.length;tr.append(td);body.append(tr);}t.append(head,body);wrap.append(t);return wrap;}
- function tag(text){return el('span',String(text||'pending').replaceAll('_',' '),'status-pill');}
- function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
+ function tag(text){const label=String(text||'pending').replaceAll('_',' '),pill=el('span',label,'status-pill');
+  if(/^(approved|active|verified|connected|resolved)\b/i.test(label))pill.classList.add('status-good');
+  else if(/^(rejected|declined|suspended|failed)\b/i.test(label))pill.classList.add('status-alert');
+  return pill;}
+ function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));if(view==='overview')text.append(el('p','The people, reviews and requests that keep your marketplace moving.'));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
  function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;heading();if(!ready)return;
   if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
- function overview(){const stats=el('div',undefined,'metrics');for(const [label,n,note] of [['Seller records loaded',sellers.length,next?'More sellers available':'Current registry page'],['Awaiting approval',sellers.filter(s=>s.approvalStatus==='pending').length,'Among loaded sellers'],['Monthly subscription',money(9900),'Standard monthly renewal']]){const c=el('article');c.append(el('span',label,'metric-label'),el('strong',String(n)),el('small',note));stats.append(c);}root.append(stats);const cards=el('div',undefined,'ops-grid');for(const [v,title,desc] of [['approvals','Verify seller registrations','Inspect the current identity document and selfie, then approve or give a clear recommendation.'],['sellers','Sellers and access exceptions','View seller accounts and grant a recorded temporary payment exception when needed.'],['users','Manage user accounts','Create shopper or seller accounts, send private setup emails and suspend accounts when needed.'],['billing','Review debit-order mandates','Review submitted R99 consent and prepare it for accredited collections. No debit is initiated here.'],['support','Keep every request moving','Track open cases, priority and internal review notes.'],['finance','Review stock finance','Manually review enquiries and record approval in principle. No automatic disbursement.']]){const c=card(title,desc);c.append(button('Open workspace →',()=>navigate(v)));cards.append(c);}root.append(cards);root.append(el('p','Products publish automatically once seller verification and subscription access are complete.','notice warning'));}
+ function overview(){
+  const review=getReviewSummary(),stats=el('div',undefined,'overview-stats');
+  const stat=(label,value,note,target,tone)=>{
+   const b=el('button',undefined,'overview-stat '+tone);b.type='button';
+   b.append(el('span',label,'overview-stat-label'),el('strong',String(value)),el('small',note),el('span','Open →','overview-stat-link'));
+   b.onclick=()=>safely(()=>navigate(target));stats.append(b);
+  };
+  stat('Seller verification',review.loaded?review.count:'—',review.loaded?(review.hasMore?'Loaded queue · more available':'Loaded review queue'):'Queue unavailable — open to retry','approvals','tone-mint');
+  stat('Seller records',sellerSnapshotLoaded?sellers.length:'—',sellerSnapshotLoaded?(next?'Loaded page · more available':'Loaded seller records'):'Registry unavailable — open to retry','sellers','tone-cream');
+  stat('Approved sellers',sellerSnapshotLoaded?sellers.filter(s=>s.approvalStatus==='approved').length:'—','Among loaded seller records','sellers','tone-blue');
+  stat('Debit-order mandates','Review','R99 requests · no debit collected here','billing','tone-sand');
+  root.append(stats);
+
+  const grid=el('div',undefined,'overview-grid');
+  const desk=el('section',undefined,'panel overview-panel overview-desk');
+  const deskHead=el('div',undefined,'overview-panel-heading');
+  const deskTitle=el('div');deskTitle.append(el('h3','Your review desk'),el('p','Pick up where your team needs you.'));
+  deskHead.append(deskTitle,el('span','QUICK ACTIONS','overview-kicker'));desk.append(deskHead);
+  const actions=el('div',undefined,'overview-actions');
+  for(const [target,label,desc,number] of [
+   ['approvals','Verify seller registrations','Review identity documents and selfies.',review.loaded?String(review.count)+' loaded':'Open queue'],
+   ['billing','Review debit-order mandates','Inspect R99 consent and prepare provider review.','Open inbox'],
+   ['support','Manage support requests','Follow up on the cases your team has recorded.','Open cases'],
+   ['field','Manage the field team','Review applications, areas and visits.','Open HR']]){
+    const b=el('button',undefined,'overview-action');b.type='button';
+    const copy=el('span',undefined,'overview-action-copy');copy.append(el('strong',label),el('small',desc));
+    b.append(el('span',label.slice(0,1),'overview-action-icon'),copy,el('span',number,'overview-action-meta'),el('span','→','overview-action-arrow'));
+    b.onclick=()=>safely(()=>navigate(target));actions.append(b);
+  }
+  desk.append(actions);grid.append(desk);
+
+  const mix=el('section',undefined,'panel overview-panel overview-mix');
+  mix.append(el('h3','Seller status'),el('p',sellerSnapshotLoaded?
+   (next?'Based on the loaded page; more records are available.':'Based on the currently loaded seller records.'):
+   'Seller records have not loaded yet.'));
+  if(sellerSnapshotLoaded&&sellers.length){
+   const groups=[['Approved',sellers.filter(s=>s.approvalStatus==='approved').length,'approved'],
+    ['Pending',sellers.filter(s=>s.approvalStatus==='pending').length,'pending'],
+    ['Other',sellers.filter(s=>!['approved','pending'].includes(s.approvalStatus)).length,'other']];
+   for(const [label,count,tone] of groups){const row=el('div',undefined,'mix-row');
+    const line=el('div',undefined,'mix-label');line.append(el('span',label),el('strong',String(count)));
+    const bar=el('div',undefined,'mix-bar');bar.setAttribute('aria-hidden','true');
+    const fill=el('span',undefined,'mix-fill '+tone);fill.style.width=(count/sellers.length*100)+'%';bar.append(fill);row.append(line,bar);mix.append(row);}
+  }else mix.append(el('p',sellerSnapshotLoaded?'No seller records were returned.':'Open the seller directory to retry.','overview-empty'));
+  mix.append(button('Open seller directory',()=>navigate('sellers')));grid.append(mix);
+
+  const recent=el('section',undefined,'panel overview-panel overview-sellers');
+  const recentHead=el('div',undefined,'overview-panel-heading'),recentTitle=el('div');
+  recentTitle.append(el('h3','Seller directory'),el('p','A quick look at loaded shops.'));
+  recentHead.append(recentTitle,button('View all',()=>navigate('sellers')));recent.append(recentHead);
+  if(sellerSnapshotLoaded&&sellers.length){
+   const rows=sellers.slice(0,5).map(s=>{
+    const name=el('div',undefined,'overview-seller-name');name.append(el('strong',s.shopName||'Unnamed shop'),el('small',s.category==='spaza'?'Spaza shop':s.category==='retail'?'Retail or wholesale':'Business'));
+    return [name,tag(s.approvalStatus||'unknown'),button('Open account',async()=>{await navigate('sellers');await choose(s);})];
+   });recent.append(table(['Shop','Verification',''],rows));
+  }else recent.append(el('p',sellerSnapshotLoaded?'No seller records to show.':'Seller information is unavailable.','overview-empty'));
+  grid.append(recent);
+
+  const guidance=el('section',undefined,'panel overview-panel overview-guide');
+  guidance.append(el('span','A LITTLE GUIDANCE','overview-kicker'),el('h3','A clear next step for every seller.'),
+   el('p','Verify the owner first. Review any mandate separately; a submitted form is not a collected payment.'));
+  guidance.append(button('Open seller verification',()=>navigate('approvals')));grid.append(guidance);
+  root.append(grid);
+ }
  async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[s.shopName+' · '+s.ownerEmail,tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing'){mandateQueue();closureReview();}root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+ function registry(){const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){if(view==='billing')mandateQueue();root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
 
  function mandateQueue(){
    const box=card('R99 monthly mandates — admin inbox',
@@ -354,11 +425,12 @@ export function createOperations({api,onError}){
  function printStatement(d){const w=window.open('','_blank');if(!w)throw Error('Allow popups to print the statement.');const doc=w.document;doc.title='Teyza seller statement';const style=doc.createElement('style');style.textContent='body{font:13px system-ui;padding:30px;color:#183c43}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}h1{font-size:28px}@media print{button{display:none}}';doc.head.append(style);const body=doc.body;body.append(el('h1','Teyza · Seller statement'),el('p',d.seller.shopName+' · '+d.seller.sellerUid),el('p',d.seller.ownerEmail),el('p','Generated '+new Date().toLocaleString('en-ZA')+' · Currency ZAR'),table(['Date','Description','Month','Reference','Charge','Payment','Balance'],statementRows(d.entries)),el('p','Closing balance: '+money(d.entries.at(-1)?.balanceCents||0)),el('p','Subscription ledger. Not a bank statement or a VAT tax invoice.'));const b=el('button','Print / save PDF');b.onclick=()=>w.print();body.append(b);w.focus();}
  function support(){const create=card('Log a received support request','Use this for a request received by email or another support channel. Notes saved here are internal; this screen does not send emails.'),f=el('form',undefined,'ops-form');sellerPicker(f);field(f,'Subject','subject');field(f,'Request details','message','textarea');submit(f,'Create support case',async fd=>{await request('ops_support_create',Object.fromEntries(fd));await refresh();message('Support case created.','success');});create.append(f);root.append(create);for(const t of tickets){const c=card(t.subject,t.ownerUid+' · '+new Date(t.createdAt).toLocaleString('en-ZA'));c.append(el('p',t.message),tag(t.status));const notes=el('div');c.append(button('View internal notes',async()=>{const r=await request('ops_support_detail',{ticketId:t.id});notes.replaceChildren(...r.notes.map(n=>el('p',new Date(n.createdAt).toLocaleString('en-ZA')+' · '+n.note)));if(!r.notes.length)notes.append(el('p','No internal notes yet.'));}),notes);const form=el('form',undefined,'ops-form');choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved'].map(v=>[v,v.replaceAll('_',' ')]),t.status);choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);field(form,'Internal note','note','textarea');submit(form,'Save case update',async fd=>{await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});await refresh();message('Support update saved. No email was sent.','success');});c.append(form);root.append(c);}if(!tickets.length)root.append(el('p','No support cases loaded.','footnote'));if(moreTickets)root.append(button('Load more cases',async()=>{const r=await request('ops_support_list',{after:moreTickets});tickets.push(...r.tickets);moreTickets=r.next;show();}));}
  function financeView(){root.append(el('p','Finance decisions require a manual review. Approval in principle does not create a loan agreement or release funds.','notice warning'));for(const a of finance){const c=card('Stock finance · '+money(a.amountCents),a.ownerUid+' · '+new Date(a.createdAt).toLocaleDateString('en-ZA'));c.append(tag(a.status),el('p',a.purpose),el('p','Contact: '+a.phone));if(a.reviewNote)c.append(el('p','Review note: '+a.reviewNote));if(!['approved_in_principle','declined'].includes(a.status)){const f=el('form',undefined,'ops-form');choice(f,'Review outcome','status',[['under_review','Under review'],['more_information','Request more information'],['approved_in_principle','Approve in principle'],['declined','Decline']],a.status==='enquiry_received'?'under_review':a.status);field(f,'Approved amount (R) — only for approval','approved','text',String((a.amountCents||0)/100),false);field(f,'Review note / conditions','note','textarea');check(f,'I completed the manual review and checked the seller’s approval and supporting information.','reviewConfirmed');submit(f,'Save finance review',async fd=>{if(!confirm('Save this stock finance review outcome? No funds will be disbursed.'))return;await request('ops_finance_decide',{path:a.path,expectedStatus:a.status,status:fd.get('status'),approvedAmountCents:fd.get('status')==='approved_in_principle'?cents(fd.get('approved')):0,note:fd.get('note'),reviewConfirmed:true});await refresh();message('Finance review saved. Funds have not been disbursed.','success');});c.append(f);}else c.append(el('p','Reviewed outcome · '+money(a.approvedAmountCents||0)+' · Not disbursed','footnote'));root.append(c);}if(!finance.length)root.append(el('p','No stock finance requests loaded.','footnote'));if(moreFinance)root.append(button('Load more finance requests',async()=>{const r=await request('ops_finance_queue',{after:moreFinance});finance.push(...r.requests);moreFinance=r.next;show();}));}
- async function refresh(){if(view==='field'){await fieldAdmin.refresh();show();return;}if(view==='users'){const page=await request('ops_users');users=page.users;usersNext=page.next;if(userSelected)userDetail=await request('ops_user_detail',{userUid:userSelected});}else if(view==='support'){const r=await request('ops_support_list');tickets=r.tickets;moreTickets=r.next;}else if(view==='finance'){const r=await request('ops_finance_queue');finance=r.requests;moreFinance=r.next;}else if(view==='products'){const r=await request('ops_catalogue_queue');catalogueQueue=r.submissions;catalogueLimited=r.limited;}else{const r=await request('ops_sellers');sellers=r.sellers;next=r.next;if(view==='billing'){const [q,m]=await Promise.all([request('ops_account_deletion_queue'),request('ops_mandate_queue')]);closures=q.requests||[];closuresNext=q.nextAfter||null;mandates=m.mandates||[];}if(selected)detail=await request('ops_seller_detail',{sellerUid:selected.sellerUid});}show();}
+ async function refresh(){if(view==='field'){await fieldAdmin.refresh();show();return;}if(view==='users'){const page=await request('ops_users');users=page.users;usersNext=page.next;if(userSelected)userDetail=await request('ops_user_detail',{userUid:userSelected});}else if(view==='support'){const r=await request('ops_support_list');tickets=r.tickets;moreTickets=r.next;}else if(view==='finance'){const r=await request('ops_finance_queue');finance=r.requests;moreFinance=r.next;}else if(view==='products'){const r=await request('ops_catalogue_queue');catalogueQueue=r.submissions;catalogueLimited=r.limited;}else{const r=await request('ops_sellers');if(!Array.isArray(r.sellers))throw Error('The seller directory could not be loaded. Please refresh.');sellers=r.sellers;next=r.next;sellerSnapshotLoaded=true;if(view==='billing'){const [q,m]=await Promise.all([request('ops_account_deletion_queue'),request('ops_mandate_queue')]);closures=q.requests||[];closuresNext=q.nextAfter||null;mandates=m.mandates||[];}if(selected)detail=await request('ops_seller_detail',{sellerUid:selected.sellerUid});}show();}
  async function navigate(v){
   if(!ready)return;
-  fieldAdmin.hideSensitive();clearMandatePhoto();
+  fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();
   document.dispatchEvent(new Event('teyza-admin-view-change'));
+  if(v!==view){selected=null;detail=null;userSelected=null;userDetail=null;}
   generation++;view=v;
   if(v==='approvals'){show();return;}
   // Do not render clickable forms while the previous view is loading.
@@ -368,6 +440,6 @@ export function createOperations({api,onError}){
   root.replaceChildren(el('p','Loading administrator workspace…','footnote'));
   await refresh();
 }
- for(const b of document.querySelectorAll('[data-admin-view]'))b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
- return {clear,async load(){ready=true;try{await refresh();}catch(e){if(!e.stale)onError(e);}},hideSensitive(){fieldAdmin.hideSensitive();clearMandatePhoto();generation++;selected=null;detail=null;root.replaceChildren();},show};
+ for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
+ return {clear,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
 }

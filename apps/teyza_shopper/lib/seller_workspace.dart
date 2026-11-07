@@ -226,12 +226,16 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(mounted&&uid==widget.session.userId)await refreshActivity();
   }
   Future<void> chooseProducts() async {
-    if(busy||draftError!=null)return;
+    if(busy)return;
     if(!sellerApproved){
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your registration must be approved before you can pay for product access or add products.')));
+      await openUpgrade(fromProductAction:true);
       return;
     }
     if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
+    if(draftError!=null){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your product list is unavailable. Refresh it before continuing.')));
+      return;
+    }
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
       session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
@@ -485,7 +489,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       phoneAlertsEnabled:SellerPush(widget.session).isEnabled,onEnableAlerts:busy?null:enableOrderAlerts,
       serviceControls:SellerServiceControls(key:ValueKey('services-${widget.session.userId}'),session:widget.session,api:widget.mobileApi,
         settings:shopServices,enabled:servicesReady,onSaved:refreshActivity),
-      onAdd:busy||draftError!=null?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
+      onAdd:busy?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
@@ -501,8 +505,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             Text(draftError!=null?'Products are temporarily unavailable.':
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Add a product')),
+            FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.add),label:Text(hasProductAccess?'Add a product':'Start selling')),
             TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
@@ -597,8 +601,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Add a product')),
+            FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.add),label:Text(hasProductAccess?'Add a product':'Start selling')),
             const SizedBox(height:16),
           OutlinedButton.icon(onPressed:()=>Navigator.push(context,
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))

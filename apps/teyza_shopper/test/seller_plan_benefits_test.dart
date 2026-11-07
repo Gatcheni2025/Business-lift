@@ -7,12 +7,18 @@ import 'package:teyza_shopper/teyza_mobile_api.dart';
 class _PlanApi extends TeyzaMobileApi {
  _PlanApi(super.session);
  final calls=<String>[];
+ bool approved=true;
  @override
  Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}])async{
    calls.add(action);
    if(action=='seller_summary')return {'ok':true,'listingPaid':false,
-     'complimentaryAccess':false,'approvalStatus':'approved'};
-   if(action=='seller_mandate_status')return {'ok':true,'mandate':null};
+     'complimentaryAccess':false,'approvalStatus':approved?'approved':'pending','setupComplete':approved};
+   if(action=='seller_mandate_status')return {'ok':true,'mandate':null,'termsVersion':'test-terms',
+     'termsTemplate':'R99 from {firstDate}, on day {collectionDay}.',
+     'banks':[{'name':'FNB','branchCode':'250655'}],
+     'identity':{'kind':'id','evidenceId':'current-id'},
+     'seller':{'shopName':'Example shop','shopAddress':'Test road','phone':'0710000000',
+       'firstName':'Test','surname':'Owner','accountHolder':'Test Owner'}};
    return {'ok':true};
  }
 }
@@ -31,7 +37,8 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
    await tester.pumpAndSettle();
    expect(find.text('R99 / month'),findsOneWidget);
-   expect(find.textContaining('This store build does not sell digital memberships'),findsOneWidget);
+   await tester.scrollUntilVisible(find.textContaining('Membership upgrade in this app is not available yet'),300);
+   expect(find.textContaining('Membership upgrade in this app is not available yet'),findsOneWidget);
    expect(find.textContaining('Pay securely with Paystack'),findsNothing);
    expect(find.textContaining('R49'),findsNothing);
    expect(api.calls,contains('seller_summary'));
@@ -39,10 +46,36 @@ void main(){
    expect(api.calls,isNot(contains('promote_checkout')));
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
+ testWidgets('Approved direct-channel seller sees benefits and opens the prefilled mandate',(tester)async{
+   await tester.binding.setSurfaceSize(const Size(420,860));
+   addTearDown(()=>tester.binding.setSurfaceSize(null));
+   final session=ShopperSession(),api=_PlanApi(session);
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
+   await tester.pumpAndSettle();
+   expect(find.text('R99 / month'),findsOneWidget);
+   await tester.scrollUntilVisible(find.text('Upgrade account'),350);
+   await tester.tap(find.text('Upgrade account'));await tester.pumpAndSettle();
+   expect(find.text('Membership & mandate'),findsOneWidget);
+   await tester.scrollUntilVisible(find.byKey(const ValueKey('mandate-bank')),300);
+   expect(find.text('Account holder: Test Owner'),findsOneWidget);
+   expect(find.byKey(const ValueKey('mandate-bank')),findsOneWidget);
+   expect(api.calls,isNot(contains('seller_mandate_submit')));
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ testWidgets('Pending sellers can read benefits but cannot open a mandate',(tester)async{
+   final session=ShopperSession(),api=_PlanApi(session)..approved=false;
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
+   await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.text('Upgrade account'),350);
+   expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Upgrade account')).onPressed,isNull);
+   expect(find.textContaining('wait for approval'),findsOneWidget);
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
  testWidgets('Membership status reload is read-only and never initiates a debit',(tester)async{
    final session=ShopperSession(),api=_PlanApi(session);
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
    await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.text('Refresh membership status'),350);
    await tester.tap(find.text('Refresh membership status'));
    await tester.pumpAndSettle();
    expect(api.calls.where((x)=>x=='seller_summary').length,2);
