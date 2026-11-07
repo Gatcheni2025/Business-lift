@@ -48,7 +48,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
        mandateStatus=m?['mandate'] is Map?m!['mandate']['status']?.toString():null;
        mandateError=formError;
      });
-   }catch(e){if(mounted)setState(()=>error=mobileError(e));}
+   }catch(e){if(mounted)setState((){loading=false;error=mobileError(e);});}
  }
  Future<void> openMandate()async{
    if(!directMandates||!approved||!setupComplete||mandateError!=null)return;
@@ -71,7 +71,9 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
    backgroundColor:const Color(0xFFF6F8F6),
    body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
      if(loading)const LinearProgressIndicator(),
-     if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
+     if(error!=null)Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+       Text('Could not refresh your seller status: $error',style:const TextStyle(color:Colors.red)),
+       const SizedBox(height:8),TextButton.icon(onPressed:loading?null:refresh,icon:const Icon(Icons.refresh),label:const Text('Try again'))]))),
      Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:const Color(0xFF073F40),borderRadius:BorderRadius.circular(25)),
        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('TEYZA BUSINESS',style:TextStyle(color:Color(0xFFC1E98D),fontWeight:FontWeight.w800,fontSize:11,letterSpacing:1.4)),
