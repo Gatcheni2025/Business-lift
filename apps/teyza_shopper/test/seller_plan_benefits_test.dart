@@ -7,10 +7,11 @@ import 'package:teyza_shopper/teyza_mobile_api.dart';
 class _PlanApi extends TeyzaMobileApi {
  _PlanApi(super.session);
  final calls=<String>[];
- bool approved=true;
+ bool approved=true,failSummary=false;
  @override
  Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}])async{
    calls.add(action);
+   if(action=='seller_summary'&&failSummary)throw StateError('Temporary seller status failure');
    if(action=='seller_summary')return {'ok':true,'listingPaid':false,
      'complimentaryAccess':false,'approvalStatus':approved?'approved':'pending','setupComplete':approved};
    if(action=='seller_mandate_status')return {'ok':true,'mandate':null,'termsVersion':'test-terms',
@@ -69,6 +70,19 @@ void main(){
    await tester.scrollUntilVisible(find.text('Upgrade account'),350);
    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Upgrade account')).onPressed,isNull);
    expect(find.textContaining('wait for approval'),findsOneWidget);
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ testWidgets('Seller still sees R99 benefits and retry when status service is unavailable',(tester)async{
+   final session=ShopperSession(),api=_PlanApi(session)..failSummary=true;
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
+   await tester.pumpAndSettle();
+   expect(find.text('R99 / month'),findsOneWidget);
+   expect(find.textContaining('Could not refresh your seller status'),findsOneWidget);
+   expect(find.byType(LinearProgressIndicator),findsNothing);
+   api.failSummary=false;
+   await tester.tap(find.text('Try again'));
+   await tester.pumpAndSettle();
+   expect(find.textContaining('Could not refresh your seller status'),findsNothing);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Membership status reload is read-only and never initiates a debit',(tester)async{
