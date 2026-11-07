@@ -56,7 +56,7 @@ void main(){
    await tester.scrollUntilVisible(find.text('Upgrade account'),350);
    await tester.tap(find.text('Upgrade account'));await tester.pumpAndSettle();
    expect(find.text('Membership & mandate'),findsOneWidget);
-   await tester.scrollUntilVisible(find.byKey(const ValueKey('mandate-bank')),300);
+   await tester.scrollUntilVisible(find.byKey(const ValueKey('mandate-bank')),300,scrollable:find.byType(Scrollable).first);
    expect(find.text('Account holder: Test Owner'),findsOneWidget);
    expect(find.byKey(const ValueKey('mandate-bank')),findsOneWidget);
    expect(api.calls,isNot(contains('seller_mandate_submit')));

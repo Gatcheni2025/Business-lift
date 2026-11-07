@@ -28,7 +28,7 @@ void main(){
  testWidgets('The exact R99 date, current ID and explicit consents are submitted; account changes clear private fields',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
   await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
-  await t.scrollUntilVisible(find.text('Test Owner · 0712345678'),250);
+  await t.scrollUntilVisible(find.text('Test Owner · 0712345678'),250,scrollable:find.byType(Scrollable).first);
   expect(find.text('Test Owner · 0712345678'),findsOneWidget);
   expect(field('ID / passport number'),findsNothing,
     reason:'Verified ID is reused without retyping its number');

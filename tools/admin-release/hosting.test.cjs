@@ -61,8 +61,9 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
  const files=overlay(root);assert.equal(files.size,16);
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R325"'));
- for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R327-premium"'));
+ // Inline SVG sprite references are fragment-only; fetched assets remain root-relative.
+ for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/')||match[1].startsWith('#'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
 });
 
