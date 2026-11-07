@@ -589,7 +589,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
           SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
-          if(!hasProductAccess)const Card(child:ListTile(
+          if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
             subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
