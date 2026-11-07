@@ -5,7 +5,8 @@ import 'teyza_mobile_api.dart';
 import 'seller_mandate.dart';
 
 // Physical-goods Paystack payments are implemented separately in shop_orders.dart.
-// No seller membership payment is offered in App Store / Play Store builds.
+// Store-distributed builds show current access and non-purchase business tools only.
+// Never solicit a digital entitlement outside App Store / Play billing.
 const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
 final Uri teyzaSellerMembershipPage=Uri.https('teyza.co.za','/seller-subscriptions.html');
 bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>
@@ -67,7 +68,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
        Text(title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
        const SizedBox(height:3),Text(detail,style:const TextStyle(color:Color(0xFF657B6E),height:1.35,fontSize:12))]))]));
  @override Widget build(BuildContext context)=>Scaffold(
-   appBar:AppBar(title:const Text('Start selling')),
+   appBar:AppBar(title:Text(directMandates?'Start selling':'Seller account')),
    backgroundColor:const Color(0xFFF6F8F6),
    body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
      if(loading)const LinearProgressIndicator(),
@@ -78,27 +79,30 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('TEYZA BUSINESS',style:TextStyle(color:Color(0xFFC1E98D),fontWeight:FontWeight.w800,fontSize:11,letterSpacing:1.4)),
         const SizedBox(height:12),const Text('More ways to grow your shop.',style:TextStyle(color:Colors.white,fontSize:27,height:1.12,fontWeight:FontWeight.w800)),
-        const SizedBox(height:14),const Text('R99 / month',style:TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w900)),
-        const SizedBox(height:5),const Text('Free registration. Membership when you are ready to sell.',style:TextStyle(color:Color(0xFFD5E6DA),height:1.4)),
+        if(directMandates)const SizedBox(height:14),if(directMandates)const Text('R99 / month',style:TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w900)),
+        if(directMandates)const SizedBox(height:5),if(directMandates)const Text('Free registration. Review the monthly debit-order request when eligible.',style:TextStyle(color:Color(0xFFD5E6DA),height:1.4)),
+        if(!directMandates)const Padding(padding:EdgeInsets.only(top:14),
+          child:Text('Check your verified seller status and available tools.',
+            style:TextStyle(color:Color(0xFFD5E6DA),height:1.4))),
        ])),
      const SizedBox(height:18),
      Card(margin:EdgeInsets.zero,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),child:Padding(padding:const EdgeInsets.all(19),child:Column(
        crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const Text('What your business can enjoy',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
+        Text(directMandates?'What your membership can include':'Explore business tools',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
         const SizedBox(height:6),
         benefit(Icons.storefront_outlined,'A shop people can discover','Approved businesses can appear to shoppers nearby.'),
         benefit(Icons.inventory_2_outlined,'Add products and receive orders','List your available items when verified product access is active.'),
-        benefit(Icons.location_on_outlined,'Local visibility','Priority placement may be offered in eligible areas.'),
+        if(directMandates)benefit(Icons.location_on_outlined,'Local visibility','Priority placement may be offered in eligible areas.'),
         benefit(Icons.handshake_outlined,'Wholesale savings','Explore discounts from participating wholesalers.'),
-        benefit(Icons.local_shipping_outlined,'Selected delivery offers','Discounted delivery may be available on qualifying products.'),
+        benefit(Icons.local_shipping_outlined,'Delivery options','Arrange collection or delivery for physical goods.'),
         benefit(Icons.account_balance_outlined,'Apply for stock finance','Applications are reviewed separately and are not guaranteed.'),
         benefit(Icons.receipt_long_outlined,'Bookkeeping support','Support may be offered where available.'),
-        const Text('Partner offers, priority placement and support depend on availability and eligibility.',style:TextStyle(color:Color(0xFF657B6E),fontSize:12,height:1.4)),
+        const Text('Supplier offers, delivery options and support depend on availability and eligibility.',style:TextStyle(color:Color(0xFF657B6E),fontSize:12,height:1.4)),
        ]))),
      const SizedBox(height:16),
      Card(margin:EdgeInsets.zero,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),child:Padding(padding:const EdgeInsets.all(19),child:Column(
        crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('Your membership',style:TextStyle(fontSize:18,fontWeight:FontWeight.w800)),
+        Text(directMandates?'Your membership':'Your seller eligibility',style:TextStyle(fontSize:18,fontWeight:FontWeight.w800)),
         const SizedBox(height:8),
         if(paid)ListTile(contentPadding:EdgeInsets.zero,
           leading:const Icon(Icons.verified,color:Colors.green),
@@ -111,20 +115,20 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
           leading:const Icon(Icons.description_outlined),
           title:const Text('Mandate received'),
           subtitle:Text('Status: ${mandateStatus!.replaceAll('_',' ')}. No debit is active until provider authentication and successful collection.')),
-        if(!loading&&(!approved||!setupComplete))const Text('Complete seller verification and wait for approval before upgrading or adding products.',style:TextStyle(color:Color(0xFF8A640F),height:1.45)),
+        if(!loading&&(!approved||!setupComplete))Text(directMandates?'Complete seller verification and wait for approval before submitting a mandate or adding products.':'Complete your seller verification. Product publishing requires a verified eligible account.',style:TextStyle(color:Color(0xFF8A640F),height:1.45)),
         if(directMandates&&mandateError!=null)const Padding(padding:EdgeInsets.symmetric(vertical:8),
           child:Text('The mandate form is temporarily unavailable. Refresh or contact Teyza support.',style:TextStyle(color:Color(0xFF9A4B31)))),
         if(directMandates&&(!paid&&!complimentary||mandateStatus!=null))FilledButton.icon(
           onPressed:loading||!approved||!setupComplete||mandateError!=null?null:openMandate,
           icon:const Icon(Icons.account_balance_outlined),
           label:Text(mandateStatus==null?'Upgrade account':'View mandate status'))
-        else if(!directMandates&&!paid&&!complimentary)const Text('Membership upgrade in this app is not available yet. Existing verified access will appear here.',
+        else if(!directMandates&&!paid&&!complimentary)const Text('Your shop registration is free. Additional selling tools appear when your account is eligible. There is no membership purchase in this app.',
           style:TextStyle(color:Color(0xFF5A6C60),fontSize:13,height:1.4)),
        ]))),
      const SizedBox(height:12),
      OutlinedButton.icon(onPressed:refresh,icon:const Icon(Icons.refresh),
        label:const Text('Refresh membership status')),
-     const Padding(padding:EdgeInsets.only(top:16),
+     if(directMandates)const Padding(padding:EdgeInsets.only(top:16),
        child:Text('A mandate request is not a payment or bank authorisation. Provider verification and a confirmed collection are required before paid access starts. Existing subscriptions may need separate cancellation.',
          style:TextStyle(color:Color(0xFF5A6C60),fontSize:12)))
    ])),
