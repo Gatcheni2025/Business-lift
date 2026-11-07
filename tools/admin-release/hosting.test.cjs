@@ -58,13 +58,22 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,16);
+ const files=overlay(root);assert.equal(files.size,17);
+  assert(files.has('/js/teyza-mandate-pdf.mjs'));
+  const pdfSource=require('node:zlib').gunzipSync(files.get('/js/teyza-mandate-pdf.mjs').bytes).toString('utf8');
+  assert(pdfSource.includes('buildMandateRequestPdf'));
+  assert(pdfSource.includes('NOT BANK-AUTHENTICATED'));
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
  const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R327-premium"'));
  // Inline SVG sprite references are fragment-only; fetched assets remain root-relative.
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/')||match[1].startsWith('#'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
+  const css=fs.readFileSync(path.join(root,'assets/teyza-app-admin.css'),'utf8');
+  assert(css.includes('.dashboard-sidebar'));
+  assert(html.includes('data-admin-view="billing"'));
+  assert(html.includes('Debit orders &amp; mandates'));
+  assert(html.includes('data-admin-view="overview"'));
 });
 
 
