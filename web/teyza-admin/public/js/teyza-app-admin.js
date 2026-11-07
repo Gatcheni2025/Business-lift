@@ -9,7 +9,7 @@ const $=id=>document.getElementById(id),state=new ReviewState();
 const api=createApi({user:()=>auth.currentUser});
 let queueLoaded=false;
 const operations=createOperations({api,onError:failed,getReviewSummary:()=>({loaded:queueLoaded,count:state.rows.length,hasMore:Boolean(state.next)})});
-let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false;
+let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false,resumeSection=null;
 const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto'];
 function notice(message,kind=''){ $('notice').textContent=message;$('notice').className='notice '+kind;$('notice').hidden=false; }
 function set(id,value){$(id).textContent=value||'Not supplied';}
@@ -24,6 +24,9 @@ function clearPhoto(){
 function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;updateControls();}
 function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;$('claimReview').hidden=true;$('reason').value='';}
 function lock(message,kind='error'){
+  // Preserve only the section identifier; no selected seller, opened document,
+  // bank account or approval confirmation survives an expired review session.
+  if(authorised)resumeSection=operations.currentView();
   operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
   $('activeSession').hidden=true;
   $('sectionSearch').value='';filterSections();
@@ -174,7 +177,11 @@ async function authorise(user){
     if(!Number.isFinite(time)||time>Date.now()+60000||expiresAt<=Date.now()){
       lock('Sign in again before reviewing sellers. Each private review session lasts five minutes.','warning');return;}
     authorised=true;renewing=false;$('loginPanel').hidden=true;$('workspace').hidden=false;$('activeSession').hidden=false;
-    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();if(authorised)await operations.load();
+    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();
+    if(authorised){await operations.load();
+      if(authorised&&resumeSection){const section=resumeSection;resumeSection=null;
+        await operations.navigate(section);}}
+
   }catch(error){if(state.current(ticket))failed(error);}
 }
 async function login(event,google=false){
@@ -199,7 +206,7 @@ async function login(event,google=false){
 $('enlargePhoto').addEventListener('click',()=>{if(!authorised||!objectUrl||$('evidenceImage').hidden)return;$('largePhoto').src=objectUrl;$('photoDialog').showModal();});
 $('closePhoto').addEventListener('click',()=>{$('photoDialog').close();$('largePhoto').removeAttribute('src');});
 $('emailLogin').addEventListener('submit',login);$('googleLogin').addEventListener('click',()=>login(null,true));
-$('signOut').addEventListener('click',async()=>{lock();await signOut(auth).catch(failed);});
+$('signOut').addEventListener('click',async()=>{resumeSection=null;lock();resumeSection=null;await signOut(auth).catch(failed);});
 $('renewSession').addEventListener('click',()=>lock('Sign in again to renew your review session.','warning'));
 $('refreshQueue').addEventListener('click',()=>loadQueue());$('loadMore').addEventListener('click',()=>loadQueue(true));
 $('search').addEventListener('input',drawQueue);$('category').addEventListener('change',drawQueue);
@@ -233,7 +240,7 @@ try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your 
 onAuthStateChanged(auth,user=>{
   operations.clear();activeUser=user;state.account(user?.uid||null);queueLoaded=false;busy=false;authorised=false;resetDetails();
   $('sectionSearch').value='';filterSections();
-  if(user)authorise(user);else{renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
+  if(user)authorise(user);else{resumeSection=null;renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
     $('activeSession').hidden=true;
     $('email').readOnly=false;set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator account.');}
 });
