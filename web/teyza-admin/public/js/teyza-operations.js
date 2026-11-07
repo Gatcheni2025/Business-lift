@@ -159,7 +159,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      ' · branch '+m.branchCode),
      el('p','Shop address: '+(m.shopAddress||'—')),
      el('p','First date: '+m.firstDate+' · recurring day '+m.collectionDay),
-     el('p','Collection provider: NOT CONNECTED · no debit submitted'),
+     el('p',m.status==='submitted_to_netcash'?'Netcash: submitted manually; bank acceptance and debit unverified':'Netcash: manual submission available after admin review; no debit initiated'),
      button('View complete private mandate (audited)',()=>inspectMandate(m)));
    if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
      const form=el('form',undefined,'ops-form');
@@ -177,6 +177,27 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
        message('Mandate review saved. Collection remains inactive.','success');show();
      });
      box.append(form);
+   }
+   if(m.status==='reviewed_pending_provider'){
+     const send=card('Record manual Netcash portal submission',
+       'Download the private mandate PDF above, upload it through the secure Netcash service, and record the portal receipt here. No API required for this administrative handoff.');
+     const form=el('form',undefined,'ops-form');
+     field(form,'Netcash submission or receipt reference','providerReference','text');
+     field(form,'Submission method / date and internal note','note','textarea');
+     check(form,'I uploaded the signed mandate through the authorised Netcash process. I understand this is NOT bank authentication, a collected debit or paid seller access.','confirmed');
+     submit(form,'Record manual submission',async fd=>{
+       const reference=String(fd.get('providerReference')||'').trim();
+       if(!confirm('Confirm that the PDF has ALREADY been submitted to Netcash? This only records an unverified provider submission.'))return;
+       const answer=await request('ops_mandate_record_netcash_submission',{
+         sellerUid:selected.sellerUid,mandateId:m.mandateId,providerReference:reference,
+         note:String(fd.get('note')||'').trim(),confirmed:true});
+       const result=await request('ops_mandate_queue');mandates=result.mandates||[];
+       detail=null;selected=null;message(answer.recorded?'Netcash portal submission recorded. Await bank validation and confirmed collection.':'No change.','success');show();
+     });
+     send.append(form);box.append(send);
+   }
+   if(m.status==='submitted_to_netcash'){
+     box.append(el('p','Submitted to Netcash manually. This is a record of transfer, not an authenticated mandate or a payment receipt. Paid access remains inactive.','notice warning'));
    }
    root.append(box);
  }
