@@ -119,3 +119,39 @@ test('Exporting a complete provider-review mandate requires fresh administrator 
  await f.call('seller_mandate_withdraw',{mandateId:'request1'});
  await rejects(f.call('ops_mandate_export',{...target,mandateId:'old'},admin),409);
 });
+
+test('Manual Netcash handoff records a provider portal receipt but never activates access or creates a debit',async()=>{
+ const f=setup(),mandate=await f.call('seller_mandate_submit',data);
+ const target={sellerUid:'owner',mandateId:mandate.mandate.mandateId,
+   providerReference:'NC-RECEIPT-2026-0042',note:'PDF uploaded securely in Netcash portal on 07 November 2026.',
+   confirmed:true};
+ await rejects(f.call('ops_mandate_record_netcash_submission',target,admin),409);
+ await f.call('ops_mandate_review',{sellerUid:'owner',mandateId:target.mandateId,
+   decision:'reviewed_pending_provider',reason:'Owner consent reviewed, awaiting manual Netcash submission.',confirmed:true},admin);
+ await rejects(f.call('ops_mandate_record_netcash_submission',{...target,confirmed:false},admin),422);
+ const done=await f.call('ops_mandate_record_netcash_submission',target,admin);
+ assert.equal(done.status,'submitted_to_netcash');
+ assert.equal(done.collectionActive,false);
+ const saved=f.db.records.get('teyzaSellerMandates/owner');
+ assert.equal(saved.providerStatus,'submitted_unverified');
+ assert.equal(saved.provider,'netcash');
+ assert.equal(saved.providerReference,target.providerReference);
+ assert.equal(saved.collectionActive,false);
+ assert(!f.db.records.has('teyzaBilling/owner'));
+ assert((await f.call('ops_mandate_record_netcash_submission',target,admin)).alreadyRecorded);
+ await rejects(f.call('ops_mandate_record_netcash_submission',{...target,providerReference:'NC-RECEIPT-OTHER'},admin),409);
+ assert([...f.db.records.values()].some(v=>v.action==='netcash_manual_submission'));
+ const view=await f.call('seller_mandate_status');
+ assert.equal(view.mandate.providerStatus,'submitted_unverified');
+ assert(!JSON.stringify(view).includes(target.providerReference));
+});
+test('Manual Netcash submission requires another fresh admin and forbids withdrawn mandates',async()=>{
+ const f=setup();await f.call('seller_mandate_submit',data);
+ const submission={sellerUid:'owner',mandateId:'request1',providerReference:'NC-PORTAL-81726',
+   note:'Submitted from secure Netcash office portal.',confirmed:true};
+ await rejects(f.call('ops_mandate_record_netcash_submission',submission),403);
+ await rejects(f.call('ops_mandate_record_netcash_submission',submission,{...admin,auth_time:now/1000-301}),401);
+ await f.call('seller_mandate_withdraw',{mandateId:'request1'});
+ await rejects(f.call('ops_mandate_record_netcash_submission',submission,admin),409);
+ assert(!f.db.records.has('teyzaBilling/owner'));
+});
