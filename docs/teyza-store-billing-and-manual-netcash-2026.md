@@ -46,6 +46,19 @@ Do not combine these two billing systems in one payment path.
 **An API to Netcash is optional** for manual uploads/collections *if* Netcash accepts
 that workflow. This does not remove separate platform reporting/API requirements.
 
+**Netcash itself explicitly warns that a website tick box is not a valid debit-order
+authorisation.** Treat the Teyza form/PDF as an *initial consent request* rather than
+a signed paper/eMandate. Netcash's portal can accept manual Masterfile entries and
+uploads of signed mandates; use Netcash's prescribed mandate wording, abbreviated
+bank-approved name, cancellation/assignment clauses and official eMandate or bank
+authentication where applicable. Do not debit solely from the Teyza PDF.
+
+Provider documentation:
+- https://help.netcash.co.za/docs/quick-start-guides/debit-orders/debit-order-service-guide/
+- https://help.netcash.co.za/docs/account-profile/debit-orders/manage-debit-orders/
+- https://help.netcash.co.za/docs/quick-start-guides/debit-orders/debit-order-mandate/
+
+
 ## Google Play (South Africa)
 
 - South Africa is eligible for the **user choice billing pilot** for non-gaming
