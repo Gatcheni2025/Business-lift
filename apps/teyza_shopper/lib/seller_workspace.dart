@@ -506,7 +506,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
             FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:Text(hasProductAccess?'Add a product':'Start selling')),
+              icon:const Icon(Icons.add),label:const Text('Start selling')),
             TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
@@ -602,7 +602,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           const SizedBox(height:12),
           if(!productsView)...[
             FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:Text(hasProductAccess?'Add a product':'Start selling')),
+              icon:const Icon(Icons.add),label:const Text('Start selling')),
             const SizedBox(height:16),
           OutlinedButton.icon(onPressed:()=>Navigator.push(context,
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
