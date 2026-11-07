@@ -32,7 +32,7 @@ void main(){
       expect(find.text('Saved Shop'),findsOneWidget);
       expect(find.text(category=='spaza'?'Spaza Shop':category=='retail'?'Other Retail':'Wholesaler / Cash & Carry'),findsOneWidget);
       expect(find.text('Shop is not live yet'),findsOneWidget);
-      expect(find.text('Add a product'),findsOneWidget);
+      expect(find.text('Start selling'),findsOneWidget);
       expect(tester.takeException(),isNull);
       await session.signOut();await tester.pumpAndSettle();
       expect(find.text('Saved Shop'),findsNothing);expect(find.text('Shop owner sign in'),findsOneWidget);
@@ -46,7 +46,7 @@ void main(){
       apiFactory:(uid,token)=>SellerFirestore(uid:uid,token:token,client:client))));
     await tester.pumpAndSettle();
     expect(find.text('No registered shop found'),findsOneWidget);
-    expect(find.text('Add a product'),findsNothing);expect(reads,1);
+    expect(find.text('Start selling'),findsNothing);expect(reads,1);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
   });
   testWidgets('Permission error offers retry without claiming the shop is missing',(tester) async{
@@ -57,7 +57,7 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.text('Retry'),findsOneWidget);
     expect(find.text('No registered shop found'),findsNothing);
-    expect(find.text('Add a product'),findsNothing);
+    expect(find.text('Start selling'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
   });
   testWidgets('Signing out during a shop read cannot display the previous owner data',(tester) async{
@@ -83,9 +83,9 @@ void main(){
     expect(find.text('Support reference: SELLER_PRODUCTS_ACCESS'),findsOneWidget);
     expect(find.text('No registered shop found'),findsNothing);
     expect(find.textContaining('0 product drafts'),findsNothing);
-    final add=find.widgetWithText(FilledButton,'Add a product');
+    final add=find.widgetWithText(FilledButton,'Start selling');
     await tester.scrollUntilVisible(add,180,scrollable:find.byType(Scrollable).first);
-    expect(tester.widget<FilledButton>(add).onPressed,isNull);
+    expect(tester.widget<FilledButton>(add).onPressed,isNotNull);
     blocked=false;
     await tester.ensureVisible(find.text('Retry products'));
     await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();

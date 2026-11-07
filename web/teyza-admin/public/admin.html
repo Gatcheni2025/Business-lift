@@ -2,14 +2,24 @@
 <html lang="en-ZA"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#010F1C">
-<meta name="teyza-admin-release" content="R325">
+<meta name="teyza-admin-release" content="R327-premium">
 <title>Operations · Teyza Admin</title>
-<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R323">
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R327-premium">
 </head><body>
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+ <symbol id="icon-overview" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5v9a1 1 0 0 1-1 1h-5.2v-6.2H9.7v6.2H4.5a1 1 0 0 1-1-1z"/></symbol>
+ <symbol id="icon-review" viewBox="0 0 24 24"><path d="M7 4.5h10l2 2v13H5v-15zM8.2 10l2.2 2.2 4.8-4.8M8 16h8"/></symbol>
+ <symbol id="icon-sellers" viewBox="0 0 24 24"><path d="M4 9.2h16M5 9v10.5h14V9M3.5 9l2-5h13l2 5a3 3 0 0 1-4 1.5 3.1 3.1 0 0 1-4.5 0 3.1 3.1 0 0 1-4.5 0 3 3 0 0 1-4-1.5zM9 19v-5h6v5"/></symbol>
+ <symbol id="icon-billing" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17M7 15h4"/></symbol>
+ <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.8 19c.2-3.1 2-5 5.2-5s5 1.9 5.2 5zM16 6a2.8 2.8 0 0 1 0 5.5M16.5 14c2.4.3 3.6 2 3.7 4.4"/></symbol>
+ <symbol id="icon-support" viewBox="0 0 24 24"><path d="M4 16v-4a8 8 0 0 1 16 0v4M4 12H3v4h3v-4zM20 12h1v4h-3v-4zM18.5 18c-1.3 1.5-3 2-5 2"/></symbol>
+ <symbol id="icon-finance" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 17v-4M11.8 17V9M17 17V5M5 10l5-3 4 1 5-4"/></symbol>
+ <symbol id="icon-field" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3"/><path d="M5.5 20v-1.5c0-3 2.4-5.3 5.5-5.3h2c3.1 0 5.5 2.3 5.5 5.3V20z"/></symbol>
+ <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></symbol>
+</svg>
 <header class="topbar"><a href="/" class="brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="128" height="48"><span>Admin workspace</span></a>
-<div class="account"><span id="accountEmail">Secure seller review</span><button id="signOut" class="button quiet" hidden>Sign out</button></div></header>
+<div class="account"><div class="account-identity"><small>TEYZA OPERATIONS</small><span id="accountEmail">Secure seller review</span></div><div class="session" id="activeSession" hidden><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet small">Renew session</button></div><button id="signOut" class="button quiet small" hidden>Sign out</button></div></header>
 <main class="shell">
- <div class="page-heading"><div><span class="eyebrow">TEYZA OPERATIONS</span><h1>Your marketplace. Connected.</h1><p>Seller approvals, accounts and support — one operations workspace.</p></div><span class="secure-tag">Authorised administrators</span></div>
  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
  <section id="loginPanel" class="login-panel">
   <div class="login-intro"><span class="eyebrow">SELLER APPROVALS</span><h2>A little care.<br>A trusted marketplace.</h2><p>Sign in to review seller registrations, inspect private verification photos and give owners a clear next step.</p><div class="intro-foot">Spaza shops &nbsp;·&nbsp; Retail &nbsp;·&nbsp; Wholesale</div></div>
@@ -21,10 +31,26 @@
    <p class="footnote">Administrator access is assigned by the Teyza project owner. Seller accounts cannot approve shops.</p>
   </div>
  </section>
- <section id="workspace" hidden>
-<nav class="admin-nav" aria-label="Admin workspaces"><button type="button" data-admin-view="approvals">Seller verification</button><button type="button" data-admin-view="sellers">Sellers &amp; exceptions</button><button type="button" data-admin-view="overview">Overview</button><button type="button" data-admin-view="users">Users &amp; access</button><button type="button" data-admin-view="billing">Debit orders &amp; mandates</button><button type="button" data-admin-view="support">Support</button><button type="button" data-admin-view="finance">Stock finance</button><button type="button" data-admin-view="field">HR &amp; field team</button></nav>
+ <section id="workspace" hidden><div class="dashboard-layout">
+ <aside class="dashboard-sidebar" aria-label="Workspace navigation">
+  <div class="sidebar-intro"><span class="sidebar-kicker">TEYZA ADMIN</span><strong>Your workspace</strong><span>Manage your marketplace</span></div>
+  <label class="nav-search" for="sectionSearch"><svg aria-hidden="true"><use href="#icon-search"></use></svg><span class="sr-only">Find an admin section</span><input id="sectionSearch" type="search" placeholder="Find a section" autocomplete="off"></label>
+  <p class="nav-hint">WORKSPACE</p>
+  <nav id="adminNavigation" class="admin-nav" aria-label="Admin workspaces">
+   <button type="button" data-admin-view="overview" data-keywords="dashboard home summary" disabled><svg aria-hidden="true"><use href="#icon-overview"></use></svg><span>Overview</span></button>
+   <button type="button" data-admin-view="approvals" data-keywords="approvals pending id identity selfie registration" disabled><svg aria-hidden="true"><use href="#icon-review"></use></svg><span>Seller verification</span></button>
+   <button type="button" data-admin-view="sellers" data-keywords="shops products accounts documents exceptions" disabled><svg aria-hidden="true"><use href="#icon-sellers"></use></svg><span>Sellers &amp; exceptions</span></button>
+   <button type="button" data-admin-view="billing" data-keywords="payment bank r99 netcash subscription" disabled><svg aria-hidden="true"><use href="#icon-billing"></use></svg><span>Debit orders &amp; mandates</span></button>
+   <button type="button" data-admin-view="users" data-keywords="people access shoppers account" disabled><svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Users &amp; access</span></button>
+   <button type="button" data-admin-view="support" data-keywords="help requests cases" disabled><svg aria-hidden="true"><use href="#icon-support"></use></svg><span>Support</span></button>
+   <button type="button" data-admin-view="finance" data-keywords="loan stock applications" disabled><svg aria-hidden="true"><use href="#icon-finance"></use></svg><span>Stock finance</span></button>
+   <button type="button" data-admin-view="field" data-keywords="agents employees hr applications areas" disabled><svg aria-hidden="true"><use href="#icon-field"></use></svg><span>HR &amp; field team</span></button>
+  </nav><p id="sectionResults" class="nav-empty" role="status" hidden>No sections match. Try another term.</p>
+  <div class="sidebar-note"><span class="sidebar-note-mark" aria-hidden="true">✳</span><div><strong>Built for your team</strong><p>Keep local businesses moving.</p></div></div>
+ </aside>
+ <div class="dashboard-main">
 <div id="operationsPanel"></div><div id="approvalView" hidden>
-  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Verify seller registrations</h2><p>Review the documents and approve the seller, or explain what they need to fix. Products publish automatically when access is active.</p></div><div class="session"><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet">Renew session</button></div></div>
+  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Verify seller registrations</h2><p>Review the documents and approve the seller, or explain what they need to fix. Products publish automatically when access is active.</p></div></div>
   <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
   <div class="review-layout">
    <section class="panel queue-panel" aria-labelledby="queueTitle"><div class="panel-heading"><div><h3 id="queueTitle">Waiting for your review</h3><p>New and resubmitted owner photos.</p></div><button id="refreshQueue" class="button quiet small">Refresh</button></div>
@@ -50,6 +76,6 @@
     </div>
    </section>
   </div>
- </div></section>
- <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin R325</small></footer>
-</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R326"></script></body></html>
+ </div></div></div></section>
+ <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin R327</small></footer>
+</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R327-premium"></script></body></html>

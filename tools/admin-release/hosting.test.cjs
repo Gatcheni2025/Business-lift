@@ -3,14 +3,22 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
-test('Admin release requires the automatic-publication backend, not the old manual product queue',()=>{
- const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
+test('Admin release requires seller approval and Netcash admin capabilities (not legacy Paystack checkout)',()=>{
+ const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
+   agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
-   manualReceiptsRetired:true,billingMode:'paystack_checkout'};
+   manualReceiptsRetired:true,sellerMandates:true,sellerMandateRequestV3:true,
+   adminMandatePdfExport:true,adminNetcashManualSubmission:true,
+   sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'netcash_manual_debit_request',
+   adminUsers:true,adminSellerDocuments:true,physicalGoodsPaystack:true};
  assert.doesNotThrow(()=>assertAdminBackend(ready));
- for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},{...ready,adminProductReview:true},
-   {...ready,automaticProductPublication:false},{...ready,adminComplimentaryAccess:false},
-   {...ready,billingMode:'manual_receipt'}])assert.throws(()=>assertAdminBackend(stale));
+ for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},
+   {...ready,adminProductReview:true},{...ready,automaticProductPublication:false},
+   {...ready,adminComplimentaryAccess:false},{...ready,adminNetcashManualSubmission:false},
+   {...ready,adminMandatePdfExport:false},{...ready,sellerMandateRequestV3:false},
+   {...ready,sellerMembershipBillingMode:'paystack_checkout'}]){
+   assert.throws(()=>assertAdminBackend(stale));
+ }
 });
 function setup(options={}){
  const source=base+'original',next=base+'patched',existing=new Map([['/index.html','home-hash'],['/shops.html','shops-hash'],['/js/firebase-r2.js','existing-auth-hash'],['/admin-sellers.html','old-admin']]);
@@ -58,12 +66,22 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,16);
+ const files=overlay(root);assert.equal(files.size,17);
+  assert(files.has('/js/teyza-mandate-pdf.mjs'));
+  const pdfSource=require('node:zlib').gunzipSync(files.get('/js/teyza-mandate-pdf.mjs').bytes).toString('utf8');
+  assert(pdfSource.includes('buildMandateRequestPdf'));
+  assert(pdfSource.includes('NOT BANK-AUTHENTICATED'));
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R325"'));
- for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R327-premium"'));
+ // Inline SVG sprite references are fragment-only; fetched assets remain root-relative.
+ for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/')||match[1].startsWith('#'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
+  const css=fs.readFileSync(path.join(root,'assets/teyza-app-admin.css'),'utf8');
+  assert(css.includes('.dashboard-sidebar'));
+  assert(html.includes('data-admin-view="billing"'));
+  assert(html.includes('Debit orders &amp; mandates'));
+  assert(html.includes('data-admin-view="overview"'));
 });
 
 

@@ -29,6 +29,10 @@ class ShopRepo extends SellerFirestore {
   @override Future<List<SellerDraft>> drafts() async=>const [
     SellerDraft(id:'bread',name:'Fresh bread',category:'Bakery',priceCents:1500,stock:6)];
 }
+class ProductsUnavailableRepo extends ShopRepo {
+  const ProductsUnavailableRepo({required super.uid,required super.token});
+  @override Future<List<SellerDraft>> drafts() async=>throw StateError('Product list unavailable');
+}
 class SellerApi extends TeyzaMobileApi {
   SellerApi(super.session);
   final calls=<({String action,Map<String,dynamic> data})>[];
@@ -107,26 +111,39 @@ void main(){
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('A free seller choosing Add product sees the price without starting a payment',(tester) async {
+  testWidgets('A free seller choosing Start selling sees benefits without starting a payment',(tester) async {
     SharedPreferences.setMockInitialValues({});
     final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();
+    expect(find.text('Start selling'),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('R99 / month'),findsOneWidget);
+    expect(find.text('Explore business tools'),findsOneWidget);
+    expect(find.text('R99 / month'),findsNothing);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('A pending seller cannot open product checkout from Add product',(tester) async {
+  testWidgets('A product-list error does not hide the seller membership introduction',(tester) async {
+    SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
+      initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ProductsUnavailableRepo(uid:uid,token:token),
+      catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
+    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
+    expect(find.text('Explore business tools'),findsOneWidget);
+    expect(find.text('R99 / month'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  });
+  testWidgets('A pending seller sees benefits but cannot begin checkout',(tester) async {
     SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=PendingSellerApi(SellerSession());
     const pending=SellerShop('Market','spaza','Durban','pending','not_listed');
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()async=>pending),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
-    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pump();
-    expect(find.textContaining('must be approved before you can pay'),findsOneWidget);
+    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.textContaining('Product publishing requires'),350);
+    expect(find.textContaining('Product publishing requires'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

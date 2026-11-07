@@ -1,4 +1,4 @@
-import {createOperations} from '/js/teyza-operations.js?v=R326';
+import {createOperations} from '/js/teyza-operations.js?v=R327-premium';
 import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
 import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
@@ -7,8 +7,9 @@ import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,
 
 const $=id=>document.getElementById(id),state=new ReviewState();
 const api=createApi({user:()=>auth.currentUser});
-const operations=createOperations({api,onError:failed});
-let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false;
+let queueLoaded=false;
+const operations=createOperations({api,onError:failed,getReviewSummary:()=>({loaded:queueLoaded,count:state.rows.length,hasMore:Boolean(state.next)})});
+let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false,resumeSection=null;
 const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto'];
 function notice(message,kind=''){ $('notice').textContent=message;$('notice').className='notice '+kind;$('notice').hidden=false; }
 function set(id,value){$(id).textContent=value||'Not supplied';}
@@ -23,7 +24,12 @@ function clearPhoto(){
 function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;updateControls();}
 function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;$('claimReview').hidden=true;$('reason').value='';}
 function lock(message,kind='error'){
-  operations.clear();state.clear();busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
+  // Preserve only the section identifier; no selected seller, opened document,
+  // bank account or approval confirmation survives an expired review session.
+  if(authorised)resumeSection=operations.currentView();
+  operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
+  $('activeSession').hidden=true;
+  $('sectionSearch').value='';filterSections();
   $('workspace').hidden=true;$('loginPanel').hidden=false;
   renewing=Boolean(activeUser);$('email').value=activeUser?.email||'';$('email').readOnly=renewing;
   set('loginTitle',renewing?'Renew your review session':'Welcome back');
@@ -87,12 +93,13 @@ function drawQueue(){
 async function loadQueue(more=false){
   if(busy||!authorised)return;
   const after=more?state.next:null;
-  if(!more){state.clear();resetDetails();}
+  if(!more){state.clear();queueLoaded=false;resetDetails();}
   const ticket=state.ticket();busy=true;updateControls();
   try{
     const r=await api('admin_seller_queue',after?{after}:{});if(!state.current(ticket))return;
+    if(!Array.isArray(r.sellers))throw new Error('The seller review queue could not be loaded. Please refresh.');
     const merged=new Map([...state.rows,...(r.sellers||[])].map(s=>[s.sellerUid,s]));
-    state.rows=[...merged.values()];state.next=r.next||null;drawQueue();
+    state.rows=[...merged.values()];state.next=r.next||null;queueLoaded=true;drawQueue();
   }catch(error){if(state.current(ticket))failed(error);}
   finally{if(state.current(ticket)){busy=false;drawQueue();}}
 }
@@ -160,7 +167,7 @@ async function decide(status){
   finally{if(state.current(ticket)){busy=false;updateControls();}}
 }
 async function authorise(user){
-  state.account(user.uid);activeUser=user;authorised=false;busy=false;resetDetails();
+  state.account(user.uid);queueLoaded=false;activeUser=user;authorised=false;busy=false;resetDetails();
   $('signOut').hidden=false;set('accountEmail',user.email||'Teyza administrator');const ticket=state.ticket();
   try{
     const token=await user.getIdTokenResult(true);if(!state.current(ticket))return;
@@ -169,8 +176,12 @@ async function authorise(user){
     const time=Number(token.claims.auth_time)*1000;expiresAt=time+300000;
     if(!Number.isFinite(time)||time>Date.now()+60000||expiresAt<=Date.now()){
       lock('Sign in again before reviewing sellers. Each private review session lasts five minutes.','warning');return;}
-    authorised=true;renewing=false;$('loginPanel').hidden=true;$('workspace').hidden=false;
-    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();if(authorised)await operations.load();
+    authorised=true;renewing=false;$('loginPanel').hidden=true;$('workspace').hidden=false;$('activeSession').hidden=false;
+    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();
+    if(authorised){await operations.load();
+      if(authorised&&resumeSection){const section=resumeSection;resumeSection=null;
+        await operations.navigate(section);}}
+
   }catch(error){if(state.current(ticket))failed(error);}
 }
 async function login(event,google=false){
@@ -195,7 +206,7 @@ async function login(event,google=false){
 $('enlargePhoto').addEventListener('click',()=>{if(!authorised||!objectUrl||$('evidenceImage').hidden)return;$('largePhoto').src=objectUrl;$('photoDialog').showModal();});
 $('closePhoto').addEventListener('click',()=>{$('photoDialog').close();$('largePhoto').removeAttribute('src');});
 $('emailLogin').addEventListener('submit',login);$('googleLogin').addEventListener('click',()=>login(null,true));
-$('signOut').addEventListener('click',async()=>{lock();await signOut(auth).catch(failed);});
+$('signOut').addEventListener('click',async()=>{resumeSection=null;lock();resumeSection=null;await signOut(auth).catch(failed);});
 $('renewSession').addEventListener('click',()=>lock('Sign in again to renew your review session.','warning'));
 $('refreshQueue').addEventListener('click',()=>loadQueue());$('loadMore').addEventListener('click',()=>loadQueue(true));
 $('search').addEventListener('input',drawQueue);$('category').addEventListener('change',drawQueue);
@@ -204,15 +215,32 @@ $('reviewConfirmed').addEventListener('change',updateControls);
 $('claimConfirmed').addEventListener('change',updateControls);
 $('approveSeller').addEventListener('click',()=>decide('approved'));$('rejectSeller').addEventListener('click',()=>decide('rejected'));
 $('requestPhoto').addEventListener('click',()=>decide('needs_new_photo'));
-document.addEventListener('teyza-admin-view-change',clearViews);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){state.generation++;busy=false;clearViews();operations.hideSensitive();}});
+function filterSections(){
+  const term=$('sectionSearch').value.trim().toLocaleLowerCase();let shown=0;
+  for(const item of document.querySelectorAll('[data-admin-view]')){
+    const match=!term||(item.textContent+' '+(item.dataset.keywords||'')).toLocaleLowerCase().includes(term);
+    item.hidden=!match;if(match)shown++;
+  }
+  $('sectionResults').hidden=shown!==0;
+}
+$('sectionSearch').addEventListener('input',filterSections);
+document.addEventListener('teyza-admin-view-change',()=>{clearViews();$('sectionSearch').value='';filterSections();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){state.generation++;busy=false;clearViews();operations.hideSensitive();return;}
+  if(!authorised)return;
+  if(Date.now()>=expiresAt){lock('Your private review session expired. Sign in again to continue.','warning');return;}
+  // Reload the section after clearing private documents, rather than returning to a blank workspace.
+  operations.load();
+});
 window.addEventListener('pagehide',()=>{state.generation++;clearViews();operations.clear();});
 setInterval(()=>{if(!authorised)return;const remaining=Math.max(0,Math.ceil((expiresAt-Date.now())/1000));
   if(!remaining){lock('Your private review session expired. Sign in again to continue.','warning');return;}
   set('sessionTime',`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')} remaining`);updateControls();},1000);
 try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your browser could not save this sign-in session. Allow site storage for teyza.co.za.','warning');}
 onAuthStateChanged(auth,user=>{
-  operations.clear();activeUser=user;state.account(user?.uid||null);busy=false;authorised=false;resetDetails();
-  if(user)authorise(user);else{renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
+  operations.clear();activeUser=user;state.account(user?.uid||null);queueLoaded=false;busy=false;authorised=false;resetDetails();
+  $('sectionSearch').value='';filterSections();
+  if(user)authorise(user);else{resumeSection=null;renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
+    $('activeSession').hidden=true;
     $('email').readOnly=false;set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator account.');}
 });

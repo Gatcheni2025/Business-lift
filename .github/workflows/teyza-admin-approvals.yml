@@ -75,9 +75,12 @@ jobs:
           $tokens=$null; $errors=$null
           [System.Management.Automation.Language.Parser]::ParseFile("$pwd/tools/paystack/RUN-SANDBOX-CHECK.ps1",[ref]$tokens,[ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+      # Keep deployment kits unavailable while the Defender source review is pending.
       - name: Package scoped admin activation kit
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         run: python3 scripts/package_operations_admin.py
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         with:
           name: teyza-admin-r319-users-kit
           path: TEYZA_ADMIN_R319_OPERATIONS_KIT.zip
@@ -99,4 +102,3 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-OPERATIONS.ps1",[ref]$tokens,[ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
           ./scripts/test_teyza_operations_deploy.ps1
-

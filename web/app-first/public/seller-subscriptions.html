@@ -70,8 +70,8 @@
 <section class="p-section p-section--white" id="web-checkout">
 <div class="p-container">
  <div class="p-section-heading"><span class="p-eyebrow">TEYZA VERIFIED SELLER MEMBERSHIP</span>
- <h2>R99 monthly · debit-order mandate</h2>
- <p>Use your existing Teyza seller account. Review the R99 monthly collection authorisation, enter your bank details and submit it securely to administration. Signing is not a debit, proof of payment, or immediate activation.</p></div>
+ <h2>R99 monthly · debit-order mandate request</h2>
+ <p>Use your existing Teyza seller account. Prepare the R99 monthly debit-order request, enter your bank details and submit your consent securely to Teyza administration. Your Teyza consent request is not a valid bank mandate. Netcash may require its official signed or approved electronic mandate before collection.</p></div>
  <div id="teyza-web-membership" class="teyza-billing-portal">
   <div id="mandateLogin">
    <h3>Sign in to your shop</h3>
@@ -108,17 +108,17 @@
       <option value="current">Current / cheque</option><option value="savings">Savings</option><option value="transmission">Transmission</option></select></label>
     <p class="p-fine-print">Teyza cannot derive your account number. Only enter an account you own or are authorised to debit. Do not share bank PINs, passwords or OTPs.</p>
     <h3>3. R99 monthly collection authorisation</h3>
-    <div class="teyza-billing-pricing"><div><span>Recurring mandate amount</span><strong>R99.00</strong><small>Monthly, ZAR</small></div><div><span>Status</span><strong>Pending</strong><small>Bank authentication still required</small></div></div>
+    <div class="teyza-billing-pricing"><div><span>Proposed monthly amount</span><strong>R99.00</strong><small>Monthly, ZAR</small></div><div><span>Status</span><strong>Pending</strong><small>Netcash signed mandate still required</small></div></div>
     <label>First proposed collection date (day 1–28)<input id="mandateDate" type="date" required></label>
     <p id="mandateTerms" class="p-fine-print" aria-live="polite"></p>
     <label class="teyza-billing-terms"><input id="mandateIdentityConsent" type="checkbox" required> I authorise Teyza to reuse my existing private ID/passport verification evidence for this mandate.</label>
-    <label class="teyza-billing-terms"><input id="mandateConsent" type="checkbox" required> I have read and authorise the R99.00 monthly debit-order mandate, including the first date, collection day and the bank account above. I understand this request does not initiate a debit.</label>
-    <button type="submit" id="mandateSign" class="p-button p-button--lime" disabled>Sign &amp; submit mandate to Teyza admin</button>
+    <label class="teyza-billing-terms"><input id="mandateConsent" type="checkbox" required> I consent to Teyza preparing a R99 monthly debit-order request with these proposed dates and bank details. I understand that ticking this box is NOT a Netcash-approved signed mandate and further bank or provider authorisation is required.</label>
+    <button type="submit" id="mandateSign" class="p-button p-button--lime" disabled>Submit consent request to Teyza admin</button>
    </form>
    <div class="teyza-billing-actions"><button type="button" id="mandateReload" class="p-button p-button--outline">Refresh my mandate</button><button type="button" id="mandateWithdraw" class="p-button p-button--outline" hidden>Withdraw pending mandate request</button></div>
   </div>
   <p id="mandateStatus" role="status" aria-live="polite">Loading secure seller authorisation…</p>
-  <p class="p-fine-print">This website saves your mandate securely and queues it for authorised Teyza administrators. A collection provider must independently register or validate it (including any bank authentication); a confirmed successful collection is required before debit-order-funded benefits can activate. Paystack remains the payment gateway for eligible shopper orders for physical goods.</p>
+  <p class="p-fine-print">This website saves your consent request securely and queues it for authorised Teyza administrators. Netcash must accept a properly signed paper or approved electronic mandate before any debit; a confirmed successful collection is required before paid business benefits can activate. Paystack remains the payment gateway for eligible shopper orders for physical goods.</p>
  </div>
 </div>
 </section><section class="p-section p-section--white"><div class="p-container p-faq-layout"><div><div class="p-section-heading "><span class="p-eyebrow">BEFORE YOU JOIN</span><h2>Clarity at every step.</h2><p>The important details behind registration, approval and paid selling.</p></div></div><div class="p-faq-list"><details class="p-faq-item"><summary>Can I register without paying?<span aria-hidden="true">+</span></summary><p>Yes. Registration and verification are free. Eligible approved shop profiles can appear in local discovery; a current paid membership is required for eligible product-selling and order tools.</p></details><details class="p-faq-item"><summary>Is the monthly membership R99?<span aria-hidden="true">+</span></summary><p>No. The proposed debit-order membership is R99 per month. Older Paystack introductory terms apply only to existing agreements and are not offered for new debit-order mandates.</p></details><details class="p-faq-item"><summary>Do paid plans guarantee wholesale deals or sales?<span aria-hidden="true">+</span></summary><p>No. Wholesale offers, delivery discounts, finance and customer orders depend on partner availability, eligibility and shop activity.</p></details><details class="p-faq-item"><summary>Can I pay through the store app today?<span aria-hidden="true">+</span></summary><p>Purchasing options depend on app-store policy, the current app build and rollout. If checkout is unavailable, no in-app charge is taken. Do not pay to unofficial accounts.</p></details></div></div></section><section class="p-cta-band" id="download"><div class="p-container p-cta-layout"><div><span class="p-eyebrow p-eyebrow--light">THE APP FOR YOUR AREA</span><h2>Closer to your community.<br>One tap away.</h2><p>Find Teyza on the official app stores. Availability may vary while each store completes review and regional release.</p></div><div class="p-cta-store"><div class="p-store-row p-store-row--cta" aria-label="Official Teyza app store links">
