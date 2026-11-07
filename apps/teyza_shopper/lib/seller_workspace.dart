@@ -54,6 +54,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
   bool get sellerApproved=>approvalStatus=='approved';
   bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess);
+  bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -448,7 +449,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Existing paid seller membership':complimentaryAccess?'Temporary product access active':'Free shop · membership status and mandate',
+      listingPaid?'Existing seller access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
       ()=>openUpgrade()),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
@@ -591,7 +592,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           if(!hasProductAccess)const Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
-            subtitle:Text('Once approved, your shop can appear nearby. Check your membership options when ready to add products.'))),
+            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -608,7 +609,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business membership active':complimentaryAccess?'Temporary product access active':'Membership status · R99 debit mandate')),
+            label:Text(listingPaid?'Business access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'R99 debit mandate':'Seller eligibility status')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
