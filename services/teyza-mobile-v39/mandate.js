@@ -74,11 +74,16 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const seller=D.seller(await read('teyzaSellerAccounts/'+uid),uid);await rate(uid,'mandate',20,60000);
   const head=doc('teyzaSellerMandates/'+uid);
   if(action==='seller_mandate_status'){
-   const [m,id,user]=await Promise.all([read(head.path),read('teyzaSellerIdentity/'+uid),getAuthUser(uid).catch(()=>null)]);
+   const [m,id,user,shopperProfile]=await Promise.all([read(head.path),read('teyzaSellerIdentity/'+uid),getAuthUser(uid).catch(()=>null),read('teyzaShopperProfiles/'+uid)]);
+   // Prefer the authenticated account's saved name; phone-only Firebase users
+   // often have an empty displayName but previously saved their Teyza profile.
    const authName=typeof user?.displayName==='string'?user.displayName.trim():'';
-   const split=authName.split(/\s+/).filter(Boolean);
+   const profileName=shopperProfile?.ownerUid===uid&&typeof shopperProfile.displayName==='string'?
+     shopperProfile.displayName.trim():'';
+   const savedName=authName||profileName;
+   const split=savedName.split(/\s+/).filter(Boolean);
    return {required:!m||['withdrawn','needs_correction'].includes(m.status),mandate:publicMandate(m),amountCents:PRICE,termsVersion:VERSION,termsTemplate:terms('{firstDate}','{collectionDay}'),banks,benefits,
-    seller:{shopName:seller.shopName||'',shopAddress:seller.address||'',phone:seller.phone||'',email:seller.ownerEmail||auth.email||'',firstName:split[0]||'',surname:split.slice(1).join(' '),accountHolder:authName},
+    seller:{shopName:seller.shopName||'',shopAddress:seller.address||'',phone:seller.phone||'',email:seller.ownerEmail||auth.email||'',firstName:split[0]||'',surname:split.slice(1).join(' '),accountHolder:savedName},
     identity:current(id,uid,clock)&&['id','passport'].includes(id.kind)?{evidenceId:id.evidenceId,kind:id.kind}:null};
   }
   if(action==='seller_mandate_withdraw')return db.runTransaction(async tx=>{
