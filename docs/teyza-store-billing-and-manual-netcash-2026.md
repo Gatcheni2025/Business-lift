@@ -70,7 +70,16 @@ Provider documentation:
   choice flow, the Alternative Billing APIs, compliance and support/disputes,
   and **reporting of authorised alternative transactions to Google Play within
   24 hours** (and applicable fees).
-- The previous manual reporting grace period ended **13 March 2024**.
+- **Alternative, without Google billing choice APIs:** Google explicitly permits
+  **consumption-only apps** (no digital purchase occurs inside the Play app),
+  including use of access acquired elsewhere. Keep Teyza's Play binary
+  status-only, with no Netcash form, external payment link, purchase CTA or
+  misleading in-app checkout. Sellers may complete a separate manual Netcash
+  process through independent out-of-app business communication. This is the
+  low-integration Google Play route, **not** the in-app user choice pilot.
+  The app must not route users to Netcash or a checkout from within it.
+- The previous manual reporting grace period ended **13 March 2024** for apps
+  enrolled in user choice billing and offering the alternative **within the app**.
 - The choice SDK and secure billing reporting must be fully implemented and
   tested before enabling the mandate in a Play build; merely recording a
   Netcash portal reference is insufficient.
