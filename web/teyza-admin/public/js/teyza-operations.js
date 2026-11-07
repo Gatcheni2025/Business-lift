@@ -107,7 +107,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
 
  function mandateQueue(){
    const box=card('R99 monthly mandates — admin inbox',
-     'These are signed authorisations awaiting review or collection-provider registration, not successful debits.');
+     'These are preliminary consent requests. Obtain a Netcash-accepted signed paper or approved eMandate before submitting a debit batch.');
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
      mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
@@ -121,7 +121,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    const info=await request('ops_mandate_detail',{sellerUid:selected.sellerUid,mandateId:m.mandateId});
    const dialog=el('dialog');dialog.className='ops-mandate-dialog';
    const content=el('div',undefined,'ops-mandate-content');
-   content.append(el('h3','Signed R99 monthly debit-order mandate'),
+   content.append(el('h3','R99 debit-order consent request · provider approval pending'),
      el('p','Shop: '+info.shopName+' · '+info.shopAddress),
      el('p','Seller email: '+(info.ownerEmail||'—')),
      el('p','Status: '+info.mandate.status+' · No debit has been collected by Teyza.'),
@@ -145,7 +145,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      downloadMandateRequestPdf(exportData);
      message('Confidential mandate request downloaded. Obtain the provider-approved mandate and bank authentication before collecting.','success');
    },'primary');
-   content.append(download,el('p','Includes seller consent, shop address, bank details and R99 dates. This is a pending request, not evidence of completed DebiCheck authentication.','footnote'));
+   content.append(download,el('p','Includes seller consent, shop address, bank details and R99 dates. It is NOT a Netcash-approved signed mandate; a checkbox alone is insufficient.','footnote'));
    const close=el('button','Close and clear details','button primary');
    close.type='button';close.onclick=()=>dialog.close();
    content.append(close);dialog.append(content);
@@ -154,7 +154,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  function mandateReview(m){
    const box=card('Debit-order mandate · R99/month',
-     'Admin review of the seller authorisation. Provider onboarding and bank verification are still required.');
+     'Admin review of seller consent. A checkbox/PDF alone is not a Netcash-approved debit mandate. Obtain acceptable authority before collections.');
    box.append(tag(m.status),el('p',m.bankName+' · account ending '+m.accountLast4+
      ' · branch '+m.branchCode),
      el('p','Shop address: '+(m.shopAddress||'—')),
@@ -180,14 +180,14 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    }
    if(m.status==='reviewed_pending_provider'){
      const send=card('Record manual Netcash portal submission',
-       'Download the private mandate PDF above, upload it through the secure Netcash service, and record the portal receipt here. No API required for this administrative handoff.');
+       'Download the private consent PDF above, obtain a Netcash-acceptable signed paper/electronic mandate through the provider-approved process, and record the provider portal receipt here. A Netcash API is not required for this manual handoff.');
      const form=el('form',undefined,'ops-form');
      field(form,'Netcash submission or receipt reference','providerReference','text');
      field(form,'Submission method / date and internal note','note','textarea');
-     check(form,'I uploaded the signed mandate through the authorised Netcash process. I understand this is NOT bank authentication, a collected debit or paid seller access.','confirmed');
+     check(form,'I obtained and submitted a Netcash-acceptable signed or approved eMandate, not just the Teyza consent PDF. I understand this is NOT a collected debit or paid seller access.','confirmed');
      submit(form,'Record manual submission',async fd=>{
        const reference=String(fd.get('providerReference')||'').trim();
-       if(!confirm('Confirm that the PDF has ALREADY been submitted to Netcash? This only records an unverified provider submission.'))return;
+       if(!confirm('Confirm a Netcash-acceptable signed mandate was submitted through the authorised provider portal? The Teyza consent PDF alone is insufficient; no payment is marked received.'))return;
        const answer=await request('ops_mandate_record_netcash_submission',{
          sellerUid:selected.sellerUid,mandateId:m.mandateId,providerReference:reference,
          note:String(fd.get('note')||'').trim(),confirmed:true});
