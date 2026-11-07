@@ -441,5 +441,5 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   await refresh();
 }
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
- return {clear,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
+ return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
 }
