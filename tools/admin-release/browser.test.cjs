@@ -351,7 +351,7 @@ async function main(){
     await f.page.getByLabel('Netcash submission or receipt reference').fill('NC-PORTAL-071126-019');
     await f.page.getByLabel('Submission method / date and internal note').fill(
       'Uploaded to the secure Netcash business portal with signed PDF, 07 November 2026.');
-    await f.page.getByRole('checkbox',{name:/I uploaded the signed mandate/}).check();
+    await f.page.getByRole('checkbox',{name:/I obtained and submitted a Netcash-acceptable/}).check();
     await f.page.getByRole('button',{name:'Record manual submission'}).click();
     await f.page.locator('#notice').getByText(/Netcash portal submission recorded/).waitFor();
     const receipt=f.calls.find(v=>v.action==='ops_mandate_record_netcash_submission');
