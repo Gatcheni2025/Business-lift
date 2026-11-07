@@ -324,6 +324,43 @@ async function main(){
     assert(!await f.page.content().then(content=>content.includes('12345678901')));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Admin logs the manual Netcash mandate receipt without collecting money or granting access',async()=>{
+    const reference='mandate_manual_qa',mandate={
+      mandateId:reference,status:'reviewed_pending_provider',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',
+      shopAddress:'12 Market Street, Durban',firstDate:'2026-12-01',
+      collectionDay:1,amountCents:9900,termsVersion:'teyza-debit-request-v2',
+      acceptedAt:Date.UTC(2026,10,6),collectionActive:false,
+      terms:'R99 consent; no bank authentication yet.'
+    };
+    let submitted=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_mandate_queue'){
+        await route.fulfill({json:{ok:true,mandates:[{sellerUid:'seller1',
+          ...mandate,status:submitted?'submitted_to_netcash':'reviewed_pending_provider'}]}});return true;
+      }
+      if(body.action==='ops_mandate_record_netcash_submission'){
+        submitted=true;
+        await route.fulfill({json:{ok:true,recorded:true,status:'submitted_to_netcash',collectionActive:false}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByRole('heading',{name:'Record manual Netcash portal submission'}).waitFor();
+    await f.page.getByLabel('Netcash submission or receipt reference').fill('NC-PORTAL-071126-019');
+    await f.page.getByLabel('Submission method / date and internal note').fill(
+      'Uploaded to the secure Netcash business portal with signed PDF, 07 November 2026.');
+    await f.page.getByRole('checkbox',{name:/I uploaded the signed mandate/}).check();
+    await f.page.getByRole('button',{name:'Record manual submission'}).click();
+    await f.page.locator('#notice').getByText(/Netcash portal submission recorded/).waitFor();
+    const receipt=f.calls.find(v=>v.action==='ops_mandate_record_netcash_submission');
+    assert.equal(receipt.data.providerReference,'NC-PORTAL-071126-019');
+    assert.equal(receipt.data.confirmed,true);
+    assert(!f.calls.some(v=>['billing_checkout','ops_paystack_confirm','ops_mandate_activate'].includes(v.action)));
+    assert.deepEqual(f.errors,[]);
+    await f.context.close();
+  });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
    await f.page.screenshot({path:path.join(output,'admin-login-desktop.png'),fullPage:true});
