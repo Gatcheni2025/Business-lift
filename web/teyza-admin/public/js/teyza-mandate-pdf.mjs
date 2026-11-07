@@ -71,6 +71,9 @@ export function buildMandateRequestPdf(info){
   add('No debit instruction has been sent and no paid membership is activated.');
   add('Bank account ownership and the applicable Netcash / DebiCheck or other');
   add('provider authentication process must be completed independently.');
+  add('Netcash: a website checkbox is not a valid debit-order authorisation.');
+  add('Obtain a signed paper mandate or provider-approved electronic mandate,');
+  add('including any applicable DebiCheck bank authentication.');
   add('This preparatory record is not a bank-approved mandate and may not');
   add('satisfy the collection provider official mandate format on its own.');
   add('Use an approved secure provider portal to transmit this confidential PDF.');
