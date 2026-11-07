@@ -28,7 +28,7 @@ class FakeDB {
 const now=Date.parse('2026-10-27T08:00:00Z'),secret=crypto.randomBytes(32).toString('base64');
 const actor={uid:'owner',email_verified:true},admin={uid:'admin',teyzaAdmin:true,email_verified:true,auth_time:now/1000};
 const data={requestId:'request1',expectedMandateId:null,amountCents:9900,termsVersion:VERSION,firstDate:'2026-11-01',collectionDay:1,firstName:'Test',surname:'Owner',phone:'0712345678',documentKind:'id',documentNumber:'9001015009087',accountHolder:'Test Owner',bankName:'FNB',branchCode:'000000',accountNumber:'12345678901',accountType:'current',consent:true,identityConsent:true,imageBase64:Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(120)]).toString('base64')};
-function setup(){const db=new FakeDB({'teyzaSellerAccounts/owner':{uid:'owner',category:'spaza',approvalStatus:'approved',phone:'+27712345678',shopName:'Test Shop',address:'12 Main Road, Durban'},'teyzaPublicShops/owner':{sellerUid:'owner',status:'active'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>[files.get(p)]})};const svc=createMandate({db,bucket,sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret),getAuthUser:async()=>({displayName:'Test Owner'}),clock:()=>now,rate:async()=>{}});return {db,files,call:(action,d={},a=actor)=>svc.execute(a,action,d)};}
+function setup({authDisplayName='Test Owner'}={}){const db=new FakeDB({'teyzaSellerAccounts/owner':{uid:'owner',category:'spaza',approvalStatus:'approved',phone:'+27712345678',shopName:'Test Shop',address:'12 Main Road, Durban'},'teyzaPublicShops/owner':{sellerUid:'owner',status:'active'}}),files=new Map();const bucket={file:p=>({save:async b=>files.set(p,b),download:async()=>[files.get(p)]})};const svc=createMandate({db,bucket,sanitizeImage:async b=>b,encryptSelfie:async b=>cipher.encrypt(b,secret),decryptSelfie:async b=>cipher.decrypt(b,secret),getAuthUser:async()=>({displayName:authDisplayName}),clock:()=>now,rate:async()=>{}});return {db,files,call:(action,d={},a=actor)=>svc.execute(a,action,d)};}
 const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
 test('A signed mandate encrypts ID and banking data and never charges or activates the shop',async()=>{const f=setup(),r=await f.call('seller_mandate_submit',data);assert.equal(r.mandate.status,'pending_provider_authentication');assert.equal(r.mandate.collectionActive,false);assert.equal(r.mandate.branchCode,'250655');const raw=f.db.records.get('teyzaSellerMandates/owner');assert(!JSON.stringify([...f.db.records]).includes(data.accountNumber));assert(!JSON.stringify(r).includes(data.documentNumber));assert.equal(JSON.parse(cipher.decrypt(Buffer.from(raw.detailsEncrypted,'base64'),secret)).accountNumber,data.accountNumber);assert.equal(f.db.records.get('teyzaSellerAccounts/owner').approvalStatus,'approved');assert.equal(f.files.size,1);assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaBilling/')));assert.equal(raw.terms,terms(data.firstDate,1));});
 test('Pending, rejected, unreviewed and suspended sellers cannot submit a debit-order request',async()=>{
@@ -64,6 +64,24 @@ test('Mandate status prefills the seller address, verified contact and known hol
  assert.equal(status.seller.surname,'Owner');
  assert(!JSON.stringify(status).includes(data.accountNumber));
  assert.equal(status.amountCents,9900);
+});
+test('Mandate prefill uses the current owner-bound saved profile when Firebase display name is empty',async()=>{
+ const f=setup({authDisplayName:''});
+ f.db.records.set('teyzaShopperProfiles/owner',{ownerUid:'owner',displayName:'Saved Owner'});
+ const status=await f.call('seller_mandate_status');
+ assert.equal(status.seller.firstName,'Saved');
+ assert.equal(status.seller.surname,'Owner');
+ assert.equal(status.seller.accountHolder,'Saved Owner');
+ assert.equal(status.seller.shopAddress,'12 Main Road, Durban');
+ assert(!JSON.stringify(status).includes(data.accountNumber));
+});
+test('A different owner profile is never used to prefill private seller identity',async()=>{
+ const f=setup({authDisplayName:''});
+ f.db.records.set('teyzaShopperProfiles/owner',{ownerUid:'another',displayName:'Another Person'});
+ const status=await f.call('seller_mandate_status');
+ assert.equal(status.seller.firstName,'');
+ assert.equal(status.seller.surname,'');
+ assert.equal(status.seller.accountHolder,'');
 });
 test('Signed mandate appears in admin inbox; sensitive details are only returned on audited explicit admin request',async()=>{
  const f=setup();
