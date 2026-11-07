@@ -30,6 +30,10 @@ on:
         description: 'QA-only signed APK, AAB and IPA; does not require the latest live backend; leaves Paystack checkout disabled in store builds'
         type: boolean
         default: false
+      direct_mandate_qa:
+        description: 'Also build a signed direct-distribution Android QA APK with the R99 debit mandate. Never upload it to Google Play.'
+        type: boolean
+        default: false
       upload_to_testflight:
         description: 'Upload the SIGNED iOS IPA to TestFlight after successful checks (optional)'
         type: boolean
@@ -69,6 +73,7 @@ env:
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
   SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
   QA_SIGNING_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'true' || 'false' }}
+  TEYZA_DIRECT_MANDATE_QA: ${{ github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa && 'true' || 'false' }}
 
 jobs:
   upload_existing_ios:
@@ -116,6 +121,7 @@ jobs:
         env:
           REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
           EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          TARGET_PLATFORMS: ${{ inputs.platforms }}
         shell: bash
         run: |
           if [ -n "$EXPECTED_SOURCE_SHA" ] && [ "$GITHUB_SHA" != "$EXPECTED_SOURCE_SHA" ]; then
@@ -133,6 +139,13 @@ jobs:
             echo "This is a SIGNED production candidate. All existing backend health and billing checks still apply." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "This is an UNSIGNED code-validation preview. Its AAB and iOS archive are NOT ready for Play Console or TestFlight. Use Actions > Run workflow > signed_release=true to produce store artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$TEYZA_DIRECT_MANDATE_QA" = true ]; then
+             if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$SIGNING_MODE" != signed ] || [ "$QA_SIGNING_ONLY" != true ] || [ "$TARGET_PLATFORMS" != android ] || [ "$REQUEST_TESTFLIGHT" = true ]; then
+               echo '::error::Direct mandate APK is Android-only, manual, signed and QA-only; never combine with store/TestFlight production publishing.'
+               exit 1
+             fi
+             echo 'Direct-channel mandate APK will be uploaded as a SEPARATE QA artifact. It is NOT a Play Store AAB and still uses the existing production Firebase project; use dedicated test accounts.' >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$SIGNING_MODE" != signed ]; then
             echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
@@ -363,6 +376,26 @@ jobs:
           path: apps/teyza_shopper/build/release/teyza-*-signed.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Keep the Play-safe signed AAB and signed store APK unchanged above.
+      # A second manually opted-in signed APK exercises in-app debit mandate
+      # on independently distributed Android only; it must NEVER be uploaded
+      # as an alternative Play Store artifact.
+      - name: Build separate Android-direct R99 mandate QA APK
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa == true && inputs.qa_signing_only == true && env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
+          python3 ../../scripts/package_teyza_direct_mandate_qa.py
+      - name: Upload Android-direct mandate QA APK (NOT GOOGLE PLAY)
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa == true && inputs.qa_signing_only == true && env.SIGNING_MODE == 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-direct-mandate-qa-signed
+          path: apps/teyza_shopper/build/direct-mandate-qa/*
+          if-no-files-found: error
+          retention-days: 14
       - name: Build installable debug APK for device testing
         if: env.SIGNING_MODE != 'signed'
         working-directory: apps/teyza_shopper
