@@ -49,6 +49,19 @@ try {
   if ($LASTEXITCODE -ne 0 -or $version -notmatch '^v(\d+)') { throw "Node.js 22 or newer required." }
   if ([int]$Matches[1] -lt 22) { throw "Node.js 22 or newer required." }
   Write-Host "Teyza admin R327 source: $sha"
+  if ($Mode -eq "Rollback") {
+    if (!$ConfirmDeployment) {
+      throw "Rollback changes live Hosting. Re-run with -ConfirmDeployment."
+    }
+    if (!(Test-Path "tools/admin-release/node_modules/firebase-tools/lib/bin/firebase.js")) {
+      Check "Restore pinned Firebase deployment dependencies" "npm" @("ci","--prefix","tools/admin-release","--ignore-scripts","--no-audit","--no-fund")
+    }
+    # Emergency rollback does not depend on the currently deployed backend
+    # or a fresh build passing; it verifies only that our exact release is live.
+    Check "Restore preceding Teyza Hosting version" "node" @("tools/admin-release/run.cjs","rollback")
+    Write-Host "Only Hosting restored. Verify signed-in access and backend state." -ForegroundColor Yellow
+    exit 0
+  }
   Check "Install backend dependencies" "npm" @("ci","--prefix","services/teyza-mobile-v39","--no-audit","--no-fund")
   Check "Run backend security and mandate tests" "npm" @("test","--prefix","services/teyza-mobile-v39")
   Check "Install admin deployment dependencies" "npm" @("ci","--prefix","tools/admin-release","--ignore-scripts","--no-audit","--no-fund")
@@ -68,14 +81,6 @@ try {
 
   $runner="tools/admin-release/node_modules/firebase-tools/lib/bin/firebase.js"
   if (!(Test-Path $runner)) {throw "Pinned Firebase CLI unavailable."}
-  if ($Mode -eq "Rollback") {
-    if (!$ConfirmDeployment) {
-      throw "Rollback changes live Hosting. Re-run with -ConfirmDeployment."
-    }
-    Check "Restore preceding Teyza Hosting version" "node" @("tools/admin-release/run.cjs","rollback")
-    Write-Host "Only Hosting restored. Verify signed-in access and backend state." -ForegroundColor Yellow
-    exit 0
-  }
   if (!$ConfirmDeployment) {throw "Live deployment requires -ConfirmDeployment."}
 
   # Preserve the legacy Paystack plan environment for existing subscriptions.
