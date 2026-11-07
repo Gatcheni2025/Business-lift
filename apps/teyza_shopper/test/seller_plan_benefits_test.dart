@@ -81,7 +81,7 @@ void main(){
  });
  testWidgets('Seller still sees R99 benefits and retry when status service is unavailable',(tester)async{
    final session=ShopperSession(),api=_PlanApi(session)..failSummary=true;
-   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
    await tester.pumpAndSettle();
    expect(find.text('R99 / month'),findsOneWidget);
    expect(find.textContaining('Could not refresh your seller status'),findsOneWidget);
@@ -97,7 +97,9 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
    await tester.pumpAndSettle();
    await tester.scrollUntilVisible(find.text('Refresh membership status'),350);
-   await tester.tap(find.text('Refresh membership status'));
+   await tester.ensureVisible(find.text('Refresh membership status'));
+   await tester.pumpAndSettle();
+   await tester.tap(find.widgetWithText(OutlinedButton,'Refresh membership status'));
    await tester.pumpAndSettle();
    expect(api.calls.where((x)=>x=='seller_summary').length,2);
    expect(api.calls.where((x)=>x=='seller_mandate_submit'),isEmpty);
