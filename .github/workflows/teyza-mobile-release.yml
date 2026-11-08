@@ -325,6 +325,11 @@ jobs:
       - name: Generate Android platform
         working-directory: apps/teyza_shopper
         run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Use official Gradle distribution CDN with retries
+        working-directory: apps/teyza_shopper
+        run: |
+          python3 scripts/test_configure_gradle_download.py
+          python3 scripts/configure_gradle_download.py
       - name: Load existing upload key for a requested signed release
         if: env.SIGNING_MODE == 'signed'
         shell: bash
@@ -583,6 +588,7 @@ jobs:
         working-directory: apps/teyza_shopper
         run: |
           flutter create --platforms=android,ios --org za.co.teyza --project-name teyza_shopper .
+          python3 scripts/configure_gradle_download.py
           rm -f test/widget_test.dart
           python3 scripts/prepare_mobile_release.py android --signing test
           python3 scripts/prepare_mobile_release.py ios
