@@ -10,7 +10,7 @@ const api=createApi({user:()=>auth.currentUser});
 let queueLoaded=false;
 const operations=createOperations({api,onError:failed,getReviewSummary:()=>({loaded:queueLoaded,count:state.rows.length,hasMore:Boolean(state.next)})});
 let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false,resumeSection=null;
-const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto'];
+const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto','requestCompliance'];
 function notice(message,kind=''){ $('notice').textContent=message;$('notice').className='notice '+kind;$('notice').hidden=false; }
 function set(id,value){$(id).textContent=value||'Not supplied';}
 function clearPhoto(){
@@ -41,6 +41,42 @@ function failed(error){
   if(error.status===403){lock(error.message+' Administrator access must be assigned by the Teyza project owner.');return;}
   notice(error.message||'The request could not be completed. Please try again.','error');
 }
+const complianceLabels={
+  identity:'Current ID, passport or company registration',
+  selfie:'Current owner selfie',
+  phone:'SMS verification of the registered mobile number',
+  shop_location:'Saved location for the claimed Google Maps business'
+};
+function missingItems(row){
+  return Array.isArray(row?.missingCompliance)?row.missingCompliance.filter(x=>Object.hasOwn(complianceLabels,x)):[];
+}
+function correctionMessage(row){
+  const missing=missingItems(row);
+  if(!missing.length)return 'Please correct the outstanding seller registration details and resubmit for review.';
+  return 'Please complete the following in the Teyza seller account: '+missing.map(x=>complianceLabels[x]).join('; ')+'. Return to seller verification after completing them.';
+}
+function drawCompliance(){
+  const s=state.selected,root=$('complianceList');root.replaceChildren();
+  if(!s)return;
+  const missing=missingItems(s);
+  for(const [code,title] of Object.entries(complianceLabels)){
+    // The backend provides the authoritative missing requirements. Reviewed
+    // evidence remains independently required for final approval.
+    if(code==='shop_location'&&!s.googlePlaceId&&!missing.includes(code))continue;
+    const issue=missing.includes(code);
+    const li=document.createElement('li'),mark=document.createElement('span'),text=document.createElement('span');
+    li.className=issue?'compliance-missing':'compliance-ready';
+    mark.textContent=issue?'!':'✓';mark.setAttribute('aria-hidden','true');
+    text.textContent=title+' — '+(issue?'Missing; seller must complete':'On file; admin review still required');
+    li.append(mark,text);root.append(li);
+  }
+  const awaiting=missing.length?
+    'Approval blocked by '+missing.length+' missing requirement'+(missing.length===1?'':'s')+'. Use “Send missing requirements” to record the corrective instructions; no new selfie is required unless the selfie itself is missing or expired.':
+    'The seller has the required information on file. Open and inspect both private images, confirm your review and check any business claim before approval.';
+  $('complianceFollowup').textContent=s.complianceRequestedAt?
+    awaiting+' Previous correction request: '+new Date(s.complianceRequestedAt).toLocaleString('en-ZA')+'.':
+    awaiting;
+}
 function approvalHint(){
   const s=state.selected;
   if(!s)return 'Select a seller to review.';
@@ -48,7 +84,7 @@ function approvalHint(){
   if(s.sellerUid===state.uid)return 'Another administrator must review your own seller registration.';
   if(s.expired)return 'This selfie has expired. Request a new selfie before approval.';
   if(!s.evidenceId)return 'The seller must submit their current ID, passport or company document in the app.';
-  if(s.phoneVerificationRequired===true&&s.phoneVerified===false)return 'The seller must verify their registered phone number by SMS OTP before approval.';
+  if(missingItems(s).length)return 'Cannot approve: '+missingItems(s).map(x=>complianceLabels[x]).join('; ')+'. Send missing requirements to the owner.';
   if(!state.views.has('identity'))return 'Step 1 of 3: Open and inspect the current ID or passport document above.';
   if(!state.views.has('selfie'))return 'Step 2 of 3: Open and inspect the current owner selfie above.';
   if(!$('reviewConfirmed').checked)return 'Step 3 of 3: Confirm that you compared both documents with the shop owner.';
@@ -63,10 +99,11 @@ function updateControls(){
   $('viewSelfie').disabled||=!s||own||s.expired;
   $('rejectSeller').disabled||=!s||own;
   $('requestPhoto').disabled||=!s||own;
+  $('requestCompliance').disabled||=!s||own;
   $('approveSeller').disabled||=!state.canApprove()||!$('reviewConfirmed').checked||
     (s?.phoneVerificationRequired===true&&s?.phoneVerified===false)||(Boolean(s?.googlePlaceId)&&!$('claimConfirmed').checked);
   $('loadMore').hidden=!state.next;
-  if(s){$('decisionHint').textContent=approvalHint();$('approveSeller').title=$('approveSeller').disabled?approvalHint():'Approve the verified seller';}
+  if(s){$('decisionHint').textContent=approvalHint();$('approveSeller').title=$('approveSeller').disabled?approvalHint():'Approve the verified seller';drawCompliance();}
   for(const [key,id] of [['identity','Identity'],['selfie','Selfie']]){
     const done=state.views.has(key);$('view'+id).classList.toggle('viewed',done);
     set(key+'State',done?'Viewed in this review':key==='identity'?'Open document':'Open photo');
@@ -85,7 +122,8 @@ function drawQueue(){
     const avatar=document.createElement('span');avatar.className='seller-avatar';avatar.textContent=String(row.shopName||'T').slice(0,1).toUpperCase();
     const body=document.createElement('span'),name=document.createElement('strong'),email=document.createElement('small'),category=document.createElement('span');
     name.textContent=row.shopName||'Shop registration';email.textContent=row.ownerEmail||row.phone||'';category.className='row-tag';
-    category.textContent=row.expired?'Selfie expired · new photo needed':row.category==='spaza'?'Spaza shop · awaiting review':'Retail / wholesale · awaiting review';
+    category.textContent=row.expired?'Selfie expired · new photo needed':missingItems(row).length?
+      missingItems(row).length+' missing compliance item(s)':row.category==='spaza'?'Spaza shop · awaiting review':'Retail / wholesale · awaiting review';
     body.append(name,email,category);button.append(avatar,body);button.addEventListener('click',()=>selectSeller(row));root.append(button);
   }
   updateControls();
@@ -109,6 +147,7 @@ function selectSeller(row){
   set('submittedAt',row.submittedAt?'Submitted '+new Date(row.submittedAt).toLocaleString('en-ZA'):'Submission date unavailable');
   set('sellerEmail',row.ownerEmail);set('sellerPhone',row.phone);set('sellerAddress',row.address);
   set('sellerCompany',[row.companyName,row.registrationNumber].filter(Boolean).join(' · ')||'Individual shop owner');
+  $('reason').value=row.reviewNote|| (missingItems(row).length?correctionMessage(row):'');
   $('claimReview').hidden=!row.googlePlaceId;
   if(row.googlePlaceId){const u=new URL('https://www.google.com/maps/search/');u.searchParams.set('api','1');u.searchParams.set('query',row.shopName||'Shop');u.searchParams.set('query_place_id',row.googlePlaceId);$('claimMapLink').href=u.href;}
   set('identityLabel',row.evidenceKind==='company'?'Company registration':row.evidenceKind==='passport'?'Passport':'ID / passport');
@@ -151,12 +190,12 @@ async function decide(status){
   if(status==='approved'&&!$('reviewConfirmed').checked){notice('Confirm that you inspected both verification photos.','error');return;}
   const name=state.selected.shopName;
   if(!window.confirm(status==='approved'?`Approve ${name} and grant the verified owner badge?`:
-    `${status==='needs_new_photo'?'Request a new selfie from':'Reject the registration for'} ${name}? The seller will receive your recommendation.`))return;
+    `${status==='needs_new_photo'?'Request a new selfie from':status==='needs_correction'?'Send correction instructions to':'Reject the registration for'} ${name}? The seller can view your note in the app.`))return;
   const ticket=state.ticket();busy=true;updateControls();
   try{
     const result=await api('admin_seller_review',data);if(!state.current(ticket))return;
     resetDetails();state.select(null);busy=false;
-    notice(status==='approved'?(result.whatsappStatus==='queued'?'Seller verification approved. WhatsApp is queued, subject to provider setup and delivery.':'Seller verification approved. Products require an active verified membership or an administrator exception.'):'Review saved. The owner will receive your note.','success');
+    notice(status==='approved'?(result.whatsappStatus==='queued'?'Seller verification approved. WhatsApp is queued, subject to provider setup and delivery.':'Seller verification approved. Products require an active verified membership or an administrator exception.'):status==='needs_correction'?'Missing requirements recorded. Seller can view the instructions in their app; approval remains pending.':'Review saved. The seller can view your note in the app.','success');
     await loadQueue();
   }catch(error){if(state.current(ticket)){
     clearViews();failed(error);
@@ -215,6 +254,7 @@ $('reviewConfirmed').addEventListener('change',updateControls);
 $('claimConfirmed').addEventListener('change',updateControls);
 $('approveSeller').addEventListener('click',()=>decide('approved'));$('rejectSeller').addEventListener('click',()=>decide('rejected'));
 $('requestPhoto').addEventListener('click',()=>decide('needs_new_photo'));
+$('requestCompliance').addEventListener('click',()=>decide('needs_correction'));
 function filterSections(){
   const term=$('sectionSearch').value.trim().toLocaleLowerCase();let shown=0;
   for(const item of document.querySelectorAll('[data-admin-view]')){
