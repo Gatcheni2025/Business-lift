@@ -25,7 +25,6 @@ import 'seller_selling.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
-import 'seller_services.dart';
 import 'seller_shop_photo.dart';
 import 'seller_push.dart';
 
@@ -287,7 +286,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> editProfile() async {
     if(shop==null)return;
-    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(session:widget.session,shop:shop!)));
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(
+      session:widget.session,shop:shop!,api:widget.mobileApi,
+      serviceSettings:shopServices,servicesReady:servicesReady,
+      onServicesSaved:refreshActivity)));
     if(changed==true&&mounted)load();
   }
   Future<void> _save(SellerDraft p) async{
@@ -429,11 +431,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
     businessTile(Icons.account_balance_outlined,'Apply for stock finance','Send an enquiry and view its progress',()=>openTool(SellerTool.finance)),
-    businessTile(Icons.local_shipping_outlined,'Delivery & shop services','Collection, delivery, cards, cashback & chat',()=>openTool(SellerTool.services)),
+    businessTile(Icons.edit_outlined,'Edit shop profile','Delivery, radius, card payments & shop details',editProfile),
     businessTile(Icons.schedule_outlined,'Trading hours','Keep your opening times current',()=>openTool(SellerTool.hours)),
     businessTile(Icons.add_a_photo_outlined,'Shop photo & verification','Shop front, documents, selfie & mobile',()=>openTool(SellerTool.verification)),
     businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
-    businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     if(shop?.category=='wholesale')businessTile(Icons.handshake_outlined,'Spaza partnership requests',
       'Approve connections, set real discounts and delivery fees, then chat',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
@@ -447,7 +448,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
       ()=>selectSellerTab(1)),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
-    businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
       listingPaid?'Existing seller access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
       ()=>openUpgrade()),
@@ -481,15 +481,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
     2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
-    3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true),
+    3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true,
+      onOpenUpdates:openNotifications,unreadUpdates:unread),
     4=>sellerBusiness(),
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:publicationStatus=='active'&&approvalStatus=='approved',verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
-      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,onNotifications:openNotifications,unread:unread,
-      phoneAlertsEnabled:SellerPush(widget.session).isEnabled,onEnableAlerts:busy?null:enableOrderAlerts,
-      serviceControls:SellerServiceControls(key:ValueKey('services-${widget.session.userId}'),session:widget.session,api:widget.mobileApi,
-        settings:shopServices,enabled:servicesReady,onSaved:refreshActivity),
+      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
+      onEditProfile:editProfile,
       onAdd:busy?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
@@ -543,10 +542,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
-          if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
-            icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
-        ]:[if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
+        ]:null),
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
         SellerNavigation(selected:sellerTab,onSelect:selectSellerTab):null,
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
@@ -588,7 +585,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
+          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null),
           if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
