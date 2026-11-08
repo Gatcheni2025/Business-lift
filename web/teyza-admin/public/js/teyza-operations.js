@@ -163,6 +163,23 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      el('p','First date: '+m.firstDate+' · recurring day '+m.collectionDay),
      el('p',m.status==='submitted_to_netcash'?'Netcash: submitted manually; bank acceptance and debit unverified':'Netcash: manual submission available after admin review; no debit initiated'),
      button('View complete private mandate (audited)',()=>inspectMandate(m)));
+   if(['reviewed_pending_provider','submitted_to_netcash'].includes(m.status)&&
+      detail?.seller?.approvalStatus==='approved'&&!detail.membershipPaid&&!detail.complimentaryAccess){
+     const grant=el('form',undefined,'ops-form');
+     grant.append(el('h4','Approve provisional selling access'));
+     grant.append(el('p','Admin may grant 30 days of audited complimentary product access while Netcash authentication and the first R99 debit remain pending. This does not mean the membership is paid.','footnote'));
+     field(grant,'Reason for provisional access (audited)','reason','textarea');
+     check(grant,'I have reviewed the seller and mandate. I understand this is 30 days of complimentary access, not a confirmed debit or permanent upgrade.','confirmed');
+     submit(grant,'Approve selling access for 30 days',async fd=>{
+       const reason=String(fd.get('reason')||'').trim();
+       if(reason.length<15)throw Error('Enter a meaningful reason of at least 15 characters.');
+       if(!confirm('Grant 30 days of temporary product access? This does not record or initiate a payment.'))return;
+       await request('ops_complimentary_access',{sellerUid:selected.sellerUid,days:30,reason,confirmed:true});
+       message('30-day provisional selling access approved and audited. Netcash collection is still pending.','success');
+       await choose(selected);
+     });
+     box.append(grant);
+   }
    if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
      const form=el('form',undefined,'ops-form');
      choice(form,'Mandate review outcome','decision',[
@@ -222,23 +239,6 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    }
    if(m.status==='submitted_to_netcash'){
      box.append(el('p','Submitted to Netcash manually. This is a record of transfer, not an authenticated mandate or a payment receipt. Paid access remains inactive.','notice warning'));
-   }
-   if(['reviewed_pending_provider','submitted_to_netcash'].includes(m.status)&&
-      detail?.seller?.approvalStatus==='approved'&&!detail.membershipPaid&&!detail.complimentaryAccess){
-     const grant=el('form',undefined,'ops-form');
-     grant.append(el('h4','Approve provisional selling access'));
-     grant.append(el('p','Admin may grant 30 days of audited complimentary product access while Netcash authentication and the first R99 debit remain pending. This does not mean the membership is paid.','footnote'));
-     field(grant,'Reason for provisional access (audited)','reason','textarea');
-     check(grant,'I have reviewed the seller and mandate. I understand this is 30 days of complimentary access, not a confirmed debit or permanent upgrade.','confirmed');
-     submit(grant,'Approve selling access for 30 days',async fd=>{
-       const reason=String(fd.get('reason')||'').trim();
-       if(reason.length<15)throw Error('Enter a meaningful reason of at least 15 characters.');
-       if(!confirm('Grant 30 days of temporary product access? This does not record or initiate a payment.'))return;
-       await request('ops_complimentary_access',{sellerUid:selected.sellerUid,days:30,reason,confirmed:true});
-       message('30-day provisional selling access approved and audited. Netcash collection is still pending.','success');
-       await choose(selected);
-     });
-     box.append(grant);
    }
    root.append(box);
  }
