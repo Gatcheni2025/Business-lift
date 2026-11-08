@@ -198,8 +198,8 @@ exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
 // deploying the core seller API unless explicitly enabled by the operator.
 // Set TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1 only after provisioning an
 // authentic Meta access token and approved message template.
-if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1' &&
-   process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
+if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
+if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
  const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
@@ -217,6 +217,7 @@ exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',tim
   .where('status','in',['queued','configuration_required']).limit(30).get();
  for(const row of rows.docs)await whatsappApproval.deliver(row.id);
 });
+}
 }
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});
 exports.teyzaPaystackCancellationCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
