@@ -22,7 +22,7 @@ void main(){
   await fixtures.visibleTap(t,bank);await t.tap(find.text('FNB').last);await t.pumpAndSettle();
   expect(t.widget<TextField>(field('Branch code (filled when bank is selected)')).controller!.text,'250655');
   expect(t.widget<TextField>(field('Account number')).controller!.text,isEmpty);
-  await fixtures.visibleTap(t,find.text('Submit R99 request to admin'));expect(api.submissions,isEmpty);
+  await fixtures.visibleTap(t,find.text('Save mandate request'));expect(api.submissions,isEmpty);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('The exact R99 date, current ID and explicit consents are submitted; account changes clear private fields',(t) async {
@@ -37,9 +37,9 @@ void main(){
   await fill(t,'Account number','12345678901');
   await fixtures.visibleTap(t,find.byKey(const ValueKey('mandate-collection-date')));await t.pumpAndSettle();await t.tap(find.text('OK'));await t.pumpAndSettle();
   await fixtures.visibleTap(t,find.text('I consent to Teyza processing this private ID/passport for owner verification.'));
-  await fixtures.visibleTap(t,find.text('I consent to preparing the R99 request using these details. I understand Netcash needs a valid signed or approved electronic mandate before any debit.'));
-  await fixtures.visibleTap(t,find.text('Submit R99 request to admin'));await t.pumpAndSettle();
-  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);expect(find.text('Debit-order request sent to Teyza admin. Netcash-approved mandate still required; no debit collected.'),findsOneWidget);
+  await fixtures.visibleTap(t,find.text('I agree to Teyza Terms of Service and consent to preparing the R99 debit-order request. I understand Netcash requires a valid signed or approved mandate before any debit.'));
+  await fixtures.visibleTap(t,find.text('Save mandate request'));await t.pumpAndSettle();
+  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);expect(find.text('Your R99 request was saved. Waiting for review (by admin). No debit has been collected.'),findsOneWidget);
   session.switchAccount();await t.pumpAndSettle();expect(find.text('Your account changed. Close this form and sign in again.'),findsOneWidget);expect(find.textContaining('8901'),findsNothing);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
