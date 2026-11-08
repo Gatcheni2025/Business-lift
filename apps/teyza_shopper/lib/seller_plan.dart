@@ -53,7 +53,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
    }catch(e){if(mounted)setState((){loading=false;error=mobileError(e);});}
  }
  Future<void> openMandate()async{
-   if(!directMandates||!approved||!setupComplete||mandateError!=null)return;
+   if(!directMandates||!approved||loading||error!=null)return;
    final uid=widget.session.userId;
    await Navigator.push(context,MaterialPageRoute(builder:(_)=>
      SellerMandatePage(session:widget.session,api:widget.api,
@@ -120,11 +120,13 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
           leading:const Icon(Icons.description_outlined),
           title:const Text('Mandate status'),
           subtitle:Text('Status: ${mandateStatus!.replaceAll('_',' ')}. Review or correct your request as needed.')),
-        if(!loading&&(!approved||!setupComplete))Text(directMandates?'Complete seller verification and wait for approval before submitting a mandate or adding products.':'Complete your seller verification. Product publishing requires a verified eligible account.',style:TextStyle(color:Color(0xFF8A640F),height:1.45)),
+        if(!loading&&!approved)Text(directMandates?'Waiting for admin approval. Once your seller registration and identity are approved, you can complete the R99 mandate.':'Complete your seller verification. Product publishing requires a verified eligible account.',style:TextStyle(color:Color(0xFF8A640F),height:1.45)),
+        if(directMandates&&!loading&&approved&&!setupComplete)const Text('Your seller account is approved. You can complete your R99 mandate now; finish any remaining shop setup before products can go live.',style:TextStyle(color:Color(0xFF60736B),height:1.4)),
         if(directMandates&&mandateError!=null)const Padding(padding:EdgeInsets.symmetric(vertical:8),
-          child:Text('The mandate form is temporarily unavailable. Refresh or contact Teyza support.',style:TextStyle(color:Color(0xFF9A4B31)))),
-        if(directMandates&&(!paid&&!complimentary||mandateStatus!=null))FilledButton.icon(
-          onPressed:loading||!approved||!setupComplete||mandateError!=null?null:openMandate,
+          child:Text('Mandate status could not be loaded. You may still open the form to retry securely; no payment will be collected.',style:TextStyle(color:Color(0xFF9A4B31)))),
+        if(directMandates)FilledButton.icon(
+          key:const ValueKey('seller-upgrade-now'),
+          onPressed:loading||error!=null||!approved?null:openMandate,
           icon:const Icon(Icons.account_balance_outlined),
           label:Text(mandateStatus==null||['withdrawn','needs_correction'].contains(mandateStatus)?'Upgrade now':'View mandate request'))
         else if(!directMandates&&!paid&&!complimentary)const Text('Your shop registration is free. Additional selling tools appear when your account is eligible. There is no membership purchase in this app.',
