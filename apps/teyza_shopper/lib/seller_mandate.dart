@@ -78,8 +78,10 @@ class _SellerMandateState extends State<SellerMandatePage> {
       'firstName':first.text.trim(),'surname':surname.text.trim(),'phone':phone.text.trim(),'documentKind':kind,'documentNumber':number.text.trim(),'accountHolder':holder.text.trim(),'bankName':bank,'branchCode':branch.text.trim(),'accountNumber':account.text.trim(),'accountType':accountType,'consent':true,'identityConsent':true,
       if(document!=null)'imageBase64':base64Encode(document!),if(document==null&&useExisting)'identityEvidenceId':identity?['evidenceId']});
       if(!mounted||uid!=widget.session.userId)return;for(final c in [first,surname,number,holder,account]){c.clear();}
-      setState((){document=null;saved=Map<String,dynamic>.from(r['mandate']);editing=false;consent=false;identityConsent=false;});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your R99 request was saved. Waiting for review (by admin). No debit has been collected.')));
+      document=null;consent=false;identityConsent=false;
+      // Report successful saving to the parent routes. The seller should
+      // return to the dashboard, not remain on a screen with bank details.
+      Navigator.of(context).pop(true);
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
