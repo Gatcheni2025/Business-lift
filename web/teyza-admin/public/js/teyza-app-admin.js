@@ -82,6 +82,7 @@ function approvalHint(){
   if(!s)return 'Select a seller to review.';
   if(!authorised)return 'Renew your administrator session to continue the review.';
   if(s.sellerUid===state.uid)return 'Another administrator must review your own seller registration.';
+  if(missingItems(s).length)return 'Cannot approve: '+missingItems(s).map(x=>complianceLabels[x]).join('; ')+'. Send missing requirements to the owner.';
   if(s.expired)return 'This selfie has expired. Request a new selfie before approval.';
   if(!s.evidenceId)return 'The seller must submit their current ID, passport or company document in the app.';
   if(missingItems(s).length)return 'Cannot approve: '+missingItems(s).map(x=>complianceLabels[x]).join('; ')+'. Send missing requirements to the owner.';
