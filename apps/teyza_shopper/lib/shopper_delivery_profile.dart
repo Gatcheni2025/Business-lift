@@ -178,7 +178,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
           const SizedBox(height:8),
           TextFormField(controller:contactName,enabled:!busy,textCapitalization:TextCapitalization.words,
             decoration:const InputDecoration(labelText:'Your full name',border:OutlineInputBorder()),
-            validator:(v)=> (v??'').trim().length<2?'Enter your name.':null),
+            validator:(v)=>(v??'').trim().length<2?'Enter your name.':null),
           const SizedBox(height:9),
           TextFormField(controller:contactPhone,enabled:!busy,keyboardType:TextInputType.phone,
             decoration:const InputDecoration(labelText:'Mobile number',hintText:'071 234 5678',border:OutlineInputBorder()),
@@ -187,33 +187,11 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
           const SizedBox(height:9),
           TextFormField(controller:contactEmail,enabled:!busy,keyboardType:TextInputType.emailAddress,
             decoration:const InputDecoration(labelText:'Email address (optional)',border:OutlineInputBorder(),
-              helperText:'Google, Facebook and Apple users do not need another email verification.'),
+              helperText:'No extra email verification for Google, Facebook or Apple users.'),
             validator:(v){final x=(v??'').trim();if(x.isEmpty)return null;
-              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+
-          icon:const Icon(Icons.my_location),label:const Text('Use my current location')),
-        const SizedBox(height:12),
-        TextFormField(key:const ValueKey('shopper-delivery-address'),controller:address,
-          enabled:!busy,maxLines:2,keyboardType:TextInputType.streetAddress,
-          onChanged:(_){detectedLatitude=null;detectedLongitude=null;},
-          decoration:const InputDecoration(labelText:'Full delivery street address',
-            hintText:'12 Main Road, KwaMashu, Durban',border:OutlineInputBorder()),
-          validator:(v)=>(v??'').trim().length<8?'Enter your full street address.':null),
-        if(notice!=null)Padding(padding:const EdgeInsets.only(top:9),
-          child:Text(notice!,style:const TextStyle(color:Colors.green))),
-        if(error!=null)Padding(padding:const EdgeInsets.only(top:9),
-          child:Text(error!,style:const TextStyle(color:Colors.red))),
-        const SizedBox(height:16),
-        SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:busy?null:save,
-          icon:const Icon(Icons.place_outlined),
-          label:Text(busy?'Saving…':'Save address & find nearby shops'))),
-        const SizedBox(height:9),
-        const Text('Email is optional. We use your saved name, phone and address for shopping and delivery; seller phone verification is separate. Your address is not shared with a seller until you order.',
-          style:TextStyle(fontSize:11,color:Colors.black54))
-      ])))));
-}
-).hasMatch(x)?null:'Enter a valid email or leave it blank.';}),
+              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(x)?null:'Enter a valid email or leave it blank.';}),
           const SizedBox(height:10),
-          const Text('These details help shops contact you about orders. Seller phone verification uses SMS separately.',
+          const Text('Saved contact details help shops reach you about orders. Seller SMS verification is separate.',
             style:TextStyle(color:Colors.black54,fontSize:12)),
         ],
         const SizedBox(height:16),
@@ -235,7 +213,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
           icon:const Icon(Icons.place_outlined),
           label:Text(busy?'Saving…':'Save address & find nearby shops'))),
         const SizedBox(height:9),
-        const Text('We only ask for your name, email and contact number when you sign in or place an order. Your address is not sent to a seller until an order is placed.',
+        const Text('Email is optional. Your contact details are only shared with a seller when you place an order.',
           style:TextStyle(fontSize:11,color:Colors.black54))
       ])))));
 }
