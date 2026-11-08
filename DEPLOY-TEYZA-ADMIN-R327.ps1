@@ -101,10 +101,13 @@ try {
     & node $runner functions:secrets:get $secret --project $project *> $null
     if($LASTEXITCODE -ne 0){throw "Missing existing Firebase secret: $secret. No changes made."}
   }
-  Write-Host "Deploying reviewed teyzaMobile backend required for Netcash reviews." -ForegroundColor Cyan
-  Check "Publish mandate and admin backend" "node" @(
-    $runner,"deploy","--config","firebase.teyza-mobile-v39.json",
-    "--only","functions:teyza-mobile:teyzaMobile","--project",$project
+  Write-Host "Deploying reviewed teyzaMobile backend; WhatsApp functions and Meta secrets are excluded." -ForegroundColor Cyan
+  # Firebase CLI can request secrets belonging to unrelated functions during
+  # source discovery, even when --only selects one function. The isolated
+  # entrypoint exports ONLY teyzaMobile and restores package.json afterward.
+  # It is non-interactive and cannot create a placeholder WhatsApp secret.
+  Check "Publish ONLY teyzaMobile with isolated function discovery" "node" @(
+    "tools/admin-release/deploy-mobile-only.cjs"
   )
 
   # Hosting is not patched unless the LIVE backend confirms required capabilities.
