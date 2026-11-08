@@ -113,8 +113,11 @@ void main(){
         {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
     ]);
     final item=find.byKey(const ValueKey('essential-product-salon-hair'));
-    await tester.scrollUntilVisible(item,220,scrollable:find.byType(Scrollable).first);
-    await tester.pumpAndSettle();
+    final home=find.byKey(const PageStorageKey<String>('shopper-home'));
+    for(var attempt=0;attempt<25&&item.evaluate().isEmpty;attempt++){
+      await tester.drag(home,const Offset(0,-180));
+      await tester.pumpAndSettle();
+    }
     expect(item,findsOneWidget);
     expect(find.text('Hair & Beauty'),findsWidgets);
     expect(find.byKey(const ValueKey('essential-product-bulk-wholesale')),findsNothing);
