@@ -330,6 +330,11 @@ jobs:
         run: |
           python3 scripts/test_configure_gradle_download.py
           python3 scripts/configure_gradle_download.py
+          # GitHub Releases currently returns 504 even when Maven Central
+          # redirects Kotlin's compiler JAR. Install CI-only, group-scoped
+          # mirror in the ephemeral runner; keep local developer builds intact.
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/ci-kotlin-mirror.init.gradle "$HOME/.gradle/init.d/teyza-kotlin-mirror.init.gradle"
       - name: Load existing upload key for a requested signed release
         if: env.SIGNING_MODE == 'signed'
         shell: bash
@@ -589,6 +594,8 @@ jobs:
         run: |
           flutter create --platforms=android,ios --org za.co.teyza --project-name teyza_shopper .
           python3 scripts/configure_gradle_download.py
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/ci-kotlin-mirror.init.gradle "$HOME/.gradle/init.d/teyza-kotlin-mirror.init.gradle"
           rm -f test/widget_test.dart
           python3 scripts/prepare_mobile_release.py android --signing test
           python3 scripts/prepare_mobile_release.py ios
