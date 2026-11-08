@@ -28,12 +28,14 @@ export class ReviewState {
   canApprove(now=Date.now()){
     const s=this.selected;
     return Boolean(s&&s.sellerUid!==this.uid&&!s.expired&&s.evidenceId&&
+      !(Array.isArray(s.missingCompliance)&&s.missingCompliance.length)&&
+      !(s.phoneVerificationRequired===true&&s.phoneVerified===false)&&
       ['identity','selfie'].every(k=>this.views.has(k)&&now-this.views.get(k)<300000));
   }
   decision(status,reason,now=Date.now()){
     const s=this.selected;
     if(!s||s.sellerUid===this.uid)throw new AdminError('Another administrator must review this shop.');
-    if(!['approved','needs_new_photo','rejected'].includes(status))throw new AdminError('Choose a review decision.');
+    if(!['approved','needs_new_photo','needs_correction','rejected'].includes(status))throw new AdminError('Choose a review decision.');
     if(status==='approved'&&!this.canApprove(now))throw new AdminError('Open and inspect the current identity document and selfie before approving.');
     const note=String(reason||'').trim();
     if(note.length>400||status!=='approved'&&note.length<10)throw new AdminError('Add a recommendation explaining what the seller needs to correct (10–400 characters).');
