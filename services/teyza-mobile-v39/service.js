@@ -35,7 +35,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const [a,o,v,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>tx.get(doc(p+uid))));
     return P.assertLive(uid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shop,b.exists?b.data():null,clock());
   }
-  async function synchronizeCatalogue(uid,{additions=[],removedProductId=null}={}) {
+  async function synchronizeCatalogue(uid,{additions=[],removedProductId=null,publishIntent=false}={}) {
     D.id(uid);
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
@@ -74,6 +74,15 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
          billing:billingSnap.exists?billingSnap.data():null,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
       const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
+      // Only an explicit seller product-add/sync can opt a legacy catalogue
+      // into publication, and only with approved, active selling entitlement.
+      // Background reconciliation must never publish legacy private drafts.
+      if(next&&canPublish&&publishIntent){
+        next.catalogueEnabled=true;
+        next.sellingEnabled=true;
+        Object.assign(next,catalogue.range(uid,next,entries,{enabled:true,removedProductId,
+          photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()}))}));
+      }
       if(next){
         const listing=eligible?'active':'not_listed';
         if(account.listingStatus!==listing)tx.update(accountRef,{listingStatus:listing,updatedAt:new Date(clock())});
@@ -370,7 +379,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
       return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
-        removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null});
+        removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null,
+        publishIntent:true});
     }
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
