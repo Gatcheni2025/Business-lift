@@ -67,10 +67,11 @@
      <div class="evidence-buttons"><button id="viewIdentity" class="evidence-button"><span class="step">01</span><span><strong id="identityLabel">ID / passport</strong><small id="identityState">Open document</small></span><span aria-hidden="true">↗</span></button><button id="viewSelfie" class="evidence-button"><span class="step">02</span><span><strong>Owner selfie</strong><small id="selfieState">Open photo</small></span><span aria-hidden="true">↗</span></button></div>
      <button type="button" id="enlargePhoto" class="button quiet">Enlarge current image</button><div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
      <dl id="identityDetails" class="identity-details" hidden></dl>
+     <section class="compliance-check" aria-labelledby="complianceTitle"><h3 id="complianceTitle">Verification requirements</h3><p class="footnote">See the seller's current compliance status and what must be completed before approval.</p><ul id="complianceList" aria-live="polite"></ul><p id="complianceFollowup" class="footnote"></p></section>
      <div class="review-decision"><h3>Your review</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
       <label>Recommendation for the seller<textarea id="reason" rows="3" maxlength="400" placeholder="Required when rejecting or requesting a new selfie. Explain what to correct and how to resubmit."></textarea></label>
-      <p id="decisionHint" class="footnote">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
-      <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
+      <p id="decisionHint" class="notice warning" role="status">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
+      <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestCompliance" class="button quiet">Send missing requirements</button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
       <p class="footnote">Once verified, products publish automatically with an active subscription or an administrator's temporary exception.</p>
      </div>
     </div>
