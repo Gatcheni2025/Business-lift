@@ -7,13 +7,14 @@ import 'package:teyza_shopper/teyza_mobile_api.dart';
 class _PlanApi extends TeyzaMobileApi {
  _PlanApi(super.session);
  final calls=<String>[];
- bool approved=true,failSummary=false;
+ bool approved=true,failSummary=false,setupReady=true,failMandateStatus=false;
  @override
  Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}])async{
    calls.add(action);
    if(action=='seller_summary'&&failSummary)throw StateError('Temporary seller status failure');
    if(action=='seller_summary')return {'ok':true,'listingPaid':false,
-     'complimentaryAccess':false,'approvalStatus':approved?'approved':'pending','setupComplete':approved};
+     'complimentaryAccess':false,'approvalStatus':approved?'approved':'pending','setupComplete':approved&&setupReady};
+   if(action=='seller_mandate_status'&&failMandateStatus)throw StateError('Mandate service unavailable');
    if(action=='seller_mandate_status')return {'ok':true,'mandate':null,'termsVersion':'test-terms',
      'termsTemplate':'R99 from {firstDate}, on day {collectionDay}.',
      'banks':[{'name':'FNB','branchCode':'250655'}],
@@ -70,13 +71,44 @@ void main(){
    expect(api.calls,isNot(contains('seller_mandate_submit')));
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
+ testWidgets('Approved seller can open mandate even when other shop setup is incomplete',(tester)async{
+   await tester.binding.setSurfaceSize(const Size(420,860));
+   addTearDown(()=>tester.binding.setSurfaceSize(null));
+   final session=ShopperSession(),api=_PlanApi(session)..setupReady=false;
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
+   await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.byKey(const ValueKey('seller-upgrade-now')),350);
+   final upgrade=find.byKey(const ValueKey('seller-upgrade-now'));
+   expect(tester.widget<FilledButton>(upgrade).onPressed,isNotNull);
+   expect(find.textContaining('You can complete your R99 mandate now'),findsOneWidget);
+   await tester.tap(upgrade);await tester.pumpAndSettle();
+   expect(find.text('Membership & mandate'),findsOneWidget);
+   expect(api.calls,contains('seller_mandate_status'));
+   expect(api.calls,isNot(contains('billing_checkout')));
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ testWidgets('Mandate status failure does not hide the button from an approved seller',(tester)async{
+   await tester.binding.setSurfaceSize(const Size(420,860));
+   addTearDown(()=>tester.binding.setSurfaceSize(null));
+   final session=ShopperSession(),api=_PlanApi(session)..failMandateStatus=true;
+   await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
+   await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.byKey(const ValueKey('seller-upgrade-now')),350);
+   final upgrade=find.byKey(const ValueKey('seller-upgrade-now'));
+   expect(tester.widget<FilledButton>(upgrade).onPressed,isNotNull);
+   await tester.tap(upgrade);await tester.pumpAndSettle();
+   expect(find.text('Membership & mandate'),findsOneWidget);
+   expect(find.text('Retry'),findsOneWidget);
+   expect(api.calls,isNot(contains('billing_checkout')));
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
  testWidgets('Pending sellers can read benefits but cannot open a mandate',(tester)async{
    final session=ShopperSession(),api=_PlanApi(session)..approved=false;
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
    await tester.pumpAndSettle();
    await tester.scrollUntilVisible(find.text('Upgrade now'),350);
    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Upgrade now')).onPressed,isNull);
-   expect(find.textContaining('wait for approval'),findsOneWidget);
+   expect(find.textContaining('Waiting for admin approval'),findsOneWidget);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Seller still sees R99 benefits and retry when status service is unavailable',(tester)async{
