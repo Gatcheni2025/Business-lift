@@ -169,10 +169,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(profile?.ownerUid!==uid||
        typeof profile.displayName!=='string'||profile.displayName.trim().length<2||
        typeof profile.phone!=='string'||profile.phone.replace(/\D/g,'').length<9||
-       typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)||
+       (profile.contactEmail&& (typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)))||
        typeof profile.address!=='string'||profile.address.trim().length<8||
        !P.coordinates(profile.latitude,profile.longitude))
-      D.fail(403,'Save your name, phone, email and delivery address once before shopping.');
+      D.fail(403,'Save your name, phone and delivery address before shopping. An email address is optional.');
     return profile;
   }
   async function execute(auth, action, data={}) {
@@ -199,9 +199,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
       const area=D.text(data.area||'','delivery area',130,false);
       const city=D.text(data.city||'','delivery city',130,false);
-      const suppliedEmail=D.text(data.email,'shopper contact email',150).trim().toLowerCase();
-      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
-        D.fail(422,'Enter a valid email address.');
+      const suppliedEmail=D.text(data.email||'','shopper contact email',150,false).trim().toLowerCase();
+      if(suppliedEmail&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
+        D.fail(422,'Enter a valid email address or leave it blank.');
       // Do NOT pretend the contact email verifies Firebase identity.
       // It is used for communication, while account authority stays with UID.
       const profile={ownerUid:uid,displayName,phone,address,area,city,
