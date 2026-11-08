@@ -9,8 +9,11 @@ function terms(firstDate,day){return `I request that Teyza prepare a formal bank
 function publicMandate(m){return m?{mandateId:m.mandateId,status:m.status,amountCents:m.amountCents,firstDate:m.firstDate,collectionDay:m.collectionDay,bankName:m.bankName,accountLast4:m.accountLast4,branchCode:m.branchCode,acceptedAt:m.acceptedAt,withdrawnAt:m.withdrawnAt||null,termsVersion:m.termsVersion,terms:m.terms,identityExpiresAt:m.identityExpiresAt,shopName:m.shopName||'',shopAddress:m.shopAddress||'',providerStatus:m.providerStatus||'not_configured',providerSubmittedAt:m.providerSubmittedAt||null,collectionActive:false}:null;}
 function schedule(date,day,clock){const today=new Date(clock()+2*3600000).toISOString().slice(0,10);if(typeof date!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date<today||date>new Date(clock()+366*86400000).toISOString().slice(0,10)||!Number.isInteger(day)||day<1||day>28||Number(date.slice(-2))!==day)D.fail(422,'Choose a first collection date within the next year, on day 1–28.');}
 function requireApprovedSeller(uid,account,setup,verification,shop,now){
+ // Mandate enrolment follows the administrator's seller/identity approval.
+ // Shop setup and an active paid listing are separate requirements for selling.
  const state=P.state(uid,account,setup||{},verification,shop,null,now);
- if(!state.approved||!state.ready||state.status!=='active')
+ if(!state.registered||!state.approved||account?.deletionPending===true||
+    setup?.moderationBlocked===true||P.held(shop)||shop?.status==='suspended')
   D.fail(403,'Your seller registration and identity verification must be approved before you submit a mandate.');
 }
 function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock,rate}){
