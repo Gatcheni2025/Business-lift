@@ -251,6 +251,19 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   root.append(box);
  }
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));account.append(button('Open approval desk',()=>navigate('approvals')));root.append(account);sellerDocuments();
+  const status=d.sellingStatus;
+  if(status){
+    const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
+    review.append(el('p','Seller registration: '+(status.sellerApproved?'Approved':'Pending review')),
+      el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
+      el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
+    if(!status.canSell)review.append(el('p',
+      'If the seller is approved, check shop setup and review the mandate. An audited temporary selling grant does not record a bank payment.','notice warning'));
+    root.append(review);
+  }
+  const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
+  if(sellerMandate)mandateReview(sellerMandate);
   // Seller ID approval is independent from Paystack purchase confirmation.
   const billing=card('Legacy Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
@@ -293,8 +306,6 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     billing.append(exception);
   }
   root.append(billing);
-  const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
-  if(sellerMandate)mandateReview(sellerMandate);
   const payment=card('Payment references','Only references issued for this seller are eligible for confirmation. The server independently verifies payment with Paystack.');
   payment.append(table(['Reference','Type','Amount','Status','Action'],
     (d.payments||[]).map(row=>[
@@ -338,7 +349,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   catalogue.append(table(['Product','Category','Price','Stock'],submitted.map(p=>[
     p.name||p.id,p.category||'Other',money(p.priceCents||0),p.stock??'Not supplied'
   ])));
-  if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller verification and subscription access are complete.','notice warning'));
+  if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller approval, shop setup and verified or temporary selling access are complete. Check the publication status above.','notice warning'));
   root.append(catalogue);
   const statement=card('Historical seller statement','Existing manual invoices and receipts are kept for audit only. They no longer enable product selling.');
   statement.append(button('Print historical statement',()=>printStatement(d)));
