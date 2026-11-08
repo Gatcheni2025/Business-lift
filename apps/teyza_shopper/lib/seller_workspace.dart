@@ -232,11 +232,40 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> chooseProducts() async {
     if(busy)return;
-    if(!sellerApproved){
-      await openUpgrade(fromProductAction:true);
+    // Never rely on the last periodic dashboard refresh for entitlement.
+    // Admin review alone is not a verified debit or a selling grant.
+    final uid=widget.session.userId;
+    if(uid==null)return;
+    Map<String,dynamic> current;
+    try{current=await mobile.call('seller_summary');}
+    catch(e){
+      if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Could not check selling access. Please try again: ${mobileError(e)}')));
       return;
     }
-    if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
+    if(!mounted||uid!=widget.session.userId)return;
+    final verified=current['approvalStatus']=='approved';
+    final active=current['listingPaid']==true||current['complimentaryAccess']==true;
+    setState((){
+      approvalStatus=verified?'approved':'pending';
+      listingPaid=current['listingPaid']==true;
+      complimentaryAccess=current['complimentaryAccess']==true;
+      sellingEnabled=current['sellingEnabled']==true;
+    });
+    if(!verified){await openUpgrade(fromProductAction:true);return;}
+    if(!active){
+      // Read the latest mandate state as well, so Start selling checks
+      // whether the R99 request is pending instead of assuming payment.
+      if(canOfferDirectMandate){
+        try{await mobile.call('seller_mandate_status');}
+        catch(e){
+          if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content:Text('Mandate status could not be verified: ${mobileError(e)}')));
+        }
+      }
+      if(mounted&&uid==widget.session.userId)await openUpgrade(fromProductAction:true);
+      return;
+    }
     if(draftError!=null){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your product list is unavailable. Refresh it before continuing.')));
       return;
