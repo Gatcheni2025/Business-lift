@@ -1637,7 +1637,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget sellerStories(){
     final sellers=nearbySellerEntries;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Sellers near you',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
+      section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
@@ -1703,7 +1703,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
       businessFilters(),sellerStories(),
-      if(discoveryType=='spaza')groceryAisles(),
       premiumGroceryHero(),
       const SizedBox(height:4),
       section(teyzaCategoryHeading(discoveryType),
@@ -1725,6 +1724,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         action:TextButton(onPressed:discoveryType=='spaza'?()=>navigateToTab(1):
           ()=>setState(()=>showAllShops=true),
           child:const Text('Explore all'))),
+      if(discoveryType=='spaza')...[
+        const Text('Shop by category',style:TextStyle(
+          fontSize:14,fontWeight:FontWeight.w800,color:ink)),
+        const SizedBox(height:9),
+        groceryAisles(),
+        const SizedBox(height:7),
+      ],
       if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
       Material(color:deep,borderRadius:BorderRadius.circular(20),
         child:InkWell(borderRadius:BorderRadius.circular(20),
