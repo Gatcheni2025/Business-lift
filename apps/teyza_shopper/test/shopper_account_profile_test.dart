@@ -85,6 +85,30 @@ void main(){
    await t.pumpWidget(const SizedBox.shrink());
    session.dispose();
  });
+ testWidgets('New user registration is social-only; legacy email login remains available',(t)async{
+   debugDefaultTargetPlatformOverride=TargetPlatform.android;
+   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+   await t.binding.setSurfaceSize(const Size(400,900));
+   addTearDown(()=>t.binding.setSurfaceSize(null));
+   final vault=MemoryStore(),session=ProfileShopperSession(vault);
+   session.idToken=null;session.userId=null;session.email=null;
+   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
+   await t.pumpAndSettle();
+   await t.tap(find.text('Continue as Shopper'));
+   await t.pumpAndSettle();
+   final signup=find.text('New to Teyza? Register with Google, Facebook or Apple');
+   await t.ensureVisible(signup);await t.tap(signup);await t.pumpAndSettle();
+   expect(find.text('Join Teyza'),findsOneWidget);
+   expect(find.text('Continue with Google'),findsOneWidget);
+   expect(find.textContaining('separate email confirmation is not required'),findsOneWidget);
+   expect(find.widgetWithText(TextFormField,'Email address'),findsNothing);
+   expect(find.byType(TextFormField),findsNothing);
+   final oldLogin=find.text('Already registered? Sign in with email');
+   await t.ensureVisible(oldLogin);await t.tap(oldLogin);await t.pumpAndSettle();
+   expect(find.byType(TextFormField),findsNWidgets(2));
+   expect(find.text('Sign in as shopper'),findsOneWidget);
+   await t.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
  testWidgets('Anonymous browsing identity is invited to register at the account tab',(t)async{
    final vault=MemoryStore(),session=ProfileShopperSession(vault);
    session.anonymousShopper=true;
