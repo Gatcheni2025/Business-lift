@@ -170,13 +170,35 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
        ['needs_correction','Needs corrected details']
      ],'reviewed_pending_provider');
      field(form,'Reason / review note','reason','textarea');
-     check(form,'I understand this review does not activate a subscription or debit a bank account.','confirmed');
+     const optional=el('label',undefined,'confirm-check'),grantBox=el('input');
+     grantBox.type='checkbox';grantBox.name='provisionalSelling';
+     optional.append(grantBox,el('span','Also approve 30 days of temporary Start Selling access after a successful mandate review. This is an audited complimentary grant, not a Netcash collection or paid subscription.'));
+     form.append(optional);
+     check(form,'I understand this review does not activate a debit order or confirm a payment.','confirmed');
      submit(form,'Save mandate review',async fd=>{
-       if(!confirm('Save this review? No debit order or paid membership will be activated.'))return;
+       const decision=String(fd.get('decision')||''),reason=String(fd.get('reason')||'').trim();
+       const grant=fd.get('provisionalSelling')==='on';
+       if(grant&&(decision!=='reviewed_pending_provider'||detail?.seller?.approvalStatus!=='approved'))
+         throw Error('Approve the seller and select Reviewed before granting provisional selling access.');
+       if(grant&&reason.length<15)throw Error('Explain the provisional selling grant in at least 15 characters.');
+       if(!confirm(grant?
+         'Review the mandate and grant 30 days of complimentary Start Selling access? No debit or paid membership will be recorded.':
+         'Save this mandate review? No debit order or paid membership will be activated.'))return;
        await request('ops_mandate_review',{sellerUid:selected.sellerUid,mandateId:m.mandateId,
-         decision:fd.get('decision'),reason:String(fd.get('reason')||''),confirmed:true});
-       const response=await request('ops_mandate_queue');mandates=response.mandates||[];
-       message('Mandate review saved. Collection remains inactive.','success');show();
+         decision,reason,confirmed:true});
+       if(grant){
+         try{
+           await request('ops_complimentary_access',{sellerUid:selected.sellerUid,days:30,reason,confirmed:true});
+         }catch(error){
+           // The review was saved; the grant was not. Keep the existing
+           // separate grant action visible for a retry and explain the gap.
+           await refresh();
+           throw Error('Mandate review saved, but selling access was not granted: '+error.message);
+         }
+       }
+       await refresh();
+       message(grant?'Mandate reviewed. 30 days of temporary selling access granted; no payment recorded.':
+         'Mandate review saved. Collection remains inactive.','success');
      });
      box.append(form);
    }
