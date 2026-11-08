@@ -64,6 +64,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const identities=await Promise.all(rows.map(r=>doc('teyzaSellerIdentity/'+r.id).get()));
    const onboardings=await Promise.all(rows.map(r=>doc('teyzaSellerOnboarding/'+r.id).get()));
    const claims=await Promise.all(rows.map(r=>doc('teyzaShopClaims/'+r.id).get()));
+   const locations=await Promise.all(rows.map(r=>doc('teyzaShopLocations/'+r.id).get()));
    const ownerUsers=await Promise.all(rows.map(r=>getAuthUser(r.id).catch(()=>null)));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};
     const identity=identities[i].exists?identities[i].data():null;
@@ -76,7 +77,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     try{require('./onboarding').checkedPhone(ownerUsers[i],a.phone);phoneVerified=true;}catch(_){}
     if(onboardings[i].exists&&onboardings[i].data().requiredVersion===2&&!phoneVerified)
       missingCompliance.push('phone');
-    if(claims[i].exists&&claims[i].data().ownerUid===r.id&&!a.address)
+    if(claims[i].exists&&claims[i].data().ownerUid===r.id&&
+       (!locations[i].exists||locations[i].data().ownerUid!==r.id))
       missingCompliance.push('shop_location');
     return {
     sellerUid:r.id,evidenceId:identityReady?identity.evidenceId:null,evidenceKind:identityReady?identity.kind:null,missingCompliance,reviewNote:v.reviewNote||'',complianceRequestedAt:v.complianceRequestedAt||null,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
