@@ -38,10 +38,10 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
    await tester.pumpAndSettle();
    expect(find.text('R99 / month'),findsNothing);
-   expect(find.text('Seller account'),findsOneWidget);
+   expect(find.text('Sell on Teyza'),findsOneWidget);
    await tester.scrollUntilVisible(find.textContaining('There is no membership purchase in this app.'),300);
    expect(find.textContaining('There is no membership purchase in this app.'),findsOneWidget);
-   expect(find.text('Upgrade account'),findsNothing);
+   expect(find.text('Upgrade now'),findsNothing);
    expect(find.textContaining('Netcash'),findsNothing);
    expect(find.textContaining('debit-order'),findsNothing);
    expect(find.textContaining('R99'),findsNothing);
@@ -61,8 +61,8 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
    await tester.pumpAndSettle();
    expect(find.text('R99 / month'),findsOneWidget);
-   await tester.scrollUntilVisible(find.text('Upgrade account'),350);
-   await tester.tap(find.text('Upgrade account'));await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.text('Upgrade now'),350);
+   await tester.tap(find.text('Upgrade now'));await tester.pumpAndSettle();
    expect(find.text('Membership & mandate'),findsOneWidget);
    await tester.scrollUntilVisible(find.byKey(const ValueKey('mandate-bank')),300,scrollable:find.byType(Scrollable).first);
    expect(find.text('Account holder: Test Owner'),findsOneWidget);
@@ -74,8 +74,8 @@ void main(){
    final session=ShopperSession(),api=_PlanApi(session)..approved=false;
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api,directMandateOverride:true)));
    await tester.pumpAndSettle();
-   await tester.scrollUntilVisible(find.text('Upgrade account'),350);
-   expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Upgrade account')).onPressed,isNull);
+   await tester.scrollUntilVisible(find.text('Upgrade now'),350);
+   expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton,'Upgrade now')).onPressed,isNull);
    expect(find.textContaining('wait for approval'),findsOneWidget);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
