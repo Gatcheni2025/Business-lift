@@ -55,10 +55,12 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
  Future<void> openMandate()async{
    if(!directMandates||!approved||loading||error!=null)return;
    final uid=widget.session.userId;
-   await Navigator.push(context,MaterialPageRoute(builder:(_)=>
+   final submitted=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>
      SellerMandatePage(session:widget.session,api:widget.api,
        phone:widget.session.phoneNumber??'')));
-   if(mounted&&uid==widget.session.userId)await refresh();
+   if(!mounted||uid!=widget.session.userId)return;
+   if(submitted==true){Navigator.of(context).pop(true);return;}
+   await refresh();
  }
  Widget benefit(IconData icon,String title,String detail)=>Padding(
    padding:const EdgeInsets.symmetric(vertical:10),
