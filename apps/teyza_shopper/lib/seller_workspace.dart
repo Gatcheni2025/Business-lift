@@ -266,9 +266,29 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(mounted&&uid==widget.session.userId)await openUpgrade(fromProductAction:true);
       return;
     }
+    if(current['sellingEnabled']!=true){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Seller approval and selling access are active, but your shop setup or public listing is not ready. Complete shop setup before publishing.')));
+      return;
+    }
     if(draftError!=null){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your product list is unavailable. Refresh it before continuing.')));
       return;
+    }
+    if(drafts.isNotEmpty){
+      // "Start selling" is an explicit request to publish the selected stock.
+      // Syncing can opt legacy catalogues in only after backend access checks.
+      try{
+        final sync=await mobile.call('catalogue_sync');
+        if(!mounted||uid!=widget.session.userId)return;
+        if(sync['publication']=='private'){
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your products are still private. Check your shop setup and mandate approval, then retry.')));
+          return;
+        }
+      }catch(e){
+        if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('Could not publish saved products. Retry Sync product listing: ${mobileError(e)}')));
+        return;
+      }
     }
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
