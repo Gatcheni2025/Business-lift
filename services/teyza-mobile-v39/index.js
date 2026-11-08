@@ -194,7 +194,12 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
-if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
+// WhatsApp notifications are optional: never register the Meta secret when
+// deploying the core seller API unless explicitly enabled by the operator.
+// Set TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1 only after provisioning an
+// authentic Meta access token and approved message template.
+if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1' &&
+   process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
  const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
