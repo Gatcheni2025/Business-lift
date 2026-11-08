@@ -330,7 +330,10 @@ class _AccountState extends State<ShopperAccountPanel> {
             ListTile(leading:const Icon(Icons.email_outlined),
               title:const Text('Email'),subtitle:Text(contactEmail),
               trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
-            ListTile(
+            if(contactEmail=='Not provided')
+              const ListTile(leading:Icon(Icons.info_outline,color:Color(0xFF078E66)),
+                title:Text('Contact email is optional'),subtitle:Text('You can use Teyza with Google, Facebook or Apple sign-in and a saved mobile number. No extra email confirmation is required.'))
+            else ListTile(
               leading:Icon(contactEmailVerified?
                 Icons.verified_user:Icons.mark_email_unread_outlined,
                 color:contactEmailVerified?const Color(0xFF078E66):Colors.orange),
@@ -347,7 +350,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             if(widget.session.phoneVerified)
               ListTile(leading:const Icon(Icons.verified_outlined,color:Color(0xFF078E66)),
                 title:const Text('Mobile number verified'),subtitle:Text(widget.session.phoneNumber??'')),
-            if(!contactEmailVerified)...[
+            if(contactEmail!='Not provided'&&!contactEmailVerified)...[
               if(widget.session.googleSignInAvailable&&!widget.session.googleProviderLinked)
                 OutlinedButton.icon(onPressed:working?null:()=>verifyWithProvider(false),
                   icon:const Icon(Icons.account_circle_outlined),
