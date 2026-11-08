@@ -522,7 +522,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(mounted&&request==_deliveryProfileRequest)setState((){
         locationName=saved!.address;_usingGps=false;locationWarning=null;
       });
-      if(uid!=null&&!session.anonymousShopper&&
+      if(uid!=null&&session.idToken!=null&&!session.anonymousShopper&&
           (saved.displayName.trim().length<2||saved.phone.replaceAll(RegExp(r'[^0-9]'),'').length<9)&&
           !_deliverySheetOpen){
         WidgetsBinding.instance.addPostFrameCallback((_){
@@ -541,7 +541,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(mounted&&request==_deliveryProfileRequest)setState((){
         locationName=deviceLocation!.address;_usingGps=false;locationWarning=null;
       });
-      if(uid!=null&&!session.anonymousShopper&&!_deliverySheetOpen){
+      if(uid!=null&&session.idToken!=null&&!session.anonymousShopper&&!_deliverySheetOpen){
         WidgetsBinding.instance.addPostFrameCallback((_){
           if(mounted&&session.userId==uid&&request==_deliveryProfileRequest&&
               !_deliverySheetOpen)unawaited(promptDeliveryProfile());
