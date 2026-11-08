@@ -13,7 +13,7 @@ function requireApprovedSeller(uid,account,setup,verification,shop,now){
  // Shop setup and an active paid listing are separate requirements for selling.
  const state=P.state(uid,account,setup||{},verification,shop,null,now);
  if(!state.registered||!state.approved||account?.deletionPending===true||
-    setup?.moderationBlocked===true||P.held(shop)||shop?.status==='suspended')
+    setup?.moderationBlocked===true||P.held(shop))
   D.fail(403,'Your seller registration and identity verification must be approved before you submit a mandate.');
 }
 function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock,rate}){
