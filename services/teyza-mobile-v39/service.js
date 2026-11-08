@@ -79,7 +79,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       // Background reconciliation must never publish legacy private drafts.
       if(next&&canPublish&&publishIntent){
         next.catalogueEnabled=true;
-        next.sellingEnabled=true;
+        // Keep the legacy sellingEnabled flag unchanged so an explicit
+        // catalogue opt-out can still hide products on subsequent refreshes.
         Object.assign(next,catalogue.range(uid,next,entries,{enabled:true,removedProductId,
           photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()}))}));
       }
@@ -401,7 +402,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
-        sellingEnabled:publication.canSell&&publicShop?.sellingEnabled===true,identityVerified:publication.approved,
+        sellingEnabled:publication.canSell&&(publicShop?.sellingEnabled===true||publicShop?.catalogueEnabled===true),identityVerified:publication.approved,
         verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         rating:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.rating:null,
