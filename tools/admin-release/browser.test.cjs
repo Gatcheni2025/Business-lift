@@ -281,6 +281,60 @@ async function main(){
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
   });
+  await check('Mandates remain visible when the seller directory is down and inbox errors are explicit',async()=>{
+    let available=false;
+    const row={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_inbox_qa',
+      bankName:'FNB',accountLast4:'8901',status:'pending_provider_authentication'};
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_sellers'){
+        await route.fulfill({status:503,json:{ok:false,error:'Seller directory offline'}});return true;
+      }
+      if(body.action==='ops_mandate_queue'){
+        if(available)await route.fulfill({json:{ok:true,mandates:[row],limited:false}});
+        else await route.fulfill({status:503,json:{ok:false,error:'Mandate inbox offline'}});
+        return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
+    available=true;
+    await f.page.getByRole('button',{name:'Refresh mandates'}).click();
+    await f.page.getByText('•••• 8901').waitFor();
+    assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Mandate review can grant an explicitly approved 30-day selling period without recording a payment',async()=>{
+    const mandate={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_grant_qa',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',shopAddress:'Durban',
+      firstDate:'2026-12-01',collectionDay:1,amountCents:9900,
+      acceptedAt:Date.UTC(2026,10,8),status:'pending_provider_authentication'};
+    let reviewed=false,granted=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_mandate_queue'){
+        await route.fulfill({json:{ok:true,mandates:[{...mandate,
+          status:reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
+      }
+      if(body.action==='ops_mandate_review'){
+        reviewed=true;await route.fulfill({json:{ok:true,reviewed:true,collectionActive:false}});return true;
+      }
+      if(body.action==='ops_complimentary_access'){
+        granted=true;await route.fulfill({json:{ok:true,granted:true}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open mandate'}).click();
+    await f.page.getByLabel('Reason / review note').fill('QA owner reviewed; temporary selling pending provider processing');
+    await f.page.getByRole('checkbox',{name:/Also approve 30 days of temporary Start Selling access/}).check();
+    await f.page.getByRole('checkbox',{name:/I understand this review does not activate a debit order/}).check();
+    await f.page.getByRole('button',{name:'Save mandate review'}).click();
+    await f.page.locator('#notice').getByText(/30 days of temporary selling access granted/).waitFor();
+    assert(reviewed&&granted);
+    assert(f.calls.some(x=>x.action==='ops_complimentary_access'&&x.data.days===30));
+    assert(!f.calls.some(x=>['billing_checkout','ops_mandate_activate','ops_paystack_confirm'].includes(x.action)));
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Confidential R99 PDF exports require an audited administrator action',async()=>{
     const reference='mandate_synthetic_1',mandate={
       mandateId:reference,status:'pending_provider_authentication',
