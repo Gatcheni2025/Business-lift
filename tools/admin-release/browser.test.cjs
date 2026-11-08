@@ -476,7 +476,7 @@ async function main(){
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(f.calls.filter(c=>c.action==='admin_seller_queue').length,2);await f.context.close();
   });
   await check('Missing phone OTP and ID show as checklist and allow recorded corrections, never approval',async()=>{
-    const incomplete={...rows[0],evidenceId:null,missingCompliance:['identity','phone'],
+    const incomplete={...rows[0],evidenceId:null,missingCompliance:['identity'], // Simulate old backend omitting phone from the list
       phoneVerificationRequired:true,phoneVerified:false,reviewNote:'',complianceRequestedAt:null};
     const f=await pageFor({api:async(route,body)=>{
       if(body.action==='admin_seller_queue'){
