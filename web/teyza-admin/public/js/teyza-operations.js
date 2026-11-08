@@ -250,7 +250,10 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(closuresNext)box.append(button('Load more account closures',async()=>{const r=await request('ops_account_deletion_queue',{after:closuresNext});closures.push(...(r.requests||[]));closuresNext=r.nextAfter||null;show();}));
   root.append(box);
  }
-  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));account.append(button('Open approval desk',()=>navigate('approvals')));root.append(account);sellerDocuments();
+  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
+    account.append(el('p','Seller registration is already approved. Use the mandate and selling-access controls below; do not approve the registration twice.','notice success'));
+  else account.append(button('Open approval desk',()=>navigate('approvals')));
+  root.append(account);sellerDocuments();
   const status=d.sellingStatus;
   if(status){
     const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
