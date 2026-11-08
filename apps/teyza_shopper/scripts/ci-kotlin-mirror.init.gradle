@@ -1,0 +1,12 @@
+// CI-only workaround for transient GitHub Release 504s during Kotlin resolution.
+// Scope the mirror to org.jetbrains.kotlin; normal Android/Google dependencies
+// keep the repositories declared by Flutter and the application build.
+// https://maven.aliyun.com/repository/central is the public Aliyun Maven mirror.
+// This init script is installed into the EPHEMERAL GitHub runner only.
+gradle.beforeProject { project ->
+    project.repositories.maven {
+        name = 'teyzaCIKotlinCentralMirror'
+        url = uri('https://maven.aliyun.com/repository/central')
+        content { includeGroup('org.jetbrains.kotlin') }
+    }
+}
