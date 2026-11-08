@@ -113,7 +113,7 @@ void main(){
         {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
     ]);
     final item=find.byKey(const ValueKey('essential-product-salon-hair'));
-    await tester.scrollUntilVisible(item,220,scrollable:find.byType(ListView).first);
+    await tester.scrollUntilVisible(item,220,scrollable:find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     expect(item,findsOneWidget);
     expect(find.text('Hair & Beauty'),findsWidgets);
