@@ -78,6 +78,12 @@ void main(){
       {'id':'milk','name':'Fresh milk','category':'Dairy','priceCents':2000,'stock':4},
     ])]);
     final fruit=find.byKey(const ValueKey('product-category-Fruit & Veg'));
+    final scroll=find.byType(ListView).first;
+    for(var attempt=0;attempt<12&&fruit.evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-170));
+      await tester.pumpAndSettle();
+    }
+    expect(fruit,findsOneWidget);
     await tester.ensureVisible(fruit);await tester.pumpAndSettle();
     await tester.tap(fruit);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('shop-product-shop1-apple')),findsOneWidget);
