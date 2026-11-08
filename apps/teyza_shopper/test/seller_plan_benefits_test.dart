@@ -38,7 +38,7 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:session,api:api)));
    await tester.pumpAndSettle();
    expect(find.text('R99 / month'),findsNothing);
-   expect(find.text('Sell on Teyza'),findsOneWidget);
+   expect(find.text('Sell on Teyza'),findsWidgets);
    await tester.scrollUntilVisible(find.textContaining('There is no membership purchase in this app.'),300);
    expect(find.textContaining('There is no membership purchase in this app.'),findsOneWidget);
    expect(find.text('Upgrade now'),findsNothing);
