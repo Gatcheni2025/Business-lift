@@ -221,9 +221,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> openUpgrade({bool promote=false,bool fromProductAction=false}) async {
     final uid=widget.session.userId;
-    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
+    final saved=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
       session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza',showPromotion:promote,fromProductAction:fromProductAction)));
-    if(mounted&&uid==widget.session.userId)await refreshActivity();
+    if(!mounted||uid!=widget.session.userId)return;
+    if(saved==true){
+      setState((){sellerTab=0;productsView=false;});
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('R99 mandate saved. Waiting for Teyza admin review. No debit has been collected.')));
+    }
+    await refreshActivity();
   }
   Future<void> chooseProducts() async {
     if(busy)return;
