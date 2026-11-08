@@ -1,16 +1,29 @@
-// CI-only group-scoped fallback for Kotlin compiler artifact GitHub 504.
-// Firebase code, payment processing, signing identity and local builds untouched.
-// Flutter's included Gradle plugin build prefers SETTINGS repositories; never
-// inject project repositories or override its FAIL_ON_PROJECT_REPOS guard.
+// Teyza GitHub Actions only: Kotlin compiler Maven fallback during GitHub 504s.
+// Keep standard Gradle plugin and Android dependency repositories available.
+// This file is copied to the ephemeral runner's GRADLE_USER_HOME/init.d only;
+// app source, signing materials and deployed Android packages are unchanged.
 gradle.beforeSettings { settings ->
-    settings.pluginManagement.repositories.maven {
-        name = 'teyzaCIKotlinPluginMirror'
-        url = uri('https://maven.aliyun.com/repository/central')
-        content { includeGroup('org.jetbrains.kotlin') }
+    settings.pluginManagement.repositories {
+        maven {
+            name = 'teyzaCIKotlinPluginMirror'
+            url = uri('https://maven.aliyun.com/repository/central')
+            content {
+                includeGroup('org.jetbrains.kotlin')
+                includeGroup('org.jetbrains.kotlin.jvm')
+                includeGroup('org.jetbrains.kotlin.plugin.serialization')
+            }
+        }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
-    settings.dependencyResolutionManagement.repositories.maven {
-        name = 'teyzaCIKotlinCompilerMirror'
-        url = uri('https://maven.aliyun.com/repository/central')
-        content { includeGroup('org.jetbrains.kotlin') }
+    settings.dependencyResolutionManagement.repositories {
+        maven {
+            name = 'teyzaCIKotlinCompilerMirror'
+            url = uri('https://maven.aliyun.com/repository/central')
+            content { includeGroup('org.jetbrains.kotlin') }
+        }
+        google()
+        mavenCentral()
     }
 }
