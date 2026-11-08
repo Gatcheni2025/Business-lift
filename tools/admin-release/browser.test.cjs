@@ -107,7 +107,12 @@ async function main(){
     assert(await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).isVisible());
     assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isHidden());
     await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
-    await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor();
+    try{await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor({timeout:7000});}
+    catch(error){
+      const panel=await f.page.locator('#operationsPanel').innerText();
+      const notice=await f.page.locator('#notice').innerText();
+      throw Error('Mandate inbox not rendered: '+JSON.stringify({panel:panel.slice(0,1500),notice,errors:f.errors}),{cause:error});
+    }
     assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
     assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isVisible());
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
