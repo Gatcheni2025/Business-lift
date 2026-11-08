@@ -447,7 +447,7 @@ async function main(){
   for(const [button,status] of [['requestPhoto','needs_new_photo'],['rejectSeller','rejected']])await check(status+' requires a note and records the chosen outcome',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();await f.page.locator('#'+button).click();
    assert(!f.calls.some(c=>c.action==='admin_seller_review'));await f.page.locator('#reason').fill('Please retake the photo in good light.');await f.page.locator('#'+button).click();
-   await f.page.locator('#notice').getByText('Review saved. The owner will receive your note.').waitFor();assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.status,status);await f.context.close();
+   await f.page.locator('#notice').getByText('Review saved. The seller can view your note in the app.').waitFor();assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.status,status);await f.context.close();
   });
   await check('Normal seller accounts cannot open the admin workspace',async()=>{
    const f=await pageFor({identity:{uid:'seller1',claims:{teyzaAdmin:false}}});await f.page.locator('#notice').getByText(/needs administrator access/).waitFor();
@@ -474,6 +474,36 @@ async function main(){
    await f.page.locator('#viewSelfie').click();await f.page.locator('#selfieState').getByText('Viewed in this review').waitFor();await f.page.locator('#reviewConfirmed').check();await f.page.locator('#approveSeller').click();
    await f.page.locator('#notice').getByText(/This submission changed/).waitFor();await f.page.locator('#sellerDetail').waitFor({state:'hidden'});
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(f.calls.filter(c=>c.action==='admin_seller_queue').length,2);await f.context.close();
+  });
+  await check('Missing phone OTP and ID show as checklist and allow recorded corrections, never approval',async()=>{
+    const incomplete={...rows[0],evidenceId:null,missingCompliance:['identity','phone'],
+      phoneVerificationRequired:true,phoneVerified:false,reviewNote:'',complianceRequestedAt:null};
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='admin_seller_queue'){
+        await route.fulfill({json:{ok:true,sellers:[incomplete],next:null}});
+        return true;
+      }
+      if(body.action==='admin_seller_review'&&body.data.status==='needs_correction'){
+        await route.fulfill({json:{ok:true,status:'needs_correction',pendingReview:true}});
+        return true;
+      }
+      return false;
+    }});
+    await f.page.locator('.seller-row').first().click();
+    assert(await f.page.locator('#approveSeller').isDisabled());
+    assert.equal(await f.page.locator('#complianceList .compliance-missing').count(),2);
+    assert(await f.page.locator('#complianceList').getByText(/SMS verification/).isVisible());
+    assert(await f.page.locator('#complianceList').getByText(/Current ID/).isVisible());
+    assert(await f.page.locator('#decisionHint').getByText(/Cannot approve/).isVisible());
+    assert(await f.page.locator('#requestCompliance').isEnabled());
+    await f.page.locator('#requestCompliance').click();
+    await f.page.locator('#notice').getByText(/Missing requirements recorded/).waitFor();
+    const review=f.calls.find(x=>x.action==='admin_seller_review');
+    assert.equal(review.data.status,'needs_correction');
+    assert(review.data.reason.includes('SMS'));
+    assert(!f.calls.some(x=>x.action==='billing_checkout'));
+    assert.deepEqual(f.errors,[]);
+    await f.context.close();
   });
   await check('Hiding the tab clears documents, view receipts in the UI and approval confirmation',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();
