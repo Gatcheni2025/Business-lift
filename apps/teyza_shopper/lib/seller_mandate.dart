@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -54,6 +55,13 @@ class _SellerMandateState extends State<SellerMandatePage> {
     final picked=await showDatePicker(context:context,initialDate:firstDate??initial,firstDate:today,lastDate:today.add(const Duration(days:365)),selectableDayPredicate:(d)=>d.day<=28);
     if(picked!=null&&mounted)setState((){firstDate=picked;consent=false;});
   }
+  Future<void> openTerms() async {
+    try{
+      final opened=await launchUrl(Uri.https('teyza.co.za','/terms.html'),mode:LaunchMode.externalApplication);
+      if(!opened)throw StateError('Terms page unavailable');
+    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:Text('Unable to open the Terms of Service. Please visit teyza.co.za/terms.html.')));}
+  }
   Future<void> capture(ImageSource source) async {
     if(busy||changed)return;setState((){busy=true;error=null;});XFile? file;
     try{Uint8List? bytes;if(widget.captureDocument!=null){bytes=await widget.captureDocument!(source);}else{file=await ImagePicker().pickImage(source:source,maxWidth:1600,maxHeight:1600,imageQuality:82,requestFullMetadata:false);bytes=await file?.readAsBytes();}
@@ -71,7 +79,7 @@ class _SellerMandateState extends State<SellerMandatePage> {
       if(document!=null)'imageBase64':base64Encode(document!),if(document==null&&useExisting)'identityEvidenceId':identity?['evidenceId']});
       if(!mounted||uid!=widget.session.userId)return;for(final c in [first,surname,number,holder,account]){c.clear();}
       setState((){document=null;saved=Map<String,dynamic>.from(r['mandate']);editing=false;consent=false;identityConsent=false;});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Debit-order request sent to Teyza admin. Netcash-approved mandate still required; no debit collected.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your R99 request was saved. Waiting for review (by admin). No debit has been collected.')));
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -90,12 +98,22 @@ class _SellerMandateState extends State<SellerMandatePage> {
       if(benefits.isNotEmpty)Card(child:ExpansionTile(title:const Text('Membership benefits'),children:[
         for(final b in benefits)ListTile(leading:const Icon(Icons.check_circle_outline,color:Color(0xFF16845D)),title:Text(b)),
         const Padding(padding:EdgeInsets.all(16),child:Text('Partner offers and priority placement are subject to availability. Finance requires a separate application and approval.'))])),
-      if(saved!=null)card('Your debit-order request',[SelectableText('Reference: ${saved!['mandateId']}'),Text('Status: ${saved!['status'].toString().replaceAll('_',' ')}'),Text('${saved!['bankName']} · account ending ${saved!['accountLast4']}'),Text('R99.00 monthly · day ${saved!['collectionDay']} · first date ${saved!['firstDate']}'),const SizedBox(height:12),Text(saved!['terms']?.toString()??''),const SizedBox(height:12),const Text('Automatic collection is not active. Teyza will contact you for provider/bank activation after approval.'),if(saved!['status']!='withdrawn')...[
+      if(saved!=null)card('Your debit-order request',[
+        Text(saved!['status']=='pending_provider_authentication'?'Waiting for review (by admin)':
+          saved!['status']=='needs_correction'?'Action required: correct your details':
+          saved!['status']=='withdrawn'?'Request withdrawn':'Provider review in progress',
+          style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:Color(0xFF8A640F))),
+        const SizedBox(height:10),SelectableText('Reference: ${saved!['mandateId']}'),Text('Status: ${saved!['status'].toString().replaceAll('_',' ')}'),Text('${saved!['bankName']} · account ending ${saved!['accountLast4']}'),Text('R99.00 monthly · day ${saved!['collectionDay']} · first date ${saved!['firstDate']}'),const SizedBox(height:12),Text(saved!['terms']?.toString()??''),const SizedBox(height:12),const Text('Automatic collection is not active. Teyza will contact you for provider/bank activation after approval.'),if(saved!['status']!='withdrawn')...[
         TextButton(onPressed:busy||changed?null:()=>setState((){editing=true;consent=false;identityConsent=false;requestId='mandate_${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(100000000)}';}),child:const Text('Replace mandate details')),
         TextButton(onPressed:busy||changed?null:withdraw,child:const Text('Withdraw authorisation'))]]),
       if(editing&&!changed&&config.isNotEmpty)AbsorbPointer(absorbing:busy,child:Form(key:form,child:Column(children:[
         card('1. Your saved details',[
-          if(seller!=null)Text('Shop: ${seller!['shopName']??''}\nAddress: ${seller!['shopAddress']??''}\nEmail: ${seller!['email']??''}',style:const TextStyle(height:1.6)),
+          if(seller!=null)Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('Seller name: ${first.text} ${surname.text}'.trim(),style:const TextStyle(height:1.6)),
+            Text('Shop name: ${seller!['shopName']??''}',style:const TextStyle(height:1.6)),
+            Text('Phone number (auto-filled): ${phone.text}',style:const TextStyle(height:1.6)),
+            Text('Address (auto-filled): ${seller!['shopAddress']??''}',style:const TextStyle(height:1.6)),
+          ]),
           const SizedBox(height:12),
           if(!editingSellerDetails)...[Text('${first.text} ${surname.text} · ${phone.text}',style:const TextStyle(fontWeight:FontWeight.w700)),
             TextButton(onPressed:()=>setState(()=>editingSellerDetails=true),child:const Text('Edit seller details'))]
@@ -125,7 +143,7 @@ class _SellerMandateState extends State<SellerMandatePage> {
           ],
           CheckboxListTile(contentPadding:EdgeInsets.zero,value:identityConsent,onChanged:(v)=>setState(()=>identityConsent=v??false),title:const Text('I consent to Teyza processing this private ID/passport for owner verification.')),
           const Text('A mandate request does not itself approve a shop.',style:TextStyle(fontSize:12))]),
-        card('4. Proposed collection terms',[const Text('Membership amount: R99.00 per month',style:TextStyle(fontWeight:FontWeight.w800,fontSize:18)),const SizedBox(height:12),OutlinedButton.icon(key:const ValueKey('mandate-collection-date'),onPressed:pickDate,icon:const Icon(Icons.calendar_month_outlined),label:Text(date.isEmpty?'Choose first collection date':date)),const Text('Choose day 1–28 so the date exists every month.'),const SizedBox(height:14),Text(terms),const SizedBox(height:14),CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:(v)=>setState(()=>consent=v??false),title:const Text('I consent to preparing the R99 request using these details. I understand Netcash needs a valid signed or approved electronic mandate before any debit.')),const Text('This sends your encrypted consent request to Teyza admin. A checkbox is not a valid Netcash mandate. Admin must obtain provider-acceptable signed authority and a successful collection before any paid access.',style:TextStyle(fontSize:12)),const SizedBox(height:14),FilledButton(onPressed:busy||config['termsVersion']==null?null:submit,child:Text(busy?'Saving securely…':'Submit R99 request to admin'))])
+        card('4. Proposed collection terms',[const Text('Membership amount: R99.00 per month',style:TextStyle(fontWeight:FontWeight.w800,fontSize:18)),const SizedBox(height:12),const Text('Collection date (auto-filled)',style:TextStyle(fontWeight:FontWeight.w700)),OutlinedButton.icon(key:const ValueKey('mandate-collection-date'),onPressed:pickDate,icon:const Icon(Icons.calendar_month_outlined),label:Text(date.isEmpty?'Choose first collection date':date)),const Text('Automatically set to day 1 of next month. Change the date if needed (days 1–28).'),const SizedBox(height:14),Text(terms),const SizedBox(height:14),CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:(v)=>setState(()=>consent=v??false),title:const Text('I agree to Teyza Terms of Service and consent to preparing the R99 debit-order request. I understand Netcash requires a valid signed or approved mandate before any debit.')),TextButton.icon(onPressed:openTerms,icon:const Icon(Icons.open_in_new_outlined),label:const Text('Read Terms of Service')),const Text('This sends your encrypted consent request to Teyza admin. A checkbox is not a valid Netcash mandate. Admin must obtain provider-acceptable signed authority and a successful collection before any paid access.',style:TextStyle(fontSize:12)),const SizedBox(height:14),FilledButton(onPressed:busy||config['termsVersion']==null?null:submit,child:Text(busy?'Saving securely…':'Save mandate request'))])
       ]))),
     ])));
   }
