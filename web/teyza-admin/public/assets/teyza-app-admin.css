@@ -96,3 +96,8 @@ body{background:#f4f7f3;color:var(--admin-ink)}
 .compliance-check .footnote{margin:8px 0 0}
 #decisionHint{margin:14px 0!important}
 #requestCompliance{background:#f9efdc;color:#714913;border-color:#e7d2a0}
+
+/* R329: surface the full approval blocker before the private evidence controls. */
+.seller-compliance-summary{margin:0 0 18px;padding:14px 16px;border-radius:14px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.seller-compliance-summary.blocked{background:#fff4e4;border:1px solid #ebcc9d;color:#6e4412}
+.seller-compliance-summary.ready{background:#e9f5ef;border:1px solid #b6dcc8;color:#195c3e}
