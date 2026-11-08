@@ -498,10 +498,35 @@ test('Pending shops cannot add products; approval and product access publish sel
  await service.execute(owner,'catalogue_add',input);
  await service.synchronizeCatalogue('seller1');
  const publicShop=db.records.get('teyzaPublicShops/seller1');
- assert.equal(publicShop.products.length,0);
+ assert.equal(publicShop.products.length,1,'An eligible seller explicitly adding a product publishes it');
+ assert.equal(publicShop.products[0].priceCents,1800);
+ assert.equal(publicShop.products[0].stock,2);
+ assert.equal(publicShop.catalogueEnabled,true);
  const p=publicShop.productHighlights.find(p=>p.id==='catalog_white-bread-700-g');
  assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
  assert.equal(publicShop.productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
+});
+test('Retail products publish only after an audited selling grant and explicit owner sync',async()=>{
+ const f=fixture({
+  'teyzaSellerAccounts/seller1':{...seller,category:'retail',listingPlan:'free'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],catalogueEnabled:false,sellingEnabled:false},
+  'teyzaBilling/seller1':{ownerUid:'seller1',status:'pending'},
+  'teyzaDraftProducts/seller1/items/chair':{ownerUid:'seller1',status:'draft',
+    name:'Furniture repair',category:'Furniture & Repairs',priceCents:45000,stockQty:3}
+ });
+ assert.deepEqual((await f.service.publicDirectory()).entries.find(p=>p.id==='seller1').products,[]);
+ const reviewer={...buyer,uid:'admin1',teyzaAdmin:true,auth_time:1000};
+ await f.service.execute(reviewer,'ops_complimentary_access',{
+  sellerUid:'seller1',days:30,reason:'Verified seller temporary product access for QA',confirmed:true});
+ assert.deepEqual((await f.service.publicDirectory()).entries.find(p=>p.id==='seller1').products,[],
+  'Background grants must not expose unselected legacy drafts');
+ const sync=await f.service.execute(owner,'catalogue_sync');
+ assert.equal(sync.publication,'live');
+ const publicShop=(await f.service.publicDirectory()).entries.find(p=>p.id==='seller1');
+ assert.equal(publicShop.shopCategory,'retail');assert.equal(publicShop.products.length,1);
+ assert.equal(publicShop.products[0].name,'Furniture repair');
+ assert.equal(publicShop.products[0].category,'Furniture & Repairs');
+ assert.equal(publicShop.products[0].priceCents,45000);
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
  const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
