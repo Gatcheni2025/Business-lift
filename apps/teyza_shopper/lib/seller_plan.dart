@@ -124,11 +124,11 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
         if(directMandates&&!loading&&approved&&!setupComplete)const Text('Your seller account is approved. You can complete your R99 mandate now; finish any remaining shop setup before products can go live.',style:TextStyle(color:Color(0xFF60736B),height:1.4)),
         if(directMandates&&mandateError!=null)const Padding(padding:EdgeInsets.symmetric(vertical:8),
           child:Text('Mandate status could not be loaded. You may still open the form to retry securely; no payment will be collected.',style:TextStyle(color:Color(0xFF9A4B31)))),
-        if(directMandates)FilledButton.icon(
+        if(directMandates&&(!paid||mandateStatus!=null))FilledButton.icon(
           key:const ValueKey('seller-upgrade-now'),
           onPressed:loading||error!=null||!approved?null:openMandate,
           icon:const Icon(Icons.account_balance_outlined),
-          label:Text(mandateStatus==null||['withdrawn','needs_correction'].contains(mandateStatus)?'Upgrade now':'View mandate request'))
+          label:Text(paid||mandateStatus!=null&&!['withdrawn','needs_correction'].contains(mandateStatus)?'View mandate request':'Upgrade now'))
         else if(!directMandates&&!paid&&!complimentary)const Text('Your shop registration is free. Additional selling tools appear when your account is eligible. There is no membership purchase in this app.',
           style:TextStyle(color:Color(0xFF5A6C60),fontSize:13,height:1.4)),
        ]))),
