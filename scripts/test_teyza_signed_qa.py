@@ -32,7 +32,7 @@ class SignedQaWorkflowTests(unittest.TestCase):
                 else:
                     self.assertIn("--dart-define=TEYZA_PAYMENT_CHANNEL=store", line)
                     store_builds.append(line)
-        self.assertEqual(len(direct_builds), 1)
+        self.assertEqual(len(direct_builds), 2)  # signed manual QA + debug-only manual QA
         self.assertGreaterEqual(len(store_builds), 4)
         self.assertIn("direct_mandate_qa:", self.workflow)
         self.assertIn("if [ \"$TEYZA_DIRECT_MANDATE_QA\" = true ]; then", self.workflow)
@@ -40,6 +40,13 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("TARGET_PLATFORMS\" != android", self.workflow)
         self.assertIn("teyza-android-apk-direct-mandate-qa-signed", self.workflow)
         self.assertIn("scripts/package_teyza_direct_mandate_qa.py", self.workflow)
+        self.assertIn("direct_mandate_debug_qa:", self.workflow)
+        self.assertIn("TEYZA_DIRECT_MANDATE_DEBUG_QA", self.workflow)
+        self.assertIn("if [ \"$TEYZA_DIRECT_MANDATE_DEBUG_QA\" = true ]; then", self.workflow)
+        self.assertIn('"$SIGNING_MODE" != unsigned', self.workflow)
+        self.assertIn('"$TARGET_PLATFORMS" != android', self.workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true", self.workflow)
+        self.assertIn("teyza-android-apk-direct-mandate-debug-qa", self.workflow)
         self.assertIn("defaultValue:'store'", self.plan)
         self.assertIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
         self.assertIn("isAndroid&&channel=='direct'", self.plan)
