@@ -498,9 +498,10 @@ test('Pending shops cannot add products; approval and product access publish sel
  await service.execute(owner,'catalogue_add',input);
  await service.synchronizeCatalogue('seller1');
  const publicShop=db.records.get('teyzaPublicShops/seller1');
- assert.equal(publicShop.products.length,1,'An eligible seller explicitly adding a product publishes it');
- assert.equal(publicShop.products[0].priceCents,1800);
- assert.equal(publicShop.products[0].stock,2);
+ assert.equal(publicShop.products.length,2,'Newly selected stock is published alongside existing legacy stock');
+ const added=publicShop.products.find(p=>p.id==='catalog_white-bread-700-g');
+ assert.equal(added.priceCents,1800);
+ assert.equal(added.stock,2);
  assert.equal(publicShop.catalogueEnabled,true);
  const p=publicShop.productHighlights.find(p=>p.id==='catalog_white-bread-700-g');
  assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
