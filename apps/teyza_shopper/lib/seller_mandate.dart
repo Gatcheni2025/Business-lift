@@ -74,7 +74,7 @@ class _SellerMandateState extends State<SellerMandatePage> {
     if(busy||changed||!form.currentState!.validate())return;
     if(firstDate==null||!consent||!identityConsent||(document==null&&!(useExisting&&identity!=null))){setState(()=>error='Choose a date, attach your ID/passport and accept both confirmations.');return;}
     setState((){busy=true;error=null;});
-    try{final r=await api.call('seller_mandate_submit',{'requestId':requestId,'expectedMandateId':saved?['mandateId'],'amountCents':9900,'termsVersion':config['termsVersion'],'firstDate':date,'collectionDay':firstDate!.day,
+    try{await api.call('seller_mandate_submit',{'requestId':requestId,'expectedMandateId':saved?['mandateId'],'amountCents':9900,'termsVersion':config['termsVersion'],'firstDate':date,'collectionDay':firstDate!.day,
       'firstName':first.text.trim(),'surname':surname.text.trim(),'phone':phone.text.trim(),'documentKind':kind,'documentNumber':number.text.trim(),'accountHolder':holder.text.trim(),'bankName':bank,'branchCode':branch.text.trim(),'accountNumber':account.text.trim(),'accountType':accountType,'consent':true,'identityConsent':true,
       if(document!=null)'imageBase64':base64Encode(document!),if(document==null&&useExisting)'identityEvidenceId':identity?['evidenceId']});
       if(!mounted||uid!=widget.session.userId)return;for(final c in [first,surname,number,holder,account]){c.clear();}
