@@ -100,6 +100,27 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('Local business products display by their own categories below local businesses, never wholesale prices',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[
+      seller('corner','Corner Spaza','spaza',products:[
+        {'id':'bread','name':'White bread','category':'Bakery','priceCents':1800,'stock':3}]),
+      seller('salon','Durban Salon','variety',products:[
+        {'id':'hair','name':'Hair treatment','category':'Hair & Beauty','priceCents':6500,'stock':8},
+        {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2000,'stock':4}]),
+      seller('bulk','Wholesale Depot','wholesale',products:[
+        {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
+    ]);
+    final item=find.byKey(const ValueKey('essential-product-salon-hair'));
+    await tester.scrollUntilVisible(item,220,scrollable:find.byType(ListView).first);
+    await tester.pumpAndSettle();
+    expect(item,findsOneWidget);
+    expect(find.text('Hair & Beauty'),findsWidgets);
+    expect(find.byKey(const ValueKey('essential-product-bulk-wholesale')),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('Shop filters products by the selected business type',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
