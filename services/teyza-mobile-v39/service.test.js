@@ -774,6 +774,38 @@ test('Identity numbers and document images are encrypted, private, consented and
  assert.equal(opened.details.documentNumber,personal.documentNumber);assert.equal(opened.imageBase64,jpeg);
  await rejects(service.execute({...newOwner,teyzaAdmin:true,auth_time:1000},'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId}),403);
 });
+test('Missing seller compliance is shown in admin queue and sent for correction without rejecting valid selfies',async()=>{
+ const {service,db}=onboardFixture(null);
+ await register(service,newOwner,registration);
+ await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const queue=await service.execute(reviewer,'admin_seller_queue');
+ const sellerRow=queue.sellers.find(x=>x.sellerUid==='buyer1');
+ assert(sellerRow,'Incomplete selfie submission remains visible to admin');
+ assert(sellerRow.missingCompliance.includes('identity'));
+ assert(sellerRow.missingCompliance.includes('phone'));
+ assert.equal(sellerRow.phoneVerified,false);
+ const submissionId=sellerRow.submissionId;
+ const note='Please upload your ID or passport and verify the registered mobile number using the SMS code.';
+ await rejects(service.execute(reviewer,'admin_seller_review',{
+   sellerUid:'buyer1',submissionId,status:'needs_correction',reason:'short'}),422);
+ const outcome=await service.execute(reviewer,'admin_seller_review',{
+   sellerUid:'buyer1',submissionId,status:'needs_correction',reason:note});
+ assert.equal(outcome.status,'needs_correction');assert.equal(outcome.pendingReview,true);
+ const existing=db.records.get('teyzaMobileVerification/buyer1');
+ assert.equal(existing.status,'pending_review');
+ assert.equal(existing.reviewNote,note);
+ assert(existing.complianceRequestedAt>0);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'pending');
+ assert.equal(db.records.has('teyzaPublicShops/buyer1'),false);
+ const after=await service.execute(reviewer,'admin_seller_queue');
+ assert.equal(after.sellers[0].reviewNote,note);
+ assert.deepEqual(after.sellers[0].missingCompliance.sort(),['identity','phone']);
+ const ownerStatus=await service.execute(newOwner,'seller_onboarding');
+ assert.equal(ownerStatus.selfie.reviewNote,note);
+ await rejects(service.execute(reviewer,'admin_seller_review',{sellerUid:'buyer1',submissionId,status:'approved'}),409);
+ assert.equal(db.records.get('teyzaMobileVerification/buyer1').status,'pending_review');
+});
 test('A missing document can be rejected with a clear recommendation, but never approved',async()=>{
  const {service,db}=onboardFixture();await ready(service);db.records.delete('teyzaSellerIdentity/buyer1');
  const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
@@ -1058,6 +1090,10 @@ test('Shopper delivery profile is UID-bound, stores full address and contacts, a
  assert.equal((await service.execute(buyer,'shopper_profile_read')).profile.address,payload.address);
  assert.equal((await service.execute({...buyer,uid:'other-shopper'},'shopper_profile_read')).profile,null);
  assert(db.records.has('teyzaShopperProfiles/buyer1'));
+ const withoutEmail=await service.execute({...buyer,email:null,email_verified:false},'shopper_profile_save',{...payload,email:''});
+ assert.equal(withoutEmail.profile.contactEmail,'');
+ assert.equal((await service.execute(buyer,'shopper_profile_read')).profile.contactEmail,'');
+ await rejects(service.execute(buyer,'shopper_profile_save',{...payload,email:'not-email'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,phone:'123'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,latitude:0,longitude:0}),422);
 });
