@@ -108,6 +108,9 @@ void main(){
    await t.ensureVisible(oldLogin);await t.tap(oldLogin);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
    expect(find.text('Sign in as shopper'),findsOneWidget);
+   // Flutter verifies debug foundation variables before addTearDown runs.
+   // Reset the fake platform inside this widget test, not only on cleanup.
+   debugDefaultTargetPlatformOverride=null;
    await t.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Anonymous browsing identity is invited to register at the account tab',(t)async{
