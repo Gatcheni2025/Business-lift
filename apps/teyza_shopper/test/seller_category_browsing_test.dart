@@ -45,6 +45,31 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('Spaza Shops and Everyday essentials categories appear in the shopper home',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[seller('shop1','Community Spaza','spaza',products:[
+      {'id':'apples','name':'Fresh apples','category':'Fruit & Veg','priceCents':1400,'stock':4},
+      {'id':'milk','name':'Fresh milk','category':'Dairy','priceCents':2000,'stock':4},
+    ])]);
+    expect(find.text('Spaza Shops'),findsOneWidget);
+    final scroll=find.byType(ListView).first;
+    for(var attempt=0;attempt<12&&find.text('Shop by category').evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-170));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Everyday essentials'),findsOneWidget);
+    expect(find.text('Shop by category'),findsOneWidget);
+    final fruit=find.byKey(const ValueKey('product-category-Fruit & Veg'));
+    expect(fruit,findsOneWidget);
+    await tester.ensureVisible(fruit);await tester.pumpAndSettle();
+    await tester.tap(fruit);await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shop-product-shop1-apples')),findsOneWidget);
+    expect(find.byKey(const ValueKey('shop-product-shop1-milk')),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Product category opens matching nearby products and seller profile',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
