@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/seller_plan.dart';
+import 'package:teyza_shopper/seller_mandate.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
 
@@ -69,6 +70,25 @@ void main(){
    expect(find.text('Account holder: Test Owner'),findsOneWidget);
    expect(find.byKey(const ValueKey('mandate-bank')),findsOneWidget);
    expect(api.calls,isNot(contains('seller_mandate_submit')));
+   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ testWidgets('Successful mandate route returns through Sell on Teyza to the dashboard',(tester)async{
+   await tester.binding.setSurfaceSize(const Size(420,860));
+   addTearDown(()=>tester.binding.setSurfaceSize(null));
+   final session=ShopperSession(),api=_PlanApi(session);
+   await tester.pumpWidget(MaterialApp(home:Scaffold(body:Builder(builder:(ctx)=>FilledButton(
+     onPressed:()=>Navigator.push<bool>(ctx,MaterialPageRoute(builder:(_)=>SellerPlanPage(
+       session:session,api:api,directMandateOverride:true))),
+     child:const Text('Seller dashboard'))))));
+   await tester.tap(find.text('Seller dashboard'));await tester.pumpAndSettle();
+   await tester.scrollUntilVisible(find.text('Upgrade now'),350);
+   await tester.tap(find.text('Upgrade now'));await tester.pumpAndSettle();
+   expect(find.text('Membership & mandate'),findsOneWidget);
+   Navigator.of(tester.element(find.byType(SellerMandatePage))).pop(true);
+   await tester.pumpAndSettle();
+   expect(find.text('Seller dashboard'),findsOneWidget);
+   expect(find.byType(SellerPlanPage),findsNothing);
+   expect(find.byType(SellerMandatePage),findsNothing);
    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
  });
  testWidgets('Approved seller can open mandate even when other shop setup is incomplete',(tester)async{
