@@ -48,7 +48,15 @@ const complianceLabels={
   shop_location:'Saved location for the claimed Google Maps business'
 };
 function missingItems(row){
-  return Array.isArray(row?.missingCompliance)?row.missingCompliance.filter(x=>Object.hasOwn(complianceLabels,x)):[];
+  if(!row)return [];
+  // Older admin/backend revisions sometimes return only the explicit phone
+  // flags, not an up-to-date missingCompliance array. Derive safe blockers
+  // from both signals so a disabled button never has an unexplained reason.
+  const missing=new Set(Array.isArray(row.missingCompliance)?row.missingCompliance.filter(x=>Object.hasOwn(complianceLabels,x)):[]);
+  if(!row.evidenceId)missing.add('identity');
+  if(row.expired)missing.add('selfie');
+  if(row.phoneVerificationRequired===true&&row.phoneVerified!==true)missing.add('phone');
+  return [...missing];
 }
 function correctionMessage(row){
   const missing=missingItems(row);
