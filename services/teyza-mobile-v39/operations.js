@@ -106,6 +106,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
+   const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
      amountCents:row.data().amountCents||0,createdAt:row.data().createdAt||0,
@@ -124,6 +125,11 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
      }:null,
      membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
+     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+       sellingAccessActive:publication.hasListing,canSell:publication.canSell,
+       shopStatus:shop?.status||'not_listed',
+       publicProductCount:publication.canSell&&shop?.status==='active'?
+         (Array.isArray(shop.products)?shop.products.length:0):0},
      complimentaryUntil:billing?.adminComplimentaryUntil||null,
      complimentaryReason:billing?.adminComplimentaryReason||null,
      canApproveCatalogue:P.state(target,account,setup||{},
