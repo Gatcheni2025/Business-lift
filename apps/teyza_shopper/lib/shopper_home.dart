@@ -556,7 +556,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       catch(_){if(mounted)setState(()=>deliveryProfileWarning='Could not save this address on this phone.');}
       if(uid!=null&&!session.anonymousShopper){
         await deliveryProfileStore.save(uid,profile);
-        if(profile.displayName.trim().isNotEmpty&&profile.email.trim().isNotEmpty&&profile.phone.trim().isNotEmpty){
+        if(profile.displayName.trim().isNotEmpty&&profile.phone.trim().isNotEmpty){
           try{await TeyzaMobileApi(session).call('shopper_profile_save',profile.toJson());}
           catch(_){if(mounted)setState(()=>deliveryProfileWarning='Address saved on this phone. Account sync will retry.');}
         }
