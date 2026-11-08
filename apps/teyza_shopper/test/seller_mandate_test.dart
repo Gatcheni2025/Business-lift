@@ -25,9 +25,13 @@ void main(){
   await fixtures.visibleTap(t,find.text('Save mandate request'));expect(api.submissions,isEmpty);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
- testWidgets('The exact R99 date, current ID and explicit consents are submitted; account changes clear private fields',(t) async {
+ testWidgets('Saving an R99 mandate returns to the dashboard with a successful result',(t) async {
   final session=fixtures.Session(),api=MandateApi(fixtures.Session());
-  await t.pumpWidget(MaterialApp(home:SellerMandatePage(session:session,api:api)));await t.pumpAndSettle();
+  bool? saved;
+  await t.pumpWidget(MaterialApp(home:Scaffold(body:Builder(builder:(ctx)=>FilledButton(
+    onPressed:()async{saved=await Navigator.push<bool>(ctx,MaterialPageRoute(builder:(_)=>
+      SellerMandatePage(session:session,api:api)));},child:const Text('Seller dashboard'))))));
+  await t.tap(find.text('Seller dashboard'));await t.pumpAndSettle();
   await t.scrollUntilVisible(find.text('Test Owner · 0712345678'),250,scrollable:find.byType(Scrollable).first);
   expect(find.text('Test Owner · 0712345678'),findsOneWidget);
   expect(field('ID / passport number'),findsNothing,
@@ -39,8 +43,11 @@ void main(){
   await fixtures.visibleTap(t,find.text('I consent to Teyza processing this private ID/passport for owner verification.'));
   await fixtures.visibleTap(t,find.text('I agree to Teyza Terms of Service and consent to preparing the R99 debit-order request. I understand Netcash requires a valid signed or approved mandate before any debit.'));
   await fixtures.visibleTap(t,find.text('Save mandate request'));await t.pumpAndSettle();
-  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);expect(find.text('Your R99 request was saved. Waiting for review (by admin). No debit has been collected.'),findsOneWidget);
-  session.switchAccount();await t.pumpAndSettle();expect(find.text('Your account changed. Close this form and sign in again.'),findsOneWidget);expect(find.textContaining('8901'),findsNothing);
+  expect(api.submissions.length,1);final d=api.submissions.single;expect(d['amountCents'],9900);expect(d['identityEvidenceId'],'current-id');expect(d['identityConsent'],true);expect(d['consent'],true);expect(d['firstDate'],isNotEmpty);
+  expect(saved,isTrue);
+  expect(find.text('Seller dashboard'),findsOneWidget);
+  expect(find.byType(SellerMandatePage),findsNothing);
+  expect(find.textContaining('8901'),findsNothing);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
 }
