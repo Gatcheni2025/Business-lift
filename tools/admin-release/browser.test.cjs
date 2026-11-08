@@ -495,6 +495,7 @@ async function main(){
     assert(await f.page.locator('#complianceList').getByText(/SMS verification/).isVisible());
     assert(await f.page.locator('#complianceList').getByText(/Current ID/).isVisible());
     assert(await f.page.locator('#decisionHint').getByText(/Cannot approve/).isVisible());
+    assert(await f.page.locator('#sellerComplianceSummary').getByText(/Approval not available:.*SMS verification/).isVisible());
     assert(await f.page.locator('#requestCompliance').isEnabled());
     await f.page.locator('#requestCompliance').click();
     await f.page.locator('#notice').getByText(/Missing requirements recorded/).waitFor();
