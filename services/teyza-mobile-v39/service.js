@@ -761,7 +761,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     D.fail(404,'This shop service is not available.');
   }
   async function publicDirectory(after='',wholesaleOnly=false){
-    let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(100);
+    // A full 100-shop page required up to 800 private validation reads per request.
+    // Bound the page to keep the public directory responsive under load, while
+    // preserving every seller/identity/entitlement check and cursor pagination.
+    const pageSize=25;
+    let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(pageSize);
     if(after)query=query.startAfter(D.id(after));
     const result=await query.get(),entries=[];
     for(let offset=0;offset<result.docs.length;offset+=10){
@@ -792,7 +796,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return publicItem;
       }));entries.push(...batch.filter(Boolean));
     }
-    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
+    return {entries,next:result.docs.length===pageSize?result.docs.at(-1).id:null,wholesaleOnly};
   }
   async function reconcilePublicationBatch(){
     // Rerun once after changing Free-plan publication eligibility. The
