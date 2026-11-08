@@ -67,7 +67,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const ownerUsers=await Promise.all(rows.map(r=>getAuthUser(r.id).catch(()=>null)));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};
     const identity=identities[i].exists?identities[i].data():null;
-    const identityReady=require('./onboarding').current(identity,r.id,clock());
+    const identityReady=require('./onboarding').current(identity,r.id,clock);
     const missingCompliance=[];
     if(!identityReady)missingCompliance.push('identity');
     const expired=!v.objectPath||v.expiresAt<=clock();
