@@ -13,7 +13,9 @@ const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
-const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
+// Admin-only deployment must not register an optional WhatsApp secret.
+// Firebase detects defineSecret during module evaluation even for exports
+// excluded via --only.
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -192,6 +194,8 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
+if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
+ const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
@@ -208,6 +212,7 @@ exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',tim
   .where('status','in',['queued','configuration_required']).limit(30).get();
  for(const row of rows.docs)await whatsappApproval.deliver(row.id);
 });
+}
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});
 exports.teyzaPaystackCancellationCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaPaystackCancellations/{sellerUid}',secrets:[paystackKey]},
