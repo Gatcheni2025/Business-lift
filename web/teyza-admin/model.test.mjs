@@ -22,6 +22,18 @@ test('Only two inspected current photos allow approval and current references ar
  assert(!state.canApprove(301000));assert.throws(()=>state.decision('approved','',301000));
  state.select({...row,submissionId:'replacement'});assert(!state.canApprove());
 });
+test('Missing compliance blocks approval yet permits a corrective note without rejecting the selfie',()=>{
+ const s=new ReviewState();s.account('reviewer');
+ s.select({...row,phoneVerificationRequired:true,phoneVerified:false,missingCompliance:['identity','phone']});
+ s.viewed('identity');s.viewed('selfie');assert.equal(s.canApprove(),false);
+ assert.throws(()=>s.decision('approved',''));
+ const outcome=s.decision('needs_correction','Please verify your phone and upload the ID document.');
+ assert.equal(outcome.status,'needs_correction');
+ assert.equal(outcome.submissionId,'current-selfie');
+ assert.throws(()=>s.decision('needs_correction','short'));
+ s.select({...row,phoneVerificationRequired:true,phoneVerified:true,missingCompliance:[]});
+ s.viewed('identity');s.viewed('selfie');assert.equal(s.canApprove(),true);
+});
 test('Account and selection changes invalidate delayed evidence and prevent self-approval',()=>{
  const state=new ReviewState();state.account('admin1');state.select(row);let ticket=state.ticket();
  state.viewed('identity');state.viewed('selfie');state.account('admin2');assert(!state.current(ticket));assert.equal(state.views.size,0);assert.equal(state.selected,null);
