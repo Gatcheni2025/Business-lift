@@ -40,6 +40,30 @@ test('Pending, rejected, unreviewed and suspended sellers cannot submit a debit-
  ]){const f=setup();change(f);await rejects(f.call('seller_mandate_submit',data),403);
   assert.equal(f.files.size,0);assert(!f.db.records.has('teyzaSellerMandates/owner'));}
 });
+test('Admin-approved verified seller can submit a mandate before final shop setup without a Paystack payment',async()=>{
+ const f=setup(),account=f.db.records.get('teyzaSellerAccounts/owner');
+ f.db.records.set('teyzaSellerAccounts/owner',{...account,approvalStatus:'approved'});
+ f.db.records.set('teyzaSellerOnboarding/owner',{requiredVersion:2,completedAt:null,
+  moderationBlocked:false,sellingStatus:'not_started'});
+ f.db.records.set('teyzaMobileVerification/owner',{ownerUid:'owner',status:'approved',
+  submissionId:'verified-selfie'});
+ f.db.records.set('teyzaPublicShops/owner',{sellerUid:'owner',status:'pending_setup'});
+ const result=await f.call('seller_mandate_submit',data);
+ assert.equal(result.mandate.status,'pending_provider_authentication');
+ assert.equal(result.mandate.collectionActive,false);
+ assert.equal(f.db.records.get('teyzaBilling/owner'),undefined);
+ assert.equal(f.db.records.get('teyzaPublicShops/owner').status,'pending_setup');
+});
+test('Admin approval does not bypass a held shop or moderation block',async()=>{
+ for(const blocked of [
+  f=>f.db.records.set('teyzaSellerOnboarding/owner',{requiredVersion:2,moderationBlocked:true}),
+  f=>f.db.records.set('teyzaSellerAccounts/owner',{...f.db.records.get('teyzaSellerAccounts/owner'),deletionPending:true})
+ ]){
+  const f=setup();blocked(f);
+  await rejects(f.call('seller_mandate_submit',data),403);
+  assert(!f.db.records.has('teyzaSellerMandates/owner'));
+ }
+});
 test('Approval revoked between the initial check and transaction cannot create a mandate',async()=>{
  const f=setup(),run=f.db.runTransaction.bind(f.db);
  f.db.runTransaction=async fn=>{f.db.records.set('teyzaSellerAccounts/owner',{
