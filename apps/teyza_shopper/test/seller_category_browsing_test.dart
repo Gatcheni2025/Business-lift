@@ -61,6 +61,10 @@ void main(){
     expect(find.text('Everyday essentials'),findsOneWidget);
     expect(find.text('Shop by category'),findsOneWidget);
     final fruit=find.byKey(const ValueKey('product-category-Fruit & Veg'));
+    for(var attempt=0;attempt<10&&fruit.evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-110));
+      await tester.pumpAndSettle();
+    }
     expect(fruit,findsOneWidget);
     await tester.ensureVisible(fruit);await tester.pumpAndSettle();
     await tester.tap(fruit);await tester.pumpAndSettle();
