@@ -54,6 +54,16 @@ test('Admin-approved verified seller can submit a mandate before final shop setu
  assert.equal(f.db.records.get('teyzaBilling/owner'),undefined);
  assert.equal(f.db.records.get('teyzaPublicShops/owner').status,'pending_setup');
 });
+test('Onboarding-only suspension does not block an otherwise approved verified seller mandate',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerOnboarding/owner',{requiredVersion:2,completedAt:null,moderationBlocked:false});
+ f.db.records.set('teyzaMobileVerification/owner',{ownerUid:'owner',status:'approved',submissionId:'verified-selfie'});
+ f.db.records.set('teyzaPublicShops/owner',{sellerUid:'owner',status:'suspended',moderationSource:'onboarding'});
+ const result=await f.call('seller_mandate_submit',data);
+ assert.equal(result.mandate.status,'pending_provider_authentication');
+ assert.equal(result.mandate.collectionActive,false);
+ assert(!f.db.records.has('teyzaBilling/owner'));
+});
 test('Admin approval does not bypass a held shop or moderation block',async()=>{
  for(const blocked of [
   f=>f.db.records.set('teyzaSellerOnboarding/owner',{requiredVersion:2,moderationBlocked:true}),
