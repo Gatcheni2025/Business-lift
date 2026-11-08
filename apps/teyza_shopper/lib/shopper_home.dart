@@ -522,6 +522,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(mounted&&request==_deliveryProfileRequest)setState((){
         locationName=saved!.address;_usingGps=false;locationWarning=null;
       });
+      if(uid!=null&&!session.anonymousShopper&&
+          (saved.displayName.trim().length<2||saved.phone.replaceAll(RegExp(r'[^0-9]'),'').length<9)&&
+          !_deliverySheetOpen){
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted&&session.userId==uid&&request==_deliveryProfileRequest&&
+              !_deliverySheetOpen)unawaited(promptDeliveryProfile());
+        });
+      }
     }else if(deviceLocation?.isValid==true){
       // After logout do not trigger first-time address onboarding again.
       // The saved shopper's name, email and phone are not reattached.
@@ -533,6 +541,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(mounted&&request==_deliveryProfileRequest)setState((){
         locationName=deviceLocation!.address;_usingGps=false;locationWarning=null;
       });
+      if(uid!=null&&!session.anonymousShopper&&!_deliverySheetOpen){
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted&&session.userId==uid&&request==_deliveryProfileRequest&&
+              !_deliverySheetOpen)unawaited(promptDeliveryProfile());
+        });
+      }
     }else if(_launchReady) {
       WidgetsBinding.instance.addPostFrameCallback((_){
         if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
@@ -545,10 +559,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     _deliverySheetOpen=true;
     final uid=session.userId;
     try{
+      final loc=rememberedLocation;
+      final initial=deliveryProfile??(uid!=null&&!session.anonymousShopper&&loc!=null?
+        ShopperDeliveryProfile(address:loc.address,area:loc.area,city:loc.city,
+          displayName:session.name??'',email:session.email??'',phone:session.phoneNumber??'',
+          latitude:loc.latitude,longitude:loc.longitude):null);
       final profile=await showModalBottomSheet<ShopperDeliveryProfile>(
         context:context,isScrollControlled:true,useSafeArea:true,
         backgroundColor:Colors.white,showDragHandle:true,
-        builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:deliveryProfile));
+        builder:(_)=>ShopperDeliveryProfileSheet(session:session,initial:initial));
       if(profile==null||!mounted||uid!=session.userId)return;
       // Browsing only needs a locally stored location, not a registered account.
       rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(profile);
