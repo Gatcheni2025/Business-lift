@@ -57,8 +57,20 @@ function correctionMessage(row){
 }
 function drawCompliance(){
   const s=state.selected,root=$('complianceList');root.replaceChildren();
+  const headline=$('sellerComplianceSummary');headline.replaceChildren();
   if(!s)return;
   const missing=missingItems(s);
+  if(missing.length){
+    headline.className='seller-compliance-summary blocked';
+    headline.textContent='Approval not available: '+missing.map(x=>complianceLabels[x]).join('; ')+
+      '. Use Send missing requirements below. The seller must complete these steps in their Teyza account.';
+  }else if(s.expired){
+    headline.className='seller-compliance-summary blocked';
+    headline.textContent='Approval not available: the owner selfie has expired. Request a new selfie.';
+  }else{
+    headline.className='seller-compliance-summary ready';
+    headline.textContent='Seller information is on file. Inspect the current ID and selfie, then complete the review checks below.';
+  }
   for(const [code,title] of Object.entries(complianceLabels)){
     // The backend provides the authoritative missing requirements. Reviewed
     // evidence remains independently required for final approval.
@@ -85,7 +97,6 @@ function approvalHint(){
   if(missingItems(s).length)return 'Cannot approve: '+missingItems(s).map(x=>complianceLabels[x]).join('; ')+'. Send missing requirements to the owner.';
   if(s.expired)return 'This selfie has expired. Request a new selfie before approval.';
   if(!s.evidenceId)return 'The seller must submit their current ID, passport or company document in the app.';
-  if(missingItems(s).length)return 'Cannot approve: '+missingItems(s).map(x=>complianceLabels[x]).join('; ')+'. Send missing requirements to the owner.';
   if(!state.views.has('identity'))return 'Step 1 of 3: Open and inspect the current ID or passport document above.';
   if(!state.views.has('selfie'))return 'Step 2 of 3: Open and inspect the current owner selfie above.';
   if(!$('reviewConfirmed').checked)return 'Step 3 of 3: Confirm that you compared both documents with the shop owner.';
