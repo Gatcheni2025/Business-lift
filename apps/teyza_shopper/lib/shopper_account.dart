@@ -144,48 +144,31 @@ class _AccountState extends State<ShopperAccountPanel> {
     widget.session.removeListener(_sessionChanged);
     email.dispose(); password.dispose(); name.dispose(); super.dispose();
   }
+  // Legacy email/password is supported for SIGN IN only. New shoppers and
+  // sellers create Firebase accounts through social identity providers.
   Future<void> submit() async {
-    // A previous Google OAuth error must not be attributed to email sign-in.
+    if(registering)return;
     if(status!=null||failure)setState(() {status=null;failure=false;});
-    if (!formKey.currentState!.validate()) return;
-    setState(() { working=true; status=null;failure=false; });
+    if(!formKey.currentState!.validate())return;
+    setState(() {working=true;status=null;failure=false;});
     try {
-      if (registering) {
-        await widget.session.register(name.text,email.text,password.text);
-      } else {
-        await widget.session.signIn(email.text,password.text);
-      }
+      await widget.session.signIn(email.text,password.text);
       password.clear();
       if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
-      if (registering) {
-        try {
-          await widget.session.sendEmailVerification();
-          if (mounted) setState(() {
-            status='Account created. Check your inbox for the verification link.';
-            failure=false;
-          });
-        } catch (_) {
-          if (mounted) setState(() {
-            status='Account created. Use the verification button below to request a link.';
-            failure=false;
-          });
-        }
+      if(!mounted)return;
+      setState((){status='Welcome back to Teyza!';failure=false;});
+      if(ownerMode&&widget.onOpenOwner!=null){
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if(mounted)widget.onOpenOwner!();
+        });
+      }else if(!ownerMode&&widget.onShopperSignedIn!=null){
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if(mounted)widget.onShopperSignedIn!();
+        });
       }
-      if (mounted) {
-        if(!registering)setState(() {status='Welcome to Teyza!';failure=false;});
-        if(ownerMode && widget.onOpenOwner!=null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if(mounted)widget.onOpenOwner!();
-          });
-        }else if(!ownerMode&&widget.onShopperSignedIn!=null){
-          WidgetsBinding.instance.addPostFrameCallback((_){
-            if(mounted)widget.onShopperSignedIn!();
-          });
-        }
-      }
-    } catch (error) {
-      if (mounted) setState(() {status=authMessage(error);failure=true;});
-    } finally { if (mounted) setState(() => working=false); }
+    }catch(error){
+      if(mounted)setState((){status=authMessage(error);failure=true;});
+    }finally{if(mounted)setState(()=>working=false);}
   }
   Future<void> googleLogin() async {
     setState(() {working=true;status=null;failure=false;});
@@ -296,13 +279,14 @@ class _AccountState extends State<ShopperAccountPanel> {
             const SizedBox(height:10),
             if(logged)const Text('My Teyza account',style:TextStyle(
               fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF078E66))),
-            Text(logged?displayName:audience==null?'Welcome to Teyza':ownerMode?(registering?'Create owner account':'Shop owner sign in'):registering?'Join Teyza':'Shopper sign in',
+            Text(logged?displayName:audience==null?'Welcome to Teyza':registering?'Join Teyza':ownerMode?'Shop owner sign in':'Shopper sign in',
               style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
             const SizedBox(height:6),
             Text(logged?'Your saved shopping profile' :
               audience==null?'How would you like to continue?':
-              ownerMode?(registering?'Create an account, register your shop, then complete your documents, selfie and mobile verification.':'Sign in with the account registered for your shop.') :
-              'Sign in to manage your profile and shop enquiries.',
+              registering?
+                'Create your account securely with Google, Facebook or Apple. No email password or separate email verification required. Shop owners complete SMS and document verification afterward.':
+                ownerMode?'Sign in with the existing account registered for your shop.':'Sign in to manage your profile and shop enquiries.',
               textAlign:TextAlign.center,
               style:const TextStyle(color:Color(0xFF60746B))),
           ])),
@@ -453,13 +437,7 @@ class _AccountState extends State<ShopperAccountPanel> {
             label:const Text('Change account type'))),
           const SizedBox(height:12),
           Form(key:formKey,child:Column(children:[
-            if(registering)...[
-              TextFormField(controller:name,textCapitalization:TextCapitalization.words,
-                decoration:const InputDecoration(labelText:'Full name',prefixIcon:Icon(Icons.badge_outlined),
-                  border:OutlineInputBorder()),
-                validator:(v)=>v==null||v.trim().isEmpty?'Enter your name':null),
-              const SizedBox(height:12)
-            ],
+            if(!registering)...[
             TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
               autofillHints:const [AutofillHints.email],
               decoration:const InputDecoration(labelText:'Email address',
@@ -467,7 +445,7 @@ class _AccountState extends State<ShopperAccountPanel> {
               validator:(v)=>v==null||!v.trim().contains('@')?'Enter a valid email':null),
             const SizedBox(height:12),
             TextFormField(controller:password,obscureText:hidden,
-              autofillHints:[registering?AutofillHints.newPassword:AutofillHints.password],
+              autofillHints:const [AutofillHints.password],
               decoration:InputDecoration(labelText:'Password',
                 prefixIcon:const Icon(Icons.lock_outline),border:const OutlineInputBorder(),
                 suffixIcon:IconButton(onPressed:()=>setState(()=>hidden=!hidden),
@@ -477,8 +455,11 @@ class _AccountState extends State<ShopperAccountPanel> {
             SizedBox(width:double.infinity,child:FilledButton(
               onPressed:working?null:submit,
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
-              child:Text(working?'Please wait…':registering?(ownerMode?'Create shop owner account':'Create shopper account'):
-                ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
+              child:Text(working?'Please wait…':ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
+            const SizedBox(height:10),
+            const Text('Existing email account? Use your email and password above.',
+              style:TextStyle(fontSize:12,color:Color(0xFF60746B))),
+            ],
             if(widget.session.googleSignInAvailable)...[
             const SizedBox(height:12),
             SizedBox(width:double.infinity,child:OutlinedButton.icon(
@@ -496,14 +477,17 @@ class _AccountState extends State<ShopperAccountPanel> {
                 onPressed:working?null:facebookLogin,icon:const Icon(Icons.facebook),label:const Text('Continue with Facebook'))),
             ],
             const SizedBox(height:7),
+            if(registering)const Padding(padding:EdgeInsets.only(top:12),
+              child:Text('Choose a provider above. Your name and phone can be saved after sign-in; a separate email confirmation is not required.',
+                textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF60746B),fontSize:12))),
             if(ownerMode&&!registering)
               TextButton.icon(onPressed:working?null:registerShopOwner,
                 icon:const Icon(Icons.add_business_outlined,size:17),
                 label:const Text('New shop owner? Register your shop'))
             else TextButton(onPressed:working?null:()=>setState(() {
               registering=!registering;status=null;
-            }),child:Text(registering?'Already registered? Sign in':
-              'New to Teyza? Create an account')),
+            }),child:Text(registering?'Already registered? Sign in with email':
+              'New to Teyza? Register with Google, Facebook or Apple')),
             if(!registering)
               TextButton(onPressed:working?null:reset,
                 child:const Text('Forgot password?')),
