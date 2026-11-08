@@ -423,6 +423,26 @@ jobs:
           path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+      # PR-only debug APK makes the mandate form testable without a Play
+      # upload key or a manual signed release. It is debug-signed and uses
+      # the existing Firebase project; never distribute it through Google Play.
+      - name: Build separate Android-direct mandate debug QA APK
+        if: github.event_name == 'pull_request' && env.SIGNING_MODE != 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p build/direct-mandate-qa-debug
+          cp build/app/outputs/flutter-apk/app-debug.apk build/direct-mandate-qa-debug/Teyza-Direct-Mandate-QA-debug.apk
+          echo "Android direct-channel mandate QA (debug-signed, NOT for Google Play). Existing Firebase accounts remain in use; use dedicated test accounts." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload separate Android-direct mandate debug QA APK
+        if: github.event_name == 'pull_request' && env.SIGNING_MODE != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-direct-mandate-debug-qa
+          path: apps/teyza_shopper/build/direct-mandate-qa-debug/Teyza-Direct-Mandate-QA-debug.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Android bundle
         uses: actions/upload-artifact@v4
         with:
