@@ -84,3 +84,15 @@ body{background:#f4f7f3;color:var(--admin-ink)}
 @media(max-width:900px){.shell{padding:20px 18px 0}.dashboard-layout{display:block}.dashboard-sidebar{position:static;max-height:none;margin-bottom:22px;padding:15px}.sidebar-intro{padding:0 3px 12px}.sidebar-note{display:none}.nav-hint{margin:13px 3px 8px}.admin-nav{display:flex;flex-wrap:nowrap;gap:7px;overflow-x:auto;padding:1px 1px 8px;margin:0;scrollbar-width:thin}.admin-nav button{flex:0 0 auto;width:auto;white-space:nowrap;padding:10px 12px}.admin-nav button.active{box-shadow:inset 0 -3px #24956c}.overview-grid{grid-template-columns:minmax(0,1.35fr) minmax(230px,1fr)}}
 @media(max-width:620px){.topbar{position:static;min-height:72px;padding:11px 16px;gap:10px}.brand img{width:108px;height:auto}.account{flex:1;justify-content:flex-end;flex-wrap:wrap;gap:7px}.account-identity small{display:none}.account-identity span{max-width:115px;font-size:11px}.account .session{flex-basis:100%;justify-content:flex-end;gap:7px}.account .session span{font-size:11px}.account .session .button,.account>#signOut{font-size:11px;min-height:31px;padding:5px 9px}.overview-grid{grid-template-columns:1fr}.overview-stats{gap:10px}.overview-stat{min-height:139px;padding:15px}.overview-stat strong{font-size:25px}.overview-stat.tone-sand strong{font-size:20px}.overview-panel{padding:19px}.overview-action-meta{display:none}.workspace-title{margin-top:3px}.workspace-title h2{font-size:26px}.workspace-title>.button{min-height:38px;padding:7px 10px;font-size:12px}.overview-guide h3{max-width:none}.login-panel{margin:12px auto 30px}}
 @media(prefers-reduced-motion:reduce){.overview-stat{transition:none}}
+
+/* R328 seller compliance: visible actions instead of silent disabled approval. */
+.compliance-check{border:1px solid #eadcba;background:#fffaf0;border-radius:15px;padding:19px 20px;margin:24px 0 12px}
+.compliance-check h3{font-size:18px;margin:0 0 6px}
+.compliance-check ul{list-style:none;margin:13px 0;padding:0;display:grid;gap:9px}
+.compliance-check li{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.compliance-check li>span:first-child{flex:0 0 24px;border-radius:50%;height:24px;display:grid;place-items:center;font-weight:800}
+.compliance-missing>span:first-child{background:#fae2d5;color:#a13f24}
+.compliance-ready>span:first-child{background:#e1f4e9;color:#168653}
+.compliance-check .footnote{margin:8px 0 0}
+#decisionHint{margin:14px 0!important}
+#requestCompliance{background:#f9efdc;color:#714913;border-color:#e7d2a0}
