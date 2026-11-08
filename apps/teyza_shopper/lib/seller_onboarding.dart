@@ -120,6 +120,9 @@ class _OnboardingState extends State<SellerOnboardingPage> {
   @override Widget build(BuildContext context){
     final identityDone=progress['identity'] is Map,selfieDone=progress['selfie'] is Map,phoneDone=progress['phoneVerified']==true;
     final allDone=identityDone&&selfieDone&&phoneDone;
+    final selfieInfo=progress['selfie'];
+    final correction= selfieInfo is Map ? (selfieInfo['reviewNote']??'').toString().trim() : '';
+    final correctionSent= selfieInfo is Map && selfieInfo['complianceRequestedAt']!=null;
     return Scaffold(backgroundColor:const Color(0xFFF7F8F5),appBar:AppBar(title:const Text('Get ready to sell'),
       actions:[IconButton(tooltip:'Refresh registration',onPressed:loading||busy||changed?null:load,icon:const Icon(Icons.refresh))]),
       body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
@@ -134,6 +137,14 @@ class _OnboardingState extends State<SellerOnboardingPage> {
         const SizedBox(height:20),if(loading)const LinearProgressIndicator(),
         if(error!=null)Padding(padding:const EdgeInsets.only(bottom:18),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412),height:1.4))),
         if(message!=null)Padding(padding:const EdgeInsets.only(bottom:18),child:Text(message!,style:const TextStyle(color:Color(0xFF168657)))),
+        if(correction.isNotEmpty)Card(color:const Color(0xFFFFF4DF),child:Padding(
+          padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(correctionSent?'Admin requested missing requirements':'Message from your Teyza reviewer',
+              style:const TextStyle(fontWeight:FontWeight.w800,color:Color(0xFF8A5916))),
+            const SizedBox(height:8),Text(correction),
+            const SizedBox(height:8),const Text('Complete the applicable steps below, then refresh your registration. Your current selfie is retained unless a new one was explicitly requested.',
+              style:TextStyle(fontSize:12,color:Color(0xFF704F20)))
+          ]))),
         if(!changed)...[
           card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             heading('1',legalType=='company'?'Company registration':'ID or passport',identityDone),const SizedBox(height:14),
