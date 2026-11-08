@@ -170,7 +170,7 @@ void main(){
   await tester.binding.setSurfaceSize(const Size(320,740));addTearDown(()=>tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(MaterialApp(home:Scaffold(body:MediaQuery(data:const MediaQueryData(textScaler:TextScaler.linear(1.5)),
    child:ListView(padding:const EdgeInsets.all(16),children:[
-    SellerShopHero(shop:const SellerShop('KwaMashu Fresh Market','retail','Durban','pending','not_listed'),productCount:184,unread:100,onNotifications:(){}),
+    SellerShopHero(shop:const SellerShop('KwaMashu Fresh Market','retail','Durban','pending','not_listed'),productCount:184),
     SellerSetupCard(products:184,verification:'pending_review',onVerify:(){},onProducts:(){})
    ])))));await tester.pumpAndSettle();expect(tester.takeException(),isNull);
   await tester.pumpWidget(const SizedBox.shrink());
@@ -179,7 +179,7 @@ void main(){
   for(final status in ['suspended','active']){
    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SellerShopHero(
     shop:const SellerShop('Corner Shop','spaza','Durban','approved','active'),publicationStatus:status,
-    productCount:5,onNotifications:(){}))));await tester.pumpAndSettle();
+    productCount:5))));await tester.pumpAndSettle();
    expect(find.text('Shop is live'),status=='active'?findsOneWidget:findsNothing);
    expect(find.text('Listing is paused'),status=='suspended'?findsOneWidget:findsNothing);
   }
