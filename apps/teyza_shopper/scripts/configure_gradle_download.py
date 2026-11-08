@@ -49,4 +49,4 @@ def configure(path: Path = WRAPPER) -> str:
     return version
 
 if __name__ == "__main__":
-    print("Gradle wrapper pinned to official downloads.gradle.org CDN; version:", configure())
+    print("Gradle wrapper pinned to checksum-verified MacPorts mirror; version:", configure())
