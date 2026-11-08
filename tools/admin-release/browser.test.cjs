@@ -311,6 +311,12 @@ async function main(){
       acceptedAt:Date.UTC(2026,10,8),status:'pending_provider_authentication'};
     let reviewed=false,granted=false;
     const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_seller_detail'){
+        await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',
+          listingPlan:'free'},billing:{status:'not_started'},membershipPaid:false,
+          complimentaryAccess:granted,paystackMode:'test',payments:[],entries:[],
+          catalogue:{products:[]},verification:{status:'approved'}}});return true;
+      }
       if(body.action==='ops_mandate_queue'){
         await route.fulfill({json:{ok:true,mandates:[{...mandate,
           status:reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
