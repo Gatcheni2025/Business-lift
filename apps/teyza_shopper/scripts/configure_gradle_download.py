@@ -1,7 +1,7 @@
 """Pin Flutter-generated Gradle wrapper to a checksum-verified distribution mirror.
 
 Flutter creates android/ during CI. Pin the *same Gradle version* to the
-official Gradle distribution CDN using the smaller binary distribution.
+checksum-verified distribution mirror using the smaller binary ZIP.
 Do not change Android Gradle Plugin, Java or APK signing certificates.
 """
 from __future__ import annotations
@@ -21,8 +21,8 @@ def configure(path: Path = WRAPPER) -> str:
         raise ValueError("Gradle wrapper has no distribution URL")
     existing = found.group(1).strip().replace(r"\:", ":")
     match = re.fullmatch(
-        r"https://(?:services\\.gradle\\.org|downloads\\.gradle\\.org)/distributions/gradle-(\\d+\\.\\d+(?:\\.\\d+)?)-(all|bin)\\.zip"
-        r"|https://distfiles\\.macports\\.org/gradle/gradle-(\\d+\\.\\d+(?:\\.\\d+)?)-bin\\.zip",
+        r"https://(?:services\.gradle\.org|downloads\.gradle\.org)/distributions/gradle-(\d+\.\d+(?:\.\d+)?)-(all|bin)\.zip"
+        r"|https://distfiles\.macports\.org/gradle/gradle-(\d+\.\d+(?:\.\d+)?)-bin\.zip",
         existing,
     )
     if not match:
