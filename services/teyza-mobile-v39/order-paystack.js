@@ -4,13 +4,14 @@
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const {recentAdmin}=require('./seller-experience');
 const offers=require('./shop-services');
-const {verifySignature,validCheckoutUrl}=require('./billing-paystack');
+const {validCheckoutUrl}=require('./billing-paystack');
+const {verifyWebhook}=require('./webhook-signature');
 const actions=new Set(['ops_order_subaccount','order_paystack_checkout','order_paystack_verify']);
 const allowedStatuses=new Set(['confirmed','preparing','ready','out_for_delivery']);
 const refPattern=/^TZO-[a-f0-9]{26}$/;
 const subPattern=/^ACCT_[A-Za-z0-9]{6,48}$/;
 const mode=key=>key.startsWith('sk_live_')?'live':'test';
-function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate=async()=>{}}){
+function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',send=fetch,rate=async()=>{}}){
  const doc=p=>db.doc(p);
  const read=async p=>{const snap=await doc(p).get();return snap.exists?snap.data():null;};
  async function paystack(path,method='GET',body){
@@ -197,8 +198,9 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',send=fetch,rate
   }
   D.fail(404,'Unknown order payment action.');
  }
- async function webhook(raw,signature,event){
-  if(!verifySignature(getSecret(),raw,signature))D.fail(401,'Invalid Paystack webhook signature.');
+ async function webhook(raw,signature,event,modernSignature){
+  if(!verifyWebhook({raw,legacy:signature,modern:modernSignature,
+     secretKey:getSecret(),signingSecret:getSigningSecret(),now:clock()}))D.fail(401,'Invalid Paystack webhook signature.');
   if(event?.event!=='charge.success'||!refPattern.test(event?.data?.reference||''))
    return {accepted:true};
   try{return await confirm(event.data.reference);}
