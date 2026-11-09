@@ -215,9 +215,26 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Future<void> openProducts() async {
     final uid=widget.session.userId;
     setState((){productsView=true;if(widget.sellerMode)sellerTab=1;});
-    try{final result=await mobile.call('seller_summary');
-      if(mounted&&uid==widget.session.userId)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
-    }catch(_){/* Product drafting remains available when optional services are offline. */}
+    if(uid==null)return;
+    try{
+      final result=await mobile.call('seller_summary');
+      if(!mounted||uid!=widget.session.userId)return;
+      setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
+      // Opening My Products is an explicit owner request to display saved
+      // stock. Recover drafts previously stored via the Firestore fallback
+      // while the mobile service was offline. Never auto-publish on login.
+      if(shop?.category!='wholesale'&&drafts.isNotEmpty){
+        if(result['approvalStatus']=='approved'&&result['setupComplete']==true&&
+          (result['listingPaid']==true||result['complimentaryAccess']==true)){
+          await syncRange();
+        }else{
+          setState(()=>rangeStatus='Your products are saved privately. Seller approval, completed shop setup and active R99 selling access are required to display prices to shoppers.');
+        }
+      }
+    }catch(error){
+      if(mounted&&uid==widget.session.userId)setState(()=>rangeStatus=
+        'Your saved products are still available. The publication service could not be checked: ${mobileError(error)}');
+    }
   }
   Future<void> openUpgrade({bool promote=false,bool fromProductAction=false}) async {
     final uid=widget.session.userId;
@@ -301,12 +318,23 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
+    final uid=widget.session.userId;
     try{
-      final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
+      final result=await mobile.call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
-      if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller verification and product access are complete.');
-    }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
+      if(!mounted||uid!=widget.session.userId)return;
+      final visible=(result['publicCount'] as num?)?.toInt()??0;
+      setState(()=>rangeStatus=shop?.category=='wholesale'?
+        'Your wholesaler shop is listed, but supplier products and prices are not public.':
+        result['publication']=='live'&&visible>0?
+          '$visible products published to the shopper catalogue. Refresh the shopper app to see them.':
+        result['publication']=='live'?
+          'No priced products published yet. Check that saved stock has a valid price and refresh the listing.':
+          'Products are saved privately. Complete shop verification and activate R99 selling access before publication.');
+    }catch(error){
+      if(mounted&&uid==widget.session.userId)setState(()=>rangeStatus=
+        'Your products are saved but not confirmed live. Retry Sync product listing. ${mobileError(error)}');
+    }
   }
   Future<void> productPhoto(SellerDraft product) async {
     if(busy)return;
