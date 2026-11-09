@@ -252,6 +252,27 @@ test('Admin identifies invalid drafts rather than silently publishing zero produ
  await rejects(f.call('ops_catalogue_publish',{sellerUid:uid,reason,confirmed:true}),409);
  assert(![...f.db.records.values()].some(x=>x.action==='ops_catalogue_publish'));
 });
+test('Admin reports account approval separately when an approved selfie is not linked to onboarding',async()=>{
+ const f=setup(),uid='seller1';
+ f.db.records.set('teyzaPublicShops/'+uid,{sellerUid:uid,status:'pending_setup',products:[],catalogueEnabled:false});
+ f.db.records.set('teyzaSellerOnboarding/'+uid,{
+   requiredVersion:2,completedAt:now-1000,sellingStatus:'pending_approval',
+   selfieSubmissionId:'previous',verifiedPhone:'+27721234567'});
+ f.db.records.set('teyzaMobileVerification/'+uid,{
+   ownerUid:uid,status:'approved',submissionId:'current'});
+ f.db.records.set('teyzaBilling/'+uid,{
+   ownerUid:uid,adminComplimentaryStatus:'active',adminComplimentaryBy:'admin2',
+   adminComplimentaryUntil:now+86400000,adminComplimentaryReason:'Audited, reviewed seller access'});
+ const d=await f.call('ops_seller_detail',{sellerUid:uid});
+ assert.equal(d.seller.sellerUid,uid);
+ assert.equal(d.seller.approvalStatus,'approved');
+ assert.equal(d.sellingStatus.registrationApproved,true);
+ assert.equal(d.sellingStatus.selfieApproved,true);
+ assert.equal(d.sellingStatus.selfieMatchesOnboarding,false);
+ assert.equal(d.sellingStatus.shopSetupComplete,false);
+ assert.equal(d.sellingStatus.canSell,false);
+ assert.equal(d.sellingStatus.sellingAccessActive,true);
+});
 test('Wholesalers remain shop listings only: admin cannot publish retail-facing prices',async()=>{
  const f=setup();
  f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),category:'wholesale'});
