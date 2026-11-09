@@ -241,7 +241,10 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
         ' · Live-priced products: '+(status.publicProductCount||0)));
       if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
-      if(status.canSell){
+      if(status.canSell&&status.publicProductCount>0&&
+          (status.savedDraftCount||0)<=status.publicProductCount)
+        review.append(el('p','These products are already published. There is no need to approve them again. Check their public-directory and nearby-location status below.','notice success'));
+      if(status.canSell&&((status.savedDraftCount||0)>(status.publicProductCount||0))){
         const form=el('form',undefined,'ops-form');
         field(form,'Reason for publishing saved seller products','reason','textarea');
         check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
@@ -255,6 +258,28 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
         });
         review.append(form);
       }
+    }
+    const visibility=d.shopperVisibility;
+    if(visibility){
+      const details=el('div',undefined,'ops-visibility-diagnostic');
+      details.append(el('h4','Shopper discovery and location check'),
+        el('p','Public directory eligibility: '+(visibility.directoryEligible?'Approved and active':'Not currently eligible')+
+          ' · Public-feed priced products: '+Number(visibility.publicProductCount||0)));
+      if(!visibility.hasValidPin){
+        const problem=visibility.status==='address_changed'
+          ?'The seller changed the shop address after setting the location. Save a new shop pin matching the updated address.'
+          :visibility.status==='pin_expired'
+          ?'The saved Google shop coordinates have expired. Refresh and save the shop location.'
+          :visibility.status==='seller_not_public'
+          ?'This shop is not eligible for the public directory yet. Check the current seller verification and approval.'
+          :'No valid shop coordinates are available. Ask the seller to open My business → Shop location, confirm the address, and save the pin.';
+        details.append(el('p',problem,'notice warning'));
+      }else{
+        details.append(el('p','Valid physical shop pin: '+Number(visibility.latitude).toFixed(5)+
+          ', '+Number(visibility.longitude).toFixed(5)+
+          '. Customer results use the distance from their saved delivery location within the selected search radius.','notice success'));
+      }
+      review.append(details);
     }
     if(!status.sellerApproved){
       review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
