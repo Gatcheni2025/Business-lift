@@ -45,7 +45,7 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
  assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
  for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple',
-   'webShopName','webShopUid','webShopType','webOwnShop','webTerms','webCheckout',
+   'webShopName','webShopUid','webShopType','webBillingStatus','webPaidThrough','webNextBill','webAmountDue','webPaymentHistory','webOwnShop','webTerms','webCheckout',
    'webCheckoutStatus','webManage','webConfirm']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
@@ -58,6 +58,14 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
  assert(js.includes('getIdToken(true)')&&js.includes('1000')&&js.includes('9900'));
  assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
+});
+test('Website statement only displays confirmed server amounts and local South African dates',async()=>{
+ const {billingMoney,billingDate}=await service();
+ assert.equal(billingMoney(9900),'R99.00');
+ assert.equal(billingMoney(1000),'R10.00');
+ assert.equal(billingMoney(null),'No confirmed amount');
+ assert.match(billingDate(Date.UTC(2026,10,30,22,0,0)),/Dec|12/);
+ assert.equal(billingDate(null),'Not scheduled');
 });
 test('App source never offers Paystack billing, due amounts or direct /pay checkout links',()=>{
  for(const f of ['seller_plan.dart','seller_workspace.dart','seller_tools.dart']){
