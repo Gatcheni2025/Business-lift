@@ -104,10 +104,10 @@ async function main(){
     assert(await f.page.getByRole('button',{name:'Seller records 3 Loaded seller records Open →'}).isVisible());
     assert.equal(await f.page.getByText('Total revenue',{exact:false}).count(),0);
     await f.page.locator('#sectionSearch').fill('mandate');
-    assert(await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).isVisible());
     assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isHidden());
-    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
-    try{await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor({timeout:7000});}
+    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    try{await f.page.getByRole('heading',{name:'Historic Netcash mandate archive — read-only'}).waitFor({timeout:7000});}
     catch(error){
       const panel=await f.page.locator('#operationsPanel').innerText();
       const notice=await f.page.locator('#notice').innerText();
@@ -116,7 +116,7 @@ async function main(){
     assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
     assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isVisible());
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
-    assert(order.indexOf('R99 monthly mandates — admin inbox')<order.indexOf('Seller directory'));
+    assert(order.indexOf('Historic Netcash mandate archive — read-only')<order.indexOf('Seller directory'));
     await f.page.getByRole('button',{name:'Overview',exact:true}).click();
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
     await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
@@ -273,7 +273,7 @@ async function main(){
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
-   await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Legacy Paystack membership',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
    await f.page.getByText('Seller products',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
@@ -301,7 +301,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
     await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
     available=true;
     await f.page.getByRole('button',{name:'Refresh mandates'}).click();
@@ -309,46 +309,25 @@ async function main(){
     assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
-  await check('Mandate review uses one consent step and requires separate provider evidence, without recording a payment',async()=>{
+  await check('Historic Netcash mandates remain visible without approval or provider collection actions',async()=>{
     const mandate={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_grant_qa',
-      bankName:'FNB',branchCode:'250655',accountLast4:'8901',shopAddress:'Durban',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',
       firstDate:'2026-12-01',collectionDay:1,amountCents:9900,
       acceptedAt:Date.UTC(2026,10,8),status:'pending_provider_authentication'};
-    let reviewed=false,accepted=false;
     const f=await pageFor({api:async(route,body)=>{
-      if(body.action==='ops_seller_detail'){
-        await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',
-          listingPlan:'free'},billing:{status:'not_started'},membershipPaid:false,
-          complimentaryAccess:false,paystackMode:'test',payments:[],entries:[],
-          catalogue:{products:[]},verification:{status:'approved'}}});return true;
-      }
       if(body.action==='ops_mandate_queue'){
-        await route.fulfill({json:{ok:true,mandates:[{...mandate,
-          status:accepted?'provider_confirmed':reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
-      }
-      if(body.action==='ops_mandate_review'){
-        reviewed=true;await route.fulfill({json:{ok:true,reviewed:true,collectionActive:false}});return true;
-      }
-      if(body.action==='ops_mandate_provider_confirm'){
-        accepted=true;await route.fulfill({json:{ok:true,confirmed:true,paymentRecorded:false}});return true;
+        await route.fulfill({json:{ok:true,mandates:[mandate]}});return true;
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
-    await f.page.getByLabel('Review note').fill('Bank and ID documents reviewed for provider submission');
-    await f.page.getByRole('checkbox',{name:/A review does not authenticate/}).check();
-    await f.page.getByRole('button',{name:'Save mandate review'}).click();
-    await f.page.locator('#notice').getByText(/Mandate decision saved/).waitFor();
-    assert(reviewed);assert(!accepted);
-    await f.page.getByLabel('Provider acceptance reference').fill('NC-ACCEPTED-0002');
-    await f.page.getByLabel('How and where provider acceptance was checked').fill('Confirmed verified provider acceptance on Netcash portal');
-    await f.page.getByRole('checkbox',{name:/I verified actual provider acceptance/}).check();
-    await f.page.getByRole('button',{name:'Confirm provider acceptance and 30-day access'}).click();
-    await f.page.locator('#notice').getByText(/Provider acceptance recorded/).waitFor();
-    assert(reviewed&&accepted);
-    assert(!f.calls.some(x=>x.action==='ops_complimentary_access'));
-    assert(!f.calls.some(x=>['billing_checkout','ops_mandate_activate','ops_paystack_confirm'].includes(x.action)));
+    await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
+    for(const name of ['Save mandate review','Record provider submission',
+      'Confirm provider acceptance and 30-day access'])
+      assert.equal(await f.page.getByRole('button',{name,exact:true}).count(),0);
+    assert(!f.calls.some(x=>['ops_mandate_review','ops_mandate_record_netcash_submission',
+      'ops_mandate_provider_confirm','billing_checkout'].includes(x.action)));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Admin can confirm publishing eligible saved retail stock without recording a payment',async()=>{
@@ -410,13 +389,13 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByRole('button',{name:'View private mandate (audited)'}).click();
     await f.page.getByRole('dialog').getByText('Account number: 12345678901').waitFor();
     const event=f.page.waitForEvent('download',{timeout:15000});
     await f.page.getByRole('dialog').getByRole('button',
-      {name:'Download confidential PDF for Netcash review'}).click();
+      {name:'Download historical mandate PDF'}).click();
     const downloaded=await event;
     assert.equal(downloaded.suggestedFilename(),'Teyza_R99_Mandate_Request_'+reference+'.pdf');
     assert(f.calls.some(v=>v.action==='ops_mandate_export'&&v.data.mandateId===reference));
@@ -425,46 +404,28 @@ async function main(){
     await f.page.locator('.ops-mandate-dialog').waitFor({state:'detached'});
     assert(!await f.page.content().then(content=>content.includes('12345678901')));
     await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
-    await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor();
+    await f.page.getByRole('heading',{name:'Historic Netcash mandate archive — read-only'}).waitFor();
     assert(!await f.page.content().then(content=>content.includes('12345678901')));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
-  await check('Admin logs the manual Netcash mandate receipt without collecting money or granting access',async()=>{
-    const reference='mandate_manual_qa',mandate={
-      mandateId:reference,status:'reviewed_pending_provider',
-      bankName:'FNB',branchCode:'250655',accountLast4:'8901',
-      shopAddress:'12 Market Street, Durban',firstDate:'2026-12-01',
-      collectionDay:1,amountCents:9900,termsVersion:'teyza-debit-request-v2',
-      acceptedAt:Date.UTC(2026,10,6),collectionActive:false,
-      terms:'R99 consent; no bank authentication yet.'
-    };
-    let submitted=false;
+  await check('Retired Netcash mandate cannot be submitted or granted fresh access in admin',async()=>{
+    const mandate={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_manual_qa',
+      bankName:'FNB',accountLast4:'8901',firstDate:'2026-12-01',
+      acceptedAt:Date.UTC(2026,10,6),status:'reviewed_pending_provider'};
     const f=await pageFor({api:async(route,body)=>{
       if(body.action==='ops_mandate_queue'){
-        await route.fulfill({json:{ok:true,mandates:[{sellerUid:'seller1',
-          ...mandate,status:submitted?'submitted_to_netcash':'reviewed_pending_provider'}]}});return true;
-      }
-      if(body.action==='ops_mandate_record_netcash_submission'){
-        submitted=true;
-        await route.fulfill({json:{ok:true,recorded:true,status:'submitted_to_netcash',collectionActive:false}});return true;
+        await route.fulfill({json:{ok:true,mandates:[mandate]}});return true;
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
-    await f.page.getByRole('button',{name:'Open account'}).first().click();
-    await f.page.getByRole('button',{name:'Record provider submission'}).waitFor();
-    await f.page.getByLabel('Netcash portal submission reference').fill('NC-PORTAL-071126-019');
-    await f.page.getByLabel('Submission method, date and note').fill(
-      'Uploaded to the secure Netcash business portal with signed PDF, 07 November 2026.');
-    await f.page.getByRole('checkbox',{name:/I submitted a provider-acceptable mandate/}).check();
-    await f.page.getByRole('button',{name:'Record provider submission'}).click();
-    await f.page.locator('#notice').getByText(/Mandate submission recorded/).waitFor();
-    const receipt=f.calls.find(v=>v.action==='ops_mandate_record_netcash_submission');
-    assert.equal(receipt.data.providerReference,'NC-PORTAL-071126-019');
-    assert.equal(receipt.data.confirmed,true);
-    assert(!f.calls.some(v=>['billing_checkout','ops_paystack_confirm','ops_mandate_activate'].includes(v.action)));
-    assert.deepEqual(f.errors,[]);
-    await f.context.close();
+    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open mandate'}).click();
+    await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
+    assert.equal(await f.page.getByRole('button',{name:'Record provider submission'}).count(),0);
+    assert.equal(await f.page.getByRole('button',{name:/Confirm provider acceptance/}).count(),0);
+    assert(!f.calls.some(x=>['ops_mandate_record_netcash_submission',
+      'ops_mandate_provider_confirm','ops_paystack_confirm'].includes(x.action)));
+    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
@@ -489,7 +450,7 @@ async function main(){
     }
     return false;
    }});
-   await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+   await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
    await f.page.getByRole('heading',{name:'Account closures and payment review'}).waitFor();
    await f.page.getByText('needs attention',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Open seller payment review'}).click();
