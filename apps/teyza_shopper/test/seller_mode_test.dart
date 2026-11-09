@@ -45,6 +45,15 @@ class SellerApi extends TeyzaMobileApi {
     };
   }
 }
+class ActivatedSellerApi extends SellerApi {
+  ActivatedSellerApi(super.session);
+  bool membershipPaid=false;
+  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async {
+    final result=await super.call(action,data);
+    return action=='seller_summary'?
+      {...result,'listingPaid':membershipPaid,'setupComplete':true}:result;
+  }
+}
 class PendingSellerApi extends SellerApi {
  PendingSellerApi(super.session);
  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
@@ -162,6 +171,26 @@ void main(){
     expect(find.text('Benefits for your shop'),findsOneWidget);
     expect(find.text('R99 / month'),findsNothing);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  });
+  testWidgets('Seller automatically recognises externally verified Paystack membership on app resume',(tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final session=SellerSession()..useSellerWorkspace();
+    final api=ActivatedSellerApi(SellerSession());
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,
+      enableBackgroundServices:false,initialArea:areas.first,
+      sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
+      catalogueLoader:()async=>[],directoryLoader:(_,__,___)async=>[])));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((call)=>call.action=='seller_summary'),isNotEmpty);
+    api.membershipPaid=true; // Only a later authenticated server response can grant selling access.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds:500));
+    expect(find.textContaining('Your verified Teyza membership is active'),findsOneWidget);
+    expect(api.calls.where((call)=>call.action=='billing_checkout'),isEmpty,
+      reason:'App recognises paid access but cannot initiate Paystack subscription.');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('A product-list error does not hide the seller membership introduction',(tester) async {
