@@ -255,6 +255,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='promote_checkout')D.fail(410,'New paid promotions are not currently offered.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
     if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
+    // Netcash cannot collect the subscription. Preserve historic requests and
+    // owner withdrawal, but reject new mandates and administrative provider
+    // acceptance/extension so a retired payment rail cannot grant fresh access.
+    if(['seller_mandate_submit','ops_mandate_review','ops_mandate_record_netcash_submission',
+        'ops_mandate_provider_confirm'].includes(action))
+      D.fail(410,'Netcash mandate collection is retired. Existing records remain available for secure review, but new collection requests are closed.');
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
