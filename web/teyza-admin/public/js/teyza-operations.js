@@ -103,13 +103,13 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+ function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone,s.sellerUid].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail,'UID '+s.sellerUid].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
 
  function mandateQueue(){
    const box=card('R99 monthly mandates — admin inbox',
      'These are preliminary consent requests. Obtain a Netcash-accepted signed paper or approved eMandate before submitting a debit batch.');
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
-     mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
+     mandates.map(m=>[(m.shopName||'Seller')+' · UID '+m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
        button('Open mandate',()=>choose(sellers.find(s=>s.sellerUid===m.sellerUid)||
          {sellerUid:m.sellerUid,shopName:m.shopName||'Seller'}))])));
@@ -243,7 +243,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
       if(status.canSell&&status.publicProductCount>0&&
           (status.savedDraftCount||0)<=status.publicProductCount)
-        review.append(el('p','These products are already published. There is no need to approve them again. Check their public-directory and nearby-location status below.','notice success'));
+        review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
       if(status.canSell&&((status.savedDraftCount||0)>(status.publicProductCount||0))){
         const form=el('form',undefined,'ops-form');
         field(form,'Reason for publishing saved seller products','reason','textarea');
@@ -263,8 +263,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     if(visibility){
       const details=el('div',undefined,'ops-visibility-diagnostic');
       details.append(el('h4','Shopper discovery and location check'),
-        el('p','Public directory eligibility: '+(visibility.directoryEligible?'Approved and active':'Not currently eligible')+
-          ' · Public-feed priced products: '+Number(visibility.publicProductCount||0)));
+        el('p','Expected public-directory eligibility: '+(visibility.directoryEligible?'Approved and active':'Not currently eligible')+
+          ' · Priced products stored in public record: '+Number(visibility.publicProductCount||0)));
       if(!visibility.hasValidPin){
         const problem=visibility.status==='address_changed'
           ?'The seller changed the shop address after setting the location. Save a new shop pin matching the updated address.'
@@ -279,6 +279,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
           ', '+Number(visibility.longitude).toFixed(5)+
           '. Customer results use the distance from their saved delivery location within the selected search radius.','notice success'));
       }
+      details.append(el('p','Stored records do not confirm what an older installed shopper app or outdated public endpoint actually displays. Match the seller UID before investigating search radius.','footnote'));
       review.append(details);
     }
     if(!status.sellerApproved){
