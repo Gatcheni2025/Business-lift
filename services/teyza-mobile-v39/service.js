@@ -95,7 +95,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       for(const item of added)tx.set(doc('teyzaDraftProducts/'+uid+'/items/'+item.id),item.record);
       if(next&&JSON.stringify(next)!==JSON.stringify(shop))tx.set(shopRef,{...next,updatedAt:clock()});
       return {addedIds:added.map(p=>p.id),alreadyAdded,publication:canPublish?'live':'private',
-        publicCount:canPublish?next?.productHighlights.length||0:0};
+        publicCount:canPublish&&account.category!=='wholesale'?next?.products?.length||0:0,
+        savedCount:entries.filter(p=>p.data?.ownerUid===uid&&p.data?.status==='draft').length};
     });
   }
   // Wholesale prices are never exposed in the anonymous shopper directory.
@@ -403,6 +404,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.canSell&&(publicShop?.sellingEnabled===true||publicShop?.catalogueEnabled===true),identityVerified:publication.approved,
+        publicProductCount:account.category==='wholesale'?0:publication.canSell?publicShop?.products?.length||0:0,
+        publicCatalogueAllowed:account.category!=='wholesale',
+        canPublishProducts:publication.canSell,
+        productPublicationReason:account.category==='wholesale'?'listing_only':!publication.approved?'seller_approval_pending':!publication.ready?'shop_setup_incomplete':!publication.hasListing?'selling_access_inactive':publicShop?.status!=='active'?'shop_not_active':
+          publicShop?.products?.length?'published':'not_published',
         verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         rating:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.rating:null,
