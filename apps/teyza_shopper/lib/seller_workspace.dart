@@ -234,7 +234,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           (result['listingPaid']==true||result['complimentaryAccess']==true||result['mandateAccessActive']==true)){
           await syncRange();
         }else{
-          setState(()=>rangeStatus='Your products are saved privately. Seller approval, completed shop setup and active R99 selling access are required to display prices to shoppers.');
+          setState(()=>rangeStatus='Your products are saved privately. Seller approval, completed shop setup and active selling eligibility are required to display prices to shoppers.');
         }
       }
     }catch(error){
@@ -249,7 +249,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(!mounted||uid!=widget.session.userId)return;
     if(saved==true){
       setState((){sellerTab=0;productsView=false;});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('R99 mandate saved. Waiting for Teyza admin review. No debit has been collected.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Shop eligibility information refreshed.')));
     }
     await refreshActivity();
   }
@@ -280,15 +280,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     });
     if(!verified){await openUpgrade(fromProductAction:true);return;}
     if(!active){
-      // Read the latest mandate state as well, so Start selling checks
-      // whether the R99 request is pending instead of assuming payment.
-      if(canOfferDirectMandate){
-        try{await mobile.call('seller_mandate_status');}
-        catch(e){
-          if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content:Text('Mandate status could not be verified: ${mobileError(e)}')));
-        }
-      }
+      // Review the current entitlement; payment is exclusively website-side.
       if(mounted&&uid==widget.session.userId)await openUpgrade(fromProductAction:true);
       return;
     }
@@ -536,7 +528,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
           body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
     if(shop?.category=='wholesale')businessTile(Icons.campaign_outlined,'Advertise to participating spaza shops',
-      'Use your R99 access to target opted-in spazas with moderated offers and invitations. No public wholesaler products.',
+      'Connect with opted-in spazas through moderated supplier offers and invitations. No public wholesaler products.',
       openSupplierAdvertising),
     if(shop?.category=='spaza')businessTile(Icons.campaign_outlined,'Supplier offers for my spaza',
       'Choose whether to receive private in-app offers from verified wholesalers.',
@@ -697,7 +689,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business access active':mandateAccess?'7-day mandate access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'R99 debit mandate':'Seller eligibility status')),
+            label:Text(listingPaid?'Business access active':mandateAccess?'Temporary access active':complimentaryAccess?'Temporary business access active':'Business eligibility status')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
