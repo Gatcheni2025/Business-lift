@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'account_deletion_page.dart';
 import 'seller_plan.dart';
+import 'seller_billing.dart';
 import 'wholesale_market.dart';
 import 'wholesale_connections.dart';
 import 'wholesale_advertising.dart';
@@ -542,9 +543,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'Choose whether to receive private in-app offers from verified wholesalers.',
       openSpazaSupplierOffers),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
-    businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Existing seller access active':mandateAccess?'Mandate-processing access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
-      ()=>openUpgrade()),
+    businessTile(Icons.receipt_long_outlined,'Subscription & statements',
+      listingPaid?'Verified Paystack membership · view next billing':complimentaryAccess?'Temporary access · view billing':mandateAccess?'Historical processing access · no debit collected':'Monthly R99 · view billing status',
+      ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        SellerBillingPage(session:widget.session,api:widget.mobileApi)))),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
