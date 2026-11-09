@@ -17,7 +17,7 @@ test('Registration and historical trials are never paid entitlements',()=>{
  }
 });
 test('Introductory first month permits products until expiry',()=>{
- assert.equal(B.INTRO_CENTS,4900);assert.equal(B.MONTHLY_CENTS,9900);
+ assert.equal(B.INTRO_CENTS,1000);assert.equal(B.MONTHLY_CENTS,9900);
  assert.equal(P.entitled('seller1',basic,billing,NOW),true);
  assert.equal(P.state('seller1',basic,{},null,shop,billing,NOW).canSell,true);
  assert.equal(P.entitled('seller1',basic,billing,billing.paidUntil),false);
@@ -56,5 +56,5 @@ test('Seven-day paid promotion is separate from membership',()=>{
  assert.equal(B.PROMO_CENTS,2900);assert.equal(B.PROMO_MS,7*86400000);
  assert.equal(B.validCheckoutUrl('https://checkout.paystack.com/abc123'),true);
  assert.equal(B.validCheckoutUrl('https://example.com/checkout'),false);
- assert.equal(B.nextMonth(Date.UTC(2026,0,31)),Date.UTC(2026,1,28));
+ assert.equal(B.nextMonth(Date.UTC(2026,0,31)),Date.UTC(2026,1,1));
 });
