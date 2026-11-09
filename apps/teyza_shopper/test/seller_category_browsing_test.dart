@@ -142,7 +142,11 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-profile-salon')),findsOneWidget);
     final product=find.text('Hair cream');
-    await tester.ensureVisible(product);await tester.pumpAndSettle();
+    final profile=find.byKey(const PageStorageKey<String>('shop-profile-salon'));
+    for(var n=0;n<14&&product.evaluate().isEmpty;n++){
+      await tester.drag(profile,const Offset(0,-220));
+      await tester.pumpAndSettle();
+    }
     expect(product,findsWidgets);
     expect(find.text('R25.00'),findsWidgets);
     expect(find.text('No published products yet'),findsNothing);
