@@ -15,6 +15,18 @@ Future<void> start(WidgetTester tester,List<Shop> shops) async {
 }
 
 void main(){
+  test('Sixteen approved spaza products appear within the saved delivery radius, never outside it',(){
+    final shop=Shop.fromJson({'id':'testSpaza','name':'Neighbourhood Spaza',
+      'shopCategory':'spaza','latitude':-29.7402,'longitude':30.992,
+      'products':[for(var n=0;n<16;n++){'id':'stock$n','name':'Product $n',
+        'category':'General Goods','priceCents':1000+n,'stock':5,'inStock':true}]});
+    const nearby=Area('KwaMashu','Durban',-29.7405,30.993);
+    const distant=Area('Johannesburg','Johannesburg',-26.2041,28.0473);
+    expect(shopMatchesArea(shop,nearby,radiusKm:22),isTrue);
+    expect(shopMatchesArea(shop,distant,radiusKm:22),isFalse);
+    expect(discoverShopProducts([shop],type:'spaza',limit:18),hasLength(16));
+    expect(shop.rangeProducts.every((p)=>p.priceCents>0&&p.inStock),isTrue);
+  });
   test('Product categories keep older names searchable',(){
     expect(teyzaProductCategory('Fresh'),'Fruit & Veg');
     expect(teyzaProductCategory('Dairy'),'Dairy & Eggs');
