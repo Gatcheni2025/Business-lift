@@ -581,7 +581,7 @@ test('Actual seller account approval stays approved when selfie or onboarding is
   assert.equal(summary.approvalChecks.selfieMatchesOnboarding,false);
   assert.equal(summary.approvalChecks.onboardingComplete,false);
   assert.equal(summary.approvalChecks.canSell,false);
-  assert.equal(summary.identityVerified,false);
+  assert.equal(summary.identityVerified,true,'A reviewed identity remains verified even if shop onboarding is incomplete');
   assert.equal(summary.publicProductCount,0);
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
