@@ -3,15 +3,15 @@
 const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
-const INTRO_CENTS=4900,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
-const SUBSCRIPTION_TERMS_VERSION='seller-r49-r99-2026-11';
+const INTRO_CENTS=1000,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
+const SUBSCRIPTION_TERMS_VERSION='seller-r10-r99-first-2026-11';
 const {recentAdmin}=require('./seller-experience');
 const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage','ops_paystack_confirm','ops_paystack_refund_confirm']);
+// First day of the following calendar month at 00:00 Africa/Johannesburg
+// (UTC+02:00, without daylight-saving changes). This is not a rolling 30-day plan.
 function nextMonth(ms) {
-  const d=new Date(ms),day=d.getUTCDate();
-  const first=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1,d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()));
-  const last=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
-  first.setUTCDate(Math.min(day,last));return first.getTime();
+  const local=new Date(ms+2*3600000);
+  return Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,1,-2);
 }
 function validCheckoutUrl(value) {
   try {const u=new URL(value);return u.protocol==='https:'&&u.hostname==='checkout.paystack.com';}
@@ -91,6 +91,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       }
     }
     const first=!isPromo&&billing?.introUsed!==true,amount=isPromo?PROMO_CENTS:first?INTRO_CENTS:MONTHLY_CENTS;
+    if(!isPromo&&nextMonth(now)-now<86400000)
+      D.fail(409,'Monthly renewal starts on the first day of the next month. New signups are paused during the final 24 hours to avoid charging twice in quick succession. Return on the first.');
     const reference=(isPromo?'TZP-':'TZM-')+crypto.randomBytes(13).toString('hex');
     const lockRef=doc('teyzaPaystackCheckoutLocks/'+uid+'_'+(isPromo?'promotion':'membership'));
     const newPayment=doc('teyzaPaystackPayments/'+reference);
@@ -128,8 +130,9 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       callback_url:webCheckout?'https://teyza.co.za/seller-subscriptions.html?payment=return':
         'https://www.teyza.co.za/?payment=return',
       metadata:{teyzaUid:uid,teyzaKind:isPromo?'promotion':'membership'}};
-    // Charge the exact initial amount once; schedule the R99 plan only after
-    // verification so the first debit and the later renewal remain distinct.
+    // Charge the R10 introduction (or R99 returning-member amount) once;
+    // first-of-month renewal is independently scheduled only after
+    // server-side Paystack verification and recurring consent.
     let result;
     try{
       result=await paystack('/transaction/initialize','POST',payload);
