@@ -238,15 +238,51 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
       const publishForm=parent=>{
         const form=el('form',undefined,'ops-form');
-        field(form,'Reason for publishing saved seller products','reason','textarea');
-        check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
+        // Validate explicitly so the admin sees why an empty/unchecked form
+        // did not submit. Native required-field blocking was silent here.
+        const reasonInput=field(form,'Reason for publishing saved seller products','reason','textarea');
+        reasonInput.required=false;reasonInput.minLength=15;
+        reasonInput.placeholder='Describe the verified seller and saved stock (minimum 15 characters)';
+        const confirmed=check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
+        confirmed.required=false;
+        const feedback=el('p','Add a review reason and tick the confirmation box before publishing.','ops-inline-feedback');
+        feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
+        form.append(feedback);
         submit(form,'Publish saved shop products',async fd=>{
           const reason=String(fd.get('reason')||'').trim(),sellerUid=d.seller.sellerUid;
-          if(reason.length<15)throw Error('Provide a meaningful publication reason of at least 15 characters.');
-          if(!confirm('Synchronise this UID’s saved products with the public catalogue? This does NOT approve a seller or record payment.'))return;
-          const result=await request('ops_catalogue_publish',{sellerUid,reason,confirmed:true});
-          await choose(selected);
-          message((result.publicProductCount||0)+' products now stored in this shop’s published record. Check the live shopper feed to confirm customer visibility.','success');
+          const report=(text,invalid=false)=>{
+            feedback.textContent=text;
+            feedback.className='ops-inline-feedback'+(invalid?' notice warning':'');
+          };
+          if(reason.length<15){
+            report('Enter a review reason of at least 15 characters before publishing.',true);
+            reasonInput.focus();return;
+          }
+          if(!confirmed.checked){
+            report('Tick the confirmation box to verify this exact seller UID and selling entitlement.',true);
+            confirmed.focus();return;
+          }
+          if(!confirm('Publish this UID’s saved products to the public catalogue? No seller approval or payment will be recorded.'))return;
+          report('Publishing the saved range for this seller UID…');
+          try{
+            const result=await request('ops_catalogue_publish',{sellerUid,reason,confirmed:true});
+            if(result.published!==true||!Number.isInteger(result.publicProductCount)||result.publicProductCount<1)
+              throw Error('The backend did not confirm any published products. The seller was not charged. Check the saved product validity and backend version.');
+            report(result.publicProductCount+' priced products saved. Checking what shoppers can retrieve…');
+            let feed=null,feedError=null;
+            try{feed=await inspectSellerPublicFeed(sellerUid);}
+            catch(error){feedError=error;}
+            await choose(selected);
+            if(feed?.found&&feed.shopperProductCount>0)
+              message(feed.shopperProductCount+' priced products verified in the live shopper feed for this exact UID. No payment was recorded.','success');
+            else if(feedError)
+              message(result.publicProductCount+' products stored, but live shopper-feed verification was unavailable. Refresh and use Check live shopper feed for this UID.','warning');
+            else
+              message(result.publicProductCount+' products stored, but the deployed shopper feed still returned zero priced products. Check backend deployment and seller UID.','error');
+          }catch(error){
+            report('Publication failed: '+(error?.message||'Unknown error')+'. No payment was collected.',true);
+            throw error;
+          }
         });
         parent.append(form);
       };
@@ -256,6 +292,12 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
         ' · Live-priced products: '+(status.publicProductCount||0)));
       if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
+      if(status.publishableDraftCount!==undefined){
+        review.append(el('p','Valid drafts ready to publish: '+Number(status.publishableDraftCount||0)+
+          ' · Drafts requiring correction: '+Number(status.invalidDraftCount||0),'footnote'));
+        if(status.invalidDraftCount>0)
+          review.append(el('p','Some saved products have invalid prices, stock, category or template details. These cannot be published until corrected in the seller app.','notice warning'));
+      }
       if(status.canSell&&status.publicProductCount>0&&
           (status.savedDraftCount||0)<=status.publicProductCount)
         review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
