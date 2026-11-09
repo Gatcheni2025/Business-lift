@@ -223,10 +223,10 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
    await saveUpload(bucket,identityPath,await encryptSelfie(jpeg),{contentType:'application/octet-stream',resumable:false,metadata:{cacheControl:'private,no-store'}});
   }
   const detailsEncrypted=(await encryptSelfie(Buffer.from(JSON.stringify(values)))).toString('base64');
-  return db.runTransaction(async tx=>{
-   const [h,v,a,idNow,setupNow,verificationNow,shopNow]=await Promise.all([
+  const result=await db.runTransaction(async tx=>{
+   const [h,v,a,idNow,setupNow,verificationNow,shopNow,billingNow]=await Promise.all([
     tx.get(head),tx.get(versionRef),tx.get(doc('teyzaSellerAccounts/'+uid)),tx.get(doc('teyzaSellerIdentity/'+uid)),
-    tx.get(doc('teyzaSellerOnboarding/'+uid)),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaPublicShops/'+uid))]);
+    tx.get(doc('teyzaSellerOnboarding/'+uid)),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaPublicShops/'+uid)),tx.get(doc('teyzaBilling/'+uid))]);
    if(data.identityEvidenceId&&(!idNow.exists||!current(idNow.data(),uid,clock)||idNow.data().evidenceId!==data.identityEvidenceId))D.fail(409,'Your ID attachment changed. Refresh and review the form.');
    const owner=D.seller(a.exists?a.data():null,uid);
    requireApprovedSeller(uid,owner,setupNow.exists?setupNow.data():null,
@@ -240,8 +240,22 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     detailsEncrypted,identityPath,identityExpiresAt,identityEvidenceId:evidenceId,
     acceptedAt:clock(),termsVersion:VERSION,terms:text,fingerprint,
     providerStatus:'not_configured',collectionActive:false};
+   if(billingNow.exists&&billingNow.data().ownerUid!==uid)D.fail(409,'Billing ownership mismatch.');
+   const earlier=h.exists?h.data():null;
+   if(earlier&&!['withdrawn','needs_correction'].includes(earlier.status))
+     D.fail(409,'An existing mandate is still being processed. Refresh or withdraw it.');
+   const firstStart=billingNow.exists&&Number.isFinite(billingNow.data().mandateAccessFirstStartedAt)?
+     billingNow.data().mandateAccessFirstStartedAt:clock();
+   const until=firstStart+PROCESSING_MS;
+   if(until>clock())tx.set(doc('teyzaBilling/'+uid),{ownerUid:uid,
+     mandateAccessStatus:'active',mandateAccessKind:'processing_7d',
+     mandateAccessFirstStartedAt:firstStart,mandateAccessMandateId:requestId,
+     mandateAccessUntil:until,mandateAccessStartedAt:clock(),updatedAt:clock()},{merge:true});
    tx.set(head,record);tx.set(versionRef,record);tx.set(doc('teyzaMandateAudit/'+crypto.randomUUID()),{actorUid:uid,action:'sign',mandateId:requestId,createdAt:clock(),termsVersion:VERSION,fingerprint});return {mandate:publicMandate(record)};
   });
+  try{await synchronize(uid,{publishIntent:true});}
+  catch(_){/* Mandate saved; owner may retry product sync. */}
+  return result;
  }
  return {execute};
 }
