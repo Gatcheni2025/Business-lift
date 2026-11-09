@@ -140,6 +140,38 @@ test('Admin distinguishes approved seller drafts lacking publication from billed
  assert.equal(d.sellingStatus.savedDraftCount,1);
  assert.equal(d.shopperVisibility.catalogueEnabled,false);
 });
+test('Published catalogue snapshot is not mistaken for saved draft items or actual shopper products',async()=>{
+  const f=setup();
+  f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',name:'Test Shop',products:[],catalogueEnabled:false});
+  f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',adminComplimentaryStatus:'active',
+    adminComplimentaryReason:'Verified seller publication test',adminComplimentaryBy:'admin1',
+    adminComplimentaryUntil:now+86400000});
+  f.db.records.set('teyzaCatalogueSubmissions/seller1',{ownerUid:'seller1',status:'published',
+    products:Array.from({length:16},(_,i)=>({id:'item'+i,name:'Product '+i,priceCents:1500,stock:3}))});
+  const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(d.shopperVisibility.directoryEligible,true);
+  assert.equal(d.shopperVisibility.entitlementActive,true);
+  assert.equal(d.shopperVisibility.submittedCatalogueCount,16);
+  assert.equal(d.shopperVisibility.submittedCatalogueStatus,'published');
+  assert.equal(d.shopperVisibility.submittedCatalogueOwnerMatchesSeller,true);
+  assert.equal(d.sellingStatus.savedDraftCount,0);
+  assert.equal(d.shopperVisibility.storedProductCount,0);
+  assert.equal(d.shopperVisibility.publicProductCount,0);
+  assert.equal(d.shopperVisibility.publicFeedReason,'no_saved_products');
+});
+test('Admin cannot claim success or audit publication when synchronisation finds zero valid products',async()=>{
+  const db=new FakeDB({
+    'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',approvalStatus:'approved',shopName:'Test Shop'},
+    'teyzaPublicShops/seller1':{sellerUid:'seller1',status:'active',products:[],catalogueEnabled:false},
+    'teyzaBilling/seller1':{ownerUid:'seller1',adminComplimentaryStatus:'active',
+      adminComplimentaryReason:'Verified seller publication test',adminComplimentaryBy:'admin1',
+      adminComplimentaryUntil:now+86400000}
+  });
+  const svc=createOperations({db,clock:()=>now,rate:async()=>{},synchronize:async()=>({publication:'live',publicCount:0,savedCount:0})});
+  await rejects(svc.execute(admin,'ops_catalogue_publish',{sellerUid:'seller1',
+    reason:'Review confirmed matching seller but no drafted items',confirmed:true}),409);
+  assert(![...db.records.values()].some(x=>x.action==='ops_catalogue_publish'));
+});
 test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
  const f=setup(),input={sellerUid:'seller1',days:7,
   reason:'Approved small business community launch demonstration',confirmed:true};
