@@ -7,11 +7,12 @@ const INTRO_CENTS=1000,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
 const SUBSCRIPTION_TERMS_VERSION='seller-r10-r99-first-2026-11';
 const {recentAdmin}=require('./seller-experience');
 const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage','ops_paystack_confirm','ops_paystack_refund_confirm']);
-// First day of the following calendar month at 00:00 Africa/Johannesburg
-// (UTC+02:00, without daylight-saving changes). This is not a rolling 30-day plan.
+// First day of the following calendar month at 00:00 UTC (02:00 in South Africa).
+// Keep the Paystack monthly renewal anchor on the 1st in the gateway's UTC
+// calendar as well as the seller's South African calendar.
 function nextMonth(ms) {
   const local=new Date(ms+2*3600000);
-  return Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,1,-2);
+  return Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,1,0,0,0);
 }
 function validCheckoutUrl(value) {
   try {const u=new URL(value);return u.protocol==='https:'&&u.hostname==='checkout.paystack.com';}
