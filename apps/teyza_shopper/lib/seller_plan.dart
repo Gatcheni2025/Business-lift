@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
-import 'seller_billing.dart';
 
 // These constants preserve the existing distribution configuration.
 // Payment checkout is never initiated within this app, including direct APKs.
 const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
-final Uri teyzaSellerMembershipPage=Uri.https('teyza.co.za','/seller-subscriptions.html');
 bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>false;
 
 class SellerPlanPage extends StatelessWidget {
@@ -57,9 +55,7 @@ class SellerPlanPage extends StatelessWidget {
           const Text('Benefits depend on availability and eligibility.',style:TextStyle(fontSize:12,color:Color(0xFF657B6E))),
         ]))),
       const SizedBox(height:18),
-      SellerBillingCard(session:session,api:api),
-      const SizedBox(height:16),
-      const Text('Subscriptions are processed through Teyza’s secure website using Paystack card authorisation. This app does not collect bank details, submit debit-order mandates or start a subscription.',
+      const Text('Your available business tools reflect your verified account eligibility. No payments or subscriptions can be initiated in this app.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B))),
     ])),
   );

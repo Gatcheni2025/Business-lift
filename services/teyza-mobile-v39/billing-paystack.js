@@ -65,6 +65,15 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     if(data.checkoutChannel!=null&&!['web','direct'].includes(data.checkoutChannel))
       D.fail(422,'Choose a supported checkout channel.');
     const webCheckout=data.checkoutChannel==='web';
+    // Prevent someone from paying with a stale browser session, a guessed UID
+    // or a reused email address. Firebase Auth UID is the only account key.
+    // Web customers must have signed in again within the past 15 minutes.
+    if(webCheckout){
+      if(data.confirmedSellerUid!==uid)D.fail(403,'Confirm the exact signed-in shop account before paying.');
+      const signedIn=Number(auth.auth_time),age=clock()/1000-signedIn;
+      if(!Number.isFinite(signedIn)||age<0||age>900)
+        D.fail(401,'For your protection, sign out and sign in again before paying.');
+    }
     // The website channel is for current, fully verified owners only:
     // legacy account-level approval is not sufficient proof of SMS/ID/selfie.
     if(webCheckout&&setup?.requiredVersion!==2)
@@ -128,7 +137,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       amountCents:old.amountCents,introductory:old.kind==='intro',monthlyCents:MONTHLY_CENTS,
       promotionDays:isPromo?7:null,requiresReturnVerification:true,alreadyStarted:true};}
     const payload={email:auth.email,amount,currency:'ZAR',channels:['card'],reference,
-      callback_url:webCheckout?'https://teyza.co.za/seller-subscriptions.html?payment=return':
+      callback_url:webCheckout?'https://teyza.co.za/pay?payment=return':
         'https://www.teyza.co.za/?payment=return',
       metadata:{teyzaUid:uid,teyzaKind:isPromo?'promotion':'membership'}};
     // Charge the R10 introduction (or R99 returning-member amount) once;

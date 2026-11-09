@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#064346"><meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Secure business payments | Teyza</title>
+<meta name="description" content="Securely sign in to the verified Teyza business account you own, review membership charges and manage your Paystack card subscription.">
+<link rel="icon" href="/assets/app/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://teyza.co.za/pay">
+<link rel="stylesheet" href="/assets/app-first.css">
+<style>
+.pay-site{margin:0;background:#f2f6f3;color:#103f41;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.pay-top{background:#063f42;color:#fff}.pay-head{max-width:1110px;margin:auto;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.pay-brand img{width:146px;height:auto}.pay-head a{color:#fff;text-decoration:none}.pay-head a:focus-visible,.pay-site button:focus-visible,.pay-site input:focus-visible{outline:3px solid #b8eb6c;outline-offset:3px}
+.pay-head nav{display:flex;gap:22px;font-size:14px;font-weight:650}
+.pay-hero{padding:58px 24px 70px;background:linear-gradient(130deg,#063f42,#05645e);color:#fff}
+.pay-hero-inner{max-width:1010px;margin:auto}.pay-label{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#c1f38e;font-weight:800}
+.pay-hero h1{font-size:clamp(2.35rem,5vw,4.4rem);line-height:1.05;letter-spacing:-.05em;margin:14px 0;max-width:670px}
+.pay-hero p{max-width:660px;color:#e1f3eb;line-height:1.7}
+.pay-wrap{max-width:1080px;margin:-32px auto 65px;padding:0 20px;position:relative;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.9fr);gap:24px}
+.pay-panel,.pay-info{background:white;border:1px solid #dce8e0;border-radius:22px;box-shadow:0 16px 38px rgba(1,50,46,.07);padding:clamp(19px,3vw,34px)}
+.pay-panel h2,.pay-info h2{margin:0 0 10px;font-size:24px;letter-spacing:-.025em}
+.pay-panel p,.pay-info p,.pay-info li{color:#47635b;line-height:1.6}
+.pay-inputs{display:grid;grid-template-columns:1fr;gap:15px;padding:10px 0}
+.pay-inputs label{display:grid;gap:7px;font-weight:700;color:#24514b}
+.pay-inputs input{width:100%;min-width:0;padding:14px;border:1px solid #b8d0c7;border-radius:12px;font:inherit;box-sizing:border-box}
+.pay-actions{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+.pay-site button,.pay-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;padding:13px 19px;border:1px solid #056357;border-radius:12px;color:#fff;background:#066c60;font:inherit;font-weight:750;cursor:pointer}
+.pay-site button:disabled{opacity:.5;cursor:not-allowed}
+.pay-site .secondary{color:#06594e;background:white;border:1px solid #b6d3c4}
+.pay-site .text{color:#06594e;background:transparent;border:0;text-decoration:underline;padding:8px}
+.pay-account{border:1px solid #d7e8dc;padding:14px;border-radius:14px;background:#f5faf6}
+.pay-account dl{display:grid;grid-template-columns:132px 1fr;gap:9px;margin:8px 0}
+.pay-account dt{color:#637f74}.pay-account dd{margin:0;overflow-wrap:anywhere;font-weight:720}
+.pay-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:17px 0}
+.pay-metric{background:#eff8f1;padding:17px;border-radius:14px}
+.pay-metric strong{font-size:29px;display:block}.pay-metric span{color:#516f65;font-size:12px}
+.pay-check{display:flex;gap:11px;align-items:flex-start;padding:11px 0;color:#22453f;line-height:1.5}
+.pay-check input{width:20px;height:20px;flex:none;margin-top:3px}
+.pay-status{padding:15px;border-radius:13px;background:#e8f1ed;min-height:36px;font-weight:640;color:#164b40}
+[data-status="error"] .pay-status{background:#fff2ee;color:#9a301e}
+[data-status="warning"] .pay-status{background:#fff5e0;color:#916004}
+[data-status="success"] .pay-status{background:#e8f8ec;color:#126b3c}
+.pay-note{font-size:13px;color:#637b70}.pay-info ul{padding-left:21px}
+.pay-divider{height:1px;background:#e2eee5;margin:22px 0}
+.pay-foot{max-width:1050px;margin:0 auto 42px;text-align:center;padding:0 22px;color:#64766d;font-size:13px}
+[hidden]{display:none!important}
+@media(max-width:780px){.pay-wrap{grid-template-columns:1fr;margin-top:-22px}.pay-hero{padding:42px 24px 57px}.pay-account dl{grid-template-columns:100px 1fr}.pay-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body class="pay-site">
+<header class="pay-top"><div class="pay-head"><a class="pay-brand" href="/" aria-label="Teyza home"><img src="/assets/app/wordmark-light.svg" alt="Teyza" width="146" height="44"></a><nav aria-label="Website navigation"><a href="/">Home</a><a href="/for-shop-owners.html">For businesses</a><a href="/support.html">Support</a></nav></div></header>
+<section class="pay-hero"><div class="pay-hero-inner"><span class="pay-label">Teyza secure business account</span><h1>Membership payments.<br>Verified to your shop.</h1><p>Sign in to the exact business account you own. Review your subscription before any payment. Your Teyza seller login and verified shop registration determine where access is granted.</p></div></section>
+<main class="pay-wrap" id="teyza-web-membership">
+<section class="pay-panel" aria-labelledby="pay-title"><h2 id="pay-title">Secure seller sign-in</h2>
+<div id="webLogin">
+<p>Use the original Google, Apple or existing email-password login for your registered spaza shop, wholesale business or other Teyza business. A shared contact email is not permission to pay for another Firebase account.</p>
+<form id="webEmailForm" class="pay-inputs">
+<label>Email address<input id="webEmail" type="email" maxlength="254" autocomplete="username" required></label>
+<label>Password<input id="webPassword" type="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in securely</button>
+</form>
+<div class="pay-actions"><button type="button" class="secondary" id="webGoogle">Continue with Google</button><button type="button" class="secondary" id="webApple">Continue with Apple</button></div>
+</div>
+<div id="webAccount" hidden>
+<div class="pay-account">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong>Account verified with Firebase</strong><button id="webLogout" type="button" class="text">Switch account</button></div>
+<dl><dt>Shop name</dt><dd id="webShopName">Checking…</dd><dt>Business type</dt><dd id="webShopType">Checking…</dd><dt>Signed-in email</dt><dd id="webAccountEmail"></dd><dt>Seller account ID</dt><dd id="webShopUid"></dd></dl>
+</div>
+<p id="webAccess" role="status">Checking shop approval and payment eligibility…</p>
+<div class="pay-grid"><div class="pay-metric"><span>First charge, if eligible</span><strong id="webPrice">R10</strong><small id="webPriceDetail">Introductory period until month-end</small></div><div class="pay-metric"><span>Monthly renewal</span><strong>R99.00</strong><small>First of each next calendar month (South Africa)</small></div></div>
+<section aria-label="Your billing statement" class="pay-account" style="margin:12px 0 19px">
+<strong>Your subscription statement</strong>
+<dl>
+<dt>Subscription</dt><dd id="webBillingStatus">Checking Paystack status…</dd>
+<dt>Paid through</dt><dd id="webPaidThrough">—</dd>
+<dt>Next scheduled bill</dt><dd id="webNextBill">Not scheduled</dd>
+<dt>Amount due</dt><dd id="webAmountDue">No verified amount due</dd>
+</dl>
+<div class="pay-divider"></div>
+<strong>Membership payment history</strong><div id="webPaymentHistory" aria-live="polite"><p class="pay-note">Sign in to see your payment history.</p></div>
+</section>
+<p class="pay-note">The R10 introduction is only for eligible first-time customers. Returning members may pay R99 immediately. Signups close during the last 24 hours before the new monthly billing cycle. No charge happens merely by signing in.</p>
+<label class="pay-check"><input id="webOwnShop" type="checkbox"><span>I recognise the shop name and exact seller account shown above. I am the authorised owner of this account.</span></label>
+<label class="pay-check"><input id="webTerms" type="checkbox"><span>I authorise the displayed first card payment (R10 if eligible, otherwise R99) and recurring R99 Paystack card charges on the first of the following months until cancelled. I understand this is a recurring subscription.</span></label>
+<div class="pay-actions">
+<button type="button" id="webCheckout" disabled>Continue to secure payment</button>
+<button type="button" class="secondary" id="webConfirm" hidden>Check payment confirmation</button>
+<button type="button" class="secondary" id="webManage" hidden>Manage / cancel existing subscription</button>
+<button type="button" class="secondary" id="webRefresh">Refresh account status</button>
+<button type="button" class="secondary" id="webVerifyEmail" hidden>Verify email</button>
+</div>
+</div>
+<div id="webCheckoutStatus" class="pay-status" aria-live="polite" role="status">Loading secure website payment access…</div>
+<div class="pay-divider"></div>
+<p class="pay-note">The Paystack card checkout opens only after a fresh login and verified seller identity. Teyza never takes your card PIN or OTP on this page. A previous Netcash mandate is not Paystack authorisation and will not be charged or migrated.</p>
+</section>
+<aside class="pay-info"><h2>How we protect your payment</h2><ul>
+<li><strong>Correct business account:</strong> the payment attaches to your signed-in Firebase UID, never a typed email or URL parameter.</li>
+<li><strong>Verified seller:</strong> Teyza checks seller registration, selfie approval, phone OTP and shop setup on the server.</li>
+<li><strong>Secure checkout:</strong> your card details are entered only on Paystack's hosted payment page.</li>
+<li><strong>Confirmed payments:</strong> access is updated only after Paystack verifies the reference, merchant amount and authenticated seller UID.</li>
+<li><strong>Cancel:</strong> manage an active subscription using the secured Paystack management link after signing in.</li>
+</ul><div class="pay-divider"></div><p><strong>Need help?</strong> Contact <a href="mailto:support@teyza.co.za">support@teyza.co.za</a> with your shop name and a payment reference. Never send a password, OTP or card number.</p>
+<p class="pay-note">The payment system remains unavailable until live Paystack activation and regulatory/store policy review are completed.</p></aside>
+</main>
+<footer class="pay-foot">© 2026 TEYZA SA (PTY) LTD · Registered in South Africa · <a href="/support.html">Support</a> · <a href="/seller-subscriptions.html">Membership details</a></footer>
+<script type="module" src="/js/seller-web-billing.mjs"></script>
+</body></html>
