@@ -64,6 +64,30 @@ void main(){
     reopened.useSellerWorkspace();expect(reopened.sellerWorkspace,isFalse);
     reopened.dispose();client.close();
   });
+  test('Shopper selection remains UID-bound and survives reopening without seller permissions',() async{
+    final store=MemoryStore();
+    final client=MockClient((r) async=>r.url.host=='securetoken.googleapis.com'?refreshed():
+      r.url.path.endsWith('signInWithPassword')?jsonReply(login):profile());
+    final session=ShopperSession(client:client,store:store);
+    await session.signIn('user@example.test','password123');
+    session.useSellerWorkspace();
+    expect(session.sellerWorkspace,isTrue);
+    session.useShopperWorkspace();
+    await session.freshIdToken();
+    expect(session.sellerWorkspace,isFalse);
+    expect(session.workspaceChosen,isTrue);
+    expect(store.values['teyza_workspace_choice_uid'],'user1');
+    expect(store.values['teyza_seller_workspace_uid'],'');
+    session.dispose();
+    final restored=ShopperSession(client:client,store:store);
+    await restored.restore();
+    expect(restored.workspaceChosen,isTrue);
+    expect(restored.sellerWorkspace,isFalse);
+    await restored.signOut();
+    expect(restored.workspaceChosen,isFalse);
+    expect(store.values,isEmpty);
+    restored.dispose();client.close();
+  });
   test('A saved seller view for a different account never follows a restored shopper',() async{
     final store=MemoryStore()..values.addAll({'teyza_refresh':'refresh','teyza_seller_workspace_uid':'other-owner'});
     final client=MockClient((r) async=>r.url.host=='securetoken.googleapis.com'?refreshed():profile());
