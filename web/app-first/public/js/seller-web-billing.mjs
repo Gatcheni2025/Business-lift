@@ -1,6 +1,6 @@
 // Teyza website-only seller subscription checkout.
 // Never embed a Paystack secret here; the Firebase service owns all amounts and verification.
-export const TERMS_VERSION='seller-r49-r99-2026-11';
+export const TERMS_VERSION='seller-r10-r99-first-2026-11';
 export const SERVICE_URL='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 const firebaseConfig={
   apiKey:'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
@@ -19,7 +19,7 @@ export function backendReady(data){
     (parts[0]>3||(parts[0]===3&&parts[1]>=25));
   return Boolean(data?.ok===true&&version&&data.approvalRequired===true&&
     data.sellerApprovalBeforeCheckout===true&&data.paystackCheckoutAvailable===true&&
-    data.billingMode==='paystack_checkout'&&data.introductoryFirstMonthCents===4900&&
+    data.billingMode==='paystack_checkout'&&data.introductoryFirstMonthCents===1000&&
     data.subscriptionMonthlyCents===9900);
 }
 export function eligibility(summary,emailVerified,healthReady){
@@ -32,7 +32,7 @@ export function eligibility(summary,emailVerified,healthReady){
     return {eligible:false,message:'Complete mobile OTP verification and seller onboarding before subscribing.'};
   if(!emailVerified)return {eligible:false,message:'Verify the email address linked to this same seller account before paying.'};
   if(!healthReady)return {eligible:false,message:'Secure website subscription checkout is not activated on Teyza yet. No payment can be taken here.'};
-  return {eligible:true,message:summary.introEligible===false?'Your next membership is R99, then R99 monthly.':'Your first eligible month is R49, then R99 monthly.'};
+  return {eligible:true,message:summary.introEligible===false?'Your next membership is R99, then R99 monthly.':'R10 today for access until month-end, then R99 on the first of each following month.'};
 }
 const receiptKey=uid=>'teyza_website_checkout_v1_'+uid;
 async function startup(){
@@ -46,8 +46,8 @@ async function startup(){
     set('webLogin',!logged);set('webAccount',logged);
     $('webAccountEmail').textContent=user?.email||'Signed-in seller';
     $('webAccess').textContent=decision.message;
-    $('webPrice').textContent=summary?.introEligible===false?'R99':'R49';
-    $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'First eligible month, then R99 monthly';
+    $('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
+    $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
     set('webVerifyEmail',logged&&user?.emailVerified!==true&&Boolean(user?.email));
     set('webManage',logged&&Boolean(summary?.listingPaid));
     set('webConfirm',logged&&Boolean(readReceipt(user?.uid)));
@@ -121,7 +121,7 @@ async function startup(){
     pending=true;render();view('Preparing a secure, one-time Paystack checkout…');
     try{
       const result=await post('billing_checkout',{checkoutChannel:'web',recurringConsent:true,termsVersion:TERMS_VERSION});
-      if(!validCheckoutUrl(result.checkoutUrl)||!validReceipt(result.reference)||![4900,9900].includes(result.amountCents)||
+      if(!validCheckoutUrl(result.checkoutUrl)||!validReceipt(result.reference)||![1000,9900].includes(result.amountCents)||
         result.monthlyCents!==9900)throw Error('Checkout details failed validation. Nothing was opened.');
       saveReceipt(user.uid,result.reference);
       window.location.assign(result.checkoutUrl);
