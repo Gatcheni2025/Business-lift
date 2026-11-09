@@ -49,6 +49,8 @@ class GradleDownloadTests(unittest.TestCase):
         # A settings-only init hook still downloads from the broken redirect.
         init_script=Path(__file__).with_name("ci-kotlin-mirror.init.gradle").read_text()
         self.assertIn("gradle.beforeProject",init_script)
+        self.assertIn("if (project.name == 'camera_android_camerax')",init_script,
+            "Flutter included builds enforce settings-only repositories")
         self.assertIn("teyzaCIKotlinCompilerProjectMirror",init_script)
         self.assertIn("includeGroup('org.jetbrains.kotlin')",init_script)
         self.assertIn("maven.aliyun.com/repository/central",init_script)
