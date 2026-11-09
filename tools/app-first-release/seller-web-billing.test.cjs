@@ -7,7 +7,7 @@ test('Website merchant readiness fails closed for old production and incomplete 
  const {backendReady}=await service();
  const ready={ok:true,version:'3.25.0',approvalRequired:true,
   sellerApprovalBeforeCheckout:true,paystackCheckoutAvailable:true,
-  billingMode:'paystack_checkout',introductoryFirstMonthCents:4900,subscriptionMonthlyCents:9900};
+  billingMode:'paystack_checkout',introductoryFirstMonthCents:1000,subscriptionMonthlyCents:9900};
  assert.equal(backendReady({...ready,version:'3.20.0'}),false);
  assert.equal(backendReady({...ready,paystackCheckoutAvailable:false}),false);
  assert.equal(backendReady({...ready,sellerApprovalBeforeCheckout:undefined}),false);
@@ -37,24 +37,25 @@ test('Client refuses wrong checkout host and non-Teyza payment references',async
  assert.equal(validReceipt('TZP-'+ 'f'.repeat(26)),false);
  assert.equal(validReceipt('TZM-a'),false);
 });
-test('Website seller membership is a debit-order mandate form, not Paystack checkout',()=>{
+test('Website seller membership uses a gated Paystack card checkout, never a bank mandate form',()=>{
  const html=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
- const js=fs.readFileSync(path.join(web,'js/seller-debit-order.mjs'),'utf8');
- for(const id of ['teyza-web-membership','mandateEmailForm','mandateGoogle','mandateApple',
-   'mandateBank','mandateBranch','mandateAccountNumber','mandateDate','mandateTerms',
-   'mandateConsent','mandateIdentityConsent','mandateSign','mandateStatus']){
-  assert(html.includes('id="'+id+'"'),'Missing mandate form '+id);
+ const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple',
+   'webPrice','webTerms','webCheckout','webCheckoutStatus','webManage','webConfirm']){
+  assert(html.includes('id="'+id+'"'),'Missing secure website billing element '+id);
  }
- assert(html.includes('seller-debit-order.mjs'));
- assert(!html.includes('src="/js/seller-web-billing.mjs"'));
- assert(!html.includes('Pay securely with Paystack'));
- assert(js.includes("seller_mandate_submit")&&js.includes("seller_mandate_status"));
- assert(js.includes('getIdToken()')&&js.includes('9900'));
- assert(!js.includes("billing_checkout")&&!js.includes("promote_checkout"));
+ assert(html.includes('src="/js/seller-web-billing.mjs"'));
+ assert(html.includes('R10 introductory')||html.includes('R10 initial'));
+ assert(html.includes('R99'));
+ assert(html.includes('Pay securely with Paystack'));
+ assert(!html.includes('id="mandateAccountNumber"')&&!html.includes('id="mandateSign"'));
+ assert(!html.includes('src="/js/seller-debit-order.mjs"'));
+ assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
+ assert(js.includes('getIdToken()')&&js.includes('1000')&&js.includes('9900'));
  assert(!html.includes('sk_live_')&&!js.includes('sk_live_'));
  assert(!html.includes('sk_test_')&&!js.includes('sk_test_'));
 });
-test('Bank branch codes must come from the backend list and monthly consent cannot be bypassed',async()=>{
+test('Archived mandate module still validates historical bank consent but is not linked from checkout',async()=>{
  const {bankBranch,canSignMandate,mandateAmountCents}=await import(path.join(web,'js/seller-debit-order.mjs'));
  assert.equal(mandateAmountCents,9900);
  assert.equal(bankBranch([{name:'FNB',branchCode:'250655'}],'FNB'),'250655');

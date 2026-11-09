@@ -31,9 +31,9 @@ for p in PUBLIC.glob('*.html'):
  assert page.meta.get('og:image')=='https://teyza.co.za/assets/app/social-preview.jpg'
  if p.name=='seller-subscriptions.html':
   # Seller debit-order mandates require authenticated owner consent.
-  assert 'id="mandateEmailForm"' in text and 'id="mandateSign"' in text
-  assert 'seller-debit-order.mjs' in text
-  assert 'id="webCheckout"' not in text
+  assert 'id="webEmailForm"' in text and 'id="webCheckout"' in text
+  assert 'seller-web-billing.mjs' in text
+  assert 'id="mandateSign"' not in text
   assert not any(s in text for s in ['data-open-register','landing-auth.js','auth=register']),p.name
  else:
   assert not any(s in text for s in ['data-open-register','landing-auth.js','<form','auth=register']),p.name

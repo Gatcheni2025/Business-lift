@@ -245,13 +245,22 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
     // Mandate signing is not payment or permission to activate product selling.
-    // Seller Paystack membership checkout is retired. Legacy verification /
-    // cancellation remains available for existing contracts; Paystack order
-    // payments for physical shopper purchases remain completely independent.
-    if(action==='billing_checkout'||action==='promote_checkout')D.fail(410,
-      'New seller Paystack subscriptions are closed. Complete the R99 debit-order mandate on the Teyza website.');
+    // Website-only seller billing is an independently reviewed rollout. Leave it
+    // disabled until the operator has verified the plan, consent terms, webhook
+    // and mobile-store policy. Physical-goods checkout remains independent.
+    if(action==='billing_checkout' && process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
+      D.fail(503,'Seller website checkout is not enabled. No payment has been initiated.');
+    if(action==='billing_checkout' && data.checkoutChannel!=='web')
+      D.fail(422,'Seller subscriptions can be purchased only through the approved Teyza website.');
+    if(action==='promote_checkout')D.fail(410,'New paid promotions are not currently offered.');
     if(billingCheckout.actions.has(action))return sellerBilling.execute(auth,action,data);
     if(orderPaystack.actions.has(action))return shopperOrderPayments.execute(auth,action,data);
+    // Netcash cannot collect the subscription. Preserve historic requests and
+    // owner withdrawal, but reject new mandates and administrative provider
+    // acceptance/extension so a retired payment rail cannot grant fresh access.
+    if(['seller_mandate_submit','ops_mandate_review','ops_mandate_record_netcash_submission',
+        'ops_mandate_provider_confirm'].includes(action))
+      D.fail(410,'Netcash mandate collection is retired. Existing records remain available for secure review, but new collection requests are closed.');
     if(mandate.actions.has(action))return sellerMandate.execute(auth,action,data);
     if(adminUsers.actions.has(action))return adminUserManagement.execute(auth,action,data);
     if(operations.actions.has(action))return adminOperations.execute(auth,action,data);
