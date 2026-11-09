@@ -412,7 +412,7 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
-    await f.page.getByRole('button',{name:'View complete private mandate (audited)'}).click();
+    await f.page.getByRole('button',{name:'View private mandate (audited)'}).click();
     await f.page.getByRole('dialog').getByText('Account number: 12345678901').waitFor();
     const event=f.page.waitForEvent('download',{timeout:15000});
     await f.page.getByRole('dialog').getByRole('button',
