@@ -134,8 +134,18 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    // the unauthenticated public directory endpoint.
    const pin=P.locationFor(target,account,location,shop,clock());
    const directoryEligible=publication.live&&shop?.sellerUid===target&&shop?.status==='active';
-   const publicItems=directoryEligible&&P.eligible(target,account,billing,clock())&&
-      account.category!=='wholesale'?(Array.isArray(shop?.products)?shop.products:[]):[];
+   const entitlementActive=P.eligible(target,account,billing,clock());
+   const storedProducts=Array.isArray(shop?.products)?shop.products:[];
+   const storedHighlights=Array.isArray(shop?.productHighlights)?shop.productHighlights:[];
+   const publicItems=directoryEligible&&entitlementActive&&
+      account.category!=='wholesale'?storedProducts:[];
+   const savedDraftCount=draftPage?draftPage.docs.filter(x=>x.data().ownerUid===target&&x.data().status==='draft').length:null;
+   // Mirrors the public directory's eligibility rules, not a live endpoint fetch.
+   const publicFeedReason=account.category==='wholesale'?'wholesale_listing_only':
+     !directoryEligible?'seller_not_public':
+     !entitlementActive?'selling_entitlement_inactive':
+     publicItems.length?'expected_published':
+     savedDraftCount>0?'saved_drafts_not_published':'no_saved_products';
    const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
    const locationPinExpired=location?.ownerUid===target&&
       P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
@@ -169,6 +179,13 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
          !pin?locationHasChanged?'address_changed':locationPinExpired?'pin_expired':'pin_missing':
          'location_ready',
        publicProductCount:publicItems.length,
+       storedProductCount:storedProducts.length,
+       unpricedHighlightCount:storedHighlights.length,
+       sellerUidMatchesShop:shop?.sellerUid===target,
+       entitlementActive,
+       catalogueEnabled:shop?.catalogueEnabled===true,
+       sellingEnabled:shop?.sellingEnabled===true,
+       publicFeedReason,
        shopCategory:account.category||'',
        radiusMustUseShopperDeliveryAddress:true
      },
@@ -177,7 +194,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        shopStatus:shop?.status||'not_listed',
        publicProductCount:account.category!=='wholesale'&&publication.canSell&&shop?.status==='active'?
          (Array.isArray(shop.products)?shop.products.length:0):0,
-       savedDraftCount:draftPage?draftPage.docs.filter(x=>x.data().ownerUid===target&&x.data().status==='draft').length:null,
+       savedDraftCount,
        draftLimitReached:!!draftPage&&draftPage.docs.length>200,
        publicProductsAllowed:account.category!=='wholesale',
        approvalAccountStatus:account.approvalStatus||'pending',
