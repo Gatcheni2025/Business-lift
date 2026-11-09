@@ -232,9 +232,13 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const status=d.sellingStatus;
   if(status){
     const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
-    review.append(el('p','Seller registration: '+(status.sellerApproved?'Approved':'Pending review')),
+    review.append(
+      el('p','Exact seller UID: '+d.seller.sellerUid),
+      el('p','Seller registration record: '+String(d.seller.approvalStatus||'pending')),
+      el('p','Owner selfie review: '+String(status.approvalVerificationStatus||'not_submitted')),
       el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
-      el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Selling access entitlement: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Eligible to publish products: '+(status.canSell?'Yes':'No')),
       el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
       const publishForm=parent=>{
         const form=el('form',undefined,'ops-form');
@@ -362,15 +366,22 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       details.append(el('p','This checks the deployed public directory independently of the private Firebase product count. Match the exact UID before investigating search radius.','footnote'));
       review.append(details);
     }
-    if(!status.sellerApproved){
-      review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
-        status.approvalAccountStatus+' · identity/selfie: '+status.approvalVerificationStatus+
-        '. Check the same seller UID in the approval queue.','notice warning'),
+    if(status.registrationApproved===false){
+      review.append(el('p','Registration approval is pending for this exact Firebase UID ('+d.seller.sellerUid+'). Approval of another account with the same email cannot transfer. Review the account and selfie audit before taking action.','notice warning'),
         button('Review seller verification',()=>navigate('approvals')));
-    }else if(!status.shopSetupComplete)
-      review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
-    else if(!status.sellingAccessActive)
-      review.append(el('p','Receive the R99 mandate to begin the automatic seven-day processing window. No additional manual seller-access approval is necessary.','notice warning'));
+    }else if(status.selfieApproved===false){
+      review.append(el('p','Registration is approved for this UID, but the current selfie review is not approved. A replacement document or selfie may have reopened verification. Check the review history; do not bypass identity checks.','notice warning'));
+    }else if(!status.shopSetupComplete){
+      const missing=[];
+      if(status.selfieMatchesOnboarding===false)missing.push('onboarding selfie reference differs from the approved selfie');
+      if(status.verifiedPhoneMatchesOnboarding===false)missing.push('saved phone verification differs from the registered phone');
+      if(status.moderationBlocked===true)missing.push('onboarding moderation is blocked');
+      review.append(el('p','Registration and selfie review are approved, but shop onboarding is incomplete'+
+        (missing.length?': '+missing.join('; '):'. Check completion and location')+
+        '. Do not reset approval or collect another payment.','notice warning'));
+    }else if(!status.sellingAccessActive){
+      review.append(el('p','Registration and verification are complete, but selling access is inactive. Check the existing time-limited grant or verified payment before offering products.','notice warning'));
+    }
     if(d.mandateAccessActive)review.append(el('p',
       (d.mandateAccessKind==='processing_7d'?'7-day processing access until ':'30-day provider-accepted access until ')+
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
