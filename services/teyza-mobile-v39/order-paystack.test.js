@@ -148,3 +148,19 @@ test('Online card checkout requires shopper selection and an enabled seller card
  wholesale.db.records.get('teyzaMobileOrders/order1').orderType='wholesale_stock';
  await rejects(wholesale.api.execute(wholesale.buyer,'order_paystack_checkout',{orderId:'order1'}),409);
 });
+
+
+test('Shopper order webhooks accept modern signatures and cannot fall back to legacy if modern is forged',async()=>{
+ const f=fixture();
+ const secret='whsec_order_test_secret',body=Buffer.from('{"event":"ping","data":{}}');
+ const timestamp=String(Math.floor(NOW/1000));
+ const signature='t='+timestamp+',v1=whk_order123:'+
+   crypto.createHmac('sha512',secret).update(timestamp+'.').update(body).digest('hex');
+ const api=createOrderPaystack({db:f.db,clock:()=>NOW,getSecret:()=> 'sk_live_12345',
+   getSigningSecret:()=>secret,send:async()=>{throw Error('Ping must not call Paystack API');},
+   rate:async()=>{}});
+ assert.deepEqual(await api.webhook(body,'',{event:'ping'},signature),{accepted:true});
+ const legacy=crypto.createHmac('sha512','sk_live_12345').update(body).digest('hex');
+ await rejects(api.webhook(body,legacy,{event:'ping'},'t='+timestamp+',v1=whk_order123:'+('f'.repeat(128))),401);
+ assert.equal(f.db.records.size>0,true,'Signed ping does not wipe seller/order records');
+});
