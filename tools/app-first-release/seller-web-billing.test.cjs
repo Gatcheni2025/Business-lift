@@ -18,14 +18,15 @@ test('Only a verified, approved, fully onboarded and email-verified shop can sta
  const {eligibility}=await service();
  const seller={approvalStatus:'approved',identityVerified:true,setupComplete:true,
   listingPaid:false,complimentaryAccess:false,introEligible:true};
- assert.equal(eligibility({...seller,approvalStatus:'pending'},true,true).eligible,false);
- assert.equal(eligibility({...seller,identityVerified:false},true,true).eligible,false);
- assert.equal(eligibility({...seller,setupComplete:false},true,true).eligible,false);
- assert.equal(eligibility(seller,false,true).eligible,false);
- assert.equal(eligibility(seller,true,false).eligible,false);
- assert.equal(eligibility({...seller,listingPaid:true},true,true).active,true);
- assert.equal(eligibility({...seller,complimentaryAccess:true},true,true).active,true);
- assert.equal(eligibility(seller,true,true).eligible,true);
+ assert.equal(eligibility({...seller,approvalStatus:'pending'},true,true,true).eligible,false);
+ assert.equal(eligibility({...seller,identityVerified:false},true,true,true).eligible,false);
+ assert.equal(eligibility({...seller,setupComplete:false},true,true,true).eligible,false);
+ assert.equal(eligibility(seller,false,true,true).eligible,false);
+ assert.equal(eligibility(seller,true,false,true).eligible,false);
+ assert.equal(eligibility({...seller,listingPaid:true},true,true,true).active,true);
+ assert.equal(eligibility({...seller,complimentaryAccess:true},true,true,true).active,true);
+ assert.equal(eligibility(seller,true,true).eligible,false,'Contact email is not seller UID proof');
+  assert.equal(eligibility(seller,true,true,true).eligible,true);
 });
 test('Client refuses wrong checkout host and non-Teyza payment references',async()=>{
  const {validCheckoutUrl,validReceipt}=await service();
@@ -37,23 +38,34 @@ test('Client refuses wrong checkout host and non-Teyza payment references',async
  assert.equal(validReceipt('TZP-'+ 'f'.repeat(26)),false);
  assert.equal(validReceipt('TZM-a'),false);
 });
-test('Website seller membership uses a gated Paystack card checkout, never a bank mandate form',()=>{
- const html=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
+test('Dedicated /pay is self-contained and seller plans only link from website',()=>{
+ const page=fs.readFileSync(path.join(web,'pay.html'),'utf8');
+ const alias=fs.readFileSync(path.join(web,'pay/index.html'),'utf8');
+ const marketing=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
  const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
  for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple',
-   'webPrice','webTerms','webCheckout','webCheckoutStatus','webManage','webConfirm']){
-  assert(html.includes('id="'+id+'"'),'Missing secure website billing element '+id);
+   'webShopName','webShopUid','webShopType','webOwnShop','webTerms','webCheckout',
+   'webCheckoutStatus','webManage','webConfirm']){
+   assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
- assert(html.includes('src="/js/seller-web-billing.mjs"'));
- assert(html.includes('R10 introductory')||html.includes('R10 initial'));
- assert(html.includes('R99'));
- assert(html.includes('Pay securely with Paystack'));
- assert(!html.includes('id="mandateAccountNumber"')&&!html.includes('id="mandateSign"'));
- assert(!html.includes('src="/js/seller-debit-order.mjs"'));
+ assert(page.includes('noindex,nofollow'));
+ assert(page.includes('src="/js/seller-web-billing.mjs"'));
+ assert(marketing.includes('href="/pay"'));
+ assert(!marketing.includes('id="webCheckout"')&&!marketing.includes('seller-web-billing.mjs'));
+ assert(!page.includes('id="mandateAccountNumber"')&&!page.includes('id="mandateSign"'));
+ assert(js.includes('seller_billing_overview')&&js.includes("confirmedSellerUid:uid"));
  assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
- assert(js.includes('getIdToken()')&&js.includes('1000')&&js.includes('9900'));
- assert(!html.includes('sk_live_')&&!js.includes('sk_live_'));
- assert(!html.includes('sk_test_')&&!js.includes('sk_test_'));
+ assert(js.includes('getIdToken(true)')&&js.includes('1000')&&js.includes('9900'));
+ assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
+});
+test('App source never offers Paystack billing, due amounts or direct /pay checkout links',()=>{
+ for(const f of ['seller_plan.dart','seller_workspace.dart','seller_tools.dart']){
+   const source=fs.readFileSync(path.join(__dirname,'../../apps/teyza_shopper/lib',f),'utf8');
+   for(const phrase of ["SellerBillingPage","SellerBillingCard","/pay","Pay securely with Paystack","Amount due"]){
+     assert(!source.includes(phrase),f+' must not contain '+phrase);
+   }
+ }
 });
 test('Archived mandate module still validates historical bank consent but is not linked from checkout',async()=>{
  const {bankBranch,canSignMandate,mandateAmountCents}=await import(path.join(web,'js/seller-debit-order.mjs'));
