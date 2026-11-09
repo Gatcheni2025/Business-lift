@@ -58,8 +58,7 @@ void main(){
    final session=seller(),api=_StatementApi(session);
    await tester.pumpWidget(MaterialApp(home:SellerBillingPage(session:session,api:api)));
    await tester.pumpAndSettle();
-   session.userId='seller2';
-   session.notifyListenersForTest();
+   await session.signOut();
    await tester.pumpAndSettle();
    expect(find.textContaining('Account switched'),findsOneWidget);
    expect(find.textContaining('TZM_sample'),findsNothing);
