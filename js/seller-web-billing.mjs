@@ -35,6 +35,9 @@ export function eligibility(summary,emailVerified,healthReady,matchedSeller=fals
   return {eligible:true,message:summary.introEligible===false?'Your next membership is R99, then R99 monthly.':'R10 today for access until month-end, then R99 on the first of each following month.'};
 }
 const receiptKey=uid=>'teyza_website_checkout_v1_'+uid;
+export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
+export const billingDate=value=>Number.isFinite(value)&&value>0?
+  new Date(value).toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg',day:'numeric',month:'short',year:'numeric'}):'Not scheduled';
 async function startup(){
   const $=id=>document.getElementById(id),root=$('teyza-web-membership');
   if(!root)return;
@@ -49,6 +52,37 @@ async function startup(){
     $('webShopName').textContent=matched?billing.shopName:'Not verified for this login';
     $('webShopType').textContent=matched?({wholesale:'Wholesaler',spaza:'Spaza shop',retail:'Other business'}[billing.businessType]||'Business'):'Not verified';
     $('webShopUid').textContent=matched?billing.sellerUid:'No matching seller';
+    $('webBillingStatus').textContent=matched?({
+      paid:'Paid · active',complimentary_access:'Temporary complimentary access',
+      legacy_temporary_access:'Historic temporary access · not a Paystack payment',
+      payment_failed:'Renewal failed',cancelled:'Renewal cancelled',
+      action_required:'Paystack action required',not_subscribed:'Not subscribed'
+    }[billing.status]||'Account status pending'):'Not verified';
+    $('webPaidThrough').textContent=matched&&billing.paymentVerified?billingDate(billing.paidThrough):'No verified live payment';
+    $('webNextBill').textContent=matched?billingDate(billing.nextBillingAt):'Not scheduled';
+    $('webAmountDue').textContent=matched?billingMoney(billing.amountDueCents):'No confirmed amount';
+    const history=$('webPaymentHistory');
+    history.replaceChildren();
+    const transactions=matched&&Array.isArray(billing.transactions)?billing.transactions:[];
+    if(!transactions.length){
+      const note=document.createElement('p');note.className='pay-note';
+      note.textContent=matched?'No Paystack membership transactions recorded yet.':'Sign in to the correct shop to see its payment history.';
+      history.append(note);
+    }else{
+      for(const item of transactions.slice(0,30)){
+        const line=document.createElement('p');
+        line.className='pay-note';
+        line.textContent=[billingDate(item.date),billingMoney(item.amountCents),
+          item.kind||'membership',item.paymentVerified?'Verified live Paystack':(item.status||'unverified'),
+          item.reference||''].join(' · ');
+        history.append(line);
+      }
+      if(billing.historyTruncated===true){
+        const note=document.createElement('p');note.className='pay-note';
+        note.textContent='Payment history is limited. Contact Teyza support for older records.';
+        history.append(note);
+      }
+    }
     $('webAccess').textContent=decision.message;
     $('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
     $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
