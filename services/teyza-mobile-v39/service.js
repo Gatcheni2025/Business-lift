@@ -365,7 +365,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const supplierUid=entry.id;
         const link=await read(wholesalePair(uid,supplierUid).path);
         if(link?.spazaUid===uid&&link.supplierUid===supplierUid&&link.status==='approved'){
-          const offered=supplierOffer(entry,await read('teyzaShopSettings/'+supplierUid),link);
+          // Public wholesaler records intentionally contain no products.
+          // Restore the private range ONLY after verifying the authenticated
+          // spaza's approved supplier link and the current supplier listing.
+          const source=await read('teyzaPublicShops/'+supplierUid);
+          if(source?.sellerUid!==supplierUid||source.status!=='active'||source.shopCategory!=='wholesale')
+            D.fail(409,'The linked supplier is not available. Refresh your connections.');
+          const offered=supplierOffer({...entry,products:Array.isArray(source.products)?source.products:[]},
+            await read('teyzaShopSettings/'+supplierUid),link);
           return {...entry,products:offered.shop.products,
             productHighlights:offered.shop.products.map(p=>({
               id:p.id,name:p.name,category:p.category,inStock:p.stock>0,
