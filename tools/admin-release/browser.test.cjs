@@ -346,6 +346,41 @@ async function main(){
     assert(!f.calls.some(x=>['billing_checkout','ops_mandate_activate','ops_paystack_confirm'].includes(x.action)));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Admin can confirm publishing eligible saved retail stock without recording a payment',async()=>{
+    let published=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_seller_detail'){
+        await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',listingPlan:'free'},
+          sellingStatus:{sellerApproved:true,shopSetupComplete:true,
+            sellingAccessActive:true,canSell:true,shopStatus:'active',
+            savedDraftCount:3,publicProductCount:published?3:0,
+            publicProductsAllowed:true},
+          billing:{status:'not_started'},paystackMode:'test',membershipPaid:false,
+          complimentaryAccess:true,complimentaryUntil:1793990000000,
+          payments:[],entries:[],verification:{status:'approved',phoneVerified:true},
+          catalogue:{status:'active',products:[]},documents:{}}});return true;
+      }
+      if(body.action==='ops_catalogue_publish'){
+        published=true;
+        await route.fulfill({json:{ok:true,published:true,
+          publicProductCount:3,noPaymentRecorded:true}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
+    await f.page.getByLabel('Reason for publishing saved seller products').fill(
+      'Confirmed three approved seller drafts for a live local shop');
+    await f.page.getByRole('checkbox',{name:/I checked the shop approval and selling entitlement/}).check();
+    await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
+    await f.page.getByText('Saved seller products: 3 · Live-priced products: 3').waitFor();
+    assert(published);
+    assert(f.calls.some(x=>x.action==='ops_catalogue_publish'&&x.data.confirmed===true&&
+      x.data.sellerUid==='seller1'));
+    assert(!f.calls.some(x=>x.action==='ops_payment'||x.action==='ops_mandate_activate'));
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Confidential R99 PDF exports require an audited administrator action',async()=>{
     const reference='mandate_synthetic_1',mandate={
       mandateId:reference,status:'pending_provider_authentication',
