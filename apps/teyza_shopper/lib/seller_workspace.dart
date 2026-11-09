@@ -52,6 +52,16 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false,openedClaim=false;
   String? publicationStatus;int? publicProductCount;bool sellingEnabled=false,identityVerified=false;
   String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,mandateAccess=false,promotionActive=false;int? paidUntil,mandateUntil,promotionEndsAt;bool hasLocation=false;
+  Map<String,dynamic> approvalChecks={};
+  String? get readinessExplanation {
+    if(approvalStatus!='approved')return 'Seller registration is pending for this Firebase account. Approval of another account with the same email does not apply here.';
+    if(approvalChecks['selfieApproved']==false)return 'This account is approved, but the current owner selfie is waiting for review. Check verification status before resubmitting.';
+    if(approvalChecks['selfieMatchesOnboarding']==false)return 'Your account and selfie are approved, but the saved onboarding reference does not match the reviewed selfie. Open verification status to finish shop setup.';
+    if(approvalChecks['onboardingComplete']==false)return 'Your account is approved, but shop setup or phone verification is incomplete.';
+    if(!hasProductAccess)return 'Your shop is verified. Publishing prices requires an active membership or valid temporary selling grant.';
+    if(publicProductCount==0&&shop?.category!='wholesale')return 'Your shop is approved but has no priced products in the shopper catalogue yet. Check your saved items and sync them.';
+    return null;
+  }
   bool get sellerApproved=>approvalStatus=='approved';
   bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess||mandateAccess);
   bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
@@ -89,7 +99,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();publicProductCount=(results[0]['publicProductCount'] as num?)?.toInt();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';
+        approvalChecks=results[0]['approvalChecks'] is Map?Map<String,dynamic>.from(results[0]['approvalChecks'] as Map):{};
+        listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -154,7 +166,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
       photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;publicProductCount=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;publicProductCount=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';approvalChecks={};listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -278,7 +290,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       complimentaryAccess=current['complimentaryAccess']==true;mandateAccess=current['mandateAccessActive']==true;mandateUntil=(current['mandateAccessUntil'] as num?)?.toInt();
       sellingEnabled=current['sellingEnabled']==true;
     });
-    if(!verified){await openUpgrade(fromProductAction:true);return;}
+    if(!verified){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text(
+        'This seller UID needs its own verification. Do not start another mandate or use approval belonging to another login.')));
+      await openTool(SellerTool.verification);return;
+    }
     if(!active){
       // Read the latest mandate state as well, so Start selling checks
       // whether the R99 request is pending instead of assuming payment.
@@ -336,7 +352,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       setState(()=>rangeStatus=shop?.category=='wholesale'?
         'Your wholesaler shop is listed, but supplier products and prices are not public.':
         result['publication']=='live'&&visible>0?
-          '$visible products published to the shopper catalogue. Refresh the shopper app to see them.':
+          '$visible priced products saved in this shop catalogue. Refresh the shopper app to verify their visibility.':
         result['publication']=='live'?
           'No priced products published yet. Check that saved stock has a valid price and refresh the listing.':
           'Products are saved privately. Complete shop verification and activate R99 selling access before publication.');
@@ -590,7 +606,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-            if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
+            if(readinessExplanation!=null)Padding(padding:const EdgeInsets.only(bottom:12),
+              child:Text(readinessExplanation!,style:const TextStyle(color:Color(0xFF8A5A00),height:1.4))),
             Row(children:[
               const Expanded(child:Text('My products',style:TextStyle(fontSize:20,
                 fontWeight:FontWeight.bold))),
