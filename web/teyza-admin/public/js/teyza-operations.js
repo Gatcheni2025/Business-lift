@@ -16,11 +16,11 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
  let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
-      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
+      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
- function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -378,6 +378,27 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      root.append(el('p','No product catalogue submissions are waiting for review.','footnote'));
    if(catalogueLimited)
      root.append(el('p','Showing the first 50 pending submissions. Ask Teyza operations for additional review pagination.','footnote'));
+   const adPanel=card('Wholesale advertising review',
+     'In-app supplier promotions go only to spaza shops that opt in. Wholesaler products do not appear publicly.');
+   if(wholesaleAdError)adPanel.append(el('p','Campaigns could not be loaded: '+wholesaleAdError,'notice warning'));
+   if(!wholesaleAdQueue.length&&!wholesaleAdError)adPanel.append(el('p','No new wholesaler campaigns.','footnote'));
+   for(const ad of wholesaleAdQueue){
+     const item=el('section',undefined,'ops-review-item');
+     item.append(el('h4',ad.supplierName+' · '+ad.title),el('p',ad.message),
+       el('p','Participating spaza targets: '+ad.targetCount));
+     const form=el('form',undefined,'ops-form');
+     choice(form,'Decision','decision',[['approved','Approve moderated offer'],['rejected','Reject offer']],'approved');
+     field(form,'Review note','reason','textarea','',false);
+     check(form,'I checked the content. It will be visible only to spaza shops that opted in.','confirmed');
+     submit(form,'Save advertising decision',async fd=>{
+       const decision=fd.get('decision'),reason=String(fd.get('reason')||'').trim();
+       if(decision==='rejected'&&reason.length<12)throw Error('Explain the rejection.');
+       await request('ops_wholesale_ad_review',{campaignId:ad.id,decision,reason,confirmed:true});
+       await refresh();message('Wholesaler advertising decision saved.','success');
+     });
+     item.append(form);adPanel.append(item);
+   }
+   root.append(adPanel);
  }
  async function chooseUser(user){
   userSelected=user.uid;userDetail=null;
@@ -528,6 +549,9 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      const r=await request('ops_finance_queue');finance=r.requests;moreFinance=r.next;
    }else if(view==='products'){
      const r=await request('ops_catalogue_queue');catalogueQueue=r.submissions;catalogueLimited=r.limited;
+     try{const q=await request('ops_wholesale_ads_queue');wholesaleAdQueue=q.campaigns||[];wholesaleAdError=null;}
+     catch(e){if(e.stale||e.status===401||e.status===403)throw e;
+       wholesaleAdQueue=[];wholesaleAdError=e.message||'Advertising review service unavailable';}
    }else{
      // Keep the mandate inbox available even when the seller directory fails.
      if(view==='overview'||view==='billing')await refreshMandates();
