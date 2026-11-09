@@ -1,6 +1,6 @@
 // Read the exact anonymous shopper directory entry for one seller UID.
 // Never infer live visibility from the private Firestore product count.
-import {serviceUrl} from './teyza-app-admin-model.mjs?v=R323';
+import {serviceUrl} from './teyza-app-admin-model.mjs?v=R331-network';
 
 const validUid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{2,128}$/.test(value);
 const shopperProduct=product=>product&&typeof product.id==='string'&&product.id.length>0&&
