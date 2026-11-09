@@ -37,6 +37,10 @@ test('An invalid modern header cannot fall back to a valid legacy signature',()=
  const old=crypto.createHmac('sha512',legacySecret).update(raw).digest('hex');
  assert(!verifyWebhook({raw,legacy:old,modern:'t='+stamp+',v1=whk_active123:'+('f'.repeat(128)),
    secretKey:legacySecret,signingSecret:key,now:at}));
+ assert(!verifyWebhook({raw,legacy:old,modern:'',
+   secretKey:legacySecret,signingSecret:key,now:at}),'Present but empty modern header cannot downgrade');
+ assert(!verifyWebhook({raw,legacy:old,modern:' ',
+   secretKey:legacySecret,signingSecret:key,now:at}),'Whitespace modern header cannot downgrade');
  assert(!verifyWebhook({raw,legacy:old,modern:modern(raw,key,String(Number(stamp)-301)),
    secretKey:legacySecret,signingSecret:key,now:at}));
 });
