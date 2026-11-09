@@ -7,7 +7,18 @@ const {allFiles,versionName}=require('./hosting-patch.cjs');
 const BASE='sites/'+PROJECT;
 const FILES=['/pay.html','/pay/index.html','/js/seller-web-billing.mjs','/seller-subscriptions.html'];
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Firebase's clone API copies content; a cloned Version's ServingConfig may
+// be empty or normalized differently. Compare the configuration *installed*
+// on our staged version, not the unmodified clone's default configuration.
+const normalizeConfig=value=>{
+ const c=structuredClone(value??{});
+ for(const k of ['redirects','rewrites','headers'])
+   if(!Array.isArray(c[k])||!c[k].length)delete c[k];
+ return c;
+};
+const canonical=value=>JSON.stringify(value,(key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?
+  Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
+const equal=(a,b)=>canonical(normalizeConfig(a))===canonical(normalizeConfig(b));
 function overlay(root){
  const out=new Map();
  for(const name of FILES){
@@ -78,11 +89,19 @@ async function deploy({client,root,backupPath,wait=pause,log=console.log}){
  const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Wrong Firebase domain');
  const source=await current(client),files=overlay(root),before=await allFiles(client,source);
- const sourceConfig=(await client.hosting('GET','/'+source)).config;
+ const sourceVersion=await client.hosting('GET','/'+source);
+ if(sourceVersion.status&&sourceVersion.status!=='FINALIZED')
+   throw Error('Live Hosting version is not finalized. Deployment stopped.');
+ if(!sourceVersion.config||typeof sourceVersion.config!=='object'||Array.isArray(sourceVersion.config))
+   throw Error('Could not read live Hosting serving configuration. Deployment stopped.');
+ const sourceConfig=sourceVersion.config;
  const nextConfig=configWithPayRoute(sourceConfig);
  const version=await clone(client,source,wait);
  const backup={site:PROJECT,sourceVersion:source,patchedVersion:version,updatedFiles:FILES,createdAt:new Date().toISOString()};
- fs.writeFileSync(backupPath,JSON.stringify(backup,null,2),{mode:0o600});
+ // A failed preparation MUST NOT replace an earlier, successfully published
+ // rollback record. Store a version-specific preparation checkpoint instead.
+ const checkpoint=backupPath.replace(/\.json$/, '-prepared-'+version.split('/').at(-1)+'.json');
+ fs.writeFileSync(checkpoint,JSON.stringify(backup,null,2),{mode:0o600});
  const populated=await client.hosting('POST','/'+version+':populateFiles',{
   files:Object.fromEntries([...files].map(([name,info])=>[name,info.hash]))
  });
@@ -92,11 +111,20 @@ async function deploy({client,root,backupPath,wait=pause,log=console.log}){
   await client.upload(populated.uploadUrl+'/'+hash,byHash.get(hash).bytes);
  }
  assertFiles(before,await allFiles(client,version),files);
- const clonedConfig=(await client.hosting('GET','/'+version)).config;
- if(!equal(clonedConfig,sourceConfig))throw Error('Cloned Hosting configuration differs from live before patch');
+ const staged=await client.hosting('GET','/'+version);
+ if(staged.status&&staged.status!=='CREATED')
+   throw Error('Staged Hosting version is not editable. No release was published.');
+ if(!equal(staged.config,sourceConfig))
+   log('Firebase cloned the live content with different/default serving rules. Explicitly installing the preserved live configuration plus /pay.');
+ // Source was read from the currently live, finalized version. Never copy
+ // the clone's default config over the existing production rules.
  await client.hosting('PATCH','/'+version,{config:nextConfig},{updateMask:'config'});
  const installed=(await client.hosting('GET','/'+version)).config;
- if(!equal(installed,nextConfig))throw Error('Hosting /pay routing did not verify');
+ if(!equal(installed,nextConfig))throw Error('Hosting /pay routing did not verify; no release was published.');
+ // The Hosting API may reorder object keys and omit empty repeated fields.
+ // Arrays and matching rule priorities must remain exactly as reviewed.
+ if(await current(client)!==source)
+   throw Error('Live Hosting changed before finalization. No /pay release was published.');
  await client.hosting('PATCH','/'+version,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(client)!==source)throw Error('A newer website release appeared; no /pay deployment performed');
  const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',
@@ -110,20 +138,47 @@ async function deploy({client,root,backupPath,wait=pause,log=console.log}){
 async function rollback({client,backupPath,log=console.log}){
  const backup=JSON.parse(fs.readFileSync(backupPath,'utf8'));
  if(backup.site!==PROJECT)throw Error('Backup belongs to another project');
+ if(!backup.publishedAt||!backup.releaseName)
+   throw Error('Rollback record does not describe a successfully published /pay release.');
  const old=versionName(backup.sourceVersion),updated=versionName(backup.patchedVersion);
  if(await current(client)!==updated)throw Error('Newer release is live; refusing unsafe rollback');
  await client.hosting('POST','/'+BASE+'/channels/live/releases',
   {message:'Rollback Teyza /pay website'},{versionName:old});
  log('Restored previous Teyza Hosting version');
 }
+async function inspect({client,root,log=console.log}){
+ const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
+ if(!domain.name?.endsWith('/customDomains/teyza.co.za'))
+   throw Error('teyza.co.za is not attached to this Firebase Hosting site.');
+ const source=await current(client);
+ const sourceVersion=await client.hosting('GET','/'+source);
+ if(!sourceVersion.config||typeof sourceVersion.config!=='object')
+   throw Error('Unable to read live configuration safely.');
+ const checked=configWithPayRoute(sourceVersion.config);
+ const files=overlay(root);
+ const liveFiles=await allFiles(client,source);
+ log('READ-ONLY /pay Hosting inspection:');
+ log('Domain: https://teyza.co.za/pay');
+ log('Hosting site: '+PROJECT);
+ log('Live version: '+source);
+ log('Existing files: '+liveFiles.size+'; intended overlay files: '+files.size);
+ log('Existing rewrites: '+(sourceVersion.config.rewrites||[]).length+
+     '; intended rewrites: '+(checked.rewrites||[]).length);
+ log('Existing redirects: '+(sourceVersion.config.redirects||[]).length+
+     '; existing headers: '+(sourceVersion.config.headers||[]).length);
+ log('No Hosting version was cloned, finalized or published.');
+ return {source,files:files.size};
+}
 async function main(){
  const action=process.argv[2];
- if(!['deploy','rollback'].includes(action))throw Error('Use deploy or rollback');
+ if(!['inspect','deploy','rollback'].includes(action))
+   throw Error('Use inspect, deploy or rollback');
  const root=path.resolve(__dirname,'../../web/app-first/public');
  const backupPath=path.resolve(__dirname,'../../teyza-pay-website-backup.json');
  const client=await connect();
- if(action==='deploy')await deploy({client,root,backupPath});
+ if(action==='inspect')await inspect({client,root});
+ else if(action==='deploy')await deploy({client,root,backupPath});
  else await rollback({client,backupPath});
 }
 if(require.main===module)main().catch(e=>{console.error('Teyza /pay deployment blocked:',e.message);process.exitCode=1;});
-module.exports={FILES,overlay,configWithPayRoute,assertFiles,deploy,rollback};
+module.exports={FILES,overlay,configWithPayRoute,assertFiles,normalizeConfig,equal,inspect,deploy,rollback};
