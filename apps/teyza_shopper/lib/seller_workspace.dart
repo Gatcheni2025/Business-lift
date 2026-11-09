@@ -10,6 +10,7 @@ import 'account_deletion_page.dart';
 import 'seller_plan.dart';
 import 'wholesale_market.dart';
 import 'wholesale_connections.dart';
+import 'wholesale_advertising.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -212,7 +213,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       }
     }
   }
+  void openSupplierAdvertising()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:true)));
+  void openSpazaSupplierOffers()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:false)));
   Future<void> openProducts() async {
+    if(shop?.category=='wholesale'){openSupplierAdvertising();return;}
     final uid=widget.session.userId;
     setState((){productsView=true;if(widget.sellerMode)sellerTab=1;});
     if(uid==null)return;
@@ -249,6 +255,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> chooseProducts() async {
     if(busy)return;
+    if(shop?.category=='wholesale'){
+      openSupplierAdvertising();return;
+    }
     // Never rely on the last periodic dashboard refresh for entitlement.
     // Admin review alone is not a verified debit or a selling grant.
     final uid=widget.session.userId;
@@ -486,7 +495,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Widget _card(Widget child)=>Card(color:Colors.white,child:Padding(
     padding:const EdgeInsets.all(16),child:child));
   void selectSellerTab(int tab){
-    if(tab==1){openProducts();return;}
+    if(tab==1){if(shop?.category=='wholesale')openSupplierAdvertising();else openProducts();return;}
     setState((){sellerTab=tab;productsView=false;});
   }
   Future<void> signOutSeller() async {
@@ -526,9 +535,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
         Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
           body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
-    if(shop?.category=='wholesale')businessTile(Icons.local_shipping_outlined,'Your wholesale stock offers',
-      'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
-      ()=>selectSellerTab(1)),
+    if(shop?.category=='wholesale')businessTile(Icons.campaign_outlined,'Advertise to participating spaza shops',
+      'Use your R99 access to target opted-in spazas with moderated offers and invitations. No public wholesaler products.',
+      openSupplierAdvertising),
+    if(shop?.category=='spaza')businessTile(Icons.campaign_outlined,'Supplier offers for my spaza',
+      'Choose whether to receive private in-app offers from verified wholesalers.',
+      openSpazaSupplierOffers),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
       listingPaid?'Existing seller access active':mandateAccess?'Mandate-processing access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
@@ -571,7 +583,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
       shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
-      onAdd:busy?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
+      onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
@@ -621,7 +633,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       backgroundColor:sellerCanvas,
       appBar:widget.sellerMode&&sellerTab==3&&shop!=null?null:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,
         automaticallyImplyLeading:!widget.sellerMode,
-        title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
+        title:Text(widget.sellerMode?(shop?.category=='wholesale'?['Wholesaler dashboard','Advertise to spazas','Partner orders','Partner chat','My business']:['Seller dashboard','My products','Customer orders','Customer chat','My business'])[sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
