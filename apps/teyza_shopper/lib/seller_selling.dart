@@ -38,10 +38,11 @@ class SellerSellingDashboard extends StatelessWidget {
   final VoidCallback? onPhoto,onShop,onEditProfile;
   final int unread;
   final int? productCount;
+  final int? publicProductCount;
   final VoidCallback? onAdd;
   final VoidCallback onProducts,onOrders,onChat,onFinance,onAreas,onBusiness,onVerify;
   const SellerSellingDashboard({super.key,required this.shopName,required this.live,required this.verified,
-    required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
+    required this.productCount,this.publicProductCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
     this.onPhoto,this.onShop,this.onEditProfile,this.unread=0});
@@ -77,6 +78,14 @@ class SellerSellingDashboard extends StatelessWidget {
         label:const Text('Start selling',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
       const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
         '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
+       if(publicProductCount!=null)Padding(padding:const EdgeInsets.only(top:7),child:Text(
+         '$publicProductCount products in your public-shop record',
+         key:const ValueKey('seller-public-product-count'),
+         style:TextStyle(color:publicProductCount!>0?_green:Colors.deepOrange,fontWeight:FontWeight.w700,fontSize:12))),
+       if(approvedLive&&productCount!=null&&productCount!>0&&publicProductCount==0)
+         const Padding(padding:EdgeInsets.only(top:5),child:Text(
+           'Your shop listing is active, but saved stock is not published. Open My Products to sync or contact Teyza support.',
+           key:ValueKey('seller-stock-not-published'),style:TextStyle(color:Colors.deepOrange,fontSize:12))),
       if(awaitingApproval)...[
         const SizedBox(height:10),const Text('Setup received. Your shop becomes visible to shoppers after Teyza approves it.',style:TextStyle(color:_muted)),
         TextButton(onPressed:onVerify,child:const Text('View review status')),
