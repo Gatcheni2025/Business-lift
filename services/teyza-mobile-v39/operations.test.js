@@ -39,6 +39,21 @@ test('Legacy mandate and manual payment endpoints refuse to change billing',asyn
    await rejects(f.call(action,data),410);
  assert.deepEqual([...f.db.records],before,'Manual payment actions must never create a paid entitlement');
 });
+test('Admin shows same-email account types separately and flags deletion-pending UID',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),
+   ownerEmail:'shared@example.test',shopName:'Approved Spaza'});
+ f.db.records.set('teyzaSellerAccounts/seller2',{...f.db.records.get('teyzaSellerAccounts/seller2'),
+   ownerEmail:'shared@example.test',shopName:'Old Tester',deletionPending:true});
+ const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.seller.sellerUid,'seller1');
+ assert.equal(d.relatedAccounts.length,2);
+ assert.deepEqual(d.relatedAccounts.map(a=>a.sellerUid).sort(),['seller1','seller2']);
+ assert.equal(d.relatedAccounts.find(a=>a.sellerUid==='seller1').approvalStatus,'approved');
+ assert.equal(d.relatedAccounts.find(a=>a.sellerUid==='seller2').approvalStatus,'pending');
+ assert.equal(d.relatedAccounts.find(a=>a.sellerUid==='seller2').deletionPending,true);
+ assert.equal(d.relatedAccounts.find(a=>a.sellerUid==='seller2').isCurrent,false);
+});
 test('Product approvals queue shows a verified Paystack seller and submitted catalogue',async()=>{
  const f=setup();
  f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
