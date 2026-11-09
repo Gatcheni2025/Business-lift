@@ -102,6 +102,53 @@ test('Only a separate recently signed-in admin can grant explicitly confirmed co
  const blocked=await f.call('ops_seller_detail',{sellerUid:'seller1'});
  assert.equal(blocked.complimentaryAccess,false,'A revoked shop identity approval blocks complimentary access');
 });
+test('Admin can publish a saved spaza range only with approved, active selling access, confirmation and an audit',async()=>{
+ const syncCalls=[],f=(()=>{
+   const db=new FakeDB({
+     'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',shopName:'Test Shop',approvalStatus:'approved'},
+     'teyzaPublicShops/seller1':{sellerUid:'seller1',status:'active',products:[],catalogueEnabled:false},
+     'teyzaDraftProducts/seller1/items/rice':{ownerUid:'seller1',status:'draft',name:'Rice',priceCents:2500,stockQty:3},
+   });
+   const sync=async (target,options)=>{
+     syncCalls.push({target,options});
+     db.records.set('teyzaPublicShops/'+target,{...db.records.get('teyzaPublicShops/'+target),products:[
+       {id:'rice',name:'Rice',category:'Groceries',priceCents:2500,stock:3}]});
+     return {publication:'live',publicCount:1};
+   };
+   const svc=createOperations({db,clock:()=>now,rate:async()=>{},synchronize:sync});
+   return {db,call:(action,data={},actor=admin)=>svc.execute(actor,action,data)};
+ })();
+ const input={sellerUid:'seller1',reason:'Reviewed live shop and current stock for publication',confirmed:true};
+ await rejects(f.call('ops_catalogue_publish',input),409);
+ const grant=await f.call('ops_complimentary_access',{
+   sellerUid:'seller1',days:30,reason:'Verified QA local seller for temporary listing',confirmed:true});
+ assert.equal(grant.paid,false);
+ await rejects(f.call('ops_catalogue_publish',{...input,confirmed:false}),422);
+ await rejects(f.call('ops_catalogue_publish',{...input,reason:'short'}),422);
+ await rejects(f.call('ops_catalogue_publish',input,{...admin,uid:'seller1'}),403);
+ await rejects(f.call('ops_catalogue_publish',input,{...admin,auth_time:now/1000-301}),401);
+ const result=await f.call('ops_catalogue_publish',input);
+ assert.equal(result.published,true);assert.equal(result.publicProductCount,1);
+ assert.equal(result.noPaymentRecorded,true);
+ assert.deepEqual(syncCalls.at(-1),{target:'seller1',options:{publishIntent:true}});
+ const audit=[...f.db.records.values()].find(x=>x.action==='ops_catalogue_publish');
+ assert.equal(audit.target,'seller1');assert.equal(audit.details.noPaymentRecorded,true);
+ const detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.sellingStatus.savedDraftCount,1);
+ assert.equal(detail.sellingStatus.publicProductCount,1);
+ assert.equal(detail.sellingStatus.publicProductsAllowed,true);
+});
+test('Wholesalers remain shop listings only: admin cannot publish retail-facing prices',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),category:'wholesale'});
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',shopCategory:'wholesale',products:[
+   {id:'bulk',name:'Private bulk prices',priceCents:10000,stock:2}]});
+ const input={sellerUid:'seller1',reason:'Attempt to publish wholesale supplier prices',confirmed:true};
+ await rejects(f.call('ops_catalogue_publish',input),409);
+ const detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.sellingStatus.publicProductCount,0);
+ assert.equal(detail.sellingStatus.publicProductsAllowed,false);
+});
 test('Seller statements are bound to the authenticated owner even when another UID is supplied',async()=>{const f=setup();f.db.records.set('teyzaBilling/seller1/entries/invoice_2026-10',{ownerUid:'seller1',kind:'subscription_invoice',createdAt:now,debitCents:9900,creditCents:0});const d=await f.call('seller_billing_statement',{sellerUid:'seller1'},{uid:'seller2',email_verified:true});assert.equal(d.seller.sellerUid,'seller2');assert.equal(d.entries.length,0);});
 test('Finance decisions require consent, approved seller, expected status and capped amounts',async()=>{const f=setup(),path='teyzaCreditEnquiries/seller1/requests/r1';f.db.records.set(path,{ownerUid:'seller1',amountCents:100000,purpose:'Stock',status:'enquiry_received',consent:true});const data={path,expectedStatus:'enquiry_received',status:'approved_in_principle',approvedAmountCents:50000,note:'Manual review complete; subject to lender terms',reviewConfirmed:true};await rejects(f.call('ops_finance_decide',{...data,approvedAmountCents:100001}),409);await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'under_review'}),409);await f.call('ops_finance_decide',data);assert.equal(f.db.records.get(path).disbursementStatus,'not_disbursed');await rejects(f.call('ops_finance_decide',{...data,expectedStatus:'approved_in_principle'}),409);});
 test('Finance cannot approve own application or read arbitrary document paths',async()=>{const f=setup();await rejects(f.call('ops_finance_decide',{path:'users/seller1',note:'x',status:'declined'}),422);await rejects(f.call('ops_finance_decide',{path:'teyzaCreditEnquiries/admin1/requests/r1',note:'x',status:'declined',expectedStatus:'enquiry_received'}),403);});
