@@ -76,6 +76,34 @@ test('Product approvals queue and seller detail never treat bank receipts or san
  q=await f.call('ops_catalogue_queue');assert.equal(q.submissions[0].paidMembership,false);
  d=await f.call('ops_seller_detail',{sellerUid:'seller1'});assert.equal(d.membershipPaid,false);
 });
+test('Admin distinguishes sixteen public products from missing, changed and valid shop coordinates',async()=>{
+  const f=setup();
+  const account=f.db.records.get('teyzaSellerAccounts/seller1');
+  f.db.records.set('teyzaSellerAccounts/seller1',{...account,address:'12 Main Road, Durban'});
+  f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',
+    name:'Test Shop',address:'12 Main Road, Durban',
+    products:Array.from({length:16},(_,i)=>({id:'item'+i,name:'Item '+i,priceCents:1000+i,stock:5}))});
+  f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',mandateAccessStatus:'active',
+    mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate_qa',mandateAccessUntil:now+86400000});
+  let detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(detail.shopperVisibility.directoryEligible,true);
+  assert.equal(detail.shopperVisibility.publicProductCount,16);
+  assert.equal(detail.shopperVisibility.status,'pin_missing');
+  assert.equal(detail.shopperVisibility.hasValidPin,false);
+  f.db.records.set('teyzaShopLocations/seller1',{ownerUid:'seller1',
+    address:'12 Main Road, Durban',area:'KwaMashu',city:'Durban',
+    latitude:-29.7402,longitude:30.992,consentAt:now-60000,
+    source:'google_places',coordinatesExpireAt:now+5*86400000});
+  detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(detail.shopperVisibility.status,'location_ready');
+  assert.equal(detail.shopperVisibility.hasValidPin,true);
+  assert.equal(detail.shopperVisibility.latitude,-29.7402);
+  f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),
+    address:'20 Second Road, Durban'});
+  detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(detail.shopperVisibility.status,'address_changed');
+  assert.equal(detail.shopperVisibility.hasValidPin,false);
+});
 test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
  const f=setup(),input={sellerUid:'seller1',days:7,
   reason:'Approved small business community launch demonstration',confirmed:true};
