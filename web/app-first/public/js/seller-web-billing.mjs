@@ -90,6 +90,11 @@ async function startup(){
       }
     }
     $('webAccess').textContent=decision.message;
+    $('webAvailabilityNotice').textContent=!logged?
+      'Sign in to check the current availability of verified website checkout.':
+      backendReady(health)?
+      'Website checkout is available to eligible, approved Teyza sellers after explicit recurring consent.':
+      'New website membership payments are temporarily unavailable. No charge will be initiated.';
     $('webReturnGuidance').hidden=!confirmedMembership(summary,billing,user?.uid);
     if(confirmedMembership(summary,billing,user?.uid)&&billing?.renewalStatus==='action_required')
       $('webReturnGuidance').textContent='Selling access is active. Your next automatic renewal still needs attention; contact Teyza support before the paid month ends.';
