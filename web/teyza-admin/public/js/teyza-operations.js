@@ -241,7 +241,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
         // Validate explicitly so the admin sees why an empty/unchecked form
         // did not submit. Native required-field blocking was silent here.
         const reasonInput=field(form,'Reason for publishing saved seller products','reason','textarea');
-        reasonInput.required=false;reasonInput.minLength=15;
+        reasonInput.required=false; // Manual validation shows an inline explanation instead of an invisible browser block.
         reasonInput.placeholder='Describe the verified seller and saved stock (minimum 15 characters)';
         const confirmed=check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
         confirmed.required=false;
