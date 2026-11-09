@@ -1,6 +1,6 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview');
+const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
@@ -21,6 +21,18 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   // never activate membership now that Paystack verifies all new charges.
   if(['ops_invoice','ops_payment','ops_payment_reverse'].includes(action))
     D.fail(410,'Manual mandate invoices and receipt activation are retired. Use Paystack checkout and verified transactions.');
+  if(action==='seller_billing_overview'){
+    // Bound solely to the authenticated Firebase UID; never accept sellerUid/email.
+    const account=await owner(uid);
+    const [bill,history]=await Promise.all([
+      read('teyzaBilling/'+uid),
+      db.collection('teyzaPaystackPayments').where('ownerUid','==',uid).limit(101).get()
+    ]);
+    const entries=history.docs.filter(row=>row.data().ownerUid===uid)
+      .map(row=>({reference:row.id,...row.data()}));
+    return {...BillingOverview.summarize(uid,account,bill,entries,clock()),
+      historyTruncated:history.docs.length>100};
+  }
   if(action==='ops_complimentary_revoke'){
     const target=D.id(data.sellerUid);
     if(target===uid)D.fail(403,'Another administrator must review your shop access.');
