@@ -22,18 +22,21 @@ class Page(HTMLParser):
   if tag=='script' and self.in_schema:self.schemas.append(json.loads(self.buffer));self.in_schema=False
 for p in PUBLIC.glob('*.html'):
  page=Page();text=p.read_text();page.feed(text)
- if p.name in ['work.html','owner-confirm.html']:
+ if p.name in ['work.html','owner-confirm.html','pay.html']:
   assert page.meta.get('robots')=='noindex,nofollow',p.name
   assert '<form' in text and 'type="module"' in text,p.name
+  if p.name=='pay.html':
+   assert 'id="webShopUid"' in text and 'id="webCheckout"' in text
+   assert text==(PUBLIC/'pay/index.html').read_text(),'Pay clean-url alias has diverged'
   continue
  assert page.headings==1,p.name
  assert page.meta['description'] and page.canonical.startswith('https://teyza.co.za/'),p.name
  assert page.meta.get('og:image')=='https://teyza.co.za/assets/app/social-preview.jpg'
  if p.name=='seller-subscriptions.html':
-  # Seller debit-order mandates require authenticated owner consent.
-  assert 'id="webEmailForm"' in text and 'id="webCheckout"' in text
-  assert 'seller-web-billing.mjs' in text
-  assert 'id="mandateSign"' not in text
+  # Informational plans refer to the separate web-only /pay checkout portal.
+  assert 'href="/pay"' in text
+  assert 'id="webCheckout"' not in text
+  assert 'seller-web-billing.mjs' not in text
   assert not any(s in text for s in ['data-open-register','landing-auth.js','auth=register']),p.name
  else:
   assert not any(s in text for s in ['data-open-register','landing-auth.js','<form','auth=register']),p.name
