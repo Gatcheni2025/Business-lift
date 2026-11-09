@@ -261,6 +261,27 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
       el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
       el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
+    if(status.publicProductsAllowed===false){
+      review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
+    }else{
+      review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
+        ' · Live-priced products: '+(status.publicProductCount||0)));
+      if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
+      if(status.canSell){
+        const form=el('form',undefined,'ops-form');
+        field(form,'Reason for publishing saved seller products','reason','textarea');
+        check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
+        submit(form,'Publish saved shop products',async fd=>{
+          const reason=String(fd.get('reason')||'').trim();
+          if(reason.length<15)throw Error('Explain this publication in at least 15 characters.');
+          if(!confirm('Publish this approved shop’s current saved product range to shoppers? No payment will be recorded.'))return;
+          const result=await request('ops_catalogue_publish',{sellerUid:d.seller.sellerUid,reason,confirmed:true});
+          await choose(selected);
+          message((result.publicProductCount||0)+' products published on the shopper catalogue.','success');
+        });
+        review.append(form);
+      }
+    }
     if(!status.canSell)review.append(el('p',
       'If the seller is approved, check shop setup and review the mandate. An audited temporary selling grant does not record a bank payment.','notice warning'));
     root.append(review);
