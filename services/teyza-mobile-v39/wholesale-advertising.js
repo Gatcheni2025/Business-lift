@@ -3,6 +3,7 @@ const crypto=require('node:crypto'),D=require('./domain'),P=require('./publicati
   {recentAdmin}=require('./seller-experience');
 const actions=new Set(['wholesale_spaza_directory','wholesale_ad_preferences',
   'wholesale_ad_opt_in','wholesale_ad_submit','wholesale_ads','wholesale_ad_pause',
+  'wholesale_spaza_invite','wholesale_spaza_accept_invite',
   'ops_wholesale_ads_queue','ops_wholesale_ad_review']);
 function createWholesaleAdvertising({db,clock=Date.now,rate=async()=>{}}){
  const doc=p=>db.doc(p);
@@ -32,7 +33,7 @@ function createWholesaleAdvertising({db,clock=Date.now,rate=async()=>{}}){
   }))).filter(Boolean);
   return {shops,limited:rows.docs.length===40};
  }
- const display=c=>({id:c.id||'',title:c.title||'',message:c.message||'',
+ const display=c=>({supplierUid:c.supplierUid||'',id:c.id||'',title:c.title||'',message:c.message||'',
   status:c.status||'pending_review',createdAt:c.createdAt||0,
   reviewedAt:c.reviewedAt||null,expiresAt:c.expiresAt||null,
   targetCount:Array.isArray(c.targetUids)?c.targetUids.length:0,
@@ -90,6 +91,37 @@ function createWholesaleAdvertising({db,clock=Date.now,rate=async()=>{}}){
   if(action==='wholesale_spaza_directory'){
    await check(uid,'wholesale');await rate(uid,'supplier-ad-directory',20,60000);
    return directory();
+  }
+  if(action==='wholesale_spaza_invite'){
+   await check(uid,'wholesale',{paid:true});
+   await rate(uid,'supplier-invite',10,86400000);
+   const spazaUid=D.id(data.spazaUid);
+   const candidates=await directory();
+   if(!candidates.shops.some(x=>x.sellerUid===spazaUid))
+     D.fail(409,'The spaza must be active and opt in to supplier offers before an invitation.');
+   const ref=doc('teyzaWholesaleConnections/'+spazaUid+'_'+uid);
+   return db.runTransaction(async tx=>{
+    const old=await tx.get(ref);
+    if(old.exists&&['invited','pending','approved'].includes(old.data().status))
+      return {status:old.data().status,alreadyRequested:true};
+    tx.set(ref,{spazaUid,supplierUid:uid,status:'invited',discountPercent:0,
+     deliveryFeeCents:null,invitedAt:clock(),createdAt:old.exists?old.data().createdAt:clock(),updatedAt:clock()});
+    return {status:'invited',invited:true};
+   });
+  }
+  if(action==='wholesale_spaza_accept_invite'){
+   await check(uid,'spaza');await rate(uid,'supplier-invite-response',15,60000);
+   const supplierUid=D.id(data.supplierUid);
+   const ref=doc('teyzaWholesaleConnections/'+uid+'_'+supplierUid);
+   const result=await db.runTransaction(async tx=>{
+    const saved=await tx.get(ref);
+    if(!saved.exists||saved.data().spazaUid!==uid||saved.data().supplierUid!==supplierUid||
+       saved.data().status!=='invited')D.fail(409,'Refresh the current supplier invitation.');
+    tx.update(ref,{status:data.accept===true?'pending':'declined',
+      spazaRespondedAt:clock(),updatedAt:clock()});
+    return {status:data.accept===true?'pending':'declined'};
+   });
+   return result;
   }
   if(action==='wholesale_ad_submit'){
    const supplier=await check(uid,'wholesale',{paid:true});
