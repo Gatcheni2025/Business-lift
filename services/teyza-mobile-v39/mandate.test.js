@@ -51,7 +51,7 @@ test('Admin-approved verified seller can submit a mandate before final shop setu
  const result=await f.call('seller_mandate_submit',data);
  assert.equal(result.mandate.status,'pending_provider_authentication');
  assert.equal(result.mandate.collectionActive,false);
- assert.equal(f.db.records.get('teyzaBilling/owner'),undefined);
+ assert.equal(f.db.records.get('teyzaBilling/owner').mandateAccessKind,'processing_7d');
  assert.equal(f.db.records.get('teyzaPublicShops/owner').status,'pending_setup');
 });
 test('Onboarding-only suspension does not block an otherwise approved verified seller mandate',async()=>{
@@ -62,7 +62,7 @@ test('Onboarding-only suspension does not block an otherwise approved verified s
  const result=await f.call('seller_mandate_submit',data);
  assert.equal(result.mandate.status,'pending_provider_authentication');
  assert.equal(result.mandate.collectionActive,false);
- assert(!f.db.records.has('teyzaBilling/owner'));
+ assert.equal(f.db.records.get('teyzaBilling/owner').mandateAccessStatus,'active');
 });
 test('Admin approval does not bypass a held shop or moderation block',async()=>{
  for(const blocked of [
@@ -133,7 +133,7 @@ test('Signed mandate appears in admin inbox; sensitive details are only returned
    decision:'reviewed_pending_provider',reason:'Bank authentication needs accredited debit collection provider.',confirmed:true},admin);
  assert.equal(review.collectionActive,false);
  assert.equal(f.db.records.get('teyzaSellerMandates/owner').status,'reviewed_pending_provider');
- assert.equal(f.db.records.get('teyzaBilling/owner'),undefined);
+ assert.equal(f.db.records.get('teyzaBilling/owner').mandateAccessKind,'processing_7d');
 });
 test('Seller cannot replace registered contact phone in a signed mandate',async()=>{
  const f=setup();
@@ -171,7 +171,7 @@ test('Manual Netcash handoff records a provider portal receipt but never activat
  assert.equal(saved.provider,'netcash');
  assert.equal(saved.providerReference,target.providerReference);
  assert.equal(saved.collectionActive,false);
- assert(!f.db.records.has('teyzaBilling/owner'));
+ assert.equal(f.db.records.get('teyzaBilling/owner').mandateAccessKind,'processing_7d');
  assert((await f.call('ops_mandate_record_netcash_submission',target,admin)).alreadyRecorded);
  await rejects(f.call('ops_mandate_record_netcash_submission',{...target,providerReference:'NC-RECEIPT-OTHER'},admin),409);
  assert([...f.db.records.values()].some(v=>v.action==='netcash_manual_submission'));
@@ -187,5 +187,5 @@ test('Manual Netcash submission requires another fresh admin and forbids withdra
  await rejects(f.call('ops_mandate_record_netcash_submission',submission,{...admin,auth_time:now/1000-301}),401);
  await f.call('seller_mandate_withdraw',{mandateId:'request1'});
  await rejects(f.call('ops_mandate_record_netcash_submission',submission,admin),409);
- assert(!f.db.records.has('teyzaBilling/owner'));
+ assert.equal(f.db.records.get('teyzaBilling/owner').mandateAccessStatus,'revoked');
 });
