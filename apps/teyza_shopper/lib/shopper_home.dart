@@ -1378,8 +1378,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           const Text('Shop by category',style:TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:ink)),
           const SizedBox(height:8),groceryAisles(openProducts:false),
           const SizedBox(height:12),
+          if(catalogueError!=null)...[
+            Padding(padding:const EdgeInsets.symmetric(vertical:8),
+              child:Text(catalogueError!,style:const TextStyle(color:Colors.deepOrange))),
+            TextButton.icon(onPressed:()=>load(),icon:const Icon(Icons.refresh),
+              label:const Text('Retry approved shop products')),
+          ],
           if(products.isEmpty)...[
-            empty('No matching products','Try another product or browse nearby shops.'),
+            empty('No matching products',area==null
+              ?'Set your delivery address to discover Teyza shops and products.'
+              :'No matching published products within $searchRadiusKm km of ${area!.label}. Check your delivery address or try a wider search.'),
+            if(area!=null&&!widerSearch)Center(child:TextButton.icon(
+              onPressed:(){setState(()=>widerSearch=true);unawaited(reloadOnline());},
+              icon:const Icon(Icons.zoom_out_map),
+              label:const Text('Search a wider area'))),
             Center(child:TextButton(onPressed:browseNearby,child:const Text('Browse nearby shops'))),
           ],
         ]);
