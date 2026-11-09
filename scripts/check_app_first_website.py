@@ -66,5 +66,10 @@ assert not any(u.endswith('/work.html') or 'owner-confirm' in u for u in urls)
 assert not any('register' in u or 'admin' in u for u in urls)
 assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_text()
 for p in PUBLIC.rglob('*'):
- if p.is_file():assert p.read_bytes()==(ROOT/p.relative_to(PUBLIC)).read_bytes(),p
+ if p.is_file():
+  relative=p.relative_to(PUBLIC)
+  # Dedicated /pay is deployed from the scoped Hosting overlay only.
+  # All existing root-mirrored marketing pages remain parity checked.
+  if relative==Path('pay.html') or relative.parts[0]=='pay':continue
+  assert p.read_bytes()==(ROOT/relative).read_bytes(),p
 print('Marketing pages, links, image metadata, JSON-LD, sitemap, registration removal and root/overlay parity pass.')
