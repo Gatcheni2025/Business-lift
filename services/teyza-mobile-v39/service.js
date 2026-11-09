@@ -246,8 +246,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
           if(otherUid===uid)return [otherUid,a,true];
           if(!sameEmail(a.ownerEmail,email))return null;
           const identity=await getAuthUser(otherUid).catch(()=>null);
-          if(!identity||identity.disabled===true||identity.emailVerified!==true||
-             !sameEmail(identity.email,email)||identity.uid!==otherUid)return null;
+          if(!identity||identity.emailVerified!==true||
+             !sameEmail(identity.email,email)||identity.uid!==otherUid||
+             (identity.disabled===true&&a.deletionPending!==true))return null;
           return [otherUid,a,false];
         }));
         for(const entry of checked)if(entry)add(...entry);
