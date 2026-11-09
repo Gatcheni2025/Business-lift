@@ -45,6 +45,7 @@ test('Only /pay rewrites and security headers are added; existing API/admin rule
  assert.equal(modified.headers.find(x=>x.glob==='/pay').headers['Cache-Control'],'no-store');
  assert.equal(base.rewrites.length,2,'Original Hosting config must not be mutated');
  assert.throws(()=>configWithPayRoute({rewrites:[{glob:'/pay',function:'evilFunction'}]}),/Existing \/pay/);
+ assert.throws(()=>configWithPayRoute({headers:[{glob:'/pay',headers:{'Content-Security-Policy':'default-src self'}}]}),/security headers/);
 });
 test('Scoped Hosting clone preserves all admin/API files and refuses unexpected publish failures',async()=>{
  const x=fixture();await deploy(x);assert.equal(x.live(),x.next);
