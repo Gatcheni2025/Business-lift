@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),
 const {PROJECT}=require('./firebase-client.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=['/admin.html','/admin-review.html','/admin-sellers.html','/admin-login.html','/admin-dashboard.html','/admin/index.html','/admin-payments.html','/admin-support.html','/admin-users.html'];
-const assets=['/assets/teyza-app-admin.css','/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-app-admin-firebase.mjs','/js/teyza-operations.js','/js/teyza-mandate-pdf.mjs','/js/teyza-operations-model.mjs','/js/teyza-field-admin.js'];
+const assets=['/assets/teyza-app-admin.css','/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-app-admin-firebase.mjs','/js/teyza-operations.js','/js/teyza-public-feed-check.mjs','/js/teyza-mandate-pdf.mjs','/js/teyza-operations-model.mjs','/js/teyza-field-admin.js'];
 const overlayPaths=new Set([...aliases,...assets]);
 function overlay(root){
  const files=new Map();
@@ -21,7 +21,7 @@ function servingConfig(original){
   ...(config.rewrites||[]).filter(r=>!routes.includes(r.glob))];
  // Retain every unrelated header and route, and make private-review pages non-cacheable.
  config.headers=[...(config.headers||[]),
-  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/assets/teyza-app-admin.css'].map(glob=>({glob,headers:{
+  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-public-feed-check.mjs','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/assets/teyza-app-admin.css'].map(glob=>({glob,headers:{
    'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}}))];
  return config;
 }
