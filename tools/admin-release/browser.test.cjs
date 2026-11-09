@@ -50,8 +50,12 @@ async function main(){
    'export const getApps=()=>[];export const initializeApp=c=>c;':firebaseAuth}));
   await page.route('https://fonts.googleapis.com/**',r=>r.abort());
   await page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',async route=>{
-   const body=route.request().postDataJSON();calls.push(body);
+   const body=route.request().method()==='POST'?route.request().postDataJSON():{action:'publicShops'};
+   calls.push(body);
    if(api&&await api(route,body)!==false)return;
+   if(route.request().method()==='GET'){
+     await route.fulfill({json:{ok:true,entries:[],next:null}});return;
+   }
    let result={ok:true};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
    if(body.action==='ops_catalogue_queue')result={ok:true,submissions:[{sellerUid:rows[0].sellerUid,shopName:rows[0].shopName,ownerEmail:rows[0].ownerEmail,approvalStatus:'approved',productCount:1,paymentStatus:'not_started',paidMembership:false}],limited:false};
@@ -374,9 +378,18 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByText('Exact seller UID: seller1').waitFor();
+    await f.page.getByText('Seller registration record: approved').waitFor();
+    await f.page.getByText('Owner selfie review: not_submitted').waitFor();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
+    await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
+    await f.page.getByText('Enter a review reason of at least 15 characters before publishing.').waitFor();
+    assert(!published,'The blank form must never initiate a catalogue publication');
     await f.page.getByLabel('Reason for publishing saved seller products').fill(
       'Confirmed three approved seller drafts for a live local shop');
+    await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
+    await f.page.getByText('Tick the confirmation box to verify this exact seller UID and selling entitlement.').waitFor();
+    assert(!published,'An unchecked form must never publish products');
     await f.page.getByRole('checkbox',{name:/I checked the shop approval and selling entitlement/}).check();
     await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 3').waitFor();

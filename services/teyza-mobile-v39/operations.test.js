@@ -104,6 +104,74 @@ test('Admin distinguishes sixteen public products from missing, changed and vali
   assert.equal(detail.shopperVisibility.status,'address_changed');
   assert.equal(detail.shopperVisibility.hasValidPin,false);
 });
+test('Admin explains live shop with sixteen stored items but zero shopper-visible products after entitlement expiry',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',name:'Test Shop',
+   products:Array.from({length:16},(_,i)=>({id:'stock'+i,name:'Product '+i,priceCents:1000,stock:4})),
+   productHighlights:Array.from({length:16},(_,i)=>({id:'stock'+i,name:'Product '+i,inStock:true})),
+   catalogueEnabled:true});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',mandateAccessStatus:'active',
+   mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate_a',
+   mandateAccessUntil:now-1000});
+ let d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.shopperVisibility.directoryEligible,true,'Verified business listing remains publicly discoverable');
+ assert.equal(d.shopperVisibility.storedProductCount,16);
+ assert.equal(d.shopperVisibility.unpricedHighlightCount,16);
+ assert.equal(d.shopperVisibility.publicProductCount,0,'Expired entitlement must hide priced stock');
+ assert.equal(d.shopperVisibility.entitlementActive,false);
+ assert.equal(d.shopperVisibility.publicFeedReason,'selling_entitlement_inactive');
+ assert.equal(d.shopperVisibility.sellerUidMatchesShop,true);
+ assert.equal(d.sellingStatus.canSell,false);
+ assert.equal(d.membershipPaid,false,'Mandate expiry cannot be converted to verified payment');
+});
+test('Admin distinguishes approved seller drafts lacking publication from billed or private stock',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',
+   name:'Test Shop',products:[],catalogueEnabled:false});
+ f.db.records.set('teyzaDraftProducts/seller1/items/rice',{ownerUid:'seller1',status:'draft',name:'Rice',category:'Groceries',priceCents:2500,stockQty:3});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',mandateAccessStatus:'active',
+   mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate_a',
+   mandateAccessUntil:now+86400000});
+ const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.shopperVisibility.directoryEligible,true);
+ assert.equal(d.shopperVisibility.publicFeedReason,'saved_drafts_not_published');
+ assert.equal(d.shopperVisibility.publicProductCount,0);
+ assert.equal(d.shopperVisibility.entitlementActive,true);
+ assert.equal(d.sellingStatus.savedDraftCount,1);
+ assert.equal(d.shopperVisibility.catalogueEnabled,false);
+});
+test('Published catalogue snapshot is not mistaken for saved draft items or actual shopper products',async()=>{
+  const f=setup();
+  f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',name:'Test Shop',products:[],catalogueEnabled:false});
+  f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',adminComplimentaryStatus:'active',
+    adminComplimentaryReason:'Verified seller publication test',adminComplimentaryBy:'admin1',
+    adminComplimentaryUntil:now+86400000});
+  f.db.records.set('teyzaCatalogueSubmissions/seller1',{ownerUid:'seller1',status:'published',
+    products:Array.from({length:16},(_,i)=>({id:'item'+i,name:'Product '+i,priceCents:1500,stock:3}))});
+  const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(d.shopperVisibility.directoryEligible,true);
+  assert.equal(d.shopperVisibility.entitlementActive,true);
+  assert.equal(d.shopperVisibility.submittedCatalogueCount,16);
+  assert.equal(d.shopperVisibility.submittedCatalogueStatus,'published');
+  assert.equal(d.shopperVisibility.submittedCatalogueOwnerMatchesSeller,true);
+  assert.equal(d.sellingStatus.savedDraftCount,0);
+  assert.equal(d.shopperVisibility.storedProductCount,0);
+  assert.equal(d.shopperVisibility.publicProductCount,0);
+  assert.equal(d.shopperVisibility.publicFeedReason,'no_saved_products');
+});
+test('Admin cannot claim success or audit publication when synchronisation finds zero valid products',async()=>{
+  const db=new FakeDB({
+    'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',approvalStatus:'approved',shopName:'Test Shop'},
+    'teyzaPublicShops/seller1':{sellerUid:'seller1',status:'active',products:[],catalogueEnabled:false},
+    'teyzaBilling/seller1':{ownerUid:'seller1',adminComplimentaryStatus:'active',
+      adminComplimentaryReason:'Verified seller publication test',adminComplimentaryBy:'admin1',
+      adminComplimentaryUntil:now+86400000}
+  });
+  const svc=createOperations({db,clock:()=>now,rate:async()=>{},synchronize:async()=>({publication:'live',publicCount:0,savedCount:0})});
+  await rejects(svc.execute(admin,'ops_catalogue_publish',{sellerUid:'seller1',
+    reason:'Review confirmed matching seller but no drafted items',confirmed:true}),409);
+  assert(![...db.records.values()].some(x=>x.action==='ops_catalogue_publish'));
+});
 test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
  const f=setup(),input={sellerUid:'seller1',days:7,
   reason:'Approved small business community launch demonstration',confirmed:true};
@@ -135,7 +203,7 @@ test('Admin can publish a saved spaza range only with approved, active selling a
    const db=new FakeDB({
      'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',shopName:'Test Shop',approvalStatus:'approved'},
      'teyzaPublicShops/seller1':{sellerUid:'seller1',status:'active',products:[],catalogueEnabled:false},
-     'teyzaDraftProducts/seller1/items/rice':{ownerUid:'seller1',status:'draft',name:'Rice',priceCents:2500,stockQty:3},
+     'teyzaDraftProducts/seller1/items/rice':{ownerUid:'seller1',status:'draft',name:'Rice',category:'Groceries',priceCents:2500,stockQty:3},
    });
    const sync=async (target,options)=>{
      syncCalls.push({target,options});
@@ -165,6 +233,45 @@ test('Admin can publish a saved spaza range only with approved, active selling a
  assert.equal(detail.sellingStatus.savedDraftCount,1);
  assert.equal(detail.sellingStatus.publicProductCount,1);
  assert.equal(detail.sellingStatus.publicProductsAllowed,true);
+});
+test('Admin identifies invalid drafts rather than silently publishing zero products',async()=>{
+ const f=setup();
+ // A canonical template with a mismatched name is not a valid product.
+ const uid='seller1',productId='catalog_milk-2-l';
+ f.db.records.set('teyzaDraftProducts/'+uid+'/items/'+productId,{
+   ownerUid:uid,status:'draft',name:'Forged template name',category:'Dairy & Eggs',
+   priceCents:3000,stockQty:4
+ });
+ f.db.records.set('teyzaPublicShops/'+uid,{...f.db.records.get('teyzaPublicShops/'+uid),
+   status:'active',products:[],catalogueEnabled:false});
+ const summary=await f.call('ops_seller_detail',{sellerUid:uid});
+ assert.equal(summary.sellingStatus.savedDraftCount,1);
+ assert.equal(summary.sellingStatus.publishableDraftCount,0);
+ assert.equal(summary.sellingStatus.invalidDraftCount,1);
+ const reason='Reviewed valid seller identity and saved product stock';
+ await rejects(f.call('ops_catalogue_publish',{sellerUid:uid,reason,confirmed:true}),409);
+ assert(![...f.db.records.values()].some(x=>x.action==='ops_catalogue_publish'));
+});
+test('Admin reports account approval separately when an approved selfie is not linked to onboarding',async()=>{
+ const f=setup(),uid='seller1';
+ f.db.records.set('teyzaPublicShops/'+uid,{sellerUid:uid,status:'pending_setup',products:[],catalogueEnabled:false});
+ f.db.records.set('teyzaSellerOnboarding/'+uid,{
+   requiredVersion:2,completedAt:now-1000,sellingStatus:'pending_approval',
+   selfieSubmissionId:'previous',verifiedPhone:'+27721234567'});
+ f.db.records.set('teyzaMobileVerification/'+uid,{
+   ownerUid:uid,status:'approved',submissionId:'current'});
+ f.db.records.set('teyzaBilling/'+uid,{
+   ownerUid:uid,adminComplimentaryStatus:'active',adminComplimentaryBy:'admin2',
+   adminComplimentaryUntil:now+86400000,adminComplimentaryReason:'Audited, reviewed seller access'});
+ const d=await f.call('ops_seller_detail',{sellerUid:uid});
+ assert.equal(d.seller.sellerUid,uid);
+ assert.equal(d.seller.approvalStatus,'approved');
+ assert.equal(d.sellingStatus.registrationApproved,true);
+ assert.equal(d.sellingStatus.selfieApproved,true);
+ assert.equal(d.sellingStatus.selfieMatchesOnboarding,false);
+ assert.equal(d.sellingStatus.shopSetupComplete,false);
+ assert.equal(d.sellingStatus.canSell,false);
+ assert.equal(d.sellingStatus.sellingAccessActive,true);
 });
 test('Wholesalers remain shop listings only: admin cannot publish retail-facing prices',async()=>{
  const f=setup();

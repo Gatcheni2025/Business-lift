@@ -1,6 +1,7 @@
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
+import {inspectSellerPublicFeed} from '/js/teyza-public-feed-check.mjs?v=R333';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
@@ -103,13 +104,13 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+ function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone,s.sellerUid].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail,'UID '+s.sellerUid].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
 
  function mandateQueue(){
    const box=card('R99 monthly mandates — admin inbox',
      'These are preliminary consent requests. Obtain a Netcash-accepted signed paper or approved eMandate before submitting a debit batch.');
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
-     mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
+     mandates.map(m=>[(m.shopName||'Seller')+' · UID '+m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
        button('Open mandate',()=>choose(sellers.find(s=>s.sellerUid===m.sellerUid)||
          {sellerUid:m.sellerUid,shopName:m.shopName||'Seller'}))])));
@@ -231,40 +232,88 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const status=d.sellingStatus;
   if(status){
     const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
-    review.append(el('p','Seller registration: '+(status.sellerApproved?'Approved':'Pending review')),
+    review.append(
+      el('p','Exact seller UID: '+d.seller.sellerUid),
+      el('p','Seller registration record: '+String(d.seller.approvalStatus||'pending')),
+      el('p','Owner selfie review: '+String(status.approvalVerificationStatus||'not_submitted')),
       el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
-      el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Selling access entitlement: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Eligible to publish products: '+(status.canSell?'Yes':'No')),
       el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
+      const publishForm=parent=>{
+        const form=el('form',undefined,'ops-form');
+        // Validate explicitly so the admin sees why an empty/unchecked form
+        // did not submit. Native required-field blocking was silent here.
+        const reasonInput=field(form,'Reason for publishing saved seller products','reason','textarea');
+        reasonInput.required=false; // Manual validation shows an inline explanation instead of an invisible browser block.
+        reasonInput.placeholder='Describe the verified seller and saved stock (minimum 15 characters)';
+        const confirmed=check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
+        confirmed.required=false;
+        const feedback=el('p','Add a review reason and tick the confirmation box before publishing.','ops-inline-feedback');
+        feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
+        form.append(feedback);
+        submit(form,'Publish saved shop products',async fd=>{
+          const reason=String(fd.get('reason')||'').trim(),sellerUid=d.seller.sellerUid;
+          const report=(text,invalid=false)=>{
+            feedback.textContent=text;
+            feedback.className='ops-inline-feedback'+(invalid?' notice warning':'');
+          };
+          if(reason.length<15){
+            report('Enter a review reason of at least 15 characters before publishing.',true);
+            reasonInput.focus();return;
+          }
+          if(!confirmed.checked){
+            report('Tick the confirmation box to verify this exact seller UID and selling entitlement.',true);
+            confirmed.focus();return;
+          }
+          if(!confirm('Publish this UID’s saved products to the public catalogue? No seller approval or payment will be recorded.'))return;
+          report('Publishing the saved range for this seller UID…');
+          try{
+            const result=await request('ops_catalogue_publish',{sellerUid,reason,confirmed:true});
+            if(result.published!==true||!Number.isInteger(result.publicProductCount)||result.publicProductCount<1)
+              throw Error('The backend did not confirm any published products. The seller was not charged. Check the saved product validity and backend version.');
+            report(result.publicProductCount+' priced products saved. Checking what shoppers can retrieve…');
+            let feed=null,feedError=null;
+            try{feed=await inspectSellerPublicFeed(sellerUid);}
+            catch(error){feedError=error;}
+            await choose(selected);
+            if(feed?.found&&feed.shopperProductCount>0)
+              message(feed.shopperProductCount+' priced products verified in the live shopper feed for this exact UID. No payment was recorded.','success');
+            else if(feedError)
+              message(result.publicProductCount+' products stored, but live shopper-feed verification was unavailable. Refresh and use Check live shopper feed for this UID.','warning');
+            else
+              message(result.publicProductCount+' products stored, but the deployed shopper feed still returned zero priced products. Check backend deployment and seller UID.','error');
+          }catch(error){
+            report('Publication failed: '+(error?.message||'Unknown error')+'. No payment was collected.',true);
+            throw error;
+          }
+        });
+        parent.append(form);
+      };
     if(status.publicProductsAllowed===false){
       review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
     }else{
       review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
         ' · Live-priced products: '+(status.publicProductCount||0)));
       if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
+      if(status.publishableDraftCount!==undefined){
+        review.append(el('p','Valid drafts ready to publish: '+Number(status.publishableDraftCount||0)+
+          ' · Drafts requiring correction: '+Number(status.invalidDraftCount||0),'footnote'));
+        if(status.invalidDraftCount>0)
+          review.append(el('p','Some saved products have invalid prices, stock, category or template details. These cannot be published until corrected in the seller app.','notice warning'));
+      }
       if(status.canSell&&status.publicProductCount>0&&
           (status.savedDraftCount||0)<=status.publicProductCount)
-        review.append(el('p','These products are already published. There is no need to approve them again. Check their public-directory and nearby-location status below.','notice success'));
-      if(status.canSell&&((status.savedDraftCount||0)>(status.publicProductCount||0))){
-        const form=el('form',undefined,'ops-form');
-        field(form,'Reason for publishing saved seller products','reason','textarea');
-        check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
-        submit(form,'Publish saved shop products',async fd=>{
-          const reason=String(fd.get('reason')||'').trim();
-          if(reason.length<15)throw Error('Explain this publication in at least 15 characters.');
-          if(!confirm('Publish this approved shop’s current saved product range to shoppers? No payment will be recorded.'))return;
-          const result=await request('ops_catalogue_publish',{sellerUid:d.seller.sellerUid,reason,confirmed:true});
-          await choose(selected);
-          message((result.publicProductCount||0)+' products published on the shopper catalogue.','success');
-        });
-        review.append(form);
-      }
+        review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
+      if(status.canSell&&(status.savedDraftCount||0)>(status.publicProductCount||0))
+        publishForm(review);
     }
     const visibility=d.shopperVisibility;
     if(visibility){
       const details=el('div',undefined,'ops-visibility-diagnostic');
       details.append(el('h4','Shopper discovery and location check'),
-        el('p','Public directory eligibility: '+(visibility.directoryEligible?'Approved and active':'Not currently eligible')+
-          ' · Public-feed priced products: '+Number(visibility.publicProductCount||0)));
+        el('p','Expected public-directory eligibility: '+(visibility.directoryEligible?'Approved and active':'Not currently eligible')+
+          ' · Priced products stored in public record: '+Number(visibility.publicProductCount||0)));
       if(!visibility.hasValidPin){
         const problem=visibility.status==='address_changed'
           ?'The seller changed the shop address after setting the location. Save a new shop pin matching the updated address.'
@@ -279,17 +328,64 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
           ', '+Number(visibility.longitude).toFixed(5)+
           '. Customer results use the distance from their saved delivery location within the selected search radius.','notice success'));
       }
+      details.append(el('p','Backend assessment: '+(visibility.publicFeedReason||'unknown').replaceAll('_',' ')+
+        ' · Stored priced products: '+Number(visibility.storedProductCount||0)+
+        ' · Unpriced highlights: '+Number(visibility.unpricedHighlightCount||0)+
+        ' · Submitted snapshot products: '+Number(visibility.submittedCatalogueCount||0)+
+        ' · Submission status: '+(visibility.submittedCatalogueStatus||'not found')+
+        ' · Active selling entitlement: '+(visibility.entitlementActive?'yes':'no')+
+        ' · Seller UID matches public shop: '+(visibility.sellerUidMatchesShop?'yes':'no'),'footnote'));
+      if(visibility.submittedCatalogueCount>0&&(status.savedDraftCount||0)===0&&visibility.storedProductCount===0)
+        details.append(el('p','A catalogue submission exists, but no valid saved draft products or priced public stock are currently available. Check teyzaDraftProducts/{sellerUid}/items; do not publish an empty catalogue or recreate the missing parent document.','notice warning'));
+      const resultBox=el('div',undefined,'ops-live-feed-result');
+      details.append(button('Check live shopper feed for this UID',async()=>{
+        const sellerUid=d.seller.sellerUid;
+        const feed=await inspectSellerPublicFeed(sellerUid);
+        if(selected?.sellerUid!==sellerUid||detail?.seller?.sellerUid!==sellerUid)return;
+        resultBox.replaceChildren();
+        if(!feed.found){
+          resultBox.append(el('p','The live shopper directory did not return this exact seller UID. Investigate approval, status and backend deployment; search radius is not the cause.','notice warning'));
+        }else{
+          resultBox.append(el('p','Actual live shopper feed for UID '+sellerUid+
+            ': '+feed.publicProductCount+' products received · '+feed.shopperProductCount+
+            ' correctly priced · '+feed.inStockProductCount+' in stock · '+feed.highlightCount+
+            ' unpriced highlights.',feed.shopperProductCount>0?'notice success':'notice warning'));
+          if(feed.publicProductCount>0&&feed.shopperProductCount===0)
+            resultBox.append(el('p','Products were returned, but prices, stock or required fields do not satisfy shopper-app validation.','notice warning'));
+          else if(feed.shopperProductCount>0)
+            resultBox.append(el('p','The live feed contains priced stock. Confirm the shopper uses the same shop UID, saved delivery address, radius and current app build.','footnote'));
+        }
+        if(status.canSell&&status.publicProductsAllowed!==false&&
+           (status.savedDraftCount||0)>0&&(!feed.found||feed.shopperProductCount===0)){
+          resultBox.append(el('p','Publishing can be retried only after verifying account approval and active selling access. It will not charge Paystack or bypass seller checks.','footnote'));
+          publishForm(resultBox);
+        }else if(!status.canSell){
+          resultBox.append(el('p','Do not force publication: this seller UID is missing verified approval, completed setup or eligible selling access.','notice warning'));
+        }
+      }),resultBox);
+      details.append(el('p','This checks the deployed public directory independently of the private Firebase product count. Match the exact UID before investigating search radius.','footnote'));
       review.append(details);
     }
-    if(!status.sellerApproved){
-      review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
-        status.approvalAccountStatus+' · identity/selfie: '+status.approvalVerificationStatus+
-        '. Check the same seller UID in the approval queue.','notice warning'),
+    // Use the authoritative values from the response even if Hosting and
+    // Functions revisions are briefly out of step during deployment.
+    const registrationApproved=status.registrationApproved??d.seller.approvalStatus==='approved';
+    const selfieApproved=status.selfieApproved??status.approvalVerificationStatus==='approved';
+    if(!registrationApproved){
+      review.append(el('p','Registration approval is pending for this exact Firebase UID ('+d.seller.sellerUid+'). Approval of another account with the same email cannot transfer. Review the account and selfie audit before taking action.','notice warning'),
         button('Review seller verification',()=>navigate('approvals')));
-    }else if(!status.shopSetupComplete)
-      review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
-    else if(!status.sellingAccessActive)
-      review.append(el('p','Receive the R99 mandate to begin the automatic seven-day processing window. No additional manual seller-access approval is necessary.','notice warning'));
+    }else if(!selfieApproved){
+      review.append(el('p','Registration is approved for this UID, but the current selfie review is not approved. A replacement document or selfie may have reopened verification. Check the review history; do not bypass identity checks.','notice warning'));
+    }else if(!status.shopSetupComplete){
+      const missing=[];
+      if(status.selfieMatchesOnboarding===false)missing.push('onboarding selfie reference differs from the approved selfie');
+      if(status.verifiedPhoneMatchesOnboarding===false)missing.push('saved phone verification differs from the registered phone');
+      if(status.moderationBlocked===true)missing.push('onboarding moderation is blocked');
+      review.append(el('p','Registration and selfie review are approved, but shop onboarding is incomplete'+
+        (missing.length?': '+missing.join('; '):'. Check completion and location')+
+        '. Do not reset approval or collect another payment.','notice warning'));
+    }else if(!status.sellingAccessActive){
+      review.append(el('p','Registration and verification are complete, but selling access is inactive. Check the existing time-limited grant or verified payment before offering products.','notice warning'));
+    }
     if(d.mandateAccessActive)review.append(el('p',
       (d.mandateAccessKind==='processing_7d'?'7-day processing access until ':'30-day provider-accepted access until ')+
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));

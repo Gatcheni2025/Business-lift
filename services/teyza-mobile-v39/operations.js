@@ -1,5 +1,5 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication');
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),catalogue=require('./catalogue');
 const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
@@ -87,8 +87,21 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    const state=P.state(target,account,setup||{},verification,shop,billing,clock());
    if(!state.canSell||shop?.status!=='active')
      D.fail(409,'Shop setup, seller verification and active paid or temporary selling access are required.');
+   // Preflight existing draft documents before attempting publication. The
+   // saved count alone does not mean those documents still meet catalogue
+   // template and stock rules. Never silently publish zero valid items.
+   const draftPage=await db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get();
+   if(draftPage.docs.length>200)D.fail(409,'This seller has over 200 saved products. Review and reduce the draft range before publishing.');
+   const sellerDrafts=draftPage.docs.filter(row=>row.data().ownerUid===target&&row.data().status==='draft');
+   const publishable=sellerDrafts.filter(row=>{
+     const entry={id:row.id,data:row.data()};
+     return Boolean(catalogue.canonical(target,entry)||catalogue.custom(target,entry));
+   });
+   if(sellerDrafts.length&&!publishable.length)
+     D.fail(409,'Saved products exist, but none passed price, stock and catalogue-template validation. Ask the seller to correct their product records; no payment was recorded.');
    const result=await synchronize(target,{publishIntent:true});
    if(result.publication!=='live')D.fail(409,'Seller access changed. Refresh the shop before publishing.');
+   if(result.publicCount===0)D.fail(409,'No publishable products were found for this seller UID. Check the saved product items subcollection and submitted catalogue snapshot. No payment or product publication was recorded.');
    await db.runTransaction(async tx=>{
      audit(tx,auth,action,target,{reason,publicProductCount:result.publicCount,noPaymentRecorded:true});
    });
@@ -134,8 +147,23 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    // the unauthenticated public directory endpoint.
    const pin=P.locationFor(target,account,location,shop,clock());
    const directoryEligible=publication.live&&shop?.sellerUid===target&&shop?.status==='active';
-   const publicItems=directoryEligible&&P.eligible(target,account,billing,clock())&&
-      account.category!=='wholesale'?(Array.isArray(shop?.products)?shop.products:[]):[];
+   const entitlementActive=P.eligible(target,account,billing,clock());
+   const storedProducts=Array.isArray(shop?.products)?shop.products:[];
+   const storedHighlights=Array.isArray(shop?.productHighlights)?shop.productHighlights:[];
+   const publicItems=directoryEligible&&entitlementActive&&
+      account.category!=='wholesale'?storedProducts:[];
+   const sellerDrafts=(draftPage?.docs||[]).filter(x=>x.data().ownerUid===target&&x.data().status==='draft');
+   const savedDraftCount=draftPage?sellerDrafts.length:null;
+   const publishableDraftCount=sellerDrafts.filter(row=>{
+     const entry={id:row.id,data:row.data()};
+     return Boolean(catalogue.canonical(target,entry)||catalogue.custom(target,entry));
+   }).length;
+   // Mirrors the public directory's eligibility rules, not a live endpoint fetch.
+   const publicFeedReason=account.category==='wholesale'?'wholesale_listing_only':
+     !directoryEligible?'seller_not_public':
+     !entitlementActive?'selling_entitlement_inactive':
+     publicItems.length?'expected_published':
+     savedDraftCount>0?'saved_drafts_not_published':'no_saved_products';
    const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
    const locationPinExpired=location?.ownerUid===target&&
       P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
@@ -169,15 +197,35 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
          !pin?locationHasChanged?'address_changed':locationPinExpired?'pin_expired':'pin_missing':
          'location_ready',
        publicProductCount:publicItems.length,
+       storedProductCount:storedProducts.length,
+       unpricedHighlightCount:storedHighlights.length,
+       submittedCatalogueCount:submission?.ownerUid===target&&Array.isArray(submission.products)?submission.products.length:0,
+       submittedCatalogueStatus:submission?.ownerUid===target?submission.status||'unknown':'not_found',
+       submittedCatalogueOwnerMatchesSeller:submission?.ownerUid===target,
+       sellerUidMatchesShop:shop?.sellerUid===target,
+       entitlementActive,
+       catalogueEnabled:shop?.catalogueEnabled===true,
+       sellingEnabled:shop?.sellingEnabled===true,
+       publicFeedReason,
        shopCategory:account.category||'',
        radiusMustUseShopperDeliveryAddress:true
      },
-     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+     sellingStatus:{
+       // Actual account approval differs from aggregate publication readiness.
+       sellerApproved:publication.approved,
+       registrationApproved:account.approvalStatus==='approved',
+       selfieApproved:verification?.ownerUid===target&&verification.status==='approved',
+       selfieMatchesOnboarding:setup?.requiredVersion!==2||
+         Boolean(setup?.selfieSubmissionId&&setup.selfieSubmissionId===verification?.submissionId),
+       verifiedPhoneMatchesOnboarding:setup?.requiredVersion!==2||
+         Boolean(setup?.verifiedPhone&&setup.verifiedPhone===String(account.phone||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27')),
+       moderationBlocked:setup?.moderationBlocked===true,
+       shopSetupComplete:publication.ready,
        sellingAccessActive:publication.hasListing,canSell:publication.canSell,
        shopStatus:shop?.status||'not_listed',
        publicProductCount:account.category!=='wholesale'&&publication.canSell&&shop?.status==='active'?
          (Array.isArray(shop.products)?shop.products.length:0):0,
-       savedDraftCount:draftPage?draftPage.docs.filter(x=>x.data().ownerUid===target&&x.data().status==='draft').length:null,
+       savedDraftCount,publishableDraftCount,invalidDraftCount:sellerDrafts.length-publishableDraftCount,
        draftLimitReached:!!draftPage&&draftPage.docs.length>200,
        publicProductsAllowed:account.category!=='wholesale',
        approvalAccountStatus:account.approvalStatus||'pending',

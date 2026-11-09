@@ -529,6 +529,61 @@ test('Retail products publish only after an audited selling grant and explicit o
  assert.equal(publicShop.products[0].category,'Furniture & Repairs');
  assert.equal(publicShop.products[0].priceCents,45000);
 });
+test('Explicit seller catalogue submission publishes sixteen valid drafts, not just a saved published label',async()=>{
+  const templates=require('./catalogue.json').products.slice(0,16);
+  const records=Object.fromEntries(templates.map((template,i)=>[
+    'teyzaDraftProducts/seller1/items/catalog_'+template.id,
+    {ownerUid:'seller1',status:'draft',name:template.name,category:template.category,
+      description:'Pack size: '+template.unit,priceCents:2000+i,stockQty:6}
+  ]));
+  const f=fixture({...records,'teyzaPublicShops/seller1':{...shop,products:[],
+    productHighlights:[],catalogueEnabled:false,sellingEnabled:false}});
+  const result=await f.service.execute(owner,'catalogue_submit');
+  assert.equal(result.status,'published');
+  assert.equal(result.publicationConfirmed,true);
+  assert.equal(result.publicProductCount,16);
+  const listing=f.db.records.get('teyzaPublicShops/seller1');
+  assert.equal(listing.products.length,16);
+  assert.equal(listing.productHighlights.length,16);
+  assert.equal((await f.service.publicDirectory()).entries.find(x=>x.id==='seller1').products.length,16);
+  assert.equal(f.db.records.get('teyzaCatalogueSubmissions/seller1').status,'published');
+  assert(![...f.db.records.values()].some(x=>x.action==='ops_payment'));
+});
+test('Submitting sixteen drafts without valid selling entitlement stays private, never falsely published',async()=>{
+  const template=require('./catalogue.json').products[0];
+  const f=fixture({
+    'teyzaSellerAccounts/seller1':{...seller,listingPlan:'free'},
+    'teyzaBilling/seller1':{ownerUid:'seller1',status:'pending'},
+    'teyzaPublicShops/seller1':{...shop,products:[],productHighlights:[],
+      sellingEnabled:false,catalogueEnabled:false},
+    ['teyzaDraftProducts/seller1/items/catalog_'+template.id]:{
+      ownerUid:'seller1',status:'draft',name:template.name,category:template.category,
+      description:'Pack size: '+template.unit,priceCents:2000,stockQty:3}
+  });
+  const result=await f.service.execute(owner,'catalogue_submit');
+  assert.equal(result.status,'waiting_for_access');
+  assert.equal(result.publicationConfirmed,false);
+  assert.equal(result.publicProductCount,0);
+  assert.equal(f.db.records.get('teyzaPublicShops/seller1').products.length,0);
+  assert.equal(f.db.records.get('teyzaCatalogueSubmissions/seller1').status,'waiting_for_access');
+});
+test('Actual seller account approval stays approved when selfie or onboarding is out of sync',async()=>{
+  const f=fixture({
+    'teyzaSellerOnboarding/seller1':{requiredVersion:2,completedAt:100,
+      verifiedPhone:'+27710000000',selfieSubmissionId:'old',sellingStatus:'pending_approval'},
+    'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved',
+      submissionId:'new',submittedAt:123}
+  });
+  const summary=await f.service.execute(owner,'seller_summary');
+  assert.equal(summary.approvalStatus,'approved');
+  assert.equal(summary.approvalChecks.registrationApproved,true);
+  assert.equal(summary.approvalChecks.selfieApproved,true);
+  assert.equal(summary.approvalChecks.selfieMatchesOnboarding,false);
+  assert.equal(summary.approvalChecks.onboardingComplete,false);
+  assert.equal(summary.approvalChecks.canSell,false);
+  assert.equal(summary.identityVerified,true,'A reviewed identity remains verified even if shop onboarding is incomplete');
+  assert.equal(summary.publicProductCount,0);
+});
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
  const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
  const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop,

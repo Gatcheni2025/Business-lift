@@ -12,6 +12,7 @@ import 'package:teyza_shopper/seller_firestore.dart';
 import 'package:teyza_shopper/seller_selling.dart';
 import 'package:teyza_shopper/seller_areas.dart';
 import 'package:teyza_shopper/seller_tools.dart';
+import 'package:teyza_shopper/seller_onboarding.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
 import 'session_test.dart' as auth;
 
@@ -174,16 +175,16 @@ void main(){
     expect(find.text('R99 / month'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('A pending seller sees benefits but cannot begin checkout',(tester) async {
+  testWidgets('A pending seller is directed to verification, not a second payment mandate',(tester) async {
     SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=PendingSellerApi(SellerSession());
     const pending=SellerShop('Market','spaza','Durban','pending','not_listed');
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()async=>pending),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.textContaining('Product publishing requires'),350);
-    expect(find.textContaining('Product publishing requires'),findsOneWidget);
-    expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
+    expect(find.byType(SellerOnboardingPage),findsOneWidget);
+    expect(find.text('Benefits for your shop'),findsNothing);
+    expect(api.calls.where((c)=>c.action=='billing_checkout'||c.action=='seller_mandate_submit'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('A delayed seller lookup cannot switch the app back after logout',(tester) async {

@@ -66,8 +66,9 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,17);
+ const files=overlay(root);assert.equal(files.size,18);
   assert(files.has('/js/teyza-mandate-pdf.mjs'));
+  assert(files.has('/js/teyza-public-feed-check.mjs'));
   const pdfSource=require('node:zlib').gunzipSync(files.get('/js/teyza-mandate-pdf.mjs').bytes).toString('utf8');
   assert(pdfSource.includes('buildMandateRequestPdf'));
   assert(pdfSource.includes('NOT BANK-AUTHENTICATED'));
