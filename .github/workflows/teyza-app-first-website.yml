@@ -20,6 +20,7 @@ jobs:
           python-version: '3.12'
       - run: python3 scripts/check_app_first_website.py
       - run: node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/store-links.test.cjs tools/app-first-release/premium-site.test.cjs
+      - run: node --test tools/app-first-release/pay-preview-patch.test.cjs
       - run: node --check tools/app-first-release/store-links-patch.cjs
       - run: node --check tools/app-first-release/premium-site-patch.cjs
       - run: node --check tools/app-first-release/run.cjs
