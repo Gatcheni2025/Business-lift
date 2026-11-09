@@ -13,6 +13,7 @@ const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
+const paystackSigningKey=defineSecret('TEYZA_PAYSTACK_WEBHOOK_SIGNING_SECRET');
 // Admin-only deployment must not register an optional WhatsApp secret.
 // Firebase detects defineSecret during module evaluation even for exports
 // excluded via --only.
@@ -65,7 +66,7 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
    updateAuthUser:(uid,values)=>admin.auth().updateUser(uid,values),
    sendPasswordResetEmail:sendSetupEmail,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
-   getPaystackSecret:()=>paystackKey.value(),getPaystackPlanCode:()=>process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE||'',
+   getPaystackSecret:()=>paystackKey.value(),getPaystackWebhookSigningSecret:()=>paystackSigningKey.value(),getPaystackPlanCode:()=>process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE||'',
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
@@ -76,11 +77,11 @@ function sellerCheckoutConfigured(){
  return Boolean(/^sk_(test|live)_/.test(key)&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE&&
   (!key.startsWith('sk_test_')||(project&&project!=='business-lift-3c19c')));
 }
-exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
+exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
     if(req.method!=='POST'){res.status(405).end();return;}
-    try{await service.paystackWebhook(req.rawBody,req.get('X-Paystack-Signature'),req.body);
+    try{await service.paystackWebhook(req.rawBody,req.get('X-Paystack-Signature'),req.body,req.get('Paystack-Signature'));
       res.status(200).json({ok:true});}
     catch(error){res.status(error.status===401?401:503).json({error:'Webhook verification failed.'});}
     return;
@@ -108,7 +109,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackModernWebhookSignatureVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:true,
        sellerMandateRequestV3:true,adminMandatePdfExport:true,adminNetcashManualSubmission:true,
