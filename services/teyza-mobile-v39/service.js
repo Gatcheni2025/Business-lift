@@ -39,20 +39,36 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     D.id(uid);
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
-      const setupRef=doc('teyzaSellerOnboarding/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap]=await Promise.all([
-        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid)),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201))]);
+      const setupRef=doc('teyzaSellerOnboarding/'+uid),billRef=doc('teyzaBilling/'+uid);
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap,mandateSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(billRef),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201)),tx.get(doc('teyzaSellerMandates/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
       // Migrate old trials to free without billing or resetting trial dates.
       if(account?.listingPlan==='trial'){
         account={...account,listingPlan:'free'};
         tx.update(accountRef,{listingPlan:'free',updatedAt:new Date(clock())});
       }
+      let effectiveBilling=billingSnap.exists?billingSnap.data():null;
+      const m=mandateSnap.exists?mandateSnap.data():null,stamp=clock();
+      // Existing mandates signed before the rollout receive only the remainder
+      // of the original 7-day window; never restart on a read or correction.
+      if(account?.uid===uid&&account.approvalStatus==='approved'&&m?.ownerUid===uid&&
+         ['pending_provider_authentication','reviewed_pending_provider','submitted_to_netcash'].includes(m.status)&&
+         Number.isFinite(m.acceptedAt)&&stamp>=m.acceptedAt&&stamp<m.acceptedAt+7*86400000&&
+         !Number.isFinite(effectiveBilling?.mandateAccessFirstStartedAt)&&
+         !['active','revoked'].includes(effectiveBilling?.mandateAccessStatus)&&
+         (!effectiveBilling?.ownerUid||effectiveBilling.ownerUid===uid)){
+        const patch={ownerUid:uid,mandateAccessStatus:'active',mandateAccessKind:'processing_7d',
+          mandateAccessFirstStartedAt:m.acceptedAt,mandateAccessMandateId:m.mandateId,
+          mandateAccessUntil:m.acceptedAt+7*86400000,mandateAccessStartedAt:m.acceptedAt,updatedAt:stamp};
+        tx.set(billRef,patch,{merge:true});
+        effectiveBilling={...(effectiveBilling||{}),...patch};
+      }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       if(additions.length&&account.approvalStatus!=='approved')
         D.fail(403,'Your seller registration must be approved before adding products.');
-      if(additions.length&&!P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()))
+      if(additions.length&&!P.eligible(uid,account,effectiveBilling,clock()))
         D.fail(403,'Activate product access before adding products, or ask an administrator about complimentary access.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
@@ -72,8 +88,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const verification=verificationSnap.exists?verificationSnap.data():null;
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
         front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
-         billing:billingSnap.exists?billingSnap.data():null,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
-      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
+         billing:effectiveBilling,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
+      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,effectiveBilling,clock()));
       // Only an explicit seller product-add/sync can opt a legacy catalogue
       // into publication, and only with approved, active selling entitlement.
       // Background reconciliation must never publish legacy private drafts.
@@ -143,7 +159,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
-  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate});
+  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate,synchronize:synchronizeCatalogue});
   const agentWorkspace=fieldAgents.createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getPlacesKey,fetchImpl:addressFetch,clock,rate});
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
@@ -403,6 +419,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
         complimentaryAccess:P.complimentary(uid,account,billing,clock()),
+        mandateAccessActive:P.mandateAccess(uid,account,billing,clock()),
+        mandateAccessKind:billing?.mandateAccessKind||null,
+        mandateAccessUntil:P.mandateAccess(uid,account,billing,clock())?billing.mandateAccessUntil:null,
         complimentaryUntil:P.complimentary(uid,account,billing,clock())?billing.adminComplimentaryUntil:null,
         paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,introEligible:billing?.introUsed!==true,
         promotionEndsAt:promotion?.endsAt||null,
