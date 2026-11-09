@@ -1,6 +1,7 @@
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
+import {inspectSellerPublicFeed} from '/js/teyza-public-feed-check.mjs?v=R333';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
@@ -244,20 +245,22 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       if(status.canSell&&status.publicProductCount>0&&
           (status.savedDraftCount||0)<=status.publicProductCount)
         review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
-      if(status.canSell&&((status.savedDraftCount||0)>(status.publicProductCount||0))){
+      const publishForm=parent=>{
         const form=el('form',undefined,'ops-form');
         field(form,'Reason for publishing saved seller products','reason','textarea');
-        check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
-        submit(form,'Publish saved shop products',async fd=>{
-          const reason=String(fd.get('reason')||'').trim();
-          if(reason.length<15)throw Error('Explain this publication in at least 15 characters.');
-          if(!confirm('Publish this approved shop’s current saved product range to shoppers? No payment will be recorded.'))return;
-          const result=await request('ops_catalogue_publish',{sellerUid:d.seller.sellerUid,reason,confirmed:true});
+        check(form,'I verified this seller UID, account approval, active entitlement and saved stock. This does not record a payment.','confirmed');
+        submit(form,'Reconcile and publish saved products',async fd=>{
+          const reason=String(fd.get('reason')||'').trim(),sellerUid=d.seller.sellerUid;
+          if(reason.length<15)throw Error('Provide a meaningful publication reason of at least 15 characters.');
+          if(!confirm('Synchronise this UID’s saved products with the public catalogue? This does NOT approve a seller or record payment.'))return;
+          const result=await request('ops_catalogue_publish',{sellerUid,reason,confirmed:true});
           await choose(selected);
-          message((result.publicProductCount||0)+' products published on the shopper catalogue.','success');
+          message((result.publicProductCount||0)+' products now stored in this shop’s published record. Check the live shopper feed to confirm customer visibility.','success');
         });
-        review.append(form);
-      }
+        parent.append(form);
+      };
+      if(status.canSell&&(status.savedDraftCount||0)>(status.publicProductCount||0))
+        publishForm(review);
     }
     const visibility=d.shopperVisibility;
     if(visibility){
@@ -279,7 +282,38 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
           ', '+Number(visibility.longitude).toFixed(5)+
           '. Customer results use the distance from their saved delivery location within the selected search radius.','notice success'));
       }
-      details.append(el('p','Stored records do not confirm what an older installed shopper app or outdated public endpoint actually displays. Match the seller UID before investigating search radius.','footnote'));
+      details.append(el('p','Backend assessment: '+(visibility.publicFeedReason||'unknown').replaceAll('_',' ')+
+        ' · Stored priced products: '+Number(visibility.storedProductCount||0)+
+        ' · Unpriced highlights: '+Number(visibility.unpricedHighlightCount||0)+
+        ' · Active selling entitlement: '+(visibility.entitlementActive?'yes':'no')+
+        ' · Seller UID matches public shop: '+(visibility.sellerUidMatchesShop?'yes':'no'),'footnote'));
+      const resultBox=el('div',undefined,'ops-live-feed-result');
+      details.append(button('Check live shopper feed for this UID',async()=>{
+        const sellerUid=d.seller.sellerUid;
+        const feed=await inspectSellerPublicFeed(sellerUid);
+        if(selected?.sellerUid!==sellerUid||detail?.seller?.sellerUid!==sellerUid)return;
+        resultBox.replaceChildren();
+        if(!feed.found){
+          resultBox.append(el('p','The live shopper directory did not return this exact seller UID. Investigate approval, status and backend deployment; search radius is not the cause.','notice warning'));
+        }else{
+          resultBox.append(el('p','Actual live shopper feed for UID '+sellerUid+
+            ': '+feed.publicProductCount+' products received · '+feed.shopperProductCount+
+            ' correctly priced · '+feed.inStockProductCount+' in stock · '+feed.highlightCount+
+            ' unpriced highlights.',feed.shopperProductCount>0?'notice success':'notice warning'));
+          if(feed.publicProductCount>0&&feed.shopperProductCount===0)
+            resultBox.append(el('p','Products were returned, but prices, stock or required fields do not satisfy shopper-app validation.','notice warning'));
+          else if(feed.shopperProductCount>0)
+            resultBox.append(el('p','The live feed contains priced stock. Confirm the shopper uses the same shop UID, saved delivery address, radius and current app build.','footnote'));
+        }
+        if(status.canSell&&status.publicProductsAllowed!==false&&
+           (status.savedDraftCount||0)>0&&(!feed.found||feed.shopperProductCount===0)){
+          resultBox.append(el('p','Publishing can be retried only after verifying account approval and active selling access. It will not charge Paystack or bypass seller checks.','footnote'));
+          publishForm(resultBox);
+        }else if(!status.canSell){
+          resultBox.append(el('p','Do not force publication: this seller UID is missing verified approval, completed setup or eligible selling access.','notice warning'));
+        }
+      }),resultBox);
+      details.append(el('p','This checks the deployed public directory independently of the private Firebase product count. Match the exact UID before investigating search radius.','footnote'));
       review.append(details);
     }
     if(!status.sellerApproved){
