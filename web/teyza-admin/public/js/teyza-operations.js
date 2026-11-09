@@ -285,8 +285,12 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       details.append(el('p','Backend assessment: '+(visibility.publicFeedReason||'unknown').replaceAll('_',' ')+
         ' · Stored priced products: '+Number(visibility.storedProductCount||0)+
         ' · Unpriced highlights: '+Number(visibility.unpricedHighlightCount||0)+
+        ' · Submitted snapshot products: '+Number(visibility.submittedCatalogueCount||0)+
+        ' · Submission status: '+(visibility.submittedCatalogueStatus||'not found')+
         ' · Active selling entitlement: '+(visibility.entitlementActive?'yes':'no')+
         ' · Seller UID matches public shop: '+(visibility.sellerUidMatchesShop?'yes':'no'),'footnote'));
+      if(visibility.submittedCatalogueCount>0&&(status.savedDraftCount||0)===0&&visibility.storedProductCount===0)
+        details.append(el('p','A catalogue submission exists, but no valid saved draft products or priced public stock are currently available. Check teyzaDraftProducts/{sellerUid}/items; do not publish an empty catalogue or recreate the missing parent document.','notice warning'));
       const resultBox=el('div',undefined,'ops-live-feed-result');
       details.append(button('Check live shopper feed for this UID',async()=>{
         const sellerUid=d.seller.sellerUid;
