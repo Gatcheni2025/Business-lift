@@ -155,91 +155,65 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    document.body.append(dialog);dialog.showModal();
  }
  function mandateReview(m){
-   const box=card('Debit-order mandate · R99/month',
-     'Admin review of seller consent. A checkbox/PDF alone is not a Netcash-approved debit mandate. Obtain acceptable authority before collections.');
-   box.append(tag(m.status),el('p',m.bankName+' · account ending '+m.accountLast4+
-     ' · branch '+m.branchCode),
-     el('p','Shop address: '+(m.shopAddress||'—')),
-     el('p','First date: '+m.firstDate+' · recurring day '+m.collectionDay),
-     el('p',m.status==='submitted_to_netcash'?'Netcash: submitted manually; bank acceptance and debit unverified':'Netcash: manual submission available after admin review; no debit initiated'),
-     button('View complete private mandate (audited)',()=>inspectMandate(m)));
-   if(['reviewed_pending_provider','submitted_to_netcash'].includes(m.status)&&
-      detail?.seller?.approvalStatus==='approved'&&!detail.membershipPaid&&!detail.complimentaryAccess){
-     const grant=el('form',undefined,'ops-form');
-     grant.append(el('h4','Approve provisional selling access'));
-     grant.append(el('p','Admin may grant 30 days of audited complimentary product access while Netcash authentication and the first R99 debit remain pending. This does not mean the membership is paid.','footnote'));
-     field(grant,'Reason for provisional access (audited)','reason','textarea');
-     check(grant,'I have reviewed the seller and mandate. I understand this is 30 days of complimentary access, not a confirmed debit or permanent upgrade.','confirmed');
-     submit(grant,'Approve selling access for 30 days',async fd=>{
-       const reason=String(fd.get('reason')||'').trim();
-       if(reason.length<15)throw Error('Enter a meaningful reason of at least 15 characters.');
-       if(!confirm('Grant 30 days of temporary product access? This does not record or initiate a payment.'))return;
-       await request('ops_complimentary_access',{sellerUid:selected.sellerUid,days:30,reason,confirmed:true});
-       message('30-day provisional selling access approved and audited. Netcash collection is still pending.','success');
-       await choose(selected);
-     });
-     box.append(grant);
-   }
+   const box=card('R99 debit mandate · '+(m.shopName||'Seller'),
+     'Approved sellers automatically receive up to seven days of access after submitting a valid mandate. No payment is recorded.');
+   box.append(tag(m.status),el('p',m.bankName+' · account ending '+m.accountLast4),
+     el('p','First requested collection date: '+m.firstDate),
+     button('View private mandate (audited)',()=>inspectMandate(m)));
+   if(detail?.mandateAccessActive&&detail.mandateAccessUntil)box.append(el('p',
+     (detail.mandateAccessKind==='processing_7d'?'Processing access until ':'Provider-confirmed access until ')+
+       new Date(detail.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
+   if(m.status==='pending_provider_authentication')box.append(el('p',
+     'Mandate received. Prepare provider submission. No second Start Selling approval is needed.','notice'));
    if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
      const form=el('form',undefined,'ops-form');
-     choice(form,'Mandate review outcome','decision',[
-       ['reviewed_pending_provider','Reviewed — awaiting collection provider'],
-       ['needs_correction','Needs corrected details']
+     choice(form,'Mandate review decision','decision',[
+       ['reviewed_pending_provider','Reviewed — prepare provider submission'],
+       ['needs_correction','Needs correction — pause processing access']
      ],'reviewed_pending_provider');
-     field(form,'Reason / review note','reason','textarea');
-     const optional=el('label',undefined,'confirm-check'),grantBox=el('input');
-     grantBox.type='checkbox';grantBox.name='provisionalSelling';
-     optional.append(grantBox,el('span','Also approve 30 days of temporary Start Selling access after a successful mandate review. This is an audited complimentary grant, not a Netcash collection or paid subscription.'));
-     form.append(optional);
-     check(form,'I understand this review does not activate a debit order or confirm a payment.','confirmed');
+     field(form,'Review note','reason','textarea');
+     check(form,'A review does not authenticate a debit mandate or record payment.','confirmed');
      submit(form,'Save mandate review',async fd=>{
-       const decision=String(fd.get('decision')||''),reason=String(fd.get('reason')||'').trim();
-       const grant=fd.get('provisionalSelling')==='on';
-       if(grant&&(decision!=='reviewed_pending_provider'||detail?.seller?.approvalStatus!=='approved'))
-         throw Error('Approve the seller and select Reviewed before granting provisional selling access.');
-       if(grant&&reason.length<15)throw Error('Explain the provisional selling grant in at least 15 characters.');
-       if(!confirm(grant?
-         'Review the mandate and grant 30 days of complimentary Start Selling access? No debit or paid membership will be recorded.':
-         'Save this mandate review? No debit order or paid membership will be activated.'))return;
-       await request('ops_mandate_review',{sellerUid:selected.sellerUid,mandateId:m.mandateId,
-         decision,reason,confirmed:true});
-       if(grant){
-         try{
-           await request('ops_complimentary_access',{sellerUid:selected.sellerUid,days:30,reason,confirmed:true});
-         }catch(error){
-           // The review was saved; the grant was not. Keep the existing
-           // separate grant action visible for a retry and explain the gap.
-           await refresh();
-           throw Error('Mandate review saved, but selling access was not granted: '+error.message);
-         }
-       }
-       await refresh();
-       message(grant?'Mandate reviewed. 30 days of temporary selling access granted; no payment recorded.':
-         'Mandate review saved. Collection remains inactive.','success');
+       await request('ops_mandate_review',{sellerUid:m.sellerUid,mandateId:m.mandateId,
+         decision:fd.get('decision'),reason:String(fd.get('reason')||''),confirmed:true});
+       await refreshMandates();await refresh();
+       message('Mandate decision saved. Processing access uses the original seven-day window.','success');
      });
      box.append(form);
    }
    if(m.status==='reviewed_pending_provider'){
-     const send=card('Record manual Netcash portal submission',
-       'Download the private consent PDF above, obtain a Netcash-acceptable signed paper/electronic mandate through the provider-approved process, and record the provider portal receipt here. A Netcash API is not required for this manual handoff.');
      const form=el('form',undefined,'ops-form');
-     field(form,'Netcash submission or receipt reference','providerReference','text');
-     field(form,'Submission method / date and internal note','note','textarea');
-     check(form,'I obtained and submitted a Netcash-acceptable signed or approved eMandate, not just the Teyza consent PDF. I understand this is NOT a collected debit or paid seller access.','confirmed');
-     submit(form,'Record manual submission',async fd=>{
-       const reference=String(fd.get('providerReference')||'').trim();
-       if(!confirm('Confirm a Netcash-acceptable signed mandate was submitted through the authorised provider portal? The Teyza consent PDF alone is insufficient; no payment is marked received.'))return;
-       const answer=await request('ops_mandate_record_netcash_submission',{
-         sellerUid:selected.sellerUid,mandateId:m.mandateId,providerReference:reference,
+     field(form,'Netcash portal submission reference','providerReference','text');
+     field(form,'Submission method, date and note','note','textarea');
+     check(form,'I submitted a provider-acceptable mandate. A portal submission is not proof of acceptance or collection.','confirmed');
+     submit(form,'Record provider submission',async fd=>{
+       await request('ops_mandate_record_netcash_submission',{sellerUid:m.sellerUid,
+         mandateId:m.mandateId,providerReference:String(fd.get('providerReference')||'').trim(),
          note:String(fd.get('note')||'').trim(),confirmed:true});
-       const result=await request('ops_mandate_queue');mandates=result.mandates||[];
-       detail=null;selected=null;message(answer.recorded?'Netcash portal submission recorded. Await bank validation and confirmed collection.':'No change.','success');show();
+       await refreshMandates();await refresh();
+       message('Mandate submission recorded. Await provider acceptance.','success');
      });
-     send.append(form);box.append(send);
+     box.append(form);
    }
-   if(m.status==='submitted_to_netcash'){
-     box.append(el('p','Submitted to Netcash manually. This is a record of transfer, not an authenticated mandate or a payment receipt. Paid access remains inactive.','notice warning'));
+   if(['reviewed_pending_provider','submitted_to_netcash'].includes(m.status)){
+     const form=el('form',undefined,'ops-form');
+     form.append(el('h4','Provider acceptance · next 30 days'),
+       el('p','Only use actual provider or bank acceptance evidence, not the submission receipt. This activates 30 days of non-paid access; debit collection requires separate reconciliation.','footnote'));
+     field(form,'Provider acceptance reference','providerReference','text');
+     field(form,'How and where provider acceptance was checked','note','textarea');
+     check(form,'I verified actual provider acceptance. No collected debit or paid membership is being recorded.','confirmed');
+     submit(form,'Confirm provider acceptance and 30-day access',async fd=>{
+       if(!confirm('Was this mandate independently accepted by the provider? This does not record payment.'))return;
+       await request('ops_mandate_provider_confirm',{sellerUid:m.sellerUid,
+         mandateId:m.mandateId,providerReference:String(fd.get('providerReference')||'').trim(),
+         note:String(fd.get('note')||'').trim(),confirmed:true});
+       await refreshMandates();await refresh();
+       message('Provider acceptance recorded. 30-day non-paid access active.','success');
+     });
+     box.append(form);
    }
+   if(m.status==='provider_confirmed')box.append(el('p',
+     'Provider acceptance verified and time-limited selling access active. No debit assumed.','notice success'));
    root.append(box);
  }
  function closureReview(){const box=card('Account closures and payment review','Cancellation is complete only when Paystack confirms it. Investigate needs-attention items and any checkout or refund still open.');
