@@ -47,7 +47,7 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
  for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple','webFacebook','webReturnGuidance',
    'webShopName','webShopUid','webShopType','webBillingStatus','webPaidThrough','webNextBill','webAmountDue','webPaymentHistory','webOwnShop','webTerms','webCheckout',
-   'webCheckoutStatus','webManage','webConfirm']){
+   'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
  assert(page.includes('noindex,nofollow'));
