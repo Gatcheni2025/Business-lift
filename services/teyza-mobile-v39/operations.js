@@ -120,15 +120,25 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
-     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get()]);
+     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
    const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
+   // A stored product count is distinct from a shopper-visible public listing.
+   // Location projection follows exactly the same consent and expiry rules as
+   // the unauthenticated public directory endpoint.
+   const pin=P.locationFor(target,account,location,shop,clock());
+   const directoryEligible=publication.live&&shop?.sellerUid===target&&shop?.status==='active';
+   const publicItems=directoryEligible&&P.eligible(target,account,billing,clock())&&
+      account.category!=='wholesale'?(Array.isArray(shop?.products)?shop.products:[]):[];
+   const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
+   const locationPinExpired=location?.ownerUid===target&&
+      P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
      amountCents:row.data().amountCents||0,createdAt:row.data().createdAt||0,
@@ -150,6 +160,18 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      mandateAccessActive:P.mandateAccess(target,account,billing,clock()),
      mandateAccessKind:billing?.mandateAccessKind||null,
      mandateAccessUntil:P.mandateAccess(target,account,billing,clock())?billing.mandateAccessUntil:null,
+     shopperVisibility:{
+       directoryEligible,
+       hasValidPin:Boolean(pin&&P.coordinates(pin.latitude,pin.longitude)),
+       latitude:pin&&P.coordinates(pin.latitude,pin.longitude)?pin.latitude:null,
+       longitude:pin&&P.coordinates(pin.latitude,pin.longitude)?pin.longitude:null,
+       status:!directoryEligible?'seller_not_public':
+         !pin?locationHasChanged?'address_changed':locationPinExpired?'pin_expired':'pin_missing':
+         'location_ready',
+       publicProductCount:publicItems.length,
+       shopCategory:account.category||'',
+       radiusMustUseShopperDeliveryAddress:true
+     },
      sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
        sellingAccessActive:publication.hasListing,canSell:publication.canSell,
        shopStatus:shop?.status||'not_listed',
