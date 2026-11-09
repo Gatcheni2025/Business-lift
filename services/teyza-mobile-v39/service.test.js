@@ -75,6 +75,48 @@ test('Only completed-order shoppers rate a shop; edits and repeat orders never i
  db.records.set('teyzaPublicShops/seller1',{...s,status:'suspended'});
  await rejects(service.execute(buyer,'shop_rate',{orderId:'done',stars:5}),409);
 });
+test('Account choices show same verified email businesses without giving access to another Firebase UID',async()=>{
+ const email='owner@example.test';
+ const extra={
+  'teyzaSellerAccounts/otherOwner':{uid:'otherOwner',ownerEmail:email,category:'wholesale',
+    shopName:'Wholesale Supply',approvalStatus:'pending',deletionPending:false},
+  'teyzaSellerAccounts/closingOwner':{uid:'closingOwner',ownerEmail:email,category:'spaza',
+    shopName:'Old Seller',approvalStatus:'pending',deletionPending:true},
+  'teyzaSellerAccounts/unverifiedOwner':{uid:'unverifiedOwner',ownerEmail:email,category:'retail',
+    shopName:'Unverified claim',approvalStatus:'approved'},
+  'teyzaSellerAccounts/differentOwner':{uid:'differentOwner',ownerEmail:email,category:'retail',
+    shopName:'Mismatched Firebase email',approvalStatus:'approved'},
+  'teyzaSellerAccounts/seller1':{...seller,ownerEmail:email}
+ };
+ const identities={
+  otherOwner:{uid:'otherOwner',email,emailVerified:true,disabled:false},
+  closingOwner:{uid:'closingOwner',email,emailVerified:true,disabled:false},
+  unverifiedOwner:{uid:'unverifiedOwner',email,emailVerified:false,disabled:false},
+  differentOwner:{uid:'differentOwner',email:'another@example.test',emailVerified:true,disabled:false}
+ };
+ const {service}=fixture(extra,{getAuthUser:async uid=>identities[uid]??null});
+ const choices=await service.execute({...owner,email_verified:true},'account_choices');
+ assert.equal(choices.currentUid,'seller1');
+ assert.deepEqual(choices.accounts.map(a=>a.sellerUid),['seller1','otherOwner','closingOwner']);
+ assert.equal(choices.accounts[0].canOpen,true);
+ assert.equal(choices.accounts[1].category,'wholesale');
+ assert.equal(choices.accounts[1].approvalStatus,'pending');
+ assert.equal(choices.accounts[1].canOpen,false);
+ assert.equal(choices.accounts[1].signInRequired,true);
+ assert.equal(choices.accounts[2].deletionPending,true);
+ assert.equal(choices.accounts[2].signInRequired,false);
+ await rejects(service.execute({...owner,uid:'buyer1'},'seller_summary'),403);
+});
+test('Unverified email or phone-only session never enumerates seller accounts by a typed email',async()=>{
+ const {service}=fixture({'teyzaSellerAccounts/seller1':{...seller,ownerEmail:'owner@example.test'}},{
+  getAuthUser:async uid=>({uid,email:'owner@example.test',emailVerified:true})
+ });
+ const anonymous=await service.execute({...buyer,uid:'buyer1',email:'owner@example.test',email_verified:false},'account_choices');
+ assert.equal(anonymous.verifiedEmail,false);
+ assert.deepEqual(anonymous.accounts,[]);
+ const own=await service.execute({...owner,email_verified:false},'account_choices');
+ assert.deepEqual(own.accounts.map(a=>a.sellerUid),['seller1']);
+});
 test('Existing approved active shops reconcile old listing flags but suspended shops stay paused',async()=>{
  const {service,db}=fixture({'teyzaSellerAccounts/seller1':{...seller,listingStatus:'not_listed'},
   'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved'}});
