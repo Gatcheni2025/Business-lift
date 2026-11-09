@@ -21,7 +21,7 @@ const billingCheckout=require('./billing-paystack');
 const orderPaystack=require('./order-paystack');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
-  getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackPlanCode=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
+  getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackWebhookSigningSecret=()=>'',getPaystackPlanCode=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
@@ -172,9 +172,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const advertising=wholesaleAdvertising.createWholesaleAdvertising({db,clock,rate});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
-    getPlanCode:getPaystackPlanCode,send:paystackFetch,refresh:synchronizeCatalogue});
+    getPlanCode:getPaystackPlanCode,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch,refresh:synchronizeCatalogue});
   const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,
-    send:paystackFetch,rate});
+    getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch,rate});
   const sellerOnboarding=onboarding.createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate});
   async function syncSettings(uid,values) {
     const ref=doc('teyzaPublicShops/'+uid);
@@ -868,10 +868,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     await ref.set({after:rows.docs.at(-1)?.id||'',...(complete?{completedAt:clock()}:{}),updatedAt:clock()});
     return {complete,checked:rows.docs.length};
   }
-  async function paystackWebhook(raw,signature,event){
+  async function paystackWebhook(raw,signature,event,modernSignature){
     if(event?.event==='charge.success'&&/^TZO-[a-f0-9]{26}$/.test(event?.data?.reference||''))
-      return shopperOrderPayments.webhook(raw,signature,event);
-    return sellerBilling.webhook(raw,signature,event);
+      return shopperOrderPayments.webhook(raw,signature,event,modernSignature);
+    return sellerBilling.webhook(raw,signature,event,modernSignature);
   }
   return {execute,paystackWebhook,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
     publicShopPhoto:shopFront.publicPhoto};

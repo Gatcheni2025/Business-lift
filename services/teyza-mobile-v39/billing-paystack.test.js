@@ -430,3 +430,17 @@ test('Website checkout refuses legacy account approval without current SMS onboa
  }),e=>e.status===409&&/phone OTP/.test(e.message));
  assert.equal(requests.length,0);
 });
+
+
+test('Seller billing accepts Paystack modern signing-secret ping and rejects bad modern even with valid legacy',async()=>{
+ const now=NOW,raw=Buffer.from('{"event":"ping","data":{}}');
+ const signingSecret='whsec_billing_test_secret',stamp=String(Math.floor(now/1000));
+ const modern='t='+stamp+',v1=whk_seller123:'+
+   crypto.createHmac('sha512',signingSecret).update(stamp+'.').update(raw).digest('hex');
+ const legacy=crypto.createHmac('sha512','sk_test_FAKE').update(raw).digest('hex');
+ const {api,records}=fixture({}, {getSigningSecret:()=>signingSecret});
+ assert.deepEqual(await api.webhook(raw,legacy,{event:'ping',data:{}},modern),{accepted:true});
+ await assert.rejects(api.webhook(raw,legacy,{event:'ping',data:{}},
+   't='+stamp+',v1=whk_seller123:'+('0'.repeat(128))),e=>e.status===401);
+ assert.equal(records.has('teyzaBilling/shop1'),false,'Signed ping never creates a billing record');
+});

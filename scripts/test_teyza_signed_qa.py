@@ -48,8 +48,16 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true", self.workflow)
         self.assertIn("teyza-android-apk-direct-mandate-debug-qa", self.workflow)
         self.assertIn("defaultValue:'store'", self.plan)
-        self.assertIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
-        self.assertIn("isAndroid&&channel=='direct'", self.plan)
+        # The channel flags and QA signing lanes still exist, but NONE of
+        # the mobile distributions may initiate an external digital-membership
+        # payment. The historical test expected Android direct checkout and
+        # must now actively reject that unsafe behaviour.
+        self.assertIn("bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>false;", self.plan)
+        self.assertIn("No payments or subscriptions can be initiated in this app.", self.plan)
+        self.assertNotIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
+        self.assertNotIn("isAndroid&&channel=='direct'", self.plan)
+        self.assertNotIn("billing_checkout", self.plan)
+        self.assertNotIn("https://teyza.co.za/pay", self.plan)
 
     def test_direct_apk_signing_is_reverified_and_cannot_be_the_play_bundle(self):
         direct_package = (ROOT / "scripts/package_teyza_direct_mandate_qa.py").read_text()
