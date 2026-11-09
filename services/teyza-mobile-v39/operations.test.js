@@ -203,7 +203,7 @@ test('Admin can publish a saved spaza range only with approved, active selling a
    const db=new FakeDB({
      'teyzaSellerAccounts/seller1':{uid:'seller1',category:'spaza',shopName:'Test Shop',approvalStatus:'approved'},
      'teyzaPublicShops/seller1':{sellerUid:'seller1',status:'active',products:[],catalogueEnabled:false},
-     'teyzaDraftProducts/seller1/items/rice':{ownerUid:'seller1',status:'draft',name:'Rice',priceCents:2500,stockQty:3},
+     'teyzaDraftProducts/seller1/items/rice':{ownerUid:'seller1',status:'draft',name:'Rice',category:'Groceries',priceCents:2500,stockQty:3},
    });
    const sync=async (target,options)=>{
      syncCalls.push({target,options});
@@ -233,6 +233,24 @@ test('Admin can publish a saved spaza range only with approved, active selling a
  assert.equal(detail.sellingStatus.savedDraftCount,1);
  assert.equal(detail.sellingStatus.publicProductCount,1);
  assert.equal(detail.sellingStatus.publicProductsAllowed,true);
+});
+test('Admin identifies invalid drafts rather than silently publishing zero products',async()=>{
+ const f=setup();
+ // A canonical template with a mismatched name is not a valid product.
+ const uid='seller1',productId='catalog_milk-2-l';
+ f.db.records.set('teyzaDraftProducts/'+uid+'/items/'+productId,{
+   ownerUid:uid,status:'draft',name:'Forged template name',category:'Dairy & Eggs',
+   priceCents:3000,stockQty:4
+ });
+ f.db.records.set('teyzaPublicShops/'+uid,{...f.db.records.get('teyzaPublicShops/'+uid),
+   status:'active',products:[],catalogueEnabled:false});
+ const summary=await f.call('ops_seller_detail',{sellerUid:uid});
+ assert.equal(summary.sellingStatus.savedDraftCount,1);
+ assert.equal(summary.sellingStatus.publishableDraftCount,0);
+ assert.equal(summary.sellingStatus.invalidDraftCount,1);
+ const reason='Reviewed valid seller identity and saved product stock';
+ await rejects(f.call('ops_catalogue_publish',{sellerUid:uid,reason,confirmed:true}),409);
+ assert(![...f.db.records.values()].some(x=>x.action==='ops_catalogue_publish'));
 });
 test('Wholesalers remain shop listings only: admin cannot publish retail-facing prices',async()=>{
  const f=setup();
