@@ -430,7 +430,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         promotionEndsAt:promotion?.endsAt||null,
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
-        approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
+        // Distinguish the actual account approval from aggregate readiness.
+        approvalStatus:account.approvalStatus||'pending',
+        approvalChecks:{registrationApproved:account.approvalStatus==='approved',
+          selfieApproved:verification?.ownerUid===uid&&verification.status==='approved',
+          selfieMatchesOnboarding:setup?.requiredVersion!==2||
+            Boolean(setup?.selfieSubmissionId&&setup.selfieSubmissionId===verification?.submissionId),
+          onboardingComplete:publication.ready,canSell:publication.canSell},
+        setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.canSell&&(publicShop?.sellingEnabled===true||publicShop?.catalogueEnabled===true),identityVerified:publication.approved,
         publicProductCount:account.category==='wholesale'?0:publication.canSell?publicShop?.products?.length||0:0,
@@ -558,10 +565,13 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       }
       // Older apps may still submit a catalogue. Synchronize it immediately;
       // seller identity and payment remain separate server-enforced gates.
-      const result=await synchronizeCatalogue(uid);
-      const status=result.publication==='live'?'published':'waiting_for_access';
+      // A seller's explicit Submit Catalogue is a publication instruction,
+      // unlike passive dashboard refresh, which must never expose drafts.
+      const result=await synchronizeCatalogue(uid,{publishIntent:true});
+      const published=result.publication==='live'&&result.publicCount>0;
+      const status=published?'published':'waiting_for_access';
       await doc('teyzaCatalogueSubmissions/'+uid).set({ownerUid:uid,status,products,submittedAt:clock()});
-      return {status};
+      return {status,publicProductCount:published?result.publicCount:0,publicationConfirmed:published};
     }
     if(action==='catalogue_review') {
       experience.recentAdmin(auth,clock);
