@@ -366,10 +366,14 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       details.append(el('p','This checks the deployed public directory independently of the private Firebase product count. Match the exact UID before investigating search radius.','footnote'));
       review.append(details);
     }
-    if(status.registrationApproved===false){
+    // Use the authoritative values from the response even if Hosting and
+    // Functions revisions are briefly out of step during deployment.
+    const registrationApproved=status.registrationApproved??d.seller.approvalStatus==='approved';
+    const selfieApproved=status.selfieApproved??status.approvalVerificationStatus==='approved';
+    if(!registrationApproved){
       review.append(el('p','Registration approval is pending for this exact Firebase UID ('+d.seller.sellerUid+'). Approval of another account with the same email cannot transfer. Review the account and selfie audit before taking action.','notice warning'),
         button('Review seller verification',()=>navigate('approvals')));
-    }else if(status.selfieApproved===false){
+    }else if(!selfieApproved){
       review.append(el('p','Registration is approved for this UID, but the current selfie review is not approved. A replacement document or selfie may have reopened verification. Check the review history; do not bypass identity checks.','notice warning'));
     }else if(!status.shopSetupComplete){
       const missing=[];
