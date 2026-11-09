@@ -342,9 +342,9 @@ void main(){
     await revealShopperHome(tester,card);
     await tester.tap(card);await tester.pumpAndSettle();
     expect(find.text('Verified Spaza'),findsWidgets);
-    await tester.scrollUntilVisible(find.text('Products coming soon'),200,
+    await tester.scrollUntilVisible(find.text('No published products yet'),200,
       scrollable:find.byType(Scrollable).last);
-    expect(find.text('Products coming soon'),findsOneWidget);
+    expect(find.text('No published products yet'),findsOneWidget);
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
