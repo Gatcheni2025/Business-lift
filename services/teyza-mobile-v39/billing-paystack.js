@@ -432,7 +432,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
       tx.create(payment,{reference:ref,ownerUid:uid,kind:'renewal',amountCents:MONTHLY_CENTS,
         currency:'ZAR',status:'paid',verifiedAt:now,transactionId:String(verified.id||'')});
       tx.set(billRef,{status:'paid',monthlyCents:MONTHLY_CENTS,standardMonthlyCents:MONTHLY_CENTS,
-        paidUntil:nextMonth(base),lastReference:ref,latestPeriod:P.period(now),
+        paidUntil:nextMonth(base),nextBillingAt:nextMonth(base),lastReference:ref,latestPeriod:P.period(now),
         paymentProvider:'paystack',paymentEnvironment:environment(),
         renewalSetup:bill.renewalSetup==='cancelled'?'cancelled':'active',updatedAt:now},{merge:true});
     });
