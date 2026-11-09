@@ -13,6 +13,12 @@ export function validCheckoutUrl(value){
   catch(_){return false;}
 }
 export function validReceipt(value){return /^TZM-[a-f0-9]{26}$/.test(String(value||''));}
+ // Never take a Paystack redirect, query parameter, or browser receipt as proof
+ // of membership. Only the authenticated seller's two server-verified views.
+ export function confirmedMembership(summary,billing,uid){
+   return typeof uid==='string'&&uid.length>0&&billing?.sellerUid===uid&&
+     summary?.listingPaid===true&&billing?.paymentVerified===true&&billing?.status==='paid';
+ }
 export function backendReady(data){
   const parts=String(data?.version||'').split('.').map(Number);
   const version=parts.length===3&&parts.every(Number.isInteger)&&
@@ -84,10 +90,16 @@ async function startup(){
       }
     }
     $('webAccess').textContent=decision.message;
+    $('webReturnGuidance').hidden=!confirmedMembership(summary,billing,user?.uid);
+    if(confirmedMembership(summary,billing,user?.uid)&&billing?.renewalStatus==='action_required')
+      $('webReturnGuidance').textContent='Selling access is active. Your next automatic renewal still needs attention; contact Teyza support before the paid month ends.';
+    else
+      $('webReturnGuidance').textContent='Your verified membership is now linked to this Teyza account. Reopen the app to use Start selling; it refreshes your access automatically.';
     $('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
     $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
     set('webVerifyEmail',logged&&user?.emailVerified!==true&&Boolean(user?.email));
-    set('webManage',logged&&Boolean(summary?.listingPaid));
+    set('webManage',logged&&matched&&['scheduled','active'].includes(billing?.renewalStatus)&&
+      Number.isFinite(billing?.nextBillingAt));
     set('webConfirm',logged&&Boolean(readReceipt(user?.uid)));
     $('webCheckout').disabled=pending||!decision.eligible||!$('webTerms').checked||!$('webOwnShop').checked;
     $('webRefresh').disabled=pending;
@@ -132,10 +144,18 @@ async function startup(){
       if(fetched[2]?.sellerUid!==uid)throw Error('The secure billing account does not match this Firebase login.');
       health=fetched[0];summary=fetched[1];billing=fetched[2];view('Shop identity and seller status verified.');render();
       const isReturn=new URLSearchParams(location.search).get('payment')==='return';
-      if(isReturn&&returnProcessed!==uid&&readReceipt(uid)){
+      if(confirmedMembership(summary,billing,uid)){
+        // A signed Paystack webhook can finish before the customer's browser
+        // comes back, including when the browser has lost its session receipt.
+        sessionStorage.removeItem(receiptKey(uid));
+        if(isReturn){
+          view('Paystack payment verified for your shop. Reopen the Teyza app; selling access is now active.','success');
+          history.replaceState(null,'',location.pathname);
+        }
+      }else if(isReturn&&returnProcessed!==uid&&readReceipt(uid)){
         returnProcessed=uid;await confirmPayment();
       }else if(isReturn&&!readReceipt(uid)){
-        view('Returned from Paystack. Refresh your seller status; if payment is missing, contact Teyza support with your Paystack receipt.');
+        view('Your browser returned from Paystack. Your seller access is not verified yet. Choose Refresh account status; if a charge is missing, contact Teyza support with the Paystack reference.','warning');
       }
     }catch(error){if(auth.currentUser?.uid===uid){summary=null;billing=null;view(error.message||'Unable to verify this shop account.','error');}}
     finally{pending=false;render();}
@@ -146,13 +166,19 @@ async function startup(){
     try{
       const result=await post('billing_confirm',{reference});
       if(!result.paid){view('Payment cannot activate access yet. Contact support for payment review.','warning');return;}
-      sessionStorage.removeItem(receiptKey(uid));
-      summary=await post('seller_summary');
-      view(summary.listingPaid===true?
-        'Payment verified. Your active membership is available to your approved shop.':
-        'Payment confirmed, but live membership is not active. Contact support before adding products.',
-        summary.listingPaid===true?'success':'warning');
-      history.replaceState(null,'',location.pathname);
+      const [nextSummary,nextBilling]=await Promise.all([
+        post('seller_summary'),post('seller_billing_overview')
+      ]);
+      if(auth?.currentUser?.uid!==uid||nextBilling.sellerUid!==uid)
+        throw Error('Your account changed while confirming payment. Sign in again.');
+      summary=nextSummary;billing=nextBilling;
+      const active=confirmedMembership(summary,billing,uid);
+      if(active)sessionStorage.removeItem(receiptKey(uid));
+      view(active?
+        'Payment verified and linked to your Teyza shop. Reopen the app to start selling.':
+        'Payment was recorded, but selling access is not active yet. Refresh or contact support before publishing products.',
+        active?'success':'warning');
+      if(active)history.replaceState(null,'',location.pathname);
     }catch(error){view(error.message||'Payment not yet confirmed. Use Check payment after Paystack completes.','error');}
     finally{pending=false;render();}
   }
@@ -197,6 +223,10 @@ async function startup(){
     $('webApple').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.OAuthProvider('apple.com'));}
       catch(error){view(error.message||'Apple sign-in is not available on this browser or account.','error');}
+    });
+    $('webFacebook').addEventListener('click',async()=>{
+      try{await sdk.signInWithPopup(auth,new sdk.FacebookAuthProvider());}
+      catch(error){view(error.message||'Facebook sign-in could not be completed. Ensure it is enabled for your existing Teyza account.','error');}
     });
     $('webLogout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>view(e.message,'error')));
     $('webVerifyEmail').addEventListener('click',async()=>{
