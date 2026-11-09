@@ -112,7 +112,8 @@ function publicRow(uid,shop){
   photoUrl:shop.photoUrl||'',latitude:coordinates(shop.latitude,shop.longitude)?shop.latitude:null,
   longitude:coordinates(shop.latitude,shop.longitude)?shop.longitude:null,
   pickupEnabled:shop.pickupEnabled===true,deliveryEnabled:shop.deliveryEnabled===true,
-  services:shop.services||{},products:shop.products||[],productHighlights:shop.productHighlights||[],hours:shop.hours||[],
+  services:shop.services||{},products:shop.shopCategory==='wholesale'?[]:shop.products||[],
+  productHighlights:shop.shopCategory==='wholesale'?[]:shop.productHighlights||[],hours:shop.hours||[],
   deliveryFeeCents:shop.deliveryFeeCents||0,
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
