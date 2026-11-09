@@ -956,6 +956,15 @@ test('account deletion bypasses shop approval for approved, pending and rejected
    'account_deletion_request',{confirmation:'DELETE'});
  assert.equal(result.requested,true);
 });
+test('Netcash collection is retired and Paystack seller checkout is closed by default',async()=>{
+  const {service,db}=fixture();
+  await rejects(service.execute(owner,'seller_mandate_submit',{}),410);
+  await rejects(service.execute(owner,'ops_mandate_provider_confirm',{}),410);
+  if(process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
+    await rejects(service.execute(owner,'billing_checkout',{checkoutChannel:'web'}),503);
+  await rejects(service.execute(owner,'promote_checkout',{}),410);
+  assert.equal([...db.records.keys()].some(key=>key.startsWith('teyzaPaystackPayments/')),false);
+});
 test('New business registration is free and no trial is activated',async()=>{
  const {service,db}=fixture();
  const data={category:'spaza',shopName:'Another local shop',phone:'0712345678',
@@ -963,7 +972,7 @@ test('New business registration is free and no trial is activated',async()=>{
  await service.execute(buyer,'seller_register',data);
  assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
  await rejects(service.execute(buyer,'seller_plan_select',{plan:'trial'}),410);
- await rejects(service.execute(buyer,'seller_mandate_submit',{}),403);
+ await rejects(service.execute(buyer,'seller_mandate_submit',{}),410);
  assert.equal(db.records.has('teyzaBilling/buyer1'),false);
  // Existing trials cannot recur or unlock private catalogues.
  const legacy=fixture({'teyzaSellerAccounts/seller1':{...seller,listingPlan:'trial'}});
