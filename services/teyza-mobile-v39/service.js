@@ -213,6 +213,48 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const deletionRecord=await read('teyzaAccountDeletionRequests/'+uid);
     if(deletionRecord&&deletionRecord.status!=='completed'&&auth.teyzaAdmin!==true)
       D.fail(403,'Your account deletion is being processed. Save your deletion reference and contact Teyza support if you need assistance.');
+    if(action==='account_choices'){
+      // A verified Firebase email can DISCOVER another matching account, but
+      // cannot act as that account's UID or inherit its approval/payment.
+      const own=await read('teyzaSellerAccounts/'+uid);
+      const sameEmail=(value,email)=>typeof value==='string'&&
+        value.trim().toLowerCase()===email;
+      const email=auth.email_verified===true&&typeof auth.email==='string'
+        ?auth.email.trim().toLowerCase():'';
+      const accounts=new Map();
+      const add=(id,a,current)=>{
+        if(a?.uid!==id||!['spaza','retail','wholesale'].includes(a.category))return;
+        accounts.set(id,{sellerUid:id,shopName:a.shopName||'Business account',
+          category:a.category,approvalStatus:a.approvalStatus||'pending',
+          deletionPending:a.deletionPending===true,currentSession:current,
+          canOpen:current&&a.deletionPending!==true,
+          signInRequired:!current&&a.deletionPending!==true});
+      };
+      add(uid,own,true);
+      if(email){
+        // Legacy records may have used original-case email strings. Query
+        // only the verified identity email and its canonical lowercase form.
+        const candidates=new Map();
+        for(const lookup of new Set([auth.email.trim(),email])){
+          const matches=await db.collection('teyzaSellerAccounts')
+            .where('ownerEmail','==',lookup).limit(21).get();
+          for(const row of matches.docs)candidates.set(row.id,row.data());
+        }
+        // Never expose arbitrary account records merely because their stored
+        // contact email matches. Verify the OTHER Firebase Auth identity too.
+        const checked=await Promise.all([...candidates].slice(0,21).map(async ([otherUid,a])=>{
+          if(otherUid===uid)return [otherUid,a,true];
+          if(!sameEmail(a.ownerEmail,email))return null;
+          const identity=await getAuthUser(otherUid).catch(()=>null);
+          if(!identity||identity.disabled===true||identity.emailVerified!==true||
+             !sameEmail(identity.email,email)||identity.uid!==otherUid)return null;
+          return [otherUid,a,false];
+        }));
+        for(const entry of checked)if(entry)add(...entry);
+      }
+      return {currentUid:uid,verifiedEmail:Boolean(email),shopperAvailable:true,
+        accounts:[...accounts.values()].sort((a,b)=>Number(b.currentSession)-Number(a.currentSession))};
+    }
     if(action==='shopper_profile_read'){
       const profile=await read('teyzaShopperProfiles/'+uid);
       return {profile:profile?.ownerUid===uid?profile:null};
@@ -266,7 +308,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     let shopperProfile=null;
     if(!auth.email_verified&&!auth.phone_number){
       if(isShopperAction)shopperProfile=await registeredShopper(uid);
-      else if(!['seller_register','seller_whatsapp_preferences','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
+      else if(!['account_choices','seller_register','seller_whatsapp_preferences','verification_selfie','seller_summary','catalogue_add','catalogue_sync'].includes(action))
         D.fail(403,'Verify your email or mobile number before using seller services.');
     }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
