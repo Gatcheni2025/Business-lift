@@ -86,6 +86,30 @@ void main(){
   });
   final shops=await fetchTeyzaPublicDirectory(client:mock);expect(pages,2);expect(shops.single['id'],'seller200');
  });
+ test('Gateway failure uses same reviewed Cloud Run directory and retains sixteen public products',()async{
+   final hosts=<String>[];
+   final products=[for(var i=0;i<16;i++)
+     {'id':'stock-$i','name':'Product $i','category':'Groceries',
+      'priceCents':1000+i,'stock':5,'inStock':true}];
+   final mock=MockClient((request)async{
+     hosts.add(request.url.host);
+     if(request.url.host=='us-central1-business-lift-3c19c.cloudfunctions.net')
+       return http.Response('gateway unavailable',503);
+     expect(request.url.host,'teyzamobile-7u4jhfs4ya-uc.a.run.app');
+     expect(request.url.queryParameters['publicShops'],'1');
+     return http.Response(jsonEncode({'ok':true,'entries':[
+       {...apiRow('approvedSpaza'),'latitude':-29.7402,
+         'longitude':30.992,'products':products},
+       {...apiRow('unapproved'),'approvalStatus':'pending','products':products}
+     ],'next':null}),200);
+   });
+   final shops=await fetchTeyzaPublicDirectory(client:mock);
+   expect(hosts.length,2);
+   expect(shops.single['id'],'approvedSpaza');
+   expect(shops.single['products'],hasLength(16));
+   expect(shops.single['latitude'],-29.7402);
+   expect(shops.single['longitude'],30.992);
+ });
  test('A denied or outdated service never falls back to unapproved Firestore listings',() async {
   for(final response in [http.Response('{"error":"PERMISSION_DENIED"}',403),http.Response('{"ok":true,"version":"3.15.0"}',200)]){
    final mock=MockClient((_) async=>response);await expectLater(fetchTeyzaPublicDirectory(client:mock),throwsStateError);
