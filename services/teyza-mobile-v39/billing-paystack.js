@@ -3,6 +3,7 @@
 const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
+const webhookSignature=require('./webhook-signature');
 const INTRO_CENTS=1000,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
 const SUBSCRIPTION_TERMS_VERSION='seller-r10-r99-first-2026-11';
 const {recentAdmin}=require('./seller-experience');
@@ -18,12 +19,8 @@ function validCheckoutUrl(value) {
   try {const u=new URL(value);return u.protocol==='https:'&&u.hostname==='checkout.paystack.com';}
   catch (_) {return false;}
 }
-function verifySignature(secret,body,signature) {
-  if(!secret||!Buffer.isBuffer(body)||typeof signature!=='string'||!/^[a-f0-9]{128}$/i.test(signature))return false;
-  const expected=crypto.createHmac('sha512',secret).update(body).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(signature,'hex'));
-}
-function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',send=fetch,refresh=async()=>{}}) {
+const verifySignature=webhookSignature.verifyLegacy;
+function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',getPlanCode=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',send=fetch,refresh=async()=>{}}) {
   const doc=p=>db.doc(p);
   const environment=()=>getSecret().startsWith('sk_live_')?'live':'test';
   async function read(path) {const x=await doc(path).get();return x.exists?x.data():null;}
@@ -383,8 +380,10 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getPlanCode=()=>'',ge
     }
     D.fail(404,'Unknown billing action.');
   }
-  async function webhook(raw,signature,payload) {
-    if(!verifySignature(getSecret(),raw,signature))D.fail(401,'Invalid Paystack webhook signature.');
+  async function webhook(raw,signature,payload,modernSignature) {
+    if(!webhookSignature.verifyWebhook({raw,legacy:signature,modern:modernSignature,
+       secretKey:getSecret(),signingSecret:getSigningSecret(),now:clock()}))
+       D.fail(401,'Invalid Paystack webhook signature.');
     requireSafeMode(getSecret());
     const event=payload?.event,details=payload?.data||{};
     if(event==='subscription.disable'||event==='subscription.not_renew'||event==='invoice.payment_failed'){
