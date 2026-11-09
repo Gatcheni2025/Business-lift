@@ -81,8 +81,8 @@ class SellerSellingDashboard extends StatelessWidget {
        if(publicProductCount!=null)Padding(padding:const EdgeInsets.only(top:7),child:Text(
          '$publicProductCount products in your public-shop record',
          key:const ValueKey('seller-public-product-count'),
-         style:TextStyle(color:publicProductCount!>0?_green:Colors.deepOrange,fontWeight:FontWeight.w700,fontSize:12))),
-       if(approvedLive&&productCount!=null&&productCount!>0&&publicProductCount==0)
+         style:TextStyle(color:publicProductCount! > 0?_green:Colors.deepOrange,fontWeight:FontWeight.w700,fontSize:12))),
+       if(approvedLive&&productCount!=null&&productCount! > 0&&publicProductCount==0)
          const Padding(padding:EdgeInsets.only(top:5),child:Text(
            'Your shop listing is active, but saved stock is not published. Open My Products to sync or contact Teyza support.',
            key:ValueKey('seller-stock-not-published'),style:TextStyle(color:Colors.deepOrange,fontSize:12))),
