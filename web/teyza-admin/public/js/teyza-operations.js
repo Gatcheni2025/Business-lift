@@ -106,8 +106,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
 
  function mandateQueue(){
-   const box=card('R99 monthly mandates — admin inbox',
-     'These are preliminary consent requests. Obtain a Netcash-accepted signed paper or approved eMandate before submitting a debit batch.');
+   const box=card('Historic Netcash mandate archive — read-only',
+     'Netcash collection has been retired. Do not submit new debit batches. Historical consent is not Paystack authorisation.');
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
      mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
@@ -140,12 +140,12 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      el('p','Sensitive details are displayed only to authorised administrators and this view is audited.',
        'notice warning'));
    const exportedSellerUid=info.sellerUid,exportedId=info.mandate.mandateId;
-   const download=button('Download confidential PDF for Netcash review',async()=>{
-     if(!confirm('This PDF contains full bank and identity details. Save and transmit only through an approved secure Netcash channel. It is NOT bank-authenticated. Continue?'))return;
+   const download=button('Download historical mandate PDF',async()=>{
+     if(!confirm('This historical document contains full bank and identity details. It is not authority for a new debit. Continue?'))return;
      const exportData=await request('ops_mandate_export',{
        sellerUid:exportedSellerUid,mandateId:exportedId});
      downloadMandateRequestPdf(exportData);
-     message('Confidential mandate request downloaded. Obtain the provider-approved mandate and bank authentication before collecting.','success');
+     message('Confidential mandate request downloaded. Keep this historical document private. New Netcash collection is retired.','success');
    },'primary');
    content.append(download,el('p','Includes seller consent, shop address, bank details and R99 dates. It is NOT a Netcash-approved signed mandate; a checkbox alone is insufficient.','footnote'));
    const close=el('button','Close and clear details','button primary');
@@ -155,14 +155,17 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    document.body.append(dialog);dialog.showModal();
  }
  function mandateReview(m){
-   const box=card('R99 debit mandate · '+(m.shopName||'Seller'),
-     'Approved sellers automatically receive up to seven days of access after submitting a valid mandate. No payment is recorded.');
+   const box=card('Historic Netcash mandate · '+(m.shopName||'Seller'),
+     'Archived consent only. New Netcash collections and approvals are disabled; no payment is recorded.');
    box.append(tag(m.status),el('p',m.bankName+' · account ending '+m.accountLast4),
      el('p','First requested collection date: '+m.firstDate),
      button('View private mandate (audited)',()=>inspectMandate(m)));
    if(detail?.mandateAccessActive&&detail.mandateAccessUntil)box.append(el('p',
      (detail.mandateAccessKind==='processing_7d'?'Processing access until ':'Provider-confirmed access until ')+
        new Date(detail.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
+   box.append(el('p','This Netcash record is retained for audit only. Future selling access requires independently verified Paystack payment.','notice warning'));
+   root.append(box);
+   return;
    if(m.status==='pending_provider_authentication')box.append(el('p',
      'Mandate received. Prepare provider submission. No second Start Selling approval is needed.','notice'));
    if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
@@ -298,7 +301,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
   if(sellerMandate)mandateReview(sellerMandate);
   // Seller ID approval is independent from Paystack purchase confirmation.
-  const billing=card('Legacy Paystack membership',d.membershipPaid?'Seller membership verified by Paystack.':
+  const billing=card('Paystack seller membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
   billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Complimentary temporary access':'Not paid'));
   billing.append(el('p','Mode: '+(d.paystackMode==='live'?'Live Paystack':'Paystack TEST — not real money')));
