@@ -85,12 +85,24 @@ Future<List<Map<String,dynamic>>> fetchTeyzaPublicDirectory({http.Client? client
     while(true){
       final url=Uri.https('us-central1-business-lift-3c19c.cloudfunctions.net','/teyzaMobile',
         {'publicShops':'1',if(cursor!=null)'after':cursor});
-      // The public Cloud Function can occasionally close a connection under
-      // heavy load. Retry GET once; it is read-only and never collects money.
-      http.Response response;
-      try{response=await remote.get(url).timeout(const Duration(seconds:18));}
-      catch(_){response=await remote.get(url).timeout(const Duration(seconds:18));}
-      if(response.statusCode!=200)throw StateError('The approved shop directory is temporarily unavailable.');
+      // The public function endpoint has intermittently returned connection
+      // closes/5xx. Retry the SAME server-validated GET on its Firebase Cloud
+      // Run service URL. Never fall back to direct Firestore or unreviewed data.
+      // This is a public, read-only endpoint: no authentication or bank data.
+      final runUrl=Uri.https('teyzamobile-7u4jhfs4ya-uc.a.run.app','/',
+        {'publicShops':'1',if(cursor!=null)'after':cursor});
+      http.Response? response;
+      for(final candidate in [url,runUrl]){
+        try{response=await remote.get(candidate).timeout(const Duration(seconds:18));}
+        catch(_){response=null;continue;}
+        if(response.statusCode==200)break;
+        // Only network/availability failures permit switching endpoints.
+        if(![429,500,502,503,504].contains(response.statusCode))
+          throw StateError('The approved shop directory is temporarily unavailable.');
+        response=null;
+      }
+      if(response==null||response.statusCode!=200)
+        throw StateError('The approved shop directory is temporarily unavailable.');
       final data=jsonDecode(utf8.decode(response.bodyBytes));
       if(data is! Map||data['ok']!=true||data['entries'] is! List)throw StateError('The shop directory needs the latest Teyza service update.');
       for(final value in data['entries'] as List){
