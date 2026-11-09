@@ -104,6 +104,42 @@ test('Admin distinguishes sixteen public products from missing, changed and vali
   assert.equal(detail.shopperVisibility.status,'address_changed');
   assert.equal(detail.shopperVisibility.hasValidPin,false);
 });
+test('Admin explains live shop with sixteen stored items but zero shopper-visible products after entitlement expiry',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',name:'Test Shop',
+   products:Array.from({length:16},(_,i)=>({id:'stock'+i,name:'Product '+i,priceCents:1000,stock:4})),
+   productHighlights:Array.from({length:16},(_,i)=>({id:'stock'+i,name:'Product '+i,inStock:true})),
+   catalogueEnabled:true});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',mandateAccessStatus:'active',
+   mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate_a',
+   mandateAccessUntil:now-1000});
+ let d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.shopperVisibility.directoryEligible,true,'Verified business listing remains publicly discoverable');
+ assert.equal(d.shopperVisibility.storedProductCount,16);
+ assert.equal(d.shopperVisibility.unpricedHighlightCount,16);
+ assert.equal(d.shopperVisibility.publicProductCount,0,'Expired entitlement must hide priced stock');
+ assert.equal(d.shopperVisibility.entitlementActive,false);
+ assert.equal(d.shopperVisibility.publicFeedReason,'selling_entitlement_inactive');
+ assert.equal(d.shopperVisibility.sellerUidMatchesShop,true);
+ assert.equal(d.sellingStatus.canSell,false);
+ assert.equal(d.membershipPaid,false,'Mandate expiry cannot be converted to verified payment');
+});
+test('Admin distinguishes approved seller drafts lacking publication from billed or private stock',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',
+   name:'Test Shop',products:[],catalogueEnabled:false});
+ f.db.records.set('teyzaDraftProducts/seller1/items/rice',{ownerUid:'seller1',status:'draft',name:'Rice',category:'Groceries',priceCents:2500,stockQty:3});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',mandateAccessStatus:'active',
+   mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate_a',
+   mandateAccessUntil:now+86400000});
+ const d=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(d.shopperVisibility.directoryEligible,true);
+ assert.equal(d.shopperVisibility.publicFeedReason,'saved_drafts_not_published');
+ assert.equal(d.shopperVisibility.publicProductCount,0);
+ assert.equal(d.shopperVisibility.entitlementActive,true);
+ assert.equal(d.sellingStatus.savedDraftCount,1);
+ assert.equal(d.shopperVisibility.catalogueEnabled,false);
+});
 test('Only a separate recently signed-in admin can grant explicitly confirmed complimentary shop access',async()=>{
  const f=setup(),input={sellerUid:'seller1',days:7,
   reason:'Approved small business community launch demonstration',confirmed:true};
