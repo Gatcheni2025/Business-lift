@@ -1,12 +1,13 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{phone,current}=require('./onboarding'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage');
-const actions=new Set(['seller_mandate_status','seller_mandate_submit','seller_mandate_withdraw','ops_mandate_image','ops_mandate_queue','ops_mandate_detail','ops_mandate_export','ops_mandate_review','ops_mandate_record_netcash_submission']);
+const actions=new Set(['seller_mandate_status','seller_mandate_submit','seller_mandate_withdraw','ops_mandate_image','ops_mandate_queue','ops_mandate_detail','ops_mandate_export','ops_mandate_review','ops_mandate_record_netcash_submission','ops_mandate_provider_confirm']);
 const VERSION='teyza-debit-request-v3',PRICE=9900;
 // Universal codes: https://support.peachpayments.com/support/solutions/articles/47001207209
 const banks=[['Absa','632005'],['Capitec','470010'],['Capitec Business','450105'],['FNB','250655'],['Nedbank','198765'],['Standard Bank','051001'],['African Bank','430000'],['Investec','580105'],['Discovery Bank','679000'],['TymeBank','678910'],['Other','']].map(([name,branchCode])=>({name,branchCode}));
+const PROCESSING_MS=7*86400000,PROVIDER_MS=30*86400000;
 const benefits=['Visibility on Teyza','Priority placement in your area, subject to eligibility and availability','Discounts on stock from participating wholesalers','Discounted delivery on selected products','Access to shop finance, subject to separate application and approval','Free bookkeeping support'];
 function terms(firstDate,day){return `I request that Teyza prepare a formal bank-authenticated R99.00 monthly debit-order mandate with a proposed first collection date of ${firstDate} and thereafter day ${day} each month. I authorise Teyza to process my bank details securely and submit them to an authorised collection provider for verification and mandate authentication. I understand that ticking the consent box and submitting this request is not a bank-accepted signed debit-order mandate. Netcash requires a valid written, recorded or provider-approved electronic mandate before collections. No debit or paid entitlement results from this request or administrator review. A debit may be presented only after any bank-required authentication and collection-provider activation. No increase in the R99.00 monthly amount or change of collection date is allowed without a fresh authorisation. I confirm I own the bank account or am an authorised signatory, and may withdraw this request before provider activation or contact support@teyza.co.za; existing provider mandates must separately be cancelled through Teyza or the provider. Partner offers depend on eligibility and availability.`;}
-function publicMandate(m){return m?{mandateId:m.mandateId,status:m.status,amountCents:m.amountCents,firstDate:m.firstDate,collectionDay:m.collectionDay,bankName:m.bankName,accountLast4:m.accountLast4,branchCode:m.branchCode,acceptedAt:m.acceptedAt,withdrawnAt:m.withdrawnAt||null,termsVersion:m.termsVersion,terms:m.terms,identityExpiresAt:m.identityExpiresAt,shopName:m.shopName||'',shopAddress:m.shopAddress||'',providerStatus:m.providerStatus||'not_configured',providerSubmittedAt:m.providerSubmittedAt||null,collectionActive:false}:null;}
+function publicMandate(m){return m?{mandateId:m.mandateId,status:m.status,amountCents:m.amountCents,firstDate:m.firstDate,collectionDay:m.collectionDay,bankName:m.bankName,accountLast4:m.accountLast4,branchCode:m.branchCode,acceptedAt:m.acceptedAt,withdrawnAt:m.withdrawnAt||null,termsVersion:m.termsVersion,terms:m.terms,identityExpiresAt:m.identityExpiresAt,shopName:m.shopName||'',shopAddress:m.shopAddress||'',providerStatus:m.providerStatus||'not_configured',providerSubmittedAt:m.providerSubmittedAt||null,providerConfirmedAt:m.providerConfirmedAt||null,collectionActive:false}:null;}
 function schedule(date,day,clock){const today=new Date(clock()+2*3600000).toISOString().slice(0,10);if(typeof date!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date<today||date>new Date(clock()+366*86400000).toISOString().slice(0,10)||!Number.isInteger(day)||day<1||day>28||Number(date.slice(-2))!==day)D.fail(422,'Choose a first collection date within the next year, on day 1–28.');}
 function requireApprovedSeller(uid,account,setup,verification,shop,now){
  // Mandate enrolment follows the administrator's seller/identity approval.
@@ -16,7 +17,7 @@ function requireApprovedSeller(uid,account,setup,verification,shop,now){
     setup?.moderationBlocked===true||P.held(shop))
   D.fail(403,'Your seller registration and identity verification must be approved before you submit a mandate.');
 }
-function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock,rate}){
+function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,clock,rate,synchronize=async()=>{}}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  async function execute(auth,action,data={}){
   const uid=D.id(auth.uid);
@@ -91,17 +92,54 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const reason=D.text(data.reason,'review note',400);
     if(reason.length<10)D.fail(422,'Explain the review decision (at least 10 characters).');
     return db.runTransaction(async tx=>{
-      const snap=await tx.get(doc('teyzaSellerMandates/'+target));
+      const billRef=doc('teyzaBilling/'+target);
+      const [snap,bill]=await Promise.all([tx.get(doc('teyzaSellerMandates/'+target)),tx.get(billRef)]);
       if(!snap.exists||snap.data().ownerUid!==target||snap.data().mandateId!==mandateId||
          !['signed_pending_activation','pending_provider_authentication','reviewed_pending_provider','needs_correction'].includes(snap.data().status))
         D.fail(409,'Mandate was withdrawn, replaced or already changed.');
       const now=clock();
       tx.update(doc('teyzaSellerMandates/'+target),{status:decision,
         adminReviewBy:uid,adminReviewedAt:now,adminReviewNote:reason,collectionActive:false});
+      if(decision==='needs_correction'&&bill.exists&&bill.data().ownerUid===target&&bill.data().mandateAccessMandateId===mandateId)
+        tx.update(billRef,{mandateAccessStatus:'revoked',mandateAccessRevokedAt:now});
       tx.set(doc('teyzaMandateAudit/'+crypto.randomUUID()),{actorUid:uid,ownerUid:target,
         action:'admin_review',decision,reason,mandateId,createdAt:now});
       return {reviewed:true,status:decision,collectionActive:false};
     });
+  }
+  if(action==='ops_mandate_provider_confirm'){
+    recentAdmin(auth,clock);await rate(uid,'mandate-review',10,60000);
+    const target=D.id(data.sellerUid),mandateId=D.id(data.mandateId);
+    if(target===uid)D.fail(403,'Another administrator must verify provider acceptance.');
+    if(data.confirmed!==true)D.fail(422,'Independently confirm the provider-approved mandate.');
+    const reference=D.text(data.providerReference,'provider acceptance reference',120),
+      note=D.text(data.note,'provider acceptance evidence',400);
+    if(!/^[A-Za-z0-9][A-Za-z0-9._\/-]{5,119}$/.test(reference)||note.length<20)
+      D.fail(422,'Enter the verified provider acceptance reference and a 20-character evidence note.');
+    const result=await db.runTransaction(async tx=>{
+      const ref=doc('teyzaSellerMandates/'+target),billRef=doc('teyzaBilling/'+target);
+      const [m,b,a]=await Promise.all([tx.get(ref),tx.get(billRef),tx.get(doc('teyzaSellerAccounts/'+target))]);
+      if(!m.exists||m.data().ownerUid!==target||m.data().mandateId!==mandateId)
+        D.fail(409,'The mandate has changed. Refresh before confirming.');
+      if(!a.exists||a.data().approvalStatus!=='approved'||a.data().deletionPending===true)
+        D.fail(409,'Seller approval is not current.');
+      if(!['reviewed_pending_provider','submitted_to_netcash'].includes(m.data().status))
+        D.fail(409,'Review the mandate and verify provider acceptance first.');
+      if(b.exists&&b.data().ownerUid!==target)D.fail(409,'Billing ownership mismatch.');
+      const at=clock(),until=at+PROVIDER_MS;
+      tx.update(ref,{status:'provider_confirmed',providerStatus:'accepted_verified_manually',
+        providerConfirmedAt:at,providerConfirmedBy:uid,providerAcceptanceReference:reference,
+        providerConfirmationNote:note,collectionActive:false});
+      tx.set(billRef,{ownerUid:target,mandateAccessStatus:'active',
+        mandateAccessKind:'provider_confirmed_30d',mandateAccessMandateId:mandateId,
+        mandateAccessUntil:until,mandateAccessProviderBy:uid,mandateAccessProviderReference:reference,updatedAt:at},{merge:true});
+      tx.set(doc('teyzaMandateAudit/'+crypto.randomUUID()),{actorUid:uid,ownerUid:target,
+        action:'provider_confirmation',mandateId,reference,reason:note,
+        until,createdAt:at,paymentRecorded:false,collectionActive:false});
+      return {confirmed:true,until,status:'provider_confirmed',paymentRecorded:false};
+    });
+    await synchronize(target,{publishIntent:true});
+    return result;
   }
   if(action==='ops_mandate_image'){
    recentAdmin(auth,clock);await rate(uid,'mandate-review',20,60000);const target=D.id(data.sellerUid);if(target===uid)D.fail(403,'Another administrator must review your ID.');
@@ -125,11 +163,21 @@ function createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     seller:{shopName:seller.shopName||'',shopAddress:seller.address||'',phone:seller.phone||'',email:seller.ownerEmail||auth.email||'',firstName:split[0]||'',surname:split.slice(1).join(' '),accountHolder:savedName},
     identity:current(id,uid,clock)&&['id','passport'].includes(id.kind)?{evidenceId:id.evidenceId,kind:id.kind}:null};
   }
-  if(action==='seller_mandate_withdraw')return db.runTransaction(async tx=>{
-   const s=await tx.get(head),m=s.exists?s.data():null;if(!m||m.mandateId!==data.mandateId)D.fail(409,'Refresh the current mandate first.');
-   if(m.status==='withdrawn')return {withdrawn:true};
-   tx.update(head,{status:'withdrawn',withdrawnAt:clock()});tx.set(doc('teyzaMandateAudit/'+crypto.randomUUID()),{actorUid:uid,mandateId:m.mandateId,action:'withdraw',createdAt:clock()});return {withdrawn:true};
-  });
+  if(action==='seller_mandate_withdraw'){
+    const result=await db.runTransaction(async tx=>{
+      const billRef=doc('teyzaBilling/'+uid);
+      const [s,bill]=await Promise.all([tx.get(head),tx.get(billRef)]);
+      const m=s.exists?s.data():null;
+      if(!m||m.mandateId!==data.mandateId)D.fail(409,'Refresh the mandate first.');
+      if(m.status==='withdrawn')return {withdrawn:true};
+      tx.update(head,{status:'withdrawn',withdrawnAt:clock()});
+      if(bill.exists&&bill.data().ownerUid===uid&&bill.data().mandateAccessMandateId===m.mandateId)
+        tx.update(billRef,{mandateAccessStatus:'revoked',mandateAccessRevokedAt:clock()});
+      tx.set(doc('teyzaMandateAudit/'+crypto.randomUUID()),{actorUid:uid,mandateId:m.mandateId,action:'withdraw',createdAt:clock()});
+      return {withdrawn:true};
+    });
+    await synchronize(uid);return result;
+  }
   if(action!=='seller_mandate_submit')D.fail(404,'Unknown mandate action.');
   const [setup,verification,shop]=await Promise.all([
    read('teyzaSellerOnboarding/'+uid),read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid)]);
