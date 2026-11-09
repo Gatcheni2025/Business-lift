@@ -218,7 +218,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        selfieMatchesOnboarding:setup?.requiredVersion!==2||
          Boolean(setup?.selfieSubmissionId&&setup.selfieSubmissionId===verification?.submissionId),
        verifiedPhoneMatchesOnboarding:setup?.requiredVersion!==2||
-         Boolean(setup?.verifiedPhone&&setup.verifiedPhone===String(account.phone||'').replace(/[\\s()-]/g,'').replace(/^0(?=\\d{9}$)/,'+27')),
+         Boolean(setup?.verifiedPhone&&setup.verifiedPhone===String(account.phone||'').replace(/[\s()-]/g,'').replace(/^0(?=\d{9}$)/,'+27')),
        moderationBlocked:setup?.moderationBlocked===true,
        shopSetupComplete:publication.ready,
        sellingAccessActive:publication.hasListing,canSell:publication.canSell,
