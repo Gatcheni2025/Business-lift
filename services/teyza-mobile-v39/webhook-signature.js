@@ -33,7 +33,9 @@ function verifyModern(signingSecret,body,header,now=Date.now()){
  return values.some(value=>compare(expected,value.slice(value.indexOf(':')+1)));
 }
 function verifyWebhook({raw,legacy,modern,secretKey,signingSecret,now=Date.now()}={}){
- if(typeof modern==='string'&&modern.trim()!=='')
+ // A present modern header, including an empty or malformed one, MUST
+ // fail closed instead of downgrading to the legacy secret-key signature.
+ if(modern!==undefined&&modern!==null)
    return verifyModern(signingSecret,raw,modern,now);
  return verifyLegacy(secretKey,raw,legacy);
 }
