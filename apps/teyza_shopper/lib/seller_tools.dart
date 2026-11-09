@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'seller_firestore.dart';
 import 'seller_selfie_camera.dart';
 import 'seller_location.dart';
+import 'seller_billing.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -311,6 +312,8 @@ class _ProfileState extends State<SellerProfilePage>{
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
       FilledButton(onPressed:saving||uid!=widget.session.userId?null:save,child:Text(saving?'Saving…':'Save shop profile')),
       const SizedBox(height:26),
+      SellerBillingCard(session:widget.session,api:widget.api),
+      const SizedBox(height:16),
       const Text('Delivery, cards & messaging',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
       const SizedBox(height:8),
       const Text('Your saved shop options can be changed here at any time.',style:TextStyle(color:Color(0xFF60736B))),
