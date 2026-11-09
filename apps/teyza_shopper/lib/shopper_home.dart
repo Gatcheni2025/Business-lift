@@ -432,8 +432,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     try{
       final token=await session.freshIdToken();
       if(!mounted||session.userId!=uid||session.idToken==null||session.workspaceChosen)return;
-      final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
-      if(!mounted||uid!=session.userId||session.workspaceChosen)return;
+      // Discover other verified sign-ins FIRST. A new shopper may have no
+      // seller document (or lack direct Firestore read permission), but should
+      // still be offered a legitimate existing seller account.
       if(session.emailVerified&&widget.enableBackgroundServices){
         try{
           final choices=mobileRows((await (widget.sellerMobileApi??TeyzaMobileApi(session))
@@ -448,6 +449,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           }
         }catch(_){/* Current UID still works if account discovery is offline. */}
       }
+      final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
       if(mounted&&session.userId==uid&&session.idToken!=null&&
          account?.hasRegisteredCategory==true&&!session.workspaceChosen)session.useSellerWorkspace();
     }catch(_){/* Seller authentication stays separate from account discovery. */}
