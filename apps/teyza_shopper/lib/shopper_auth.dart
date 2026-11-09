@@ -106,11 +106,17 @@ class ShopperSession extends ChangeNotifier {
   bool forgetDeviceLocationOnSignOut=false;
   // A UID-bound presentation preference only. Seller permissions still come
   // from authenticated account records and server checks.
-  String? _sellerWorkspaceUid;
+  String? _sellerWorkspaceUid,_workspaceChoiceUid;
   bool get sellerWorkspace=>idToken!=null&&userId!=null&&_sellerWorkspaceUid==userId;
+  bool get workspaceChosen=>idToken!=null&&userId!=null&&_workspaceChoiceUid==userId;
+  void useShopperWorkspace(){
+    if(idToken==null||userId==null)return;
+    _sellerWorkspaceUid=null;_workspaceChoiceUid=userId;_changed();
+    unawaited(_persist().catchError((Object _){}));
+  }
   void useSellerWorkspace(){
     if(idToken==null||userId==null)return;
-    _sellerWorkspaceUid=userId;_changed();
+    _sellerWorkspaceUid=userId;_workspaceChoiceUid=userId;_changed();
     unawaited(_persist().catchError((Object _){}));
   }
   bool get contactVerified=>emailVerified||phoneVerified;
@@ -166,6 +172,7 @@ class ShopperSession extends ChangeNotifier {
     final version=_version;
     final values={'teyza_refresh':refresh,'teyza_email':email??'','teyza_name':name??'',
       'teyza_seller_workspace_uid':sellerWorkspace?userId!:'',
+      'teyza_workspace_choice_uid':workspaceChosen?userId!:'',
       'teyza_anonymous_shopper_uid':anonymousShopper?userId??'':''};
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final entry in values.entries){
@@ -177,10 +184,10 @@ class ShopperSession extends ChangeNotifier {
     await operation;
   }
   Future<void> _clear() async {
-    _sellerWorkspaceUid=null;
+    _sellerWorkspaceUid=null;_workspaceChoiceUid=null;
     idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;googleProviderLinked=false;googleProviderLinked=false;anonymousShopper=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
-      for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_anonymous_shopper_uid']){
+      for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_workspace_choice_uid','teyza_anonymous_shopper_uid']){
         await _store.delete(key);
       }
     });
@@ -200,6 +207,7 @@ class ShopperSession extends ChangeNotifier {
         final savedEmail=await _store.read('teyza_email');
         final savedName=await _store.read('teyza_name');
         final savedWorkspaceUid=await _store.read('teyza_seller_workspace_uid');
+        final savedChoiceUid=await _store.read('teyza_workspace_choice_uid');
         final savedAnonymousUid=await _store.read('teyza_anonymous_shopper_uid');
         final data=await _refresh(refresh);
         if(version!=_version||_disposed)return;
@@ -208,6 +216,7 @@ class ShopperSession extends ChangeNotifier {
         if(token.isEmpty||uid.isEmpty)throw StateError('INVALID_REFRESH_TOKEN');
         idToken=token;userId=uid;anonymousShopper=savedAnonymousUid==uid;
         _sellerWorkspaceUid=savedWorkspaceUid==uid?uid:null;
+        _workspaceChoiceUid=savedChoiceUid==uid?uid:null;
         _refreshToken=data['refresh_token']?.toString()??refresh;
         email=savedEmail?.isNotEmpty==true?savedEmail:null;name=savedName;
         await _persist();
@@ -231,7 +240,7 @@ class ShopperSession extends ChangeNotifier {
     final refresh=data['refreshToken']?.toString()??'';
     final uid=data['localId']?.toString()??'';
     if(token.isEmpty||refresh.isEmpty||uid.isEmpty)throw StateError('NETWORK_ERROR');
-    if(userId!=uid)_sellerWorkspaceUid=null;
+    if(userId!=uid){_sellerWorkspaceUid=null;_workspaceChoiceUid=null;}
     idToken=token;userId=uid;_refreshToken=refresh;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;anonymousShopper=false;
     email=(data['email']?.toString().isNotEmpty==true?data['email'].toString():fallbackEmail);
     if(email?.isEmpty==true)email=null;

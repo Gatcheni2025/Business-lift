@@ -37,7 +37,8 @@ class SellerWorkspacePage extends StatefulWidget{
   final String? initialTarget;
   final String? initialClaimPlaceId;
   final bool sellerMode;
-  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory,this.mobileApi,this.initialTarget,this.initialClaimPlaceId,this.sellerMode=false});
+  final VoidCallback? onChooseAccount;
+  const SellerWorkspacePage({super.key,required this.session,required this.openLogin,this.apiFactory,this.mobileApi,this.initialTarget,this.initialClaimPlaceId,this.sellerMode=false,this.onChooseAccount});
   @override State<SellerWorkspacePage> createState()=>_SellerWorkspaceState();
 }
 class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindingObserver{
@@ -636,6 +637,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         title:Text(widget.sellerMode?(shop?.category=='wholesale'?['Wholesaler dashboard','Advertise to spazas','Partner orders','Partner chat','My business']:['Seller dashboard','My products','Customer orders','Customer chat','My business'])[sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
+          if(widget.onChooseAccount!=null)IconButton(
+            key:const ValueKey('seller-choose-account'),tooltip:'Choose Teyza account',
+            onPressed:widget.onChooseAccount,icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
         ]:null),
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
