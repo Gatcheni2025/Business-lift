@@ -309,40 +309,45 @@ async function main(){
     assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
-  await check('Mandate review can grant an explicitly approved 30-day selling period without recording a payment',async()=>{
+  await check('Mandate review uses one consent step and requires separate provider evidence, without recording a payment',async()=>{
     const mandate={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_grant_qa',
       bankName:'FNB',branchCode:'250655',accountLast4:'8901',shopAddress:'Durban',
       firstDate:'2026-12-01',collectionDay:1,amountCents:9900,
       acceptedAt:Date.UTC(2026,10,8),status:'pending_provider_authentication'};
-    let reviewed=false,granted=false;
+    let reviewed=false,accepted=false;
     const f=await pageFor({api:async(route,body)=>{
       if(body.action==='ops_seller_detail'){
         await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',
           listingPlan:'free'},billing:{status:'not_started'},membershipPaid:false,
-          complimentaryAccess:granted,paystackMode:'test',payments:[],entries:[],
+          complimentaryAccess:false,paystackMode:'test',payments:[],entries:[],
           catalogue:{products:[]},verification:{status:'approved'}}});return true;
       }
       if(body.action==='ops_mandate_queue'){
         await route.fulfill({json:{ok:true,mandates:[{...mandate,
-          status:reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
+          status:accepted?'provider_confirmed':reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
       }
       if(body.action==='ops_mandate_review'){
         reviewed=true;await route.fulfill({json:{ok:true,reviewed:true,collectionActive:false}});return true;
       }
-      if(body.action==='ops_complimentary_access'){
-        granted=true;await route.fulfill({json:{ok:true,granted:true}});return true;
+      if(body.action==='ops_mandate_provider_confirm'){
+        accepted=true;await route.fulfill({json:{ok:true,confirmed:true,paymentRecorded:false}});return true;
       }
       return false;
     }});
     await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
-    await f.page.getByLabel('Reason / review note').fill('QA owner reviewed; temporary selling pending provider processing');
-    await f.page.getByRole('checkbox',{name:/Also approve 30 days of temporary Start Selling access/}).check();
-    await f.page.getByRole('checkbox',{name:/I understand this review does not activate a debit order/}).check();
+    await f.page.getByLabel('Review note').fill('Bank and ID documents reviewed for provider submission');
+    await f.page.getByRole('checkbox',{name:/A review does not authenticate/}).check();
     await f.page.getByRole('button',{name:'Save mandate review'}).click();
-    await f.page.locator('#notice').getByText(/30 days of temporary selling access granted/).waitFor();
-    assert(reviewed&&granted);
-    assert(f.calls.some(x=>x.action==='ops_complimentary_access'&&x.data.days===30));
+    await f.page.locator('#notice').getByText(/Mandate decision saved/).waitFor();
+    assert(reviewed);assert(!accepted);
+    await f.page.getByLabel('Provider acceptance reference').fill('NC-ACCEPTED-0002');
+    await f.page.getByLabel('How and where provider acceptance was checked').fill('Confirmed verified provider acceptance on Netcash portal');
+    await f.page.getByRole('checkbox',{name:/I verified actual provider acceptance/}).check();
+    await f.page.getByRole('button',{name:'Confirm provider acceptance and 30-day access'}).click();
+    await f.page.locator('#notice').getByText(/Provider acceptance recorded/).waitFor();
+    assert(reviewed&&accepted);
+    assert(!f.calls.some(x=>x.action==='ops_complimentary_access'));
     assert(!f.calls.some(x=>['billing_checkout','ops_mandate_activate','ops_paystack_confirm'].includes(x.action)));
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
