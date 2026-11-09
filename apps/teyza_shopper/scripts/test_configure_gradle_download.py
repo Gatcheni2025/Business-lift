@@ -43,6 +43,17 @@ class GradleDownloadTests(unittest.TestCase):
                 module.configure(path)
             self.assertEqual(path.read_text(),original)
 
+    def test_kotlin_mirror_includes_project_level_compiler_classpaths(self):
+        # Kotlin's compiler is loaded by :camera_android_camerax's
+        # kotlinBuildToolsApiClasspath (a PROJECT repository configuration).
+        # A settings-only init hook still downloads from the broken redirect.
+        init_script=Path(__file__).with_name("ci-kotlin-mirror.init.gradle").read_text()
+        self.assertIn("gradle.beforeProject",init_script)
+        self.assertIn("teyzaCIKotlinCompilerProjectMirror",init_script)
+        self.assertIn("includeGroup('org.jetbrains.kotlin')",init_script)
+        self.assertIn("maven.aliyun.com/repository/central",init_script)
+        self.assertIn("mavenCentral()",init_script)
+
     def test_does_not_create_a_missing_native_project(self):
         with tempfile.TemporaryDirectory() as folder:
             with self.assertRaises(FileNotFoundError):
