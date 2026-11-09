@@ -3,7 +3,7 @@ import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Debit-order mandate review',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Seller Paystack billing & historical mandates',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  const navButtons=[...document.querySelectorAll('[data-admin-view]')];
@@ -239,7 +239,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     }else if(!status.shopSetupComplete)
       review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
     else if(!status.sellingAccessActive)
-      review.append(el('p','Receive the R99 mandate to begin the automatic seven-day processing window. No additional manual seller-access approval is necessary.','notice warning'));
+      review.append(el('p','Seller registration is approved, but product and advertising access requires a verified live Paystack membership or a separately audited temporary access grant. Old Netcash requests cannot establish a new recurring payment.','notice warning'));
     if(d.mandateAccessActive)review.append(el('p',
       (d.mandateAccessKind==='processing_7d'?'7-day processing access until ':'30-day provider-accepted access until ')+
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
@@ -269,7 +269,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       await choose(selected);
     }));
   }
-  billing.append(el('p','Existing Paystack memberships are displayed only for reconciliation and cancellation. New sellers must complete R99 debit-order mandate requests and provider bank authentication.','footnote'));
+  billing.append(el('p','New subscriptions must be authorised by the seller with Paystack card checkout on the Teyza website. Historic Netcash mandates remain read-only and are not chargeable.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
   if(d.seller.approvalStatus==='approved'&&!d.membershipPaid&&!d.complimentaryAccess){

@@ -31,6 +31,28 @@ const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
 const invoice={sellerUid:'seller1',period:'2026-10',consentReference:'Recorded mandate A',consentConfirmed:true};
 const payment={sellerUid:'seller1',period:'2026-10',amountCents:9900,reference:'Bank-TXN-001',receiptVerified:true};
 test('Operations reject sellers, stale admins, phone bootstrap tokens and unverified reviewers',async()=>{const f=setup();for(const actor of [{uid:'seller1',email_verified:true},{...admin,auth_time:now/1000-301},{...admin,teyzaPhoneBootstrap:true},{...admin,email_verified:false}])await rejects(f.call('ops_sellers',{},actor),actor.teyzaAdmin&&actor.email_verified?401:403);});
+test('Seller billing overview is UID-scoped, includes genuine Paystack history and never grants payment',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{...f.db.records.get('teyzaSellerAccounts/seller1'),listingPlan:'basic'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',
+   paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:now+86400000,
+   nextBillingAt:now+86400000,renewalSetup:'scheduled',paystackSubscriptionCode:'SUB_A1'});
+ f.db.records.set('teyzaPaystackPayments/pay1',{ownerUid:'seller1',kind:'intro',status:'paid',
+   amountCents:1000,currency:'ZAR',environment:'live',verifiedAt:now-10000});
+ f.db.records.set('teyzaPaystackPayments/payOther',{ownerUid:'seller2',kind:'monthly',
+   status:'paid',amountCents:9900,currency:'ZAR',environment:'live',verifiedAt:now-5000});
+ const before=structuredClone([...f.db.records]);
+ const result=await f.call('seller_billing_overview',{sellerUid:'seller2'},{
+   uid:'seller1',email_verified:true,auth_time:now/1000});
+ assert.equal(result.sellerUid,'seller1');
+ assert.equal(result.status,'paid');
+ assert.equal(result.nextBillAmountCents,9900);
+ assert.equal(result.amountDueCents,null);
+ assert.deepEqual(result.transactions.map(x=>x.reference),['pay1']);
+ assert.deepEqual([...f.db.records],before,'Reading a statement must not change billing or access');
+ await rejects(f.call('seller_billing_overview',{sellerUid:'seller1'},{
+   uid:'seller2',email_verified:false}),403);
+});
 test('Legacy mandate and manual payment endpoints refuse to change billing',async()=>{
  const f=setup();
  const before=structuredClone([...f.db.records]);
