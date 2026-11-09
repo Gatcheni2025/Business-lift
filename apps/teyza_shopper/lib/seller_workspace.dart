@@ -50,9 +50,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false,openedClaim=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,mandateAccess=false,promotionActive=false;int? paidUntil,mandateUntil,promotionEndsAt;bool hasLocation=false;
   bool get sellerApproved=>approvalStatus=='approved';
-  bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess);
+  bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess||mandateAccess);
   bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
@@ -88,7 +88,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -225,7 +225,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       // while the mobile service was offline. Never auto-publish on login.
       if(shop?.category!='wholesale'&&drafts.isNotEmpty){
         if(result['approvalStatus']=='approved'&&result['setupComplete']==true&&
-          (result['listingPaid']==true||result['complimentaryAccess']==true)){
+          (result['listingPaid']==true||result['complimentaryAccess']==true||result['mandateAccessActive']==true)){
           await syncRange();
         }else{
           setState(()=>rangeStatus='Your products are saved privately. Seller approval, completed shop setup and active R99 selling access are required to display prices to shoppers.');
@@ -262,11 +262,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     }
     if(!mounted||uid!=widget.session.userId)return;
     final verified=current['approvalStatus']=='approved';
-    final active=current['listingPaid']==true||current['complimentaryAccess']==true;
+    final active=current['listingPaid']==true||current['complimentaryAccess']==true||current['mandateAccessActive']==true;
     setState((){
       approvalStatus=verified?'approved':'pending';
       listingPaid=current['listingPaid']==true;
-      complimentaryAccess=current['complimentaryAccess']==true;
+      complimentaryAccess=current['complimentaryAccess']==true;mandateAccess=current['mandateAccessActive']==true;mandateUntil=(current['mandateAccessUntil'] as num?)?.toInt();
       sellingEnabled=current['sellingEnabled']==true;
     });
     if(!verified){await openUpgrade(fromProductAction:true);return;}
@@ -531,7 +531,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ()=>selectSellerTab(1)),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Existing seller access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
+      listingPaid?'Existing seller access active':mandateAccess?'Mandate-processing access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
       ()=>openUpgrade()),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
@@ -688,7 +688,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'R99 debit mandate':'Seller eligibility status')),
+            label:Text(listingPaid?'Business access active':mandateAccess?'7-day mandate access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'R99 debit mandate':'Seller eligibility status')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
