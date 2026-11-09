@@ -89,6 +89,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      D.fail(409,'Shop setup, seller verification and active paid or temporary selling access are required.');
    const result=await synchronize(target,{publishIntent:true});
    if(result.publication!=='live')D.fail(409,'Seller access changed. Refresh the shop before publishing.');
+   if(result.publicCount===0)D.fail(409,'No publishable products were found for this seller UID. Check the saved product items subcollection and submitted catalogue snapshot. No payment or product publication was recorded.');
    await db.runTransaction(async tx=>{
      audit(tx,auth,action,target,{reason,publicProductCount:result.publicCount,noPaymentRecorded:true});
    });
