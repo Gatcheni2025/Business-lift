@@ -5,7 +5,9 @@ const normalizedPhone=value=>String(value||'').replace(/[\s()-]/g,'').replace(/^
 const held=shop=>Boolean(shop&&!['active','pending_review','pending_setup','awaiting_subscription'].includes(shop.status)&&
  !(shop.status==='suspended'&&['onboarding','owner_review','approval'].includes(shop.moderationSource)));
 // Verified, approved shops can appear for free with no catalogue.
-// Product publishing and orders require a server-verified paid membership.
+// New direct-channel R99 mandates provide a non-paid 7-day processing window.
+// A separately evidenced provider acceptance can extend access for 30 days.
+// Neither state means a bank debit was collected, and neither auto-renews.
 function period(now) { return new Date(now+2*3600000).toISOString().slice(0,7); }
 const TRIAL_MS=7*24*60*60*1000; // historical compatibility only
 const trialActive=()=>false;
@@ -27,8 +29,16 @@ function complimentary(uid,account,billing,now=Date.now()){
   typeof billing.adminComplimentaryBy==='string'&&billing.adminComplimentaryBy!==uid&&
   Number.isFinite(billing.adminComplimentaryUntil)&&now<billing.adminComplimentaryUntil;
 }
+function mandateAccess(uid,account,billing,now=Date.now()){
+ return account?.uid===uid&&account.approvalStatus==='approved'&&
+  billing?.ownerUid===uid&&billing.mandateAccessStatus==='active'&&
+  ['processing_7d','provider_confirmed_30d'].includes(billing.mandateAccessKind)&&
+  typeof billing.mandateAccessMandateId==='string'&&billing.mandateAccessMandateId.length>0&&
+  Number.isFinite(billing.mandateAccessUntil)&&billing.mandateAccessUntil>now;
+}
 function eligible(uid,account,billing,now=Date.now()){
- return entitled(uid,account,billing,now)||complimentary(uid,account,billing,now);
+ return entitled(uid,account,billing,now)||complimentary(uid,account,billing,now)||
+  mandateAccess(uid,account,billing,now);
 }
 function state(uid,account,setup={},verification,shop,billing=null,now=Date.now()){
  const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
@@ -49,7 +59,7 @@ function state(uid,account,setup={},verification,shop,billing=null,now=Date.now(
 function assertLive(uid,account,setup,verification,shop,billing=null,now=Date.now()){
  D.published(shop,uid);
  if(!state(uid,account,setup,verification,shop,billing,now).canSell)
-   D.fail(409,'This shop needs seller approval and an active Paystack membership or recorded time-limited complimentary access before accepting orders.');
+   D.fail(409,'This shop needs verified approval and active R99 mandate-processing, provider-confirmed or verified membership access before accepting orders.');
  return shop;
 }
 const coordinates=(lat,lng)=>typeof lat==='number'&&Number.isFinite(lat)&&lat>=-90&&lat<=90&&
@@ -118,4 +128,4 @@ function publicRow(uid,shop){
   rating:shop.ratingSource==='teyza_completed_orders'?shop.rating:null,
   ratingCount:shop.ratingSource==='teyza_completed_orders'?shop.ratingCount:0,ratingSource:shop.ratingSource||''};
 }
-module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,eligible,complimentary,trialActive,TRIAL_MS};
+module.exports={state,assertLive,coordinates,locationFor,locationMatches,freshCoordinates,project,publicRow,held,period,entitled,eligible,complimentary,mandateAccess,trialActive,TRIAL_MS};
