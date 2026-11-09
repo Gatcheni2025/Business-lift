@@ -210,7 +210,17 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        shopCategory:account.category||'',
        radiusMustUseShopperDeliveryAddress:true
      },
-     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+     sellingStatus:{
+       // Actual account approval differs from aggregate publication readiness.
+       sellerApproved:publication.approved,
+       registrationApproved:account.approvalStatus==='approved',
+       selfieApproved:verification?.ownerUid===target&&verification.status==='approved',
+       selfieMatchesOnboarding:setup?.requiredVersion!==2||
+         Boolean(setup?.selfieSubmissionId&&setup.selfieSubmissionId===verification?.submissionId),
+       verifiedPhoneMatchesOnboarding:setup?.requiredVersion!==2||
+         Boolean(setup?.verifiedPhone&&setup.verifiedPhone===String(account.phone||'').replace(/[\\s()-]/g,'').replace(/^0(?=\\d{9}$)/,'+27')),
+       moderationBlocked:setup?.moderationBlocked===true,
+       shopSetupComplete:publication.ready,
        sellingAccessActive:publication.hasListing,canSell:publication.canSell,
        shopStatus:shop?.status||'not_listed',
        publicProductCount:account.category!=='wholesale'&&publication.canSell&&shop?.status==='active'?
