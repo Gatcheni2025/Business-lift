@@ -385,14 +385,29 @@ test('Website membership checkout returns to the fixed Teyza domain, never a cli
    sellingStatus:'pending_approval',verifiedPhone:phone,selfieSubmissionId:'selfie1'},
   'teyzaMobileVerification/shop1':{ownerUid:'shop1',status:'approved',submissionId:'selfie1'}
  });
- const response=await api.execute(auth,'billing_checkout',{
-  ...consent,checkoutChannel:'web',callback_url:'https://evil.example/collect'
+ const response=await api.execute({...auth,auth_time:NOW/1000},'billing_checkout',{
+  ...consent,checkoutChannel:'web',confirmedSellerUid:'shop1',callback_url:'https://evil.example/collect'
  });
  const init=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
- assert.equal(init.callback_url,'https://teyza.co.za/seller-subscriptions.html?payment=return');
+ assert.equal(init.callback_url,'https://teyza.co.za/pay?payment=return');
  assert.equal(init.amount,1000);
  assert.equal(records.get('teyzaPaystackPayments/'+response.reference).checkoutChannel,'web');
  assert.equal(init.metadata.teyzaUid,'shop1');
+});
+test('Website checkout requires recent Firebase login and explicit correct seller UID',async()=>{
+ const phone='+27712345678';
+ const {api,auth,requests}=fixture({
+  'teyzaSellerAccounts/shop1':{uid:'shop1',ownerEmail:'owner@example.test',category:'spaza',listingPlan:'free',approvalStatus:'approved',phone},
+  'teyzaSellerOnboarding/shop1':{requiredVersion:2,completedAt:NOW,moderationBlocked:false,
+    sellingStatus:'pending_approval',verifiedPhone:phone,selfieSubmissionId:'selfie1'},
+  'teyzaMobileVerification/shop1':{ownerUid:'shop1',status:'approved',submissionId:'selfie1'},
+ });
+ const opts={...consent,checkoutChannel:'web',confirmedSellerUid:'shop1'};
+ await assert.rejects(api.execute({...auth,auth_time:NOW/1000-901},'billing_checkout',opts),e=>e.status===401);
+ await assert.rejects(api.execute({...auth,auth_time:NOW/1000},'billing_checkout',
+   {...opts,confirmedSellerUid:'other-shop'}),e=>e.status===403);
+ await assert.rejects(api.execute({...auth,auth_time:NOW/1000,email_verified:false},'billing_checkout',opts),e=>e.status===403);
+ assert.equal(requests.length,0,'No Paystack API request before verified shop owner is authenticated');
 });
 test('Website checkout refuses an unsupported channel before calling Paystack',async()=>{
  const {api,auth,requests}=fixture();
@@ -410,8 +425,8 @@ test('Direct-distribution Android retains its existing callback',async()=>{
 
 test('Website checkout refuses legacy account approval without current SMS onboarding',async()=>{
  const {api,auth,requests}=fixture();
- await assert.rejects(api.execute(auth,'billing_checkout',{
-  ...consent,checkoutChannel:'web'
+ await assert.rejects(api.execute({...auth,auth_time:NOW/1000},'billing_checkout',{
+  ...consent,checkoutChannel:'web',confirmedSellerUid:'shop1'
  }),e=>e.status===409&&/phone OTP/.test(e.message));
  assert.equal(requests.length,0);
 });
