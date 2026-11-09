@@ -227,7 +227,21 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
     account.append(el('p','Seller registration is already approved. Use the mandate and selling-access controls below; do not approve the registration twice.','notice success'));
   else account.append(button('Open approval desk',()=>navigate('approvals')));
-  root.append(account);sellerDocuments();
+  root.append(account);
+  if(Array.isArray(d.relatedAccounts)&&d.relatedAccounts.length>1){
+    const related=card('Account types sharing this contact email',
+      'Email matching does not prove ownership. Every seller registration retains its own Firebase UID, identity review, payments and deletion state.');
+    related.append(table(['Business / UID','Type','Approval','Access'],d.relatedAccounts.map(a=>[
+      [a.shopName,'UID '+a.sellerUid].join(' · '),
+      a.category==='spaza'?'Spaza owner':a.category==='wholesale'?'Wholesaler':a.category==='retail'?'Other business':a.category,
+      a.deletionPending?'Deletion pending':a.approvalStatus,
+      a.isCurrent?'Currently selected':a.deletionPending?'Unavailable':
+        button('Open this UID',()=>choose({sellerUid:a.sellerUid,shopName:a.shopName}))
+    ])));
+    related.append(el('p','Choose the exact UID before opening the approval desk. A pending deletion cannot be re-approved or used to inherit another shop’s verified status.','footnote'));
+    root.append(related);
+  }
+  sellerDocuments();
   const status=d.sellingStatus;
   if(status){
     const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
