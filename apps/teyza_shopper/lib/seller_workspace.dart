@@ -87,12 +87,21 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final fresh=noticesPrimed?notices.where((n)=>n['read']!=true&&!seenOrderNotices.contains(n['id'].toString())).toList():<Map<String,dynamic>>[];
       seenOrderNotices.addAll(notices.map((n)=>n['id'].toString()));noticesPrimed=true;
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
+      // Website Paystack payments are reconciled by Firebase, not by a
+      // browser callback or mobile checkout. Only server-reported entitlement
+      // can unlock the existing seller tools when this app resumes.
+      final newlyVerifiedMembership=!listingPaid&&results[0]['listingPaid']==true&&
+          results[0]['approvalStatus']=='approved';
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
         approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
+      if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:Text('Your verified Teyza membership is active. Start selling is now available.')));
+      }
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
       if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:Text(fresh.length==1?fresh.first['title']?.toString()??'New order update':'${fresh.length} new order updates'),
@@ -299,7 +308,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         final sync=await mobile.call('catalogue_sync');
         if(!mounted||uid!=widget.session.userId)return;
         if(sync['publication']=='private'){
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your products are still private. Check your shop setup and mandate approval, then retry.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your products are still private. Check shop verification and verified selling access, then retry.')));
           return;
         }
       }catch(e){
@@ -331,7 +340,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           '$visible products published to the shopper catalogue. Refresh the shopper app to see them.':
         result['publication']=='live'?
           'No priced products published yet. Check that saved stock has a valid price and refresh the listing.':
-          'Products are saved privately. Complete shop verification and activate R99 selling access before publication.');
+          'Products are saved privately. Complete shop verification and activate selling access before publication.');
     }catch(error){
       if(mounted&&uid==widget.session.userId)setState(()=>rangeStatus=
         'Your products are saved but not confirmed live. Retry Sync product listing. ${mobileError(error)}');
