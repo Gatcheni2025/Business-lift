@@ -11,6 +11,7 @@ import 'shopper_auth.dart';
 import 'shopper_delivery_profile.dart';
 import 'shopper_account.dart';
 import 'seller_workspace.dart';
+import 'teyza_account_chooser.dart';
 import 'shopper_discovery.dart';
 import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
@@ -290,6 +291,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String? _pendingClaimPlaceId;
   int _sellerEntry=0;
   Future<void>? _workspaceResolution;
+  bool _choosingTeyzaAccount=false;
   SellerPush? sellerPush;
   StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
@@ -391,13 +393,64 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _checkedSellerUid=uid;_workspaceResolution=resolveSellerWorkspace(uid);
     }
   }
+  Future<void> chooseTeyzaAccount({List<Map<String,dynamic>>? known}) async {
+    final uid=session.userId;
+    if(uid==null||session.idToken==null){navigateToTab(4);return;}
+    if(_choosingTeyzaAccount)return;
+    _choosingTeyzaAccount=true;
+    try{
+      final rows=known??mobileRows((await (widget.sellerMobileApi??TeyzaMobileApi(session))
+          .call('account_choices'))['accounts']);
+      if(!mounted||uid!=session.userId)return;
+      final choice=await showTeyzaAccountChooser(context,currentUid:uid,accounts:rows);
+      if(!mounted||uid!=session.userId)return;
+      if(choice=='seller'){
+        // Server APIs still enforce that all seller actions belong to this UID.
+        if(rows.any((r)=>r['sellerUid']==uid&&r['deletionPending']!=true))session.useSellerWorkspace();
+      }else if(choice=='shopper'){
+        session.useShopperWorkspace();
+        if(mounted)setState(()=>tab=0);
+      }else if(choice=='signin'){
+        final change=await showDialog<bool>(context:context,builder:(dialog)=>AlertDialog(
+          title:const Text('Sign in to your existing account'),
+          content:const Text('This shop belongs to another Firebase login. Sign out and use its original Google, Apple or email sign-in method. Approval and products cannot be transferred by email alone.'),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(dialog,false),child:const Text('Cancel')),
+            FilledButton(onPressed:()=>Navigator.pop(dialog,true),child:const Text('Sign out and switch')),
+          ]));
+        if(change==true&&uid==session.userId){
+          await session.signOut();
+          if(mounted)setState(()=>tab=4);
+        }
+      }
+    }catch(error){
+      if(mounted&&uid==session.userId)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Account choices are unavailable: ${mobileError(error)}')));
+    }finally{_choosingTeyzaAccount=false;}
+  }
   Future<void> resolveSellerWorkspace(String uid) async {
     try{
       final token=await session.freshIdToken();
-      if(!mounted||session.userId!=uid||session.idToken==null)return;
+      if(!mounted||session.userId!=uid||session.idToken==null||session.workspaceChosen)return;
       final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
-      if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true)session.useSellerWorkspace();
-    }catch(_){/* A selected seller workspace remains available for retry during outages. */}
+      if(!mounted||uid!=session.userId||session.workspaceChosen)return;
+      if(session.emailVerified&&widget.enableBackgroundServices){
+        try{
+          final choices=mobileRows((await (widget.sellerMobileApi??TeyzaMobileApi(session))
+            .call('account_choices'))['accounts']);
+          if(!mounted||uid!=session.userId||session.workspaceChosen)return;
+          if(choices.any((r)=>r['sellerUid']!=uid)){
+            WidgetsBinding.instance.addPostFrameCallback((_){
+              if(mounted&&uid==session.userId&&!session.workspaceChosen)
+                chooseTeyzaAccount(known:choices);
+            });
+            return;
+          }
+        }catch(_){/* Current UID still works if account discovery is offline. */}
+      }
+      if(mounted&&session.userId==uid&&session.idToken!=null&&
+         account?.hasRegisteredCategory==true&&!session.workspaceChosen)session.useSellerWorkspace();
+    }catch(_){/* Seller authentication stays separate from account discovery. */}
   }
   Future<void> _prepareLaunch([Future<void>? restoring]) async {
     try{await restoring?.timeout(const Duration(seconds:12));}catch(_){/* Authentication retries independently. */}
@@ -1286,7 +1339,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
       session:session,sellerMode:true,apiFactory:widget.sellerApiFactory,mobileApi:widget.sellerMobileApi,
       initialTarget:_sellerInitialTarget,initialClaimPlaceId:_pendingClaimPlaceId,
-      openLogin:(){if(mounted)setState(()=>tab=0);});
+      openLogin:(){if(mounted)setState(()=>tab=0);},
+      onChooseAccount:()=>chooseTeyzaAccount());
     if(!_launchReady)return const ShopperLaunchScreen();
     return Scaffold(
       appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,
@@ -1310,6 +1364,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ]))))
         ]),
         actions:[
+          if(session.idToken!=null&&!session.anonymousShopper)IconButton(
+            key:const ValueKey('teyza-choose-account'),tooltip:'Choose Teyza account',
+            onPressed:()=>chooseTeyzaAccount(),icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
