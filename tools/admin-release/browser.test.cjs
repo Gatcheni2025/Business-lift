@@ -452,13 +452,13 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
-    await f.page.getByRole('heading',{name:'Record manual Netcash portal submission'}).waitFor();
-    await f.page.getByLabel('Netcash submission or receipt reference').fill('NC-PORTAL-071126-019');
-    await f.page.getByLabel('Submission method / date and internal note').fill(
+    await f.page.getByRole('button',{name:'Record provider submission'}).waitFor();
+    await f.page.getByLabel('Netcash portal submission reference').fill('NC-PORTAL-071126-019');
+    await f.page.getByLabel('Submission method, date and note').fill(
       'Uploaded to the secure Netcash business portal with signed PDF, 07 November 2026.');
-    await f.page.getByRole('checkbox',{name:/I obtained and submitted a Netcash-acceptable/}).check();
-    await f.page.getByRole('button',{name:'Record manual submission'}).click();
-    await f.page.locator('#notice').getByText(/Netcash portal submission recorded/).waitFor();
+    await f.page.getByRole('checkbox',{name:/I submitted a provider-acceptable mandate/}).check();
+    await f.page.getByRole('button',{name:'Record provider submission'}).click();
+    await f.page.locator('#notice').getByText(/Mandate submission recorded/).waitFor();
     const receipt=f.calls.find(v=>v.action==='ops_mandate_record_netcash_submission');
     assert.equal(receipt.data.providerReference,'NC-PORTAL-071126-019');
     assert.equal(receipt.data.confirmed,true);
