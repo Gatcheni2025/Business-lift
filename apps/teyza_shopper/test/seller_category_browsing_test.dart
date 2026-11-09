@@ -124,6 +124,30 @@ void main(){
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  test('Wholesaler rows always render only a listing even if a malformed public response includes supplier prices',(){
+    final supplier=Shop.fromJson({'id':'bulk1','name':'Wholesale Outlet',
+      'shopCategory':'wholesale','products':[{'id':'secret','name':'Private wholesale price',
+        'category':'Wholesale','priceCents':110000,'stock':12}],
+      'productHighlights':[{'id':'secret','name':'Secret supplier stock','inStock':true}]});
+    expect(supplier.products,isEmpty);
+    expect(supplier.rangeProducts,isEmpty);
+    expect(discoverShopProducts([supplier],type:'wholesale'),isEmpty);
+  });
+  testWidgets('An approved local business shows its own priced products on the selected shop profile',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[seller('salon','Local Salon','variety',products:[
+      {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2500,'stock':3}])]);
+    await tester.tap(find.byKey(const ValueKey('seller-story-salon')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-profile-salon')),findsOneWidget);
+    final product=find.text('Hair cream');
+    await tester.ensureVisible(product);await tester.pumpAndSettle();
+    expect(product,findsWidgets);
+    expect(find.text('R25.00'),findsWidgets);
+    expect(find.text('No published products yet'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('Shop filters products by the selected business type',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
