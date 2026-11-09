@@ -35,11 +35,16 @@ gradle.beforeSettings { settings ->
 // configures Kotlin's compiler dependencies. Keep Maven Central/Google as
 // fallback repositories and keep the mirror out of shipped app artifacts.
 gradle.beforeProject { project ->
-    project.repositories {
-        maven {
-            name = 'teyzaCIKotlinCompilerProjectMirror'
-            url = uri('https://maven.aliyun.com/repository/central')
-            content { includeGroup('org.jetbrains.kotlin') }
+    // Flutter's included Gradle plugin builds enforce settings-only
+    // repositories and reject any project repository additions. Scope this
+    // to the single CameraX Android plugin that resolves the compiler JAR.
+    if (project.name == 'camera_android_camerax') {
+        project.repositories {
+            maven {
+                name = 'teyzaCIKotlinCompilerProjectMirror'
+                url = uri('https://maven.aliyun.com/repository/central')
+                content { includeGroup('org.jetbrains.kotlin') }
+            }
         }
     }
 }
