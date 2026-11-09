@@ -39,10 +39,15 @@ function configWithPayRoute(original){
   ...rewrites.filter(r=>!['/pay','/pay/'].includes(r.glob))
  ];
  const headers=Array.isArray(config.headers)?config.headers:[];
+ const routes=['/pay','/pay/','/pay.html','/pay/index.html'];
+ // Existing security rules for these exact routes require human review.
+ // Silently replacing them could weaken a previously approved CSP/HSTS.
+ if(headers.some(h=>routes.includes(h.glob)))
+   throw Error('Existing /pay security headers require manual Hosting review');
  const payHeaders={'Cache-Control':'no-store','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'};
  config.headers=[
-  ...['/pay','/pay/','/pay.html','/pay/index.html'].map(glob=>({glob,headers:payHeaders})),
-  ...headers.filter(h=>!['/pay','/pay/','/pay.html','/pay/index.html'].includes(h.glob))
+  ...routes.map(glob=>({glob,headers:payHeaders})),
+  ...headers
  ];
  return config;
 }
