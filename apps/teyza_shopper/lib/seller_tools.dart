@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'seller_services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'seller_firestore.dart';
 import 'seller_selfie_camera.dart';
@@ -261,7 +262,12 @@ class _SellerToolState extends State<SellerToolPage> {
 
 class SellerProfilePage extends StatefulWidget {
   final ShopperSession session;final SellerShop shop;
-  const SellerProfilePage({super.key,required this.session,required this.shop});
+  final TeyzaMobileApi? api;
+  final Map<String,dynamic> serviceSettings;
+  final bool servicesReady;
+  final VoidCallback? onServicesSaved;
+  const SellerProfilePage({super.key,required this.session,required this.shop,
+    this.api,this.serviceSettings=const {},this.servicesReady=false,this.onServicesSaved});
   @override State<SellerProfilePage> createState()=>_ProfileState();
 }
 class _ProfileState extends State<SellerProfilePage>{
@@ -292,7 +298,7 @@ class _ProfileState extends State<SellerProfilePage>{
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>saving=false);}
   }
-  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Shop profile')),
+  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Edit shop profile')), 
     body:ListView(padding:const EdgeInsets.all(20),children:[
       Text(widget.shop.categoryLabel,style:const TextStyle(color:ownerGreen,fontWeight:FontWeight.w700)),const SizedBox(height:18),
       for(final field in [(name,'Shop name'),(address,'Shop address'),(phone,'Contact number')])Padding(
@@ -303,6 +309,14 @@ class _ProfileState extends State<SellerProfilePage>{
         icon:const Icon(Icons.location_on_outlined),label:const Text('Change address & map location')),
       const SizedBox(height:16),
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
-      FilledButton(onPressed:saving||uid!=widget.session.userId?null:save,child:Text(saving?'Saving…':'Save shop profile'))
+      FilledButton(onPressed:saving||uid!=widget.session.userId?null:save,child:Text(saving?'Saving…':'Save shop profile')),
+      const SizedBox(height:26),
+      const Text('Delivery, cards & messaging',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
+      const SizedBox(height:8),
+      const Text('Your saved shop options can be changed here at any time.',style:TextStyle(color:Color(0xFF60736B))),
+      const SizedBox(height:12),
+      SellerServiceControls(key:ValueKey('edit-services-${widget.session.userId}'),
+        session:widget.session,api:widget.api,settings:widget.serviceSettings,
+        enabled:widget.servicesReady&&uid==widget.session.userId,onSaved:widget.onServicesSaved),
     ]));
 }

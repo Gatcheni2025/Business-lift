@@ -21,14 +21,44 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("adminComplimentaryAccess", self.workflow)
         self.assertIn("'agentCommissionEnabled'", self.workflow)
 
-    def test_signed_builds_compile_only_store_payment_channel(self):
+    def test_store_artifacts_keep_store_channel_and_direct_apk_is_only_separate_manual_qa(self):
+        store_builds, direct_builds = [], []
         for line in self.workflow.splitlines():
             if "flutter build " in line and any(x in line for x in
                     ("flutter build appbundle", "flutter build apk", "flutter build ipa")):
-                self.assertIn("--dart-define=TEYZA_PAYMENT_CHANNEL=store", line)
+                if "--dart-define=TEYZA_PAYMENT_CHANNEL=direct" in line:
+                    self.assertIn("flutter build apk", line)
+                    direct_builds.append(line)
+                else:
+                    self.assertIn("--dart-define=TEYZA_PAYMENT_CHANNEL=store", line)
+                    store_builds.append(line)
+        self.assertEqual(len(direct_builds), 2)  # signed manual QA + debug-only manual QA
+        self.assertGreaterEqual(len(store_builds), 4)
+        self.assertIn("direct_mandate_qa:", self.workflow)
+        self.assertIn("if [ \"$TEYZA_DIRECT_MANDATE_QA\" = true ]; then", self.workflow)
+        self.assertIn("QA_SIGNING_ONLY\" != true", self.workflow)
+        self.assertIn("TARGET_PLATFORMS\" != android", self.workflow)
+        self.assertIn("teyza-android-apk-direct-mandate-qa-signed", self.workflow)
+        self.assertIn("scripts/package_teyza_direct_mandate_qa.py", self.workflow)
+        self.assertIn("direct_mandate_debug_qa:", self.workflow)
+        self.assertIn("TEYZA_DIRECT_MANDATE_DEBUG_QA", self.workflow)
+        self.assertIn("if [ \"$TEYZA_DIRECT_MANDATE_DEBUG_QA\" = true ]; then", self.workflow)
+        self.assertIn('"$SIGNING_MODE" != unsigned', self.workflow)
+        self.assertIn('"$TARGET_PLATFORMS" != android', self.workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true", self.workflow)
+        self.assertIn("teyza-android-apk-direct-mandate-debug-qa", self.workflow)
         self.assertIn("defaultValue:'store'", self.plan)
         self.assertIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
         self.assertIn("isAndroid&&channel=='direct'", self.plan)
+
+    def test_direct_apk_signing_is_reverified_and_cannot_be_the_play_bundle(self):
+        direct_package = (ROOT / "scripts/package_teyza_direct_mandate_qa.py").read_text()
+        self.assertIn("validate(", direct_package)
+        self.assertIn("certificateSha256", direct_package)
+        self.assertIn("storeUploadPermitted", direct_package)
+        self.assertIn("TEYZA_DIRECT_MANDATE_QA", direct_package)
+        self.assertIn("README-DIRECT-MANDATE-QA-ONLY.txt", direct_package)
+        self.assertIn("collectionProviderConnected", direct_package)
 
     def test_qa_artifacts_are_distinct_and_manifest_is_truthful(self):
         for marker in ("teyza-android-apk-", "teyza-android-aab-", "teyza-ios-release-"):

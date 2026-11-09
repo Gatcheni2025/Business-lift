@@ -41,7 +41,7 @@ async function main(){
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port;
  let browser;try{browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.TEYZA_ADMIN_CHROMIUM?{executablePath:process.env.TEYZA_ADMIN_CHROMIUM}:{})});}
  catch(error){server.close();throw error;}let count=0;
- async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false}={}){
+ async function pageFor({identity={uid:'admin1'},api,viewport={width:1440,height:1100},pagination=false,startView='approvals'}={}){
   const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows),legacyUploaded=false;
   let syntheticUsers=[{uid:'admin1',email:'reviewer@example.test',displayName:'Reviewer',verified:true,disabled:false,admin:true,providers:['google.com']},
     {uid:'shopper2',email:'shopper@example.test',displayName:'Existing Shopper',verified:false,disabled:false,admin:false,providers:['password']}];
@@ -89,11 +89,54 @@ async function main(){
   });
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
-  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});await nav.click();}
+  if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
+   const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});
+   if(startView==='approvals')await nav.click();
+  }
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('Overview uses loaded counts and the sidebar opens mandate and seller reviews on desktop and phone',async()=>{
+    const f=await pageFor({startView:'overview'});
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    assert(await f.page.getByRole('button',{name:'Seller verification 3 Loaded review queue Open →'}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Seller records 3 Loaded seller records Open →'}).isVisible());
+    assert.equal(await f.page.getByText('Total revenue',{exact:false}).count(),0);
+    await f.page.locator('#sectionSearch').fill('mandate');
+    assert(await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isHidden());
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    try{await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor({timeout:7000});}
+    catch(error){
+      const panel=await f.page.locator('#operationsPanel').innerText();
+      const notice=await f.page.locator('#notice').innerText();
+      throw Error('Mandate inbox not rendered: '+JSON.stringify({panel:panel.slice(0,1500),notice,errors:f.errors}),{cause:error});
+    }
+    assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
+    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isVisible());
+    const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
+    assert(order.indexOf('R99 monthly mandates — admin inbox')<order.indexOf('Seller directory'));
+    await f.page.getByRole('button',{name:'Overview',exact:true}).click();
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
+    await f.page.setViewportSize({width:393,height:852});
+    assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await f.page.screenshot({path:path.join(output,'admin-overview-phone.png'),fullPage:true});
+    await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
+    await f.page.locator('.seller-row').first().waitFor();
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Unavailable review data is not represented as zero applications',async()=>{
+    const f=await pageFor({startView:'overview',api:async(route,body)=>{
+      if(body.action==='admin_seller_queue'){await route.fulfill({status:503,json:{ok:false,error:'Review queue unavailable'}});return true;}
+      return false;
+    }});
+    await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
+    assert(await f.page.getByRole('button',{name:'Seller verification — Queue unavailable — open to retry Open →'}).isVisible());
+    assert(await f.page.getByText('Review queue unavailable').isVisible());
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('User management creates a non-admin account, sends setup email and suspends without changing claims',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
@@ -243,6 +286,106 @@ async function main(){
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
   });
+  await check('Mandates remain visible when the seller directory is down and inbox errors are explicit',async()=>{
+    let available=false;
+    const row={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_inbox_qa',
+      bankName:'FNB',accountLast4:'8901',status:'pending_provider_authentication'};
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_sellers'){
+        await route.fulfill({status:503,json:{ok:false,error:'Seller directory offline'}});return true;
+      }
+      if(body.action==='ops_mandate_queue'){
+        if(available)await route.fulfill({json:{ok:true,mandates:[row],limited:false}});
+        else await route.fulfill({status:503,json:{ok:false,error:'Mandate inbox offline'}});
+        return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
+    available=true;
+    await f.page.getByRole('button',{name:'Refresh mandates'}).click();
+    await f.page.getByText('•••• 8901').waitFor();
+    assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Mandate review uses one consent step and requires separate provider evidence, without recording a payment',async()=>{
+    const mandate={sellerUid:'seller1',shopName:'Corner Spaza',mandateId:'mandate_grant_qa',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',shopAddress:'Durban',
+      firstDate:'2026-12-01',collectionDay:1,amountCents:9900,
+      acceptedAt:Date.UTC(2026,10,8),status:'pending_provider_authentication'};
+    let reviewed=false,accepted=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_seller_detail'){
+        await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',
+          listingPlan:'free'},billing:{status:'not_started'},membershipPaid:false,
+          complimentaryAccess:false,paystackMode:'test',payments:[],entries:[],
+          catalogue:{products:[]},verification:{status:'approved'}}});return true;
+      }
+      if(body.action==='ops_mandate_queue'){
+        await route.fulfill({json:{ok:true,mandates:[{...mandate,
+          status:accepted?'provider_confirmed':reviewed?'reviewed_pending_provider':'pending_provider_authentication'}]}});return true;
+      }
+      if(body.action==='ops_mandate_review'){
+        reviewed=true;await route.fulfill({json:{ok:true,reviewed:true,collectionActive:false}});return true;
+      }
+      if(body.action==='ops_mandate_provider_confirm'){
+        accepted=true;await route.fulfill({json:{ok:true,confirmed:true,paymentRecorded:false}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open mandate'}).click();
+    await f.page.getByLabel('Review note').fill('Bank and ID documents reviewed for provider submission');
+    await f.page.getByRole('checkbox',{name:/A review does not authenticate/}).check();
+    await f.page.getByRole('button',{name:'Save mandate review'}).click();
+    await f.page.locator('#notice').getByText(/Mandate decision saved/).waitFor();
+    assert(reviewed);assert(!accepted);
+    await f.page.getByLabel('Provider acceptance reference').fill('NC-ACCEPTED-0002');
+    await f.page.getByLabel('How and where provider acceptance was checked').fill('Confirmed verified provider acceptance on Netcash portal');
+    await f.page.getByRole('checkbox',{name:/I verified actual provider acceptance/}).check();
+    await f.page.getByRole('button',{name:'Confirm provider acceptance and 30-day access'}).click();
+    await f.page.locator('#notice').getByText(/Provider acceptance recorded/).waitFor();
+    assert(reviewed&&accepted);
+    assert(!f.calls.some(x=>x.action==='ops_complimentary_access'));
+    assert(!f.calls.some(x=>['billing_checkout','ops_mandate_activate','ops_paystack_confirm'].includes(x.action)));
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Admin can confirm publishing eligible saved retail stock without recording a payment',async()=>{
+    let published=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_seller_detail'){
+        await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved',listingPlan:'free'},
+          sellingStatus:{sellerApproved:true,shopSetupComplete:true,
+            sellingAccessActive:true,canSell:true,shopStatus:'active',
+            savedDraftCount:3,publicProductCount:published?3:0,
+            publicProductsAllowed:true},
+          billing:{status:'not_started'},paystackMode:'test',membershipPaid:false,
+          complimentaryAccess:true,complimentaryUntil:1793990000000,
+          payments:[],entries:[],verification:{status:'approved',phoneVerified:true},
+          catalogue:{status:'active',products:[]},documents:{}}});return true;
+      }
+      if(body.action==='ops_catalogue_publish'){
+        published=true;
+        await route.fulfill({json:{ok:true,published:true,
+          publicProductCount:3,noPaymentRecorded:true}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
+    await f.page.getByLabel('Reason for publishing saved seller products').fill(
+      'Confirmed three approved seller drafts for a live local shop');
+    await f.page.getByRole('checkbox',{name:/I checked the shop approval and selling entitlement/}).check();
+    await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
+    await f.page.getByText('Saved seller products: 3 · Live-priced products: 3').waitFor();
+    assert(published);
+    assert(f.calls.some(x=>x.action==='ops_catalogue_publish'&&x.data.confirmed===true&&
+      x.data.sellerUid==='seller1'));
+    assert(!f.calls.some(x=>x.action==='ops_payment'||x.action==='ops_mandate_activate'));
+    assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Confidential R99 PDF exports require an audited administrator action',async()=>{
     const reference='mandate_synthetic_1',mandate={
       mandateId:reference,status:'pending_provider_authentication',
@@ -269,7 +412,7 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
-    await f.page.getByRole('button',{name:'View complete private mandate (audited)'}).click();
+    await f.page.getByRole('button',{name:'View private mandate (audited)'}).click();
     await f.page.getByRole('dialog').getByText('Account number: 12345678901').waitFor();
     const event=f.page.waitForEvent('download',{timeout:15000});
     await f.page.getByRole('dialog').getByRole('button',
@@ -278,7 +421,50 @@ async function main(){
     assert.equal(downloaded.suggestedFilename(),'Teyza_R99_Mandate_Request_'+reference+'.pdf');
     assert(f.calls.some(v=>v.action==='ops_mandate_export'&&v.data.mandateId===reference));
     assert(!f.calls.some(v=>v.action==='billing_checkout'));
+    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await f.page.locator('.ops-mandate-dialog').waitFor({state:'detached'});
+    assert(!await f.page.content().then(content=>content.includes('12345678901')));
+    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+    await f.page.getByRole('heading',{name:'R99 monthly mandates — admin inbox'}).waitFor();
+    assert(!await f.page.content().then(content=>content.includes('12345678901')));
     assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Admin logs the manual Netcash mandate receipt without collecting money or granting access',async()=>{
+    const reference='mandate_manual_qa',mandate={
+      mandateId:reference,status:'reviewed_pending_provider',
+      bankName:'FNB',branchCode:'250655',accountLast4:'8901',
+      shopAddress:'12 Market Street, Durban',firstDate:'2026-12-01',
+      collectionDay:1,amountCents:9900,termsVersion:'teyza-debit-request-v2',
+      acceptedAt:Date.UTC(2026,10,6),collectionActive:false,
+      terms:'R99 consent; no bank authentication yet.'
+    };
+    let submitted=false;
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='ops_mandate_queue'){
+        await route.fulfill({json:{ok:true,mandates:[{sellerUid:'seller1',
+          ...mandate,status:submitted?'submitted_to_netcash':'reviewed_pending_provider'}]}});return true;
+      }
+      if(body.action==='ops_mandate_record_netcash_submission'){
+        submitted=true;
+        await route.fulfill({json:{ok:true,recorded:true,status:'submitted_to_netcash',collectionActive:false}});return true;
+      }
+      return false;
+    }});
+    await f.page.getByRole('button',{name:'Debit orders & mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByRole('button',{name:'Record provider submission'}).waitFor();
+    await f.page.getByLabel('Netcash portal submission reference').fill('NC-PORTAL-071126-019');
+    await f.page.getByLabel('Submission method, date and note').fill(
+      'Uploaded to the secure Netcash business portal with signed PDF, 07 November 2026.');
+    await f.page.getByRole('checkbox',{name:/I submitted a provider-acceptable mandate/}).check();
+    await f.page.getByRole('button',{name:'Record provider submission'}).click();
+    await f.page.locator('#notice').getByText(/Mandate submission recorded/).waitFor();
+    const receipt=f.calls.find(v=>v.action==='ops_mandate_record_netcash_submission');
+    assert.equal(receipt.data.providerReference,'NC-PORTAL-071126-019');
+    assert.equal(receipt.data.confirmed,true);
+    assert(!f.calls.some(v=>['billing_checkout','ops_paystack_confirm','ops_mandate_activate'].includes(v.action)));
+    assert.deepEqual(f.errors,[]);
+    await f.context.close();
   });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
@@ -366,7 +552,7 @@ async function main(){
   for(const [button,status] of [['requestPhoto','needs_new_photo'],['rejectSeller','rejected']])await check(status+' requires a note and records the chosen outcome',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();await f.page.locator('#'+button).click();
    assert(!f.calls.some(c=>c.action==='admin_seller_review'));await f.page.locator('#reason').fill('Please retake the photo in good light.');await f.page.locator('#'+button).click();
-   await f.page.locator('#notice').getByText('Review saved. The owner will receive your note.').waitFor();assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.status,status);await f.context.close();
+   await f.page.locator('#notice').getByText('Review saved. The seller can view your note in the app.').waitFor();assert.equal(f.calls.find(c=>c.action==='admin_seller_review').data.status,status);await f.context.close();
   });
   await check('Normal seller accounts cannot open the admin workspace',async()=>{
    const f=await pageFor({identity:{uid:'seller1',claims:{teyzaAdmin:false}}});await f.page.locator('#notice').getByText(/needs administrator access/).waitFor();
@@ -393,6 +579,37 @@ async function main(){
    await f.page.locator('#viewSelfie').click();await f.page.locator('#selfieState').getByText('Viewed in this review').waitFor();await f.page.locator('#reviewConfirmed').check();await f.page.locator('#approveSeller').click();
    await f.page.locator('#notice').getByText(/This submission changed/).waitFor();await f.page.locator('#sellerDetail').waitFor({state:'hidden'});
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(f.calls.filter(c=>c.action==='admin_seller_queue').length,2);await f.context.close();
+  });
+  await check('Missing phone OTP and ID show as checklist and allow recorded corrections, never approval',async()=>{
+    const incomplete={...rows[0],evidenceId:null,missingCompliance:['identity'], // Simulate old backend omitting phone from the list
+      phoneVerificationRequired:true,phoneVerified:false,reviewNote:'',complianceRequestedAt:null};
+    const f=await pageFor({api:async(route,body)=>{
+      if(body.action==='admin_seller_queue'){
+        await route.fulfill({json:{ok:true,sellers:[incomplete],next:null}});
+        return true;
+      }
+      if(body.action==='admin_seller_review'&&body.data.status==='needs_correction'){
+        await route.fulfill({json:{ok:true,status:'needs_correction',pendingReview:true}});
+        return true;
+      }
+      return false;
+    }});
+    await f.page.locator('.seller-row').first().click();
+    assert(await f.page.locator('#approveSeller').isDisabled());
+    assert.equal(await f.page.locator('#complianceList .compliance-missing').count(),2);
+    assert(await f.page.locator('#complianceList').getByText(/SMS verification/).isVisible());
+    assert(await f.page.locator('#complianceList').getByText(/Current ID/).isVisible());
+    assert(await f.page.locator('#decisionHint').getByText(/Cannot approve/).isVisible());
+    assert(await f.page.locator('#sellerComplianceSummary').getByText(/Approval not available:.*SMS verification/).isVisible());
+    assert(await f.page.locator('#requestCompliance').isEnabled());
+    await f.page.locator('#requestCompliance').click();
+    await f.page.locator('#notice').getByText(/Missing requirements recorded/).waitFor();
+    const review=f.calls.find(x=>x.action==='admin_seller_review');
+    assert.equal(review.data.status,'needs_correction');
+    assert(review.data.reason.includes('SMS'));
+    assert(!f.calls.some(x=>x.action==='billing_checkout'));
+    assert.deepEqual(f.errors,[]);
+    await f.context.close();
   });
   await check('Hiding the tab clears documents, view receipts in the UI and approval confirmation',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();

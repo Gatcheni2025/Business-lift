@@ -534,21 +534,11 @@ class ShopperSession extends ChangeNotifier {
       await _save(data,emailAddress.trim(),'',version);
     }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
   }
+  /// Legacy email/password accounts retain sign-in and password reset.
+  /// New account creation must go through Google, Facebook or Apple so this
+  /// client cannot accidentally reintroduce email/password signup.
   Future<void> register(String displayName,String emailAddress,String password) async {
-    if(displayName.trim().isEmpty)throw StateError('Enter your name.');
-    final version=++_version;
-    isBusy=true;_changed();
-    try{
-      final data=await _post('signUp',{
-        'email':emailAddress.trim(),'password':password,'returnSecureToken':true});
-      await _save(data,emailAddress.trim(),displayName.trim(),version);
-      if(version!=_version||idToken==null)return;
-      try{
-        await _post('update',{'idToken':idToken!,'displayName':displayName.trim(),
-          'returnSecureToken':false});
-        name=displayName.trim();await _persist();
-      }catch(_){/* Account is valid even if updating the display name fails. */}
-    }finally{if(version==_version){isBusy=false;isReady=true;_changed();}}
+    throw UnsupportedError('New Teyza accounts use Google, Facebook or Apple. Existing email users can sign in.');
   }
   Future<void> resetPassword(String emailAddress) async {
     if(!emailAddress.trim().contains('@'))throw StateError('INVALID_EMAIL');

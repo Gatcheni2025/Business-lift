@@ -13,7 +13,9 @@ const selfieCrypto=require('./selfie-crypto');
 const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
-const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
+// Admin-only deployment must not register an optional WhatsApp secret.
+// Firebase detects defineSecret during module evaluation even for exports
+// excluded via --only.
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -108,7 +110,10 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     const uploads=await readiness();
     res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.25.0',sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
-      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:true,adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+      service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:true,
+       sellerMandateRequestV3:true,adminMandatePdfExport:true,adminNetcashManualSubmission:true,
+       sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'netcash_manual_debit_request',
+       adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:4900,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
@@ -189,6 +194,13 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
+// WhatsApp notifications are optional: never register the Meta secret when
+// deploying the core seller API unless explicitly enabled by the operator.
+// Set TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1 only after provisioning an
+// authentic Meta access token and approved message template.
+if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
+if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
+ const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
@@ -205,6 +217,8 @@ exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',tim
   .where('status','in',['queued','configuration_required']).limit(30).get();
  for(const row of rows.docs)await whatsappApproval.deliver(row.id);
 });
+}
+}
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});
 exports.teyzaPaystackCancellationCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaPaystackCancellations/{sellerUid}',secrets:[paystackKey]},

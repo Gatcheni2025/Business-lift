@@ -10,6 +10,7 @@ import 'account_deletion_page.dart';
 import 'seller_plan.dart';
 import 'wholesale_market.dart';
 import 'wholesale_connections.dart';
+import 'wholesale_advertising.dart';
 import 'seller_firestore.dart';
 import 'seller_tools.dart';
 import 'shopper_chat.dart';
@@ -25,7 +26,6 @@ import 'seller_selling.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
-import 'seller_services.dart';
 import 'seller_shop_photo.dart';
 import 'seller_push.dart';
 
@@ -51,9 +51,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false,openedClaim=false;
   String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
-  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,promotionActive=false;int? paidUntil,promotionEndsAt;bool hasLocation=false;
+  String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,mandateAccess=false,promotionActive=false;int? paidUntil,mandateUntil,promotionEndsAt;bool hasLocation=false;
   bool get sellerApproved=>approvalStatus=='approved';
-  bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess);
+  bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess||mandateAccess);
+  bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
   Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
@@ -88,7 +89,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(seenOrderNotices.length>500)seenOrderNotices.removeAll(seenOrderNotices.take(seenOrderNotices.length-500).toList());
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
-        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
+        approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
@@ -212,26 +213,109 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       }
     }
   }
+  void openSupplierAdvertising()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:true)));
+  void openSpazaSupplierOffers()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:false)));
   Future<void> openProducts() async {
+    if(shop?.category=='wholesale'){openSupplierAdvertising();return;}
     final uid=widget.session.userId;
     setState((){productsView=true;if(widget.sellerMode)sellerTab=1;});
-    try{final result=await mobile.call('seller_summary');
-      if(mounted&&uid==widget.session.userId)setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
-    }catch(_){/* Product drafting remains available when optional services are offline. */}
+    if(uid==null)return;
+    try{
+      final result=await mobile.call('seller_summary');
+      if(!mounted||uid!=widget.session.userId)return;
+      setState(()=>productPhotos={for(final p in mobileRows(result['photos']))p['id'].toString():p['url'].toString()});
+      // Opening My Products is an explicit owner request to display saved
+      // stock. Recover drafts previously stored via the Firestore fallback
+      // while the mobile service was offline. Never auto-publish on login.
+      if(shop?.category!='wholesale'&&drafts.isNotEmpty){
+        if(result['approvalStatus']=='approved'&&result['setupComplete']==true&&
+          (result['listingPaid']==true||result['complimentaryAccess']==true||result['mandateAccessActive']==true)){
+          await syncRange();
+        }else{
+          setState(()=>rangeStatus='Your products are saved privately. Seller approval, completed shop setup and active R99 selling access are required to display prices to shoppers.');
+        }
+      }
+    }catch(error){
+      if(mounted&&uid==widget.session.userId)setState(()=>rangeStatus=
+        'Your saved products are still available. The publication service could not be checked: ${mobileError(error)}');
+    }
   }
   Future<void> openUpgrade({bool promote=false,bool fromProductAction=false}) async {
     final uid=widget.session.userId;
-    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
+    final saved=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerPlanPage(
       session:widget.session,api:widget.mobileApi,businessType:shop?.category??'spaza',showPromotion:promote,fromProductAction:fromProductAction)));
-    if(mounted&&uid==widget.session.userId)await refreshActivity();
+    if(!mounted||uid!=widget.session.userId)return;
+    if(saved==true){
+      setState((){sellerTab=0;productsView=false;});
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('R99 mandate saved. Waiting for Teyza admin review. No debit has been collected.')));
+    }
+    await refreshActivity();
   }
   Future<void> chooseProducts() async {
-    if(busy||draftError!=null)return;
-    if(!sellerApproved){
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your registration must be approved before you can pay for product access or add products.')));
+    if(busy)return;
+    if(shop?.category=='wholesale'){
+      openSupplierAdvertising();return;
+    }
+    // Never rely on the last periodic dashboard refresh for entitlement.
+    // Admin review alone is not a verified debit or a selling grant.
+    final uid=widget.session.userId;
+    if(uid==null)return;
+    Map<String,dynamic> current;
+    try{current=await mobile.call('seller_summary');}
+    catch(e){
+      if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Could not check selling access. Please try again: ${mobileError(e)}')));
       return;
     }
-    if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
+    if(!mounted||uid!=widget.session.userId)return;
+    final verified=current['approvalStatus']=='approved';
+    final active=current['listingPaid']==true||current['complimentaryAccess']==true||current['mandateAccessActive']==true;
+    setState((){
+      approvalStatus=verified?'approved':'pending';
+      listingPaid=current['listingPaid']==true;
+      complimentaryAccess=current['complimentaryAccess']==true;mandateAccess=current['mandateAccessActive']==true;mandateUntil=(current['mandateAccessUntil'] as num?)?.toInt();
+      sellingEnabled=current['sellingEnabled']==true;
+    });
+    if(!verified){await openUpgrade(fromProductAction:true);return;}
+    if(!active){
+      // Read the latest mandate state as well, so Start selling checks
+      // whether the R99 request is pending instead of assuming payment.
+      if(canOfferDirectMandate){
+        try{await mobile.call('seller_mandate_status');}
+        catch(e){
+          if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content:Text('Mandate status could not be verified: ${mobileError(e)}')));
+        }
+      }
+      if(mounted&&uid==widget.session.userId)await openUpgrade(fromProductAction:true);
+      return;
+    }
+    if(current['sellingEnabled']!=true){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Seller approval and selling access are active, but your shop setup or public listing is not ready. Complete shop setup before publishing.')));
+      return;
+    }
+    if(draftError!=null){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your product list is unavailable. Refresh it before continuing.')));
+      return;
+    }
+    if(drafts.isNotEmpty){
+      // "Start selling" is an explicit request to publish the selected stock.
+      // Syncing can opt legacy catalogues in only after backend access checks.
+      try{
+        final sync=await mobile.call('catalogue_sync');
+        if(!mounted||uid!=widget.session.userId)return;
+        if(sync['publication']=='private'){
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your products are still private. Check your shop setup and mandate approval, then retry.')));
+          return;
+        }
+      }catch(e){
+        if(mounted&&uid==widget.session.userId)ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('Could not publish saved products. Retry Sync product listing: ${mobileError(e)}')));
+        return;
+      }
+    }
     final requestedUid=widget.session.userId;
     final result=await Navigator.push<Map<String,dynamic>>(context,MaterialPageRoute(builder:(_)=>SellerProductPickerPage(
       session:widget.session,existingIds:drafts.map((p)=>p.id).toSet(),api:widget.mobileApi,draftApiFactory:widget.apiFactory)));
@@ -243,12 +327,23 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(rangeStatus!)));}
   }
   Future<void> syncRange({String? removedId}) async {
+    final uid=widget.session.userId;
     try{
-      final result=await TeyzaMobileApi(widget.session).call('catalogue_sync',{
+      final result=await mobile.call('catalogue_sync',{
         if(removedId!=null)'removedProductId':removedId});
-      if(mounted)setState(()=>rangeStatus=result['publication']=='live'?
-        shop?.category=='wholesale'?'Wholesale prices remain private to approved spaza buyers.':'Shopper range updated. Public prices follow your listing plan.':'Products stay private until seller verification and product access are complete.');
-    }catch(_){if(mounted)setState(()=>rangeStatus='Products saved. The shopper update is pending. Tap Refresh shopper range to retry.');}
+      if(!mounted||uid!=widget.session.userId)return;
+      final visible=(result['publicCount'] as num?)?.toInt()??0;
+      setState(()=>rangeStatus=shop?.category=='wholesale'?
+        'Your wholesaler shop is listed, but supplier products and prices are not public.':
+        result['publication']=='live'&&visible>0?
+          '$visible products published to the shopper catalogue. Refresh the shopper app to see them.':
+        result['publication']=='live'?
+          'No priced products published yet. Check that saved stock has a valid price and refresh the listing.':
+          'Products are saved privately. Complete shop verification and activate R99 selling access before publication.');
+    }catch(error){
+      if(mounted&&uid==widget.session.userId)setState(()=>rangeStatus=
+        'Your products are saved but not confirmed live. Retry Sync product listing. ${mobileError(error)}');
+    }
   }
   Future<void> productPhoto(SellerDraft product) async {
     if(busy)return;
@@ -282,7 +377,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   }
   Future<void> editProfile() async {
     if(shop==null)return;
-    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(session:widget.session,shop:shop!)));
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerProfilePage(
+      session:widget.session,shop:shop!,api:widget.mobileApi,
+      serviceSettings:shopServices,servicesReady:servicesReady,
+      onServicesSaved:refreshActivity)));
     if(changed==true&&mounted)load();
   }
   Future<void> _save(SellerDraft p) async{
@@ -397,7 +495,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Widget _card(Widget child)=>Card(color:Colors.white,child:Padding(
     padding:const EdgeInsets.all(16),child:child));
   void selectSellerTab(int tab){
-    if(tab==1){openProducts();return;}
+    if(tab==1){if(shop?.category=='wholesale')openSupplierAdvertising();else openProducts();return;}
     setState((){sellerTab=tab;productsView=false;});
   }
   Future<void> signOutSeller() async {
@@ -424,11 +522,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
     businessTile(Icons.account_balance_outlined,'Apply for stock finance','Send an enquiry and view its progress',()=>openTool(SellerTool.finance)),
-    businessTile(Icons.local_shipping_outlined,'Delivery & shop services','Collection, delivery, cards, cashback & chat',()=>openTool(SellerTool.services)),
+    businessTile(Icons.edit_outlined,'Edit shop profile','Delivery, radius, card payments & shop details',editProfile),
     businessTile(Icons.schedule_outlined,'Trading hours','Keep your opening times current',()=>openTool(SellerTool.hours)),
     businessTile(Icons.add_a_photo_outlined,'Shop photo & verification','Shop front, documents, selfie & mobile',()=>openTool(SellerTool.verification)),
     businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
-    businessTile(Icons.notifications_active_outlined,'Notifications','Orders, customer messages & shop updates',openNotifications),
     if(shop?.category=='wholesale')businessTile(Icons.handshake_outlined,'Spaza partnership requests',
       'Approve connections, set real discounts and delivery fees, then chat',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
@@ -438,13 +535,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
         Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
           body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
-    if(shop?.category=='wholesale')businessTile(Icons.local_shipping_outlined,'Your wholesale stock offers',
-      'List pack sizes and wholesale prices in My Products. Enable free delivery only when you can honour it.',
-      ()=>selectSellerTab(1)),
+    if(shop?.category=='wholesale')businessTile(Icons.campaign_outlined,'Advertise to participating spaza shops',
+      'Use your R99 access to target opted-in spazas with moderated offers and invitations. No public wholesaler products.',
+      openSupplierAdvertising),
+    if(shop?.category=='spaza')businessTile(Icons.campaign_outlined,'Supplier offers for my spaza',
+      'Choose whether to receive private in-app offers from verified wholesalers.',
+      openSpazaSupplierOffers),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
-    businessTile(Icons.edit_outlined,'Edit shop profile','Business details and address',editProfile),
     businessTile(Icons.workspace_premium_outlined,'Business membership',
-      listingPaid?'Existing paid seller membership':complimentaryAccess?'Temporary product access active':'Free shop · membership status and mandate',
+      listingPaid?'Existing seller access active':mandateAccess?'Mandate-processing access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'Free shop · R99 mandate status':'Free shop · seller eligibility status',
       ()=>openUpgrade()),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
@@ -476,16 +575,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
     2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
-    3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true),
+    3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true,
+      onOpenUpdates:openNotifications,unreadUpdates:unread),
     4=>sellerBusiness(),
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:publicationStatus=='active'&&approvalStatus=='approved',verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
-      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,onNotifications:openNotifications,unread:unread,
-      phoneAlertsEnabled:SellerPush(widget.session).isEnabled,onEnableAlerts:busy?null:enableOrderAlerts,
-      serviceControls:SellerServiceControls(key:ValueKey('services-${widget.session.userId}'),session:widget.session,api:widget.mobileApi,
-        settings:shopServices,enabled:servicesReady,onSaved:refreshActivity),
-      onAdd:busy||draftError!=null?null:chooseProducts,onProducts:openProducts,onOrders:()=>selectSellerTab(2),
+      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
+      onEditProfile:editProfile,
+      onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
@@ -501,8 +599,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             Text(draftError!=null?'Products are temporarily unavailable.':
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Add a product')),
+            FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.add),label:const Text('Start selling')),
             TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
@@ -535,13 +633,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       backgroundColor:sellerCanvas,
       appBar:widget.sellerMode&&sellerTab==3&&shop!=null?null:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,
         automaticallyImplyLeading:!widget.sellerMode,
-        title:Text(widget.sellerMode?['Seller dashboard','My products','Customer orders','Customer chat','My business'][sellerTab]:productsView?'Shop setup & products':'My business'),
+        title:Text(widget.sellerMode?(shop?.category=='wholesale'?['Wholesaler dashboard','Advertise to spazas','Partner orders','Partner chat','My business']:['Seller dashboard','My products','Customer orders','Customer chat','My business'])[sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
-          if(shop!=null)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,
-            icon:Badge(isLabelVisible:unread>0,label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.notifications_none_rounded))),
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
-        ]:[if(shop!=null&&productsView)IconButton(tooltip:'Shop notifications',onPressed:openNotifications,icon:const Icon(Icons.notifications_none_rounded))]),
+        ]:null),
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
         SellerNavigation(selected:sellerTab,onSelect:selectSellerTab):null,
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
@@ -583,11 +679,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null,unread:unread,onNotifications:openNotifications),
-          if(!hasProductAccess)const Card(child:ListTile(
+          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null),
+          if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
-            subtitle:Text('Once approved, your shop can appear nearby. Check your membership options when ready to add products.'))),
+            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
           const SizedBox(height:16),
           if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -597,14 +693,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy||draftError!=null?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Add a product')),
+            FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.add),label:const Text('Start selling')),
             const SizedBox(height:16),
           OutlinedButton.icon(onPressed:()=>Navigator.push(context,
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business membership active':complimentaryAccess?'Temporary product access active':'Membership status · R99 debit mandate')),
+            label:Text(listingPaid?'Business access active':mandateAccess?'7-day mandate access active':complimentaryAccess?'Temporary product access active':canOfferDirectMandate?'R99 debit mandate':'Seller eligibility status')),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),

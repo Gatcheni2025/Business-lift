@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
+const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_support_create','seller_support_list']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
@@ -73,6 +73,27 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
     await synchronize(target);
     return {granted:true,grantId,until,paid:false,provider:'complimentary_admin'};
   }
+  if(action==='ops_catalogue_publish'){
+   const target=D.id(data.sellerUid),reason=D.text(data.reason,'publication review reason',250);
+   if(target===uid)D.fail(403,'Another administrator must publish your shop products.');
+   if(data.confirmed!==true||reason.length<15)
+     D.fail(422,'Confirm publication and enter a reason of at least 15 characters.');
+   const [account,setup,verification,shop,billing]=await Promise.all([
+     read('teyzaSellerAccounts/'+target),read('teyzaSellerOnboarding/'+target),
+     read('teyzaMobileVerification/'+target),read('teyzaPublicShops/'+target),read('teyzaBilling/'+target)]);
+   if(account?.uid!==target)D.fail(404,'The seller account was not found.');
+   if(account.category==='wholesale')D.fail(409,'Wholesalers are public shop listings only. No products may be published to shoppers.');
+   if(!['spaza','retail'].includes(account.category))D.fail(409,'Choose a spaza shop or other business.');
+   const state=P.state(target,account,setup||{},verification,shop,billing,clock());
+   if(!state.canSell||shop?.status!=='active')
+     D.fail(409,'Shop setup, seller verification and active paid or temporary selling access are required.');
+   const result=await synchronize(target,{publishIntent:true});
+   if(result.publication!=='live')D.fail(409,'Seller access changed. Refresh the shop before publishing.');
+   await db.runTransaction(async tx=>{
+     audit(tx,auth,action,target,{reason,publicProductCount:result.publicCount,noPaymentRecorded:true});
+   });
+   return {published:true,publicProductCount:result.publicCount,noPaymentRecorded:true};
+  }
   if(action==='ops_catalogue_queue'){
     const result=await db.collection('teyzaCatalogueSubmissions')
       .where('status','==','pending_review').limit(50).get();
@@ -99,13 +120,25 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments,payout]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
-       .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target)]);
+       .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
+     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
+   const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
+   // A stored product count is distinct from a shopper-visible public listing.
+   // Location projection follows exactly the same consent and expiry rules as
+   // the unauthenticated public directory endpoint.
+   const pin=P.locationFor(target,account,location,shop,clock());
+   const directoryEligible=publication.live&&shop?.sellerUid===target&&shop?.status==='active';
+   const publicItems=directoryEligible&&P.eligible(target,account,billing,clock())&&
+      account.category!=='wholesale'?(Array.isArray(shop?.products)?shop.products:[]):[];
+   const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
+   const locationPinExpired=location?.ownerUid===target&&
+      P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
      amountCents:row.data().amountCents||0,createdAt:row.data().createdAt||0,
@@ -124,6 +157,31 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
      }:null,
      membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
+     mandateAccessActive:P.mandateAccess(target,account,billing,clock()),
+     mandateAccessKind:billing?.mandateAccessKind||null,
+     mandateAccessUntil:P.mandateAccess(target,account,billing,clock())?billing.mandateAccessUntil:null,
+     shopperVisibility:{
+       directoryEligible,
+       hasValidPin:Boolean(pin&&P.coordinates(pin.latitude,pin.longitude)),
+       latitude:pin&&P.coordinates(pin.latitude,pin.longitude)?pin.latitude:null,
+       longitude:pin&&P.coordinates(pin.latitude,pin.longitude)?pin.longitude:null,
+       status:!directoryEligible?'seller_not_public':
+         !pin?locationHasChanged?'address_changed':locationPinExpired?'pin_expired':'pin_missing':
+         'location_ready',
+       publicProductCount:publicItems.length,
+       shopCategory:account.category||'',
+       radiusMustUseShopperDeliveryAddress:true
+     },
+     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+       sellingAccessActive:publication.hasListing,canSell:publication.canSell,
+       shopStatus:shop?.status||'not_listed',
+       publicProductCount:account.category!=='wholesale'&&publication.canSell&&shop?.status==='active'?
+         (Array.isArray(shop.products)?shop.products.length:0):0,
+       savedDraftCount:draftPage?draftPage.docs.filter(x=>x.data().ownerUid===target&&x.data().status==='draft').length:null,
+       draftLimitReached:!!draftPage&&draftPage.docs.length>200,
+       publicProductsAllowed:account.category!=='wholesale',
+       approvalAccountStatus:account.approvalStatus||'pending',
+       approvalVerificationStatus:verification?.status||'not_submitted'},
      complimentaryUntil:billing?.adminComplimentaryUntil||null,
      complimentaryReason:billing?.adminComplimentaryReason||null,
      canApproveCatalogue:P.state(target,account,setup||{},

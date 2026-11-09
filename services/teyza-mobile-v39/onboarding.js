@@ -58,7 +58,7 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
     shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,whatsappOptedIn:whatsapp?.ownerUid===uid&&whatsapp.optedIn===true&&whatsapp.phone===account.phone,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
-    selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId}:null,
+    selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId,reviewNote:selfie.reviewNote||'',complianceRequestedAt:selfie.complianceRequestedAt||null}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
     locationSaved:Boolean(P.locationFor(uid,account,location,shop,clock())),
     publicationStatus:P.state(uid,account,saved||{},selfie,shop,billing,clock()).status};

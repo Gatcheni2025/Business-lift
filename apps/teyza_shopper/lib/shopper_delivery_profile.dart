@@ -95,6 +95,10 @@ class ShopperDeliveryProfileSheet extends StatefulWidget {
 class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
   final form=GlobalKey<FormState>();
   late final address=TextEditingController(text:widget.initial?.address??'');
+  late final contactName=TextEditingController(text:widget.initial?.displayName??widget.session.name??'');
+  late final contactPhone=TextEditingController(text:widget.initial?.phone??widget.session.phoneNumber??'');
+  late final contactEmail=TextEditingController(text:widget.initial?.email??widget.session.email??'');
+  bool get signedInAccount=>widget.session.userId!=null&&!widget.session.anonymousShopper;
   bool busy=false;
   double? detectedLatitude,detectedLongitude;
   String? error,notice;
@@ -127,7 +131,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
     }catch(e){if(mounted)setState(()=>error=e is StateError?e.message.toString():'Automatic location failed. Enter your complete address manually.');}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  @override void dispose(){address.dispose();super.dispose();}
+  @override void dispose(){address.dispose();contactName.dispose();contactPhone.dispose();contactEmail.dispose();super.dispose();}
   Future<void> save()async{
     if(!form.currentState!.validate()||busy)return;
     setState((){busy=true;error=null;});
@@ -152,9 +156,9 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
       if(!mounted)return;
       Navigator.pop(context,ShopperDeliveryProfile(
         address:full,area:area.isNotEmpty?area:city,city:city,
-        displayName:widget.initial?.displayName??widget.session.name??'',
-        email:widget.initial?.email??widget.session.email??'',
-        phone:widget.initial?.phone??widget.session.phoneNumber??'',
+        displayName:contactName.text.trim(),
+        email:contactEmail.text.trim(),
+        phone:contactPhone.text.trim(),
         latitude:lat,longitude:lon));
     }catch(e){
       if(mounted)setState(()=>error=e is StateError?e.message.toString():
@@ -168,6 +172,28 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
         const Text('Set your delivery address',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
         const SizedBox(height:7),
         const Text('Find shops near you without creating an account. You can sign in when you are ready to shop.'),
+        if(signedInAccount)...[
+          const SizedBox(height:12),
+          const Text('Your contact details',style:TextStyle(fontWeight:FontWeight.w800,fontSize:16)),
+          const SizedBox(height:8),
+          TextFormField(controller:contactName,enabled:!busy,textCapitalization:TextCapitalization.words,
+            decoration:const InputDecoration(labelText:'Your full name',border:OutlineInputBorder()),
+            validator:(v)=>(v??'').trim().length<2?'Enter your name.':null),
+          const SizedBox(height:9),
+          TextFormField(controller:contactPhone,enabled:!busy,keyboardType:TextInputType.phone,
+            decoration:const InputDecoration(labelText:'Mobile number',hintText:'071 234 5678',border:OutlineInputBorder()),
+            validator:(v){final digits=(v??'').replaceAll(RegExp(r'[^0-9]'),'');
+              return digits.length<9||digits.length>15?'Enter a valid phone number.':null;}),
+          const SizedBox(height:9),
+          TextFormField(controller:contactEmail,enabled:!busy,keyboardType:TextInputType.emailAddress,
+            decoration:const InputDecoration(labelText:'Email address (optional)',border:OutlineInputBorder(),
+              helperText:'No extra email verification for Google, Facebook or Apple users.'),
+            validator:(v){final x=(v??'').trim();if(x.isEmpty)return null;
+              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(x)?null:'Enter a valid email or leave it blank.';}),
+          const SizedBox(height:10),
+          const Text('Saved contact details help shops reach you about orders. Seller SMS verification is separate.',
+            style:TextStyle(color:Colors.black54,fontSize:12)),
+        ],
         const SizedBox(height:16),
         OutlinedButton.icon(onPressed:busy?null:detectAddress,
           icon:const Icon(Icons.my_location),label:const Text('Use my current location')),
@@ -187,7 +213,7 @@ class _ProfileSheetState extends State<ShopperDeliveryProfileSheet>{
           icon:const Icon(Icons.place_outlined),
           label:Text(busy?'Saving…':'Save address & find nearby shops'))),
         const SizedBox(height:9),
-        const Text('We only ask for your name, email and contact number when you sign in or place an order. Your address is not sent to a seller until an order is placed.',
+        const Text('Email is optional. Your contact details are only shared with a seller when you place an order.',
           style:TextStyle(fontSize:11,color:Colors.black54))
       ])))));
 }

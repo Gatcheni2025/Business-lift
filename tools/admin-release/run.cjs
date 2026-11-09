@@ -2,10 +2,20 @@
 const path=require('node:path'),fs=require('node:fs');
 const {connect}=require('./firebase-client.cjs'),{patch,rollback}=require('./hosting-patch.cjs'),{reviewer}=require('./reviewer.cjs');
 function assertAdminBackend(health){
- if(health?.ok!==true||health.version!=='3.25.0'||health.googlePlaceClaims!==true||health.sellerApprovalBeforeCheckout!==true||health.agentCommissionEnabled!==false||health.adminOperations!==true||health.adminReview!==true||
-    health.adminProductReview!==false||health.automaticProductPublication!==true||health.adminPaystackVerify!==true||
-    health.adminComplimentaryAccess!==true||health.manualReceiptsRetired!==true||health.billingMode!=='paystack_checkout')
-  throw new Error('The current seller-verification and automatic-product backend is not deployed yet. Publish it before the admin website.');
+ const required=[
+  'googlePlaceClaims','sellerApprovalBeforeCheckout','adminOperations','adminReview',
+  'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
+  'manualReceiptsRetired','sellerMandates','sellerMandateRequestV3',
+  'adminMandatePdfExport','adminNetcashManualSubmission',
+  'sellerPaystackNewCheckoutDisabled','adminUsers','adminSellerDocuments',
+  'physicalGoodsPaystack'
+ ];
+ if(health?.ok!==true||health.version!=='3.25.0'||health.agentCommissionEnabled!==false||
+    health.adminProductReview!==false||
+    health.sellerMembershipBillingMode!=='netcash_manual_debit_request'||
+    required.some(key=>health[key]!==true)){
+   throw new Error('Backend does not confirm R327 seller approval and manual Netcash mandate capabilities. Deploy the reviewed teyzaMobile function first; Hosting was not changed.');
+ }
 }
 async function main(){
  const [action,uid]=process.argv.slice(2);
@@ -16,7 +26,7 @@ async function main(){
   if(!r.ok)throw new Error('The seller operations backend health check failed.');
   assertAdminBackend(await r.json());
  }
- const client=await connect(),backupPath=path.resolve(__dirname,'../../hosting-backup-paystack-admin.json');
+ const client=await connect(),backupPath=path.resolve(__dirname,'../../hosting-backup-teyza-admin-r327.json');
  const currentSource=path.resolve(__dirname,'../../web/teyza-admin/public');
  const bundleSource=path.resolve(__dirname,'../../public');
  const root=fs.existsSync(path.join(currentSource,'admin.html'))?currentSource:bundleSource;

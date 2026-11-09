@@ -24,7 +24,9 @@ class ShopperChatPage extends StatefulWidget {
   final TeyzaMobileApi? api;
   final String? initialThreadId,initialTitle,initialMessage;
   final bool asOwner;
-  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle,this.initialMessage,this.asOwner=false});
+  final VoidCallback? onOpenUpdates;
+  final int unreadUpdates;
+  const ShopperChatPage({super.key,required this.session,this.initialShop,this.api,this.initialThreadId,this.initialTitle,this.initialMessage,this.asOwner=false,this.onOpenUpdates,this.unreadUpdates=0});
   @override State<ShopperChatPage> createState()=>_ChatState();
 }
 class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
@@ -127,7 +129,16 @@ class _ChatState extends State<ShopperChatPage> with WidgetsBindingObserver {
         style:const TextStyle(color:Colors.deepOrange,fontWeight:FontWeight.w700))),
       Expanded(child:threadId==null?ListView(padding:const EdgeInsets.all(18),children:[
         Text(widget.asOwner?'Your customers':'Your conversations',style:const TextStyle(fontSize:25,fontWeight:FontWeight.w800)),
-        const SizedBox(height:8),Text(widget.asOwner?'Reply to customer questions about products, collection and delivery.':'Ask about products, collection or delivery. Replies appear here.'),
+        const SizedBox(height:8),Text(widget.asOwner?'Customer messages and shop updates are together here.':'Ask about products, collection or delivery. Replies appear here.'),
+        if(widget.asOwner&&widget.onOpenUpdates!=null)Card(color:const Color(0xFFEAF6EF),child:ListTile(
+          key:const ValueKey('seller-message-updates'),
+          leading:const Icon(Icons.markunread_mailbox_outlined,color:chatGreen),
+          title:const Text('Order & shop updates'),
+          subtitle:const Text('Order activity, account reviews and service updates'),
+          trailing:Badge(isLabelVisible:widget.unreadUpdates>0,
+            label:Text(widget.unreadUpdates>99?'99+':'${widget.unreadUpdates}'),
+            child:const Icon(Icons.chevron_right)),
+          onTap:widget.onOpenUpdates)),
         if(threads.isEmpty&&!loading)Padding(padding:const EdgeInsets.symmetric(vertical:20),
           child:Text(widget.asOwner?'No customer messages yet. New customer conversations will appear here.':'No conversations yet. Open a registered shop and tap Live chat.')),
         for(final item in threads)Card(color:Colors.white,child:ListTile(

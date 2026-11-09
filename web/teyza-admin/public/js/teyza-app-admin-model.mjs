@@ -3,16 +3,34 @@ export class AdminError extends Error {
 }
 
 export const serviceUrl='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
+// Read-only requests can be repeated safely after a transient network close.
+// Decisions, mandate submissions, banking, document reads and grants must NOT
+// be re-sent automatically because they create sensitive audit events or writes.
+const retryableReads=new Set([
+  'ops_sellers','ops_seller_detail','ops_mandate_queue','ops_account_deletion_queue',
+  'ops_catalogue_queue','ops_finance_queue','ops_support_list','ops_users',
+  'seller_summary','admin_seller_queue'
+]);
 export function createApi({user,fetcher=fetch}) {
   return async (action,data={})=>{
     const actor=user();
     if(!actor)throw new AdminError('Sign in with your authorised Teyza administrator account.',401);
     const token=await actor.getIdToken();
-    const response=await fetcher(serviceUrl,{method:'POST',cache:'no-store',credentials:'omit',
-      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,data})});
-    const result=await response.json().catch(()=>null);
-    if(!response.ok||result?.ok!==true)throw new AdminError(result?.error||'The review service could not respond. Please try again.',response.status);
-    return result;
+    const options={method:'POST',cache:'no-store',credentials:'omit',
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,data})};
+    const attempts=retryableReads.has(action)?2:1;
+    for(let attempt=0;attempt<attempts;attempt++){
+      let response;
+      try{response=await fetcher(serviceUrl,options);}
+      catch(error){
+        if(attempt+1<attempts)continue;
+        throw new AdminError('Unable to connect to the Teyza review service. Check your network, then refresh and retry. No approval was confirmed.',0);
+      }
+      const result=await response.json().catch(()=>null);
+      if(!response.ok||result?.ok!==true)
+        throw new AdminError(result?.error||'The review service could not respond. Please try again.',response.status);
+      return result;
+    }
   };
 }
 
@@ -28,12 +46,14 @@ export class ReviewState {
   canApprove(now=Date.now()){
     const s=this.selected;
     return Boolean(s&&s.sellerUid!==this.uid&&!s.expired&&s.evidenceId&&
+      !(Array.isArray(s.missingCompliance)&&s.missingCompliance.length)&&
+      !(s.phoneVerificationRequired===true&&s.phoneVerified===false)&&
       ['identity','selfie'].every(k=>this.views.has(k)&&now-this.views.get(k)<300000));
   }
   decision(status,reason,now=Date.now()){
     const s=this.selected;
     if(!s||s.sellerUid===this.uid)throw new AdminError('Another administrator must review this shop.');
-    if(!['approved','needs_new_photo','rejected'].includes(status))throw new AdminError('Choose a review decision.');
+    if(!['approved','needs_new_photo','needs_correction','rejected'].includes(status))throw new AdminError('Choose a review decision.');
     if(status==='approved'&&!this.canApprove(now))throw new AdminError('Open and inspect the current identity document and selfie before approving.');
     const note=String(reason||'').trim();
     if(note.length>400||status!=='approved'&&note.length<10)throw new AdminError('Add a recommendation explaining what the seller needs to correct (10–400 characters).');

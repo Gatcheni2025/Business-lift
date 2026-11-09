@@ -14,6 +14,23 @@ test('App admin sends the authenticated native review contract and preserves ser
  await assert.rejects(denied('admin_seller_review'),e=>e.status===409&&e.message.includes('document changed'));
  let touched=false;await assert.rejects(createApi({user:()=>null,fetcher:async()=>{touched=true;}})('admin_seller_queue'),e=>e.status===401);assert(!touched);
 });
+test('A closed connection retries a read-only mandate inbox but never repeats an approval',async()=>{
+ const actor={getIdToken:async()=>'synthetic-token'};
+ let reads=0;
+ const recover=createApi({user:()=>actor,fetcher:async()=>{
+   reads++;if(reads===1)throw TypeError('Failed to fetch');
+   return {ok:true,status:200,json:async()=>({ok:true,mandates:[]})};
+ }});
+ assert.deepEqual((await recover('ops_mandate_queue')).mandates,[]);
+ assert.equal(reads,2);
+ let writes=0;
+ const reject=createApi({user:()=>actor,fetcher:async()=>{
+   writes++;throw TypeError('ERR_CONNECTION_CLOSED');
+ }});
+ await assert.rejects(reject('ops_complimentary_access',{sellerUid:'seller1'}),error=>
+   error.status===0&&/Unable to connect/.test(error.message));
+ assert.equal(writes,1);
+});
 test('Only two inspected current photos allow approval and current references are submitted',()=>{
  const state=new ReviewState();state.account('admin1');state.select(row);
  state.viewed('selfie',1000);assert(!state.canApprove(1001));
@@ -21,6 +38,18 @@ test('Only two inspected current photos allow approval and current references ar
  assert.deepEqual(state.decision('approved',' Looks correct ',1001),{sellerUid:'seller1',submissionId:'current-selfie',evidenceId:'current-document',status:'approved',reason:'Looks correct'});
  assert(!state.canApprove(301000));assert.throws(()=>state.decision('approved','',301000));
  state.select({...row,submissionId:'replacement'});assert(!state.canApprove());
+});
+test('Missing compliance blocks approval yet permits a corrective note without rejecting the selfie',()=>{
+ const s=new ReviewState();s.account('reviewer');
+ s.select({...row,phoneVerificationRequired:true,phoneVerified:false,missingCompliance:['identity','phone']});
+ s.viewed('identity');s.viewed('selfie');assert.equal(s.canApprove(),false);
+ assert.throws(()=>s.decision('approved',''));
+ const outcome=s.decision('needs_correction','Please verify your phone and upload the ID document.');
+ assert.equal(outcome.status,'needs_correction');
+ assert.equal(outcome.submissionId,'current-selfie');
+ assert.throws(()=>s.decision('needs_correction','short'));
+ s.select({...row,phoneVerificationRequired:true,phoneVerified:true,missingCompliance:[]});
+ s.viewed('identity');s.viewed('selfie');assert.equal(s.canApprove(),true);
 });
 test('Account and selection changes invalidate delayed evidence and prevent self-approval',()=>{
  const state=new ReviewState();state.account('admin1');state.select(row);let ticket=state.ticket();

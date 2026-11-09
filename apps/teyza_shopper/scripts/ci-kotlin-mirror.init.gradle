@@ -1,0 +1,50 @@
+// Teyza GitHub Actions only: Kotlin compiler Maven fallback during GitHub 504s.
+// Keep standard Gradle plugin and Android dependency repositories available.
+// This file is copied to the ephemeral runner's GRADLE_USER_HOME/init.d only;
+// app source, signing materials and deployed Android packages are unchanged.
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories {
+        maven {
+            name = 'teyzaCIKotlinPluginMirror'
+            url = uri('https://maven.aliyun.com/repository/central')
+            content {
+                includeGroup('org.jetbrains.kotlin')
+                includeGroup('org.jetbrains.kotlin.jvm')
+                includeGroup('org.jetbrains.kotlin.plugin.serialization')
+            }
+        }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    settings.dependencyResolutionManagement.repositories {
+        maven {
+            name = 'teyzaCIKotlinCompilerMirror'
+            url = uri('https://maven.aliyun.com/repository/central')
+            content { includeGroup('org.jetbrains.kotlin') }
+        }
+        google()
+        mavenCentral()
+    }
+}
+
+// Kotlin's camera_android_camerax compiler classpath is a subproject
+// configuration (kotlinBuildToolsApiClasspath), not a settings or plugin
+// management configuration. The settings mirrors above do not intercept it.
+// Add the *same group-scoped mirror* to every project before its build script
+// configures Kotlin's compiler dependencies. Keep Maven Central/Google as
+// fallback repositories and keep the mirror out of shipped app artifacts.
+gradle.beforeProject { project ->
+    // Flutter's included Gradle plugin builds enforce settings-only
+    // repositories and reject any project repository additions. Scope this
+    // to the single CameraX Android plugin that resolves the compiler JAR.
+    if (project.name == 'camera_android_camerax') {
+        project.repositories {
+            maven {
+                name = 'teyzaCIKotlinCompilerProjectMirror'
+                url = uri('https://maven.aliyun.com/repository/central')
+                content { includeGroup('org.jetbrains.kotlin') }
+            }
+        }
+    }
+}

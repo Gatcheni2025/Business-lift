@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
@@ -25,6 +26,7 @@ class _SellerMandateState extends State<SellerMandatePage> {
   DateTime? firstDate;Uint8List? document;
   Map<String,dynamic>? saved,identity,seller;Map<String,dynamic> config={};
   bool loading=true,busy=false,consent=false,identityConsent=false,changed=false,editing=false,useExisting=true;
+  bool editingSellerDetails=false,editingHolder=false;
   @override void initState(){super.initState();phone.text=widget.phone;widget.session.addListener(accountChanged);load();}
   void accountChanged(){if(uid!=widget.session.userId){for(final c in [first,surname,phone,number,holder,account,branch]){c.clear();}document=null;if(mounted)setState((){changed=true;saved=null;identity=null;consent=false;identityConsent=false;error='Your account changed. Close this form and sign in again.';});}}
   @override void dispose(){widget.session.removeListener(accountChanged);document=null;for(final c in [first,surname,phone,number,holder,account,branch]){c.dispose();}super.dispose();}
@@ -33,10 +35,13 @@ class _SellerMandateState extends State<SellerMandatePage> {
     try{final r=await api.call('seller_mandate_status');if(!mounted||uid!=widget.session.userId)return;
       setState((){config=r;saved=r['mandate'] is Map?Map<String,dynamic>.from(r['mandate']):null;identity=r['identity'] is Map?Map<String,dynamic>.from(r['identity']):null;kind=identity?['kind']?.toString()??'id';
        seller=r['seller'] is Map?Map<String,dynamic>.from(r['seller']):null;
-       if(first.text.isEmpty)first.text=seller?['firstName']?.toString()??'';
-       if(surname.text.isEmpty)surname.text=seller?['surname']?.toString()??'';
+       final fallback=(widget.session.name??'').trim().split(RegExp(r'\s+')).where((part)=>part.isNotEmpty).toList();
+       if(first.text.isEmpty)first.text=(seller?['firstName']?.toString().trim().isNotEmpty==true?seller!['firstName'].toString():fallback.isNotEmpty?fallback.first:'');
+       if(surname.text.isEmpty)surname.text=(seller?['surname']?.toString().trim().isNotEmpty==true?seller!['surname'].toString():fallback.length>1?fallback.skip(1).join(' '):'');
        if(phone.text.isEmpty||phone.text==widget.phone)phone.text=seller?['phone']?.toString()??widget.phone;
-       if(holder.text.isEmpty)holder.text=seller?['accountHolder']?.toString()??'';
+       if(holder.text.isEmpty)holder.text=(seller?['accountHolder']?.toString().trim().isNotEmpty==true?seller!['accountHolder'].toString():[first.text,surname.text].where((part)=>part.trim().isNotEmpty).join(' '));
+       editingSellerDetails=first.text.trim().isEmpty||surname.text.trim().isEmpty||phone.text.trim().isEmpty;
+       editingHolder=holder.text.trim().isEmpty;
        firstDate??=DateTime(DateTime.now().year,DateTime.now().month+1,1);
        editing=saved==null||['withdrawn','needs_correction'].contains(saved?['status']);error=null;});
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
@@ -50,6 +55,13 @@ class _SellerMandateState extends State<SellerMandatePage> {
     final picked=await showDatePicker(context:context,initialDate:firstDate??initial,firstDate:today,lastDate:today.add(const Duration(days:365)),selectableDayPredicate:(d)=>d.day<=28);
     if(picked!=null&&mounted)setState((){firstDate=picked;consent=false;});
   }
+  Future<void> openTerms() async {
+    try{
+      final opened=await launchUrl(Uri.https('teyza.co.za','/terms.html'),mode:LaunchMode.externalApplication);
+      if(!opened)throw StateError('Terms page unavailable');
+    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:Text('Unable to open the Terms of Service. Please visit teyza.co.za/terms.html.')));}
+  }
   Future<void> capture(ImageSource source) async {
     if(busy||changed)return;setState((){busy=true;error=null;});XFile? file;
     try{Uint8List? bytes;if(widget.captureDocument!=null){bytes=await widget.captureDocument!(source);}else{file=await ImagePicker().pickImage(source:source,maxWidth:1600,maxHeight:1600,imageQuality:82,requestFullMetadata:false);bytes=await file?.readAsBytes();}
@@ -62,12 +74,14 @@ class _SellerMandateState extends State<SellerMandatePage> {
     if(busy||changed||!form.currentState!.validate())return;
     if(firstDate==null||!consent||!identityConsent||(document==null&&!(useExisting&&identity!=null))){setState(()=>error='Choose a date, attach your ID/passport and accept both confirmations.');return;}
     setState((){busy=true;error=null;});
-    try{final r=await api.call('seller_mandate_submit',{'requestId':requestId,'expectedMandateId':saved?['mandateId'],'amountCents':9900,'termsVersion':config['termsVersion'],'firstDate':date,'collectionDay':firstDate!.day,
+    try{await api.call('seller_mandate_submit',{'requestId':requestId,'expectedMandateId':saved?['mandateId'],'amountCents':9900,'termsVersion':config['termsVersion'],'firstDate':date,'collectionDay':firstDate!.day,
       'firstName':first.text.trim(),'surname':surname.text.trim(),'phone':phone.text.trim(),'documentKind':kind,'documentNumber':number.text.trim(),'accountHolder':holder.text.trim(),'bankName':bank,'branchCode':branch.text.trim(),'accountNumber':account.text.trim(),'accountType':accountType,'consent':true,'identityConsent':true,
       if(document!=null)'imageBase64':base64Encode(document!),if(document==null&&useExisting)'identityEvidenceId':identity?['evidenceId']});
       if(!mounted||uid!=widget.session.userId)return;for(final c in [first,surname,number,holder,account]){c.clear();}
-      setState((){document=null;saved=Map<String,dynamic>.from(r['mandate']);editing=false;consent=false;identityConsent=false;});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Mandate securely submitted for administrator review. No debit has been collected.')));
+      document=null;consent=false;identityConsent=false;
+      // Report successful saving to the parent routes. The seller should
+      // return to the dashboard, not remain on a screen with bank details.
+      Navigator.of(context).pop(true);
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -83,18 +97,55 @@ class _SellerMandateState extends State<SellerMandatePage> {
     return Scaffold(backgroundColor:const Color(0xFFF5F7F2),appBar:AppBar(title:const Text('Membership & mandate')),body:SafeArea(child:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(20),children:[
       Container(padding:const EdgeInsets.all(24),margin:const EdgeInsets.only(bottom:20),decoration:BoxDecoration(color:const Color(0xFF123E36),borderRadius:BorderRadius.circular(28)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('GROW YOUR SHOP',style:TextStyle(color:Color(0xFFC4EB94),letterSpacing:1.6,fontWeight:FontWeight.w700)),SizedBox(height:12),Text('Your next chapter.\nR99 / month.',style:TextStyle(color:Colors.white,fontSize:32,fontWeight:FontWeight.w800)),SizedBox(height:12),Text('Choose your collection date. Review your details. Stay in control.',style:TextStyle(color:Color(0xFFDBE9E1),height:1.5))])),
       if(error!=null)card('Please check',[Text(error!,style:const TextStyle(color:Colors.red)),if(config.isEmpty&&!changed)TextButton(onPressed:load,child:const Text('Retry'))]),
-      if(benefits.isNotEmpty)card('Made for your business',[for(final b in benefits)Padding(padding:const EdgeInsets.only(bottom:12),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.check_circle_outline,color:Color(0xFF16845D),size:20),const SizedBox(width:10),Expanded(child:Text(b))])),const Text('Partner offers and priority placement are subject to availability. Finance requires a separate application and approval.',style:TextStyle(fontSize:12))]),
-      if(saved!=null)card('Your authorisation',[SelectableText('Reference: ${saved!['mandateId']}'),Text('Status: ${saved!['status'].toString().replaceAll('_',' ')}'),Text('${saved!['bankName']} · account ending ${saved!['accountLast4']}'),Text('R99.00 monthly · day ${saved!['collectionDay']} · first date ${saved!['firstDate']}'),const SizedBox(height:12),Text(saved!['terms']?.toString()??''),const SizedBox(height:12),const Text('Automatic collection is not active. Teyza will contact you for provider/bank activation after approval.'),if(saved!['status']!='withdrawn')...[
+      if(benefits.isNotEmpty)Card(child:ExpansionTile(title:const Text('Membership benefits'),children:[
+        for(final b in benefits)ListTile(leading:const Icon(Icons.check_circle_outline,color:Color(0xFF16845D)),title:Text(b)),
+        const Padding(padding:EdgeInsets.all(16),child:Text('Partner offers and priority placement are subject to availability. Finance requires a separate application and approval.'))])),
+      if(saved!=null)card('Your debit-order request',[
+        Text(saved!['status']=='pending_provider_authentication'?'Waiting for review (by admin)':
+          saved!['status']=='needs_correction'?'Action required: correct your details':
+          saved!['status']=='withdrawn'?'Request withdrawn':'Provider review in progress',
+          style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:Color(0xFF8A640F))),
+        const SizedBox(height:10),SelectableText('Reference: ${saved!['mandateId']}'),Text('Status: ${saved!['status'].toString().replaceAll('_',' ')}'),Text('${saved!['bankName']} · account ending ${saved!['accountLast4']}'),Text('R99.00 monthly · day ${saved!['collectionDay']} · first date ${saved!['firstDate']}'),const SizedBox(height:12),Text(saved!['terms']?.toString()??''),const SizedBox(height:12),const Text('Automatic collection is not active. Teyza will contact you for provider/bank activation after approval.'),if(saved!['status']!='withdrawn')...[
         TextButton(onPressed:busy||changed?null:()=>setState((){editing=true;consent=false;identityConsent=false;requestId='mandate_${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(100000000)}';}),child:const Text('Replace mandate details')),
         TextButton(onPressed:busy||changed?null:withdraw,child:const Text('Withdraw authorisation'))]]),
       if(editing&&!changed&&config.isNotEmpty)AbsorbPointer(absorbing:busy,child:Form(key:form,child:Column(children:[
-        card('1. Seller details (automatically filled)',[
-          if(seller!=null)Text('Shop: ${seller!['shopName']??''}\nAddress: ${seller!['shopAddress']??''}\nEmail: ${seller!['email']??''}'),
-          input('Name',first),input('Surname',surname),
-          input('Registered contact number',phone,keyboard:TextInputType.phone,readOnly:seller?['phone']?.toString().isNotEmpty==true),DropdownButtonFormField<String>(initialValue:kind,decoration:const InputDecoration(labelText:'Document type'),items:const [DropdownMenuItem(value:'id',child:Text('South African ID')),DropdownMenuItem(value:'passport',child:Text('Passport'))],onChanged:(v)=>setState((){kind=v!;useExisting=identity?['kind']==kind;consent=false;})),const SizedBox(height:14),if(identity==null||!useExisting)input('ID / passport number',number,validate:(v)=>kind=='id'?(RegExp(r'^\d{13}$').hasMatch(v??'')?null:'Enter your 13-digit ID number'):((v??'').trim().length>=4?null:'Enter your passport number'))]),
-        card('2. Required ID attachment',[if(identity!=null&&identity?['kind']==kind)CheckboxListTile(contentPadding:EdgeInsets.zero,value:useExisting&&document==null,onChanged:(v)=>setState((){useExisting=v??false;consent=false;}),title:const Text('Use my current verification ID/passport attachment')),if(document!=null)...[const Text('ID/passport photo attached'),const SizedBox(height:8),Image.memory(document!,height:150,fit:BoxFit.contain,excludeFromSemantics:true)],OutlinedButton.icon(onPressed:()=>capture(ImageSource.camera),icon:const Icon(Icons.camera_alt_outlined),label:const Text('Photograph ID / passport')),TextButton(onPressed:()=>capture(ImageSource.gallery),child:const Text('Attach ID / passport photo')),CheckboxListTile(contentPadding:EdgeInsets.zero,value:identityConsent,onChanged:(v)=>setState(()=>identityConsent=v??false),title:const Text('I consent to Teyza processing this private ID/passport for owner verification.')),const Text('Required for verification. A mandate submission does not automatically verify or approve a shop.',style:TextStyle(fontSize:12))]),
-        card('3. Bank details',[input('Account holder / authorised signatory',holder),DropdownButtonFormField<String>(initialValue:bank,decoration:const InputDecoration(labelText:'Bank name'),items:[for(final b in banks)DropdownMenuItem(value:b['name'].toString(),child:Text(b['name'].toString()))],onChanged:(v)=>setState((){bank=v;branch.text=banks.firstWhere((b)=>b['name']==v)['branchCode']?.toString()??'';consent=false;}),validator:(v)=>v==null?'Select your bank':null),const SizedBox(height:14),input('Branch code (filled when bank is selected)',branch,keyboard:TextInputType.number,readOnly:bank!=null&&bank!='Other',validate:(v)=>RegExp(r'^\d{6}$').hasMatch(v??'')?null:'Enter six digits'),input('Account number',account,keyboard:TextInputType.number,validate:(v)=>RegExp(r'^\d{6,20}$').hasMatch(v??'')?null:'Enter your account number'),const Text('Bank selection fills the standard branch code. Enter your own account number; it cannot be generated or inferred. Bank ownership and DebiCheck approval are separate requirements.',style:TextStyle(fontSize:12)),DropdownButtonFormField<String>(initialValue:accountType,decoration:const InputDecoration(labelText:'Account type'),items:const [DropdownMenuItem(value:'current',child:Text('Current / cheque')),DropdownMenuItem(value:'savings',child:Text('Savings')),DropdownMenuItem(value:'transmission',child:Text('Transmission'))],onChanged:(v)=>setState((){accountType=v!;consent=false;}))]),
-        card('4. Your collection agreement',[const Text('Membership amount: R99.00 per month',style:TextStyle(fontWeight:FontWeight.w800,fontSize:18)),const SizedBox(height:12),OutlinedButton.icon(key:const ValueKey('mandate-collection-date'),onPressed:pickDate,icon:const Icon(Icons.calendar_month_outlined),label:Text(date.isEmpty?'Choose first collection date':date)),const Text('Choose day 1–28 so the date exists every month.'),const SizedBox(height:14),Text(terms),const SizedBox(height:14),CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:(v)=>setState(()=>consent=v??false),title:const Text('I have read and authorise the exact amount, dates and bank account above.')),const Text('This sends your encrypted mandate to Teyza administration for review. No debit is collected, and no paid access starts, until an authorised collection provider confirms the mandate and a successful collection.',style:TextStyle(fontSize:12)),const SizedBox(height:14),FilledButton(onPressed:busy||config['termsVersion']==null?null:submit,child:Text(busy?'Saving securely…':'Sign & submit R99 mandate'))])
+        card('1. Your saved details',[
+          if(seller!=null)Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('Seller name: ${first.text} ${surname.text}'.trim(),style:const TextStyle(height:1.6)),
+            Text('Shop name: ${seller!['shopName']??''}',style:const TextStyle(height:1.6)),
+            Text('Phone number (auto-filled): ${phone.text}',style:const TextStyle(height:1.6)),
+            Text('Address (auto-filled): ${seller!['shopAddress']??''}',style:const TextStyle(height:1.6)),
+          ]),
+          const SizedBox(height:12),
+          if(!editingSellerDetails)...[Text('${first.text} ${surname.text} · ${phone.text}',style:const TextStyle(fontWeight:FontWeight.w700)),
+            TextButton(onPressed:()=>setState(()=>editingSellerDetails=true),child:const Text('Edit seller details'))]
+          else ...[input('Name',first),input('Surname',surname),
+            input('Registered contact number',phone,keyboard:TextInputType.phone,readOnly:seller?['phone']?.toString().isNotEmpty==true)]
+        ]),
+        card('2. Bank details',[
+          if(!editingHolder)...[Text('Account holder: ${holder.text}',style:const TextStyle(fontWeight:FontWeight.w700)),
+            TextButton(onPressed:()=>setState(()=>editingHolder=true),child:const Text('Change account holder'))]
+          else input('Account holder / authorised signatory',holder),
+          DropdownButtonFormField<String>(key:const ValueKey('mandate-bank'),initialValue:bank,decoration:const InputDecoration(labelText:'Bank name'),items:[for(final b in banks)DropdownMenuItem(value:b['name'].toString(),child:Text(b['name'].toString()))],onChanged:(v)=>setState((){bank=v;branch.text=banks.firstWhere((b)=>b['name']==v)['branchCode']?.toString()??'';consent=false;}),validator:(v)=>v==null?'Select your bank':null),
+          const SizedBox(height:14),input('Branch code (filled when bank is selected)',branch,keyboard:TextInputType.number,readOnly:bank!=null&&bank!='Other',validate:(v)=>RegExp(r'^\d{6}$').hasMatch(v??'')?null:'Enter six digits'),
+          input('Account number',account,keyboard:TextInputType.number,validate:(v)=>RegExp(r'^\d{6,20}$').hasMatch(v??'')?null:'Enter your account number'),
+          const Text('Select your bank and enter your own account number. We fill the standard branch code where available.',style:TextStyle(fontSize:12)),
+          DropdownButtonFormField<String>(initialValue:accountType,decoration:const InputDecoration(labelText:'Account type'),items:const [DropdownMenuItem(value:'current',child:Text('Current / cheque')),DropdownMenuItem(value:'savings',child:Text('Savings')),DropdownMenuItem(value:'transmission',child:Text('Transmission'))],onChanged:(v)=>setState((){accountType=v!;consent=false;}))]),
+        card('3. Your verification document',[
+          if(identity!=null&&useExisting&&document==null)...[
+            const Text('Your current verified ID or passport will be reused. No new identity upload needed.'),
+            TextButton(onPressed:()=>setState((){useExisting=false;identityConsent=false;consent=false;}),child:const Text('Use a different document'))
+          ]else ...[
+            DropdownButtonFormField<String>(initialValue:kind,decoration:const InputDecoration(labelText:'Document type'),items:const [DropdownMenuItem(value:'id',child:Text('South African ID')),DropdownMenuItem(value:'passport',child:Text('Passport'))],onChanged:(v)=>setState((){kind=v!;identityConsent=false;consent=false;})),
+            const SizedBox(height:14),input('ID / passport number',number,validate:(v)=>kind=='id'?(RegExp(r'^\d{13}$').hasMatch(v??'')?null:'Enter your 13-digit ID number'):((v??'').trim().length>=4?null:'Enter your passport number')),
+            if(document!=null)...[const Text('ID/passport photo attached'),const SizedBox(height:8),Image.memory(document!,height:150,fit:BoxFit.contain,excludeFromSemantics:true)],
+            OutlinedButton.icon(onPressed:()=>capture(ImageSource.camera),icon:const Icon(Icons.camera_alt_outlined),label:const Text('Photograph ID / passport')),
+            TextButton(onPressed:()=>capture(ImageSource.gallery),child:const Text('Attach ID / passport photo')),
+            if(identity!=null)TextButton(onPressed:()=>setState((){kind=identity!['kind'].toString();useExisting=true;document=null;number.clear();identityConsent=false;consent=false;}),child:const Text('Use my saved verification document'))
+          ],
+          CheckboxListTile(contentPadding:EdgeInsets.zero,value:identityConsent,onChanged:(v)=>setState(()=>identityConsent=v??false),title:const Text('I consent to Teyza processing this private ID/passport for owner verification.')),
+          const Text('A mandate request does not itself approve a shop.',style:TextStyle(fontSize:12))]),
+        card('4. Proposed collection terms',[const Text('Membership amount: R99.00 per month',style:TextStyle(fontWeight:FontWeight.w800,fontSize:18)),const SizedBox(height:12),const Text('Collection date (auto-filled)',style:TextStyle(fontWeight:FontWeight.w700)),OutlinedButton.icon(key:const ValueKey('mandate-collection-date'),onPressed:pickDate,icon:const Icon(Icons.calendar_month_outlined),label:Text(date.isEmpty?'Choose first collection date':date)),const Text('Automatically set to day 1 of next month. Change the date if needed (days 1–28).'),const SizedBox(height:14),Text(terms),const SizedBox(height:14),CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:(v)=>setState(()=>consent=v??false),title:const Text('I agree to Teyza Terms of Service and consent to preparing the R99 debit-order request. I understand Netcash requires a valid signed or approved mandate before any debit.')),TextButton.icon(onPressed:openTerms,icon:const Icon(Icons.open_in_new_outlined),label:const Text('Read Terms of Service')),const Text('This sends your encrypted consent request to Teyza admin. A checkbox is not a valid Netcash mandate. Admin must obtain provider-acceptable signed authority and a successful collection before any paid access.',style:TextStyle(fontSize:12)),const SizedBox(height:14),FilledButton(onPressed:busy||config['termsVersion']==null?null:submit,child:Text(busy?'Saving securely…':'Save mandate request'))])
       ]))),
     ])));
   }

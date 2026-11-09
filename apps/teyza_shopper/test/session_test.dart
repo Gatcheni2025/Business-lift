@@ -123,20 +123,14 @@ void main(){
     expect(signups,1);
     restored.dispose();client.close();
   });
-  test('Shopper signup creates an Auth account without creating a merchant',() async{
-    final calls=<String>[];
-    final client=MockClient((r) async{
-      calls.add(r.url.path);
-      expect(r.url.host,'identitytoolkit.googleapis.com');
-      if(r.url.path.endsWith('signUp'))return jsonReply(login);
-      if(r.url.path.endsWith('lookup'))return profile();
-      expect(r.url.path,endsWith('update'));
-      expect(jsonDecode(r.body)['returnSecureToken'],isFalse);
-      return jsonReply({});
-    });
+  test('Email account creation is disabled for new users while login remains available',() async {
+    var requests=0;
+    final client=MockClient((_)async{requests++;return jsonReply(login);});
     final session=ShopperSession(client:client,store:MemoryStore());
-    await session.register('New Shopper','user@example.test','password123');
-    expect(session.name,'New Shopper');expect(calls,hasLength(3));
+    await expectLater(session.register('New Shopper','new@example.test','password123'),
+      throwsUnsupportedError);
+    expect(requests,0);
+    expect(session.userId,isNull);
     session.dispose();client.close();
   });
   test('Wrong password never creates an assumed authenticated session',() async{

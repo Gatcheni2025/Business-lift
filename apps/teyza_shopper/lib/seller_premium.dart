@@ -3,24 +3,21 @@ import 'seller_firestore.dart';
 
 const sellerCanvas=Color(0xFFF6F7F2);
 class SellerShopHero extends StatelessWidget{
-  final SellerShop shop;final int? productCount;final int unread;
-  final VoidCallback onNotifications;
+  final SellerShop shop;final int? productCount;
   final String? publicationStatus;
   final bool sellingEnabled;
   final bool? identityVerified;
   bool get approved=>identityVerified??shop.approvalStatus=='approved';
   bool get live=>publicationStatus=='active'&&approved;
-  const SellerShopHero({super.key,required this.shop,required this.productCount,required this.onNotifications,this.unread=0,this.publicationStatus,this.sellingEnabled=false,this.identityVerified});
+  const SellerShopHero({super.key,required this.shop,required this.productCount,this.publicationStatus,this.sellingEnabled=false,this.identityVerified});
   @override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(23),
     decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
       colors:[Color(0xFF010F1C),Color(0xFF123E31)]),borderRadius:BorderRadius.circular(28),
       boxShadow:const [BoxShadow(color:Color(0x16010F1C),blurRadius:20,offset:Offset(0,8))]),
     child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Row(children:[Expanded(child:Align(alignment:Alignment.centerLeft,child:Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:7),
+      Align(alignment:Alignment.centerLeft,child:Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:7),
         decoration:BoxDecoration(color:const Color(0xFF244C3E),borderRadius:BorderRadius.circular(30)),
-        child:const Text('TEYZA  /  FOR BUSINESS',style:TextStyle(color:Color(0xFFB7EACD),fontSize:10,fontWeight:FontWeight.w700,letterSpacing:1))))),
-        Badge(isLabelVisible:unread>0,label:Text(unread>=100?'99+':'$unread'),
-          child:IconButton(tooltip:'Shop notifications',onPressed:onNotifications,icon:const Icon(Icons.notifications_none_rounded,color:Colors.white)))]),
+        child:const Text('TEYZA  /  FOR BUSINESS',style:TextStyle(color:Color(0xFFB7EACD),fontSize:10,fontWeight:FontWeight.w700,letterSpacing:1)))),
       const SizedBox(height:17),Text(shop.name.isEmpty?'Your neighbourhood shop':shop.name,
         style:const TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w800,height:1.12)),
       const SizedBox(height:9),Text(shop.categoryLabel,key:const ValueKey('saved-shop-category'),

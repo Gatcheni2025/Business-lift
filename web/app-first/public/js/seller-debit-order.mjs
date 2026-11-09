@@ -81,8 +81,8 @@ async function start(){
           ' · '+prior.bankName+' ending '+prior.accountLast4+' · R99 monthly. No debit is active.';
         $('mandateExistingId').value=prior.mandateId;
       }else{$('mandateExistingId').value='';}
-      terms();status(prior?'Signed mandate received. Collections are not active.':
-        'Choose your bank, enter your bank account and confirm the monthly R99 mandate.');
+      terms();status(prior?'Consent request received. A Netcash-accepted mandate is still required.':
+        'Choose your bank, enter your account number and review the proposed R99 mandate request.');
     }catch(e){info=null;status(e.message||'Could not load your mandate.','error');}
     finally{busy=false;render();}
   }
@@ -110,11 +110,11 @@ async function start(){
         accountType:$('mandateAccountType').value,identityConsent:true,consent:true
       });
       $('mandateAccountNumber').value='';status('Mandate '+response.mandate.mandateId+
-        ' received by Teyza administration. No debit order has been collected or activated.','success');
+        ' received by Teyza admin. Netcash-approved authority is still required; no debit collected.','success');
       info.mandate=response.mandate;
       hide('mandateForm',false);hide('mandateSaved',true);
       $('mandateSaved').textContent='Mandate '+response.mandate.mandateId+
-        ' · awaiting administrator and provider review · R99 per month';
+        ' · waiting for Netcash-approved signed mandate · proposed R99/month';
     }catch(e){status(e.message||'Mandate could not be submitted.','error');}
     finally{busy=false;render();}
   }

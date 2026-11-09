@@ -115,7 +115,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           subtitle:const Text('Optional. Uses the contact number above. You can change this in seller verification.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
-        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After approval your shop can appear nearby for free. Upgrade only when adding products; promotions are optional for paid members. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
+        const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After approval your shop can appear nearby for free. Product publishing is subject to verification and seller account eligibility. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
     ])));

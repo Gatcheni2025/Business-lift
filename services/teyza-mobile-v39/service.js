@@ -10,6 +10,7 @@ const onboarding=require('./onboarding');
 const operations=require('./operations');
 const adminUsers=require('./admin-users');
 const mandate=require('./mandate');
+const wholesaleAdvertising=require('./wholesale-advertising');
 const fieldAgents=require('./field-agents');
 const ratings=require('./ratings');
 const P=require('./publication');
@@ -35,24 +36,40 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const [a,o,v,b]=await Promise.all(['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaBilling/'].map(p=>tx.get(doc(p+uid))));
     return P.assertLive(uid,a.exists?a.data():null,o.exists?o.data():{},v.exists?v.data():null,shop,b.exists?b.data():null,clock());
   }
-  async function synchronizeCatalogue(uid,{additions=[],removedProductId=null}={}) {
+  async function synchronizeCatalogue(uid,{additions=[],removedProductId=null,publishIntent=false}={}) {
     D.id(uid);
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
-      const setupRef=doc('teyzaSellerOnboarding/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap]=await Promise.all([
-        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(doc('teyzaBilling/'+uid)),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201))]);
+      const setupRef=doc('teyzaSellerOnboarding/'+uid),billRef=doc('teyzaBilling/'+uid);
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap,mandateSnap]=await Promise.all([
+        tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(billRef),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201)),tx.get(doc('teyzaSellerMandates/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
       // Migrate old trials to free without billing or resetting trial dates.
       if(account?.listingPlan==='trial'){
         account={...account,listingPlan:'free'};
         tx.update(accountRef,{listingPlan:'free',updatedAt:new Date(clock())});
       }
+      let effectiveBilling=billingSnap.exists?billingSnap.data():null;
+      const m=mandateSnap.exists?mandateSnap.data():null,stamp=clock();
+      // Existing mandates signed before the rollout receive only the remainder
+      // of the original 7-day window; never restart on a read or correction.
+      if(account?.uid===uid&&account.approvalStatus==='approved'&&m?.ownerUid===uid&&
+         ['pending_provider_authentication','reviewed_pending_provider','submitted_to_netcash'].includes(m.status)&&
+         Number.isFinite(m.acceptedAt)&&stamp>=m.acceptedAt&&stamp<m.acceptedAt+7*86400000&&
+         !Number.isFinite(effectiveBilling?.mandateAccessFirstStartedAt)&&
+         !['active','revoked'].includes(effectiveBilling?.mandateAccessStatus)&&
+         (!effectiveBilling?.ownerUid||effectiveBilling.ownerUid===uid)){
+        const patch={ownerUid:uid,mandateAccessStatus:'active',mandateAccessKind:'processing_7d',
+          mandateAccessFirstStartedAt:m.acceptedAt,mandateAccessMandateId:m.mandateId,
+          mandateAccessUntil:m.acceptedAt+7*86400000,mandateAccessStartedAt:m.acceptedAt,updatedAt:stamp};
+        tx.set(billRef,patch,{merge:true});
+        effectiveBilling={...(effectiveBilling||{}),...patch};
+      }
       const registered=account?.uid===uid&&['spaza','retail','wholesale'].includes(account.category);
       if(additions.length&&!registered)D.fail(403,'Register your shop with this account first.');
       if(additions.length&&account.approvalStatus!=='approved')
         D.fail(403,'Your seller registration must be approved before adding products.');
-      if(additions.length&&!P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()))
+      if(additions.length&&!P.eligible(uid,account,effectiveBilling,clock()))
         D.fail(403,'Activate product access before adding products, or ask an administrator about complimentary access.');
       const entries=draftSnap.docs.map(x=>({id:x.id,data:x.data()}));
       const existing=new Map(entries.map(p=>[p.id,p.data]));
@@ -72,8 +89,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const verification=verificationSnap.exists?verificationSnap.data():null;
       const next=P.project(uid,{account,setup,verification,shop,settings:settingsSnap.exists?settingsSnap.data():{},
         front:frontSnap.exists?frontSnap.data():null,location:locationSnap.exists?locationSnap.data():null,
-         billing:billingSnap.exists?billingSnap.data():null,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
-      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,billingSnap.exists?billingSnap.data():null,clock()));
+         billing:effectiveBilling,drafts:entries,photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()})),removedProductId,now:clock()});
+      const eligible=next?.status==='active',canPublish=Boolean(eligible&&P.eligible(uid,account,effectiveBilling,clock()));
+      // Only an explicit seller product-add/sync can opt a legacy catalogue
+      // into publication, and only with approved, active selling entitlement.
+      // Background reconciliation must never publish legacy private drafts.
+      if(next&&canPublish&&publishIntent){
+        next.catalogueEnabled=true;
+        // Keep the legacy sellingEnabled flag unchanged so an explicit
+        // catalogue opt-out can still hide products on subsequent refreshes.
+        Object.assign(next,catalogue.range(uid,next,entries,{enabled:true,removedProductId,
+          photos:photoSnap.docs.map(x=>({id:x.id,data:x.data()}))}));
+      }
       if(next){
         const listing=eligible?'active':'not_listed';
         if(account.listingStatus!==listing)tx.update(accountRef,{listingStatus:listing,updatedAt:new Date(clock())});
@@ -85,7 +112,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       for(const item of added)tx.set(doc('teyzaDraftProducts/'+uid+'/items/'+item.id),item.record);
       if(next&&JSON.stringify(next)!==JSON.stringify(shop))tx.set(shopRef,{...next,updatedAt:clock()});
       return {addedIds:added.map(p=>p.id),alreadyAdded,publication:canPublish?'live':'private',
-        publicCount:canPublish?next?.productHighlights.length||0:0};
+        publicCount:canPublish&&account.category!=='wholesale'?next?.products?.length||0:0,
+        savedCount:entries.filter(p=>p.data?.ownerUid===uid&&p.data?.status==='draft').length};
     });
   }
   // Wholesale prices are never exposed in the anonymous shopper directory.
@@ -132,7 +160,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       tx.set(ref,{start:fresh?clock():old.start,count:count+1});
     });
   }
-  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate});
+  const sellerMandate=mandate.createMandate({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,clock,rate,synchronize:synchronizeCatalogue});
   const agentWorkspace=fieldAgents.createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getPlacesKey,fetchImpl:addressFetch,clock,rate});
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
@@ -142,6 +170,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     synchronize:synchronizeCatalogue});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
+  const advertising=wholesaleAdvertising.createWholesaleAdvertising({db,clock,rate});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
     getPlanCode:getPaystackPlanCode,send:paystackFetch,refresh:synchronizeCatalogue});
   const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,
@@ -169,10 +198,10 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(profile?.ownerUid!==uid||
        typeof profile.displayName!=='string'||profile.displayName.trim().length<2||
        typeof profile.phone!=='string'||profile.phone.replace(/\D/g,'').length<9||
-       typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)||
+       (profile.contactEmail&& (typeof profile.contactEmail!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(profile.contactEmail)))||
        typeof profile.address!=='string'||profile.address.trim().length<8||
        !P.coordinates(profile.latitude,profile.longitude))
-      D.fail(403,'Save your name, phone, email and delivery address once before shopping.');
+      D.fail(403,'Save your name, phone and delivery address before shopping. An email address is optional.');
     return profile;
   }
   async function execute(auth, action, data={}) {
@@ -199,9 +228,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       if(!P.coordinates(lat,lng))D.fail(422,'Select an address with a valid map location.');
       const area=D.text(data.area||'','delivery area',130,false);
       const city=D.text(data.city||'','delivery city',130,false);
-      const suppliedEmail=D.text(data.email,'shopper contact email',150).trim().toLowerCase();
-      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
-        D.fail(422,'Enter a valid email address.');
+      const suppliedEmail=D.text(data.email||'','shopper contact email',150,false).trim().toLowerCase();
+      if(suppliedEmail&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(suppliedEmail))
+        D.fail(422,'Enter a valid email address or leave it blank.');
       // Do NOT pretend the contact email verifies Firebase identity.
       // It is used for communication, while account authority stays with UID.
       const profile={ownerUid:uid,displayName,phone,address,area,city,
@@ -241,6 +270,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         D.fail(403,'Verify your email or mobile number before using seller services.');
     }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
+    if(wholesaleAdvertising.actions.has(action))return advertising.execute(auth,action,data);
     if(action==='wholesale_link_request'){
       const account=await read('teyzaSellerAccounts/'+uid);
       if(account?.uid!==uid||account.category!=='spaza'||account.deletionPending===true)
@@ -354,7 +384,14 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         const supplierUid=entry.id;
         const link=await read(wholesalePair(uid,supplierUid).path);
         if(link?.spazaUid===uid&&link.supplierUid===supplierUid&&link.status==='approved'){
-          const offered=supplierOffer(entry,await read('teyzaShopSettings/'+supplierUid),link);
+          // Public wholesaler records intentionally contain no products.
+          // Restore the private range ONLY after verifying the authenticated
+          // spaza's approved supplier link and the current supplier listing.
+          const source=await read('teyzaPublicShops/'+supplierUid);
+          if(source?.sellerUid!==supplierUid||source.status!=='active'||source.shopCategory!=='wholesale')
+            D.fail(409,'The linked supplier is not available. Refresh your connections.');
+          const offered=supplierOffer({...entry,products:Array.isArray(source.products)?source.products:[]},
+            await read('teyzaShopSettings/'+supplierUid),link);
           return {...entry,products:offered.shop.products,
             productHighlights:offered.shop.products.map(p=>({
               id:p.id,name:p.name,category:p.category,inStock:p.stock>0,
@@ -370,7 +407,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='catalogue_add'||action==='catalogue_sync'){
       await owner(uid);await rate(uid,'catalogue-edit',30,60000);
       return synchronizeCatalogue(uid,{additions:action==='catalogue_add'?catalogue.selection(data.products):[],
-        removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null});
+        removedProductId:action==='catalogue_sync'&&data.removedProductId?D.id(data.removedProductId):null,
+        publishIntent:true});
     }
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
@@ -384,6 +422,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
         complimentaryAccess:P.complimentary(uid,account,billing,clock()),
+        mandateAccessActive:P.mandateAccess(uid,account,billing,clock()),
+        mandateAccessKind:billing?.mandateAccessKind||null,
+        mandateAccessUntil:P.mandateAccess(uid,account,billing,clock())?billing.mandateAccessUntil:null,
         complimentaryUntil:P.complimentary(uid,account,billing,clock())?billing.adminComplimentaryUntil:null,
         paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,introEligible:billing?.introUsed!==true,
         promotionEndsAt:promotion?.endsAt||null,
@@ -391,7 +432,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
-        sellingEnabled:publication.canSell&&publicShop?.sellingEnabled===true,identityVerified:publication.approved,
+        sellingEnabled:publication.canSell&&(publicShop?.sellingEnabled===true||publicShop?.catalogueEnabled===true),identityVerified:publication.approved,
+        publicProductCount:account.category==='wholesale'?0:publication.canSell?publicShop?.products?.length||0:0,
+        publicCatalogueAllowed:account.category!=='wholesale',
+        canPublishProducts:publication.canSell,
+        productPublicationReason:account.category==='wholesale'?'listing_only':!publication.approved?'seller_approval_pending':!publication.ready?'shop_setup_incomplete':!publication.hasListing?'selling_access_inactive':publicShop?.status!=='active'?'shop_not_active':
+          publicShop?.products?.length?'published':'not_published',
         verification:verification?{status:verification.status,submittedAt:verification.submittedAt,reviewNote:verification.reviewNote||''}:null,
         credit:finance.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.createdAt-a.createdAt),
         rating:publicShop?.ratingSource==='teyza_completed_orders'?publicShop.rating:null,
@@ -761,7 +807,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     D.fail(404,'This shop service is not available.');
   }
   async function publicDirectory(after='',wholesaleOnly=false){
-    let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(100);
+    // A full 100-shop page required up to 800 private validation reads per request.
+    // Bound the page to keep the public directory responsive under load, while
+    // preserving every seller/identity/entitlement check and cursor pagination.
+    const pageSize=25;
+    let query=db.collection('teyzaPublicShops').where('status','==','active').orderBy('__name__').limit(pageSize);
     if(after)query=query.startAfter(D.id(after));
     const result=await query.get(),entries=[];
     for(let offset=0;offset<result.docs.length;offset+=10){
@@ -792,7 +842,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         return publicItem;
       }));entries.push(...batch.filter(Boolean));
     }
-    return {entries,next:result.docs.length===100?result.docs.at(-1).id:null,wholesaleOnly};
+    return {entries,next:result.docs.length===pageSize?result.docs.at(-1).id:null,wholesaleOnly};
   }
   async function reconcilePublicationBatch(){
     // Rerun once after changing Free-plan publication eligibility. The

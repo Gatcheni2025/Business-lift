@@ -52,6 +52,31 @@ void main(){
   debugDefaultTargetPlatformOverride=null;
  });
 
+ for(final owner in [false,true])testWidgets('New social registration hides email password entry', (t)async{
+  debugDefaultTargetPlatformOverride=TargetPlatform.android;
+  addTearDown(()=>debugDefaultTargetPlatformOverride=null);
+  final session=FakeFacebookSession();
+  await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
+  await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));
+  await t.pumpAndSettle();
+  final signup=owner?find.text('New shop owner? Register your shop'):
+    find.text('New to Teyza? Register with Google, Facebook or Apple');
+  await t.ensureVisible(signup);await t.pumpAndSettle();
+  await t.tap(signup);await t.pumpAndSettle();
+  expect(find.text('Join Teyza'),findsOneWidget);
+  expect(find.byType(TextFormField),findsNothing);
+  expect(find.text('Continue with Google'),findsOneWidget);
+  expect(find.text('Continue with Facebook'),findsOneWidget);
+  expect(find.text('Create shopper account'),findsNothing);
+  expect(find.text('Create shop owner account'),findsNothing);
+  final login=find.text('Already registered? Sign in with email');
+  await t.ensureVisible(login);await t.pumpAndSettle();
+  await t.tap(login);await t.pumpAndSettle();
+  expect(find.byType(TextFormField),findsNWidgets(2));
+  expect(find.text(owner?'Sign in as shop owner':'Sign in as shopper'),findsOneWidget);
+  await t.pumpWidget(const SizedBox.shrink());session.dispose();
+  debugDefaultTargetPlatformOverride=null;
+ });
  test('Google OAuth mismatch explains Android test versus Play certificates',(){
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);

@@ -498,10 +498,36 @@ test('Pending shops cannot add products; approval and product access publish sel
  await service.execute(owner,'catalogue_add',input);
  await service.synchronizeCatalogue('seller1');
  const publicShop=db.records.get('teyzaPublicShops/seller1');
- assert.equal(publicShop.products.length,0);
+ assert.equal(publicShop.products.length,2,'Newly selected stock is published alongside existing legacy stock');
+ const added=publicShop.products.find(p=>p.id==='catalog_white-bread-700-g');
+ assert.equal(added.priceCents,1800);
+ assert.equal(added.stock,2);
+ assert.equal(publicShop.catalogueEnabled,true);
  const p=publicShop.productHighlights.find(p=>p.id==='catalog_white-bread-700-g');
  assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
  assert.equal(publicShop.productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
+});
+test('Retail products publish only after an audited selling grant and explicit owner sync',async()=>{
+ const f=fixture({
+  'teyzaSellerAccounts/seller1':{...seller,category:'retail',listingPlan:'free'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],catalogueEnabled:false,sellingEnabled:false},
+  'teyzaBilling/seller1':{ownerUid:'seller1',status:'pending'},
+  'teyzaDraftProducts/seller1/items/chair':{ownerUid:'seller1',status:'draft',
+    name:'Furniture repair',category:'Furniture & Repairs',priceCents:45000,stockQty:3}
+ });
+ assert.deepEqual((await f.service.publicDirectory()).entries.find(p=>p.id==='seller1').products,[]);
+ const reviewer={...buyer,uid:'admin1',teyzaAdmin:true,auth_time:1000};
+ await f.service.execute(reviewer,'ops_complimentary_access',{
+  sellerUid:'seller1',days:30,reason:'Verified seller temporary product access for QA',confirmed:true});
+ assert.deepEqual((await f.service.publicDirectory()).entries.find(p=>p.id==='seller1').products,[],
+  'Background grants must not expose unselected legacy drafts');
+ const sync=await f.service.execute(owner,'catalogue_sync');
+ assert.equal(sync.publication,'live');
+ const publicShop=(await f.service.publicDirectory()).entries.find(p=>p.id==='seller1');
+ assert.equal(publicShop.shopCategory,'retail');assert.equal(publicShop.products.length,1);
+ assert.equal(publicShop.products[0].name,'Furniture repair');
+ assert.equal(publicShop.products[0].category,'Furniture & Repairs');
+ assert.equal(publicShop.products[0].priceCents,45000);
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
  const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
@@ -774,6 +800,38 @@ test('Identity numbers and document images are encrypted, private, consented and
  assert.equal(opened.details.documentNumber,personal.documentNumber);assert.equal(opened.imageBase64,jpeg);
  await rejects(service.execute({...newOwner,teyzaAdmin:true,auth_time:1000},'seller_identity_read',{sellerUid:'buyer1',evidenceId:record.evidenceId}),403);
 });
+test('Missing seller compliance is shown in admin queue and sent for correction without rejecting valid selfies',async()=>{
+ const {service,db}=onboardFixture(null);
+ await register(service,newOwner,registration);
+ await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
+ const queue=await service.execute(reviewer,'admin_seller_queue');
+ const sellerRow=queue.sellers.find(x=>x.sellerUid==='buyer1');
+ assert(sellerRow,'Incomplete selfie submission remains visible to admin');
+ assert(sellerRow.missingCompliance.includes('identity'));
+ assert(sellerRow.missingCompliance.includes('phone'));
+ assert.equal(sellerRow.phoneVerified,false);
+ const submissionId=sellerRow.submissionId;
+ const note='Please upload your ID or passport and verify the registered mobile number using the SMS code.';
+ await rejects(service.execute(reviewer,'admin_seller_review',{
+   sellerUid:'buyer1',submissionId,status:'needs_correction',reason:'short'}),422);
+ const outcome=await service.execute(reviewer,'admin_seller_review',{
+   sellerUid:'buyer1',submissionId,status:'needs_correction',reason:note});
+ assert.equal(outcome.status,'needs_correction');assert.equal(outcome.pendingReview,true);
+ const existing=db.records.get('teyzaMobileVerification/buyer1');
+ assert.equal(existing.status,'pending_review');
+ assert.equal(existing.reviewNote,note);
+ assert(existing.complianceRequestedAt>0);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'pending');
+ assert.equal(db.records.has('teyzaPublicShops/buyer1'),false);
+ const after=await service.execute(reviewer,'admin_seller_queue');
+ assert.equal(after.sellers[0].reviewNote,note);
+ assert.deepEqual(after.sellers[0].missingCompliance.sort(),['identity','phone']);
+ const ownerStatus=await service.execute(newOwner,'seller_onboarding');
+ assert.equal(ownerStatus.selfie.reviewNote,note);
+ await rejects(service.execute(reviewer,'admin_seller_review',{sellerUid:'buyer1',submissionId,status:'approved'}),409);
+ assert.equal(db.records.get('teyzaMobileVerification/buyer1').status,'pending_review');
+});
 test('A missing document can be rejected with a clear recommendation, but never approved',async()=>{
  const {service,db}=onboardFixture();await ready(service);db.records.delete('teyzaSellerIdentity/buyer1');
  const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
@@ -905,7 +963,7 @@ test('New business registration is free and no trial is activated',async()=>{
  await service.execute(buyer,'seller_register',data);
  assert.equal(db.records.get('teyzaSellerAccounts/buyer1').listingPlan,'free');
  await rejects(service.execute(buyer,'seller_plan_select',{plan:'trial'}),410);
- await rejects(service.execute(buyer,'seller_mandate_submit',{}),422);
+ await rejects(service.execute(buyer,'seller_mandate_submit',{}),403);
  assert.equal(db.records.has('teyzaBilling/buyer1'),false);
  // Existing trials cannot recur or unlock private catalogues.
  const legacy=fixture({'teyzaSellerAccounts/seller1':{...seller,listingPlan:'trial'}});
@@ -1058,6 +1116,10 @@ test('Shopper delivery profile is UID-bound, stores full address and contacts, a
  assert.equal((await service.execute(buyer,'shopper_profile_read')).profile.address,payload.address);
  assert.equal((await service.execute({...buyer,uid:'other-shopper'},'shopper_profile_read')).profile,null);
  assert(db.records.has('teyzaShopperProfiles/buyer1'));
+ const withoutEmail=await service.execute({...buyer,email:null,email_verified:false},'shopper_profile_save',{...payload,email:''});
+ assert.equal(withoutEmail.profile.contactEmail,'');
+ assert.equal((await service.execute(buyer,'shopper_profile_read')).profile.contactEmail,'');
+ await rejects(service.execute(buyer,'shopper_profile_save',{...payload,email:'not-email'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,phone:'123'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,latitude:0,longitude:0}),422);
 });

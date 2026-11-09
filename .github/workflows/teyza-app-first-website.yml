@@ -23,17 +23,22 @@ jobs:
       - run: node --check tools/app-first-release/store-links-patch.cjs
       - run: node --check tools/app-first-release/premium-site-patch.cjs
       - run: node --check tools/app-first-release/run.cjs
+      # These archives include sources awaiting the owner's Defender review.
       - run: python3 scripts/package_app_first_website.py
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
       - run: python3 scripts/package_teyza_premium_website.py
       - name: Package a checked no-secrets seller pilot kit
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         run: python3 scripts/package_teyza_seller_pilot.py
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         with:
           name: TEYZA-SELLER-WEBSITE-PILOT
           path: dist/TEYZA_SELLER_WEBSITE_PILOT_20261106.zip
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
         with:
           name: TEYZA-APP-FIRST-WEBSITE
           path: dist/TEYZA_APP_FIRST_WEBSITE_20261029.zip

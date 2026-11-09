@@ -15,6 +15,18 @@ Future<void> start(WidgetTester tester,List<Shop> shops) async {
 }
 
 void main(){
+  test('Sixteen approved spaza products appear within the saved delivery radius, never outside it',(){
+    final shop=Shop.fromJson({'id':'testSpaza','name':'Neighbourhood Spaza',
+      'shopCategory':'spaza','latitude':-29.7402,'longitude':30.992,
+      'products':[for(var n=0;n<16;n++){'id':'stock$n','name':'Product $n',
+        'category':'General Goods','priceCents':1000+n,'stock':5,'inStock':true}]});
+    const nearby=Area('KwaMashu','Durban',-29.7405,30.993);
+    const distant=Area('Johannesburg','Johannesburg',-26.2041,28.0473);
+    expect(shopMatchesArea(shop,nearby,radiusKm:22),isTrue);
+    expect(shopMatchesArea(shop,distant,radiusKm:22),isFalse);
+    expect(discoverShopProducts([shop],type:'spaza',limit:18),hasLength(16));
+    expect(shop.rangeProducts.every((p)=>p.priceCents>0&&p.inStock),isTrue);
+  });
   test('Product categories keep older names searchable',(){
     expect(teyzaProductCategory('Fresh'),'Fruit & Veg');
     expect(teyzaProductCategory('Dairy'),'Dairy & Eggs');
@@ -45,6 +57,35 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('Spaza Shops and Everyday essentials categories appear in the shopper home',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[seller('shop1','Community Spaza','spaza',products:[
+      {'id':'apples','name':'Fresh apples','category':'Fruit & Veg','priceCents':1400,'stock':4},
+      {'id':'milk','name':'Fresh milk','category':'Dairy','priceCents':2000,'stock':4},
+    ])]);
+    expect(find.text('Spaza Shops'),findsOneWidget);
+    final scroll=find.byType(ListView).first;
+    for(var attempt=0;attempt<12&&find.text('Shop by category').evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-170));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Everyday essentials'),findsOneWidget);
+    expect(find.text('Shop by category'),findsOneWidget);
+    final fruit=find.byKey(const ValueKey('product-category-Fruit & Veg'));
+    for(var attempt=0;attempt<10&&fruit.evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-110));
+      await tester.pumpAndSettle();
+    }
+    expect(fruit,findsOneWidget);
+    await tester.ensureVisible(fruit);await tester.pumpAndSettle();
+    await tester.tap(fruit);await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shop-product-shop1-apples')),findsOneWidget);
+    expect(find.byKey(const ValueKey('shop-product-shop1-milk')),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Product category opens matching nearby products and seller profile',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
@@ -53,6 +94,12 @@ void main(){
       {'id':'milk','name':'Fresh milk','category':'Dairy','priceCents':2000,'stock':4},
     ])]);
     final fruit=find.byKey(const ValueKey('product-category-Fruit & Veg'));
+    final scroll=find.byType(ListView).first;
+    for(var attempt=0;attempt<12&&fruit.evaluate().isEmpty;attempt++){
+      await tester.drag(scroll,const Offset(0,-170));
+      await tester.pumpAndSettle();
+    }
+    expect(fruit,findsOneWidget);
     await tester.ensureVisible(fruit);await tester.pumpAndSettle();
     await tester.tap(fruit);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('shop-product-shop1-apple')),findsOneWidget);
@@ -65,6 +112,58 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('Local business products display by their own categories below local businesses, never wholesale prices',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[
+      seller('corner','Corner Spaza','spaza',products:[
+        {'id':'bread','name':'White bread','category':'Bakery','priceCents':1800,'stock':3}]),
+      seller('salon','Durban Salon','variety',products:[
+        {'id':'hair','name':'Hair treatment','category':'Hair & Beauty','priceCents':6500,'stock':8},
+        {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2000,'stock':4}]),
+      seller('bulk','Wholesale Depot','wholesale',products:[
+        {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
+    ]);
+    final item=find.byKey(const ValueKey('essential-product-salon-hair'));
+    final home=find.byKey(const PageStorageKey<String>('shopper-home'));
+    for(var attempt=0;attempt<25&&item.evaluate().isEmpty;attempt++){
+      await tester.drag(home,const Offset(0,-180));
+      await tester.pumpAndSettle();
+    }
+    expect(item,findsOneWidget);
+    expect(find.text('Hair & Beauty'),findsWidgets);
+    expect(find.byKey(const ValueKey('essential-product-bulk-wholesale')),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  test('Wholesaler rows always render only a listing even if a malformed public response includes supplier prices',(){
+    final supplier=Shop.fromJson({'id':'bulk1','name':'Wholesale Outlet',
+      'shopCategory':'wholesale','products':[{'id':'secret','name':'Private wholesale price',
+        'category':'Wholesale','priceCents':110000,'stock':12}],
+      'productHighlights':[{'id':'secret','name':'Secret supplier stock','inStock':true}]});
+    expect(supplier.products,isEmpty);
+    expect(supplier.rangeProducts,isEmpty);
+    expect(discoverShopProducts([supplier],type:'wholesale'),isEmpty);
+  });
+  testWidgets('An approved local business shows its own priced products on the selected shop profile',(tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    await start(tester,[seller('salon','Local Salon','variety',products:[
+      {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2500,'stock':3}])]);
+    await tester.tap(find.byKey(const ValueKey('seller-story-salon')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-profile-salon')),findsOneWidget);
+    final product=find.text('Hair cream');
+    final profile=find.byKey(const PageStorageKey<String>('shop-profile-salon'));
+    for(var n=0;n<14&&product.evaluate().isEmpty;n++){
+      await tester.drag(profile,const Offset(0,-220));
+      await tester.pumpAndSettle();
+    }
+    expect(product,findsWidgets);
+    expect(find.text('R25.00'),findsWidgets);
+    expect(find.text('No published products yet'),findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('Shop filters products by the selected business type',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
