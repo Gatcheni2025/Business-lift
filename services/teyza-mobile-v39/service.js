@@ -10,6 +10,7 @@ const onboarding=require('./onboarding');
 const operations=require('./operations');
 const adminUsers=require('./admin-users');
 const mandate=require('./mandate');
+const wholesaleAdvertising=require('./wholesale-advertising');
 const fieldAgents=require('./field-agents');
 const ratings=require('./ratings');
 const P=require('./publication');
@@ -169,6 +170,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     synchronize:synchronizeCatalogue});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
+  const advertising=wholesaleAdvertising.createWholesaleAdvertising({db,clock,rate});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
     getPlanCode:getPaystackPlanCode,send:paystackFetch,refresh:synchronizeCatalogue});
   const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,
@@ -268,6 +270,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         D.fail(403,'Verify your email or mobile number before using seller services.');
     }
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
+    if(wholesaleAdvertising.actions.has(action))return advertising.execute(auth,action,data);
     if(action==='wholesale_link_request'){
       const account=await read('teyzaSellerAccounts/'+uid);
       if(account?.uid!==uid||account.category!=='spaza'||account.deletionPending===true)
