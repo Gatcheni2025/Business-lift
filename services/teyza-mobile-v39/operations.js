@@ -127,6 +127,18 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
      self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target)]);
+   // This is an admin review aid only. A shared contact email cannot grant
+   // another Firebase UID's approval, payment or identity documents.
+   let relatedAccounts=[];
+   if(!self&&typeof account.ownerEmail==='string'&&account.ownerEmail.trim()){
+     const matches=await db.collection('teyzaSellerAccounts')
+       .where('ownerEmail','==',account.ownerEmail).limit(21).get();
+     relatedAccounts=matches.docs.filter(row=>row.data()?.uid===row.id)
+       .map(row=>({sellerUid:row.id,shopName:row.data().shopName||'Business account',
+         category:row.data().category||'',approvalStatus:row.data().approvalStatus||'pending',
+         deletionPending:row.data().deletionPending===true,listingStatus:row.data().listingStatus||'not_listed',
+         isCurrent:row.id===target}));
+   }
    const membershipPaid=P.entitled(target,account,billing,clock());
    const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
    // A stored product count is distinct from a shopper-visible public listing.
@@ -148,7 +160,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      paymentProvider:billing?.paymentProvider||'',renewalSetup:billing?.renewalSetup||'',
      paidUntil:billing?.paidUntil||null,lastReference:billing?.lastReference||null,
      introUsed:billing?.introUsed===true,standardMonthlyCents:9900};
-   return {seller:{sellerUid:target,shopName:account.shopName,ownerEmail:account.ownerEmail||'',
+   return {relatedAccounts,seller:{sellerUid:target,shopName:account.shopName,ownerEmail:account.ownerEmail||'',
      phone:account.phone||'',address:account.address||'',
      approvalStatus:account.approvalStatus,listingPlan:account.listingPlan||'free'},
      billing:billingView,paystackMode:getPaystackMode()==='live'?'live':'test',
