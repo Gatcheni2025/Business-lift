@@ -256,8 +256,18 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
         review.append(form);
       }
     }
-    if(!status.canSell)review.append(el('p',
-      'If the seller is approved, check shop setup and review the mandate. An audited temporary selling grant does not record a bank payment.','notice warning'));
+    if(!status.sellerApproved){
+      review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
+        status.approvalAccountStatus+' · identity/selfie: '+status.approvalVerificationStatus+
+        '. Check the same seller UID in the approval queue.','notice warning'),
+        button('Review seller verification',()=>navigate('approvals')));
+    }else if(!status.shopSetupComplete)
+      review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
+    else if(!status.sellingAccessActive)
+      review.append(el('p','Receive the R99 mandate to begin the automatic seven-day processing window. No additional manual seller-access approval is necessary.','notice warning'));
+    if(d.mandateAccessActive)review.append(el('p',
+      (d.mandateAccessKind==='processing_7d'?'7-day processing access until ':'30-day provider-accepted access until ')+
+      new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
     root.append(review);
   }
   const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
