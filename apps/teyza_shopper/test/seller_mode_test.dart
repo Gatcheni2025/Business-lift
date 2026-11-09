@@ -182,6 +182,7 @@ void main(){
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
     expect(find.text('Benefits for your shop'),findsOneWidget);
+    await tester.scrollUntilVisible(find.textContaining('No payments or subscriptions can be initiated in this app.'),350);
     expect(find.textContaining('No payments or subscriptions can be initiated in this app.'),findsOneWidget);
     expect(find.textContaining('Paystack'),findsNothing);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
