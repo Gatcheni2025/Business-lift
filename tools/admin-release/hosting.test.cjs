@@ -80,7 +80,7 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
   const css=fs.readFileSync(path.join(root,'assets/teyza-app-admin.css'),'utf8');
   assert(css.includes('.dashboard-sidebar'));
   assert(html.includes('data-admin-view="billing"'));
-  assert(html.includes('Debit orders &amp; mandates'));
+  assert(html.includes('Seller payments &amp; legacy mandates'));
   assert(html.includes('data-admin-view="overview"'));
 });
 
