@@ -236,15 +236,6 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
       el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
       el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
-    if(status.publicProductsAllowed===false){
-      review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
-    }else{
-      review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
-        ' · Live-priced products: '+(status.publicProductCount||0)));
-      if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
-      if(status.canSell&&status.publicProductCount>0&&
-          (status.savedDraftCount||0)<=status.publicProductCount)
-        review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
       const publishForm=parent=>{
         const form=el('form',undefined,'ops-form');
         field(form,'Reason for publishing saved seller products','reason','textarea');
@@ -259,6 +250,15 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
         });
         parent.append(form);
       };
+    if(status.publicProductsAllowed===false){
+      review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
+    }else{
+      review.append(el('p','Saved seller products: '+(status.savedDraftCount??'Not checked')+
+        ' · Live-priced products: '+(status.publicProductCount||0)));
+      if(status.draftLimitReached)review.append(el('p','More than 200 private drafts found. Contact Teyza support before publishing.','notice warning'));
+      if(status.canSell&&status.publicProductCount>0&&
+          (status.savedDraftCount||0)<=status.publicProductCount)
+        review.append(el('p','The seller has priced products in the stored public-shop record. Verify that the deployed public directory returns this exact seller UID and stock before reporting shopper availability. No second approval is required.','notice success'));
       if(status.canSell&&(status.savedDraftCount||0)>(status.publicProductCount||0))
         publishForm(review);
     }
