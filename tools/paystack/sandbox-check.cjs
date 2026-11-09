@@ -75,9 +75,9 @@ async function runSandbox({key,send=fetch,confirm,log=()=>{},clock=Date.now}){
   getProjectId:()=> 'teyza-local-sandbox',send:guarded,refresh:async()=>{}});
  const auth={uid,email,email_verified:true};
  const checkout=await billing.execute(auth,'billing_checkout',{recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION});
- if(checkout.amountCents!==4900||checkout.monthlyCents!==9900||!checkout.introductory||!validCheckoutUrl(checkout.checkoutUrl))
-  throw Error('The test checkout did not have the expected R49 and R99 terms.');
- log('The test checkout is R49 for the first month, followed by R99 monthly.');
+ if(checkout.amountCents!==1000||checkout.monthlyCents!==9900||!checkout.introductory||!validCheckoutUrl(checkout.checkoutUrl))
+  throw Error('The test checkout did not have the expected R10 and R99 terms.');
+ log('The test checkout is R10 until the next month, followed by R99 monthly on the first.');
  const proceed=await confirm(checkout.checkoutUrl);
  if(!proceed)return {status:'stopped',planCreated:true};
  let result,error;
@@ -94,7 +94,7 @@ async function runSandbox({key,send=fetch,confirm,log=()=>{},clock=Date.now}){
     !Number.isFinite(Date.parse(sub.next_payment_date||''))||
     new Date(sub.next_payment_date).toISOString().slice(0,10)!==new Date(bill.paidUntil).toISOString().slice(0,10))
    throw Error('The provider did not confirm the expected R99 subscription and renewal date.');
-  result={status:'verified',initialCents:4900,renewalCents:9900,nextPaymentDate:new Date(sub.next_payment_date).toISOString().slice(0,10),testEntitlement:false};
+  result={status:'verified',initialCents:1000,renewalCents:9900,nextPaymentDate:new Date(sub.next_payment_date).toISOString().slice(0,10),testEntitlement:false};
  } catch(e){error=e;}
  // Only cancel the new TEST subscription created by this run. If the provider
  // result is uncertain, leave it for manual TEST-dashboard reconciliation.
@@ -129,7 +129,7 @@ async function main(){
    return answer.trim().toUpperCase()==='DONE';
   }});
   if(result.status==='stopped'){console.log('RESULT: STOPPED - no live charge or Firebase data change.');return;}
-  console.log('RESULT: VERIFIED - test R49 payment, scheduled R99 monthly renewal and test subscription cancellation.');
+  console.log('RESULT: VERIFIED - test R10 payment, scheduled R99 monthly renewal and test subscription cancellation.');
   console.log('RESULT: TEST ONLY - no live charge, no Firebase data change; a real renewal webhook has not been tested.');
  }finally{rl.close();}
 }
