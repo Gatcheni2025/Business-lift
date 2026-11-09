@@ -23,10 +23,11 @@ class SellerPlanPage extends StatefulWidget {
  @override State<SellerPlanPage> createState()=>_SellerPlanState();
 }
 class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver {
- bool loading=true,paid=false,complimentary=false,approved=false,setupComplete=false;
+ bool loading=true,paid=false,complimentary=false,mandateActive=false,approved=false,setupComplete=false;
  String? error,mandateStatus,mandateError;
  bool get mandateAwaitingReview=>['pending_provider_authentication','signed_pending_activation','reviewed_pending_provider','submitted_to_netcash'].contains(mandateStatus);
- int? paidUntil,complimentaryUntil;
+ int? paidUntil,complimentaryUntil,mandateUntil;
+  String? mandateKind;
  TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
  bool get directMandates=>widget.directMandateOverride??teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);refresh();}
@@ -43,6 +44,9 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      if(mounted)setState((){
        loading=false;error=null;paid=s['listingPaid']==true;
        complimentary=s['complimentaryAccess']==true;
+        mandateActive=s['mandateAccessActive']==true;
+        mandateKind=s['mandateAccessKind']?.toString();
+        mandateUntil=(s['mandateAccessUntil'] as num?)?.toInt();
        approved=s['approvalStatus']=='approved';
        setupComplete=s['setupComplete']==true;
        paidUntil=(s['paidUntil'] as num?)?.toInt();
@@ -71,7 +75,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
        Text(title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
        const SizedBox(height:3),Text(detail,style:const TextStyle(color:Color(0xFF657B6E),height:1.35,fontSize:12))]))]));
  @override Widget build(BuildContext context)=>Scaffold(
-   appBar:AppBar(title:const Text('Sell on Teyza')),
+   appBar:AppBar(title:Text(widget.businessType=='wholesale'?'Wholesale advertising':'Sell on Teyza')),
    backgroundColor:const Color(0xFFF6F8F6),
    body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
      if(loading)const LinearProgressIndicator(),
@@ -81,7 +85,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:const Color(0xFF073F40),borderRadius:BorderRadius.circular(25)),
        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('TEYZA BUSINESS',style:TextStyle(color:Color(0xFFC1E98D),fontWeight:FontWeight.w800,fontSize:11,letterSpacing:1.4)),
-        const SizedBox(height:12),const Text('Sell on Teyza',style:TextStyle(color:Colors.white,fontSize:27,height:1.12,fontWeight:FontWeight.w800)),
+        const SizedBox(height:12),Text(widget.businessType=='wholesale'?'Advertise to spaza shops':'Sell on Teyza',style:const TextStyle(color:Colors.white,fontSize:27,height:1.12,fontWeight:FontWeight.w800)),
         if(directMandates)const SizedBox(height:14),if(directMandates)const Text('R99 / month',style:TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w900)),
         if(directMandates)const SizedBox(height:5),if(directMandates)const Text('Free registration. Review the monthly debit-order request when eligible.',style:TextStyle(color:Color(0xFFD5E6DA),height:1.4)),
         if(!directMandates)const Padding(padding:EdgeInsets.only(top:14),
@@ -94,7 +98,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
         const Text('Benefits for your shop',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800)),
         const SizedBox(height:6),
         benefit(Icons.storefront_outlined,'A shop people can discover','Approved businesses can appear to shoppers nearby.'),
-        benefit(Icons.inventory_2_outlined,'Add products and receive orders','List your available items when verified product access is active.'),
+        benefit(Icons.inventory_2_outlined,widget.businessType=='wholesale'?'Advertise supplier offers':'Add products and receive orders',widget.businessType=='wholesale'?'Select participating spaza shops to receive moderated in-app offers. No public wholesaler catalogue.':'List products that become public with verified access.'),
         if(directMandates)benefit(Icons.location_on_outlined,'Local visibility','Priority placement may be offered in eligible areas.'),
         benefit(Icons.handshake_outlined,'Wholesale savings','Explore discounts from participating wholesalers.'),
         benefit(Icons.local_shipping_outlined,'Delivery options','Arrange collection or delivery for physical goods.'),
@@ -112,12 +116,16 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
           title:const Text('Existing paid membership active'),
           subtitle:Text(paidUntil==null?'Membership is active':
             'Paid through ${DateTime.fromMillisecondsSinceEpoch(paidUntil!).toLocal().toIso8601String().split('T').first}')),
-        if(complimentary&&!paid)const ListTile(contentPadding:EdgeInsets.zero,
+        if(complimentary&&!paid&&!mandateActive)const ListTile(contentPadding:EdgeInsets.zero,
           leading:Icon(Icons.verified_outlined),title:Text('Temporary admin-granted access is active')),
-        if(mandateAwaitingReview&&!paid)ListTile(contentPadding:EdgeInsets.zero,
+        if(mandateActive)ListTile(contentPadding:EdgeInsets.zero,
+           leading:const Icon(Icons.verified_outlined,color:Colors.green),
+           title:Text(mandateKind=='processing_7d'?'7-day mandate processing access active':'30-day provider-accepted access active'),
+           subtitle:Text('Valid until ${mandateUntil==null?'status refresh':DateTime.fromMillisecondsSinceEpoch(mandateUntil!).toLocal().toIso8601String().split('T').first}. This is not a paid debit.')),
+         if(mandateAwaitingReview&&!paid&&!mandateActive)ListTile(contentPadding:EdgeInsets.zero,
           leading:const Icon(Icons.hourglass_top_rounded,color:Color(0xFF8A640F)),
           title:Text(mandateStatus=='pending_provider_authentication'?'Waiting for review (by admin)':'Provider review in progress'),
-          subtitle:const Text('Your R99 request has been saved. Product access remains locked until approval and confirmed collection.')),
+          subtitle:const Text('Your R99 request is saved. Approved sellers receive seven days of processing access; check your current eligibility above.')),
         if(mandateStatus!=null&&!mandateAwaitingReview&&!paid)ListTile(contentPadding:EdgeInsets.zero,
           leading:const Icon(Icons.description_outlined),
           title:const Text('Mandate status'),
@@ -138,7 +146,7 @@ class _SellerPlanState extends State<SellerPlanPage> with WidgetsBindingObserver
      OutlinedButton.icon(onPressed:refresh,icon:const Icon(Icons.refresh),
        label:const Text('Refresh membership status')),
      if(directMandates)const Padding(padding:EdgeInsets.only(top:16),
-       child:Text('A mandate request is not a payment or bank authorisation. Provider verification and a confirmed collection are required before paid access starts. Existing subscriptions may need separate cancellation.',
+       child:Text('Mandate submission is not a bank debit. The seven-day processing window begins once for an approved seller. Provider acceptance can allow a further 30 days without marking the account paid; subsequent renewals need reconciled collections.',
          style:TextStyle(color:Color(0xFF5A6C60),fontSize:12)))
    ])),
  );
