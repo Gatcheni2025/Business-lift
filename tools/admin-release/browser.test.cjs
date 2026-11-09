@@ -378,6 +378,9 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByText('Exact seller UID: seller1').waitFor();
+    await f.page.getByText('Seller registration record: approved').waitFor();
+    await f.page.getByText('Owner selfie review: not_submitted').waitFor();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
     await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
     await f.page.getByText('Enter a review reason of at least 15 characters before publishing.').waitFor();
