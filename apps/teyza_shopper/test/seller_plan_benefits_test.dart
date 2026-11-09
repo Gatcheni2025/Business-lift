@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:teyza_shopper/seller_billing.dart';
 import 'package:teyza_shopper/seller_plan.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/teyza_mobile_api.dart';
@@ -36,12 +35,13 @@ void main(){
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:owner,api:api)));
    await tester.pumpAndSettle();
    expect(find.text('Benefits for your shop'),findsOneWidget);
-   expect(find.byType(SellerBillingCard),findsOneWidget);
-   expect(find.text('Subscription & billing'),findsOneWidget);
+   expect(find.text('Subscription & billing'),findsNothing);
+   expect(find.textContaining('Paystack'),findsNothing);
+   expect(find.textContaining('Amount due'),findsNothing);
    expect(find.text('Upgrade now'),findsNothing);
    expect(find.text('Membership & mandate'),findsNothing);
    expect(find.byKey(const ValueKey('mandate-bank')),findsNothing);
-   expect(api.calls,contains('seller_billing_overview'));
+   expect(api.calls,isNot(contains('seller_billing_overview')));
    expect(api.calls,isNot(contains('seller_mandate_status')));
    expect(api.calls,isNot(contains('seller_mandate_submit')));
    expect(api.calls,isNot(contains('billing_checkout')));
@@ -54,23 +54,20 @@ void main(){
    await tester.pumpAndSettle();
    expect(find.text('Wholesale business membership'),findsOneWidget);
    expect(find.text('Advertise to spaza shops'),findsOneWidget);
-   expect(find.text('Subscription & billing'),findsOneWidget);
+   expect(find.text('Subscription & billing'),findsNothing);
    expect(find.byKey(const ValueKey('mandate-bank')),findsNothing);
    expect(api.calls,isNot(contains('seller_mandate_submit')));
    await tester.pumpWidget(const SizedBox.shrink());owner.dispose();
  });
- testWidgets('A Paystack billing outage shows a retry, not a mandate or fake paid status',(tester)async{
-   final owner=session(),api=_PlanApi(owner)..failBilling=true;
+ testWidgets('Store app has no website payment CTA or payable amount',(tester)async{
+   final owner=session(),api=_PlanApi(owner);
    await tester.pumpWidget(MaterialApp(home:SellerPlanPage(session:owner,api:api)));
    await tester.pumpAndSettle();
-   expect(find.textContaining('Could not load billing'),findsOneWidget);
-   expect(find.text('Paid · active'),findsNothing);
+   expect(find.textContaining('Paystack'),findsNothing);
+   expect(find.textContaining('Amount due'),findsNothing);
    expect(find.text('Upgrade now'),findsNothing);
-   api.failBilling=false;
-   await tester.tap(find.byTooltip('Refresh subscription status'));await tester.pumpAndSettle();
-   expect(find.text('No verified subscription'),findsOneWidget);
-   expect(api.calls.where((x)=>x=='seller_billing_overview').length,2);
-   expect(api.calls.where((x)=>x=='seller_mandate_submit'||x=='billing_checkout'),isEmpty);
+   expect(find.byKey(const ValueKey('seller-open-statement')),findsNothing);
+   expect(api.calls.where((x)=>x=='seller_mandate_submit'||x=='billing_checkout'||x=='seller_billing_overview'),isEmpty);
    await tester.pumpWidget(const SizedBox.shrink());owner.dispose();
  });
 }
