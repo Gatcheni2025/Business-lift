@@ -1,8 +1,9 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {pathToFileURL}=require('node:url');
 const web=path.resolve(__dirname,'../../web/app-first/public');
 let helpers;
-async function service(){return helpers??=await import(path.join(web,'js/seller-web-billing.mjs'));}
+async function service(){return helpers??=await import(pathToFileURL(path.join(web,'js/seller-web-billing.mjs')).href);}
 test('Website merchant readiness fails closed for old production and incomplete payment configuration',async()=>{
  const {backendReady}=await service();
  const ready={ok:true,version:'3.25.0',approvalRequired:true,
@@ -76,7 +77,7 @@ test('App source never offers Paystack billing, due amounts or direct /pay check
  }
 });
 test('Archived mandate module still validates historical bank consent but is not linked from checkout',async()=>{
- const {bankBranch,canSignMandate,mandateAmountCents}=await import(path.join(web,'js/seller-debit-order.mjs'));
+ const {bankBranch,canSignMandate,mandateAmountCents}=await import(pathToFileURL(path.join(web,'js/seller-debit-order.mjs')).href);
  assert.equal(mandateAmountCents,9900);
  assert.equal(bankBranch([{name:'FNB',branchCode:'250655'}],'FNB'),'250655');
  const good={config:{termsVersion:'teyza-membership-v1'},identity:{evidenceId:'current',kind:'id'},
