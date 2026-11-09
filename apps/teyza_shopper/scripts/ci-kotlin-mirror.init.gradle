@@ -27,3 +27,19 @@ gradle.beforeSettings { settings ->
         mavenCentral()
     }
 }
+
+// Kotlin's camera_android_camerax compiler classpath is a subproject
+// configuration (kotlinBuildToolsApiClasspath), not a settings or plugin
+// management configuration. The settings mirrors above do not intercept it.
+// Add the *same group-scoped mirror* to every project before its build script
+// configures Kotlin's compiler dependencies. Keep Maven Central/Google as
+// fallback repositories and keep the mirror out of shipped app artifacts.
+gradle.beforeProject { project ->
+    project.repositories {
+        maven {
+            name = 'teyzaCIKotlinCompilerProjectMirror'
+            url = uri('https://maven.aliyun.com/repository/central')
+            content { includeGroup('org.jetbrains.kotlin') }
+        }
+    }
+}
