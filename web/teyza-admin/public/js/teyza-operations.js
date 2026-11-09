@@ -165,59 +165,6 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
        new Date(detail.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
    box.append(el('p','This Netcash record is retained for audit only. Future selling access requires independently verified Paystack payment.','notice warning'));
    root.append(box);
-   return;
-   if(m.status==='pending_provider_authentication')box.append(el('p',
-     'Mandate received. Prepare provider submission. No second Start Selling approval is needed.','notice'));
-   if(['pending_provider_authentication','needs_correction','reviewed_pending_provider'].includes(m.status)){
-     const form=el('form',undefined,'ops-form');
-     choice(form,'Mandate review decision','decision',[
-       ['reviewed_pending_provider','Reviewed — prepare provider submission'],
-       ['needs_correction','Needs correction — pause processing access']
-     ],'reviewed_pending_provider');
-     field(form,'Review note','reason','textarea');
-     check(form,'A review does not authenticate a debit mandate or record payment.','confirmed');
-     submit(form,'Save mandate review',async fd=>{
-       await request('ops_mandate_review',{sellerUid:m.sellerUid,mandateId:m.mandateId,
-         decision:fd.get('decision'),reason:String(fd.get('reason')||''),confirmed:true});
-       await refreshMandates();await refresh();
-       message('Mandate decision saved. Processing access uses the original seven-day window.','success');
-     });
-     box.append(form);
-   }
-   if(m.status==='reviewed_pending_provider'){
-     const form=el('form',undefined,'ops-form');
-     field(form,'Netcash portal submission reference','providerReference','text');
-     field(form,'Submission method, date and note','note','textarea');
-     check(form,'I submitted a provider-acceptable mandate. A portal submission is not proof of acceptance or collection.','confirmed');
-     submit(form,'Record provider submission',async fd=>{
-       await request('ops_mandate_record_netcash_submission',{sellerUid:m.sellerUid,
-         mandateId:m.mandateId,providerReference:String(fd.get('providerReference')||'').trim(),
-         note:String(fd.get('note')||'').trim(),confirmed:true});
-       await refreshMandates();await refresh();
-       message('Mandate submission recorded. Await provider acceptance.','success');
-     });
-     box.append(form);
-   }
-   if(['reviewed_pending_provider','submitted_to_netcash'].includes(m.status)){
-     const form=el('form',undefined,'ops-form');
-     form.append(el('h4','Provider acceptance · next 30 days'),
-       el('p','Only use actual provider or bank acceptance evidence, not the submission receipt. This activates 30 days of non-paid access; debit collection requires separate reconciliation.','footnote'));
-     field(form,'Provider acceptance reference','providerReference','text');
-     field(form,'How and where provider acceptance was checked','note','textarea');
-     check(form,'I verified actual provider acceptance. No collected debit or paid membership is being recorded.','confirmed');
-     submit(form,'Confirm provider acceptance and 30-day access',async fd=>{
-       if(!confirm('Was this mandate independently accepted by the provider? This does not record payment.'))return;
-       await request('ops_mandate_provider_confirm',{sellerUid:m.sellerUid,
-         mandateId:m.mandateId,providerReference:String(fd.get('providerReference')||'').trim(),
-         note:String(fd.get('note')||'').trim(),confirmed:true});
-       await refreshMandates();await refresh();
-       message('Provider acceptance recorded. 30-day non-paid access active.','success');
-     });
-     box.append(form);
-   }
-   if(m.status==='provider_confirmed')box.append(el('p',
-     'Provider acceptance verified and time-limited selling access active. No debit assumed.','notice success'));
-   root.append(box);
  }
  function closureReview(){const box=card('Account closures and payment review','Cancellation is complete only when Paystack confirms it. Investigate needs-attention items and any checkout or refund still open.');
   const relevant=closures.filter(x=>x.seller&&x.needsBillingReview);
