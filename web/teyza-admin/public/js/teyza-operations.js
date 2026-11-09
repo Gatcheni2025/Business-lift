@@ -239,8 +239,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       const publishForm=parent=>{
         const form=el('form',undefined,'ops-form');
         field(form,'Reason for publishing saved seller products','reason','textarea');
-        check(form,'I verified this seller UID, account approval, active entitlement and saved stock. This does not record a payment.','confirmed');
-        submit(form,'Reconcile and publish saved products',async fd=>{
+        check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
+        submit(form,'Publish saved shop products',async fd=>{
           const reason=String(fd.get('reason')||'').trim(),sellerUid=d.seller.sellerUid;
           if(reason.length<15)throw Error('Provide a meaningful publication reason of at least 15 characters.');
           if(!confirm('Synchronise this UID’s saved products with the public catalogue? This does NOT approve a seller or record payment.'))return;
