@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list']);
+const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
@@ -286,6 +286,63 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
     tx.update(ref,{status,reviewNote:note,approvedAmountCents:approved,reviewedBy:uid,reviewedAt:clock(),disbursementStatus:'not_disbursed'});
     audit(tx,auth,action,target,{applicationId:snap.id,status,approvedAmountCents:approved,note});return {status,disbursementStatus:'not_disbursed'};
    });
+  }
+  // Direct, account-bound seller/admin support inbox. Never store card details,
+  // accept payment proofs here, or use messages to grant an entitlement.
+  // Support replies in store apps must not steer people to external checkout.
+  if(action==='seller_support_open'){
+   const ticketId='seller_'+uid,ref=doc('teyzaSupportTickets/'+ticketId);
+   const account=await owner(uid);
+   await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists)tx.set(ref,{ownerUid:uid,subject:'Seller and business support',
+     message:'',status:'open',priority:'normal',revision:0,
+     createdBy:uid,createdAt:clock(),updatedAt:clock(),
+     source:'seller_admin_chat',shopName:account.shopName||'Business',
+     lastMessage:'',lastMessageAt:clock(),sellerUnread:0,adminUnread:0});
+    else if(snap.data().ownerUid!==uid)D.fail(403,'Support conversation belongs to another seller.');
+   });
+   return {ticketId};
+  }
+  if(['seller_support_thread','ops_support_thread'].includes(action)){
+   const ticketId=self?'seller_'+uid:D.id(data.ticketId);
+   const ticket=await read('teyzaSupportTickets/'+ticketId);
+   if(!ticket||ticket.source!=='seller_admin_chat'||(self&&ticket.ownerUid!==uid))
+     D.fail(404,'Support conversation not found.');
+   const rows=await db.collection('teyzaSupportTickets/'+ticketId+'/messages')
+     .orderBy('createdAt','desc').limit(60).get();
+   // Reading never changes seller approval, subscription or billing.
+   return {ticket:{id:ticketId,ownerUid:ticket.ownerUid,shopName:ticket.shopName||'',
+     subject:ticket.subject,status:ticket.status,updatedAt:ticket.updatedAt},
+     messages:rows.docs.map(row).reverse()};
+  }
+  if(['seller_support_message','ops_support_reply'].includes(action)){
+   const ticketId=self?'seller_'+uid:D.id(data.ticketId);
+   const raw=D.text(data.message,'support message',1000).trim();
+   if(raw.length<2)D.fail(422,'Write a support message before sending.');
+   // An in-app admin conversation cannot become a disguised web-payment CTA.
+   if(!self&&/(https?:\\/\\/|www\\.|paystack\\.com|teyza\\.co\\.za\\/pay)/i.test(raw))
+     D.fail(422,'Do not send external links through in-app seller support.');
+   const messageId=D.id(data.messageId);
+   await rate(uid,'seller-support-message',12,60000);
+   await db.runTransaction(async tx=>{
+    const ref=doc('teyzaSupportTickets/'+ticketId),snap=await tx.get(ref);
+    if(!snap.exists||snap.data().source!=='seller_admin_chat'||
+       (self&&snap.data().ownerUid!==uid))D.fail(404,'Support conversation not found.');
+    const entry=ref.collection('messages').doc(messageId),existing=await tx.get(entry);
+    if(existing.exists){
+     if(existing.data().senderUid!==uid||existing.data().text!==raw)
+       D.fail(409,'This message reference is already in use.');
+     return;
+    }
+    const at=clock();
+    tx.set(entry,{senderUid:uid,sender:self?'seller':'admin',
+      text:raw,createdAt:at});
+    tx.update(ref,{lastMessage:raw.slice(0,180),lastMessageAt:at,updatedAt:at,
+      status:self?'open':'waiting_for_seller',revision:(snap.data().revision||0)+1,
+      [self?'adminUnread':'sellerUnread']:(snap.data()[self?'adminUnread':'sellerUnread']||0)+1});
+   });
+   return {sent:true,messageId};
   }
   if(action==='ops_support_list'||action==='seller_support_list'){
    let q=db.collection('teyzaSupportTickets');if(self)q=q.where('ownerUid','==',uid);else q=q.orderBy('__name__');
