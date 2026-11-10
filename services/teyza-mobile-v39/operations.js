@@ -128,7 +128,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   if(action==='ops_sellers'){
    let q=db.collection('teyzaSellerAccounts').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
    const result=await q.get(),rows=result.docs.slice(0,30);const billing=await Promise.all(rows.map(s=>read('teyzaBilling/'+s.id)));
-   return {sellers:rows.map((s,i)=>{const a=s.data();return {sellerUid:s.id,shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',phone:a.phone||'',address:a.address||'',category:a.category||'',approvalStatus:a.approvalStatus||'pending',subscription:billing[i]?.status||'not_started'};}),next:result.docs.length>30?rows.at(-1).id:null};
+   return {sellers:rows.map((s,i)=>{const a=s.data();return {sellerUid:s.id,shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',phone:a.phone||'',address:a.address||'',category:a.category||'',approvalStatus:a.approvalStatus||'pending',subscription:P.entitled(s.id,a,billing[i],clock())?'premium':P.complimentary(s.id,a,billing[i],clock())?'temporary_access':'free'};}),next:result.docs.length>30?rows.at(-1).id:null};
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
