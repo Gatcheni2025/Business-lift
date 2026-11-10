@@ -25,7 +25,13 @@ test('Only a verified, approved, fully onboarded and email-verified shop can sta
  assert.equal(eligibility(seller,false,true,true).eligible,false);
  assert.equal(eligibility(seller,true,false,true).eligible,false);
  assert.equal(eligibility({...seller,listingPaid:true},true,true,true).active,true);
- assert.equal(eligibility({...seller,complimentaryAccess:true},true,true,true).active,true);
+ const complimentary={...seller,complimentaryAccess:true};
+ assert.equal(eligibility(complimentary,true,true,true).eligible,true,'A grant must not block voluntary Paystack upgrade');
+ assert.match(eligibility(complimentary,true,true,true).message,/temporary complimentary access/i);
+ assert.match(eligibility(complimentary,true,true,true).message,/not a payment/i);
+ assert.equal(eligibility(complimentary,true,false,true).eligible,false,'Provider health still gates a complimentary seller');
+ assert.equal(eligibility({...complimentary,pilotCheckoutEligible:false},true,true,true).eligible,false,'Exact Firebase UID pilot still gates a complimentary seller');
+ assert.equal(eligibility({...complimentary,listingPaid:true},true,true,true).eligible,false,'Never sell duplicate paid membership');
  assert.equal(eligibility(seller,true,true).eligible,false,'Contact email is not seller UID proof');
   assert.equal(eligibility({...seller,pilotCheckoutEligible:false},true,true,true).eligible,false,'Pilot restrictions apply to authenticated UID');
  assert.equal(eligibility(seller,true,true,true).eligible,true);
