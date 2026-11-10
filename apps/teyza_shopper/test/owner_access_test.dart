@@ -88,6 +88,10 @@ void main(){
       reason:'Product publishing is hidden until the account has selling entitlement.');
     blocked=false;
     await tester.ensureVisible(find.text('Retry products'));
+    await tester.pumpAndSettle();
+    // Keep the button away from the bottom boundary of the test viewport.
+    await tester.drag(find.byType(Scrollable).first,const Offset(0,-90));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();
     expect(find.text('Retry products'),findsNothing);
     // A successful retry clears the permission error; the products button can
