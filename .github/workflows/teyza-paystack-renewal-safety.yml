@@ -1,0 +1,29 @@
+name: Teyza Paystack renewal date safety checks
+on:
+  pull_request:
+    paths:
+      - 'services/teyza-mobile-v39/billing-paystack.js'
+      - 'services/teyza-mobile-v39/billing-paystack.test.js'
+      - 'services/teyza-mobile-v39/package.json'
+      - '.github/workflows/teyza-paystack-renewal-safety.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paystack-renewal-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and Paystack renewal regression checks
+        run: |
+          node --check services/teyza-mobile-v39/billing-paystack.js
+          node --test services/teyza-mobile-v39/billing-paystack.test.js
+      - name: Full Teyza backend regression suite
+        working-directory: services/teyza-mobile-v39
+        run: npm test
