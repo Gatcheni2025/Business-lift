@@ -3,7 +3,7 @@ import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Seller Paystack billing & historical mandates',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  const navButtons=[...document.querySelectorAll('[data-admin-view]')];
@@ -14,7 +14,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(dialog.open)dialog.close();dialog.replaceChildren();dialog.remove();
  }}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,sellerSnapshotLoaded=false,
+ let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,accountTab='summary',sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null;
@@ -47,7 +47,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   stat('Seller verification',review.loaded?review.count:'—',review.loaded?(review.hasMore?'Loaded queue · more available':'Loaded review queue'):'Queue unavailable — open to retry','approvals','tone-mint');
   stat('Seller records',sellerSnapshotLoaded?sellers.length:'—',sellerSnapshotLoaded?(next?'Loaded page · more available':'Loaded seller records'):'Registry unavailable — open to retry','sellers','tone-cream');
   stat('Approved sellers',sellerSnapshotLoaded?sellers.filter(s=>s.approvalStatus==='approved').length:'—','Among loaded seller records','sellers','tone-blue');
-  stat('Debit-order requests',mandatesLoaded?mandates.length:'—',mandatesLoaded?(mandatesLimited?'First 50 received requests':'Loaded requests · not a payment count'):'Mandate inbox unavailable — open to retry','billing','tone-sand');
+  stat('Historic mandate records',mandatesLoaded?mandates.length:'—',mandatesLoaded?(mandatesLimited?'First 50 archived records':'Archived for audit only'):'Mandate archive unavailable','billing','tone-sand');
   root.append(stats);
 
   const grid=el('div',undefined,'overview-grid');
@@ -57,8 +57,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   deskHead.append(deskTitle,el('span','QUICK ACTIONS','overview-kicker'));desk.append(deskHead);
   const actions=el('div',undefined,'overview-actions');
   for(const [target,label,desc,number] of [
-   ['approvals','Verify seller registrations','Review identity documents and selfies.',review.loaded?String(review.count)+' loaded':'Open queue'],
-   ['billing','Review debit-order mandates','Inspect R99 consent and prepare provider review.',mandatesLoaded?String(mandates.length)+' loaded':'Open inbox'],
+   ['sellers','Business accounts & approvals','One profile: verify the business and view what is missing.',review.loaded?String(review.count)+' loaded':'Open queue'],
+   ['billing','Finance and membership','Check Paystack membership, settlement and archived mandates.',mandatesLoaded?String(mandates.length)+' loaded':'Open inbox'],
    ['support','Manage support requests','Follow up on the cases your team has recorded.','Open cases'],
    ['field','Manage the field team','Review applications, areas and visits.','Open HR']]){
     const b=el('button',undefined,'overview-action');b.type='button';
@@ -101,9 +101,18 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   guidance.append(button('Open seller verification',()=>navigate('approvals')));grid.append(guidance);
   root.append(grid);
  }
- async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
+ async function choose(s){if(view==='products')view='sellers';selected=s;accountTab=view==='billing'?'finance':'summary';detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+ function registry(){
+   if(view==='billing'&&!detail)mandateQueue();
+   if(!detail)root.append(button('Review pending business verifications',()=>navigate('approvals')));
+   const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
+     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
+      root.append(c);
+      if(view==='billing')closureReview();
+      root.append(el('p','Select a business account to inspect its verification, shop visibility, membership, support and financial history.','footnote'));
+      return;
+   }
 
  function mandateQueue(){
    const box=card('Historic Netcash mandate archive — read-only',
@@ -623,7 +632,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(!ready)return;
   fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();
   document.dispatchEvent(new Event('teyza-admin-view-change'));
-  if(v!==view){selected=null;detail=null;userSelected=null;userDetail=null;}
+  if(v!==view){selected=null;detail=null;accountTab='summary';userSelected=null;userDetail=null;}
   generation++;view=v;
   if(v==='approvals'){show();return;}
   // Do not render clickable forms while the previous view is loading.
