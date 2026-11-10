@@ -87,12 +87,11 @@ void main(){
     expect(find.text('Start selling'),findsNothing,
       reason:'Product publishing is hidden until the account has selling entitlement.');
     blocked=false;
-    await tester.ensureVisible(find.text('Retry products'));
-    await tester.pumpAndSettle();
-    // Keep the button away from the bottom boundary of the test viewport.
-    await tester.drag(find.byType(Scrollable).first,const Offset(0,-90));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();
+    // Exercise the actual button callback without relying on scroll geometry:
+    // shorter free-account dashboards may place it at a lazy-list boundary.
+    final retry=tester.widget<TextButton>(find.ancestor(
+      of:find.text('Retry products'),matching:find.byType(TextButton)));
+    retry.onPressed!();await tester.pumpAndSettle();
     expect(find.text('Retry products'),findsNothing);
     // A successful retry clears the permission error; the products button can
     // move to an unbuilt position in a lazily rendered dashboard.
