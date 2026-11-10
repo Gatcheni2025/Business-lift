@@ -50,10 +50,19 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Map<String,String> productPhotos={};
   String? rangeStatus;
   int unread=0;String verification='not_submitted';Timer? activityWatch;bool activityLoading=false,openedInitial=false,openedClaim=false;
-  String? publicationStatus;bool sellingEnabled=false,identityVerified=false;
+  String? publicationStatus;bool sellingEnabled=false,identityVerified=false,shopLive=false;
   String approvalStatus='pending',listingPlan='free';bool listingPaid=false,complimentaryAccess=false,mandateAccess=false,promotionActive=false;int? paidUntil,mandateUntil,promotionEndsAt;bool hasLocation=false;
   bool get sellerApproved=>approvalStatus=='approved';
   bool get hasProductAccess=>sellerApproved&&(listingPaid||complimentaryAccess||mandateAccess);
+  // A public shop listing is free. Selling/advertising needs a separate
+  // verified entitlement. Temporary admin access is not a paid subscription.
+  bool get premiumAccount=>sellerApproved&&listingPaid;
+  bool get needsMembership=>sellerApproved&&shopLive&&!hasProductAccess;
+  String get businessAccessLabel=>premiumAccount?'Premium account':
+      !sellerApproved?'Shop approval pending':
+      !shopLive?'Shop listing pending':
+      complimentaryAccess||mandateAccess?'Temporary selling access':
+      'Unable to sell · membership inactive';
   bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
@@ -93,7 +102,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       final newlyVerifiedMembership=!listingPaid&&results[0]['listingPaid']==true&&
           results[0]['approvalStatus']=='approved';
       setState((){unread=(results[1]['unread'] as num? ??0).toInt();
-        publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;
+        publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;shopLive=results[0]['shopLive']==true;
         approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
         shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
@@ -163,7 +172,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
       photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
-      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
+      loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;shopLive=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
       if(loadedUid!=null && mounted)setState((){
@@ -577,7 +586,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       onOpenUpdates:openNotifications,unreadUpdates:unread),
     4=>sellerBusiness(),
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
-      live:publicationStatus=='active'&&approvalStatus=='approved',verified:identityVerified,publicationStatus:publicationStatus,
+      live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
       shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
@@ -677,13 +686,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             icon:const Icon(Icons.delete_outline,color:Colors.red),label:const Text('Delete My Account')),
         ]))
         else if(shop?.hasRegisteredCategory==true) ...[
-          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,productCount:draftError==null?drafts.length:null),
+          SellerShopHero(shop:shop!,identityVerified:identityVerified,publicationStatus:publicationStatus,sellingEnabled:sellingEnabled,shopLive:shopLive,premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,productCount:draftError==null?drafts.length:null),
           if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
             subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
           const SizedBox(height:16),
-          if(!sellingEnabled)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete registration & start selling')),
+          if(!sellerApproved)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete seller verification')),
+          if(needsMembership)const Padding(padding:EdgeInsets.symmetric(vertical:6),child:Text('Shop is live · Unable to sell until membership is active.',style:TextStyle(fontWeight:FontWeight.w700,color:Color(0xFF8A5A00)))),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
             if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
@@ -698,7 +708,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
               MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
               .then((_){if(mounted)refreshActivity();}),
             icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(listingPaid?'Business access active':mandateAccess?'Temporary access active':complimentaryAccess?'Temporary business access active':'Business eligibility status')),
+            label:Text(premiumAccount?'Premium account':needsMembership?'Upgrade to sell on Teyza':businessAccessLabel)),
 
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
