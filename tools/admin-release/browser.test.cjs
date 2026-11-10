@@ -119,7 +119,8 @@ async function main(){
     assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
     assert(await f.page.getByRole('button',{name:'Business accounts',exact:true}).isVisible());
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
-    assert(order.indexOf('Historic Netcash mandate archive — read-only')<order.indexOf('Choose a business for finance'));
+    assert(order.indexOf('Choose a business for finance')<order.indexOf('Historic Netcash mandate archive — read-only'));
+    assert.equal(await f.page.locator('.ops-legacy-archive').evaluate(el=>el.open),false,'Historical mandate archive is collapsed by default');
     await f.page.getByRole('button',{name:'Overview',exact:true}).click();
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
     await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
@@ -360,6 +361,7 @@ async function main(){
     await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
     available=true;
+    await f.page.locator('.ops-legacy-archive > summary').click();
     await f.page.getByRole('button',{name:'Refresh mandates'}).click();
     await f.page.getByText('•••• 8901').waitFor();
     assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
@@ -377,6 +379,7 @@ async function main(){
       return false;
     }});
     await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
+    await f.page.locator('.ops-legacy-archive > summary').click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
     await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
     for(const name of ['Save mandate review','Record provider submission',
@@ -476,6 +479,7 @@ async function main(){
       return false;
     }});
     await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
+    await f.page.locator('.ops-legacy-archive > summary').click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
     await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
     assert.equal(await f.page.getByRole('button',{name:'Record provider submission'}).count(),0);
