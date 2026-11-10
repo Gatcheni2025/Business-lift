@@ -582,7 +582,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(draftError!),
         TextButton(onPressed:load,child:const Text('Retry products'))])),
       productList(),const SizedBox(height:12),
-      const Padding(padding:EdgeInsets.all(12),child:Text('Products and photos publish automatically once your registration and product access are active.',
+      const Padding(padding:EdgeInsets.all(12),child:Text('Your approved, eligible shop can publish its saved products by selecting Publish saved products or Sync product listing. A temporary grant is not a payment.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
     2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
@@ -611,6 +611,29 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             Text(draftError!=null?'Products are temporarily unavailable.':
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
+            if(hasProductAccess&&draftError==null&&drafts.isNotEmpty)...[
+              Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  const Text('Make your saved products visible',style:TextStyle(fontWeight:FontWeight.w700)),
+                  const SizedBox(height:7),
+                  Text(complimentaryAccess||mandateAccess?
+                    'Your temporary selling access is separate from Paystack payment. You may publish your existing priced stock while this access is active.':
+                    'Your active selling access allows your saved products to appear to nearby shoppers.'),
+                  const SizedBox(height:10),
+                  FilledButton.icon(
+                    key:const ValueKey('seller-publish-saved-products'),
+                    onPressed:busy?null:() async {
+                      await syncRange();
+                      if(mounted)await load();
+                    },
+                    icon:const Icon(Icons.cloud_upload_outlined),
+                    label:const Text('Publish saved products')),
+                  if(rangeStatus!=null)...[
+                    const SizedBox(height:8),Text(rangeStatus!,style:const TextStyle(fontSize:12))
+                  ]
+                ]))),
+              const SizedBox(height:12),
+            ],
             if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
               icon:const Icon(Icons.inventory_2_outlined),label:const Text('Manage my products')),
             if(hasProductAccess)TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
@@ -716,29 +739,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            if(hasProductAccess&&draftError==null&&drafts.isNotEmpty)...[
-              Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(
-                crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  const Text('Make your saved products visible',style:TextStyle(fontWeight:FontWeight.w700)),
-                  const SizedBox(height:7),
-                  Text(complimentaryAccess||mandateAccess?
-                    'Your temporary selling access is separate from Paystack payment. You may publish your existing priced stock while this access is active.':
-                    'Your active selling access allows your saved products to appear to nearby shoppers.'),
-                  const SizedBox(height:10),
-                  FilledButton.icon(
-                    key:const ValueKey('seller-publish-saved-products'),
-                    onPressed:busy?null:() async {
-                      await syncRange();
-                      if(mounted)await load();
-                    },
-                    icon:const Icon(Icons.cloud_upload_outlined),
-                    label:const Text('Publish saved products')),
-                  if(rangeStatus!=null)...[
-                    const SizedBox(height:8),Text(rangeStatus!,style:const TextStyle(fontSize:12))
-                  ]
-                ]))),
-              const SizedBox(height:12),
-            ],
             if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
               icon:const Icon(Icons.inventory_2_outlined),
               label:const Text('Manage my products')),
