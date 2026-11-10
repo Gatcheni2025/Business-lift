@@ -38,7 +38,7 @@
   <p class="nav-hint">WORKSPACE</p>
   <nav id="adminNavigation" class="admin-nav" aria-label="Admin workspaces">
    <button type="button" data-admin-view="overview" data-keywords="dashboard home summary" disabled><svg aria-hidden="true"><use href="#icon-overview"></use></svg><span>Overview</span></button>
-   <button type="button" data-admin-view="approvals" data-keywords="approvals pending id identity selfie registration" disabled><svg aria-hidden="true"><use href="#icon-review"></use></svg><span>Seller verification</span></button>
+   <button type="button" data-admin-view="approvals" data-keywords="approvals pending id identity selfie registration" disabled><svg aria-hidden="true"><use href="#icon-review"></use></svg><span>Seller approvals</span></button>
    <button type="button" data-admin-view="sellers" data-keywords="shops products accounts documents exceptions" disabled><svg aria-hidden="true"><use href="#icon-sellers"></use></svg><span>Sellers &amp; exceptions</span></button>
    <button type="button" data-admin-view="billing" data-keywords="payment paystack bank r99 historic mandate subscription" disabled><svg aria-hidden="true"><use href="#icon-billing"></use></svg><span>Seller payments &amp; legacy mandates</span></button>
    <button type="button" data-admin-view="users" data-keywords="people access shoppers account" disabled><svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Users &amp; access</span></button>
@@ -50,7 +50,7 @@
  </aside>
  <div class="dashboard-main">
 <div id="operationsPanel"></div><div id="approvalView" hidden>
-  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>Verify seller registrations</h2><p>Review the documents and approve the seller, or explain what they need to fix. Products publish automatically when access is active.</p></div></div>
+  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>One business approval, then free shop visibility</h2><p>Review the email, verified phone, ID or passport, selfie, shop-front photo and location in one final decision. An approved business is discoverable for free. An active verified membership separately unlocks selling or wholesaler advertising; individual products do not require admin approval.</p></div></div>
   <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
   <div class="review-layout">
    <section class="panel queue-panel" aria-labelledby="queueTitle"><div class="panel-heading"><div><h3 id="queueTitle">Waiting for your review</h3><p>New and resubmitted owner photos.</p></div><button id="refreshQueue" class="button quiet small">Refresh</button></div>
@@ -63,16 +63,16 @@
      <dl class="seller-facts"><div><dt>Owner email</dt><dd id="sellerEmail"></dd></div><div><dt>Mobile number</dt><dd id="sellerPhone"></dd></div><div><dt>Shop address</dt><dd id="sellerAddress"></dd></div><div><dt>Registration</dt><dd id="sellerCompany"></dd></div></dl>
      <div id="claimReview" class="notice warning" hidden><strong>Google Maps business claim</strong><p>Check the listing and independently confirm that this applicant is authorised to manage the business on Teyza.</p><a id="claimMapLink" target="_blank" rel="noopener noreferrer">Open Google Maps listing ↗</a><label class="confirm-check"><input id="claimConfirmed" type="checkbox">I reviewed the listing and the applicant's authority to represent this business.</label></div>
      <div id="selfReview" class="notice warning" hidden>Another administrator must review your own shop.</div>
-     <div class="section-title"><h3>Owner verification</h3><span>Private evidence</span></div><p class="evidence-note">Open the current document and selfie, then compare the owner's details. Photos are shown only in this review session.</p>
+     <div class="section-title"><h3>Owner verification — part of final approval</h3><span>Private evidence</span></div><p class="evidence-note">Open the current document and selfie, then compare the owner's details. Photos are shown only in this review session.</p>
      <div class="evidence-buttons"><button id="viewIdentity" class="evidence-button"><span class="step">01</span><span><strong id="identityLabel">ID / passport</strong><small id="identityState">Open document</small></span><span aria-hidden="true">↗</span></button><button id="viewSelfie" class="evidence-button"><span class="step">02</span><span><strong>Owner selfie</strong><small id="selfieState">Open photo</small></span><span aria-hidden="true">↗</span></button></div>
      <button type="button" id="enlargePhoto" class="button quiet">Enlarge current image</button><div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
      <dl id="identityDetails" class="identity-details" hidden></dl>
      <section class="compliance-check" aria-labelledby="complianceTitle"><h3 id="complianceTitle">Verification requirements</h3><p class="footnote">See the seller's current compliance status and what must be completed before approval.</p><ul id="complianceList" aria-live="polite"></ul><p id="complianceFollowup" class="footnote"></p></section>
-     <div class="review-decision"><h3>Your review</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
+     <div class="review-decision"><h3>Final seller approval</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
       <label>Recommendation for the seller<textarea id="reason" rows="3" maxlength="400" placeholder="Required when rejecting or requesting a new selfie. Explain what to correct and how to resubmit."></textarea></label>
       <p id="decisionHint" class="notice warning" role="status">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
       <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestCompliance" class="button quiet">Send missing requirements</button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
-      <p class="footnote">Once verified, products publish automatically with an active subscription or an administrator's temporary exception.</p>
+      <p class="footnote">Once approved, the shop can appear nearby for free. A separate verified membership unlocks seller products or wholesaler advertising. Products publish automatically without individual admin approval.</p>
      </div>
     </div>
    </section>
