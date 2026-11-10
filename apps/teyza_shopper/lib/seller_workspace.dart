@@ -601,7 +601,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
-       onSupport:openSellerSupport))),
+       onSupport:openSellerSupport)),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
