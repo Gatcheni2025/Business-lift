@@ -3,20 +3,21 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
-test('Admin release requires seller approval and Netcash admin capabilities (not legacy Paystack checkout)',()=>{
+test('Admin release requires seller approval and Paystack checkout disabled (not retired Netcash)',()=>{
  const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
    agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
-   manualReceiptsRetired:true,sellerMandates:true,sellerMandateRequestV3:true,
-   adminMandatePdfExport:true,adminNetcashManualSubmission:true,
-   sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'netcash_manual_debit_request',
+   manualReceiptsRetired:true,historicSellerMandatesReadOnly:true,sellerMandates:false,sellerMandateRequestV3:false,
+   adminMandatePdfExport:true,adminNetcashManualSubmission:false,paystackCheckoutAvailable:false,
+   sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'checkout_disabled',
    adminUsers:true,adminSellerDocuments:true,physicalGoodsPaystack:true};
  assert.doesNotThrow(()=>assertAdminBackend(ready));
  for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},
    {...ready,adminProductReview:true},{...ready,automaticProductPublication:false},
-   {...ready,adminComplimentaryAccess:false},{...ready,adminNetcashManualSubmission:false},
-   {...ready,adminMandatePdfExport:false},{...ready,sellerMandateRequestV3:false},
-   {...ready,sellerMembershipBillingMode:'paystack_checkout'}]){
+   {...ready,adminComplimentaryAccess:false},{...ready,adminNetcashManualSubmission:true},
+   {...ready,adminMandatePdfExport:false},{...ready,sellerMandateRequestV3:true},
+   {...ready,sellerMembershipBillingMode:'paystack_card_subscription'},
+   {...ready,paystackCheckoutAvailable:true}]){
    assert.throws(()=>assertAdminBackend(stale));
  }
 });
