@@ -230,7 +230,7 @@ async function startup(){
       catch(error){notice(error.message||'Email verification unavailable.','error');}
     });
     el('webCheckout').addEventListener('click',checkout);
-    el('webConfirm').addEventListener('click',confirm);
+    el('webConfirm').addEventListener('click',()=>confirm(false));
     el('webRefresh').addEventListener('click',reload);
     el('webTerms').addEventListener('change',render);
     el('webOwnShop').addEventListener('change',render);
