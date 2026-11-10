@@ -200,7 +200,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
  assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });
 
-function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=1000,mode='test',project='teyza-isolated-test',paidAt=NOW}={}){
+function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=1000,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
  let records;const calls=[];
  const send=async(url,options)=>{
   calls.push({url,options});let data;
@@ -215,6 +215,10 @@ function recurringFixture({failInitialization=false,failSubscription=false,verif
     authorization:{reusable:true,authorization_code:'AUTH_TEST'}};
   }else if(url.endsWith('/subscription/SUB_PREV')){
    data={subscription_code:'SUB_PREV',domain:mode,status:oldStatus,customer:{customer_code:'CUS_TEST'}};
+  }else if(url.endsWith('/subscription/SUB_TEST')){
+   data={subscription_code:'SUB_TEST',domain:mode,status:'active',amount:9900,
+     customer:{customer_code:'CUS_TEST'},plan:{plan_code:'PLN_TEST99'},
+     next_payment_date:skipNextPaymentDate?null:nextPaymentDate};
   }else if(url.endsWith('/refund/345')){
    data={id:345,transaction:12345,domain:mode,amount:refundAmount,currency:'ZAR',status:'processed'};
   }else if(url.endsWith('/subscription')){
@@ -279,6 +283,23 @@ test('A paid transaction can recover renewal setup interrupted before the subscr
  assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,1);
 });
 
+test('Verified payment with wrong provider renewal date requires action, never schedules an incorrect debit',async()=>{
+ const wrong=new Date(nextMonth(NOW)+86400000).toISOString();
+ const f=recurringFixture({nextPaymentDate:wrong}),checkout=await f.api.execute(f.auth,'billing_checkout',consent);
+ const paid=await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(paid.paid,true,'Verified payment remains valid and is not retried');
+ assert.equal(f.records.get('teyzaBilling/shop1').renewalSetup,'action_required');
+ assert.equal(f.records.get('teyzaPaystackRenewal/shop1').status,'needs_attention');
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,1);
+ await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,1,'No duplicate subscription on later confirmation');
+});
+test('Missing Paystack next_payment_date fails closed for first-month renewal',async()=>{
+ const f=recurringFixture({skipNextPaymentDate:true}),checkout=await f.api.execute(f.auth,'billing_checkout',consent);
+ await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(f.records.get('teyzaBilling/shop1').renewalSetup,'action_required');
+ assert.equal(f.records.get('teyzaPaystackRenewal/shop1').status,'needs_attention');
+});
 test('An uncertain recurring subscription request is flagged instead of retried',async()=>{
  const f=recurringFixture({failSubscription:true}),checkout=await f.api.execute(f.auth,'billing_checkout',consent);
  await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
