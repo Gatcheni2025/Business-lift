@@ -101,3 +101,25 @@ body{background:#f4f7f3;color:var(--admin-ink)}
 .seller-compliance-summary{margin:0 0 18px;padding:14px 16px;border-radius:14px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .seller-compliance-summary.blocked{background:#fff4e4;border:1px solid #ebcc9d;color:#6e4412}
 .seller-compliance-summary.ready{background:#e9f5ef;border:1px solid #b6dcc8;color:#195c3e}
+
+/* Business account layout: one selectable profile, with finance kept separate. */
+.ops-account-tabs{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0 18px;border-bottom:1px solid #dbe6de;margin-bottom:20px}
+.ops-account-tabs .button{min-height:44px;padding:10px 16px;border-radius:12px}
+.ops-account-tabs .button[aria-current="page"]{background:#076d60;color:white;border-color:#076d60}
+.ops-account-tabs .button:focus-visible{outline:3px solid #80bfe8;outline-offset:2px}
+.ops-account-tabs+.ops-card{margin-top:4px}
+.ops-support-thread{max-height:420px;overflow:auto;display:grid;gap:10px;padding:12px;border-radius:12px;background:#f3f7f5;margin:12px 0}
+.ops-support-bubble{padding:12px;background:white;border:1px solid #d9e8df;border-radius:12px;overflow-wrap:anywhere}
+.ops-support-bubble strong{display:block;margin-bottom:5px;color:#075949}
+.ops-support-bubble p{margin:0}
+@media(max-width:640px){.ops-account-tabs .button{flex:1 1 42%;font-size:13px}}
+
+/* Hide the legacy full-page verification shortcut; it stays reachable from a business account. */
+.admin-nav button[hidden]{display:none!important}
+
+/* Finance puts active membership information before old debit-order records. */
+.ops-legacy-archive{margin-top:20px}
+.ops-legacy-archive>summary{cursor:pointer;list-style-position:inside;display:list-item;padding:4px 6px}
+.ops-legacy-archive>summary h3{display:inline-block;margin:0 0 0 8px}
+.ops-legacy-archive>summary:focus-visible{outline:3px solid #80bfe8;border-radius:8px}
+.ops-legacy-archive[open]>summary{margin-bottom:16px}

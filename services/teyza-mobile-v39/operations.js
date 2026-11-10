@@ -1,13 +1,13 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list']);
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
+const actions=new Set(['ops_sellers','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
 function amount(value){if(!Number.isSafeInteger(value)||value<=0||value>50000000)D.fail(422,'Enter a valid amount in cents.');return value;}
 function statement(entries){let balance=0;return entries.sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)).map(e=>({...e,balanceCents:balance+=(e.debitCents||0)-(e.creditCents||0)}));}
 function financePath(value){if(!/^teyzaCreditEnquiries\/[A-Za-z0-9_-]{1,128}\/requests\/[A-Za-z0-9_-]{1,128}$/.test(value||''))D.fail(422,'Choose a valid stock finance request.');return value;}
-function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',synchronize=async()=>{}}){
+function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',getAuthUser=async()=>null,getAuthUserByEmail=async()=>null,synchronize=async()=>{}}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  const owner=async uid=>D.seller(await read('teyzaSellerAccounts/'+uid),uid);
  function audit(tx,auth,action,target,details){tx.set(doc('teyzaOperationsAudit/'+crypto.randomUUID()),{actorUid:auth.uid,action,target,details,createdAt:clock()});}
@@ -127,18 +127,63 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   }
   if(action==='ops_sellers'){
    let q=db.collection('teyzaSellerAccounts').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
-   const result=await q.get(),rows=result.docs.slice(0,30);const billing=await Promise.all(rows.map(s=>read('teyzaBilling/'+s.id)));
-   return {sellers:rows.map((s,i)=>{const a=s.data();return {sellerUid:s.id,shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',phone:a.phone||'',address:a.address||'',category:a.category||'',approvalStatus:a.approvalStatus||'pending',subscription:billing[i]?.status||'not_started'};}),next:result.docs.length>30?rows.at(-1).id:null};
+   const result=await q.get(),rows=result.docs.slice(0,30);
+   const directory=await Directory.visibleDirectory(rows.map(s=>({sellerUid:s.id,...s.data()})),getAuthUserByEmail);
+   // Resolve subscription only for canonical, safely owned seller records.
+   // Never merge paid states or approvals from another UID just because an email matches.
+   const billing=await Promise.all(directory.map(s=>s.accountConflict?null:read('teyzaBilling/'+s.sellerUid)));
+   return {sellers:directory.map((a,i)=>({
+     sellerUid:a.sellerUid||'',shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',
+     phone:a.phone||'',address:a.address||'',category:a.category||'',
+     approvalStatus:a.accountConflict?'identity_conflict':a.approvalStatus||'pending',
+     accountConflict:a.accountConflict===true,
+     conflictingSellerUids:a.accountConflict?a.conflictingSellerUids:undefined,
+     subscription:a.accountConflict?'blocked':
+       P.entitled(a.sellerUid,a,billing[i],clock())?'premium':
+       P.complimentary(a.sellerUid,a,billing[i],clock())?'temporary_access':'free'
+   })),next:result.docs.length>30?rows.at(-1).id:null};
+  }
+  if(action==='ops_seller_profile'){
+   const target=D.id(data.sellerUid),account=await owner(target);
+   // Small, read-only summary: do not load statements, payment history, draft
+   // catalogues or sensitive evidence merely to open the business profile.
+   const [billing,setup,verification,shop,location]=await Promise.all([
+     read('teyzaBilling/'+target),read('teyzaSellerOnboarding/'+target),
+     read('teyzaMobileVerification/'+target),read('teyzaPublicShops/'+target),
+     read('teyzaShopLocations/'+target)
+   ]);
+   const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
+   const membershipPaid=P.entitled(target,account,billing,clock());
+   const complimentaryAccess=P.complimentary(target,account,billing,clock());
+   const pin=P.locationFor(target,account,location,shop,clock());
+   return {
+     partial:true,seller:{sellerUid:target,shopName:account.shopName||'Shop',
+       ownerEmail:account.ownerEmail||'',phone:account.phone||'',address:account.address||'',
+       approvalStatus:account.approvalStatus||'pending',listingPlan:account.listingPlan||'free'},
+     businessAccount:{approvalStatus:account.approvalStatus||'pending',
+       type:account.category==='wholesale'?'Wholesaler':account.category==='spaza'?'Spaza shop':'Business owner',
+       isPublic:publication.live&&shop?.sellerUid===target&&shop?.status==='active'&&Boolean(pin),
+       membershipStatus:membershipPaid?'premium':complimentaryAccess?'temporary_access':'free',
+       verificationChecks:[],missingRequirements:[]},
+     membershipPaid,complimentaryAccess,
+     verification:{status:verification?.status||'not_submitted',phoneVerified:!!setup?.verifiedPhone},
+     billing:{status:billing?.status||'not_started'},
+     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+       canSell:publication.canSell,shopStatus:shop?.status||'not_listed',savedDraftCount:null,
+       publicProductCount:0},payments:[],entries:[],catalogue:{products:[],status:'unavailable'},
+     paystackMode:getPaystackMode()==='live'?'live':'test'
+   };
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location,front,authUser]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
-     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target)]);
+     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target),
+     read('teyzaShopFrontPhotos/'+target),getAuthUser(target).catch(()=>null)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
    const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
    // A stored product count is distinct from a shopper-visible public listing.
@@ -151,6 +196,23 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
    const locationPinExpired=location?.ownerUid===target&&
       P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
+   const verifiedEmail=authUser?.emailVerified===true;
+   let verifiedPhone=false;
+   try{require('./onboarding').checkedPhone(authUser,account.phone);verifiedPhone=true;}catch(_){}
+   const validIdentity=require('./onboarding').current(identity,target,clock());
+   const validSelfie=verification?.ownerUid===target &&
+     typeof verification.objectPath==='string'&&verification.expiresAt>clock();
+   const validFront=require('./shop-front').valid(front,target);
+   const validPin=Boolean(P.locationFor(target,account,location,null,clock()));
+   const approvalChecks=[
+     {id:'email',label:'Email verified',complete:verifiedEmail},
+     {id:'phone',label:'Phone OTP verified',complete:verifiedPhone},
+     {id:'identity',label:'Current ID/passport submitted',complete:validIdentity},
+     {id:'selfie',label:'Current selfie submitted',complete:validSelfie},
+     {id:'shop_front',label:'Shop-front photo submitted',complete:validFront},
+     {id:'location',label:'Shop pin saved',complete:validPin},
+     {id:'onboarding',label:'Registration completed',complete:Boolean(setup?.completedAt)}
+   ];
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
      amountCents:row.data().amountCents||0,createdAt:row.data().createdAt||0,
@@ -168,6 +230,20 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        connected:!!payout.enabled,mode:payout.mode||'test',subaccountCode:payout.code||'',
        businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
      }:null,
+     businessAccount:{
+       approvalStatus:account.approvalStatus||'pending',
+       reviewStatus:verification?.status||'not_submitted',
+       verificationChecks:approvalChecks,
+       missingRequirements:approvalChecks.filter(item=>!item.complete).map(item=>item.id),
+       isPublic:directoryEligible&&Boolean(pin),
+       type:account.category==='wholesale'?'Wholesaler':account.category==='spaza'?'Spaza shop':'Business owner',
+       membershipStatus:membershipPaid?'premium':
+         P.complimentary(target,account,billing,clock())?'temporary_access':'free',
+       upgradeRequired:publication.approved&&publication.ready&&!membershipPaid,
+       manualIdentityReviewRequired:account.approvalStatus!=='approved',
+       accountLifecycle:account.approvalStatus==='approved'?
+         directoryEligible?'shop_live':'approved_check_location':'verification_pending'
+     },
      membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
      mandateAccessActive:P.mandateAccess(target,account,billing,clock()),
      mandateAccessKind:billing?.mandateAccessKind||null,
@@ -286,6 +362,64 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
     tx.update(ref,{status,reviewNote:note,approvedAmountCents:approved,reviewedBy:uid,reviewedAt:clock(),disbursementStatus:'not_disbursed'});
     audit(tx,auth,action,target,{applicationId:snap.id,status,approvedAmountCents:approved,note});return {status,disbursementStatus:'not_disbursed'};
    });
+  }
+  // Direct, account-bound seller/admin support inbox. Never store card details,
+  // accept payment proofs here, or use messages to grant an entitlement.
+  // Support replies in store apps must not steer people to external checkout.
+  if(action==='seller_support_open'){
+   const ticketId='seller_'+uid,ref=doc('teyzaSupportTickets/'+ticketId);
+   const account=await owner(uid);
+   await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists)tx.set(ref,{ownerUid:uid,subject:'Seller and business support',
+     message:'',status:'open',priority:'normal',revision:0,
+     createdBy:uid,createdAt:clock(),updatedAt:clock(),
+     source:'seller_admin_chat',shopName:account.shopName||'Business',
+     lastMessage:'',lastMessageAt:clock(),messageCount:0,sellerUnread:0,adminUnread:0});
+    else if(snap.data().ownerUid!==uid)D.fail(403,'Support conversation belongs to another seller.');
+   });
+   return {ticketId};
+  }
+  if(['seller_support_thread','ops_support_thread'].includes(action)){
+   const ticketId=self?'seller_'+uid:D.id(data.ticketId);
+   const ticket=await read('teyzaSupportTickets/'+ticketId);
+   if(!ticket||ticket.source!=='seller_admin_chat'||(self&&ticket.ownerUid!==uid))
+     D.fail(404,'Support conversation not found.');
+   const rows=await db.collection('teyzaSupportTickets/'+ticketId+'/messages')
+     .orderBy('sequence','desc').limit(60).get();
+   // Reading never changes seller approval, subscription or billing.
+   return {ticket:{id:ticketId,ownerUid:ticket.ownerUid,shopName:ticket.shopName||'',
+     subject:ticket.subject,status:ticket.status,updatedAt:ticket.updatedAt},
+     messages:rows.docs.map(row).reverse()};
+  }
+  if(['seller_support_message','ops_support_reply'].includes(action)){
+   const ticketId=self?'seller_'+uid:D.id(data.ticketId);
+   const raw=D.text(data.message,'support message',1000).trim();
+   if(raw.length<2)D.fail(422,'Write a support message before sending.');
+   // An in-app admin conversation cannot become a disguised web-payment CTA.
+   if(!self&&(/https?:\/\//i.test(raw)||/www\./i.test(raw)||/paystack\.com/i.test(raw)||/teyza\.co\.za\/pay/i.test(raw)))
+     D.fail(422,'Do not send external links through in-app seller support.');
+   const messageId=D.id(data.messageId);
+   await rate(uid,'seller-support-message',12,60000);
+   await db.runTransaction(async tx=>{
+    const ref=doc('teyzaSupportTickets/'+ticketId),snap=await tx.get(ref);
+    if(!snap.exists||snap.data().source!=='seller_admin_chat'||
+       (self&&snap.data().ownerUid!==uid))D.fail(404,'Support conversation not found.');
+    const entry=ref.collection('messages').doc(messageId),existing=await tx.get(entry);
+    if(existing.exists){
+     if(existing.data().senderUid!==uid||existing.data().text!==raw)
+       D.fail(409,'This message reference is already in use.');
+     return;
+    }
+    const at=clock();
+    tx.set(entry,{senderUid:uid,sender:self?'seller':'admin',
+      text:raw,createdAt:at,sequence:(snap.data().messageCount||0)+1});
+    tx.update(ref,{lastMessage:raw.slice(0,180),lastMessageAt:at,updatedAt:at,
+      messageCount:(snap.data().messageCount||0)+1,
+      status:self?'open':'waiting_for_seller',revision:(snap.data().revision||0)+1,
+      [self?'adminUnread':'sellerUnread']:(snap.data()[self?'adminUnread':'sellerUnread']||0)+1});
+   });
+   return {sent:true,messageId};
   }
   if(action==='ops_support_list'||action==='seller_support_list'){
    let q=db.collection('teyzaSupportTickets');if(self)q=q.where('ownerUid','==',uid);else q=q.orderBy('__name__');

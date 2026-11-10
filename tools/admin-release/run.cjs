@@ -5,16 +5,20 @@ function assertAdminBackend(health){
  const required=[
   'googlePlaceClaims','sellerApprovalBeforeCheckout','adminOperations','adminReview',
   'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
-  'manualReceiptsRetired','sellerMandates','sellerMandateRequestV3',
-  'adminMandatePdfExport','adminNetcashManualSubmission',
+  'manualReceiptsRetired','historicSellerMandatesReadOnly',
+  'adminMandatePdfExport',
   'sellerPaystackNewCheckoutDisabled','adminUsers','adminSellerDocuments',
   'physicalGoodsPaystack'
  ];
  if(health?.ok!==true||health.version!=='3.25.0'||health.agentCommissionEnabled!==false||
     health.adminProductReview!==false||
-    health.sellerMembershipBillingMode!=='netcash_manual_debit_request'||
+    health.sellerMembershipBillingMode!=='checkout_disabled'||
+    health.paystackCheckoutAvailable!==false||
+    health.sellerMandates!==false||
+    health.sellerMandateRequestV3!==false||
+    health.adminNetcashManualSubmission!==false||
     required.some(key=>health[key]!==true)){
-   throw new Error('Backend does not confirm R327 seller approval and manual Netcash mandate capabilities. Deploy the reviewed teyzaMobile function first; Hosting was not changed.');
+   throw new Error('Backend does not confirm Teyza seller approval, archived mandates and disabled checkout. Deploy the reviewed teyzaMobile function first; Hosting was not changed.');
  }
 }
 async function main(){

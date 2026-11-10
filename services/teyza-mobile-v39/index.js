@@ -72,6 +72,7 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
   sanitizeImage:bytes=>sharp(bytes,{limitInputPixels:16000000})
   .rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).jpeg({quality:82}).toBuffer()});
+const sellerCheckoutRollout=require('./paystack-rollout');
 function sellerCheckoutConfigured(){
  const key=paystackKey.value()||'',project=process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'';
  return Boolean(/^sk_(test|live)_/.test(key)&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE&&
@@ -114,7 +115,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:false,historicSellerMandatesReadOnly:true,
        sellerMandateRequestV3:false,adminMandatePdfExport:true,adminNetcashManualSubmission:false,
        sellerPaystackNewCheckoutDisabled:process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true',sellerMembershipBillingMode:process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true'?'paystack_card_subscription':'checkout_disabled',
-       adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:1000,promotionSevenDaysCents:2900,paystackCheckoutAvailable:process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true'&&sellerCheckoutConfigured(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+       adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,introductoryFirstMonthCents:1000,promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutRollout.hasEligibleAudience()&&sellerCheckoutConfigured(),paystackRolloutMode:sellerCheckoutRollout.mode(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{

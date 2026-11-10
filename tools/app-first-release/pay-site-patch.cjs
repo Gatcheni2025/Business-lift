@@ -51,14 +51,35 @@ function configWithPayRoute(original){
  ];
  const headers=Array.isArray(config.headers)?config.headers:[];
  const routes=['/pay','/pay/','/pay.html','/pay/index.html'];
- // Existing security rules for these exact routes require human review.
- // Silently replacing them could weaken a previously approved CSP/HSTS.
- if(headers.some(h=>routes.includes(h.glob)))
-   throw Error('Existing /pay security headers require manual Hosting review');
  const payHeaders={'Cache-Control':'no-store','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer'};
+ const seen=new Set();
+ const updated=headers.map(rule=>{
+   if(!routes.includes(rule.glob))return rule;
+   if(seen.has(rule.glob))throw Error('Ambiguous duplicate /pay security header rules; manual review required');
+   seen.add(rule.glob);
+   if(!rule.headers||typeof rule.headers!=='object'||Array.isArray(rule.headers))
+     throw Error('Unrecognised /pay security header configuration; manual review required');
+   // Keep original CSP, HSTS and all other security directives byte-for-byte
+   // unchanged. Only supply missing hardening headers for /pay.
+   const existing=structuredClone(rule.headers);
+   for(const [name,minimum] of Object.entries(payHeaders)){
+     const present=Object.keys(existing).filter(k=>k.toLowerCase()===name.toLowerCase());
+     if(present.length>1)throw Error('Conflicting duplicate /pay security headers require manual review');
+     if(present.length===1){
+       const value=existing[present[0]];
+       if(typeof value!=='string')throw Error('Unsupported /pay security header value');
+       const compliant=name==='Cache-Control'?value.split(',').some(v=>v.trim().toLowerCase()==='no-store'):
+         value.trim().toLowerCase()===minimum.toLowerCase();
+       if(!compliant)throw Error('Conflicting existing /pay '+name+'; manual security review required');
+     }else existing[name]=minimum;
+   }
+   return {...rule,headers:existing};
+ });
+ // New scoped headers come first. Existing route rules retain their position
+ // and all unrelated Hosting configuration remains unchanged.
  config.headers=[
-  ...routes.map(glob=>({glob,headers:payHeaders})),
-  ...headers
+   ...routes.filter(glob=>!seen.has(glob)).map(glob=>({glob,headers:structuredClone(payHeaders)})),
+   ...updated
  ];
  return config;
 }

@@ -18,7 +18,7 @@ test('Website merchant readiness fails closed for old production and incomplete 
 test('Only a verified, approved, fully onboarded and email-verified shop can start website checkout',async()=>{
  const {eligibility}=await service();
  const seller={approvalStatus:'approved',identityVerified:true,setupComplete:true,
-  listingPaid:false,complimentaryAccess:false,introEligible:true};
+  listingPaid:false,complimentaryAccess:false,introEligible:true,pilotCheckoutEligible:true};
  assert.equal(eligibility({...seller,approvalStatus:'pending'},true,true,true).eligible,false);
  assert.equal(eligibility({...seller,identityVerified:false},true,true,true).eligible,false);
  assert.equal(eligibility({...seller,setupComplete:false},true,true,true).eligible,false);
@@ -27,7 +27,8 @@ test('Only a verified, approved, fully onboarded and email-verified shop can sta
  assert.equal(eligibility({...seller,listingPaid:true},true,true,true).active,true);
  assert.equal(eligibility({...seller,complimentaryAccess:true},true,true,true).active,true);
  assert.equal(eligibility(seller,true,true).eligible,false,'Contact email is not seller UID proof');
-  assert.equal(eligibility(seller,true,true,true).eligible,true);
+  assert.equal(eligibility({...seller,pilotCheckoutEligible:false},true,true,true).eligible,false,'Pilot restrictions apply to authenticated UID');
+ assert.equal(eligibility(seller,true,true,true).eligible,true);
 });
 test('Client refuses wrong checkout host and non-Teyza payment references',async()=>{
  const {validCheckoutUrl,validReceipt}=await service();

@@ -18,6 +18,7 @@ const locations=require('./shop-location');
 const addresses=require('./shop-address');
 const deletion=require('./account-deletion');
 const billingCheckout=require('./billing-paystack');
+const paystackRollout=require('./paystack-rollout');
 const orderPaystack=require('./order-paystack');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
@@ -165,7 +166,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
-  const adminOperations=operations.createOperations({db,clock,rate,
+  const adminOperations=operations.createOperations({db,clock,rate,getAuthUser,getAuthUserByEmail,
     getPaystackMode:()=>getPaystackSecret().startsWith('sk_live_')?'live':'test',
     synchronize:synchronizeCatalogue});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
@@ -250,6 +251,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     // and mobile-store policy. Physical-goods checkout remains independent.
     if(action==='billing_checkout' && process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
       D.fail(503,'Seller website checkout is not enabled. No payment has been initiated.');
+    if(action==='billing_checkout' && !paystackRollout.allowed(uid))
+      D.fail(403,'Seller membership checkout is not yet available for this account. No charge has been initiated.');
     if(action==='billing_checkout' && data.checkoutChannel!=='web')
       D.fail(422,'Seller subscriptions can be purchased only through the approved Teyza website.');
     if(action==='promote_checkout')D.fail(410,'New paid promotions are not currently offered.');
@@ -430,6 +433,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
+        pilotCheckoutEligible:paystackRollout.allowed(uid),
         complimentaryAccess:P.complimentary(uid,account,billing,clock()),
         mandateAccessActive:P.mandateAccess(uid,account,billing,clock()),
         mandateAccessKind:billing?.mandateAccessKind||null,

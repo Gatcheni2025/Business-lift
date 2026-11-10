@@ -309,9 +309,21 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
         start_date:new Date(startsAt).toISOString()});
       if(!/^SUB_[A-Za-z0-9]+$/.test(data.subscription_code||'')||data.domain!==entry.environment||data.amount!==MONTHLY_CENTS)
         throw Error('Subscription was not confirmed');
+      // Independent Paystack check: a successful POST does not prove the
+      // actual next debit matches the first day of the SA calendar month.
+      const actual=await paystack('/subscription/'+encodeURIComponent(data.subscription_code));
+      const chargedAt=Date.parse(actual.next_payment_date||'');
+      const startOfDaySA=startsAt-2*3600000,followingDaySA=startOfDaySA+86400000;
+      if(actual.subscription_code!==data.subscription_code||
+         actual.domain!==entry.environment||
+         actual.customer?.customer_code!==verified.customer.customer_code||
+         actual.plan?.plan_code!==code||
+         !Number.isFinite(chargedAt)||chargedAt<startOfDaySA||chargedAt>=followingDaySA)
+        throw Error('Paystack next renewal date is not independently verified for the first of the month');
       await doc('teyzaBilling/'+uid).set({paystackSubscriptionCode:data.subscription_code,
-        renewalSetup:'scheduled',nextBillingAt:startsAt},{merge:true});
-      await lease.set({status:'created',subscriptionCode:data.subscription_code,createdAt:clock()},{merge:true});
+        renewalSetup:'scheduled',nextBillingAt:chargedAt},{merge:true});
+      await lease.set({status:'created',subscriptionCode:data.subscription_code,
+        nextBillingAt:chargedAt,createdAt:clock()},{merge:true});
     }catch(_){
       // Do not blindly retry: a network failure may occur after Paystack created the subscription.
       await lease.set({status:'needs_attention',updatedAt:clock()},{merge:true});

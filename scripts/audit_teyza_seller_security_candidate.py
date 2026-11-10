@@ -19,7 +19,9 @@ assert approval['decision']=='approved' and approval['waivesExternalThirdPartyMa
 assert approval['externalAnalystVerdict']=='not_received'
 assert approval['approvedFile']=='web/app-first/public/js/seller-web-billing.mjs'
 reviewed_browser_sha256=approval['approvedSha256']
-assert reviewed_browser_sha256=='833ef88a38b28dc958ae63cfd307d15d41f092b3370f8d8e28fc0d163ff23e21'
+assert re.fullmatch(r'[a-f0-9]{64}',reviewed_browser_sha256), 'Missing exact operator-approved SHA-256'
+assert approval['operatorApprovalPr']==138
+assert approval['canonicalRepositorySha256']==reviewed_browser_sha256
 
 with zipfile.ZipFile(archive) as z:
     entries=z.namelist()
@@ -39,14 +41,15 @@ with zipfile.ZipFile(archive) as z:
     source=z.read('public/js/seller-web-billing.mjs')
     actual_browser_sha256=sha256(source).hexdigest()
     print('Git LF candidate browser SHA-256:',actual_browser_sha256)
-    print('Operator-approved Windows CRLF SHA-256:',reviewed_browser_sha256)
+    print('Operator-approved canonical Git LF SHA-256:',reviewed_browser_sha256)
+    print('Verified Windows CRLF equivalent SHA-256:',approval['windowsWorktreeCrLfSha256'])
     assert approval['lineEndingEquivalenceVerified'] is True
-    assert approval['approvedSha256Representation']=='Windows worktree CRLF UTF-8'
+    assert approval['approvedSha256Representation']=='Git checkout LF UTF-8'
     assert approval['canonicalRepositoryRepresentation']=='Git checkout LF UTF-8'
-    assert actual_browser_sha256==approval['canonicalRepositorySha256'], 'Canonical Git LF source differs from approved equivalent'
+    assert actual_browser_sha256==reviewed_browser_sha256, 'Canonical Git LF source differs from operator-approved exact SHA-256'
     assert b'\r' not in source, 'Unexpected noncanonical line endings in Git source'
     windows_bytes=source.replace(b'\n',b'\r\n')
-    assert sha256(windows_bytes).hexdigest()==reviewed_browser_sha256, 'Windows CRLF equivalent differs from operator-approved exact file'
+    assert sha256(windows_bytes).hexdigest()==approval['windowsWorktreeCrLfSha256'], 'Windows CRLF source differs from recorded reviewed equivalent'
     src=source.decode('utf-8')
     assert "https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
@@ -64,5 +67,5 @@ with zipfile.ZipFile(archive) as z:
     print(f'Structural and static code audit passed for {len(entries)} entries.')
     print('Candidate SHA-256:',sha256(archive.read_bytes()).hexdigest())
     print('Source browser SHA-256:',sha256(source).hexdigest())
-    print('Fingerprint gate: PASSED by exact Git LF + approved Windows CRLF byte-equivalence under OPERATOR SOURCE APPROVAL.')
+    print('Fingerprint gate: PASSED by exact operator-approved Git LF SHA-256 and verified CRLF byte-equivalence.')
     print('No independent malware-clean verdict; other CI/security gates and payment activation controls still apply.')

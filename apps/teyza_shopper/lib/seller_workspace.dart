@@ -23,6 +23,7 @@ import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
 import 'seller_premium.dart';
 import 'seller_selling.dart';
+import 'seller_support_chat.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
@@ -109,7 +110,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:Text('Your verified Teyza membership is active. Start selling is now available.')));
+          content:Text('Premium account is active. Your selling tools are now available.')));
       }
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
       if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -164,6 +165,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       default:openNotifications();
     }
   }
+  void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    SellerSupportChatPage(session:widget.session,api:widget.mobileApi,
+      premiumAccount:premiumAccount,businessApproved:sellerApproved)));
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
@@ -578,7 +582,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(draftError!),
         TextButton(onPressed:load,child:const Text('Retry products'))])),
       productList(),const SizedBox(height:12),
-      const Padding(padding:EdgeInsets.all(12),child:Text('Products and photos publish automatically once your registration and product access are active.',
+      const Padding(padding:EdgeInsets.all(12),child:Text('Your approved, eligible shop can publish its saved products by selecting Publish saved products or Sync product listing. A temporary grant is not a payment.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
     2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
@@ -588,7 +592,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
-      premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,onUpgrade:()=>openUpgrade(),
+      premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,
       shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
       onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
@@ -607,12 +611,36 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             Text(draftError!=null?'Products are temporarily unavailable.':
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Start selling')),
-            TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+            if(hasProductAccess&&draftError==null&&drafts.isNotEmpty)...[
+              Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  const Text('Make your saved products visible',style:TextStyle(fontWeight:FontWeight.w700)),
+                  const SizedBox(height:7),
+                  Text(complimentaryAccess||mandateAccess?
+                    'Your temporary selling access is separate from Paystack payment. You may publish your existing priced stock while this access is active.':
+                    'Your active selling access allows your saved products to appear to nearby shoppers.'),
+                  const SizedBox(height:10),
+                  FilledButton.icon(
+                    key:const ValueKey('seller-publish-saved-products'),
+                    onPressed:busy?null:() async {
+                      await syncRange();
+                      if(mounted)await load();
+                    },
+                    icon:const Icon(Icons.cloud_upload_outlined),
+                    label:const Text('Publish saved products')),
+                  if(rangeStatus!=null)...[
+                    const SizedBox(height:8),Text(rangeStatus!,style:const TextStyle(fontSize:12))
+                  ]
+                ]))),
+              const SizedBox(height:12),
+            ],
+            if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.inventory_2_outlined),label:const Text('Manage my products')),
+            if(hasProductAccess)TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
-            OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(hasProductAccess)OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(!hasProductAccess)const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text('Product editing is unavailable until selling access is verified. Your shop can remain listed for free.')),
             for(final item in drafts)
               Column(children:[
                 const Divider(),
@@ -624,13 +652,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
                     (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Custom product')),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
-                  onTap:busy?null:()=>_edit(item)),
+                  onTap:busy||!hasProductAccess?null:()=>_edit(item)),
                 Wrap(alignment:WrapAlignment.end,children:[
-                  TextButton.icon(onPressed:busy?null:()=>_edit(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_edit(item),
                     icon:const Icon(Icons.edit_outlined),label:const Text('Edit')),
-                  TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
                     icon:const Icon(Icons.add_a_photo_outlined),label:const Text('Photo')),
-                  TextButton.icon(onPressed:busy?null:()=>_delete(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_delete(item),
                     icon:const Icon(Icons.delete_outline),label:const Text('Delete'))
                 ])
               ])
@@ -646,6 +674,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         actions:widget.sellerMode?[
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
         ]:null),
+      floatingActionButton:widget.sellerMode&&shop?.hasRegisteredCategory==true&&session.idToken!=null&&
+          (sellerTab==0||sellerTab==4)?
+        FloatingActionButton.extended(
+          key:const ValueKey('teyza-floating-chat'),
+          onPressed:openSellerSupport,
+          icon:const Icon(Icons.chat_bubble_outline_rounded),
+          label:const Text('Chat'),
+          tooltip:'Chat with Teyza Support'):null,
+      floatingActionButtonLocation:FloatingActionButtonLocation.endFloat,
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
         SellerNavigation(selected:sellerTab,onSelect:selectSellerTab):null,
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
@@ -702,15 +739,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Start selling')),
-            const SizedBox(height:16),
-          OutlinedButton.icon(onPressed:()=>Navigator.push(context,
-              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
-              .then((_){if(mounted)refreshActivity();}),
-            icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(premiumAccount?'Premium account':needsMembership?'Upgrade to sell on Teyza':businessAccessLabel)),
-
+            if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.inventory_2_outlined),
+              label:const Text('Manage my products')),
+            const SizedBox(height:12),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),

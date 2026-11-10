@@ -3,20 +3,21 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
-test('Admin release requires seller approval and Netcash admin capabilities (not legacy Paystack checkout)',()=>{
+test('Admin release requires seller approval and Paystack checkout disabled (not retired Netcash)',()=>{
  const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
    agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
-   manualReceiptsRetired:true,sellerMandates:true,sellerMandateRequestV3:true,
-   adminMandatePdfExport:true,adminNetcashManualSubmission:true,
-   sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'netcash_manual_debit_request',
+   manualReceiptsRetired:true,historicSellerMandatesReadOnly:true,sellerMandates:false,sellerMandateRequestV3:false,
+   adminMandatePdfExport:true,adminNetcashManualSubmission:false,paystackCheckoutAvailable:false,
+   sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'checkout_disabled',
    adminUsers:true,adminSellerDocuments:true,physicalGoodsPaystack:true};
  assert.doesNotThrow(()=>assertAdminBackend(ready));
  for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},
    {...ready,adminProductReview:true},{...ready,automaticProductPublication:false},
-   {...ready,adminComplimentaryAccess:false},{...ready,adminNetcashManualSubmission:false},
-   {...ready,adminMandatePdfExport:false},{...ready,sellerMandateRequestV3:false},
-   {...ready,sellerMembershipBillingMode:'paystack_checkout'}]){
+   {...ready,adminComplimentaryAccess:false},{...ready,adminNetcashManualSubmission:true},
+   {...ready,adminMandatePdfExport:false},{...ready,sellerMandateRequestV3:true},
+   {...ready,sellerMembershipBillingMode:'paystack_card_subscription'},
+   {...ready,paystackCheckoutAvailable:true}]){
    assert.throws(()=>assertAdminBackend(stale));
  }
 });
@@ -73,14 +74,14 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
   assert(pdfSource.includes('NOT BANK-AUTHENTICATED'));
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R332-product-visibility"'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R333-single-business-account"'));
  // Inline SVG sprite references are fragment-only; fetched assets remain root-relative.
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/')||match[1].startsWith('#'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));
   const css=fs.readFileSync(path.join(root,'assets/teyza-app-admin.css'),'utf8');
   assert(css.includes('.dashboard-sidebar'));
   assert(html.includes('data-admin-view="billing"'));
-  assert(html.includes('Seller payments &amp; legacy mandates'));
+  assert(html.includes('Finance &amp; payments'));
   assert(html.includes('data-admin-view="overview"'));
 });
 

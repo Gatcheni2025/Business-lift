@@ -213,3 +213,120 @@ test('Finance queue exposes only seller-bound finance requests and supports lega
  const r=await f.call('ops_finance_queue');assert.equal(r.requests.length,1);assert.equal(r.requests[0].path,'teyzaCreditEnquiries/seller1/requests/a');assert(!JSON.stringify(r).includes('unrelated'));
 });
 test('An oversized ledger is never returned as a complete statement with a false opening balance',async()=>{const f=setup();for(let n=0;n<501;n++)f.db.records.set('teyzaBilling/seller1/entries/e'+n,{ownerUid:'seller1',createdAt:n,debitCents:9900,creditCents:0});await rejects(f.call('ops_seller_detail',{sellerUid:'seller1'}),422);});
+
+test('Seller support conversations are scoped to the signed-in UID and replies reach the owner',async()=>{
+ const f=setup(),seller={uid:'seller1',email_verified:true},intruder={uid:'seller2',email_verified:true};
+ const opened=await f.call('seller_support_open',{sellerUid:'seller2'},seller);
+ assert.equal(opened.ticketId,'seller_seller1');
+ assert.equal(f.db.records.get('teyzaSupportTickets/seller_seller1').ownerUid,'seller1');
+ const id='seller_msg_1';
+ await f.call('seller_support_message',{ticketId:'seller_seller2',message:'Please help me understand my membership status.',messageId:id},seller);
+ const saved=f.db.records.get('teyzaSupportTickets/seller_seller1/messages/'+id);
+ assert.equal(saved.senderUid,'seller1');
+ assert.equal((await f.call('seller_support_thread',{},seller)).messages[0].text,saved.text);
+ await rejects(f.call('seller_support_thread',{ticketId:'seller_seller1'},intruder),404);
+ await rejects(f.call('ops_support_thread',{ticketId:'seller_seller1'},seller),403);
+ await rejects(f.call('ops_support_reply',{ticketId:'seller_seller1',message:'See https://teyza.co.za/pay',messageId:'admin_link_1'}),422);
+ await f.call('ops_support_reply',{ticketId:'seller_seller1',message:'Your seller review is complete. We can assist with your membership status.',messageId:'admin_msg_1'});
+ const thread=await f.call('seller_support_thread',{},seller);
+ assert.equal(thread.messages.length,2);
+ assert.equal(thread.messages[1].sender,'admin');
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false,'Support cannot create a billing record');
+ assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
+ const adminThread=await f.call('ops_support_thread',{ticketId:'seller_seller1'});
+ assert.equal(adminThread.messages.length,2);
+});
+test('Seller support messages are idempotent and cannot impersonate admins',async()=>{
+ const f=setup(),seller={uid:'seller1',email_verified:true};
+ await f.call('seller_support_open',{},seller);
+ await f.call('seller_support_message',{message:'Hi team',messageId:'fixed_1'},seller);
+ await f.call('seller_support_message',{message:'Hi team',messageId:'fixed_1'},seller);
+ assert.equal((await f.call('seller_support_thread',{},seller)).messages.length,1);
+ await rejects(f.call('seller_support_message',{message:'Changed message',messageId:'fixed_1'},seller),409);
+ await rejects(f.call('ops_support_reply',{ticketId:'seller_seller1',message:'Unauthorised',messageId:'bad_1'},seller),403);
+});
+
+test('One business account API separates verified onboarding, free shop and Paystack membership',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{
+   ...f.db.records.get('teyzaSellerAccounts/seller1'),
+   approvalStatus:'approved',listingPlan:'free',address:'12 Main Road, Durban',phone:'+27712345678'});
+ f.db.records.set('teyzaSellerOnboarding/seller1',{completedAt:now,verifiedPhone:'+27712345678'});
+ f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',status:'approved',
+   objectPath:'teyza-private/mobile-verification/seller1/selfie',expiresAt:now+86400000});
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',products:[]});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},getAuthUser:async uid=>({
+   uid,emailVerified:true,phoneNumber:'+27712345678',providerData:[{providerId:'phone',phoneNumber:'+27712345678'}]})});
+ const detail=await api.execute(admin,'ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.businessAccount.approvalStatus,'approved');
+ assert.equal(detail.businessAccount.membershipStatus,'free');
+ assert.equal(detail.businessAccount.manualIdentityReviewRequired,false);
+ assert.equal(detail.businessAccount.verificationChecks.find(x=>x.id==='email').complete,true);
+ assert.equal(detail.businessAccount.verificationChecks.find(x=>x.id==='phone').complete,true);
+ assert.equal(detail.membershipPaid,false);
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});
+test('Unapproved business remains a single pending verification, not an independent paid approval',async()=>{
+ const f=setup();
+ const response=await f.call('ops_seller_detail',{sellerUid:'seller2'});
+ assert.equal(response.businessAccount.approvalStatus,'pending');
+ assert.equal(response.businessAccount.manualIdentityReviewRequired,true);
+ assert.equal(response.businessAccount.membershipStatus,'free');
+ assert.equal(response.businessAccount.upgradeRequired,false);
+ assert(response.businessAccount.missingRequirements.includes('identity'));
+ assert.equal(response.membershipPaid,false);
+});
+
+test('Business directory Premium badge cannot be forged by archived manual paid records',async()=>{
+ const f=setup(),account=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...account,listingPlan:'basic'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'manual_receipt',paymentEnvironment:'live'});
+ let result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'free');
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'paystack',paymentEnvironment:'live'});
+ result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'premium');
+});
+
+test('Admin directory coalesces same-email seller records only to exact Firebase Auth UID',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/legacySeller',{uid:'legacySeller',category:'spaza',shopName:'Historical Shop',ownerEmail:'OWNER@example.test',approvalStatus:'approved'});
+ f.db.records.set('teyzaSellerAccounts/currentSeller',{uid:'currentSeller',category:'spaza',shopName:'Current Shop',ownerEmail:'owner@example.test',approvalStatus:'pending'});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},
+   getAuthUserByEmail:async email=>{assert.equal(email,'owner@example.test');return {uid:'currentSeller'};}});
+ const d=await api.execute(admin,'ops_sellers');
+ assert.equal(d.sellers.filter(s=>s.ownerEmail.toLowerCase()==='owner@example.test').length,1);
+ const seller=d.sellers.find(s=>s.ownerEmail.toLowerCase()==='owner@example.test');
+ assert.equal(seller.sellerUid,'currentSeller');
+ assert.equal(seller.approvalStatus,'pending');
+});
+test('Admin directory quarantines email collisions when Firestore UIDs do not match the actual Auth user',async()=>{
+ const f=setup();
+ for(const uid of ['legacySeller','otherSeller'])
+   f.db.records.set('teyzaSellerAccounts/'+uid,{uid,category:'spaza',shopName:uid,ownerEmail:'owner@example.test',approvalStatus:uid==='legacySeller'?'approved':'pending'});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},getAuthUserByEmail:async()=>({uid:'realAuthUid'})});
+ const d=await api.execute(admin,'ops_sellers');
+ const record=d.sellers.find(s=>s.ownerEmail==='owner@example.test');
+ assert(record);
+ assert.equal(record.accountConflict,true);
+ assert.equal(record.sellerUid,'');
+ assert.equal(record.subscription,'blocked');
+ assert.equal(d.sellers.filter(s=>s.ownerEmail==='owner@example.test').length,1);
+});
+test('Lightweight profile does not fetch seller statements or payment history after a detail failure',async()=>{
+ const f=setup();
+ const original=f.db.collection.bind(f.db);
+ f.db.collection=(path)=>{
+   if(path.startsWith('teyzaBilling/seller1/entries')||path==='teyzaPaystackPayments')
+     throw Error('Costly read must not happen in summary');
+   return original(path);
+ };
+ const profile=await f.call('ops_seller_profile',{sellerUid:'seller1'});
+ assert.equal(profile.partial,true);
+ assert.equal(profile.seller.sellerUid,'seller1');
+ assert.equal(profile.businessAccount.approvalStatus,'approved');
+ assert.equal(profile.membershipPaid,false);
+ assert.deepEqual(profile.payments,[]);
+});
