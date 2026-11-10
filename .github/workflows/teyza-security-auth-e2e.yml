@@ -9,6 +9,8 @@ permissions:
 jobs:
   synthetic-auth-e2e:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -20,9 +22,6 @@ jobs:
       - name: Install pinned test dependencies without install scripts
         working-directory: tools/app-first-release
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install browser runtime
-        working-directory: tools/app-first-release
-        run: npx playwright install --with-deps chromium
       - name: Run browser auth and payment-return integration tests (synthetic accounts)
         working-directory: tools/app-first-release
         run: node --test seller-auth-browser-e2e.test.cjs
