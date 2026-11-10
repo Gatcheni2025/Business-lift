@@ -245,3 +245,47 @@ test('Seller support messages are idempotent and cannot impersonate admins',asyn
  await rejects(f.call('seller_support_message',{message:'Changed message',messageId:'fixed_1'},seller),409);
  await rejects(f.call('ops_support_reply',{ticketId:'seller_seller1',message:'Unauthorised',messageId:'bad_1'},seller),403);
 });
+
+test('One business account API separates verified onboarding, free shop and Paystack membership',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{
+   ...f.db.records.get('teyzaSellerAccounts/seller1'),
+   approvalStatus:'approved',listingPlan:'free',address:'12 Main Road, Durban',phone:'+27712345678'});
+ f.db.records.set('teyzaSellerOnboarding/seller1',{completedAt:now,verifiedPhone:'+27712345678'});
+ f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',status:'approved',
+   objectPath:'teyza-private/mobile-verification/seller1/selfie',expiresAt:now+86400000});
+ f.db.records.set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',products:[]});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},getAuthUser:async uid=>({
+   uid,emailVerified:true,phoneNumber:'+27712345678',providerData:[{providerId:'phone',phoneNumber:'+27712345678'}]})});
+ const detail=await api.execute(admin,'ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.businessAccount.approvalStatus,'approved');
+ assert.equal(detail.businessAccount.membershipStatus,'free');
+ assert.equal(detail.businessAccount.manualIdentityReviewRequired,false);
+ assert.equal(detail.businessAccount.verificationChecks.find(x=>x.id==='email').complete,true);
+ assert.equal(detail.businessAccount.verificationChecks.find(x=>x.id==='phone').complete,true);
+ assert.equal(detail.membershipPaid,false);
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});
+test('Unapproved business remains a single pending verification, not an independent paid approval',async()=>{
+ const f=setup();
+ const response=await f.call('ops_seller_detail',{sellerUid:'seller2'});
+ assert.equal(response.businessAccount.approvalStatus,'pending');
+ assert.equal(response.businessAccount.manualIdentityReviewRequired,true);
+ assert.equal(response.businessAccount.membershipStatus,'free');
+ assert.equal(response.businessAccount.upgradeRequired,false);
+ assert(response.businessAccount.missingRequirements.includes('identity'));
+ assert.equal(response.membershipPaid,false);
+});
+
+test('Business directory Premium badge cannot be forged by archived manual paid records',async()=>{
+ const f=setup(),account=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...account,listingPlan:'basic'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'manual_receipt',paymentEnvironment:'live'});
+ let result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'free');
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'paystack',paymentEnvironment:'live'});
+ result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'premium');
+});

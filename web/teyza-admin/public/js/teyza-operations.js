@@ -3,7 +3,7 @@ import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Sellers and access exceptions',products:'Product activity',billing:'Seller Paystack billing & historical mandates',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  const navButtons=[...document.querySelectorAll('[data-admin-view]')];
@@ -14,13 +14,13 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(dialog.open)dialog.close();dialog.replaceChildren();dialog.remove();
  }}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,sellerSnapshotLoaded=false,
+ let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
- function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -47,7 +47,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   stat('Seller verification',review.loaded?review.count:'—',review.loaded?(review.hasMore?'Loaded queue · more available':'Loaded review queue'):'Queue unavailable — open to retry','approvals','tone-mint');
   stat('Seller records',sellerSnapshotLoaded?sellers.length:'—',sellerSnapshotLoaded?(next?'Loaded page · more available':'Loaded seller records'):'Registry unavailable — open to retry','sellers','tone-cream');
   stat('Approved sellers',sellerSnapshotLoaded?sellers.filter(s=>s.approvalStatus==='approved').length:'—','Among loaded seller records','sellers','tone-blue');
-  stat('Debit-order requests',mandatesLoaded?mandates.length:'—',mandatesLoaded?(mandatesLimited?'First 50 received requests':'Loaded requests · not a payment count'):'Mandate inbox unavailable — open to retry','billing','tone-sand');
+  stat('Historic mandate records',mandatesLoaded?mandates.length:'—',mandatesLoaded?(mandatesLimited?'First 50 archived records':'Archived for audit only'):'Mandate archive unavailable','billing','tone-sand');
   root.append(stats);
 
   const grid=el('div',undefined,'overview-grid');
@@ -57,8 +57,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   deskHead.append(deskTitle,el('span','QUICK ACTIONS','overview-kicker'));desk.append(deskHead);
   const actions=el('div',undefined,'overview-actions');
   for(const [target,label,desc,number] of [
-   ['approvals','Verify seller registrations','Review identity documents and selfies.',review.loaded?String(review.count)+' loaded':'Open queue'],
-   ['billing','Review debit-order mandates','Inspect R99 consent and prepare provider review.',mandatesLoaded?String(mandates.length)+' loaded':'Open inbox'],
+   ['sellers','Business accounts & approvals','One profile: verify the business and view what is missing.',review.loaded?String(review.count)+' loaded':'Open queue'],
+   ['billing','Finance and membership','Check Paystack membership, settlement and archived mandates.',mandatesLoaded?String(mandates.length)+' loaded':'Open inbox'],
    ['support','Manage support requests','Follow up on the cases your team has recorded.','Open cases'],
    ['field','Manage the field team','Review applications, areas and visits.','Open HR']]){
     const b=el('button',undefined,'overview-action');b.type='button';
@@ -101,13 +101,27 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   guidance.append(button('Open seller verification',()=>navigate('approvals')));grid.append(guidance);
   root.append(grid);
  }
- async function choose(s){if(view==='products')view='sellers';selected=s;detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
+ async function choose(s){if(view==='products')view='sellers';const sameAccount=selected?.sellerUid===s.sellerUid&&detail!==null;selected=s;if(!sameAccount)accountTab=view==='billing'?'finance':'summary';detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
- function registry(){if(view==='billing')mandateQueue();const c=card('Seller directory',next?'This is a page of seller records. Load more to extend search.':'Search the loaded seller records.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){root.append(c);if(view==='billing')closureReview();root.append(el('p','Select a seller to view their account, mandates and historical statement.','footnote'));return;}
+ function registry(){
+   if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
+   const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
+     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus==='approved'?'Business approved':'Verification in progress'),
+      tag(s.subscription==='premium'?'Premium account':s.subscription==='temporary_access'?'Temporary access':'Free account'),
+      button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
+      root.append(c);
+      if(view==='billing'){closureReview();mandateQueue();}
+      root.append(el('p','Select a business account to inspect its verification, shop visibility, membership, support and financial history.','footnote'));
+      return;
+   }
 
  function mandateQueue(){
-   const box=card('Historic Netcash mandate archive — read-only',
-     'Netcash collection has been retired. Do not submit new debit batches. Historical consent is not Paystack authorisation.');
+   const box=el('details',undefined,'panel ops-card ops-legacy-archive');
+   box.open=archiveExpanded;
+   box.addEventListener('toggle',()=>{archiveExpanded=box.open;});
+   const archiveToggle=el('summary');archiveToggle.append(el('h3','Historic Netcash mandate archive — read-only'));
+   box.append(archiveToggle,
+     el('p','Archived consent only. These mandates cannot authorise a new debit or prove a Paystack subscription.','footnote'));
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
      mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
@@ -174,17 +188,76 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(closuresNext)box.append(button('Load more account closures',async()=>{const r=await request('ops_account_deletion_queue',{after:closuresNext});closures.push(...(r.requests||[]));closuresNext=r.nextAfter||null;show();}));
   root.append(box);
  }
-  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
+  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),
+    el('p',d.seller.address),
+    tag(d.seller.approvalStatus==='approved'?'Business approved':'Verification pending'),
+    tag(d.membershipPaid?'Premium account':d.complimentaryAccess?'Temporary access · not paid':'Free account'));
+  account.append(el('p','Account ID: '+d.seller.sellerUid+' · '+(d.businessAccount?.type||'Business')));
+  if(d.seller.approvalStatus!=='approved')
+    account.append(el('p','The registration is recorded. Final identity and business verification is pending; payment is a separate decision.','notice warning'));if(d.seller.approvalStatus==='approved')
     account.append(el('p','Business approval is complete. Your shop listing can be free and live; subscription status is separate. Do not approve the seller or products again.','notice success'));
   else account.append(button('Open approval desk',()=>navigate('approvals')));
-  root.append(account);sellerDocuments();
+  root.append(account);
+  const accountTabs=el('nav',undefined,'ops-account-tabs');
+  accountTabs.setAttribute('aria-label','Business account sections');
+  for(const [key,label] of [
+    ['summary','Overview'],['verification','Verification'],['shop','Shop & selling'],
+    ['finance','Finance'],['chat','Support']
+  ]){
+    const control=el('button',label,'button '+(accountTab===key?'primary':'quiet'));
+    control.type='button';control.setAttribute('aria-current',accountTab===key?'page':'false');
+    control.onclick=()=>{accountTab=key;show();root.querySelector('[data-seller-account]')?.scrollIntoView({block:'start',behavior:'instant'});};
+    accountTabs.append(control);
+  }
+  root.append(accountTabs);
+  if(accountTab==='summary'){
+    const life=d.businessAccount||{},isApproved=d.seller.approvalStatus==='approved';
+    const summary=card('Business account overview',
+      'One business verification outcome. Membership and settlement are separate finance decisions.');
+    summary.append(el('p','Business type: '+(life.type||'Registered business')),
+      el('p','Business verification: '+(isApproved?'Approved':'Verification pending')),
+      el('p','Community visibility: '+(life.isPublic?'Shop is live':'Not yet live')),
+      el('p','Selling entitlement: '+(d.membershipPaid?'Premium account':
+        d.complimentaryAccess?'Temporary access · not a payment':'Free account · unable to sell')),
+      el('p','Product approval: Not required; products publish automatically after verified membership.'));
+    if(!isApproved){
+      const remaining=life.missingRequirements||[];
+      summary.append(el('p',remaining.length?
+        'Registration checklist still missing: '+remaining.join(', ').replaceAll('_',' '):
+        'Uploaded requirements look complete; final identity review has not yet been recorded.',
+        'notice warning'),button('Open one verification checklist',()=>{accountTab='verification';show();}));
+    }
+    if(isApproved&&!life.isPublic)
+      summary.append(el('p','Check shop location and publication status under Shop & selling.','notice warning'));
+    summary.append(button('View membership & finance',()=>{accountTab='finance';show();}),
+      button('View seller support',()=>{accountTab='chat';show();}));
+    root.append(summary);
+  }
+  if(accountTab==='verification'){
+    const life=d.businessAccount||{},checks=life.verificationChecks||[];
+    const review=card('One business verification checklist','Registration is free. Email and phone checks are automatic. An uploaded ID and selfie still require genuine identity review; uploading does not prove identity.');
+    if(checks.length)review.append(table(['Requirement','Status'],checks.map(x=>[
+      x.label,tag(x.complete?'Complete':'Missing')
+    ])));
+    review.append(el('p',d.seller.approvalStatus==='approved'?
+      'Final business approval: Approved. No repeat approval required.':
+      'Final business approval: Awaiting business and identity review. No payment is required to be verified.',
+      d.seller.approvalStatus==='approved'?'notice success':'notice warning'));
+    if(d.seller.approvalStatus!=='approved')
+      review.append(button('Review final verification decision',()=>navigate('approvals')));
+    root.append(review);
+    sellerDocuments();
+  }
+  if(accountTab==='shop'){
   const status=d.sellingStatus;
   if(status){
     const review=card('Business approval · free listing · premium selling','One final seller approval only. Free shop discovery is separate from verified membership; products do not require individual admin approval.');
-    review.append(el('p','Final business approval: '+(status.sellerApproved?'Approved':'Pending review')),
-      el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
-      el('p','Membership-based selling access: '+(status.sellingAccessActive?'Active':'Not active')),
-      el('p','Free community shop listing: '+status.shopStatus+' · Public products: '+Number(status.publicProductCount||0)));
+    review.append(el('p','Business verification: '+(status.sellerApproved?'Approved':'Still in progress')),
+      el('p','Registration: '+(status.shopSetupComplete?'Complete':'Needs finishing')),
+      el('p','Community listing: '+(d.businessAccount?.isPublic?'Shop is live':'Not yet live')),
+      el('p','Selling account: '+(d.membershipPaid?'Premium account':
+        d.complimentaryAccess?'Temporary access · not subscribed':'Free · upgrade needed after verification')),
+      el('p','Public products: '+Number(status.publicProductCount||0)+' · No individual product approvals'));
     if(status.publicProductsAllowed===false){
       review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
     }else{
@@ -232,10 +305,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       review.append(details);
     }
     if(!status.sellerApproved){
-      review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
-        status.approvalAccountStatus+' · identity/selfie: '+status.approvalVerificationStatus+
-        '. Check the same seller UID in the approval queue.','notice warning'),
-        button('Review seller verification',()=>navigate('approvals')));
+      review.append(el('p','Business verification is still pending. Uploaded identity evidence is not a separate final approval. Use the one checklist in this account.','notice warning'),
+        button('Open verification checklist',()=>{accountTab='verification';show();}));
     }else if(!status.shopSetupComplete)
       review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
     else if(!status.sellingAccessActive)
@@ -245,6 +316,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
     root.append(review);
   }
+  }
+  if(accountTab==='finance'){
   const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
   if(sellerMandate)mandateReview(sellerMandate);
   // Seller ID approval is independent from Paystack purchase confirmation.
@@ -325,6 +398,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     await choose(selected);
   });
   settlement.append(payoutForm);root.append(settlement);
+  }
+  if(accountTab==='shop'){
   const catalogue=card('Seller products','Products publish automatically when registration is approved and subscription or temporary access is active.');
   const submitted=d.catalogue?.products||[];
   catalogue.append(tag(d.catalogue?.status||'not submitted'));
@@ -334,13 +409,54 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   ])));
   if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller approval, shop setup and verified or temporary selling access are complete. Check the publication status above.','notice warning'));
   root.append(catalogue);
+  }
+  if(accountTab==='finance'){
   const statement=card('Historical seller statement','Existing manual invoices and receipts are kept for audit only. They no longer enable product selling.');
   statement.append(button('Print historical statement',()=>printStatement(d)));
   statement.append(table(['Date','Description','Period','Reference','Charge','Payment','Balance'],
     d.entries.map(e=>statementRows([e])[0])));
   root.append(statement);
+  }
+  if(accountTab==='chat')sellerAccountSupport(d);
  }
 
+ function sellerAccountSupport(d){
+   const sellerUid=d.seller.sellerUid,ticketId='seller_'+sellerUid;
+   const panel=card('Teyza Support · '+d.seller.shopName,
+     'Private business-owner conversation. Customer chat is separate. Support cannot activate memberships or send payment links.');
+   const history=el('div',undefined,'ops-support-thread');
+   const load=async()=>{
+     try{
+       const response=await request('ops_support_thread',{ticketId});
+       if(detail?.seller?.sellerUid!==sellerUid||accountTab!=='chat')return;
+       history.replaceChildren();
+       const rows=response.messages||[];
+       if(!rows.length)history.append(el('p','No messages have been sent.'));
+       for(const m of rows){
+         const bubble=el('div',undefined,'ops-support-bubble');
+         bubble.append(el('strong',m.sender==='admin'?'Teyza Support':'Business owner'),el('p',m.text));
+         history.append(bubble);
+       }
+     }catch(error){
+       if(error.stale)return;
+       if(error.status===404)history.replaceChildren(el('p','No conversation yet. The seller can start one from the app.'));
+       else throw error;
+     }
+   };
+   panel.append(button('Load conversation',load),history);
+   const reply=el('form',undefined,'ops-form');
+   field(reply,'Message to business owner (no payment links)','message','textarea');
+   submit(reply,'Reply to seller',async fd=>{
+     const msg=String(fd.get('message')||'').trim();
+     if(msg.length<2)throw Error('Write a reply before sending.');
+     await request('ops_support_reply',{ticketId,message:msg,
+       messageId:'a'+Date.now().toString()+Math.random().toString(36).slice(2,10)});
+     message('Support reply sent. No billing or approval changed.','success');
+     await load();
+   });
+   panel.append(reply,button('Open support inbox',()=>navigate('support')));
+   root.append(panel);
+ }
  function productsView(){
    root.append(el('p','Only submitted seller catalogues appear here. Approving products never bypasses ID/selfie checks or Paystack payment verification.','footnote'));
    root.append(table(['Shop','Products','Seller approval','Paystack','Action'],
@@ -444,16 +560,19 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     const onboardingReady=seller.registrationReady===true;
     const membership=seller.membershipPaid?'Verified live Paystack membership':
       seller.complimentaryAccess?'Time-limited administrator access':'No verified product membership';
-    view.append(el('p','Owner verification: '+(seller.verificationStatus||'not submitted')+
-      ' · Onboarding: '+(onboardingReady?'complete':'incomplete')+
-      ' · Product selling: '+(seller.sellingUnlocked===true?'enabled':'locked')));
+    view.append(el('p','Business verification: '+(seller.approvalStatus==='approved'?'Approved':'Pending verification')+
+      ' · Registration: '+(onboardingReady?'Complete':'Incomplete')+
+      ' · Selling: '+(seller.sellingUnlocked===true?'Enabled':'Membership or verification required')));
     view.append(el('p','Product membership: '+membership,'footnote'));
     if(seller.sellingUnlocked!==true)view.append(el('p',!identityReviewed?
-      'Account approval alone does not complete seller verification. Open the approval desk to check the current ID and selfie.':
+      'This business still needs genuine identity and registration verification. Open the complete business account to see one checklist.':
       !onboardingReady?'The seller must finish onboarding, including verified mobile registration, before selling.':
       'Seller verification is complete. Products require a verified Paystack membership or a recorded administrator exception.',
       'notice warning'));
-    view.append(button('Open seller verification',()=>navigate('approvals')));
+    view.append(button('Open complete business account',async()=>{
+      await navigate('sellers');
+      await choose(sellers.find(x=>x.sellerUid===user.uid)||{sellerUid:user.uid,shopName:seller.shopName||'Business'});
+    }));
   }
   if(!user.admin){
     if(user.email)view.append(button('Send password setup email',async()=>{
@@ -623,7 +742,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(!ready)return;
   fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();
   document.dispatchEvent(new Event('teyza-admin-view-change'));
-  if(v!==view){selected=null;detail=null;userSelected=null;userDetail=null;}
+  if(v!==view){selected=null;detail=null;accountTab='summary';userSelected=null;userDetail=null;}
   generation++;view=v;
   if(v==='approvals'){show();return;}
   // Do not render clickable forms while the previous view is loading.
@@ -634,5 +753,6 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   await refresh();
 }
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
+ document.getElementById('backToBusinessAccounts').onclick=()=>safely(()=>navigate('sellers'));
  return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
 }
