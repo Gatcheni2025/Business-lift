@@ -45,7 +45,7 @@ test('Stopping checkout never creates or cancels a subscription',async()=>{
  assert.equal(result.status,'stopped');
  assert(!fake.calls.some(c=>c.path.startsWith('/subscription')));
 });
-test('Provider date mismatch cancels the newly created test subscription and reports failure',async()=>{
+test('Provider date mismatch requires manual TEST-dashboard reconciliation without unsafe cancellation',async()=>{
  const fake=fakePaystack();
  const send=async(url,opts)=>{
   const response=await fake.send(url,opts);
@@ -54,6 +54,7 @@ test('Provider date mismatch cancels the newly created test subscription and rep
   }
   return response;
  };
- await assert.rejects(runSandbox({key:'sk_test_FAKE',send,clock:()=>now,confirm:async()=>true}),/renewal date/);
- assert(fake.calls.some(c=>c.path==='/subscription/disable'));
+ await assert.rejects(runSandbox({key:'sk_test_FAKE',send,clock:()=>now,confirm:async()=>true}),/Renewal setup was uncertain/);
+ assert.equal(fake.calls.filter(c=>c.path==='/subscription').length,1,'Only one provider subscription created');
+ assert.equal(fake.calls.filter(c=>c.path==='/subscription/disable').length,0,'Mismatch must not pretend a provider subscription was safely cancelled');
 });
