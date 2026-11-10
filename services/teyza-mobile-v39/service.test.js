@@ -587,7 +587,7 @@ test('Uploaded replacement photos publish automatically with current template pr
 
 const jpeg=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,23)]).toString('base64');
 const mobile='+27712345678';
-const phoneUser={uid:'buyer1',phoneNumber:mobile,providerData:[{providerId:'phone',phoneNumber:mobile}]};
+const phoneUser={uid:'buyer1',emailVerified:true,phoneNumber:mobile,providerData:[{providerId:'phone',phoneNumber:mobile}]};
 const newOwner={...buyer,email_verified:false};
 const registration={legalType:'individual',category:'spaza',shopName:'New Local Shop',phone:'0712345678',address:'KwaMashu, Durban',consent:true};
 const personal={legalType:'individual',kind:'passport',documentNumber:'PRIVATE-PASSPORT-123',imageBase64:jpeg,consent:true};
@@ -597,6 +597,7 @@ async function ready(service,{company=false}={}){
  await register(service,newOwner,details);
  await service.execute(newOwner,'seller_identity_submit',company?{...details,imageBase64:jpeg}:personal);
  await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
 }
 async function approve(service,db,uid='buyer1'){
  const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
@@ -615,6 +616,7 @@ test('Google claim requires explicit reviewer confirmation, links the approved p
  await service.execute(newOwner,'seller_register',{...registration,locationConsent:true,whatsappConsent:true,
   googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection});
  await service.execute(newOwner,'seller_identity_submit',personal);await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'seller_onboarding_complete');
  const reviewer={...owner,teyzaAdmin:true,auth_time:1000};
  const v=db.records.get('teyzaMobileVerification/buyer1'),id=db.records.get('teyzaSellerIdentity/buyer1');
@@ -662,11 +664,14 @@ function seedHistoricalDraft(db,uid,templateId='milk-2-l'){
  const row=catalogue.selection([{templateId,priceCents:3000,stockQty:4}])[0];
  db.records.set('teyzaDraftProducts/'+uid+'/items/'+row.id,{...row,ownerUid:uid});
 }
-test('Approval before completion stays private, then completing the approved setup publishes it',async()=>{
- const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);await approve(service,db);
- assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'approved');
+test('Final business approval requires completed onboarding, then publishes the free shop',async()=>{
+ const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);
+ await rejects(approve(service,db),409);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'pending');
  assert(!(await service.publicDirectory()).entries.some(s=>s.id==='buyer1'));
- const result=await service.execute(newOwner,'seller_onboarding_complete');assert.equal(result.sellingStatus,'active');
+ await service.execute(newOwner,'seller_onboarding_complete');
+ await approve(service,db);
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'approved');
  assert((await service.publicDirectory()).entries.some(s=>s.id==='buyer1'));
 });
 test('Approval recreates a missing listing with the prepared products, services, shop photo and exact saved location',async()=>{
@@ -783,6 +788,7 @@ test('Company sellers must provide company registration details and the matching
  await rejects(service.execute(newOwner,'seller_identity_submit',{legalType:'company',imageBase64:jpeg,consent:true}),422);
  await service.execute(newOwner,'seller_identity_submit',{legalType:'company',companyName:'Local Trading Pty Ltd',registrationNumber:'2026/123456/07',imageBase64:jpeg,consent:true});
  await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'seller_onboarding_complete');
  assert.equal(db.records.get('teyzaSellerIdentity/buyer1').kind,'company');assert.equal(db.records.get('teyzaPublicShops/buyer1').sellingEnabled,false);
  await approve(service,db);assert.equal(db.records.get('teyzaPublicShops/buyer1').sellingEnabled,true);
@@ -826,7 +832,7 @@ test('Missing seller compliance is shown in admin queue and sent for correction 
  assert.equal(db.records.has('teyzaPublicShops/buyer1'),false);
  const after=await service.execute(reviewer,'admin_seller_queue');
  assert.equal(after.sellers[0].reviewNote,note);
- assert.deepEqual(after.sellers[0].missingCompliance.sort(),['identity','phone']);
+ assert.deepEqual(after.sellers[0].missingCompliance.sort(),['email','identity','onboarding','phone','shop_front']);
  const ownerStatus=await service.execute(newOwner,'seller_onboarding');
  assert.equal(ownerStatus.selfie.reviewNote,note);
  await rejects(service.execute(reviewer,'admin_seller_review',{sellerUid:'buyer1',submissionId,status:'approved'}),409);

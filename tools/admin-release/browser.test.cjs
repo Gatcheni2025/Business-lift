@@ -354,10 +354,10 @@ async function main(){
     await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
-    await f.page.getByLabel('Reason for publishing saved seller products').fill(
+    await f.page.getByLabel('Reason to repair the seller catalogue sync').fill(
       'Confirmed three approved seller drafts for a live local shop');
     await f.page.getByRole('checkbox',{name:/I checked the shop approval and selling entitlement/}).check();
-    await f.page.getByRole('button',{name:'Publish saved shop products'}).click();
+    await f.page.getByRole('button',{name:'Repair saved-product sync'}).click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 3').waitFor();
     assert(published);
     assert(f.calls.some(x=>x.action==='ops_catalogue_publish'&&x.data.confirmed===true&&

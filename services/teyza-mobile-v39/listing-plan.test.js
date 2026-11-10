@@ -58,3 +58,32 @@ test('Seven-day paid promotion is separate from membership',()=>{
  assert.equal(B.validCheckoutUrl('https://example.com/checkout'),false);
  assert.equal(B.nextMonth(Date.UTC(2026,0,31)),Date.UTC(2026,1,1));
 });
+
+test('One final seller approval makes a free shop live; it never grants Premium access',()=>{
+ const account={...free,phone:'+27712345678'};
+ const setup={requiredVersion:2,completedAt:NOW,sellingStatus:'pending_approval',
+   verifiedPhone:'+27712345678',selfieSubmissionId:'selfie-approved'};
+ const verification={ownerUid:'seller1',submissionId:'selfie-approved',status:'approved'};
+ const unbilled=P.state('seller1',account,setup,verification,shop,null,NOW);
+ assert.equal(unbilled.approved,true);
+ assert.equal(unbilled.live,true,'Free community listing does not require membership');
+ assert.equal(unbilled.canSell,false,'Business approval must not grant selling');
+ const paid=P.state('seller1',{...account,listingPlan:'basic'},setup,verification,shop,billing,NOW);
+ assert.equal(paid.live,true);
+ assert.equal(paid.canSell,true,'Verified Paystack payment unlocks selling automatically');
+ const afterExpiry=P.state('seller1',{...account,listingPlan:'basic'},setup,verification,shop,billing,billing.paidUntil);
+ assert.equal(afterExpiry.live,true,'The free shop remains listed after membership expires');
+ assert.equal(afterExpiry.canSell,false,'Selling locks again after membership expiry');
+});
+test('Approved wholesale membership is not permission to show public wholesale products',()=>{
+ const supplier={...basic,category:'wholesale',phone:'+27712345678'};
+ const setup={requiredVersion:2,completedAt:NOW,sellingStatus:'pending_approval',
+   verifiedPhone:'+27712345678',selfieSubmissionId:'supplier-selfie'};
+ const verification={ownerUid:'seller1',submissionId:'supplier-selfie',status:'approved'};
+ const listed=P.project('seller1',{account:supplier,setup,verification,shop:{...shop,shopCategory:'wholesale'},
+   billing,drafts:[],photos:[],now:NOW});
+ assert.equal(listed.status,'active');
+ assert.equal(P.state('seller1',supplier,setup,verification,listed,billing,NOW).canSell,true);
+ assert.deepEqual(P.publicRow('seller1',listed).products,[],'Wholesalers advertise privately; no public products');
+ assert.deepEqual(P.publicRow('seller1',listed).productHighlights,[]);
+});

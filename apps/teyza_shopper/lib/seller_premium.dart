@@ -6,10 +6,11 @@ class SellerShopHero extends StatelessWidget{
   final SellerShop shop;final int? productCount;
   final String? publicationStatus;
   final bool sellingEnabled;
+  final bool shopLive,premiumAccount,hasProductAccess;
   final bool? identityVerified;
   bool get approved=>identityVerified??shop.approvalStatus=='approved';
-  bool get live=>publicationStatus=='active'&&approved;
-  const SellerShopHero({super.key,required this.shop,required this.productCount,this.publicationStatus,this.sellingEnabled=false,this.identityVerified});
+  bool get live=>shopLive&&approved;
+  const SellerShopHero({super.key,required this.shop,required this.productCount,this.publicationStatus,this.sellingEnabled=false,this.identityVerified,this.shopLive=false,this.premiumAccount=false,this.hasProductAccess=false});
   @override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(23),
     decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
       colors:[Color(0xFF010F1C),Color(0xFF123E31)]),borderRadius:BorderRadius.circular(28),
@@ -28,9 +29,13 @@ class SellerShopHero extends StatelessWidget{
           publicationStatus==null?'Owner approved':'Owner approved · listing pending':'Shop is not live yet',
           live?Icons.check_circle_outline:Icons.shield_outlined),
         _pill(productCount==null?'Products unavailable':'$productCount products',Icons.inventory_2_outlined),
-        if(approved)_pill('Teyza verified',Icons.verified_outlined)
+        if(approved)_pill('Teyza verified',Icons.verified_outlined),
+        if(premiumAccount)_pill('Premium account',Icons.workspace_premium_outlined)
+        else if(live&&!hasProductAccess)_pill('Unable to sell · upgrade required',Icons.lock_outline)
+        else if(live&&hasProductAccess)_pill('Selling access active',Icons.check_circle_outline)
       ]),
-      const SizedBox(height:14),Text(live?'Your approved shop is published. Save its map location so shoppers can find it nearby.':
+      const SizedBox(height:14),Text(live&&!hasProductAccess?'Shop is live and visible in your community. Selling requires an active membership.':
+        live?'Your shop is live in the community. Products publish automatically when selling access is active; no individual product approval is required.':
         publicationStatus=='pending_review'?'Your setup is complete. Your shop will be published after Teyza approves it.':
         approved?'Your review is approved. Complete shop setup to publish, or contact support if your listing is paused.':'Complete your documents, selfie and mobile verification. You can prepare products now.',
         style:const TextStyle(color:Color(0xFFBACFC3),height:1.45,fontSize:12))

@@ -65,18 +65,27 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    const onboardings=await Promise.all(rows.map(r=>doc('teyzaSellerOnboarding/'+r.id).get()));
    const claims=await Promise.all(rows.map(r=>doc('teyzaShopClaims/'+r.id).get()));
    const locations=await Promise.all(rows.map(r=>doc('teyzaShopLocations/'+r.id).get()));
+   const fronts=await Promise.all(rows.map(r=>doc('teyzaShopFrontPhotos/'+r.id).get()));
    const ownerUsers=await Promise.all(rows.map(r=>getAuthUser(r.id).catch(()=>null)));
    return {sellers:rows.map((r,i)=>{const v=r.data(),a=shops[i].exists?shops[i].data():{};
     const identity=identities[i].exists?identities[i].data():null;
     const identityReady=require('./onboarding').current(identity,r.id,clock);
     const missingCompliance=[];
     if(!identityReady)missingCompliance.push('identity');
+    if(ownerUsers[i]?.emailVerified!==true)missingCompliance.push('email');
     const expired=!v.objectPath||v.expiresAt<=clock();
     if(expired)missingCompliance.push('selfie');
     let phoneVerified=false;
     try{require('./onboarding').checkedPhone(ownerUsers[i],a.phone);phoneVerified=true;}catch(_){}
     if(onboardings[i].exists&&onboardings[i].data().requiredVersion===2&&!phoneVerified)
       missingCompliance.push('phone');
+    if(onboardings[i].exists&&onboardings[i].data().requiredVersion===2){
+      if(!require('./shop-front').valid(fronts[i].exists?fronts[i].data():null,r.id))
+        missingCompliance.push('shop_front');
+      if(!P.locationFor(r.id,a,locations[i].exists?locations[i].data():null,null,clock()))
+        missingCompliance.push('shop_location');
+      if(!onboardings[i].data().completedAt)missingCompliance.push('onboarding');
+    }
     if(claims[i].exists&&claims[i].data().ownerUid===r.id&&
        (!locations[i].exists||locations[i].data().ownerUid!==r.id))
       missingCompliance.push('shop_location');
@@ -113,6 +122,12 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(setup.requiredVersion===2){
       if((identity&&data.evidenceId!==identity.evidenceId)||(!identity&&data.status==='approved'))D.fail(409,'View the current identity document and refresh this review.');
       if(data.status==='approved'){
+        if(authUser?.emailVerified!==true)D.fail(409,'The seller must verify their email before final business approval.');
+        if(!setup.completedAt)D.fail(409,'Finish registration and verified phone setup before business approval.');
+        if(!require('./shop-front').valid(f.exists?f.data():null,sellerUid))
+          D.fail(409,'Upload a current shop-front photo before final business approval.');
+        if(!P.locationFor(sellerUid,a.exists?a.data():null,l.exists?l.data():null,null,clock()))
+          D.fail(409,'Save a valid shop pin matching the registered address before approval.');
         require('./onboarding').checkedPhone(authUser,a.exists?a.data().phone:'');
         if(!require('./onboarding').current(identity,sellerUid,clock)||!identityView?.exists||identityView.data().sellerUid!==sellerUid||clock()-identityView.data().viewedAt>300000)
           D.fail(409,'View the current private identity document before approving this seller.');
