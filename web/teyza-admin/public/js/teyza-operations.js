@@ -175,16 +175,16 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   root.append(box);
  }
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
-    account.append(el('p','Seller registration is already approved. Use the mandate and selling-access controls below; do not approve the registration twice.','notice success'));
+    account.append(el('p','Business approval is complete. Your shop listing can be free and live; subscription status is separate. Do not approve the seller or products again.','notice success'));
   else account.append(button('Open approval desk',()=>navigate('approvals')));
   root.append(account);sellerDocuments();
   const status=d.sellingStatus;
   if(status){
-    const review=card('Seller approval and product publication','Seller verification, mandate review and selling eligibility are separate decisions.');
-    review.append(el('p','Seller registration: '+(status.sellerApproved?'Approved':'Pending review')),
+    const review=card('Business approval · free listing · premium selling','One final seller approval only. Free shop discovery is separate from verified membership; products do not require individual admin approval.');
+    review.append(el('p','Final business approval: '+(status.sellerApproved?'Approved':'Pending review')),
       el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
-      el('p','Selling access: '+(status.sellingAccessActive?'Active':'Not active')),
-      el('p','Public listing: '+status.shopStatus+' · Published products: '+Number(status.publicProductCount||0)));
+      el('p','Membership-based selling access: '+(status.sellingAccessActive?'Active':'Not active')),
+      el('p','Free community shop listing: '+status.shopStatus+' · Public products: '+Number(status.publicProductCount||0)));
     if(status.publicProductsAllowed===false){
       review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
     }else{
@@ -239,7 +239,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     }else if(!status.shopSetupComplete)
       review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
     else if(!status.sellingAccessActive)
-      review.append(el('p','Seller registration is approved, but product and advertising access requires a verified live Paystack membership or a separately audited temporary access grant. Old Netcash requests cannot establish a new recurring payment.','notice warning'));
+      review.append(el('p','Shop approval is complete and is not a charge. The free listing can be discoverable; to sell or advertise the business needs a verified premium membership (or an audited temporary access grant). The seller upgrades independently. No product-by-product approval is required.','notice warning'));
     if(d.mandateAccessActive)review.append(el('p',
       (d.mandateAccessKind==='processing_7d'?'7-day processing access until ':'30-day provider-accepted access until ')+
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
