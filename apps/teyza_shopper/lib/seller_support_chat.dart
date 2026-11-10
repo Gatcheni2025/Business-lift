@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
@@ -16,9 +17,13 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
   String? ticketId,error;
   List<Map<String,dynamic>> messages=[];
   String? ownerUid;
+  Timer? refreshTimer;
   TeyzaMobileApi get api=>widget.api??TeyzaMobileApi(widget.session);
-  @override void initState(){super.initState();ownerUid=widget.session.userId;refresh();}
-  @override void dispose(){input.dispose();super.dispose();}
+  @override void initState(){
+    super.initState();ownerUid=widget.session.userId;refresh();
+    refreshTimer=Timer.periodic(const Duration(seconds:25),(_){if(mounted)refresh();});
+  }
+  @override void dispose(){refreshTimer?.cancel();input.dispose();super.dispose();}
   Future<void> refresh()async{
     if(loading||ownerUid==null)return;
     setState(()=>loading=true);
