@@ -38,9 +38,15 @@ with zipfile.ZipFile(archive) as z:
     assert all(sha256(z.read(name)).hexdigest()==digest for name,digest in manifest.items())
     source=z.read('public/js/seller-web-billing.mjs')
     actual_browser_sha256=sha256(source).hexdigest()
-    print('Actual candidate browser SHA-256:',actual_browser_sha256)
-    print('Operator approved browser SHA-256:',reviewed_browser_sha256)
-    assert actual_browser_sha256==reviewed_browser_sha256, 'Browser source SHA-256 differs from operator-approved exact file'
+    print('Git LF candidate browser SHA-256:',actual_browser_sha256)
+    print('Operator-approved Windows CRLF SHA-256:',reviewed_browser_sha256)
+    assert approval['lineEndingEquivalenceVerified'] is True
+    assert approval['approvedSha256Representation']=='Windows worktree CRLF UTF-8'
+    assert approval['canonicalRepositoryRepresentation']=='Git checkout LF UTF-8'
+    assert actual_browser_sha256==approval['canonicalRepositorySha256'], 'Canonical Git LF source differs from approved equivalent'
+    assert b'\r' not in source, 'Unexpected noncanonical line endings in Git source'
+    windows_bytes=source.replace(b'\n',b'\r\n')
+    assert sha256(windows_bytes).hexdigest()==reviewed_browser_sha256, 'Windows CRLF equivalent differs from operator-approved exact file'
     src=source.decode('utf-8')
     assert "https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
@@ -56,5 +62,5 @@ with zipfile.ZipFile(archive) as z:
     print(f'Structural and static code audit passed for {len(entries)} entries.')
     print('Candidate SHA-256:',sha256(archive.read_bytes()).hexdigest())
     print('Source browser SHA-256:',sha256(source).hexdigest())
-    print('Fingerprint gate: PASSED by exact SHA-256 OPERATOR SOURCE APPROVAL with external verdict explicitly WAIVED.')
+    print('Fingerprint gate: PASSED by exact Git LF + approved Windows CRLF byte-equivalence under OPERATOR SOURCE APPROVAL.')
     print('No independent malware-clean verdict; other CI/security gates and payment activation controls still apply.')
