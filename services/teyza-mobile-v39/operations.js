@@ -1,13 +1,13 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview');
-const actions=new Set(['ops_sellers','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
+const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
+const actions=new Set(['ops_sellers','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
 function amount(value){if(!Number.isSafeInteger(value)||value<=0||value>50000000)D.fail(422,'Enter a valid amount in cents.');return value;}
 function statement(entries){let balance=0;return entries.sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)).map(e=>({...e,balanceCents:balance+=(e.debitCents||0)-(e.creditCents||0)}));}
 function financePath(value){if(!/^teyzaCreditEnquiries\/[A-Za-z0-9_-]{1,128}\/requests\/[A-Za-z0-9_-]{1,128}$/.test(value||''))D.fail(422,'Choose a valid stock finance request.');return value;}
-function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',getAuthUser=async()=>null,synchronize=async()=>{}}){
+function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',getAuthUser=async()=>null,getAuthUserByEmail=async()=>null,synchronize=async()=>{}}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  const owner=async uid=>D.seller(await read('teyzaSellerAccounts/'+uid),uid);
  function audit(tx,auth,action,target,details){tx.set(doc('teyzaOperationsAudit/'+crypto.randomUUID()),{actorUid:auth.uid,action,target,details,createdAt:clock()});}
@@ -127,8 +127,52 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   }
   if(action==='ops_sellers'){
    let q=db.collection('teyzaSellerAccounts').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
-   const result=await q.get(),rows=result.docs.slice(0,30);const billing=await Promise.all(rows.map(s=>read('teyzaBilling/'+s.id)));
-   return {sellers:rows.map((s,i)=>{const a=s.data();return {sellerUid:s.id,shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',phone:a.phone||'',address:a.address||'',category:a.category||'',approvalStatus:a.approvalStatus||'pending',subscription:P.entitled(s.id,a,billing[i],clock())?'premium':P.complimentary(s.id,a,billing[i],clock())?'temporary_access':'free'};}),next:result.docs.length>30?rows.at(-1).id:null};
+   const result=await q.get(),rows=result.docs.slice(0,30);
+   const directory=await Directory.visibleDirectory(rows.map(s=>({sellerUid:s.id,...s.data()})),getAuthUserByEmail);
+   // Resolve subscription only for canonical, safely owned seller records.
+   // Never merge paid states or approvals from another UID just because an email matches.
+   const billing=await Promise.all(directory.map(s=>s.accountConflict?null:read('teyzaBilling/'+s.sellerUid)));
+   return {sellers:directory.map((a,i)=>({
+     sellerUid:a.sellerUid||'',shopName:a.shopName||'',ownerEmail:a.ownerEmail||'',
+     phone:a.phone||'',address:a.address||'',category:a.category||'',
+     approvalStatus:a.accountConflict?'identity_conflict':a.approvalStatus||'pending',
+     accountConflict:a.accountConflict===true,
+     conflictingSellerUids:a.accountConflict?a.conflictingSellerUids:undefined,
+     subscription:a.accountConflict?'blocked':
+       P.entitled(a.sellerUid,a,billing[i],clock())?'premium':
+       P.complimentary(a.sellerUid,a,billing[i],clock())?'temporary_access':'free'
+   })),next:result.docs.length>30?rows.at(-1).id:null};
+  }
+  if(action==='ops_seller_profile'){
+   const target=D.id(data.sellerUid),account=await owner(target);
+   // Small, read-only summary: do not load statements, payment history, draft
+   // catalogues or sensitive evidence merely to open the business profile.
+   const [billing,setup,verification,shop,location]=await Promise.all([
+     read('teyzaBilling/'+target),read('teyzaSellerOnboarding/'+target),
+     read('teyzaMobileVerification/'+target),read('teyzaPublicShops/'+target),
+     read('teyzaShopLocations/'+target)
+   ]);
+   const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
+   const membershipPaid=P.entitled(target,account,billing,clock());
+   const complimentaryAccess=P.complimentary(target,account,billing,clock());
+   const pin=P.locationFor(target,account,location,shop,clock());
+   return {
+     partial:true,seller:{sellerUid:target,shopName:account.shopName||'Shop',
+       ownerEmail:account.ownerEmail||'',phone:account.phone||'',address:account.address||'',
+       approvalStatus:account.approvalStatus||'pending',listingPlan:account.listingPlan||'free'},
+     businessAccount:{approvalStatus:account.approvalStatus||'pending',
+       type:account.category==='wholesale'?'Wholesaler':account.category==='spaza'?'Spaza shop':'Business owner',
+       isPublic:publication.live&&shop?.sellerUid===target&&shop?.status==='active'&&Boolean(pin),
+       membershipStatus:membershipPaid?'premium':complimentaryAccess?'temporary_access':'free',
+       verificationChecks:[],missingRequirements:[]},
+     membershipPaid,complimentaryAccess,
+     verification:{status:verification?.status||'not_submitted',phoneVerified:!!setup?.verifiedPhone},
+     billing:{status:billing?.status||'not_started'},
+     sellingStatus:{sellerApproved:publication.approved,shopSetupComplete:publication.ready,
+       canSell:publication.canSell,shopStatus:shop?.status||'not_listed',savedDraftCount:null,
+       publicProductCount:0},payments:[],entries:[],catalogue:{products:[],status:'unavailable'},
+     paystackMode:getPaystackMode()==='live'?'live':'test'
+   };
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);

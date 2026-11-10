@@ -240,6 +240,48 @@ async function main(){
      assert(!f.calls.some(x=>x.action==='ops_paystack_confirm'||x.action==='ops_catalogue_publish'));
      assert.deepEqual(f.errors,[]);await f.context.close();
    });
+   await check('Duplicate business email shows one explicit owner conflict rather than inherited approvals',async()=>{
+      const f=await pageFor({startView:'overview',api:async(route,body)=>{
+        if(body.action==='ops_sellers'){
+          await route.fulfill({json:{ok:true,sellers:[
+            {sellerUid:'',shopName:'Account ownership conflict',
+              ownerEmail:'owner@example.test',accountConflict:true,approvalStatus:'identity_conflict',
+              subscription:'blocked',conflictingSellerUids:['sellerOld','sellerNew']}
+          ],next:null}});return true;
+        }
+        return false;
+      }});
+      await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+      const directory=f.page.getByRole('heading',{name:'Business account directory'});
+      await directory.waitFor();
+      assert.equal(await f.page.getByRole('button',{name:'Open account'}).count(),0);
+      assert.equal(await f.page.getByRole('button',{name:'Review conflict'}).count(),1);
+      await f.page.getByRole('button',{name:'Review conflict'}).click();
+      await f.page.getByText('sellerOld · sellerNew').waitFor();
+      assert(!f.calls.some(x=>x.action==='ops_seller_detail'));
+      assert.deepEqual(f.errors,[]);await f.context.close();
+   });
+   await check('Full account 503 uses explicit limited profile without pretending payments were loaded',async()=>{
+      const f=await pageFor({startView:'overview',api:async(route,body)=>{
+        if(body.action==='ops_seller_detail'){
+          await route.fulfill({status:503,json:{error:'Shop services temporarily unavailable'}});return true;
+        }
+        if(body.action==='ops_seller_profile'){
+          await route.fulfill({json:{ok:true,partial:true,
+            seller:{...rows[0],approvalStatus:'pending',listingPlan:'free'},
+            businessAccount:{isPublic:false,type:'Spaza shop'},membershipPaid:false,complimentaryAccess:false,
+            verification:{status:'pending'},billing:{status:'not_started'}}});return true;
+        }
+        return false;
+      }});
+      await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+      await f.page.getByRole('button',{name:'Open account'}).first().click();
+      await f.page.getByRole('heading',{name:'Business account summary · limited service'}).waitFor();
+      await f.page.getByText('full account details returned a server error',{exact:false}).waitFor();
+      assert.equal(await f.page.getByText('Payment references').count(),0);
+      assert(f.calls.some(x=>x.action==='ops_seller_profile'&&x.data.sellerUid==='seller1'));
+      assert.deepEqual(f.errors,[]);await f.context.close();
+   });
    await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();

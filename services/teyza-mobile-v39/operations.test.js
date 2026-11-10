@@ -289,3 +289,44 @@ test('Business directory Premium badge cannot be forged by archived manual paid 
  result=await f.call('ops_sellers');
  assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'premium');
 });
+
+test('Admin directory coalesces same-email seller records only to exact Firebase Auth UID',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/legacySeller',{uid:'legacySeller',category:'spaza',shopName:'Historical Shop',ownerEmail:'OWNER@example.test',approvalStatus:'approved'});
+ f.db.records.set('teyzaSellerAccounts/currentSeller',{uid:'currentSeller',category:'spaza',shopName:'Current Shop',ownerEmail:'owner@example.test',approvalStatus:'pending'});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},
+   getAuthUserByEmail:async email=>{assert.equal(email,'owner@example.test');return {uid:'currentSeller'};}});
+ const d=await api.execute(admin,'ops_sellers');
+ assert.equal(d.sellers.filter(s=>s.ownerEmail.toLowerCase()==='owner@example.test').length,1);
+ const seller=d.sellers.find(s=>s.ownerEmail.toLowerCase()==='owner@example.test');
+ assert.equal(seller.sellerUid,'currentSeller');
+ assert.equal(seller.approvalStatus,'pending');
+});
+test('Admin directory quarantines email collisions when Firestore UIDs do not match the actual Auth user',async()=>{
+ const f=setup();
+ for(const uid of ['legacySeller','otherSeller'])
+   f.db.records.set('teyzaSellerAccounts/'+uid,{uid,category:'spaza',shopName:uid,ownerEmail:'owner@example.test',approvalStatus:uid==='legacySeller'?'approved':'pending'});
+ const api=createOperations({db:f.db,clock:()=>now,rate:async()=>{},getAuthUserByEmail:async()=>({uid:'realAuthUid'})});
+ const d=await api.execute(admin,'ops_sellers');
+ const record=d.sellers.find(s=>s.ownerEmail==='owner@example.test');
+ assert(record);
+ assert.equal(record.accountConflict,true);
+ assert.equal(record.sellerUid,'');
+ assert.equal(record.subscription,'blocked');
+ assert.equal(d.sellers.filter(s=>s.ownerEmail==='owner@example.test').length,1);
+});
+test('Lightweight profile does not fetch seller statements or payment history after a detail failure',async()=>{
+ const f=setup();
+ const original=f.db.collection.bind(f.db);
+ f.db.collection=(path)=>{
+   if(path.startsWith('teyzaBilling/seller1/entries')||path==='teyzaPaystackPayments')
+     throw Error('Costly read must not happen in summary');
+   return original(path);
+ };
+ const profile=await f.call('ops_seller_profile',{sellerUid:'seller1'});
+ assert.equal(profile.partial,true);
+ assert.equal(profile.seller.sellerUid,'seller1');
+ assert.equal(profile.businessAccount.approvalStatus,'approved');
+ assert.equal(profile.membershipPaid,false);
+ assert.deepEqual(profile.payments,[]);
+});
