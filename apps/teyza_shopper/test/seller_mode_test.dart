@@ -93,7 +93,9 @@ void main(){
     await capture(tester,boundary,'seller-dashboard-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-1')));await tester.pumpAndSettle();
     expect(find.text('Fresh bread'),findsOneWidget);expect(find.text('R15.00'),findsOneWidget);
-    expect(find.text('Add a custom product'),findsOneWidget);await capture(tester,boundary,'seller-products-28');
+    expect(find.text('Add a custom product'),findsNothing);
+    expect(find.textContaining('Product editing is unavailable until selling access is verified'),findsOneWidget);
+    await capture(tester,boundary,'seller-products-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-2')));await tester.pumpAndSettle();
     expect(find.text('No orders yet'),findsOneWidget);expect(api.calls.last.action,'order_list');expect(api.calls.last.data,{'asOwner':true});
     await tester.tap(find.byKey(const ValueKey('seller-nav-3')));await tester.pumpAndSettle();
@@ -195,7 +197,7 @@ void main(){
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump(const Duration(milliseconds:500));
-    expect(find.textContaining('Your verified Teyza membership is active'),findsOneWidget);
+    expect(find.textContaining('Premium account is active'),findsOneWidget);
     expect(api.calls.where((call)=>call.action=='billing_checkout'),isEmpty,
       reason:'App recognises paid access but cannot initiate Paystack subscription.');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
