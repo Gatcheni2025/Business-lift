@@ -553,16 +553,19 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     const onboardingReady=seller.registrationReady===true;
     const membership=seller.membershipPaid?'Verified live Paystack membership':
       seller.complimentaryAccess?'Time-limited administrator access':'No verified product membership';
-    view.append(el('p','Owner verification: '+(seller.verificationStatus||'not submitted')+
-      ' · Onboarding: '+(onboardingReady?'complete':'incomplete')+
-      ' · Product selling: '+(seller.sellingUnlocked===true?'enabled':'locked')));
+    view.append(el('p','Business verification: '+(seller.approvalStatus==='approved'?'Approved':'Pending verification')+
+      ' · Registration: '+(onboardingReady?'Complete':'Incomplete')+
+      ' · Selling: '+(seller.sellingUnlocked===true?'Enabled':'Membership or verification required')));
     view.append(el('p','Product membership: '+membership,'footnote'));
     if(seller.sellingUnlocked!==true)view.append(el('p',!identityReviewed?
-      'Account approval alone does not complete seller verification. Open the approval desk to check the current ID and selfie.':
+      'This business still needs genuine identity and registration verification. Open the complete business account to see one checklist.':
       !onboardingReady?'The seller must finish onboarding, including verified mobile registration, before selling.':
       'Seller verification is complete. Products require a verified Paystack membership or a recorded administrator exception.',
       'notice warning'));
-    view.append(button('Open seller verification',()=>navigate('approvals')));
+    view.append(button('Open complete business account',async()=>{
+      await navigate('sellers');
+      await choose(sellers.find(x=>x.sellerUid===user.uid)||{sellerUid:user.uid,shopName:seller.shopName||'Business'});
+    }));
   }
   if(!user.admin){
     if(user.email)view.append(button('Send password setup email',async()=>{
