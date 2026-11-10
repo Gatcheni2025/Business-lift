@@ -186,7 +186,58 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
     account.append(el('p','Business approval is complete. Your shop listing can be free and live; subscription status is separate. Do not approve the seller or products again.','notice success'));
   else account.append(button('Open approval desk',()=>navigate('approvals')));
-  root.append(account);sellerDocuments();
+  root.append(account);
+  const accountTabs=el('nav',undefined,'ops-account-tabs');
+  accountTabs.setAttribute('aria-label','Business account sections');
+  for(const [key,label] of [
+    ['summary','Overview'],['verification','Verification'],['shop','Shop & selling'],
+    ['finance','Finance'],['chat','Support']
+  ]){
+    const control=el('button',label,'button '+(accountTab===key?'primary':'quiet'));
+    control.type='button';control.setAttribute('aria-current',accountTab===key?'page':'false');
+    control.onclick=()=>{accountTab=key;show();root.querySelector('[data-seller-account]')?.scrollIntoView({block:'start',behavior:'instant'});};
+    accountTabs.append(control);
+  }
+  root.append(accountTabs);
+  if(accountTab==='summary'){
+    const life=d.businessAccount||{},isApproved=d.seller.approvalStatus==='approved';
+    const summary=card('Business account overview',
+      'One business verification outcome. Membership and settlement are separate finance decisions.');
+    summary.append(el('p','Business type: '+(life.type||'Registered business')),
+      el('p','Business verification: '+(isApproved?'Approved':'Verification pending')),
+      el('p','Community visibility: '+(life.isPublic?'Shop is live':'Not yet live')),
+      el('p','Selling entitlement: '+(d.membershipPaid?'Premium account':
+        d.complimentaryAccess?'Temporary access · not a payment':'Free account · unable to sell')),
+      el('p','Product approval: Not required; products publish automatically after verified membership.'));
+    if(!isApproved){
+      const remaining=life.missingRequirements||[];
+      summary.append(el('p',remaining.length?
+        'Registration checklist still missing: '+remaining.join(', ').replaceAll('_',' '):
+        'Uploaded requirements look complete; final identity review has not yet been recorded.',
+        'notice warning'),button('Open one verification checklist',()=>{accountTab='verification';show();}));
+    }
+    if(isApproved&&!life.isPublic)
+      summary.append(el('p','Check shop location and publication status under Shop & selling.','notice warning'));
+    summary.append(button('View membership & finance',()=>{accountTab='finance';show();}),
+      button('View seller support',()=>{accountTab='chat';show();}));
+    root.append(summary);
+  }
+  if(accountTab==='verification'){
+    const life=d.businessAccount||{},checks=life.verificationChecks||[];
+    const review=card('One business verification checklist','Registration is free. Email and phone checks are automatic. An uploaded ID and selfie still require genuine identity review; uploading does not prove identity.');
+    if(checks.length)review.append(table(['Requirement','Status'],checks.map(x=>[
+      x.label,tag(x.complete?'Complete':'Missing')
+    ])));
+    review.append(el('p',d.seller.approvalStatus==='approved'?
+      'Final business approval: Approved. No repeat approval required.':
+      'Final business approval: Awaiting business and identity review. No payment is required to be verified.',
+      d.seller.approvalStatus==='approved'?'notice success':'notice warning'));
+    if(d.seller.approvalStatus!=='approved')
+      review.append(button('Review final verification decision',()=>navigate('approvals')));
+    root.append(review);
+    sellerDocuments();
+  }
+  if(accountTab==='shop'){
   const status=d.sellingStatus;
   if(status){
     const review=card('Business approval · free listing · premium selling','One final seller approval only. Free shop discovery is separate from verified membership; products do not require individual admin approval.');
@@ -254,6 +305,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       new Date(d.mandateAccessUntil).toLocaleString('en-ZA'),'notice success'));
     root.append(review);
   }
+  }
+  if(accountTab==='finance'){
   const sellerMandate=mandates.find(m=>m.sellerUid===d.seller.sellerUid);
   if(sellerMandate)mandateReview(sellerMandate);
   // Seller ID approval is independent from Paystack purchase confirmation.
@@ -334,6 +387,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     await choose(selected);
   });
   settlement.append(payoutForm);root.append(settlement);
+  }
+  if(accountTab==='shop'){
   const catalogue=card('Seller products','Products publish automatically when registration is approved and subscription or temporary access is active.');
   const submitted=d.catalogue?.products||[];
   catalogue.append(tag(d.catalogue?.status||'not submitted'));
@@ -343,11 +398,15 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   ])));
   if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller approval, shop setup and verified or temporary selling access are complete. Check the publication status above.','notice warning'));
   root.append(catalogue);
+  }
+  if(accountTab==='finance'){
   const statement=card('Historical seller statement','Existing manual invoices and receipts are kept for audit only. They no longer enable product selling.');
   statement.append(button('Print historical statement',()=>printStatement(d)));
   statement.append(table(['Date','Description','Period','Reference','Charge','Payment','Balance'],
     d.entries.map(e=>statementRows([e])[0])));
   root.append(statement);
+  }
+  if(accountTab==='chat')sellerAccountSupport(d);
  }
 
  function productsView(){
