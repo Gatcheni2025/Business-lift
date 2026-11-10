@@ -106,15 +106,22 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  function registry(){
    if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
    const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
-     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus==='approved'?'Business approved':'Verification in progress'),
-      tag(s.subscription==='premium'?'Premium account':s.subscription==='temporary_access'?'Temporary access':'Free account'),
-      button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
+     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.accountConflict?'Account ownership conflict':s.approvalStatus==='approved'?'Business approved':'Verification in progress'),
+      tag(s.accountConflict?'Review required':s.subscription==='premium'?'Premium account':s.subscription==='temporary_access'?'Temporary access':'Free account'),
+      s.accountConflict?button('Review conflict',()=>showAccountConflict(s)):button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
       root.append(c);
       if(view==='billing'){closureReview();mandateQueue();}
       root.append(el('p','Select a business account to inspect its verification, shop visibility, membership, support and financial history.','footnote'));
       return;
    }
 
+ function showAccountConflict(s){
+   const warning=card('Account ownership conflict · '+s.ownerEmail,
+     'Multiple historical seller documents share one email. We cannot infer which record owns Firebase Auth, nor copy approval, documents or Paystack history between UIDs.');
+   warning.append(el('p','Affected seller UIDs: '+(s.conflictingSellerUids||[]).join(' · '),'notice warning'),
+     el('p','Verify the authoritative Firebase Authentication UID and investigate historical records before any account migration. No seller approval, billing, or deletion has been changed.','footnote'));
+   root.replaceChildren(warning,button('← Back to business directory',()=>show()));
+ }
  function mandateQueue(){
    const box=el('details',undefined,'panel ops-card ops-legacy-archive');
    box.open=archiveExpanded;
