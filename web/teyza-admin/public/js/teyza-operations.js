@@ -115,7 +115,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
 
  function mandateQueue(){
    const box=el('details',undefined,'panel ops-card ops-legacy-archive');
-   box.append(el('summary','Historic Netcash mandate archive — read-only'),
+   const archiveToggle=el('summary');archiveToggle.append(el('h3','Historic Netcash mandate archive — read-only'));
+   box.append(archiveToggle,
      el('p','Archived consent only. These mandates cannot authorise a new debit or prove a Paystack subscription.','footnote'));
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
      mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
