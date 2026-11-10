@@ -126,7 +126,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
         if(!setup.completedAt)D.fail(409,'Finish registration and verified phone setup before business approval.');
         if(!require('./shop-front').valid(f.exists?f.data():null,sellerUid))
           D.fail(409,'Upload a current shop-front photo before final business approval.');
-        if(!P.locationFor(sellerUid,a.exists?a.data():null,l.exists?l.data():null,s.exists?s.data():null,clock()))
+        if(!P.locationFor(sellerUid,a.exists?a.data():null,l.exists?l.data():null,null,clock()))
           D.fail(409,'Save a valid shop pin matching the registered address before approval.');
         require('./onboarding').checkedPhone(authUser,a.exists?a.data().phone:'');
         if(!require('./onboarding').current(identity,sellerUid,clock)||!identityView?.exists||identityView.data().sellerUid!==sellerUid||clock()-identityView.data().viewedAt>300000)
