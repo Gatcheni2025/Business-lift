@@ -443,7 +443,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         // One authoritative business approval; free directory visibility and
         // paid selling/wholesale advertising are independently reported.
         // Never infer a payment from an admin approval or temporary grant.
-        shopLive:publication.live&&publicShop?.status==='active',
+        shopLive:publication.live&&publicShop?.status==='active'&&Boolean(pin),
         premiumAccount:P.entitled(uid,account,billing,clock()),
         sellerBusinessType:account.category,
         sellingAccessState:!publication.approved?'awaiting_business_approval':
