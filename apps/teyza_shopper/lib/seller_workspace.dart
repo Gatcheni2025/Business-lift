@@ -650,7 +650,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         actions:widget.sellerMode?[
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
         ]:null),
-      floatingActionButton:shop?.hasRegisteredCategory==true&&session.idToken!=null?
+      floatingActionButton:widget.sellerMode&&shop?.hasRegisteredCategory==true&&session.idToken!=null&&
+          (sellerTab==0||sellerTab==4)?
         FloatingActionButton.extended(
           key:const ValueKey('teyza-floating-chat'),
           onPressed:openSellerSupport,
