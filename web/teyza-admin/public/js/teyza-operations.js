@@ -101,7 +101,24 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   guidance.append(button('Open seller verification',()=>navigate('approvals')));grid.append(guidance);
   root.append(grid);
  }
- async function choose(s){if(view==='products')view='sellers';const sameAccount=selected?.sellerUid===s.sellerUid&&detail!==null;selected=s;if(!sameAccount)accountTab=view==='billing'?'finance':'summary';detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
+ async function choose(s){if(view==='products')view='sellers';const sameAccount=selected?.sellerUid===s.sellerUid&&detail!==null;selected=s;if(!sameAccount)accountTab=view==='billing'?'finance':'summary';detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{
+    try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});}
+    catch(error){
+      if(error.stale||![500,502,503,504].includes(error.status))throw error;
+      detail=await request('ops_seller_profile',{sellerUid:s.sellerUid});
+      accountTab='summary';
+    }
+    show();const account=root.querySelector('[data-seller-account]');
+    account?.scrollIntoView({block:'start',behavior:'instant'});
+    account?.focus({preventScroll:true});
+   }catch(error){
+     if(!error.stale){
+       selected=null;detail=null;show();
+       message('Business account details are temporarily unavailable. No approval or payment was changed. Refresh the backend and try again.','warning');
+       root.scrollIntoView({block:'start',behavior:'instant'});
+     }
+     throw error;
+   }}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
  function registry(){
    if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
@@ -217,6 +234,17 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     accountTabs.append(control);
   }
   root.append(accountTabs);
+  if(d.partial){
+    const limited=card('Business account summary · limited service',
+      'Full account details returned a server error. The basic registration status is available, but documents, payments, shop product counts and financial history have NOT been loaded.');
+    limited.append(el('p','Business verification: '+(d.seller.approvalStatus==='approved'?'Approved':'Pending')),
+      el('p','Community listing: '+(d.businessAccount?.isPublic?'Live':'Not yet live')),
+      el('p','Selling: '+(d.membershipPaid?'Verified Premium':d.complimentaryAccess?'Temporary access':'Free')),
+      el('p','The detailed backend must recover before financial or verification decisions can be made.','notice warning'),
+      button('Retry complete account',()=>choose({...sellers.find(x=>x.sellerUid===d.seller.sellerUid),sellerUid:d.seller.sellerUid,shopName:d.seller.shopName})));
+    root.append(limited);
+    return;
+  }
   if(accountTab==='summary'){
     const life=d.businessAccount||{},isApproved=d.seller.approvalStatus==='approved';
     const summary=card('Business account overview',
