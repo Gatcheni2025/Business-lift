@@ -60,7 +60,7 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
   }
   void explainUpgrade(){
     showModalBottomSheet<void>(context:context,isScrollControlled:true,
-      showDragHandle:true,builder:(sheetContext)=>SafeArea(child:Padding(
+      showDragHandle:true,builder:(sheetContext)=>SafeArea(child:SingleChildScrollView(child:Padding(
         padding:const EdgeInsets.fromLTRB(20,8,20,24),
         child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
           const Text('Upgrade Account',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
