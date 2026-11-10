@@ -47,7 +47,33 @@ test('Only /pay rewrites and security headers are added; existing API/admin rule
  assert(equal({rewrites:[],headers:[],redirects:[]},{}),'Empty REST arrays can be omitted');
  assert(equal({rewrites:[{path:'/pay.html',glob:'/pay'}]},{rewrites:[{glob:'/pay',path:'/pay.html'}]}),'JSON key order is not semantically material');
  assert.throws(()=>configWithPayRoute({rewrites:[{glob:'/pay',function:'evilFunction'}]}),/Existing \/pay/);
- assert.throws(()=>configWithPayRoute({headers:[{glob:'/pay',headers:{'Content-Security-Policy':'default-src self'}}]}),/security headers/);
+ const safe=configWithPayRoute({headers:[
+   {glob:'/pay',headers:{'Content-Security-Policy':"default-src 'self'",
+      'Strict-Transport-Security':'max-age=31536000; includeSubDomains'}},
+   {glob:'/pay/',headers:{'Cache-Control':'private, no-store',
+      'X-Frame-Options':'DENY','Referrer-Policy':'no-referrer',
+      'Content-Security-Policy':"default-src 'none'"}}
+ ]});
+ const exact=safe.headers.find(x=>x.glob==='/pay');
+ assert.equal(exact.headers['Content-Security-Policy'],"default-src 'self'",'Must not modify existing CSP');
+ assert.equal(exact.headers['Strict-Transport-Security'],'max-age=31536000; includeSubDomains');
+ assert.equal(exact.headers['Cache-Control'],'no-store');
+ assert.equal(exact.headers['X-Frame-Options'],'DENY');
+ assert.equal(exact.headers['Referrer-Policy'],'no-referrer');
+ const slash=safe.headers.find(x=>x.glob==='/pay/');
+ assert.equal(slash.headers['Cache-Control'],'private, no-store','Do not replace compliant existing cache policy');
+ assert.equal(slash.headers['Content-Security-Policy'],"default-src 'none'");
+ assert.equal(safe.headers.length,4);
+ for(const key of ['Cache-Control','X-Frame-Options','Referrer-Policy']){
+   assert.throws(()=>configWithPayRoute({headers:[{glob:'/pay',headers:{
+     [key]:key==='Cache-Control'?'public,max-age=3600':key==='X-Frame-Options'?'SAMEORIGIN':'strict-origin-when-cross-origin'
+   }}]}),/manual security review/,'Conflicting policy '+key+' must stop release');
+ }
+ assert.throws(()=>configWithPayRoute({headers:[
+   {glob:'/pay',headers:{'Content-Security-Policy':'abc'}},
+   {glob:'/pay',headers:{'Content-Security-Policy':'xyz'}}
+ ]}),/duplicate \/pay security/);
+ assert.throws(()=>configWithPayRoute({headers:[{glob:'/pay',headers:{'cache-control':'no-store','Cache-Control':'no-store'}}]}),/Conflicting duplicate/);
 });
 test('Scoped Hosting clone restores missing source config and preserves all admin/API files',async()=>{
  const x=fixture({emptyCloneConfig:true});await deploy(x);assert.equal(x.live(),x.next);
