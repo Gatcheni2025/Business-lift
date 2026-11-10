@@ -42,6 +42,9 @@ export function eligibility(summary,verified,ready,matched=false){
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
   new Date(value).toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg',day:'numeric',month:'short',year:'numeric'}):'Not scheduled';
+export function shouldConfirmReturn(params,reference,verified){
+  return params?.get('payment')==='return' && validReceipt(reference) && !verified;
+}
 const receiptKey=uid=>'teyza_website_checkout_v1_'+uid;
 async function startup(){
   const el=id=>document.getElementById(id);
@@ -49,7 +52,8 @@ async function startup(){
   if(!root) return;
   const show=(id,on)=>{el(id).hidden=!on;};
   const notice=(message,level='')=>{el('webCheckoutStatus').textContent=message;root.dataset.status=level;};
-  let sdk=null,auth=null,summary=null,billing=null,health=null,busy=false;
+  let sdk=null,auth=null,summary=null,billing=null,health=null,busy=false,accountGeneration=0;
+  const current=(uid,generation)=>auth?.currentUser?.uid===uid && accountGeneration===generation;
   function receipt(uid){
     if(!uid) return null;
     try{
@@ -106,19 +110,20 @@ async function startup(){
   async function api(action,data={}){
     const user=auth?.currentUser;
     if(!user) throw Error('Sign in first.');
-    const uid=user.uid,token=await user.getIdToken(true);
+    const uid=user.uid,generation=accountGeneration,token=await user.getIdToken(true);
     const response=await fetch(SERVICE_URL,{
       method:'POST',cache:'no-store',credentials:'omit',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
       body:JSON.stringify({action,data})
     });
     const output=await response.json().catch(()=>({}));
-    if(auth.currentUser?.uid!==uid) throw Error('Seller account changed. Sign in again.');
+    if(!current(uid,generation)) throw Error('Seller account changed. Sign in again.');
     if(!response.ok||output.ok!==true) throw Error(output.error||'Unable to verify this request.');
     return output;
   }
   async function reload(){
     const uid=auth?.currentUser?.uid;if(!uid)return;
+    const generation=accountGeneration;
     busy=true;render();notice('Checking your seller account securely…');
     try{
       await auth.currentUser.reload();
@@ -126,7 +131,8 @@ async function startup(){
         fetch(SERVICE_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null),
         api('seller_summary'),api('seller_billing_overview')
       ]);
-      if(auth.currentUser?.uid!==uid||b?.sellerUid!==uid)throw Error('Seller identity does not match billing record.');
+      if(!current(uid,generation))return;
+      if(b?.sellerUid!==uid)throw Error('Seller identity does not match billing record.');
       health=h;summary=s;billing=b;notice('Shop identity and seller status verified.');
       if(confirmedMembership(summary,billing,uid)){
         sessionStorage.removeItem(receiptKey(uid));
@@ -134,33 +140,41 @@ async function startup(){
           history.replaceState(null,'',location.pathname);
           notice('Membership verified by Firebase. Reopen Teyza to use your selling tools.','success');
         }
+      }else if(shouldConfirmReturn(new URLSearchParams(location.search),receipt(uid),false)){
+        // Return parameters are navigation hints, not payment proof.
+        // The backend independently verifies the saved Teyza reference.
+        await confirm(true);
       }else if(new URLSearchParams(location.search).get('payment')==='return'){
-        notice('Returning from Paystack is not payment proof. Refresh status or check your payment reference.','warning');
+        notice('Your return is pending verification. Refresh status; do not pay twice.','warning');
       }
     }catch(error){
-      summary=null;billing=null;health=null;
-      if(auth.currentUser?.uid===uid)notice(error.message||'Account check unavailable.','error');
-    }finally{busy=false;render();}
+      if(current(uid,generation)){
+        summary=null;billing=null;health=null;
+        notice(error.message||'Account check unavailable.','error');
+      }
+    }finally{if(current(uid,generation)){busy=false;render();}}
   }
-  async function confirm(){
-    const uid=auth?.currentUser?.uid,reference=receipt(uid);
+  async function confirm(fromReturn=false){
+    const uid=auth?.currentUser?.uid,reference=receipt(uid),generation=accountGeneration;
+    if(busy && !fromReturn)return;
     if(!reference)return notice('No pending payment reference is available.','warning');
     busy=true;render();notice('Verifying payment through Firebase…');
     try{
       const verified=await api('billing_confirm',{reference});
       if(verified.paid!==true)throw Error('Payment requires further review.');
       const [s,b]=await Promise.all([api('seller_summary'),api('seller_billing_overview')]);
-      if(auth.currentUser?.uid!==uid||b.sellerUid!==uid)throw Error('Seller identity mismatch.');
+      if(!current(uid,generation))return;
+      if(b.sellerUid!==uid)throw Error('Seller identity mismatch.');
       summary=s;billing=b;
       if(!confirmedMembership(summary,billing,uid))throw Error('Payment not yet reflected as active seller membership.');
       sessionStorage.removeItem(receiptKey(uid));
       history.replaceState(null,'',location.pathname);
       notice('Verified payment activated. Reopen the Teyza app.','success');
-    }catch(error){notice(error.message||'Unable to confirm payment.','warning');}
-    finally{busy=false;render();}
+    }catch(error){if(current(uid,generation))notice(error.message||'Unable to confirm payment.','warning');}
+    finally{if(current(uid,generation)){busy=false;render();}}
   }
   async function checkout(){
-    const uid=auth?.currentUser?.uid;
+    const uid=auth?.currentUser?.uid,generation=accountGeneration;
     if(!uid||busy||!eligibility(summary,auth.currentUser.emailVerified,backendReady(health),billing?.sellerUid===uid).eligible||
       !el('webOwnShop').checked||!el('webTerms').checked)return notice('Confirm your shop identity and subscription terms.','warning');
     busy=true;render();notice('Preparing verified Paystack checkout…');
@@ -170,11 +184,12 @@ async function startup(){
       if(!validReceipt(result.reference)||!validCheckoutUrl(result.checkoutUrl)||
         ![1000,9900].includes(result.amountCents)||result.monthlyCents!==9900)
         throw Error('Unexpected checkout details.');
-      if(auth.currentUser?.uid!==uid)throw Error('Account changed before payment.');
+      if(!current(uid,generation))return;
       sessionStorage.setItem(receiptKey(uid),JSON.stringify({reference:result.reference,createdAt:Date.now()}));
       if(receipt(uid)!==result.reference)throw Error('Unable to save your checkout reference.');
+      if(!current(uid,generation))return;
       window.location.assign(result.checkoutUrl);
-    }catch(error){notice(error.message||'Checkout unavailable. No payment initiated.','error');busy=false;render();}
+    }catch(error){if(current(uid,generation)){notice(error.message||'Checkout unavailable. No payment initiated.','error');busy=false;render();}}
   }
   try{
     const [app,sdkAuth]=await Promise.all([
@@ -185,6 +200,7 @@ async function startup(){
     auth=sdk.getAuth(app.getApps()[0]||app.initializeApp(config));
     await sdk.setPersistence(auth,sdk.browserSessionPersistence);
     sdk.onAuthStateChanged(auth,async user=>{
+      accountGeneration++;
       summary=null;billing=null;health=null;busy=false;
       el('webOwnShop').checked=false;el('webTerms').checked=false;render();
       if(user)await reload();
@@ -220,9 +236,12 @@ async function startup(){
     el('webOwnShop').addEventListener('change',render);
     el('webManage').addEventListener('click',async()=>{
       try{
+        const uid=auth?.currentUser?.uid,generation=accountGeneration;
         const result=await api('billing_manage');
         const url=new URL(result.manageUrl);
-        if(url.protocol!=='https:'||url.hostname!=='paystack.com')throw Error('Unexpected management URL.');
+        if(url.protocol!=='https:'||url.hostname!=='paystack.com'||url.username||url.password||url.port)
+          throw Error('Unexpected management URL.');
+        if(!current(uid,generation))return;
         window.location.assign(result.manageUrl);
       }catch(error){notice(error.message||'Subscription management unavailable.','error');}
     });
