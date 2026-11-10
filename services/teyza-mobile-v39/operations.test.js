@@ -276,3 +276,16 @@ test('Unapproved business remains a single pending verification, not an independ
  assert(response.businessAccount.missingRequirements.includes('identity'));
  assert.equal(response.membershipPaid,false);
 });
+
+test('Business directory Premium badge cannot be forged by archived manual paid records',async()=>{
+ const f=setup(),account=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...account,listingPlan:'basic'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'manual_receipt',paymentEnvironment:'live'});
+ let result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'free');
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'paid',paidUntil:now+86400000,
+   paymentProvider:'paystack',paymentEnvironment:'live'});
+ result=await f.call('ops_sellers');
+ assert.equal(result.sellers.find(x=>x.sellerUid==='seller1').subscription,'premium');
+});
