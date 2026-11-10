@@ -106,7 +106,9 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  function registry(){
    if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
    const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
-     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
+     next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus==='approved'?'Business approved':'Verification in progress'),
+      tag(s.subscription==='paid'?'Premium account':s.subscription==='complimentary'?'Temporary access':'Free account'),
+      button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
       root.append(c);
       if(view==='billing'){closureReview();mandateQueue();}
       root.append(el('p','Select a business account to inspect its verification, shop visibility, membership, support and financial history.','footnote'));
@@ -250,10 +252,12 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const status=d.sellingStatus;
   if(status){
     const review=card('Business approval · free listing · premium selling','One final seller approval only. Free shop discovery is separate from verified membership; products do not require individual admin approval.');
-    review.append(el('p','Final business approval: '+(status.sellerApproved?'Approved':'Pending review')),
-      el('p','Shop setup: '+(status.shopSetupComplete?'Complete':'Incomplete')),
-      el('p','Membership-based selling access: '+(status.sellingAccessActive?'Active':'Not active')),
-      el('p','Free community shop listing: '+status.shopStatus+' · Public products: '+Number(status.publicProductCount||0)));
+    review.append(el('p','Business verification: '+(status.sellerApproved?'Approved':'Still in progress')),
+      el('p','Registration: '+(status.shopSetupComplete?'Complete':'Needs finishing')),
+      el('p','Community listing: '+(d.businessAccount?.isPublic?'Shop is live':'Not yet live')),
+      el('p','Selling account: '+(d.membershipPaid?'Premium account':
+        d.complimentaryAccess?'Temporary access · not subscribed':'Free · upgrade needed after verification')),
+      el('p','Public products: '+Number(status.publicProductCount||0)+' · No individual product approvals'));
     if(status.publicProductsAllowed===false){
       review.append(el('p','Wholesaler listing only. Supplier products and prices are not shown on the public shopper app.','notice'));
     }else{
