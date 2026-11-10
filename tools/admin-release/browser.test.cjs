@@ -90,8 +90,11 @@ async function main(){
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(url+'/admin');await page.bringToFront();
   if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
-   const nav=page.getByRole('button',{name:'Seller verification',exact:true});await nav.waitFor({state:'visible'});
-   if(startView==='approvals')await nav.click();
+   const nav=page.getByRole('button',{name:'Business accounts',exact:true});await nav.waitFor({state:'visible'});
+   if(startView==='approvals'){
+     await nav.click();
+     await page.getByRole('button',{name:'Review pending business verifications'}).click();
+   }
   }
   return {context,page,calls,errors};
  }
@@ -104,9 +107,9 @@ async function main(){
     assert(await f.page.getByRole('button',{name:'Seller records 3 Loaded seller records Open →'}).isVisible());
     assert.equal(await f.page.getByText('Total revenue',{exact:false}).count(),0);
     await f.page.locator('#sectionSearch').fill('mandate');
-    assert(await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).isVisible());
-    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isHidden());
-    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    assert(await f.page.getByRole('button',{name:'Finance & payments',exact:true}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Business accounts',exact:true}).isHidden());
+    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     try{await f.page.getByRole('heading',{name:'Historic Netcash mandate archive — read-only'}).waitFor({timeout:7000});}
     catch(error){
       const panel=await f.page.locator('#operationsPanel').innerText();
@@ -114,16 +117,17 @@ async function main(){
       throw Error('Mandate inbox not rendered: '+JSON.stringify({panel:panel.slice(0,1500),notice,errors:f.errors}),{cause:error});
     }
     assert.equal(await f.page.locator('#sectionSearch').inputValue(),'');
-    assert(await f.page.getByRole('button',{name:'Seller verification',exact:true}).isVisible());
+    assert(await f.page.getByRole('button',{name:'Business accounts',exact:true}).isVisible());
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
-    assert(order.indexOf('Historic Netcash mandate archive — read-only')<order.indexOf('Seller directory'));
+    assert(order.indexOf('Historic Netcash mandate archive — read-only')<order.indexOf('Choose a business for finance'));
     await f.page.getByRole('button',{name:'Overview',exact:true}).click();
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
     await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
     await f.page.setViewportSize({width:393,height:852});
     assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await f.page.screenshot({path:path.join(output,'admin-overview-phone.png'),fullPage:true});
-    await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
+    await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+    await f.page.getByRole('button',{name:'Review pending business verifications'}).click();
     await f.page.locator('.seller-row').first().waitFor();
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
@@ -183,13 +187,13 @@ async function main(){
      await f.page.getByText('Owner verification: pending_review',{exact:false}).waitFor();
      await f.page.getByText('Product selling: locked',{exact:false}).waitFor();
      await f.page.getByRole('button',{name:'Open seller verification'}).click();
-     await f.page.getByRole('button',{name:'Seller verification',exact:true}).waitFor();
+     await f.page.getByRole('button',{name:'Business accounts',exact:true}).waitFor();
      assert.equal(f.errors.length,0);
      await f.context.close();
    });
    await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
     const f=await pageFor();
-    await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
+    await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByRole('heading',{name:'Verification documents'}).waitFor();
     await f.page.getByRole('button',{name:'View private document'}).first().click();
@@ -273,7 +277,7 @@ async function main(){
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
-   await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
    await f.page.getByText('Seller products',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
@@ -301,7 +305,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
     available=true;
     await f.page.getByRole('button',{name:'Refresh mandates'}).click();
@@ -320,7 +324,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
     await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
     for(const name of ['Save mandate review','Record provider submission',
@@ -351,7 +355,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Sellers & exceptions',exact:true}).click();
+    await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
     await f.page.getByLabel('Reason to repair the seller catalogue sync').fill(
@@ -389,7 +393,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByRole('button',{name:'View private mandate (audited)'}).click();
     await f.page.getByRole('dialog').getByText('Account number: 12345678901').waitFor();
@@ -418,7 +422,7 @@ async function main(){
       }
       return false;
     }});
-    await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
     await f.page.getByRole('button',{name:'Open mandate'}).click();
     await f.page.getByText('This Netcash record is retained for audit only.',{exact:false}).waitFor();
     assert.equal(await f.page.getByRole('button',{name:'Record provider submission'}).count(),0);
@@ -433,7 +437,7 @@ async function main(){
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-login-phone.png'),fullPage:true});
    await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();
-   await f.page.getByRole('button',{name:'Seller verification',exact:true}).click();
+   await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
    await f.page.locator('.seller-row').first().waitFor();assert.equal(await f.page.locator('#password').inputValue(),'');assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Subscriptions shows closure reviews and verifies a processed full refund',async()=>{
@@ -450,7 +454,7 @@ async function main(){
     }
     return false;
    }});
-   await f.page.getByRole('button',{name:'Seller payments & legacy mandates',exact:true}).click();
+   await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
    await f.page.getByRole('heading',{name:'Account closures and payment review'}).waitFor();
    await f.page.getByText('needs attention',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Open seller payment review'}).click();
