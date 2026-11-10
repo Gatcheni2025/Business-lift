@@ -299,7 +299,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
      message:'',status:'open',priority:'normal',revision:0,
      createdBy:uid,createdAt:clock(),updatedAt:clock(),
      source:'seller_admin_chat',shopName:account.shopName||'Business',
-     lastMessage:'',lastMessageAt:clock(),sellerUnread:0,adminUnread:0});
+     lastMessage:'',lastMessageAt:clock(),messageCount:0,sellerUnread:0,adminUnread:0});
     else if(snap.data().ownerUid!==uid)D.fail(403,'Support conversation belongs to another seller.');
    });
    return {ticketId};
@@ -310,7 +310,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    if(!ticket||ticket.source!=='seller_admin_chat'||(self&&ticket.ownerUid!==uid))
      D.fail(404,'Support conversation not found.');
    const rows=await db.collection('teyzaSupportTickets/'+ticketId+'/messages')
-     .orderBy('createdAt','desc').limit(60).get();
+     .orderBy('sequence','desc').limit(60).get();
    // Reading never changes seller approval, subscription or billing.
    return {ticket:{id:ticketId,ownerUid:ticket.ownerUid,shopName:ticket.shopName||'',
      subject:ticket.subject,status:ticket.status,updatedAt:ticket.updatedAt},
@@ -337,8 +337,9 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
     }
     const at=clock();
     tx.set(entry,{senderUid:uid,sender:self?'seller':'admin',
-      text:raw,createdAt:at});
+      text:raw,createdAt:at,sequence:(snap.data().messageCount||0)+1});
     tx.update(ref,{lastMessage:raw.slice(0,180),lastMessageAt:at,updatedAt:at,
+      messageCount:(snap.data().messageCount||0)+1,
       status:self?'open':'waiting_for_seller',revision:(snap.data().revision||0)+1,
       [self?'adminUnread':'sellerUnread']:(snap.data()[self?'adminUnread':'sellerUnread']||0)+1});
    });
