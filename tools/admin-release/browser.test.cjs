@@ -92,8 +92,8 @@ async function main(){
   if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
    const nav=page.getByRole('button',{name:'Business accounts',exact:true});await nav.waitFor({state:'visible'});
    if(startView==='approvals'){
-     await nav.click();
-     await page.getByRole('button',{name:'Review pending business verifications'}).click();
+     // Overview's verification queue remains accessible even when the seller directory fails.
+     await page.locator('.overview-stat').first().click();
    }
   }
   return {context,page,calls,errors};
