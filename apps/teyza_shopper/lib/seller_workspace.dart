@@ -166,7 +166,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     }
   }
   void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-    SellerSupportChatPage(session:widget.session,api:widget.mobileApi)));
+    SellerSupportChatPage(session:widget.session,api:widget.mobileApi,
+      premiumAccount:premiumAccount,businessApproved:sellerApproved)));
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
