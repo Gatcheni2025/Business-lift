@@ -44,8 +44,11 @@ function failed(error){
 const complianceLabels={
   identity:'Current ID, passport or company registration',
   selfie:'Current owner selfie',
+  email:'Verified Firebase email for this seller',
   phone:'SMS verification of the registered mobile number',
-  shop_location:'Saved location for the claimed Google Maps business'
+  shop_front:'Current photo of the physical shop front',
+  onboarding:'Completed seller registration and setup',
+  shop_location:'Saved, accurate map pin matching the shop address'
 };
 function missingItems(row){
   if(!row)return [];
