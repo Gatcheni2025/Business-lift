@@ -110,7 +110,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:Text('Your verified Teyza membership is active. Start selling is now available.')));
+          content:Text('Premium account is active. Your selling tools are now available.')));
       }
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
       if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -613,10 +613,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             const SizedBox(height:10),
             if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
               icon:const Icon(Icons.inventory_2_outlined),label:const Text('Manage my products')),
-            TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+            if(hasProductAccess)TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
-            OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(hasProductAccess)OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(!hasProductAccess)const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text('Product editing is unavailable until selling access is verified. Your shop can remain listed for free.')),
             for(final item in drafts)
               Column(children:[
                 const Divider(),
@@ -628,9 +629,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
                     (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Custom product')),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
-                  onTap:busy?null:()=>_edit(item)),
+                  onTap:busy||!hasProductAccess?null:()=>_edit(item)),
                 Wrap(alignment:WrapAlignment.end,children:[
-                  TextButton.icon(onPressed:busy?null:()=>_edit(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_edit(item),
                     icon:const Icon(Icons.edit_outlined),label:const Text('Edit')),
                   TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
                     icon:const Icon(Icons.add_a_photo_outlined),label:const Text('Photo')),
