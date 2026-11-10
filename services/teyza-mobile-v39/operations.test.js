@@ -213,3 +213,35 @@ test('Finance queue exposes only seller-bound finance requests and supports lega
  const r=await f.call('ops_finance_queue');assert.equal(r.requests.length,1);assert.equal(r.requests[0].path,'teyzaCreditEnquiries/seller1/requests/a');assert(!JSON.stringify(r).includes('unrelated'));
 });
 test('An oversized ledger is never returned as a complete statement with a false opening balance',async()=>{const f=setup();for(let n=0;n<501;n++)f.db.records.set('teyzaBilling/seller1/entries/e'+n,{ownerUid:'seller1',createdAt:n,debitCents:9900,creditCents:0});await rejects(f.call('ops_seller_detail',{sellerUid:'seller1'}),422);});
+
+test('Seller support conversations are scoped to the signed-in UID and replies reach the owner',async()=>{
+ const f=setup(),seller={uid:'seller1',email_verified:true},intruder={uid:'seller2',email_verified:true};
+ const opened=await f.call('seller_support_open',{sellerUid:'seller2'},seller);
+ assert.equal(opened.ticketId,'seller_seller1');
+ assert.equal(f.db.records.get('teyzaSupportTickets/seller_seller1').ownerUid,'seller1');
+ const id='seller_msg_1';
+ await f.call('seller_support_message',{ticketId:'seller_seller2',message:'Please help me understand my membership status.',messageId:id},seller);
+ const saved=f.db.records.get('teyzaSupportTickets/seller_seller1/messages/'+id);
+ assert.equal(saved.senderUid,'seller1');
+ assert.equal((await f.call('seller_support_thread',{},seller)).messages[0].text,saved.text);
+ await rejects(f.call('seller_support_thread',{ticketId:'seller_seller1'},intruder),404);
+ await rejects(f.call('ops_support_thread',{ticketId:'seller_seller1'},seller),403);
+ await rejects(f.call('ops_support_reply',{ticketId:'seller_seller1',message:'See https://teyza.co.za/pay',messageId:'admin_link_1'}),422);
+ await f.call('ops_support_reply',{ticketId:'seller_seller1',message:'Your seller review is complete. We can assist with your membership status.',messageId:'admin_msg_1'});
+ const thread=await f.call('seller_support_thread',{},seller);
+ assert.equal(thread.messages.length,2);
+ assert.equal(thread.messages[1].sender,'admin');
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false,'Support cannot create a billing record');
+ assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'approved');
+ const adminThread=await f.call('ops_support_thread',{ticketId:'seller_seller1'});
+ assert.equal(adminThread.messages.length,2);
+});
+test('Seller support messages are idempotent and cannot impersonate admins',async()=>{
+ const f=setup(),seller={uid:'seller1',email_verified:true};
+ await f.call('seller_support_open',{},seller);
+ await f.call('seller_support_message',{message:'Hi team',messageId:'fixed_1'},seller);
+ await f.call('seller_support_message',{message:'Hi team',messageId:'fixed_1'},seller);
+ assert.equal((await f.call('seller_support_thread',{},seller)).messages.length,1);
+ await rejects(f.call('seller_support_message',{message:'Changed message',messageId:'fixed_1'},seller),409);
+ await rejects(f.call('ops_support_reply',{ticketId:'seller_seller1',message:'Unauthorised',messageId:'bad_1'},seller),403);
+});
