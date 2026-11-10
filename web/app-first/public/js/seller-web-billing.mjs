@@ -1,257 +1,251 @@
-// Teyza website-only seller subscription checkout.
-// Never embed a Paystack secret here; the Firebase service owns all amounts and verification.
+// SECURITY REMEDIATION: independently rewritten, fail-closed Teyza seller portal.
+// No card details or Paystack secrets are handled here. Pending independent review.
 export const TERMS_VERSION='seller-r10-r99-first-2026-11';
 export const SERVICE_URL='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
-const firebaseConfig={
+const config={
   apiKey:'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
   authDomain:'business-lift-3c19c.firebaseapp.com',
   projectId:'business-lift-3c19c',
   appId:'1:983479810697:web:bd021d86bbe6d787db2458'
 };
-export function validCheckoutUrl(value){
-  try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='checkout.paystack.com'&&!u.username&&!u.password;}
-  catch(_){return false;}
+export function validCheckoutUrl(input){
+  try{
+    const url=new URL(input);
+    return url.protocol==='https:' && url.hostname==='checkout.paystack.com' &&
+      !url.username && !url.password && !url.port;
+  }catch{return false;}
 }
 export function validReceipt(value){return /^TZM-[a-f0-9]{26}$/.test(String(value||''));}
- // Never take a Paystack redirect, query parameter, or browser receipt as proof
- // of membership. Only the authenticated seller's two server-verified views.
- export function confirmedMembership(summary,billing,uid){
-   return typeof uid==='string'&&uid.length>0&&billing?.sellerUid===uid&&
-     summary?.listingPaid===true&&billing?.paymentVerified===true&&billing?.status==='paid';
- }
-export function backendReady(data){
-  const parts=String(data?.version||'').split('.').map(Number);
-  const version=parts.length===3&&parts.every(Number.isInteger)&&
-    (parts[0]>3||(parts[0]===3&&parts[1]>=25));
-  return Boolean(data?.ok===true&&version&&data.approvalRequired===true&&
-    data.sellerApprovalBeforeCheckout===true&&data.paystackCheckoutAvailable===true&&
-    data.billingMode==='paystack_checkout'&&data.introductoryFirstMonthCents===1000&&
-    data.subscriptionMonthlyCents===9900);
+export function confirmedMembership(summary,billing,uid){
+  return typeof uid==='string' && uid.length>0 && billing?.sellerUid===uid &&
+    summary?.listingPaid===true && billing?.paymentVerified===true && billing?.status==='paid';
 }
-export function eligibility(summary,emailVerified,healthReady,matchedSeller=false){
-  if(!summary||!matchedSeller)return {eligible:false,message:'Sign in to the exact Firebase account that owns this verified Teyza shop.'};
-  if(summary.listingPaid===true)return {eligible:false,active:true,message:'Your verified membership is active. Product access follows your current seller approval.'};
-  if(summary.complimentaryAccess===true)return {eligible:false,active:true,message:'Your administrator-granted product access is active until its stated expiry.'};
-  if(summary.approvalStatus!=='approved'||summary.identityVerified!==true)
-    return {eligible:false,message:'Your shop needs administrator approval, including its current ID and selfie review, before payment.'};
-  if(summary.setupComplete!==true)
-    return {eligible:false,message:'Complete mobile OTP verification and seller onboarding before subscribing.'};
-  if(!emailVerified)return {eligible:false,message:'Verify the email address linked to this same seller account before paying.'};
-  if(!healthReady)return {eligible:false,message:'Secure website subscription checkout is not activated on Teyza yet. No payment can be taken here.'};
-  return {eligible:true,message:summary.introEligible===false?'Your next membership is R99, then R99 monthly.':'R10 today for access until month-end, then R99 on the first of each following month.'};
+export function backendReady(health){
+  const v=String(health?.version||'').split('.').map(Number);
+  return Boolean(health?.ok===true && v.length===3 && v.every(Number.isInteger) &&
+    (v[0]>3 || v[0]===3 && v[1]>=25) &&
+    health.approvalRequired===true && health.sellerApprovalBeforeCheckout===true &&
+    health.paystackCheckoutAvailable===true && health.billingMode==='paystack_checkout' &&
+    health.introductoryFirstMonthCents===1000 && health.subscriptionMonthlyCents===9900);
 }
-const receiptKey=uid=>'teyza_website_checkout_v1_'+uid;
+export function eligibility(summary,verified,ready,matched=false){
+  if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
+  if(summary.listingPaid===true) return {eligible:false,active:true,message:'Verified membership active. Open the Teyza app to manage products.'};
+  if(summary.complimentaryAccess===true) return {eligible:false,active:true,message:'Temporary complimentary access is active. This is not a Paystack payment.'};
+  if(summary.approvalStatus!=='approved' || summary.identityVerified!==true)
+    return {eligible:false,message:'Shop approval and identity review must be completed first.'};
+  if(summary.setupComplete!==true) return {eligible:false,message:'Complete phone verification and seller onboarding in Teyza.'};
+  if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
+  if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
+  return {eligible:true,message:summary.introEligible===false?'R99 today, then R99 monthly.':'R10 introductory payment, then R99 monthly from the following month.'};
+}
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
   new Date(value).toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg',day:'numeric',month:'short',year:'numeric'}):'Not scheduled';
+export function shouldConfirmReturn(params,reference,verified){
+  return params?.get('payment')==='return' && validReceipt(reference) && !verified;
+}
+const receiptKey=uid=>'teyza_website_checkout_v1_'+uid;
 async function startup(){
-  const $=id=>document.getElementById(id),root=$('teyza-web-membership');
-  if(!root)return;
-  const view=(message,level='')=>{$('webCheckoutStatus').textContent=message;root.dataset.status=level;};
-  let sdk,auth,health=null,summary=null,billing=null,activeUid=null,pending=false,returnProcessed=null;
-  const set=(id,visible)=>{$(id).hidden=!visible;};
+  const el=id=>document.getElementById(id);
+  const root=el('teyza-web-membership');
+  if(!root) return;
+  const show=(id,on)=>{el(id).hidden=!on;};
+  const notice=(message,level='')=>{el('webCheckoutStatus').textContent=message;root.dataset.status=level;};
+  let sdk=null,auth=null,summary=null,billing=null,health=null,busy=false,accountGeneration=0;
+  const current=(uid,generation)=>auth?.currentUser?.uid===uid && accountGeneration===generation;
+  function receipt(uid){
+    if(!uid) return null;
+    try{
+      const stored=JSON.parse(sessionStorage.getItem(receiptKey(uid))||'null');
+      if(!validReceipt(stored?.reference) || !Number.isFinite(stored?.createdAt) ||
+        stored.createdAt>Date.now()+300000 || Date.now()-stored.createdAt>48*3600000){
+        sessionStorage.removeItem(receiptKey(uid));return null;
+      }
+      return stored.reference;
+    }catch{return null;}
+  }
   function render(){
-    const user=auth?.currentUser||null,logged=Boolean(user),matched=Boolean(user&&billing?.sellerUid===user.uid);
-    const decision=eligibility(summary,user?.emailVerified===true,backendReady(health),matched);
-    set('webLogin',!logged);set('webAccount',logged);
-    $('webAccountEmail').textContent=user?.email||'Signed-in seller';
-    $('webShopName').textContent=matched?billing.shopName:'Not verified for this login';
-    $('webShopType').textContent=matched?({wholesale:'Wholesaler',spaza:'Spaza shop',retail:'Other business'}[billing.businessType]||'Business'):'Not verified';
-    $('webShopUid').textContent=matched?billing.sellerUid:'No matching seller';
-    $('webBillingStatus').textContent=matched?({
+    const user=auth?.currentUser,uid=user?.uid,matched=Boolean(uid&&billing?.sellerUid===uid);
+    const status=eligibility(summary,user?.emailVerified===true,backendReady(health),matched);
+    show('webLogin',!user);show('webAccount',!!user);
+    el('webAccountEmail').textContent=user?.email||'';
+    el('webShopName').textContent=matched?billing.shopName||'Unnamed shop':'Not verified';
+    el('webShopType').textContent=matched?({spaza:'Spaza shop',retail:'Other business',wholesale:'Wholesaler'}[billing.businessType]||'Business'):'Not verified';
+    el('webShopUid').textContent=matched?uid:'No matching seller';
+    el('webAccess').textContent=status.message;
+    el('webBillingStatus').textContent=matched?({
       paid:'Paid · active',complimentary_access:'Temporary complimentary access',
       legacy_temporary_access:'Historic temporary access · not a Paystack payment',
       payment_failed:'Renewal failed',cancelled:'Renewal cancelled',
       action_required:'Paystack action required',not_subscribed:'Not subscribed'
-    }[billing.status]||'Account status pending'):'Not verified';
-    $('webPaidThrough').textContent=matched&&billing.paymentVerified?billingDate(billing.paidThrough):'No verified live payment';
-    $('webNextBill').textContent=matched?billingDate(billing.nextBillingAt):'Not scheduled';
-    $('webAmountDue').textContent=matched?billingMoney(billing.amountDueCents):'No confirmed amount';
-    const history=$('webPaymentHistory');
-    history.replaceChildren();
-    const transactions=matched&&Array.isArray(billing.transactions)?billing.transactions:[];
-    if(!transactions.length){
-      const note=document.createElement('p');note.className='pay-note';
-      note.textContent=matched?'No Paystack membership transactions recorded yet.':'Sign in to the correct shop to see its payment history.';
-      history.append(note);
-    }else{
-      for(const item of transactions.slice(0,30)){
-        const line=document.createElement('p');
-        line.className='pay-note';
-        line.textContent=[billingDate(item.date),billingMoney(item.amountCents),
-          item.kind||'membership',item.paymentVerified?'Verified live Paystack':(item.status||'unverified'),
-          item.reference||''].join(' · ');
-        history.append(line);
-      }
-      if(billing.historyTruncated===true){
-        const note=document.createElement('p');note.className='pay-note';
-        note.textContent='Payment history is limited. Contact Teyza support for older records.';
-        history.append(note);
-      }
+    }[billing.status]||'Awaiting verification'):'Not verified';
+    el('webPaidThrough').textContent=matched&&billing.paymentVerified?billingDate(billing.paidThrough):'No verified live payment';
+    el('webNextBill').textContent=matched?billingDate(billing.nextBillingAt):'Not scheduled';
+    el('webAmountDue').textContent=matched?billingMoney(billing.amountDueCents):'No confirmed amount';
+    el('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
+    el('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
+    const historyNode=el('webPaymentHistory');historyNode.replaceChildren();
+    const records=matched&&Array.isArray(billing.transactions)?billing.transactions.slice(0,30):[];
+    if(!records.length){
+      const p=document.createElement('p');p.textContent='No verified Paystack membership transactions recorded yet.';
+      historyNode.append(p);
+    }else for(const record of records){
+      const p=document.createElement('p');
+      p.textContent=[billingDate(record.date),billingMoney(record.amountCents),
+        record.kind||'membership',record.paymentVerified?'Verified live Paystack':record.status||'unverified'].join(' · ');
+      historyNode.append(p);
     }
-    $('webAccess').textContent=decision.message;
-    $('webAvailabilityNotice').textContent=!logged?
-      'Sign in to check the current availability of verified website checkout.':
-      backendReady(health)?
-      'Website checkout is available to eligible, approved Teyza sellers after explicit recurring consent.':
-      'New website membership payments are temporarily unavailable. No charge will be initiated.';
-    $('webReturnGuidance').hidden=!confirmedMembership(summary,billing,user?.uid);
-    if(confirmedMembership(summary,billing,user?.uid)&&billing?.renewalStatus==='action_required')
-      $('webReturnGuidance').textContent='Selling access is active. Your next automatic renewal still needs attention; contact Teyza support before the paid month ends.';
-    else
-      $('webReturnGuidance').textContent='Your verified membership is now linked to this Teyza account. Reopen the app to use Start selling; it refreshes your access automatically.';
-    $('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
-    $('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
-    set('webVerifyEmail',logged&&user?.emailVerified!==true&&Boolean(user?.email));
-    set('webManage',logged&&matched&&['scheduled','active'].includes(billing?.renewalStatus)&&
-      Number.isFinite(billing?.nextBillingAt));
-    set('webConfirm',logged&&Boolean(readReceipt(user?.uid)));
-    $('webCheckout').disabled=pending||!decision.eligible||!$('webTerms').checked||!$('webOwnShop').checked;
-    $('webRefresh').disabled=pending;
-    $('webCheckout').textContent=pending?'Checking…':'Pay securely with Paystack';
+    el('webAvailabilityNotice').textContent=backendReady(health)?
+      'Checkout is available only to approved and verified sellers.':
+      'New membership checkout is disabled while security verification is completed.';
+    show('webReturnGuidance',confirmedMembership(summary,billing,uid));
+    el('webReturnGuidance').textContent='Verified membership is linked to this account. Reopen the app to refresh selling access.';
+    show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
+    show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
+    show('webConfirm',Boolean(uid&&receipt(uid)));
+    el('webCheckout').disabled=busy||!status.eligible||!el('webTerms').checked||!el('webOwnShop').checked;
+    el('webRefresh').disabled=busy;
   }
-  function readReceipt(uid){
-    if(!uid)return null;
-    try{const raw=sessionStorage.getItem(receiptKey(uid));if(!raw)return null;
-      const row=JSON.parse(raw);if(!validReceipt(row.reference)||!Number.isFinite(row.createdAt)||
-        Date.now()-row.createdAt>48*3600000){sessionStorage.removeItem(receiptKey(uid));return null;}
-      return row.reference;
-    }catch(_){return null;}
-  }
-  function saveReceipt(uid,reference){
-    if(!uid||!validReceipt(reference))throw Error('Unexpected payment reference. Checkout was stopped.');
-    sessionStorage.setItem(receiptKey(uid),JSON.stringify({reference,createdAt:Date.now()}));
-    if(readReceipt(uid)!==reference)throw Error('Your browser could not save the payment return reference.');
-  }
-  async function post(action,data={}){
-    const user=auth?.currentUser;if(!user)throw Error('Sign in to your seller account first.');
-    const uid=user.uid,token=await user.getIdToken(true);
-    const response=await fetch(SERVICE_URL,{method:'POST',cache:'no-store',credentials:'omit',
+  async function api(action,data={}){
+    const user=auth?.currentUser;
+    if(!user) throw Error('Sign in first.');
+    const uid=user.uid,generation=accountGeneration,token=await user.getIdToken(true);
+    const response=await fetch(SERVICE_URL,{
+      method:'POST',cache:'no-store',credentials:'omit',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-      body:JSON.stringify({action,data})});
-    const payload=await response.json().catch(()=>({}));
-    if(auth.currentUser?.uid!==uid)throw Error('The signed-in account changed. Sign in again.');
-    if(!response.ok||payload.ok!==true)throw Error(payload.error||'The Teyza service could not complete the request.');
-    return payload;
+      body:JSON.stringify({action,data})
+    });
+    const output=await response.json().catch(()=>({}));
+    if(!current(uid,generation)) throw Error('Seller account changed. Sign in again.');
+    if(!response.ok||output.ok!==true) throw Error(output.error||'Unable to verify this request.');
+    return output;
   }
-  async function sync(){
-    if(!auth?.currentUser)return;
-    const uid=auth.currentUser.uid;
-    pending=true;render();view('Checking seller approval and payment status…');
+  async function reload(){
+    const uid=auth?.currentUser?.uid;if(!uid)return;
+    const generation=accountGeneration;
+    busy=true;render();notice('Checking your seller account securely…');
     try{
       await auth.currentUser.reload();
-      const fetched=await Promise.all([
-        fetch(SERVICE_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
-        post('seller_summary'),
-        post('seller_billing_overview')
+      const [h,s,b]=await Promise.all([
+        fetch(SERVICE_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null),
+        api('seller_summary'),api('seller_billing_overview')
       ]);
-      if(auth.currentUser?.uid!==uid)return;
-      if(fetched[2]?.sellerUid!==uid)throw Error('The secure billing account does not match this Firebase login.');
-      health=fetched[0];summary=fetched[1];billing=fetched[2];view('Shop identity and seller status verified.');render();
-      const isReturn=new URLSearchParams(location.search).get('payment')==='return';
+      if(!current(uid,generation))return;
+      if(b?.sellerUid!==uid)throw Error('Seller identity does not match billing record.');
+      health=h;summary=s;billing=b;notice('Shop identity and seller status verified.');
       if(confirmedMembership(summary,billing,uid)){
-        // A signed Paystack webhook can finish before the customer's browser
-        // comes back, including when the browser has lost its session receipt.
         sessionStorage.removeItem(receiptKey(uid));
-        if(isReturn){
-          view('Paystack payment verified for your shop. Reopen the Teyza app; selling access is now active.','success');
+        if(new URLSearchParams(location.search).get('payment')==='return'){
           history.replaceState(null,'',location.pathname);
+          notice('Membership verified by Firebase. Reopen Teyza to use your selling tools.','success');
         }
-      }else if(isReturn&&returnProcessed!==uid&&readReceipt(uid)){
-        returnProcessed=uid;await confirmPayment();
-      }else if(isReturn&&!readReceipt(uid)){
-        view('Your browser returned from Paystack. Your seller access is not verified yet. Choose Refresh account status; if a charge is missing, contact Teyza support with the Paystack reference.','warning');
+      }else if(shouldConfirmReturn(new URLSearchParams(location.search),receipt(uid),false)){
+        // Return parameters are navigation hints, not payment proof.
+        // The backend independently verifies the saved Teyza reference.
+        await confirm(true);
+      }else if(new URLSearchParams(location.search).get('payment')==='return'){
+        notice('Your return is pending verification. Refresh status; do not pay twice.','warning');
       }
-    }catch(error){if(auth.currentUser?.uid===uid){summary=null;billing=null;view(error.message||'Unable to verify this shop account.','error');}}
-    finally{pending=false;render();}
+    }catch(error){
+      if(current(uid,generation)){
+        summary=null;billing=null;health=null;
+        notice(error.message||'Account check unavailable.','error');
+      }
+    }finally{if(current(uid,generation)){busy=false;render();}}
   }
-  async function confirmPayment(){
-    const uid=auth?.currentUser?.uid,reference=readReceipt(uid);if(!reference){view('No pending browser payment receipt was found.','warning');return;}
-    pending=true;render();view('Verifying the payment directly with Paystack…');
+  async function confirm(fromReturn=false){
+    const uid=auth?.currentUser?.uid,reference=receipt(uid),generation=accountGeneration;
+    if(busy && !fromReturn)return;
+    if(!reference)return notice('No pending payment reference is available.','warning');
+    busy=true;render();notice('Verifying payment through Firebase…');
     try{
-      const result=await post('billing_confirm',{reference});
-      if(!result.paid){view('Payment cannot activate access yet. Contact support for payment review.','warning');return;}
-      const [nextSummary,nextBilling]=await Promise.all([
-        post('seller_summary'),post('seller_billing_overview')
-      ]);
-      if(auth?.currentUser?.uid!==uid||nextBilling.sellerUid!==uid)
-        throw Error('Your account changed while confirming payment. Sign in again.');
-      summary=nextSummary;billing=nextBilling;
-      const active=confirmedMembership(summary,billing,uid);
-      if(active)sessionStorage.removeItem(receiptKey(uid));
-      view(active?
-        'Payment verified and linked to your Teyza shop. Reopen the app to start selling.':
-        'Payment was recorded, but selling access is not active yet. Refresh or contact support before publishing products.',
-        active?'success':'warning');
-      if(active)history.replaceState(null,'',location.pathname);
-    }catch(error){view(error.message||'Payment not yet confirmed. Use Check payment after Paystack completes.','error');}
-    finally{pending=false;render();}
+      const verified=await api('billing_confirm',{reference});
+      if(verified.paid!==true)throw Error('Payment requires further review.');
+      const [s,b]=await Promise.all([api('seller_summary'),api('seller_billing_overview')]);
+      if(!current(uid,generation))return;
+      if(b.sellerUid!==uid)throw Error('Seller identity mismatch.');
+      summary=s;billing=b;
+      if(!confirmedMembership(summary,billing,uid))throw Error('Payment not yet reflected as active seller membership.');
+      sessionStorage.removeItem(receiptKey(uid));
+      history.replaceState(null,'',location.pathname);
+      notice('Verified payment activated. Reopen the Teyza app.','success');
+    }catch(error){if(current(uid,generation))notice(error.message||'Unable to confirm payment.','warning');}
+    finally{if(current(uid,generation)){busy=false;render();}}
   }
   async function checkout(){
-    const user=auth?.currentUser,uid=user?.uid,decision=eligibility(summary,user?.emailVerified===true,backendReady(health),Boolean(uid&&billing?.sellerUid===uid));
-    if(pending||!decision.eligible||!$('webTerms').checked||!$('webOwnShop').checked){view('Confirm your exact Teyza business and recurring payment terms first.','warning');return;}
-    pending=true;render();view('Preparing a secure, one-time Paystack checkout…');
+    const uid=auth?.currentUser?.uid,generation=accountGeneration;
+    if(!uid||busy||!eligibility(summary,auth.currentUser.emailVerified,backendReady(health),billing?.sellerUid===uid).eligible||
+      !el('webOwnShop').checked||!el('webTerms').checked)return notice('Confirm your shop identity and subscription terms.','warning');
+    busy=true;render();notice('Preparing verified Paystack checkout…');
     try{
-      const result=await post('billing_checkout',{checkoutChannel:'web',confirmedSellerUid:uid,recurringConsent:true,termsVersion:TERMS_VERSION});
-      if(!validCheckoutUrl(result.checkoutUrl)||!validReceipt(result.reference)||![1000,9900].includes(result.amountCents)||
-        result.monthlyCents!==9900)throw Error('Checkout details failed validation. Nothing was opened.');
-      if(auth.currentUser?.uid!==uid)throw Error('The signed-in account changed. Payment was not opened.');
-      saveReceipt(uid,result.reference);
+      const result=await api('billing_checkout',{checkoutChannel:'web',confirmedSellerUid:uid,
+        recurringConsent:true,termsVersion:TERMS_VERSION});
+      if(!validReceipt(result.reference)||!validCheckoutUrl(result.checkoutUrl)||
+        ![1000,9900].includes(result.amountCents)||result.monthlyCents!==9900)
+        throw Error('Unexpected checkout details.');
+      if(!current(uid,generation))return;
+      sessionStorage.setItem(receiptKey(uid),JSON.stringify({reference:result.reference,createdAt:Date.now()}));
+      if(receipt(uid)!==result.reference)throw Error('Unable to save your checkout reference.');
+      if(!current(uid,generation))return;
       window.location.assign(result.checkoutUrl);
-    }catch(error){pending=false;render();view(error.message||'Checkout could not be started.','error');}
+    }catch(error){if(current(uid,generation)){notice(error.message||'Checkout unavailable. No payment initiated.','error');busy=false;render();}}
   }
   try{
-    const [app,authApi]=await Promise.all([
+    const [app,sdkAuth]=await Promise.all([
       import('https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js')
     ]);
-    sdk=authApi;
-    auth=sdk.getAuth(app.getApps()[0]||app.initializeApp(firebaseConfig));
+    sdk=sdkAuth;
+    auth=sdk.getAuth(app.getApps()[0]||app.initializeApp(config));
     await sdk.setPersistence(auth,sdk.browserSessionPersistence);
     sdk.onAuthStateChanged(auth,async user=>{
-      activeUid=user?.uid||null;summary=null;billing=null;health=null;pending=false;
-      $('webOwnShop').checked=false;$('webTerms').checked=false;render();
-      if(user)await sync();
-      else view('Sign in with the same verified email, Google or Apple account used to register your Teyza shop.');
+      accountGeneration++;
+      summary=null;billing=null;health=null;busy=false;
+      el('webOwnShop').checked=false;el('webTerms').checked=false;render();
+      if(user)await reload();
+      else notice('Sign in using the original Firebase account for your approved Teyza shop.');
     });
-    $('webEmailForm').addEventListener('submit',async event=>{
-      event.preventDefault();const email=$('webEmail').value.trim(),password=$('webPassword').value;
-      view('Signing in securely…');
-      try{await sdk.signInWithEmailAndPassword(auth,email,password);}
-      catch(error){view(error.message||'Sign-in failed. Check your email and password.','error');}
-      finally{$('webPassword').value='';}
+    el('webEmailForm').addEventListener('submit',async event=>{
+      event.preventDefault();
+      try{await sdk.signInWithEmailAndPassword(auth,el('webEmail').value.trim(),el('webPassword').value);}
+      catch(error){notice(error.message||'Sign-in unavailable.','error');}
+      finally{el('webPassword').value='';}
     });
-    $('webGoogle').addEventListener('click',async()=>{
+    el('webGoogle').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider());}
-      catch(error){view(error.message||'Google sign-in failed.','error');}
+      catch(error){notice(error.message||'Google sign-in failed.','error');}
     });
-    $('webApple').addEventListener('click',async()=>{
+    el('webApple').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.OAuthProvider('apple.com'));}
-      catch(error){view(error.message||'Apple sign-in is not available on this browser or account.','error');}
+      catch(error){notice(error.message||'Apple sign-in failed.','error');}
     });
-    $('webFacebook').addEventListener('click',async()=>{
+    el('webFacebook').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.FacebookAuthProvider());}
-      catch(error){view(error.message||'Facebook sign-in could not be completed. Ensure it is enabled for your existing Teyza account.','error');}
+      catch(error){notice(error.message||'Facebook sign-in failed.','error');}
     });
-    $('webLogout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>view(e.message,'error')));
-    $('webVerifyEmail').addEventListener('click',async()=>{
-      try{await sdk.sendEmailVerification(auth.currentUser);view('Verification email requested. Open your inbox, verify it, then refresh your seller status.');}
-      catch(e){view(e.message||'Unable to request verification email.','error');}
+    el('webLogout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>notice(e.message,'error')));
+    el('webVerifyEmail').addEventListener('click',async()=>{
+      try{await sdk.sendEmailVerification(auth.currentUser);notice('Verification email sent. Verify and refresh your account.');}
+      catch(error){notice(error.message||'Email verification unavailable.','error');}
     });
-    $('webRefresh').addEventListener('click',sync);
-    $('webCheckout').addEventListener('click',checkout);
-    $('webConfirm').addEventListener('click',confirmPayment);
-    $('webTerms').addEventListener('change',render);
-    $('webOwnShop').addEventListener('change',render);
-    $('webManage').addEventListener('click',async()=>{
-      pending=true;render();
-      try{const result=await post('billing_manage');const url=new URL(result.manageUrl);
-        if(url.protocol!=='https:'||url.hostname!=='paystack.com')throw Error('Unsafe subscription management address.');
+    el('webCheckout').addEventListener('click',checkout);
+    el('webConfirm').addEventListener('click',()=>confirm(false));
+    el('webRefresh').addEventListener('click',reload);
+    el('webTerms').addEventListener('change',render);
+    el('webOwnShop').addEventListener('change',render);
+    el('webManage').addEventListener('click',async()=>{
+      try{
+        const uid=auth?.currentUser?.uid,generation=accountGeneration;
+        const result=await api('billing_manage');
+        const url=new URL(result.manageUrl);
+        if(url.protocol!=='https:'||url.hostname!=='paystack.com'||url.username||url.password||url.port)
+          throw Error('Unexpected management URL.');
+        if(!current(uid,generation))return;
         window.location.assign(result.manageUrl);
-      }catch(error){view(error.message||'Subscription management is unavailable.','error');}
-      finally{pending=false;render();}
+      }catch(error){notice(error.message||'Subscription management unavailable.','error');}
     });
     render();
-  }catch(error){view('Unable to load secure seller sign-in. Reload the page or contact Teyza support.','error');}
+  }catch(error){notice('Secure sign-in is temporarily unavailable. Contact Teyza support.','error');}
 }
 if(typeof document!=='undefined')startup();

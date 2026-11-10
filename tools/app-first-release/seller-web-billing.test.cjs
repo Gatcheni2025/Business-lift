@@ -110,3 +110,26 @@ test('Browser return requires matching original UID and independently verified l
  assert.equal(confirmedMembership(summary,null,uid),false);
  assert.equal(confirmedMembership(summary,billing,''),false);
 });
+
+test('Payment return recovery is bound to a valid server-issued reference, not a redirect alone',async()=>{
+ const {shouldConfirmReturn}=await service();
+ const returnUrl=new URLSearchParams('payment=return');
+ const reference='TZM-'+ 'a'.repeat(26);
+ assert.equal(shouldConfirmReturn(returnUrl,reference,false),true);
+ assert.equal(shouldConfirmReturn(returnUrl,reference,true),false);
+ assert.equal(shouldConfirmReturn(returnUrl,'TZM-invalid',false),false);
+ assert.equal(shouldConfirmReturn(new URLSearchParams('payment=success'),reference,false),false);
+ assert.equal(shouldConfirmReturn(new URLSearchParams('uid=other'),reference,false),false);
+});
+test('Account switch invalidates asynchronous reads and navigation before state mutations',()=>{
+ const src=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ assert(src.includes('accountGeneration++'),'Switch must invalidate outstanding operations');
+ assert(src.includes('const current=(uid,generation)'),'Both UID and auth generation must match');
+ assert(src.includes('if(!current(uid,generation))return;'),'Stale operations must exit');
+ assert(src.includes('if(!current(uid,generation)) throw Error('),'Authenticated API results must reject stale UID');
+ assert(src.includes('await confirm(true)'),'Return recovery must invoke Firebase backend verification');
+ assert(src.includes("api('billing_confirm',{reference})"),'Only backend can confirm a saved reference');
+ assert(src.includes("confirmedMembership(summary,billing,uid)"),'Backend access state controls success');
+ assert(src.includes("url.hostname!=='paystack.com'||url.username||url.password||url.port"),
+  'Subscription management navigation must refuse unsafe URL authority');
+});

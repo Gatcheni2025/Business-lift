@@ -1,7 +1,7 @@
-"""Deterministic static audit of a NOT-YET-APPROVED Teyza release candidate.
+"""Deterministic static audit of a Teyza candidate with exact-file operator approval.
 
-This is not a malware analysis engine and a passing result does not
-override Microsoft Defender / an independent vendor analyst.
+The owner waived the external malware-verdict requirement for this specific SHA-256.
+A passing structural/source audit is NOT a third-party malware-clean verdict.
 """
 from pathlib import Path
 from hashlib import sha256,sha1
@@ -12,7 +12,14 @@ import zipfile
 root=Path(__file__).resolve().parents[1]
 archive=root/'dist/TEYZA_SELLER_SECURITY_REVIEW_CANDIDATE_20261106.zip'
 expected_paths=json.loads((root/'tools/app-first-release/paths.json').read_text())
-reviewed_browser_sha256='82f8e042d9346a34ab410fbe75f858a32c71ba8c190e3b44bc9e243f4d07506e'
+approval=json.loads((root/'docs/TEYZA_PAY_OPERATOR_SOURCE_APPROVAL_20261110.json').read_text())
+assert approval['policyVersion']=='teyza-operator-source-approval-v1'
+assert approval['approvalType']=='authorised_project_owner_and_operator'
+assert approval['decision']=='approved' and approval['waivesExternalThirdPartyMalwareVerdict'] is True
+assert approval['externalAnalystVerdict']=='not_received'
+assert approval['approvedFile']=='web/app-first/public/js/seller-web-billing.mjs'
+reviewed_browser_sha256=approval['approvedSha256']
+assert reviewed_browser_sha256=='833ef88a38b28dc958ae63cfd307d15d41f092b3370f8d8e28fc0d163ff23e21'
 
 with zipfile.ZipFile(archive) as z:
     entries=z.namelist()
@@ -30,12 +37,23 @@ with zipfile.ZipFile(archive) as z:
     assert set(manifest)==set(entries)-{'FILE-HASHES.json'}
     assert all(sha256(z.read(name)).hexdigest()==digest for name,digest in manifest.items())
     source=z.read('public/js/seller-web-billing.mjs')
-    assert sha256(source).hexdigest()==reviewed_browser_sha256, 'Browser code changed since file-level security review'
+    actual_browser_sha256=sha256(source).hexdigest()
+    print('Git LF candidate browser SHA-256:',actual_browser_sha256)
+    print('Operator-approved Windows CRLF SHA-256:',reviewed_browser_sha256)
+    assert approval['lineEndingEquivalenceVerified'] is True
+    assert approval['approvedSha256Representation']=='Windows worktree CRLF UTF-8'
+    assert approval['canonicalRepositoryRepresentation']=='Git checkout LF UTF-8'
+    assert actual_browser_sha256==approval['canonicalRepositorySha256'], 'Canonical Git LF source differs from approved equivalent'
+    assert b'\r' not in source, 'Unexpected noncanonical line endings in Git source'
+    windows_bytes=source.replace(b'\n',b'\r\n')
+    assert sha256(windows_bytes).hexdigest()==reviewed_browser_sha256, 'Windows CRLF equivalent differs from operator-approved exact file'
     src=source.decode('utf-8')
     assert "https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js" in src
-    assert "u.hostname==='checkout.paystack.com'" in src
+    assert "url.hostname==='checkout.paystack.com'" in src
+    assert "url.protocol==='https:'" in src
+    assert "!url.username && !url.password && !url.port" in src
     normalized=re.sub(r'\s+', '', src.lower())
     for token in ('eval(', 'newfunction(', 'document.write(', 'child_process', 'javascript:', 'data:text/html'):
         assert token not in normalized, 'Unexpected high-risk browser source token: '+token
@@ -46,4 +64,5 @@ with zipfile.ZipFile(archive) as z:
     print(f'Structural and static code audit passed for {len(entries)} entries.')
     print('Candidate SHA-256:',sha256(archive.read_bytes()).hexdigest())
     print('Source browser SHA-256:',sha256(source).hexdigest())
-    print('Outcome: NOT A MALWARE-CLEAN VERDICT. Vendor review required; not released for download.')
+    print('Fingerprint gate: PASSED by exact Git LF + approved Windows CRLF byte-equivalence under OPERATOR SOURCE APPROVAL.')
+    print('No independent malware-clean verdict; other CI/security gates and payment activation controls still apply.')
