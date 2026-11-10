@@ -184,9 +184,9 @@ async function main(){
      const row=f.page.getByRole('row').filter({hasText:'shopper@example.test'});
      await row.getByRole('button',{name:'View user'}).click();
      await f.page.getByText('Account approval: approved',{exact:false}).waitFor();
-     await f.page.getByText('Owner verification: pending_review',{exact:false}).waitFor();
-     await f.page.getByText('Product selling: locked',{exact:false}).waitFor();
-     await f.page.getByRole('button',{name:'Open seller verification'}).click();
+     await f.page.getByText('Business verification: Approved',{exact:false}).waitFor();
+     await f.page.getByText('Selling: Membership or verification required',{exact:false}).waitFor();
+     await f.page.getByRole('button',{name:'Open complete business account'}).click();
      await f.page.getByRole('button',{name:'Business accounts',exact:true}).waitFor();
      assert.equal(f.errors.length,0);
      await f.context.close();
@@ -195,7 +195,8 @@ async function main(){
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
-    await f.page.getByRole('heading',{name:'Verification documents'}).waitFor();
+    await f.page.getByRole('button',{name:'Verification',exact:true}).click();
+     await f.page.getByRole('heading',{name:'Verification documents'}).waitFor();
     await f.page.getByRole('button',{name:'View private document'}).first().click();
     assert(f.calls.some(x=>x.action==='seller_identity_read'&&x.data.evidenceId==='doc1'));
     await f.page.locator('#photoDialog').getByRole('button',{name:/close/i}).click();
