@@ -32,10 +32,10 @@ class SellerSellingDashboard extends StatelessWidget {
   final bool live,verified,premiumAccount,hasProductAccess;
   final String? publicationStatus;
   final bool hasLocation;
-  final VoidCallback? onLocation,onUpgrade;
+  final VoidCallback? onLocation;
   final Uint8List? shopPhoto;
   final bool photoLoading;
-  final VoidCallback? onPhoto,onShop,onEditProfile,onSupport;
+  final VoidCallback? onPhoto,onShop,onEditProfile;
   final int unread;
   final int? productCount;
   final VoidCallback? onAdd;
@@ -44,7 +44,7 @@ class SellerSellingDashboard extends StatelessWidget {
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
-    this.onPhoto,this.onShop,this.onEditProfile,this.onSupport,this.onUpgrade,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0});
+    this.onPhoto,this.onShop,this.onEditProfile,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0});
   bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
   bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
   String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
@@ -68,9 +68,6 @@ class SellerSellingDashboard extends StatelessWidget {
         if(onShop!=null)FilledButton.tonalIcon(key:const ValueKey('seller-shop-wholesale'),onPressed:onShop,
           icon:const Icon(Icons.shopping_bag_outlined),label:const Text('Shop')),
         FilledButton.tonalIcon(onPressed:onOrders,icon:const Icon(Icons.receipt_long_outlined),label:const Text('Orders')),
-        if(onSupport!=null)FilledButton.tonalIcon(key:const ValueKey('seller-support-chat'),
-          onPressed:onSupport,icon:const Icon(Icons.support_agent_outlined),
-          label:const Text('Teyza Support')),
         FilledButton.tonalIcon(onPressed:onChat,icon:Badge(isLabelVisible:unread>0,
           label:Text(unread>99?'99+':'$unread'),child:const Icon(Icons.chat_bubble_outline)),
           label:const Text('Messages')),
@@ -86,19 +83,16 @@ class SellerSellingDashboard extends StatelessWidget {
                 hasProductAccess?'Temporary selling access · This is not a paid subscription.':
                 'Unable to sell · No active membership. Your shop remains visible to nearby shoppers.',
                 style:const TextStyle(color:_muted)),
-            if(!premiumAccount&&onUpgrade!=null)...[
-              const SizedBox(height:10),
-              SizedBox(width:double.infinity,child:FilledButton.icon(
-                key:const ValueKey('seller-upgrade-to-sell'),onPressed:onUpgrade,
-                icon:const Icon(Icons.workspace_premium_outlined),
-                label:const Text('Upgrade to sell on Teyza'))),
-            ]
           ]))),
       ],
-      const SizedBox(height:16),SizedBox(width:double.infinity,child:FilledButton.icon(
-        key:const ValueKey('seller-add-product'),onPressed:onAdd,icon:const Icon(Icons.add),
-        style:FilledButton.styleFrom(backgroundColor:_green,padding:const EdgeInsets.all(16)),
-        label:Text(premiumAccount?'Manage my products':approvedLive&&!hasProductAccess?'Upgrade to sell on Teyza':'Start selling',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
+      if(hasProductAccess)...[
+        const SizedBox(height:16),
+        SizedBox(width:double.infinity,child:FilledButton.icon(
+          key:const ValueKey('seller-add-product'),onPressed:onAdd,
+          icon:const Icon(Icons.inventory_2_outlined),
+          style:FilledButton.styleFrom(backgroundColor:_green,padding:const EdgeInsets.all(16)),
+          label:const Text('Manage my products',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
+      ],
       const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
         '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
       if(awaitingApproval)...[
@@ -119,7 +113,6 @@ class SellerSellingDashboard extends StatelessWidget {
           _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
           _tool('Customer orders','Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
           _tool('Customer chat','Reply and make the sale',Icons.chat_bubble_outline_rounded,onChat),
-          if(onSupport!=null)_tool('Teyza Support','Chat with the Teyza team',Icons.support_agent_outlined,onSupport!),
           _tool('Stock finance','Apply for a funding review',Icons.account_balance_outlined,onFinance),
           _tool('Areas around me','Plan your local deliveries',Icons.near_me_outlined,onAreas),
           _tool('My business','Services, photos & settings',Icons.tune_rounded,onBusiness),

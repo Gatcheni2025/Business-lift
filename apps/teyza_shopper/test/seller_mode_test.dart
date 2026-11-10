@@ -86,11 +86,16 @@ void main(){
       catalogueLoader:() async{publicReads++;return [];},directoryLoader:(_,__,___) async=>[]))));
     await tester.pumpAndSettle();expect(find.byType(SellerNavigation),findsOneWidget);
     expect(find.text('Seller dashboard'),findsOneWidget);expect(find.text('Shops'),findsNothing);expect(find.text('Cart'),findsNothing);
-    expect(find.byKey(const ValueKey('seller-add-product')).hitTestable(),findsOneWidget);expect(publicReads,0);
+    expect(find.byKey(const ValueKey('seller-add-product')),findsNothing);
+    expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
+    expect(find.text('Upgrade to sell on Teyza'),findsNothing);
+    expect(publicReads,0);
     await capture(tester,boundary,'seller-dashboard-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-1')));await tester.pumpAndSettle();
     expect(find.text('Fresh bread'),findsOneWidget);expect(find.text('R15.00'),findsOneWidget);
-    expect(find.text('Add a custom product'),findsOneWidget);await capture(tester,boundary,'seller-products-28');
+    expect(find.text('Add a custom product'),findsNothing);
+    expect(find.textContaining('Product editing is unavailable until selling access is verified'),findsOneWidget);
+    await capture(tester,boundary,'seller-products-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-2')));await tester.pumpAndSettle();
     expect(find.text('No orders yet'),findsOneWidget);expect(api.calls.last.action,'order_list');expect(api.calls.last.data,{'asOwner':true});
     await tester.tap(find.byKey(const ValueKey('seller-nav-3')));await tester.pumpAndSettle();
@@ -159,17 +164,21 @@ void main(){
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('A free seller choosing Start selling sees benefits without starting a payment',(tester) async {
+  testWidgets('Free seller has one floating Chat with informational Upgrade Account, no purchase flow',(tester) async {
     SharedPreferences.setMockInitialValues({});
     final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();
-    expect(find.text('Start selling'),findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('Benefits for your shop'),findsOneWidget);
-    expect(find.text('R99 / month'),findsNothing);
+    expect(find.text('Start selling'),findsNothing);
+    expect(find.text('Upgrade to sell on Teyza'),findsNothing);
+    expect(find.byKey(const ValueKey('seller-add-product')),findsNothing);
+    expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('teyza-floating-chat')));await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('support-upgrade-account')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
+    expect(find.text('Membership steps'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
@@ -188,19 +197,20 @@ void main(){
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump(const Duration(milliseconds:500));
-    expect(find.textContaining('Your verified Teyza membership is active'),findsOneWidget);
+    expect(find.textContaining('Premium account is active'),findsOneWidget);
     expect(api.calls.where((call)=>call.action=='billing_checkout'),isEmpty,
       reason:'App recognises paid access but cannot initiate Paystack subscription.');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('A product-list error does not hide the seller membership introduction',(tester) async {
+  testWidgets('Product-list error still leaves one support entry point without an upgrade duplicate',(tester) async {
     SharedPreferences.setMockInitialValues({});final session=SellerSession()..useSellerWorkspace(),api=SellerApi(SellerSession());
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ProductsUnavailableRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
-    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('Benefits for your shop'),findsOneWidget);
-    expect(find.text('R99 / month'),findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
+    expect(find.text('Start selling'),findsNothing);
+    expect(find.text('Upgrade to sell on Teyza'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('A pending seller sees benefits but cannot begin checkout',(tester) async {
@@ -209,11 +219,12 @@ void main(){
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token,read:()async=>pending),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
-    await tester.pumpAndSettle();await tester.tap(find.byKey(const ValueKey('seller-add-product')));await tester.pumpAndSettle();
-    expect(find.text('Benefits for your shop'),findsOneWidget);
-    await tester.scrollUntilVisible(find.textContaining('No payments or subscriptions can be initiated in this app.'),350);
-    expect(find.textContaining('No payments or subscriptions can be initiated in this app.'),findsOneWidget);
-    expect(find.textContaining('Paystack'),findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-add-product')),findsNothing);
+    expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('teyza-floating-chat')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
+    expect(find.text('Membership steps'),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

@@ -32,7 +32,8 @@ void main(){
       expect(find.text('Saved Shop'),findsOneWidget);
       expect(find.text(category=='spaza'?'Spaza Shop':category=='retail'?'Other Retail':'Wholesaler / Cash & Carry'),findsOneWidget);
       expect(find.text('Shop is not live yet'),findsOneWidget);
-      expect(find.text('Start selling'),findsOneWidget);
+      expect(find.text('Start selling'),findsNothing);
+      expect(find.text('Upgrade to sell on Teyza'),findsNothing);
       expect(tester.takeException(),isNull);
       await session.signOut();await tester.pumpAndSettle();
       expect(find.text('Saved Shop'),findsNothing);expect(find.text('Shop owner sign in'),findsOneWidget);
@@ -83,12 +84,14 @@ void main(){
     expect(find.text('Support reference: SELLER_PRODUCTS_ACCESS'),findsOneWidget);
     expect(find.text('No registered shop found'),findsNothing);
     expect(find.textContaining('0 product drafts'),findsNothing);
-    final add=find.widgetWithText(FilledButton,'Start selling');
-    await tester.scrollUntilVisible(add,180,scrollable:find.byType(Scrollable).first);
-    expect(tester.widget<FilledButton>(add).onPressed,isNotNull);
+    expect(find.text('Start selling'),findsNothing,
+      reason:'Product publishing is hidden until the account has selling entitlement.');
     blocked=false;
-    await tester.ensureVisible(find.text('Retry products'));
-    await tester.tap(find.text('Retry products'));await tester.pumpAndSettle();
+    // Exercise the actual button callback without relying on scroll geometry:
+    // shorter free-account dashboards may place it at a lazy-list boundary.
+    final retry=tester.widget<TextButton>(find.ancestor(
+      of:find.text('Retry products'),matching:find.byType(TextButton)));
+    retry.onPressed!();await tester.pumpAndSettle();
     expect(find.text('Retry products'),findsNothing);
     // A successful retry clears the permission error; the products button can
     // move to an unbuilt position in a lazily rendered dashboard.

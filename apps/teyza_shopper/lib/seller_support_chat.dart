@@ -8,7 +8,10 @@ import 'teyza_mobile_api.dart';
 class SellerSupportChatPage extends StatefulWidget {
   final ShopperSession session;
   final TeyzaMobileApi? api;
-  const SellerSupportChatPage({super.key,required this.session,this.api});
+  final bool premiumAccount;
+  final bool businessApproved;
+  const SellerSupportChatPage({super.key,required this.session,this.api,
+    this.premiumAccount=false,this.businessApproved=false});
   @override State<SellerSupportChatPage> createState()=>_SellerSupportChatPageState();
 }
 class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
@@ -55,14 +58,54 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
     }catch(e){if(mounted)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>sending=false);}
   }
+  void explainUpgrade(){
+    showModalBottomSheet<void>(context:context,isScrollControlled:true,
+      showDragHandle:true,builder:(sheetContext)=>SafeArea(child:SingleChildScrollView(child:Padding(
+        padding:const EdgeInsets.fromLTRB(20,8,20,24),
+        child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('Upgrade Account',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
+          const SizedBox(height:12),
+          Text(widget.businessApproved?'Your business is verified and can appear in the community for free.':
+            'First complete your business registration and verification. Your shop can be listed free after approval.'),
+          const SizedBox(height:14),
+          const Text('Membership steps',style:TextStyle(fontWeight:FontWeight.w700)),
+          const SizedBox(height:8),
+          const Text('1. Finish email, phone, ID, selfie, shop-front and location verification.'),
+          const SizedBox(height:7),
+          const Text('2. Confirm your business has received final approval.'),
+          const SizedBox(height:7),
+          const Text('3. Review the available Premium membership terms and give consent through a supported purchase process.'),
+          const SizedBox(height:7),
+          const Text('4. After Teyza independently verifies an active subscription for your Firebase account, the app updates to Premium account and unlocks eligible selling or wholesale tools.'),
+          const SizedBox(height:14),
+          const Text('Membership information: introductory R10 if eligible, otherwise R99; monthly renewal R99 until cancelled. This chat cannot accept payments or activate Premium.',
+            style:TextStyle(fontSize:12)),
+          const SizedBox(height:16),
+          Align(alignment:Alignment.centerRight,
+            child:TextButton(onPressed:()=>Navigator.pop(sheetContext),
+              child:const Text('Close')))
+        ]),
+      ))));
+  }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Chat with Teyza Support'),actions:[
       IconButton(tooltip:'Refresh support messages',onPressed:loading?null:refresh,
         icon:const Icon(Icons.refresh))]),
     body:SafeArea(child:Column(children:[
-      const Padding(padding:EdgeInsets.all(16),child:Text(
-        'Ask the Teyza team about business verification, account status, membership benefits or shop operations. This chat does not process payments. Never share passwords, OTPs or card information.',
-        style:TextStyle(height:1.4))),
+      Padding(padding:const EdgeInsets.all(16),child:Column(
+        crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          const Text('Ask Teyza Support about verification, membership or your shop. Never share passwords, OTPs or card details.',
+            style:TextStyle(height:1.4)),
+          const SizedBox(height:10),
+          if(!widget.premiumAccount)OutlinedButton.icon(
+            key:const ValueKey('support-upgrade-account'),
+            onPressed:explainUpgrade,
+            icon:const Icon(Icons.workspace_premium_outlined),
+            label:const Text('Upgrade Account'))
+          else const Chip(
+            avatar:Icon(Icons.workspace_premium_outlined),
+            label:Text('Premium account')),
+        ])),
       if(error!=null)Padding(padding:const EdgeInsets.all(12),
         child:Text(error!,style:const TextStyle(color:Colors.red))),
       Expanded(child:loading&&messages.isEmpty?const Center(child:CircularProgressIndicator()):

@@ -110,7 +110,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:Text('Your verified Teyza membership is active. Start selling is now available.')));
+          content:Text('Premium account is active. Your selling tools are now available.')));
       }
       final front=results[0]['shopFront'];unawaited(loadShopPhoto(uid,front is Map?front['photoId']?.toString():null));
       if(fresh.isNotEmpty&&widget.sellerMode)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -166,7 +166,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     }
   }
   void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
-    SellerSupportChatPage(session:widget.session,api:widget.mobileApi)));
+    SellerSupportChatPage(session:widget.session,api:widget.mobileApi,
+      premiumAccount:premiumAccount,businessApproved:sellerApproved)));
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
@@ -555,8 +556,6 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'Choose whether to receive private in-app offers from verified wholesalers.',
       openSpazaSupplierOffers),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
-    businessTile(Icons.support_agent_outlined,'Chat with Teyza Support',
-      'Get help with business approval, membership status or selling tools',openSellerSupport),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
@@ -593,15 +592,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
-      premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,onUpgrade:()=>openUpgrade(),
+      premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,
       shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
       onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
-      onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
-       onSupport:openSellerSupport)),
+      onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
@@ -613,12 +611,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             Text(draftError!=null?'Products are temporarily unavailable.':
               drafts.isEmpty?'No products saved yet.':'Your shop products: '+drafts.length.toString()),
             const SizedBox(height:10),
-            FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Start selling')),
-            TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
+            if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.inventory_2_outlined),label:const Text('Manage my products')),
+            if(hasProductAccess)TextButton.icon(onPressed:busy||draftError!=null?null:()=>_edit(),
               icon:const Icon(Icons.edit_note),label:const Text('Add a custom product')),
             if(rangeStatus!=null)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(rangeStatus!)),
-            OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(hasProductAccess)OutlinedButton.icon(onPressed:busy?null:syncRange,icon:const Icon(Icons.sync),label:Text(widget.sellerMode?'Sync product listing':'Refresh shopper range')),
+            if(!hasProductAccess)const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text('Product editing is unavailable until selling access is verified. Your shop can remain listed for free.')),
             for(final item in drafts)
               Column(children:[
                 const Divider(),
@@ -630,13 +629,13 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                   subtitle:Text(item.category+'  ·  Stock: '+item.stock.toString()+
                     (cataloguePhotoForDraft(item.id)!=null?'  ·  Selected range':'  ·  Custom product')),
                   trailing:Text('R'+(item.priceCents/100).toStringAsFixed(2)),
-                  onTap:busy?null:()=>_edit(item)),
+                  onTap:busy||!hasProductAccess?null:()=>_edit(item)),
                 Wrap(alignment:WrapAlignment.end,children:[
-                  TextButton.icon(onPressed:busy?null:()=>_edit(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_edit(item),
                     icon:const Icon(Icons.edit_outlined),label:const Text('Edit')),
-                  TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
                     icon:const Icon(Icons.add_a_photo_outlined),label:const Text('Photo')),
-                  TextButton.icon(onPressed:busy?null:()=>_delete(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_delete(item),
                     icon:const Icon(Icons.delete_outline),label:const Text('Delete'))
                 ])
               ])
@@ -652,6 +651,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         actions:widget.sellerMode?[
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
         ]:null),
+      floatingActionButton:widget.sellerMode&&shop?.hasRegisteredCategory==true&&session.idToken!=null&&
+          (sellerTab==0||sellerTab==4)?
+        FloatingActionButton.extended(
+          key:const ValueKey('teyza-floating-chat'),
+          onPressed:openSellerSupport,
+          icon:const Icon(Icons.chat_bubble_outline_rounded),
+          label:const Text('Chat'),
+          tooltip:'Chat with Teyza Support'):null,
+      floatingActionButtonLocation:FloatingActionButtonLocation.endFloat,
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
         SellerNavigation(selected:sellerTab,onSelect:selectSellerTab):null,
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
@@ -708,17 +716,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
-            FilledButton.icon(onPressed:busy?null:chooseProducts,
-              icon:const Icon(Icons.add),label:const Text('Start selling')),
-            const SizedBox(height:16),
-          OutlinedButton.icon(onPressed:()=>Navigator.push(context,
-              MaterialPageRoute(builder:(_)=>SellerPlanPage(session:session,api:widget.mobileApi,businessType:shop?.category??'spaza')))
-              .then((_){if(mounted)refreshActivity();}),
-            icon:const Icon(Icons.workspace_premium_outlined),
-            label:Text(premiumAccount?'Premium account':needsMembership?'Upgrade to sell on Teyza':businessAccessLabel)),
-
-            OutlinedButton.icon(onPressed:openSellerSupport,icon:const Icon(Icons.support_agent_outlined),
-              label:const Text('Chat with Teyza Support')),
+            if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
+              icon:const Icon(Icons.inventory_2_outlined),
+              label:const Text('Manage my products')),
+            const SizedBox(height:12),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),
