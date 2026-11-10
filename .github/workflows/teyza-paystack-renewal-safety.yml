@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked backend dependencies
+        working-directory: services/teyza-mobile-v39
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Syntax and Paystack renewal regression checks
         run: |
           node --check services/teyza-mobile-v39/billing-paystack.js
