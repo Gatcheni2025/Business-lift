@@ -107,7 +107,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
    const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
      next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus==='approved'?'Business approved':'Verification in progress'),
-      tag(s.subscription==='paid'?'Premium account':s.subscription==='complimentary'?'Temporary access':'Free account'),
+      tag(s.subscription==='premium'?'Premium account':s.subscription==='temporary_access'?'Temporary access':'Free account'),
       button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
       root.append(c);
       if(view==='billing'){closureReview();mandateQueue();}
