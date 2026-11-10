@@ -43,3 +43,13 @@ On 10 November, the operator fetched this exact replacement through a detached G
 - The complete website CI passed on the hardened source, but the separate legacy fingerprint security job still fails, as intended, pending approval of exact new source SHA-256.
 - Separate dependency PR: https://github.com/Gatcheni2025/Business-lift/pull/131. CI regenerated a candidate lockfile, passed its unit/Hosting tests and reported **0 high, 14 moderate** in `npm audit --omit=dev`. Artifact available in GitHub Actions run https://github.com/Gatcheni2025/Business-lift/actions/runs/42780309290. The regenerated lockfile is not yet committed or approved.
 - Synthetic browser tests **do not** prove live Firebase Auth provider configuration, a real webhook, or Paystack next-payment scheduling.
+
+## Authorised operator decision — 10 November 2026
+The authorised operator explicitly stated they reviewed the hardened payment JavaScript with SHA-256 `833EF88A38B28DC958AE63CFD307D15D41F092B3370F8D8E28FC0D163FF23E21` and **approved this exact source** for the next release-validation phase.
+
+- **Operator source approval: PASSED** (operator-attested; scoped to the exact SHA-256 above).
+- **External independent analyst / Microsoft malware verdict: NOT RECEIVED / NOT PASSED**. No third-party clearance is represented by the operator approval.
+- **CI reviewed fingerprint gate: FAILING**, not altered or bypassed.
+- **Controlled production authentication tests: authorised for preparation**, with payments disabled. Real Paystack charges and public checkout: not authorised by this document.
+- Historical `Trojan:JS/Tisifi.A` archive detections remain unresolved. The user accepted 14 moderate deployment-tool vulnerabilities separately in PR #131.
+- Dependency-only PR #131 merged into this remediation branch as commit `0effcb4563056e7cc8e4557e7229a9a92fa2ba74` after the user's approval. No production deployment occurred.
