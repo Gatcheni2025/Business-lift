@@ -500,7 +500,74 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   root.append(box);
  }
  function printStatement(d){const w=window.open('','_blank');if(!w)throw Error('Allow popups to print the statement.');const doc=w.document;doc.title='Teyza seller statement';const style=doc.createElement('style');style.textContent='body{font:13px system-ui;padding:30px;color:#183c43}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}h1{font-size:28px}@media print{button{display:none}}';doc.head.append(style);const body=doc.body;body.append(el('h1','Teyza · Seller statement'),el('p',d.seller.shopName+' · '+d.seller.sellerUid),el('p',d.seller.ownerEmail),el('p','Generated '+new Date().toLocaleString('en-ZA')+' · Currency ZAR'),table(['Date','Description','Month','Reference','Charge','Payment','Balance'],statementRows(d.entries)),el('p','Closing balance: '+money(d.entries.at(-1)?.balanceCents||0)),el('p','Subscription ledger. Not a bank statement or a VAT tax invoice.'));const b=el('button','Print / save PDF');b.onclick=()=>w.print();body.append(b);w.focus();}
- function support(){const create=card('Log a received support request','Use this for a request received by email or another support channel. Notes saved here are internal; this screen does not send emails.'),f=el('form',undefined,'ops-form');sellerPicker(f);field(f,'Subject','subject');field(f,'Request details','message','textarea');submit(f,'Create support case',async fd=>{await request('ops_support_create',Object.fromEntries(fd));await refresh();message('Support case created.','success');});create.append(f);root.append(create);for(const t of tickets){const c=card(t.subject,t.ownerUid+' · '+new Date(t.createdAt).toLocaleString('en-ZA'));c.append(el('p',t.message),tag(t.status));const notes=el('div');c.append(button('View internal notes',async()=>{const r=await request('ops_support_detail',{ticketId:t.id});notes.replaceChildren(...r.notes.map(n=>el('p',new Date(n.createdAt).toLocaleString('en-ZA')+' · '+n.note)));if(!r.notes.length)notes.append(el('p','No internal notes yet.'));}),notes);const form=el('form',undefined,'ops-form');choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved'].map(v=>[v,v.replaceAll('_',' ')]),t.status);choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);field(form,'Internal note','note','textarea');submit(form,'Save case update',async fd=>{await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});await refresh();message('Support update saved. No email was sent.','success');});c.append(form);root.append(c);}if(!tickets.length)root.append(el('p','No support cases loaded.','footnote'));if(moreTickets)root.append(button('Load more cases',async()=>{const r=await request('ops_support_list',{after:moreTickets});tickets.push(...r.tickets);moreTickets=r.next;show();}));}
+ function support(){
+   const intro=card('Seller and admin support chat','A private conversation with the original seller Firebase account. Customer conversations remain separate. This inbox is for account assistance, not for sending payment links or collecting passwords, OTPs or card details.');
+   root.append(intro);
+   const create=card('Log a received support request','Use this for email or phone requests. Internal notes are not visible to sellers.'),f=el('form',undefined,'ops-form');
+   sellerPicker(f);field(f,'Subject','subject');field(f,'Request details','message','textarea');
+   submit(f,'Create support case',async fd=>{await request('ops_support_create',Object.fromEntries(fd));await refresh();message('Support case created.','success');});
+   create.append(f);root.append(create);
+   for(const t of tickets){
+     const liveChat=t.source==='seller_admin_chat';
+     const c=card(liveChat?(t.shopName||'Seller')+' · Teyza Support':t.subject,
+       t.ownerUid+' · '+new Date(t.createdAt).toLocaleString('en-ZA'));
+     if(!liveChat)c.append(el('p',t.message));
+     else c.append(el('p',t.lastMessage||'Seller has opened a support conversation.'));
+     c.append(tag(t.status));
+     if(liveChat){
+       const thread=el('div',undefined,'ops-support-thread');
+       let current=[];
+       const paint=()=>{
+         thread.replaceChildren();
+         if(!current.length)thread.append(el('p','No messages yet.','footnote'));
+         for(const m of current){
+           const row=el('div',undefined,'ops-support-bubble');
+           row.append(el('strong',m.sender==='admin'?'Teyza Support':'Seller'),
+             el('p',m.text));
+           thread.append(row);
+         }
+       };
+       const load=async()=>{
+         const r=await request('ops_support_thread',{ticketId:t.id});
+         current=r.messages||[];paint();
+       };
+       c.append(button('Open conversation',async()=>{await load();}),thread);
+       const reply=el('form',undefined,'ops-form');
+       field(reply,'Reply to seller (no links or payment instructions)','message','textarea');
+       submit(reply,'Send to seller',async fd=>{
+         const text=String(fd.get('message')||'').trim();
+         if(text.length<2)throw Error('Write a reply.');
+         await request('ops_support_reply',{ticketId:t.id,message:text,
+           messageId:'a'+Date.now().toString()+Math.random().toString(36).slice(2,10)});
+         message('Support reply sent to this seller. No payment was created.','success');
+         await load();
+       });
+       c.append(reply);
+     }else{
+       const notes=el('div');
+       c.append(button('View internal notes',async()=>{
+         const r=await request('ops_support_detail',{ticketId:t.id});
+         notes.replaceChildren(...r.notes.map(n=>el('p',new Date(n.createdAt).toLocaleString('en-ZA')+' · '+n.note)));
+         if(!r.notes.length)notes.append(el('p','No internal notes yet.'));
+       }),notes);
+       const form=el('form',undefined,'ops-form');
+       choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved'].map(v=>[v,v.replaceAll('_',' ')]),t.status);
+       choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);
+       field(form,'Internal note','note','textarea');
+       submit(form,'Save case update',async fd=>{
+         await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});
+         await refresh();message('Internal support note saved. No message sent.','success');
+       });
+       c.append(form);
+     }
+     root.append(c);
+   }
+   if(!tickets.length)root.append(el('p','No support conversations yet.','footnote'));
+   if(moreTickets)root.append(button('Load more cases',async()=>{
+     const r=await request('ops_support_list',{after:moreTickets});
+     tickets.push(...r.tickets);moreTickets=r.next;show();
+   }));
+ }
  function financeView(){root.append(el('p','Finance decisions require a manual review. Approval in principle does not create a loan agreement or release funds.','notice warning'));for(const a of finance){const c=card('Stock finance · '+money(a.amountCents),a.ownerUid+' · '+new Date(a.createdAt).toLocaleDateString('en-ZA'));c.append(tag(a.status),el('p',a.purpose),el('p','Contact: '+a.phone));if(a.reviewNote)c.append(el('p','Review note: '+a.reviewNote));if(!['approved_in_principle','declined'].includes(a.status)){const f=el('form',undefined,'ops-form');choice(f,'Review outcome','status',[['under_review','Under review'],['more_information','Request more information'],['approved_in_principle','Approve in principle'],['declined','Decline']],a.status==='enquiry_received'?'under_review':a.status);field(f,'Approved amount (R) — only for approval','approved','text',String((a.amountCents||0)/100),false);field(f,'Review note / conditions','note','textarea');check(f,'I completed the manual review and checked the seller’s approval and supporting information.','reviewConfirmed');submit(f,'Save finance review',async fd=>{if(!confirm('Save this stock finance review outcome? No funds will be disbursed.'))return;await request('ops_finance_decide',{path:a.path,expectedStatus:a.status,status:fd.get('status'),approvedAmountCents:fd.get('status')==='approved_in_principle'?cents(fd.get('approved')):0,note:fd.get('note'),reviewConfirmed:true});await refresh();message('Finance review saved. Funds have not been disbursed.','success');});c.append(f);}else c.append(el('p','Reviewed outcome · '+money(a.approvedAmountCents||0)+' · Not disbursed','footnote'));root.append(c);}if(!finance.length)root.append(el('p','No stock finance requests loaded.','footnote'));if(moreFinance)root.append(button('Load more finance requests',async()=>{const r=await request('ops_finance_queue',{after:moreFinance});finance.push(...r.requests);moreFinance=r.next;show();}));}
  async function refreshMandates(){
    try{
