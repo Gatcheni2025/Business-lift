@@ -165,7 +165,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const shopRatings=ratings.createRatings({db,clock,rate});
   const shopAddress=addresses.createShopAddress({getPlacesKey,getSigningKey:getAddressSigningKey,fetchImpl:addressFetch,clock,rate});
   const shopLocation=locations.createShopLocation({db,clock,rate,synchronize:synchronizeCatalogue,shopAddress});
-  const adminOperations=operations.createOperations({db,clock,rate,
+  const adminOperations=operations.createOperations({db,clock,rate,getAuthUser,
     getPaystackMode:()=>getPaystackSecret().startsWith('sk_live_')?'live':'test',
     synchronize:synchronizeCatalogue});
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
