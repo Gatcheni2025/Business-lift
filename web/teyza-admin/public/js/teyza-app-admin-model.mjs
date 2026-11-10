@@ -7,7 +7,7 @@ export const serviceUrl='https://us-central1-business-lift-3c19c.cloudfunctions.
 // Decisions, mandate submissions, banking, document reads and grants must NOT
 // be re-sent automatically because they create sensitive audit events or writes.
 const retryableReads=new Set([
-  'ops_sellers','ops_seller_detail','ops_mandate_queue','ops_account_deletion_queue',
+  'ops_sellers','ops_seller_profile','ops_seller_detail','ops_mandate_queue','ops_account_deletion_queue',
   'ops_catalogue_queue','ops_finance_queue','ops_support_list','ops_users',
   'seller_summary','admin_seller_queue'
 ]);
