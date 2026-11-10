@@ -45,9 +45,9 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  const marketing=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
  const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
  assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
- for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple',
+ for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple','webFacebook','webReturnGuidance',
    'webShopName','webShopUid','webShopType','webBillingStatus','webPaidThrough','webNextBill','webAmountDue','webPaymentHistory','webOwnShop','webTerms','webCheckout',
-   'webCheckoutStatus','webManage','webConfirm']){
+   'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
  assert(page.includes('noindex,nofollow'));
@@ -59,6 +59,10 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
  assert(js.includes('getIdToken(true)')&&js.includes('1000')&&js.includes('9900'));
  assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
+ assert(js.includes('new sdk.FacebookAuthProvider()'),'Existing Facebook-linked sellers need the same UID login');
+ assert(js.includes('confirmedMembership(summary,billing,uid)'),'Paystack browser return is not payment proof');
+ assert(page.includes('Reopen the app'),'Website guides owner back to the existing signed-in app');
+ assert(js.includes('history.replaceState(null'),'Return marker is cleared only after verified entitlement');
 });
 test('Website statement only displays confirmed server amounts and local South African dates',async()=>{
  const {billingMoney,billingDate}=await service();
@@ -87,4 +91,45 @@ test('Archived mandate module still validates historical bank consent but is not
  assert(!canSignMandate({...good,consent:false}));
  assert(!canSignMandate({...good,identity:null}));
  assert(!canSignMandate({...good,account:'123'}));
+});
+
+test('Browser return requires matching original UID and independently verified live seller access',async()=>{
+ const {confirmedMembership}=await service();
+ const uid='approvedSeller1';
+ const summary={listingPaid:true,approvalStatus:'approved'};
+ const billing={sellerUid:uid,status:'paid',paymentVerified:true,renewalStatus:'scheduled'};
+ assert.equal(confirmedMembership(summary,billing,uid),true,'Both Firebase server results agree');
+ for(const wrong of [
+   {summary:{...summary,listingPaid:false},billing,uid},
+   {summary,billing:{...billing,sellerUid:'anotherOwner'},uid},
+   {summary,billing:{...billing,status:'pending'},uid},
+   {summary,billing:{...billing,paymentVerified:false},uid},
+   {summary,billing,uid:'anotherOwner'}
+ ])assert.equal(confirmedMembership(wrong.summary,wrong.billing,wrong.uid),false);
+ assert.equal(confirmedMembership(null,billing,uid),false);
+ assert.equal(confirmedMembership(summary,null,uid),false);
+ assert.equal(confirmedMembership(summary,billing,''),false);
+});
+
+test('Payment return recovery is bound to a valid server-issued reference, not a redirect alone',async()=>{
+ const {shouldConfirmReturn}=await service();
+ const returnUrl=new URLSearchParams('payment=return');
+ const reference='TZM-'+ 'a'.repeat(26);
+ assert.equal(shouldConfirmReturn(returnUrl,reference,false),true);
+ assert.equal(shouldConfirmReturn(returnUrl,reference,true),false);
+ assert.equal(shouldConfirmReturn(returnUrl,'TZM-invalid',false),false);
+ assert.equal(shouldConfirmReturn(new URLSearchParams('payment=success'),reference,false),false);
+ assert.equal(shouldConfirmReturn(new URLSearchParams('uid=other'),reference,false),false);
+});
+test('Account switch invalidates asynchronous reads and navigation before state mutations',()=>{
+ const src=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ assert(src.includes('accountGeneration++'),'Switch must invalidate outstanding operations');
+ assert(src.includes('const current=(uid,generation)'),'Both UID and auth generation must match');
+ assert(src.includes('if(!current(uid,generation))return;'),'Stale operations must exit');
+ assert(src.includes('if(!current(uid,generation)) throw Error('),'Authenticated API results must reject stale UID');
+ assert(src.includes('await confirm(true)'),'Return recovery must invoke Firebase backend verification');
+ assert(src.includes("api('billing_confirm',{reference})"),'Only backend can confirm a saved reference');
+ assert(src.includes("confirmedMembership(summary,billing,uid)"),'Backend access state controls success');
+ assert(src.includes("url.hostname!=='paystack.com'||url.username||url.password||url.port"),
+  'Subscription management navigation must refuse unsafe URL authority');
 });

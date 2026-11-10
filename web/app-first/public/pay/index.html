@@ -55,13 +55,13 @@
 <main class="pay-wrap" id="teyza-web-membership">
 <section class="pay-panel" aria-labelledby="pay-title"><h2 id="pay-title">Secure seller sign-in</h2>
 <div id="webLogin">
-<p>Use the original Google, Apple or existing email-password login for your registered spaza shop, wholesale business or other Teyza business. A shared contact email is not permission to pay for another Firebase account.</p>
+<p>Use the same Google, Apple, Facebook or existing email-password sign-in you used for your Teyza seller account. Do not create a second account. The exact Firebase account ID must match your approved shop; a shared contact email cannot authorise payment for someone else's shop.</p>
 <form id="webEmailForm" class="pay-inputs">
 <label>Email address<input id="webEmail" type="email" maxlength="254" autocomplete="username" required></label>
 <label>Password<input id="webPassword" type="password" autocomplete="current-password" required></label>
 <button type="submit">Sign in securely</button>
 </form>
-<div class="pay-actions"><button type="button" class="secondary" id="webGoogle">Continue with Google</button><button type="button" class="secondary" id="webApple">Continue with Apple</button></div>
+<div class="pay-actions"><button type="button" class="secondary" id="webGoogle">Continue with Google</button><button type="button" class="secondary" id="webApple">Continue with Apple</button><button type="button" class="secondary" id="webFacebook">Continue with Facebook</button></div>
 </div>
 <div id="webAccount" hidden>
 <div class="pay-account">
@@ -69,6 +69,7 @@
 <dl><dt>Shop name</dt><dd id="webShopName">Checking…</dd><dt>Business type</dt><dd id="webShopType">Checking…</dd><dt>Signed-in email</dt><dd id="webAccountEmail"></dd><dt>Seller account ID</dt><dd id="webShopUid"></dd></dl>
 </div>
 <p id="webAccess" role="status">Checking shop approval and payment eligibility…</p>
+<p class="pay-status" id="webReturnGuidance" role="status" hidden>Verified selling access is available in your Teyza app. Reopen the app to refresh your seller dashboard.</p>
 <div class="pay-grid"><div class="pay-metric"><span>First charge, if eligible</span><strong id="webPrice">R10</strong><small id="webPriceDetail">Introductory period until month-end</small></div><div class="pay-metric"><span>Monthly renewal</span><strong>R99.00</strong><small>First of each next calendar month (South Africa)</small></div></div>
 <section aria-label="Your billing statement" class="pay-account" style="margin:12px 0 19px">
 <strong>Your subscription statement</strong>
@@ -100,10 +101,11 @@
 <li><strong>Correct business account:</strong> the payment attaches to your signed-in Firebase UID, never a typed email or URL parameter.</li>
 <li><strong>Verified seller:</strong> Teyza checks seller registration, selfie approval, phone OTP and shop setup on the server.</li>
 <li><strong>Secure checkout:</strong> your card details are entered only on Paystack's hosted payment page.</li>
-<li><strong>Confirmed payments:</strong> access is updated only after Paystack verifies the reference, merchant amount and authenticated seller UID.</li>
+<li><strong>Confirmed payments:</strong> Firebase verifies Paystack server-side and activates only the original seller UID. Returning from Paystack alone does not prove payment.</li>
+<li><strong>Return to the app:</strong> reopen the Teyza app after payment. It checks your verified selling access automatically when you return and while your dashboard is open.</li>
 <li><strong>Cancel:</strong> manage an active subscription using the secured Paystack management link after signing in.</li>
 </ul><div class="pay-divider"></div><p><strong>Need help?</strong> Contact <a href="mailto:support@teyza.co.za">support@teyza.co.za</a> with your shop name and a payment reference. Never send a password, OTP or card number.</p>
-<p class="pay-note">The payment system remains unavailable until live Paystack activation and regulatory/store policy review are completed.</p></aside>
+<p class="pay-note" id="webAvailabilityNotice" aria-live="polite">Sign in to check the current availability of verified website checkout.</p></aside>
 </main>
 <footer class="pay-foot">© 2026 TEYZA SA (PTY) LTD · Registered in South Africa · <a href="/support.html">Support</a> · <a href="/seller-subscriptions.html">Membership details</a></footer>
 <script type="module" src="/js/seller-web-billing.mjs"></script>
