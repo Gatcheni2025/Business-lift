@@ -588,6 +588,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
       live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
+      premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,onUpgrade:()=>openUpgrade(),
       shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
       onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
