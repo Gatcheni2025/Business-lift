@@ -37,7 +37,10 @@ with zipfile.ZipFile(archive) as z:
     assert set(manifest)==set(entries)-{'FILE-HASHES.json'}
     assert all(sha256(z.read(name)).hexdigest()==digest for name,digest in manifest.items())
     source=z.read('public/js/seller-web-billing.mjs')
-    assert sha256(source).hexdigest()==reviewed_browser_sha256, 'Browser source SHA-256 differs from operator-approved exact file'
+    actual_browser_sha256=sha256(source).hexdigest()
+    print('Actual candidate browser SHA-256:',actual_browser_sha256)
+    print('Operator approved browser SHA-256:',reviewed_browser_sha256)
+    assert actual_browser_sha256==reviewed_browser_sha256, 'Browser source SHA-256 differs from operator-approved exact file'
     src=source.decode('utf-8')
     assert "https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
