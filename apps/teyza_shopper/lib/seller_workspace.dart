@@ -633,9 +633,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                 Wrap(alignment:WrapAlignment.end,children:[
                   if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_edit(item),
                     icon:const Icon(Icons.edit_outlined),label:const Text('Edit')),
-                  TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>productPhoto(item),
                     icon:const Icon(Icons.add_a_photo_outlined),label:const Text('Photo')),
-                  TextButton.icon(onPressed:busy?null:()=>_delete(item),
+                  if(hasProductAccess)TextButton.icon(onPressed:busy?null:()=>_delete(item),
                     icon:const Icon(Icons.delete_outline),label:const Text('Delete'))
                 ])
               ])
