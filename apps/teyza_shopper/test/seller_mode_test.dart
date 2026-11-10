@@ -182,6 +182,7 @@ void main(){
       sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:()async=>[],directoryLoader:(_,__,___)async=>[])));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('seller-nav-1')));await tester.pumpAndSettle();
     final button=find.byKey(const ValueKey('seller-publish-saved-products'));
     expect(button,findsOneWidget);
     expect(find.textContaining('temporary selling access is separate from Paystack payment'),findsOneWidget);
