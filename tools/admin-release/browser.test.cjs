@@ -359,9 +359,9 @@ async function main(){
       return false;
     }});
     await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();
+    await f.page.locator('.ops-legacy-archive > summary').click();
     await f.page.getByText(/Unable to load mandates: Mandate inbox offline/).waitFor();
     available=true;
-    await f.page.locator('.ops-legacy-archive > summary').click();
     await f.page.getByRole('button',{name:'Refresh mandates'}).click();
     await f.page.getByText('•••• 8901').waitFor();
     assert(await f.page.getByRole('button',{name:'Open mandate'}).isVisible());
