@@ -7,7 +7,7 @@ function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(42
 function amount(value){if(!Number.isSafeInteger(value)||value<=0||value>50000000)D.fail(422,'Enter a valid amount in cents.');return value;}
 function statement(entries){let balance=0;return entries.sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)).map(e=>({...e,balanceCents:balance+=(e.debitCents||0)-(e.creditCents||0)}));}
 function financePath(value){if(!/^teyzaCreditEnquiries\/[A-Za-z0-9_-]{1,128}\/requests\/[A-Za-z0-9_-]{1,128}$/.test(value||''))D.fail(422,'Choose a valid stock finance request.');return value;}
-function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',synchronize=async()=>{}}){
+function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',getAuthUser=async()=>null,synchronize=async()=>{}}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  const owner=async uid=>D.seller(await read('teyzaSellerAccounts/'+uid),uid);
  function audit(tx,auth,action,target,details){tx.set(doc('teyzaOperationsAudit/'+crypto.randomUUID()),{actorUid:auth.uid,action,target,details,createdAt:clock()});}
@@ -132,13 +132,14 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location,front,authUser]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
-     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target)]);
+     self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target),
+     read('teyzaShopFrontPhotos/'+target),getAuthUser(target).catch(()=>null)]);
    const membershipPaid=P.entitled(target,account,billing,clock());
    const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
    // A stored product count is distinct from a shopper-visible public listing.
@@ -151,6 +152,23 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    const locationHasChanged=location?.ownerUid===target&&!P.locationMatches(target,account,location);
    const locationPinExpired=location?.ownerUid===target&&
       P.locationMatches(target,account,location)&&!P.freshCoordinates(location,clock());
+   const verifiedEmail=authUser?.emailVerified===true;
+   let verifiedPhone=false;
+   try{require('./onboarding').checkedPhone(authUser,account.phone);verifiedPhone=true;}catch(_){}
+   const validIdentity=require('./onboarding').current(identity,target,clock());
+   const validSelfie=verification?.ownerUid===target &&
+     typeof verification.objectPath==='string'&&verification.expiresAt>clock();
+   const validFront=require('./shop-front').valid(front,target);
+   const validPin=Boolean(P.locationFor(target,account,location,null,clock()));
+   const approvalChecks=[
+     {id:'email',label:'Email verified',complete:verifiedEmail},
+     {id:'phone',label:'Phone OTP verified',complete:verifiedPhone},
+     {id:'identity',label:'Current ID/passport submitted',complete:validIdentity},
+     {id:'selfie',label:'Current selfie submitted',complete:validSelfie},
+     {id:'shop_front',label:'Shop-front photo submitted',complete:validFront},
+     {id:'location',label:'Shop pin saved',complete:validPin},
+     {id:'onboarding',label:'Registration completed',complete:Boolean(setup?.completedAt)}
+   ];
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
      amountCents:row.data().amountCents||0,createdAt:row.data().createdAt||0,
@@ -168,6 +186,20 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
        connected:!!payout.enabled,mode:payout.mode||'test',subaccountCode:payout.code||'',
        businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
      }:null,
+     businessAccount:{
+       approvalStatus:account.approvalStatus||'pending',
+       reviewStatus:verification?.status||'not_submitted',
+       verificationChecks:approvalChecks,
+       missingRequirements:approvalChecks.filter(item=>!item.complete).map(item=>item.id),
+       isPublic:directoryEligible&&Boolean(pin),
+       type:account.category==='wholesale'?'Wholesaler':account.category==='spaza'?'Spaza shop':'Business owner',
+       membershipStatus:membershipPaid?'premium':
+         P.complimentary(target,account,billing,clock())?'temporary_access':'free',
+       upgradeRequired:publication.approved&&publication.ready&&!membershipPaid,
+       manualIdentityReviewRequired:account.approvalStatus!=='approved',
+       accountLifecycle:account.approvalStatus==='approved'?
+         directoryEligible?'shop_live':'approved_check_location':'verification_pending'
+     },
      membershipPaid,complimentaryAccess:P.complimentary(target,account,billing,clock()),
      mandateAccessActive:P.mandateAccess(target,account,billing,clock()),
      mandateAccessKind:billing?.mandateAccessKind||null,
