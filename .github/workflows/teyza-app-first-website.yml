@@ -70,9 +70,10 @@ jobs:
           $tokens=$null; $errors=$null
           [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-TEYZA-PREMIUM.ps1",[ref]$tokens,[ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { throw ($errors | Out-String) }
-  # A second signature engine is useful evidence, not Microsoft Defender clearance.
-  # Build the candidate only on the hosted CI runner; NEVER publish it as an artifact
-  # while the owner's Defender report is unresolved.
+  # Project owner approved the exact browser SHA-256 and explicitly waived an external
+  # analyst verdict on 2026-11-10. This job verifies that operator approval plus
+  # structural checks and ClamAV scanning; it does not attest malware-free status.
+  # Keep candidate packages unadvertised; checkout activation is a separate gate.
   seller_security_review:
     needs: check_and_package
     runs-on: ubuntu-24.04
@@ -85,7 +86,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Build an unapproved source-only candidate without test fixtures
+      - name: Verify exact operator-approved browser SHA-256 and source-only candidate
         run: |
           python3 scripts/package_teyza_seller_security_candidate.py
           python3 scripts/audit_teyza_seller_security_candidate.py
@@ -103,7 +104,7 @@ jobs:
         run: |
           clamscan --version
           clamscan --infected --recursive web/app-first/public/js/seller-web-billing.mjs services/teyza-mobile-v39/billing-paystack.test.js tools/app-first-release/seller-web-billing.test.cjs dist/TEYZA_SELLER_SECURITY_REVIEW_CANDIDATE_20261106.zip
-          echo "ClamAV only: NOT a Defender false-positive determination; candidate stays unreleased."
+          echo "ClamAV checked this candidate; operator approved source fingerprint. No independent malware-clean verdict is claimed."
   browser_preview:
     needs: check_and_package
     runs-on: ubuntu-24.04
