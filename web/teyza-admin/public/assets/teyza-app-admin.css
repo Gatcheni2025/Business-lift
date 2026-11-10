@@ -116,3 +116,10 @@ body{background:#f4f7f3;color:var(--admin-ink)}
 
 /* Hide the legacy full-page verification shortcut; it stays reachable from a business account. */
 .admin-nav button[hidden]{display:none!important}
+
+/* Finance puts active membership information before old debit-order records. */
+.ops-legacy-archive{margin-top:20px}
+.ops-legacy-archive>summary{cursor:pointer;list-style-position:inside;display:list-item;padding:4px 6px}
+.ops-legacy-archive>summary h3{display:inline-block;margin:0 0 0 8px}
+.ops-legacy-archive>summary:focus-visible{outline:3px solid #80bfe8;border-radius:8px}
+.ops-legacy-archive[open]>summary{margin-bottom:16px}
