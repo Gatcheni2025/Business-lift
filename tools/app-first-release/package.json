@@ -9,7 +9,7 @@
     "test": "node --test hosting.test.cjs store-links.test.cjs premium-site.test.cjs seller-web-billing.test.cjs"
   },
   "dependencies": {
-    "firebase-tools": "15.30.2"
+    "firebase-tools": "15.35.0"
   },
   "devDependencies": {
     "playwright": "1.56.1"
