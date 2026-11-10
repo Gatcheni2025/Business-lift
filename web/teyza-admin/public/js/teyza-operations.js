@@ -442,7 +442,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   catalogue.append(table(['Product','Category','Price','Stock'],submitted.map(p=>[
     p.name||p.id,p.category||'Other',money(p.priceCents||0),p.stock??'Not supplied'
   ])));
-  if(d.canApproveCatalogue&&Number(d.sellingStatus?.savedDraftCount||0)>0&&!Number(d.sellingStatus?.publicProductCount||0)){
+  if(d.sellingStatus?.canSell===true&&d.sellingStatus?.publicProductsAllowed!==false&&Number(d.sellingStatus?.savedDraftCount||0)>0&&!Number(d.sellingStatus?.publicProductCount||0)){
     catalogue.append(el('p','This business has saved products and valid selling access, but no public products. Ask the seller to select Publish saved products, or use Repair saved-product sync in Shop & selling. Neither action creates a payment or adds another business approval.','notice warning'));
   }
   if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller approval, shop setup and verified or temporary selling access are complete. Check the publication status above.','notice warning'));
