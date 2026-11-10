@@ -716,6 +716,29 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           ])),
           const SizedBox(height:12),
           if(!productsView)...[
+            if(hasProductAccess&&draftError==null&&drafts.isNotEmpty)...[
+              Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  const Text('Make your saved products visible',style:TextStyle(fontWeight:FontWeight.w700)),
+                  const SizedBox(height:7),
+                  Text(complimentaryAccess||mandateAccess?
+                    'Your temporary selling access is separate from Paystack payment. You may publish your existing priced stock while this access is active.':
+                    'Your active selling access allows your saved products to appear to nearby shoppers.'),
+                  const SizedBox(height:10),
+                  FilledButton.icon(
+                    key:const ValueKey('seller-publish-saved-products'),
+                    onPressed:busy?null:() async {
+                      await syncRange();
+                      if(mounted)await load();
+                    },
+                    icon:const Icon(Icons.cloud_upload_outlined),
+                    label:const Text('Publish saved products')),
+                  if(rangeStatus!=null)...[
+                    const SizedBox(height:8),Text(rangeStatus!,style:const TextStyle(fontSize:12))
+                  ]
+                ]))),
+              const SizedBox(height:12),
+            ],
             if(hasProductAccess)FilledButton.icon(onPressed:busy?null:chooseProducts,
               icon:const Icon(Icons.inventory_2_outlined),
               label:const Text('Manage my products')),
