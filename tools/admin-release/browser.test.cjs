@@ -456,6 +456,7 @@ async function main(){
     await f.page.getByRole('button',{name:'Open account'}).first().click();
     await f.page.getByRole('button',{name:'Shop & selling',exact:true}).click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
+    await f.page.getByText('This business has saved products and valid selling access, but no public products.',{exact:false}).waitFor();
     await f.page.getByLabel('Reason to repair the seller catalogue sync').fill(
       'Confirmed three approved seller drafts for a live local shop');
     await f.page.getByRole('checkbox',{name:/I checked the shop approval and selling entitlement/}).check();

@@ -435,13 +435,16 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   settlement.append(payoutForm);root.append(settlement);
   }
   if(accountTab==='shop'){
-  const catalogue=card('Seller products','Products publish automatically when registration is approved and subscription or temporary access is active.');
+  const catalogue=card('Seller products','An approved shop with active Paystack or temporary selling access can publish saved stock. Private drafts are not made public by approval or temporary access alone; use the seller’s Publish saved products action, or an audited admin catalogue repair.');
   const submitted=d.catalogue?.products||[];
   catalogue.append(tag(d.catalogue?.status||'not submitted'));
   catalogue.append(el('p',submitted.length+' products in the current listing.'));
   catalogue.append(table(['Product','Category','Price','Stock'],submitted.map(p=>[
     p.name||p.id,p.category||'Other',money(p.priceCents||0),p.stock??'Not supplied'
   ])));
+  if(d.sellingStatus?.canSell===true&&d.sellingStatus?.publicProductsAllowed!==false&&Number(d.sellingStatus?.savedDraftCount||0)>0&&!Number(d.sellingStatus?.publicProductCount||0)){
+    catalogue.append(el('p','This business has saved products and valid selling access, but no public products. Ask the seller to select Publish saved products, or use Repair saved-product sync in Shop & selling. Neither action creates a payment or adds another business approval.','notice warning'));
+  }
   if(!d.canApproveCatalogue)catalogue.append(el('p','Products remain private until seller approval, shop setup and verified or temporary selling access are complete. Check the publication status above.','notice warning'));
   root.append(catalogue);
   }

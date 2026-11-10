@@ -54,6 +54,16 @@ class ActivatedSellerApi extends SellerApi {
       {...result,'listingPaid':membershipPaid,'setupComplete':true}:result;
   }
 }
+class ComplimentarySellerApi extends SellerApi {
+ ComplimentarySellerApi(super.session);
+ @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
+  final result=await super.call(action,data);
+  if(action=='seller_summary')return {...result,'setupComplete':true,
+    'complimentaryAccess':true,'listingPaid':false,'shopLive':true};
+  if(action=='catalogue_sync')return {'publication':'live','publicCount':1};
+  return result;
+ }
+}
 class PendingSellerApi extends SellerApi {
  PendingSellerApi(super.session);
  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
@@ -162,6 +172,24 @@ void main(){
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
     await tester.pumpAndSettle();expect(session.sellerWorkspace,isTrue);expect(find.text('Seller dashboard'),findsOneWidget);
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  });
+  testWidgets('Approved complimentary seller can explicitly publish saved products without Paystack payment',(tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final session=SellerSession()..useSellerWorkspace(),api=ComplimentarySellerApi(SellerSession());
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,
+      enableBackgroundServices:false,initialArea:areas.first,
+      sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
+      catalogueLoader:()async=>[],directoryLoader:(_,__,___)async=>[])));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('seller-nav-1')));await tester.pumpAndSettle();
+    final button=find.byKey(const ValueKey('seller-publish-saved-products'));
+    expect(button,findsOneWidget);
+    expect(find.textContaining('temporary selling access is separate from Paystack payment'),findsOneWidget);
+    await tester.ensureVisible(button);await tester.pumpAndSettle();
+    await tester.tap(button);await tester.pumpAndSettle();
+    expect(api.calls.where((c)=>c.action=='catalogue_sync'),isNotEmpty);
+    expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('Free seller has one floating Chat with informational Upgrade Account, no purchase flow',(tester) async {
