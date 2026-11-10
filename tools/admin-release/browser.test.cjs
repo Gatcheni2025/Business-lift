@@ -279,7 +279,10 @@ async function main(){
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
-   await f.page.getByText('Seller products',{exact:true}).waitFor();
+   assert.equal(await f.page.getByText('Seller products',{exact:true}).count(),0,'Finance keeps catalogue controls separate');
+    await f.page.getByRole('button',{name:'Shop & selling',exact:true}).click();
+    await f.page.getByText('Seller products',{exact:true}).waitFor();
+    await f.page.getByRole('button',{name:'Finance',exact:true}).click();
    assert.equal(await f.page.getByText('Create R99 invoice').count(),0,'Legacy invoice form is removed');
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
    assert.equal(await f.page.getByRole('button',{name:'Approve submitted product catalogue'}).count(),0);
@@ -358,6 +361,7 @@ async function main(){
     }});
     await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
     await f.page.getByRole('button',{name:'Open account'}).first().click();
+    await f.page.getByRole('button',{name:'Shop & selling',exact:true}).click();
     await f.page.getByText('Saved seller products: 3 · Live-priced products: 0').waitFor();
     await f.page.getByLabel('Reason to repair the seller catalogue sync').fill(
       'Confirmed three approved seller drafts for a live local shop');
@@ -439,6 +443,7 @@ async function main(){
    await f.page.screenshot({path:path.join(output,'admin-login-phone.png'),fullPage:true});
    await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();
    await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+   await f.page.getByRole('button',{name:'Review pending business verifications'}).click();
    await f.page.locator('.seller-row').first().waitFor();assert.equal(await f.page.locator('#password').inputValue(),'');assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Subscriptions shows closure reviews and verifies a processed full refund',async()=>{
