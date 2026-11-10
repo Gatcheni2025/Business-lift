@@ -440,6 +440,18 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
+        // One authoritative business approval; free directory visibility and
+        // paid selling/wholesale advertising are independently reported.
+        // Never infer a payment from an admin approval or temporary grant.
+        shopLive:publication.live&&publicShop?.status==='active',
+        premiumAccount:P.entitled(uid,account,billing,clock()),
+        sellerBusinessType:account.category,
+        sellingAccessState:!publication.approved?'awaiting_business_approval':
+          !publication.ready?'complete_shop_setup':
+          !publication.live?'listing_not_live':
+          P.entitled(uid,account,billing,clock())?'premium_account':
+          P.complimentary(uid,account,billing,clock())||P.mandateAccess(uid,account,billing,clock())?'temporary_access':
+          'upgrade_required',
         location:pin,hasLocation:Boolean(pin),publicationStatus:publication.live&&publicShop?.status==='active'?'active':publication.status,
         sellingEnabled:publication.canSell&&(publicShop?.sellingEnabled===true||publicShop?.catalogueEnabled===true),identityVerified:publication.approved,
         publicProductCount:account.category==='wholesale'?0:publication.canSell?publicShop?.products?.length||0:0,
