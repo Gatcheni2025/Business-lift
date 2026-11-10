@@ -23,6 +23,7 @@ import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
 import 'seller_premium.dart';
 import 'seller_selling.dart';
+import 'seller_support_chat.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
@@ -164,6 +165,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       default:openNotifications();
     }
   }
+  void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    SellerSupportChatPage(session:widget.session,api:widget.mobileApi)));
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
@@ -552,6 +555,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       'Choose whether to receive private in-app offers from verified wholesalers.',
       openSpazaSupplierOffers),
     businessTile(Icons.inventory_2_outlined,'Order stock','Prepare your supplier shopping list',()=>openTool(SellerTool.stock)),
+    businessTile(Icons.support_agent_outlined,'Chat with Teyza Support',
+      'Get help with business approval, membership status or selling tools',openSellerSupport),
     businessTile(Icons.delete_outline,'Privacy & Security · Delete My Account',
       'Request permanent account and shop listing deletion',
       ()=>Navigator.push(context,MaterialPageRoute(
@@ -595,7 +600,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
-      onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification))),
+      onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
+       onSupport:openSellerSupport))),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
@@ -711,6 +717,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             icon:const Icon(Icons.workspace_premium_outlined),
             label:Text(premiumAccount?'Premium account':needsMembership?'Upgrade to sell on Teyza':businessAccessLabel)),
 
+            OutlinedButton.icon(onPressed:openSellerSupport,icon:const Icon(Icons.support_agent_outlined),
+              label:const Text('Chat with Teyza Support')),
             SellerSetupCard(products:draftError==null?drafts.length:null,verification:verification,
               onVerify:()=>openTool(SellerTool.verification),onProducts:openProducts),
             const SizedBox(height:24),
