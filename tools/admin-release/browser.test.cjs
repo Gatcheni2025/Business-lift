@@ -191,6 +191,54 @@ async function main(){
      assert.equal(f.errors.length,0);
      await f.context.close();
    });
+   await check('Unified Business Account keeps verification, selling, finance and seller chat in separate profile tabs',async()=>{
+     const f=await pageFor({startView:'overview',api:async(route,body)=>{
+       if(body.action==='ops_seller_detail'){
+         await route.fulfill({json:{ok:true,
+           seller:{...rows[0],approvalStatus:'pending',listingPlan:'free'},
+           businessAccount:{approvalStatus:'pending',reviewStatus:'pending_review',
+             verificationChecks:[
+               {id:'email',label:'Email verified',complete:true},
+               {id:'shop_front',label:'Shop-front photo submitted',complete:false}
+             ],missingRequirements:['shop_front'],isPublic:false,
+             type:'Spaza shop',membershipStatus:'free'},
+           sellingStatus:{sellerApproved:false,shopSetupComplete:true,sellingAccessActive:false,
+             canSell:false,shopStatus:'pending_review',publicProductCount:0,savedDraftCount:5,
+             publicProductsAllowed:true},
+           shopperVisibility:{directoryEligible:false,hasValidPin:true,latitude:-29.8,longitude:31.02},
+           billing:{status:'not_started'},paystackMode:'live',membershipPaid:false,
+           catalogue:{status:'waiting_for_access',products:[]},
+           payments:[],entries:[],verification:{status:'pending_review',phoneVerified:true},
+           documents:{identity:null,selfie:null}}});return true;
+       }
+       if(body.action==='ops_support_thread'){
+         await route.fulfill({json:{ok:true,messages:[
+           {sender:'seller',senderUid:'seller1',text:'Please explain my shop status.'}
+         ]}});return true;
+       }
+       return false;
+     }});
+     await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+     await f.page.getByRole('button',{name:'Open account'}).first().click();
+     await f.page.getByRole('heading',{name:'Business account overview'}).waitFor();
+     await f.page.getByText('Community visibility: Not yet live').waitFor();
+     assert.equal(await f.page.getByText('Paystack seller membership').count(),0);
+     await f.page.locator('.ops-account-tabs').getByRole('button',{name:'Verification'}).click();
+     await f.page.getByRole('heading',{name:'One business verification checklist'}).waitFor();
+     await f.page.getByText('Shop-front photo submitted').waitFor();
+     await f.page.locator('.ops-account-tabs').getByRole('button',{name:'Shop & selling'}).click();
+     await f.page.getByRole('heading',{name:'Seller products'}).waitFor();
+     assert.equal(await f.page.getByText('Payment references').count(),0);
+     await f.page.locator('.ops-account-tabs').getByRole('button',{name:'Finance'}).click();
+     await f.page.getByRole('heading',{name:'Paystack seller membership'}).waitFor();
+     assert.equal(await f.page.getByText('Seller products',{exact:true}).count(),0);
+     await f.page.locator('.ops-account-tabs').getByRole('button',{name:'Support'}).click();
+     await f.page.getByRole('button',{name:'Load conversation'}).click();
+     await f.page.getByText('Please explain my shop status.').waitFor();
+     assert(f.calls.some(x=>x.action==='ops_support_thread'&&x.data.ticketId==='seller_seller1'));
+     assert(!f.calls.some(x=>x.action==='ops_paystack_confirm'||x.action==='ops_catalogue_publish'));
+     assert.deepEqual(f.errors,[]);await f.context.close();
+   });
    await check('Seller detail opens current encrypted evidence and clears it when the dialog closes',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
