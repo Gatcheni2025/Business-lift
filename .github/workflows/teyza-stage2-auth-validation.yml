@@ -1,0 +1,76 @@
+name: Teyza Stage 2 controlled Firebase authentication validation
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/teyza-verified-web-pay-app-entitlement-20261109
+    paths:
+      - '.github/workflows/teyza-stage2-auth-validation.yml'
+permissions:
+  contents: read
+jobs:
+  stage2-nonpayment-auth:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked QA dependencies without scripts
+        working-directory: tools/app-first-release
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test isolated authenticated browser behavior (synthetic accounts)
+        working-directory: tools/app-first-release
+        run: node --test seller-auth-browser-e2e.test.cjs seller-web-billing.test.cjs
+      - name: Check live backend rejects unauthenticated identity and payment requests
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const endpoint='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
+          const report={phase:'stage2-backend-auth-denial',mode:'no-authentication-credentials',
+            checkedAt:new Date().toISOString(),requests:[],paymentsAttempted:0,privateDataRetrieved:false};
+          const checks=[
+            ['seller_summary',{}],
+            ['seller_billing_overview',{}],
+            ['billing_checkout',{checkoutChannel:'web'}]
+          ];
+          let failed=false;
+          try{
+            const healthResponse=await fetch(endpoint,{method:'GET',signal:AbortSignal.timeout(15000)});
+            const health=await healthResponse.json();
+            const safe=healthResponse.status===200 &&
+              health.sellerPaystackNewCheckoutDisabled===true &&
+              health.paystackCheckoutAvailable===false;
+            report.requests.push({action:'health',httpStatus:healthResponse.status,pass:safe});
+            console.log((safe?'PASS':'FAIL')+' payment-disabled backend health: '+healthResponse.status);
+            if(!safe) failed=true;
+          }catch(e){report.requests.push({action:'health',pass:false,error:String(e.message)});failed=true;}
+          for(const [action,data] of checks){
+            try{
+              const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({action,data}),signal:AbortSignal.timeout(15000)});
+              const body=await response.json().catch(()=>null);
+              const denied=response.status===401 && !body?.ok &&
+                typeof body?.error==='string' && !JSON.stringify(body).includes('sellerUid');
+              report.requests.push({action,httpStatus:response.status,pass:denied});
+              console.log((denied?'PASS':'FAIL')+' unauthenticated '+action+': '+response.status);
+              if(!denied)failed=true;
+            }catch(e){report.requests.push({action,pass:false,error:String(e.message)});failed=true;}
+          }
+          fs.writeFileSync('teyza-stage2-auth-denial.json',JSON.stringify(report,null,2)+'\n');
+          if(failed)process.exitCode=1;
+          NODE
+      - name: Upload non-sensitive test evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teyza-stage2-auth-denial-evidence
+          path: teyza-stage2-auth-denial.json
+          if-no-files-found: warn
+          retention-days: 14
