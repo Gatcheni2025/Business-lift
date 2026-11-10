@@ -10,5 +10,10 @@
   "historicalDefenderDetection": "Trojan:JS/Tisifi.A",
   "historicalMicrosoftSubmission": "ac42e314-aef7-4cc8-accd-e97b46944b3d",
   "basis": "Project owner explicitly reviewed and approved this exact SHA-256 and waived a mandatory external third-party verdict in the ChatGPT conversation on 2026-11-10; prior local Windows Defender scan recorded no new detection on the replacement.",
-  "scope": "Source fingerprint release gate only; does not certify malware absence, approve live payment processing, or override other failed scans or CI checks."
+  "scope": "Source fingerprint release gate only; does not certify malware absence, approve live payment processing, or override other failed scans or CI checks.",
+  "approvedSha256Representation": "Windows worktree CRLF UTF-8",
+  "canonicalRepositorySha256": "3cd19ea452d268abeb98b5b6a1d1eb7f0c8b5e80a02726d5982ef332fd874861",
+  "canonicalRepositoryRepresentation": "Git checkout LF UTF-8",
+  "lineEndingEquivalenceVerified": true,
+  "lineEndingEquivalenceExplanation": "The LF GitHub source converts by replacing each LF with CRLF to the exact Windows worktree SHA-256 explicitly approved by the operator; no code token or other bytes differ."
 }
