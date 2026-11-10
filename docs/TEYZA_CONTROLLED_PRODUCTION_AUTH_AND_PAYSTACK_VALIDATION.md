@@ -1,10 +1,10 @@
 # Teyza controlled production authentication and payment validation
 
-Status: **PRODUCTION CHARGES DISABLED. NO REAL PAYMENT AUTHORISED BY THIS DOCUMENT.**
+Status: **OPERATOR SOURCE GATE APPROVED, EXTERNAL VERDICT WAIVED. PRODUCTION CHARGES DISABLED. NO REAL PAYMENT AUTHORISED BY THIS DOCUMENT.**
 
 ## Gate record
 - Operator approved exact browser SHA-256: `833EF88A38B28DC958AE63CFD307D15D41F092B3370F8D8E28FC0D163FF23E21` on 10 November 2026.
-- Independent malware analysis remains pending and must not be recorded as passed.
+- Project owner explicitly waived the requirement for an external third-party malware verdict on 10 November 2026. **Operator Source Approval: PASSED** for the exact SHA-256 above; an independent analyst verdict was not received and must not be represented as passed. The fingerprint CI audit validates the explicit operator decision in `docs/TEYZA_PAY_OPERATOR_SOURCE_APPROVAL_20261110.json`.
 - PR #131 dependency-only change was merged into the PR #130 remediation branch. No user data or production payment records changed.
 - Current public `/pay` page has been rolled back to the holding page. Do not expose the replacement to users until the independent verdict and review requirements are completed.
 
@@ -32,4 +32,4 @@ Use two explicit consented real seller QA accounts (one approved with no paid me
 5. After all gating approval and separate explicit transaction authorisation, a controlled **live** R10 test can be scheduled; do not flip `TEYZA_SELLER_PAYSTACK_ENABLED` as part of this plan.
 
 ## Deployment hold
-Do not merge PR #130 into the payment feature branch, deploy the replacement, override the fingerprint CI gate, or enable public checkout while independent malware review and any required release checks remain unresolved.
+Operator approval replaces the external-verdict requirement **only for the exact SHA-256 above**; the fingerprint gate must still validate the approved bytes. PR #130 may merge once applicable CI/security scans pass, but merging does not deploy Hosting or enable payments. Do not deploy the replacement or enable public checkout during Stage 1 read-only checks. A controlled live R10 charge requires separate approval after the remaining payment, security and policy gates.
