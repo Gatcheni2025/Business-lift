@@ -179,7 +179,7 @@ void main(){
   for(final status in ['suspended','active']){
    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SellerShopHero(
     shop:const SellerShop('Corner Shop','spaza','Durban','approved','active'),publicationStatus:status,
-    productCount:5))));await tester.pumpAndSettle();
+    shopLive:status=='active',productCount:5))));await tester.pumpAndSettle();
    expect(find.text('Shop is live'),status=='active'?findsOneWidget:findsNothing);
    expect(find.text('Listing is paused'),status=='suspended'?findsOneWidget:findsNothing);
   }
