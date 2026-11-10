@@ -36,3 +36,10 @@ On 10 November, the operator fetched this exact replacement through a detached G
 - Mocked browser end-to-end authentication tests (account switching, backend verification, pending payment return), then an authorized test with real seller identity.
 - Backend invoice/webhook idempotency and Paystack-reported renewal date validation, policy review and approved controlled R10 charge.
 - Keep `TEYZA_SELLER_PAYSTACK_ENABLED=false`; do not deploy this branch until approval.
+
+## 10 November CI evidence update (not independent malware clearance)
+- Synthetic Playwright browser scenarios ran and **3/3 passed**: original Firebase seller UID login, delayed-response account switch, and server-verified pending Paystack return. GitHub Actions: https://github.com/Gatcheni2025/Business-lift/actions/runs/42780964149.
+- Existing seller payment JavaScript unit tests **10/10 passed** in the same job.
+- The complete website CI passed on the hardened source, but the separate legacy fingerprint security job still fails, as intended, pending approval of exact new source SHA-256.
+- Separate dependency PR: https://github.com/Gatcheni2025/Business-lift/pull/131. CI regenerated a candidate lockfile, passed its unit/Hosting tests and reported **0 high, 14 moderate** in `npm audit --omit=dev`. Artifact available in GitHub Actions run https://github.com/Gatcheni2025/Business-lift/actions/runs/42780309290. The regenerated lockfile is not yet committed or approved.
+- Synthetic browser tests **do not** prove live Firebase Auth provider configuration, a real webhook, or Paystack next-payment scheduling.
