@@ -196,15 +196,15 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
         review.append(el('p','These products are already published. There is no need to approve them again. Check their public-directory and nearby-location status below.','notice success'));
       if(status.canSell&&((status.savedDraftCount||0)>(status.publicProductCount||0))){
         const form=el('form',undefined,'ops-form');
-        field(form,'Reason for publishing saved seller products','reason','textarea');
+        field(form,'Reason to repair the seller catalogue sync','reason','textarea');
         check(form,'I checked the shop approval and selling entitlement. This publishes the seller’s saved product prices and stock, without collecting or recording R99.','confirmed');
-        submit(form,'Publish saved shop products',async fd=>{
+        submit(form,'Repair saved-product sync',async fd=>{
           const reason=String(fd.get('reason')||'').trim();
           if(reason.length<15)throw Error('Explain this publication in at least 15 characters.');
-          if(!confirm('Publish this approved shop’s current saved product range to shoppers? No payment will be recorded.'))return;
+          if(!confirm('Repair the approved seller’s existing product sync? This is not an extra product approval or a payment.'))return;
           const result=await request('ops_catalogue_publish',{sellerUid:d.seller.sellerUid,reason,confirmed:true});
           await choose(selected);
-          message((result.publicProductCount||0)+' products published on the shopper catalogue.','success');
+          message((result.publicProductCount||0)+' products synced to the shopper catalogue. No extra approval was recorded.','success');
         });
         review.append(form);
       }
