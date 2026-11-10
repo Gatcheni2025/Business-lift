@@ -31,14 +31,17 @@ export function backendReady(health){
 export function eligibility(summary,verified,ready,matched=false){
   if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
   if(summary.listingPaid===true) return {eligible:false,active:true,message:'Verified membership active. Open the Teyza app to manage products.'};
-  if(summary.complimentaryAccess===true) return {eligible:false,active:true,message:'Temporary complimentary access is active. This is not a Paystack payment.'};
+  // An audited time-limited grant is not a payment and must not prevent its owner
+  // from voluntarily purchasing Premium once live checkout is safely enabled.
   if(summary.approvalStatus!=='approved' || summary.identityVerified!==true)
     return {eligible:false,message:'Shop approval and identity review must be completed first.'};
   if(summary.setupComplete!==true) return {eligible:false,message:'Complete phone verification and seller onboarding in Teyza.'};
   if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
   if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
   if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'Membership checkout is not yet open for this business account. Your shop remains listed for free.'};
-  return {eligible:true,message:summary.introEligible===false?'R99 today, then R99 monthly.':'R10 introductory payment, then R99 monthly from the following month.'};
+  const offer=summary.introEligible===false?'R99 today, then R99 monthly.':'R10 introductory payment, then R99 monthly from the following month.';
+  return {eligible:true,message:summary.complimentaryAccess===true?
+    'Your temporary complimentary access remains active until its existing expiry. This is not a payment. You can choose to upgrade to verified Premium. '+offer:offer};
 }
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
