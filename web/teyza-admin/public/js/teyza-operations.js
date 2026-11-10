@@ -104,19 +104,19 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  async function choose(s){if(view==='products')view='sellers';selected=s;accountTab=view==='billing'?'finance':'summary';detail=null;const loading=card('Opening seller account…',s.shopName);loading.setAttribute('role','status');root.replaceChildren(loading);loading.scrollIntoView({block:'start',behavior:'instant'});try{detail=await request('ops_seller_detail',{sellerUid:s.sellerUid});show();const account=root.querySelector('[data-seller-account]');account?.scrollIntoView({block:'start',behavior:'instant'});account?.focus({preventScroll:true});}catch(error){if(!error.stale){selected=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}throw error;}}
  function sellerPicker(form){return choice(form,'Seller','sellerUid',sellers.map(s=>[s.sellerUid,s.shopName+' · '+s.sellerUid]),selected?.sellerUid||sellers[0]?.sellerUid);}
  function registry(){
-   if(view==='billing'&&!detail)mandateQueue();
-   if(!detail)root.append(button('Review pending business verifications',()=>navigate('approvals')));
+   if(!detail&&view!=='billing')root.append(button('Review pending business verifications',()=>navigate('approvals')));
    const c=card(view==='billing'?'Choose a business for finance':'Business account directory',
      next?'Load more to find an account.':'Select a business to view one unified account profile.');const input=el('input');input.type='search';input.placeholder='Search shop, phone or email';input.setAttribute('aria-label','Search loaded sellers');const list=el('div');const draw=()=>{const term=input.value.toLowerCase();list.replaceChildren(table(['Shop / owner','Status','Subscription',''],sellers.filter(s=>[s.shopName,s.ownerEmail,s.phone].join(' ').toLowerCase().includes(term)).map(s=>[[s.shopName,s.ownerEmail].filter(Boolean).join(' · '),tag(s.approvalStatus),tag(s.subscription),button('Open account',()=>choose(s))])));};input.oninput=draw;c.append(input,list);draw();if(next)c.append(button('Load more sellers',async()=>{const r=await request('ops_sellers',{after:next});sellers=[...sellers,...r.sellers];next=r.next;show();}));if(!detail){
       root.append(c);
-      if(view==='billing')closureReview();
+      if(view==='billing'){closureReview();mandateQueue();}
       root.append(el('p','Select a business account to inspect its verification, shop visibility, membership, support and financial history.','footnote'));
       return;
    }
 
  function mandateQueue(){
-   const box=card('Historic Netcash mandate archive — read-only',
-     'Netcash collection has been retired. Do not submit new debit batches. Historical consent is not Paystack authorisation.');
+   const box=el('details',undefined,'panel ops-card ops-legacy-archive');
+   box.append(el('summary','Historic Netcash mandate archive — read-only'),
+     el('p','Archived consent only. These mandates cannot authorise a new debit or prove a Paystack subscription.','footnote'));
    box.append(table(['Seller','Account ending','Bank','Mandate','Action'],
      mandates.map(m=>[m.shopName||m.sellerUid,'•••• '+(m.accountLast4||'—'),
        m.bankName||'—',tag(m.status),
