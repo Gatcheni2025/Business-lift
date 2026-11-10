@@ -183,7 +183,13 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(closuresNext)box.append(button('Load more account closures',async()=>{const r=await request('ops_account_deletion_queue',{after:closuresNext});closures.push(...(r.requests||[]));closuresNext=r.nextAfter||null;show();}));
   root.append(box);
  }
-  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),el('p',d.seller.address),tag(d.seller.approvalStatus));account.append(el('p','Verification: '+d.verification.status+' · Phone: '+(d.verification.phoneVerified?'verified':'not verified')));if(d.seller.approvalStatus==='approved')
+  const d=detail,account=card(d.seller.shopName,'Seller account · '+d.seller.sellerUid);account.dataset.sellerAccount=d.seller.sellerUid;account.tabIndex=-1;account.append(button('← Back to seller directory',async()=>{selected=null;detail=null;show();root.scrollIntoView({block:'start',behavior:'instant'});}));account.append(el('p',d.seller.ownerEmail+' · '+d.seller.phone),
+    el('p',d.seller.address),
+    tag(d.seller.approvalStatus==='approved'?'Business approved':'Verification pending'),
+    tag(d.membershipPaid?'Premium account':d.complimentaryAccess?'Temporary access · not paid':'Free account'));
+  account.append(el('p','Account ID: '+d.seller.sellerUid+' · '+(d.businessAccount?.type||'Business')));
+  if(d.seller.approvalStatus!=='approved')
+    account.append(el('p','The registration is recorded. Final identity and business verification is pending; payment is a separate decision.','notice warning'));if(d.seller.approvalStatus==='approved')
     account.append(el('p','Business approval is complete. Your shop listing can be free and live; subscription status is separate. Do not approve the seller or products again.','notice success'));
   else account.append(button('Open approval desk',()=>navigate('approvals')));
   root.append(account);
@@ -292,10 +298,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       review.append(details);
     }
     if(!status.sellerApproved){
-      review.append(el('p','This seller is not fully approved in the authoritative record. Account: '+
-        status.approvalAccountStatus+' · identity/selfie: '+status.approvalVerificationStatus+
-        '. Check the same seller UID in the approval queue.','notice warning'),
-        button('Review seller verification',()=>navigate('approvals')));
+      review.append(el('p','Business verification is still pending. Uploaded identity evidence is not a separate final approval. Use the one checklist in this account.','notice warning'),
+        button('Open verification checklist',()=>{accountTab='verification';show();}));
     }else if(!status.shopSetupComplete)
       review.append(el('p','Registration is approved. Finish shop setup and phone verification.','notice warning'));
     else if(!status.sellingAccessActive)
@@ -409,6 +413,43 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(accountTab==='chat')sellerAccountSupport(d);
  }
 
+ function sellerAccountSupport(d){
+   const sellerUid=d.seller.sellerUid,ticketId='seller_'+sellerUid;
+   const panel=card('Teyza Support · '+d.seller.shopName,
+     'Private business-owner conversation. Customer chat is separate. Support cannot activate memberships or send payment links.');
+   const history=el('div',undefined,'ops-support-thread');
+   const load=async()=>{
+     try{
+       const response=await request('ops_support_thread',{ticketId});
+       if(detail?.seller?.sellerUid!==sellerUid||accountTab!=='chat')return;
+       history.replaceChildren();
+       const rows=response.messages||[];
+       if(!rows.length)history.append(el('p','No messages have been sent.'));
+       for(const m of rows){
+         const bubble=el('div',undefined,'ops-support-bubble');
+         bubble.append(el('strong',m.sender==='admin'?'Teyza Support':'Business owner'),el('p',m.text));
+         history.append(bubble);
+       }
+     }catch(error){
+       if(error.stale)return;
+       if(error.status===404)history.replaceChildren(el('p','No conversation yet. The seller can start one from the app.'));
+       else throw error;
+     }
+   };
+   panel.append(button('Load conversation',load),history);
+   const reply=el('form',undefined,'ops-form');
+   field(reply,'Message to business owner (no payment links)','message','textarea');
+   submit(reply,'Reply to seller',async fd=>{
+     const msg=String(fd.get('message')||'').trim();
+     if(msg.length<2)throw Error('Write a reply before sending.');
+     await request('ops_support_reply',{ticketId,message:msg,
+       messageId:'a'+Date.now().toString()+Math.random().toString(36).slice(2,10)});
+     message('Support reply sent. No billing or approval changed.','success');
+     await load();
+   });
+   panel.append(reply,button('Open support inbox',()=>navigate('support')));
+   root.append(panel);
+ }
  function productsView(){
    root.append(el('p','Only submitted seller catalogues appear here. Approving products never bypasses ID/selfie checks or Paystack payment verification.','footnote'));
    root.append(table(['Shop','Products','Seller approval','Paystack','Action'],
