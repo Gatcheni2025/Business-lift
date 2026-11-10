@@ -5,7 +5,7 @@ on:
     branches:
       - security/teyza-deploy-cli-dependency-upgrade-20261110
 permissions:
-  contents: write
+  contents: read
 jobs:
   prepare-reviewed-lockfile:
     runs-on: ubuntu-latest
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -32,38 +32,7 @@ jobs:
         run: |
           npm audit --omit=dev --json > npm-audit-production.json || true
           node -e "const a=require('./npm-audit-production.json'); console.log(JSON.stringify(a.metadata?.vulnerabilities||{}, null, 2));"
-      - name: Verify approved exact dependency artifact and accepted audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "7bb28d415f8ea54d1f075b480a8059ea11f351282531e16b3f772e87c3f58562  tools/app-first-release/package-lock.json" | sha256sum -c -
-          echo "a1a20a9ec7eaa96ec6499b6a2f390c1aac59acab982e38e705fbda16d7e59179  tools/app-first-release/package.json" | sha256sum -c -
-          node - <<'NODE'
-          const fs=require('fs'), assert=require('node:assert/strict');
-          const dir='tools/app-first-release/';
-          const pkg=require('./'+dir+'package.json');
-          const lock=require('./'+dir+'package-lock.json');
-          const a=require('./'+dir+'npm-audit-production.json');
-          assert.equal(pkg.dependencies['firebase-tools'],'15.35.0');
-          assert.equal(lock.packages[''].dependencies['firebase-tools'],'15.35.0');
-          assert.equal(lock.packages['node_modules/firebase-tools'].version,'15.35.0');
-          assert.deepEqual([a.metadata.vulnerabilities.critical,a.metadata.vulnerabilities.high,a.metadata.vulnerabilities.moderate],[0,0,14]);
-          NODE
-      - name: Commit the approved package manifest and lockfile only to PR 131
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/security/teyza-deploy-cli-dependency-upgrade-20261110"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- tools/app-first-release/package.json tools/app-first-release/package-lock.json
-          if git diff --cached --quiet; then
-            echo "Approved package files already committed."
-          else
-            git commit -m "deps: commit reviewed firebase-tools 15.35.0 lockfile"
-            git push origin HEAD:refs/heads/security/teyza-deploy-cli-dependency-upgrade-20261110
-          fi
-      - name: Upload lockfile and audit evidence for review
+      - name: Upload lockfile and audit evidence for review (NO auto commit)
         uses: actions/upload-artifact@v4
         with:
           name: teyza-cli-lockfile-review-candidate
