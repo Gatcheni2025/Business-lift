@@ -321,7 +321,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',sy
    const raw=D.text(data.message,'support message',1000).trim();
    if(raw.length<2)D.fail(422,'Write a support message before sending.');
    // An in-app admin conversation cannot become a disguised web-payment CTA.
-   if(!self&&/(https?:\\/\\/|www\\.|paystack\\.com|teyza\\.co\\.za\\/pay)/i.test(raw))
+   if(!self&&(/https?:\/\//i.test(raw)||/www\./i.test(raw)||/paystack\.com/i.test(raw)||/teyza\.co\.za\/pay/i.test(raw)))
      D.fail(422,'Do not send external links through in-app seller support.');
    const messageId=D.id(data.messageId);
    await rate(uid,'seller-support-message',12,60000);
