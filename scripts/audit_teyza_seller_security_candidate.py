@@ -51,7 +51,9 @@ with zipfile.ZipFile(archive) as z:
     assert "https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js" in src
     assert "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js" in src
-    assert "u.hostname==='checkout.paystack.com'" in src
+    assert "url.hostname==='checkout.paystack.com'" in src
+    assert "url.protocol==='https:'" in src
+    assert "!url.username && !url.password && !url.port" in src
     normalized=re.sub(r'\s+', '', src.lower())
     for token in ('eval(', 'newfunction(', 'document.write(', 'child_process', 'javascript:', 'data:text/html'):
         assert token not in normalized, 'Unexpected high-risk browser source token: '+token
