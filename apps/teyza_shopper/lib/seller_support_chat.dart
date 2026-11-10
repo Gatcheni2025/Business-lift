@@ -85,7 +85,7 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
             child:TextButton(onPressed:()=>Navigator.pop(sheetContext),
               child:const Text('Close')))
         ]),
-      )));
+      ))));
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Chat with Teyza Support'),actions:[
