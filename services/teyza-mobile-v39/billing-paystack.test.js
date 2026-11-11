@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createBilling,verifySignature,validCheckoutUrl,nextMonth,INTRO_CENTS,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION}=require('./billing-paystack');
+const {createBilling,verifySignature,validCheckoutUrl,nextMonth,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION}=require('./billing-paystack');
 const NOW=Date.parse('2026-11-04T07:00:00+02:00');
 const consent={recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION};
 function fixture(seed={},options={}) {
@@ -76,21 +76,22 @@ test('A signup during the final 24 hours of the month does not initiate a Paysta
   assert.equal(f.records.has('teyzaBilling/shop1'),false);
 });
 
-test('R10 introductory checkout is server-priced and only occurs when requested',async()=>{
+test('First membership checkout is server-priced at R99 despite client supplied amount',async()=>{
  const {api,auth,records,requests}=fixture();
  assert.equal(records.size,1);
  const result=await api.execute(auth,'billing_checkout',{...consent,amount:1});
- assert.equal(result.amountCents,INTRO_CENTS);
+ assert.equal(result.amountCents,MONTHLY_CENTS);
  assert.equal(result.monthlyCents,MONTHLY_CENTS);
- assert.equal(result.introductory,true);
+ assert.equal(result.introductory,false);
  assert.match(result.reference,/^TZM-[a-f0-9]{26}$/,'Reference must use Paystack-supported characters');
  assert(validCheckoutUrl(result.checkoutUrl));
  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).status,'pending');
  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).termsVersion,SUBSCRIPTION_TERMS_VERSION);
  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).recurringConsent,true);
  const payload=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
- assert.equal(payload.amount,1000);assert.equal(payload.currency,'ZAR');
- assert.equal(payload.plan,undefined,'First month must not bill R99 accidentally');
+ assert.equal(payload.amount,9900);assert.equal(payload.currency,'ZAR');
+ assert.equal(payload.plan,undefined,'Subscription is scheduled only after verification');
+ assert.equal(records.get('teyzaPaystackPayments/'+result.reference).kind,'monthly');
  assert.equal(records.has('teyzaBilling/shop1'),false,'Checkout is not payment verification');
 });
 test('Checkout requires explicit consent to the current recurring price',async()=>{
@@ -136,7 +137,7 @@ test('Expired, wrong-owner and unverified payment cannot unlock checkout',async(
  const {api,auth,records}=fixture();
  await assert.rejects(api.execute({...auth,email_verified:false},'billing_checkout',consent),e=>e.status===403);
  await assert.rejects(api.execute(auth,'promote_checkout'),e=>e.status===403);
- assert.equal(INTRO_CENTS,1000);assert.equal(MONTHLY_CENTS,9900);
+ assert.equal(MONTHLY_CENTS,9900);
 });
 
 test('Only a fresh administrator can verify a Teyza-issued transaction for its original seller',async()=>{
@@ -200,7 +201,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
  assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });
 
-function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=1000,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
+function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=9900,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
  let records;const calls=[];
  const send=async(url,options)=>{
   calls.push({url,options});let data;
@@ -240,6 +241,18 @@ test('Repeated and concurrent checkout requests cannot create two payable refere
  assert.equal(f.calls.filter(c=>c.url.endsWith('/transaction/initialize')).length,1);
 });
 
+test('A pending historical introductory checkout never reopens the old lower price',async()=>{
+ const f=recurringFixture();
+ f.records.set('teyzaPaystackCheckoutLocks/shop1_membership',{
+  ownerUid:'shop1',reference:'TZM-'+'a'.repeat(26),status:'pending',environment:'test',createdAt:NOW});
+ f.records.set('teyzaPaystackPayments/TZM-'+'a'.repeat(26),{
+  ownerUid:'shop1',reference:'TZM-'+'a'.repeat(26),kind:'intro',status:'pending',
+  environment:'test',amountCents:1000,checkoutUrl:'https://checkout.paystack.com/legacy'});
+ await assert.rejects(f.api.execute(f.auth,'billing_checkout',consent),e=>
+  e.status===409&&/earlier introductory checkout/.test(e.message));
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/transaction/initialize')).length,0);
+});
+
 test('An uncertain checkout initialization never opens a second payment',async()=>{
  const f=recurringFixture({failInitialization:true});
  await assert.rejects(f.api.execute(f.auth,'billing_checkout',consent),/connection lost/);
@@ -247,10 +260,10 @@ test('An uncertain checkout initialization never opens a second payment',async()
  assert.equal(f.calls.filter(c=>c.url.endsWith('/transaction/initialize')).length,1);
 });
 
-test('A verified R10 payment schedules one R99 renewal on the first day of the next month',async()=>{
+test('A verified R99 membership payment schedules one R99 renewal on the first day of the next month',async()=>{
  const f=recurringFixture(),checkout=await f.api.execute(f.auth,'billing_checkout',consent);
  const firstPayload=JSON.parse(f.calls.find(c=>c.url.endsWith('/transaction/initialize')).options.body);
- assert.equal(firstPayload.amount,1000);assert.equal(firstPayload.plan,undefined);
+ assert.equal(firstPayload.amount,9900);assert.equal(firstPayload.plan,undefined);
  const paid=await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
  assert.equal(paid.paid,true);assert.equal(paid.paidUntil,nextMonth(NOW));
  const subscriptionCalls=f.calls.filter(c=>c.url.endsWith('/subscription'));
@@ -411,7 +424,7 @@ test('Website membership checkout returns to the fixed Teyza domain, never a cli
  });
  const init=JSON.parse(requests.find(x=>x.url.endsWith('/transaction/initialize')).options.body);
  assert.equal(init.callback_url,'https://teyza.co.za/pay?payment=return');
- assert.equal(init.amount,1000);
+ assert.equal(init.amount,9900);
  assert.equal(records.get('teyzaPaystackPayments/'+response.reference).checkoutChannel,'web');
  assert.equal(init.metadata.teyzaUid,'shop1');
 });

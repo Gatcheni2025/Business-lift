@@ -12,7 +12,7 @@ function fakePaystack(){
   else if(u.pathname==='/plan/PLN_QA1')data={plan_code:'PLN_QA1',domain:'test',amount:9900,interval:'monthly',currency:'ZAR',invoice_limit:0};
   else if(u.pathname==='/transaction/initialize'){init=body;data={authorization_url:'https://checkout.paystack.com/test_qa'};}
   else if(u.pathname.startsWith('/transaction/verify/'))data={reference:init.reference,status:'success',currency:'ZAR',domain:'test',
-   paid_at:new Date(now).toISOString(),amount:1000,id:12345,customer:{email:init.email,customer_code:'CUS_QA1'},
+   paid_at:new Date(now).toISOString(),amount:9900,id:12345,customer:{email:init.email,customer_code:'CUS_QA1'},
    authorization:{reusable:true,authorization_code:'AUTH_QA1'}};
   else if(u.pathname==='/subscription'&&opts.method==='POST'){
    subscription={subscription_code:'SUB_QA1',domain:'test',amount:9900,customer:{customer_code:'CUS_QA1'},
@@ -24,13 +24,13 @@ function fakePaystack(){
  };
  return {send,calls};
 }
-test('Isolated Paystack check verifies R10, schedules R99, and cancels only its test subscription',async()=>{
+test('Isolated Paystack check verifies R99, schedules R99, and cancels only its test subscription',async()=>{
  const fake=fakePaystack();let opened;
  const result=await runSandbox({key:'sk_test_FAKE',send:fake.send,clock:()=>now,confirm:async url=>{opened=url;return true;}});
  assert.equal(opened,'https://checkout.paystack.com/test_qa');
- assert.deepEqual(result,{status:'verified',initialCents:1000,renewalCents:9900,nextPaymentDate:'2026-12-01',testEntitlement:false,cancelled:true});
+ assert.deepEqual(result,{status:'verified',initialCents:9900,renewalCents:9900,nextPaymentDate:'2026-12-01',testEntitlement:false,cancelled:true});
  assert(fake.calls.every(c=>c.auth==='Bearer sk_test_FAKE'));
- assert.equal(fake.calls.filter(c=>c.path==='/transaction/initialize')[0].body.amount,1000);
+ assert.equal(fake.calls.filter(c=>c.path==='/transaction/initialize')[0].body.amount,9900);
  assert.equal(fake.calls.filter(c=>c.path==='/subscription').length,1);
  assert.equal(fake.calls.filter(c=>c.path==='/subscription/disable').length,1);
 });

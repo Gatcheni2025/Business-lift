@@ -4,8 +4,8 @@ const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
 const webhookSignature=require('./webhook-signature');
-const INTRO_CENTS=1000,MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
-const SUBSCRIPTION_TERMS_VERSION='seller-r10-r99-first-2026-11';
+const MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
+const SUBSCRIPTION_TERMS_VERSION='seller-r99-monthly-2026-11';
 const {recentAdmin}=require('./seller-experience');
 const actions=new Set(['billing_checkout','billing_confirm','promote_checkout','billing_manage','ops_paystack_confirm','ops_paystack_refund_confirm']);
 // First day of the following calendar month at 00:00 UTC (02:00 in South Africa).
@@ -31,7 +31,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
   async function paystack(path,method='GET',body) {
     const key=getSecret();
     if(!key||!/^sk_(test|live)_/.test(key))D.fail(503,'Paystack seller payments are not activated yet.');
-    // A test charge mutates subscription and introductory-offer state. Never
+    // A test charge mutates subscription state. Never
     // write sandbox payments into the production seller database.
     requireSafeMode(key);
     const response=await send('https://api.paystack.co'+path,{
@@ -97,7 +97,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
           D.fail(409,'A subscription may still renew. Manage or cancel it before starting another.');
       }
     }
-    const first=!isPromo&&billing?.introUsed!==true,amount=isPromo?PROMO_CENTS:first?INTRO_CENTS:MONTHLY_CENTS;
+    const amount=isPromo?PROMO_CENTS:MONTHLY_CENTS;
     if(!isPromo&&nextMonth(now)-now<86400000)
       D.fail(409,'Monthly renewal starts on the first day of the next month. New signups are paused during the final 24 hours to avoid charging twice in quick succession. Return on the first.');
     const reference=(isPromo?'TZP-':'TZM-')+crypto.randomBytes(13).toString('hex');
@@ -111,17 +111,19 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
       if(current.approvalStatus!=='approved'||current.deletionPending===true)D.fail(409,'Seller approval changed. Please refresh.');
       if(!isPromo&&P.entitled(uid,current,currentBill,clock()))D.fail(409,'Your seller membership is already paid.');
       if(isPromo&&!P.entitled(uid,current,currentBill,clock()))D.fail(403,'Promotion requires a current paid seller membership.');
-      if(!isPromo&&((currentBill?.introUsed!==true)!==first||
-        (currentBill?.paystackSubscriptionCode||'')!==(billing?.paystackSubscriptionCode||'')))
+      if(!isPromo&&(currentBill?.paystackSubscriptionCode||'')!==(billing?.paystackSubscriptionCode||''))
         D.fail(409,'Your membership changed. Refresh before paying.');
       if(lock&&['preparing','pending'].includes(lock.status)){
         const oldSnap=await tx.get(doc('teyzaPaystackPayments/'+lock.reference));
         const old=oldSnap.exists?oldSnap.data():null;
-        if(old?.ownerUid===uid&&old.status==='pending'&&old.environment===mode&&validCheckoutUrl(old.checkoutUrl))
+        if(!isPromo&&old?.ownerUid===uid&&old.kind==='intro')
+          D.fail(409,'An earlier introductory checkout is still unresolved. Contact support to reconcile that Paystack reference before starting the R99 membership.');
+        if(old?.ownerUid===uid&&old.status==='pending'&&old.environment===mode&&validCheckoutUrl(old.checkoutUrl)&&
+          (isPromo?old.kind==='promotion':old.kind==='monthly'&&old.amountCents===MONTHLY_CENTS))
           return {existing:old};
         D.fail(409,'A payment is already being prepared. Please contact support before trying another checkout.');
       }
-      tx.create(newPayment,{reference,ownerUid:uid,kind:isPromo?'promotion':first?'intro':'monthly',
+      tx.create(newPayment,{reference,ownerUid:uid,kind:isPromo?'promotion':'monthly',
         customerEmail:auth.email.toLowerCase(),environment:mode,checkoutChannel:webCheckout?'web':'direct',
         previousSubscriptionCode:billing?.paystackSubscriptionCode||'',
         renewalStrategy:isPromo?'none':'delayed_plan',
@@ -131,13 +133,13 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
       return {existing:null};
     });
     if(started.existing){const old=started.existing;return {reference:old.reference,checkoutUrl:old.checkoutUrl,
-      amountCents:old.amountCents,introductory:old.kind==='intro',monthlyCents:MONTHLY_CENTS,
+      amountCents:old.amountCents,introductory:false,monthlyCents:MONTHLY_CENTS,
       promotionDays:isPromo?7:null,requiresReturnVerification:true,alreadyStarted:true};}
     const payload={email:auth.email,amount,currency:'ZAR',channels:['card'],reference,
       callback_url:webCheckout?'https://teyza.co.za/pay?payment=return':
         'https://www.teyza.co.za/?payment=return',
       metadata:{teyzaUid:uid,teyzaKind:isPromo?'promotion':'membership'}};
-    // Charge the R10 introduction (or R99 returning-member amount) once;
+    // Charge the server-priced R99 membership once;
     // first-of-month renewal is independently scheduled only after
     // server-side Paystack verification and recurring consent.
     let result;
@@ -158,7 +160,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
       throw error;
     }
     return {reference,checkoutUrl:result.authorization_url,
-      amountCents:amount,introductory:first,monthlyCents:MONTHLY_CENTS,
+      amountCents:amount,introductory:false,monthlyCents:MONTHLY_CENTS,
       promotionDays:isPromo?7:null,requiresReturnVerification:true};
   }
   async function verify(reference,expectedEnvironment) {
@@ -461,4 +463,4 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
   return {execute,webhook,actions,grant};
 }
 module.exports={createBilling,actions,nextMonth,verifySignature,validCheckoutUrl,
-  INTRO_CENTS,MONTHLY_CENTS,PROMO_CENTS,PROMO_MS,SUBSCRIPTION_TERMS_VERSION};
+  MONTHLY_CENTS,PROMO_CENTS,PROMO_MS,SUBSCRIPTION_TERMS_VERSION};

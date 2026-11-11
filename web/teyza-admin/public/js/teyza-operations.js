@@ -358,7 +358,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   // Seller ID approval is independent from Paystack purchase confirmation.
   const billing=card('Paystack seller membership',d.membershipPaid?'Seller membership verified by Paystack.':
     'No active verified Paystack membership. Shop review can be completed, but products remain disabled until payment is confirmed.');
-  billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Complimentary temporary access':'Not paid'));
+  billing.append(tag(d.membershipPaid?'Paystack paid':d.complimentaryAccess?'Admin promotional access · not a payment':'Not paid'));
   billing.append(el('p','Mode: '+(d.paystackMode==='live'?'Live Paystack':'Paystack TEST — not real money')));
   billing.append(el('p','Membership: '+(d.billing?.status||'not started')+
     ' · Plan: '+(d.seller.listingPlan||'free')+
@@ -366,8 +366,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(d.billing?.paidUntil)
     billing.append(el('p','Paid until: '+new Date(d.billing.paidUntil).toLocaleString('en-ZA')));
   if(d.complimentaryAccess){
-    billing.append(el('p','Complimentary access ends: '+new Date(d.complimentaryUntil).toLocaleString('en-ZA')+' · Reason: '+(d.complimentaryReason||'')));
-    billing.append(button('Revoke complimentary access',async()=>{
+    billing.append(el('p','Promotional access ends: '+new Date(d.complimentaryUntil).toLocaleString('en-ZA')+' · Reason: '+(d.complimentaryReason||'')));
+    billing.append(button('Revoke promotional access',async()=>{
       const reason=prompt('Enter a reason for revoking temporary access (at least 15 characters):');
       if(!reason||reason.trim().length<15)throw Error('A revocation reason of at least 15 characters is required.');
       if(!confirm('Revoke this complimentary grant now? This does not refund any real payment.'))return;
@@ -378,20 +378,21 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     }));
   }
   billing.append(el('p','New subscriptions must be authorised by the seller with Paystack card checkout on the Teyza website. Historic Netcash mandates remain read-only and are not chargeable.','footnote'));
+  billing.append(el('p','Standard Premium remains R99/month. Admins may run occasional audited 7-, 14-, or 30-day promotional access grants for approved shops; these are not price discounts or Paystack payments.','footnote'));
   if(d.paystackMode!=='live')
     billing.append(el('p','TEST MODE: a successful sandbox payment does not mean real funds were collected. Do not activate a live seller on test transactions.','notice warning'));
   if(d.seller.approvalStatus==='approved'&&!d.membershipPaid&&!d.complimentaryAccess){
     const exception=el('form',undefined,'ops-form');
-    choice(exception,'Temporary complimentary access','days',[[7,'7 days'],[14,'14 days'],[30,'30 days']],7);
-    field(exception,'Reason for exception (audited)','reason','textarea');
+    choice(exception,'Admin promotional access','days',[[7,'7 days'],[14,'14 days'],[30,'30 days']],7);
+    field(exception,'Campaign name / reason (audited)','reason','textarea');
     const confirmText=check(exception,'This is a time-limited complimentary grant, not a Paystack payment.','confirmed');
-    submit(exception,'Grant temporary access',async fd=>{
+    submit(exception,'Grant promotional access',async fd=>{
       const reason=String(fd.get('reason')||'').trim();
       if(reason.length<15)throw Error('Enter a reason of at least 15 characters.');
-      if(!confirm('Grant complimentary product-selling eligibility without recording any payment? Seller identity and shop verification remain mandatory.'))return;
+      if(!confirm('Grant time-limited Premium access as an admin promotion without recording payment? Seller approval and identity verification remain mandatory. The standard R99 subscription price does not change.'))return;
       await request('ops_complimentary_access',{sellerUid:d.seller.sellerUid,
         days:Number(fd.get('days')),reason,confirmed:true});
-      message('Complimentary membership granted with an audit record and expiry. No payment was recorded.','success');
+      message('Admin promotional access granted with an audit record and expiry. No Paystack payment was recorded.','success');
       await choose(selected);
     });
     billing.append(exception);

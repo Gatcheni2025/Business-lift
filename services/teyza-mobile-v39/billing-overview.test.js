@@ -16,7 +16,7 @@ test('spaza and wholesaler both see the same verified Paystack R99 schedule',()=
     assert.equal(b.status,'paid');
     assert.equal(b.paymentVerified,true);
     assert.equal(b.monthlyFeeCents,9900);
-    assert.equal(b.introductoryFeeCents,1000);
+    assert.equal(Object.hasOwn(b,'introductoryFeeCents'),false);
     assert.equal(b.nextBillingAt,NOW+MONTH);
     assert.equal(b.nextBillAmountCents,9900);
     assert.equal(b.amountDueCents,null,'A future scheduled bill is not an overdue invoice');

@@ -31,4 +31,15 @@ void main(){
   expect(shop.serviceHighlights.single['name'],'Braiding');
   expect(discoverShopProducts([shop],type:'spaza'),isEmpty);
  });
+ test('Google retail business listings are mapped to local businesses, never spazas',(){
+  final listing=OnlineShop.fromJson({
+   'id':'google-salon-1','name':'Township Hair Salon',
+   'origin':'google_places','shopCategory':'retail',
+   'primaryType':'beauty_salon','latitude':-29.8,'longitude':31.02
+  });
+  expect(listing.shopCategory,'variety');
+  expect(teyzaMatchesShopCategory(listing,'spaza'),false);
+  expect(teyzaMatchesShopCategory(listing,'variety'),true);
+ });
+
 }

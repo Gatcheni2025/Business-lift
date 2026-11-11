@@ -456,7 +456,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         mandateAccessKind:billing?.mandateAccessKind||null,
         mandateAccessUntil:P.mandateAccess(uid,account,billing,clock())?billing.mandateAccessUntil:null,
         complimentaryUntil:P.complimentary(uid,account,billing,clock())?billing.adminComplimentaryUntil:null,
-        paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,introEligible:billing?.introUsed!==true,
+        paidUntil:billing?.paidUntil||null,renewalSetup:billing?.renewalSetup||null,
         promotionEndsAt:promotion?.endsAt||null,
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,

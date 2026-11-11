@@ -83,7 +83,7 @@ class OnlineShop {
     placeId:(p['placeId']??'').toString(),
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
-    shopCategory:p['shopCategory']=='wholesale'?'wholesale':p['shopCategory']=='variety'?'variety':'spaza',
+    shopCategory:p['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(p['shopCategory'])?'variety':'spaza',
     categorizationVerified:p['categorizationVerified']==true,
     types:[if(p['primaryType'] is String) p['primaryType'] as String,
       ...((p['types'] as List?)??const []).whereType<String>()],
