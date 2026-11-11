@@ -211,7 +211,8 @@ jobs:
           required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           required_exact={'version':'3.25.0','billingMode':'paystack_checkout',
-                          'subscriptionMonthlyCents':9900,'introductoryFirstMonthCents':1000,
+                          'subscriptionMonthlyCents':9900,'membershipInitialChargeCents':9900,
+                          'subscriptionTermsVersion':'seller-r99-monthly-2026-11',
                           'promotionSevenDaysCents':2900}
           failures=[]
           failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)

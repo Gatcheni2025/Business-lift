@@ -1,6 +1,6 @@
 'use strict';
 const P=require('./publication');
-const {MONTHLY_CENTS,INTRO_CENTS}=require('./billing-paystack');
+const {MONTHLY_CENTS}=require('./billing-paystack');
 const validTime=value=>Number.isFinite(value)&&value>0?value:null;
 const expiry=(billing,now)=>validTime(billing?.paidUntil)>now?billing.paidUntil:null;
 function summarize(uid,account,billing,transactions=[],now=Date.now()){
@@ -41,7 +41,7 @@ function summarize(uid,account,billing,transactions=[],now=Date.now()){
   return {
     sellerUid:uid,shopName:account.shopName||'',businessType:account.category,
     provider:'paystack',currency:'ZAR',
-    monthlyFeeCents:MONTHLY_CENTS,introductoryFeeCents:INTRO_CENTS,
+    monthlyFeeCents:MONTHLY_CENTS,
     status,accessActive:P.eligible(uid,account,billing,now),
     paymentVerified:livePaid,renewalStatus:renewal,
     paidThrough:through,nextBillingAt,nextBillAmountCents:nextBillingAt?MONTHLY_CENTS:null,

@@ -16,8 +16,8 @@ test('Registration and historical trials are never paid entitlements',()=>{
   assert.equal(state.canSell,false);
  }
 });
-test('Introductory first month permits products until expiry',()=>{
- assert.equal(B.INTRO_CENTS,1000);assert.equal(B.MONTHLY_CENTS,9900);
+test('Historical verified Paystack purchases remain valid until their existing expiry',()=>{
+ assert.equal(B.MONTHLY_CENTS,9900);
  assert.equal(P.entitled('seller1',basic,billing,NOW),true);
  assert.equal(P.state('seller1',basic,{},null,shop,billing,NOW).canSell,true);
  assert.equal(P.entitled('seller1',basic,billing,billing.paidUntil),false);
