@@ -779,7 +779,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       });
       final prefs=await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area','gps');
-      await Future.wait<void>([reloadOnline(),reloadOtherBusinesses()]);
+      await Future.wait<void>([reloadOnline(),reloadOtherBusinesses(),reloadSponsoredAds()]);
     } catch (e) {
       if (!mounted) return;
       setState(() { locationWarning = e is FormatException ? e.message : 'Could not find your area. Choose it manually.'; });
