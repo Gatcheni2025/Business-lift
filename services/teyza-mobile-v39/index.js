@@ -14,6 +14,10 @@ const verificationKey=defineSecret('TEYZA_VERIFICATION_ENCRYPTION_KEY');
 const placesKey=defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const paystackKey=defineSecret('TEYZA_PAYSTACK_SECRET_KEY');
 const paystackSigningKey=defineSecret('TEYZA_PAYSTACK_WEBHOOK_SIGNING_SECRET');
+// StoreKit 2 trust anchors and App Store Server API signing key are server-only.
+// Provision both in Firebase Secret Manager before deploying the Store Billing branch.
+const appleIapApiKey=defineSecret('TEYZA_APPLE_IAP_API_PRIVATE_KEY');
+const appleIapRoots=defineSecret('TEYZA_APPLE_IAP_ROOTS_BASE64');
 // Admin-only deployment must not register an optional WhatsApp secret.
 // Firebase detects defineSecret during module evaluation even for exports
 // excluded via --only.
@@ -67,6 +71,7 @@ const service=createService({db,bucket,getAuthUser:uid=>admin.auth().getUser(uid
    sendPasswordResetEmail:sendSetupEmail,
   getPlacesKey:()=>placesKey.value(),getAddressSigningKey:()=>verificationKey.value(),
    getPaystackSecret:()=>paystackKey.value(),getPaystackWebhookSigningSecret:()=>paystackSigningKey.value(),getPaystackPlanCode:()=>process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE||'',
+  getAppleIapApiKey:()=>appleIapApiKey.value(),getAppleIapRoots:()=>appleIapRoots.value(),
   createPhoneToken:uid=>admin.auth().createCustomToken(uid,{teyzaPhoneBootstrap:true}),
   encryptSelfie:bytes=>selfieCrypto.encrypt(bytes,verificationKey.value()),
   decryptSelfie:bytes=>selfieCrypto.decrypt(bytes,verificationKey.value()),
@@ -78,7 +83,7 @@ function sellerCheckoutConfigured(){
  return Boolean(/^sk_(test|live)_/.test(key)&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE&&
   (!key.startsWith('sk_test_')||(project&&project!=='business-lift-3c19c')));
 }
-exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
+exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey,appleIapApiKey,appleIapRoots],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
     if(req.method!=='POST'){res.status(405).end();return;}
@@ -126,6 +131,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
        sellerMandateRequestV3:false,adminMandatePdfExport:true,adminNetcashManualSubmission:false,
        sellerPaystackNewCheckoutDisabled:process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true',sellerMembershipBillingMode:process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true'?'paystack_card_subscription':'checkout_disabled',
        adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,membershipInitialChargeCents:9900,subscriptionTermsVersion:'seller-r99-monthly-2026-11',promotionSevenDaysCents:2900,shopperAdsRadiusPricing:true,shopperAdsSevenDays:true,
+        shopperAdsStoreBillingEnabled:process.env.TEYZA_ADS_STORE_BILLING_ENABLED==='true',
         shopperAdsDirectPaystackEnabled:process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED==='true'&&process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true',
         paystackCheckoutAvailable:sellerCheckoutRollout.hasEligibleAudience()&&sellerCheckoutConfigured(),paystackRolloutMode:sellerCheckoutRollout.mode(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
