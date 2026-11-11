@@ -1737,7 +1737,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           crossAxisAlignment:CrossAxisAlignment.start,children:[
           Row(children:[const Expanded(child:Text('SPONSORED · TEYZA ADS',
             style:TextStyle(fontWeight:FontWeight.w800,fontSize:10,color:Color(0xFF0A7453)))),
-            InkWell(tooltip:'Report this ad',onTap:() async {
+            Tooltip(message:'Report this ad',child:InkWell(onTap:() async {
               final email=Uri(scheme:'mailto',path:'support@teyza.co.za',queryParameters:{
                 'subject':'Report Teyza sponsored ad',
                 'body':'Advertisement ID: '+(item['id']??'').toString()+'\nReason: '});
@@ -1746,7 +1746,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                   content:Text('Email support@teyza.co.za to report this sponsored ad.')));
               }
             },child:const Padding(padding:EdgeInsets.all(4),child:Icon(Icons.flag_outlined,size:16,
-              color:Color(0xFF6C7880))))
+              color:Color(0xFF6C7880)))))
           ]),
           const SizedBox(height:3),Text((item['title']??'Local offer').toString(),maxLines:1,
             overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w800)),
