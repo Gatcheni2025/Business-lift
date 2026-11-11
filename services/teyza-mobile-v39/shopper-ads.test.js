@@ -130,7 +130,7 @@ test('Paid ads cannot become visible after their seller is suspended',async()=>{
  const f=fixture();
  f.db.items.set('teyzaShopperAds/campaign1',{ownerUid:'seller1',shopName:'Local Spaza',status:'active',
   paymentStatus:'paid',startsAt:NOW-100,endsAt:NOW+100000,radiusKm:10,
-  amountCents:2900,latitude:-29.86,longitude:31.02});
+  amountCents:2900,latitude:-29.86,longitude:31.02,locationAddress:'12 Example Road'});
  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,1);
  f.db.items.set('teyzaPublicShops/seller1',{...f.db.items.get('teyzaPublicShops/seller1'),status:'suspended'});
  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
