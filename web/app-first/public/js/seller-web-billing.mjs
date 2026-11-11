@@ -32,14 +32,18 @@ export function backendReady(health){
 export function eligibility(summary,verified,ready,matched=false){
   if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
   if(summary.listingPaid===true) return {eligible:false,active:true,message:'Verified membership active. Open the Teyza app to manage products.'};
-  if(summary.complimentaryAccess===true) return {eligible:false,active:true,message:'Temporary complimentary access is active. This is not a Paystack payment.'};
+  // A time-limited admin grant is NOT a verified Paystack payment and must not
+  // prevent its owner from choosing Premium after all other safeguards pass.
+  // Do not alter the historical complimentary grant or its existing expiry.
   if(summary.approvalStatus!=='approved' || summary.identityVerified!==true)
     return {eligible:false,message:'Shop approval and identity review must be completed first.'};
   if(summary.setupComplete!==true) return {eligible:false,message:'Complete phone verification and seller onboarding in Teyza.'};
   if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
   if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
   if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'Membership checkout is not yet open for this business account. Your shop remains listed for free.'};
-  return {eligible:true,message:'R99 initial payment for the current calendar month, then R99 on the first of each following month.'};
+  const offer='R99 initial payment for the current calendar month, then R99 on the first of each following month.';
+  return {eligible:true,message:summary.complimentaryAccess===true?
+    'Your temporary complimentary access remains active until its current expiry. It is not a Paystack payment. You may choose to upgrade to verified Premium. '+offer:offer};
 }
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
@@ -98,15 +102,18 @@ async function startup(){
         record.kind||'membership',record.paymentVerified?'Verified live Paystack':record.status||'unverified'].join(' · ');
       historyNode.append(p);
     }
-    el('webAvailabilityNotice').textContent=backendReady(health)?
-      'Checkout is available only to approved and verified sellers.':
-      'New membership checkout is disabled while security verification is completed.';
+    // Explain exactly why the checkout button is disabled. Never make it
+    // clickable unless the authoritative backend, UID and consent checks pass.
+    const termsAccepted=el('webTerms').checked,shopConfirmed=el('webOwnShop').checked;
+    el('webAvailabilityNotice').textContent=!status.eligible?status.message:
+      !termsAccepted||!shopConfirmed?'Tick both boxes to confirm your own shop and the recurring R99 terms before checkout.':
+      'Secure Paystack checkout is ready for this verified seller account.';
     show('webReturnGuidance',confirmedMembership(summary,billing,uid));
     el('webReturnGuidance').textContent='Verified membership is linked to this account. Reopen the app to refresh selling access.';
     show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
     show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
     show('webConfirm',Boolean(uid&&receipt(uid)));
-    el('webCheckout').disabled=busy||!status.eligible||!el('webTerms').checked||!el('webOwnShop').checked;
+    el('webCheckout').disabled=busy||!status.eligible||!termsAccepted||!shopConfirmed;
     el('webRefresh').disabled=busy;
   }
   async function api(action,data={}){
