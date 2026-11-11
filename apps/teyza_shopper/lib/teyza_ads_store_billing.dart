@@ -44,6 +44,9 @@ class TeyzaStoreAdPurchase {
   purchasing=true;
   try{
    if(!await store.isAvailable())throw StateError('Store purchases are not available on this device.');
+   final stored=await SharedPreferences.getInstance();
+   if(stored.getString(_key)!=null)
+    throw StateError('A previous store payment must be reconciled first. Use Refresh campaigns or contact support; do not pay twice.');
    final km=(ad['radiusKm'] as num?)?.toInt()??0;
    final expectedId=teyzaStoreAdsProductId(km),expected=teyzaStoreAdsPriceCents(km);
    final prepared=await api.call('ads_store_prepare',{
