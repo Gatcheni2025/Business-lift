@@ -118,7 +118,7 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   });
  }
  async function checkout(auth,data){
-  if(process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED!=='true')
+  if(process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED!=='true'||process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
    D.fail(503,'Advertising payments are not activated. Your approved ad is saved.');
   // Store-distributed app purchases must use the respective store billing rail.
   if(data.checkoutChannel!=='direct')
