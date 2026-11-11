@@ -1139,3 +1139,36 @@ test('Shopper delivery profile is UID-bound, stores full address and contacts, a
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,phone:'123'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,latitude:0,longitude:0}),422);
 });
+
+test('Local business can save service types and consented photos without exposing grocery products',async()=>{
+ const f=fixture({
+  'teyzaSellerAccounts/seller1':{...seller,category:'retail'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],productHighlights:[]}
+ });
+ const added=await f.service.execute(owner,'business_service_save',{
+   type:'Plumbing',name:'Blocked drain repair',description:'Household plumbing and drain repairs'});
+ assert.equal(added.saved,true);
+ const listing=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(listing.shopCategory,'retail');
+ assert.deepEqual(listing.products,[]);
+ assert.equal(listing.serviceHighlights[0].name,'Blocked drain repair');
+ const preview=await f.service.execute(owner,'business_services_list');
+ assert.equal(preview.services.length,1);
+ await rejects(f.service.execute(buyer,'business_services_list'),404);
+ await rejects(f.service.execute(owner,'business_service_photo',{
+   serviceId:added.serviceId,imageBase64:jpeg,consent:false}),422);
+ const uploaded=await f.service.execute(owner,'business_service_photo',{
+   serviceId:added.serviceId,imageBase64:jpeg,consent:true});
+ assert(uploaded.imageUrl.startsWith('https://firebasestorage.googleapis.com/'));
+ const published=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(published.serviceHighlights[0].imageUrl,uploaded.imageUrl);
+});
+test('A non-business and expired/unapproved business cannot publish services',async()=>{
+ const f=fixture();
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,category:'retail',approvalStatus:'pending'});
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,category:'retail'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'pending'});
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+});
