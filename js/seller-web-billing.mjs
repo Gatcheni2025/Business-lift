@@ -1,6 +1,6 @@
 // SECURITY REMEDIATION: independently rewritten, fail-closed Teyza seller portal.
 // No card details or Paystack secrets are handled here. Pending independent review.
-export const TERMS_VERSION='seller-r10-r99-first-2026-11';
+export const TERMS_VERSION='seller-r99-monthly-2026-11';
 export const SERVICE_URL='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 const config={
   apiKey:'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
@@ -26,7 +26,8 @@ export function backendReady(health){
     (v[0]>3 || v[0]===3 && v[1]>=25) &&
     health.approvalRequired===true && health.sellerApprovalBeforeCheckout===true &&
     health.paystackCheckoutAvailable===true && health.billingMode==='paystack_checkout' &&
-    health.introductoryFirstMonthCents===1000 && health.subscriptionMonthlyCents===9900);
+    health.membershipInitialChargeCents===9900 && health.subscriptionMonthlyCents===9900 &&
+    health.subscriptionTermsVersion===TERMS_VERSION);
 }
 export function eligibility(summary,verified,ready,matched=false){
   if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
@@ -38,7 +39,7 @@ export function eligibility(summary,verified,ready,matched=false){
   if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
   if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
   if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'Membership checkout is not yet open for this business account. Your shop remains listed for free.'};
-  return {eligible:true,message:summary.introEligible===false?'R99 today, then R99 monthly.':'R10 introductory payment, then R99 monthly from the following month.'};
+  return {eligible:true,message:'R99 initial payment for the current calendar month, then R99 on the first of each following month.'};
 }
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
@@ -84,8 +85,8 @@ async function startup(){
     el('webPaidThrough').textContent=matched&&billing.paymentVerified?billingDate(billing.paidThrough):'No verified live payment';
     el('webNextBill').textContent=matched?billingDate(billing.nextBillingAt):'Not scheduled';
     el('webAmountDue').textContent=matched?billingMoney(billing.amountDueCents):'No confirmed amount';
-    el('webPrice').textContent=summary?.introEligible===false?'R99':'R10';
-    el('webPriceDetail').textContent=summary?.introEligible===false?'Monthly membership':'Introductory month, then R99 on the 1st';
+    el('webPrice').textContent='R99';
+    el('webPriceDetail').textContent='First month at R99, then R99 on the 1st';
     const historyNode=el('webPaymentHistory');historyNode.replaceChildren();
     const records=matched&&Array.isArray(billing.transactions)?billing.transactions.slice(0,30):[];
     if(!records.length){
@@ -183,7 +184,7 @@ async function startup(){
       const result=await api('billing_checkout',{checkoutChannel:'web',confirmedSellerUid:uid,
         recurringConsent:true,termsVersion:TERMS_VERSION});
       if(!validReceipt(result.reference)||!validCheckoutUrl(result.checkoutUrl)||
-        ![1000,9900].includes(result.amountCents)||result.monthlyCents!==9900)
+        result.amountCents!==9900||result.monthlyCents!==9900||result.introductory!==false)
         throw Error('Unexpected checkout details.');
       if(!current(uid,generation))return;
       sessionStorage.setItem(receiptKey(uid),JSON.stringify({reference:result.reference,createdAt:Date.now()}));
