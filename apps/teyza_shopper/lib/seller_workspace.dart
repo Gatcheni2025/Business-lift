@@ -698,7 +698,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       backgroundColor:sellerCanvas,
       appBar:widget.sellerMode&&sellerTab==3&&shop!=null?null:AppBar(backgroundColor:sellerCanvas,foregroundColor:ownerInk,
         automaticallyImplyLeading:!widget.sellerMode,
-        title:Text(widget.sellerMode?(shop?.category=='wholesale'?['Wholesaler dashboard','Advertise to spazas','Partner orders','Partner chat','My business']:['Seller dashboard','My products','Customer orders','Customer chat','My business'])[sellerTab]:productsView?'Shop setup & products':'My business'),
+        title:Text(widget.sellerMode?(shop?.category=='wholesale'?['Wholesaler dashboard','Advertise to spazas','Partner orders','Chat','My business']:shop?.category=='retail'?['Business dashboard','My services','Service enquiries','Chat','My business']:['Spaza shop dashboard','My products','Customer orders','Chat','My business'])[sellerTab]:productsView?'Shop setup & products':'My business'),
         leading:!widget.sellerMode&&productsView?BackButton(onPressed:()=>setState(()=>productsView=false)):null,
         actions:widget.sellerMode?[
           IconButton(tooltip:'Sign out',onPressed:busy?null:signOutSeller,icon:const Icon(Icons.logout)),
