@@ -369,9 +369,11 @@ jobs:
           python3 scripts/prepare_mobile_release.py android --signing "$SIGNING_MODE"
           python3 -m pip install --quiet pillow cairosvg
           python3 scripts/make_launcher_icon.py
+      # QA-only: preview moderated Ads UI with payments disabled in store builds.
+      # Standard signed production builds keep Ads hidden until StoreKit/Play Billing is verified.
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
       - name: Verify merged bundle has no advertising permissions
         working-directory: apps/teyza_shopper
         run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
@@ -388,7 +390,7 @@ jobs:
         if: env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload verified signed Android APK for direct device testing
@@ -571,7 +573,7 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
             flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
