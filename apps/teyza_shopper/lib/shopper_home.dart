@@ -1484,19 +1484,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
   // Product cards come only from the server-published merchant catalogue,
   // never from private seller drafts or protected wholesale offers.
-  Map<String,List<ShopProduct>> get localBusinessProductGroups {
-    if(area==null)return {};
-    final groups=<String,List<ShopProduct>>{};
-    for(final shop in live.where((s)=>false&&s.shopCategory=='variety'&&
-      shopMatchesArea(s,area,radiusKm:40.0))){
-      for(final product in shop.products){
-        if(product.priceCents<=0||product.stock<=0||!product.inStock)continue;
-        final name=teyzaProductCategory(product.category);
-        groups.putIfAbsent(name.isEmpty?'Other':name,()=>[]).add(ShopProduct(shop,product));
-      }
-    }
-    return groups;
-  }
   List<NearbyListing> get nearbyOtherBusinesses {
     if(area==null)return [];
     final verified=live.where((shop)=>shop.shopCategory=='variety'&&
@@ -1811,18 +1798,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Text(area==null?'Add your delivery address to find local businesses nearby.':
           otherBusinessesWarning??'No local businesses found nearby. Try another area.',
           style:const TextStyle(color:muted,fontSize:12))),
-      // Separate categorized local-business products from spaza essentials.
-      // Only server-published priced stock is included here.
-      for(final group in localBusinessProductGroups.entries.take(8))...[
-        const SizedBox(height:8),
-        section(group.key,
-          subtitle:'Available from local Teyza businesses',
-          action:TextButton(onPressed:()async{
-            await setDiscoveryType('variety');
-            if(mounted)setState((){category=group.key;tab=1;});
-          },child:const Text('Browse'))),
-        productShelf(group.value),
-      ],
+      // Services are separate from the grocery cart; shoppers enter an
+      // approved local business profile to view photos and send enquiries.
       Card(color:const Color(0xFFE5F4ED),elevation:0,
         child:ListTile(
           leading:const Icon(Icons.add_business_outlined,color:green),
