@@ -8,17 +8,20 @@ test('Website merchant readiness fails closed for old production and incomplete 
  const {backendReady}=await service();
  const ready={ok:true,version:'3.25.0',approvalRequired:true,
   sellerApprovalBeforeCheckout:true,paystackCheckoutAvailable:true,
-  billingMode:'paystack_checkout',introductoryFirstMonthCents:1000,subscriptionMonthlyCents:9900};
+  billingMode:'paystack_checkout',membershipInitialChargeCents:9900,subscriptionMonthlyCents:9900,
+  subscriptionTermsVersion:'seller-r99-monthly-2026-11'};
  assert.equal(backendReady({...ready,version:'3.20.0'}),false);
  assert.equal(backendReady({...ready,paystackCheckoutAvailable:false}),false);
  assert.equal(backendReady({...ready,sellerApprovalBeforeCheckout:undefined}),false);
  assert.equal(backendReady({...ready,subscriptionMonthlyCents:4900}),false);
+ assert.equal(backendReady({...ready,membershipInitialChargeCents:1000}),false,'Old introductory backend must fail closed');
+ assert.equal(backendReady({...ready,subscriptionTermsVersion:'seller-r10-r99-first-2026-11'}),false);
  assert.equal(backendReady(ready),true);
 });
 test('Only a verified, approved, fully onboarded and email-verified shop can start website checkout',async()=>{
  const {eligibility}=await service();
  const seller={approvalStatus:'approved',identityVerified:true,setupComplete:true,
-  listingPaid:false,complimentaryAccess:false,introEligible:true,pilotCheckoutEligible:true};
+  listingPaid:false,complimentaryAccess:false,pilotCheckoutEligible:true};
  assert.equal(eligibility({...seller,approvalStatus:'pending'},true,true,true).eligible,false);
  assert.equal(eligibility({...seller,identityVerified:false},true,true,true).eligible,false);
  assert.equal(eligibility({...seller,setupComplete:false},true,true,true).eligible,false);
@@ -58,7 +61,9 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert(!page.includes('id="mandateAccountNumber"')&&!page.includes('id="mandateSign"'));
  assert(js.includes('seller_billing_overview')&&js.includes("confirmedSellerUid:uid"));
  assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
- assert(js.includes('getIdToken(true)')&&js.includes('1000')&&js.includes('9900'));
+ assert(js.includes('getIdToken(true)')&&js.includes('membershipInitialChargeCents===9900')&&js.includes('subscriptionTermsVersion===TERMS_VERSION'));
+ assert(!page.includes('R10')&&!alias.includes('R10')&&!marketing.includes('R10'));
+ assert(js.includes('result.amountCents!==9900')&&js.includes('result.introductory!==false'));
  assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
  assert(js.includes('new sdk.FacebookAuthProvider()'),'Existing Facebook-linked sellers need the same UID login');
  assert(js.includes('confirmedMembership(summary,billing,uid)'),'Paystack browser return is not payment proof');
@@ -68,7 +73,7 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
 test('Website statement only displays confirmed server amounts and local South African dates',async()=>{
  const {billingMoney,billingDate}=await service();
  assert.equal(billingMoney(9900),'R99.00');
- assert.equal(billingMoney(1000),'R10.00');
+ assert.equal(billingMoney(4900),'R49.00');
  assert.equal(billingMoney(null),'No confirmed amount');
  assert.match(billingDate(Date.UTC(2026,10,30,22,0,0)),/Dec|12/);
  assert.equal(billingDate(null),'Not scheduled');
