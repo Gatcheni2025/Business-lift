@@ -1154,7 +1154,7 @@ test('Local business can save service types and consented photos without exposin
  assert.equal(listing.serviceHighlights[0].name,'Blocked drain repair');
  const preview=await f.service.execute(owner,'business_services_list');
  assert.equal(preview.services.length,1);
- await rejects(f.service.execute(buyer,'business_services_list'),404);
+ await rejects(f.service.execute(buyer,'business_services_list'),403);
  await rejects(f.service.execute(owner,'business_service_photo',{
    serviceId:added.serviceId,imageBase64:jpeg,consent:false}),422);
  const uploaded=await f.service.execute(owner,'business_service_photo',{
