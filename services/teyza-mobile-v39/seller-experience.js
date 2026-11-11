@@ -27,6 +27,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
     catalogueApprovalRequired:false,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
+   const existingRegistration=await doc('teyzaSellerAccounts/'+uid).get();
+   if(existingRegistration.exists){D.seller(existingRegistration.data(),uid);return {registered:true,alreadyRegistered:true};}
    const claimedPlaceId=data.googleClaimSelection?shopAddress.claim(uid,data.googleClaimSelection):null;
    // A location shared with a Google business does not automatically grant
    // ownership. Require an authenticated Google listing claim first.
