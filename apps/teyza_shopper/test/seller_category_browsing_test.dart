@@ -112,26 +112,26 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Local business products display by their own categories below local businesses, never wholesale prices',(tester)async{
+  testWidgets('Local businesses appear separately without leaking services into grocery price cards',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     await start(tester,[
       seller('corner','Corner Spaza','spaza',products:[
         {'id':'bread','name':'White bread','category':'Bakery','priceCents':1800,'stock':3}]),
-      seller('salon','Durban Salon','variety',products:[
-        {'id':'hair','name':'Hair treatment','category':'Hair & Beauty','priceCents':6500,'stock':8},
-        {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2000,'stock':4}]),
+      Shop.fromJson({'id':'salon','name':'Durban Salon','shopCategory':'retail',
+        'latitude':-29.8587,'longitude':31.0218,'identityVerified':true,
+        'serviceHighlights':[{'id':'hair','name':'Hair treatment','type':'Beauty & hair'}],
+        'products':[{'id':'legacy','name':'Legacy salon product','priceCents':1000,'stock':3}]}),
       seller('bulk','Wholesale Depot','wholesale',products:[
         {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
     ]);
-    final item=find.byKey(const ValueKey('essential-product-salon-hair'));
     final home=find.byKey(const PageStorageKey<String>('shopper-home'));
-    for(var attempt=0;attempt<25&&item.evaluate().isEmpty;attempt++){
-      await tester.drag(home,const Offset(0,-180));
-      await tester.pumpAndSettle();
+    final local=find.text('Local Businesses');
+    for(var n=0;n<18&&local.evaluate().isEmpty;n++){
+      await tester.drag(home,const Offset(0,-180));await tester.pumpAndSettle();
     }
-    expect(item,findsOneWidget);
-    expect(find.text('Hair & Beauty'),findsWidgets);
+    expect(local,findsWidgets);
+    expect(find.byKey(const ValueKey('essential-product-salon-legacy')),findsNothing);
     expect(find.byKey(const ValueKey('essential-product-bulk-wholesale')),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -145,40 +145,38 @@ void main(){
     expect(supplier.rangeProducts,isEmpty);
     expect(discoverShopProducts([supplier],type:'wholesale'),isEmpty);
   });
-  testWidgets('An approved local business shows its own priced products on the selected shop profile',(tester)async{
+  testWidgets('An approved local business shows service type and enquiry rather than grocery checkout',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
-    await start(tester,[seller('salon','Local Salon','variety',products:[
-      {'id':'cream','name':'Hair cream','category':'Hair & Beauty','priceCents':2500,'stock':3}])]);
+    await start(tester,[Shop.fromJson({'id':'salon','name':'Local Salon','shopCategory':'retail',
+      'latitude':-29.8587,'longitude':31.0218,'identityVerified':true,
+      'serviceHighlights':[{'id':'braid','name':'Braiding','type':'Beauty & hair',
+        'description':'Hair styling'}],
+      'products':[{'id':'cream','name':'Hair cream','priceCents':2500,'stock':3}]})]);
     await tester.tap(find.byKey(const ValueKey('seller-story-salon')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-profile-salon')),findsOneWidget);
-    final product=find.text('Hair cream');
     final profile=find.byKey(const PageStorageKey<String>('shop-profile-salon'));
-    for(var n=0;n<14&&product.evaluate().isEmpty;n++){
+    final service=find.text('Braiding');
+    for(var n=0;n<14&&service.evaluate().isEmpty;n++){
       await tester.drag(profile,const Offset(0,-220));
       await tester.pumpAndSettle();
     }
-    expect(product,findsWidgets);
-    expect(find.text('R25.00'),findsWidgets);
-    expect(find.text('No published products yet'),findsNothing);
+    expect(service,findsWidgets);
+    expect(find.text('R25.00'),findsNothing);
+    expect(find.text('Hair cream'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Shop filters products by the selected business type',(tester)async{
-    await tester.binding.setSurfaceSize(const Size(390,844));
-    addTearDown(()=>tester.binding.setSurfaceSize(null));
-    await start(tester,[
-      seller('corner','Corner Shop','spaza',products:[
-        {'id':'bread','name':'Shop bread','category':'Bakery','priceCents':1400,'stock':4}]),
-      seller('salon','Local Salon','variety',products:[
-        {'id':'soap','name':'Salon soap','category':'Personal Care','priceCents':2000,'stock':4}]),
-    ]);
-    await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
-    final local=find.byKey(const ValueKey('business-filter-variety'));
-    await tester.ensureVisible(local);await tester.pumpAndSettle();
-    await tester.tap(local);await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('shop-product-salon-soap')),findsOneWidget);
-    expect(find.byKey(const ValueKey('shop-product-corner-bread')),findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
+  test('Shopper parsing keeps business service listings and spaza product baskets separate',(){
+    final business=Shop.fromJson({'id':'salon','name':'Local Salon','shopCategory':'retail',
+      'products':[{'id':'soap','name':'Salon soap','priceCents':2000,'stock':4}],
+      'serviceHighlights':[{'id':'hair','name':'Styling','type':'Beauty & hair'}]});
+    final spaza=Shop.fromJson({'id':'corner','name':'Corner Shop','shopCategory':'spaza',
+      'products':[{'id':'bread','name':'Shop bread','priceCents':1400,'stock':4}]});
+    expect(business.products,isEmpty);
+    expect(business.serviceHighlights.single['name'],'Styling');
+    expect(discoverShopProducts([business,spaza],type:'spaza'),hasLength(1));
+    expect(discoverShopProducts([business,spaza],type:'spaza').single.shop.id,'corner');
   });
+
 }
