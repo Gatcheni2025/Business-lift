@@ -1,7 +1,8 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const {saveUpload}=require('./upload-storage');
-const actions=new Set(['business_services_list','business_service_save','business_service_photo']);
+const actions=new Set(['business_services_list','business_service_save','business_service_photo',
+  'business_cover_read','business_cover_upload']);
 const TYPES=new Set(['Beauty & hair','Plumbing','Electrical','Furniture & upholstery','Repairs','Cleaning','Printing','Tutoring','Transport','Other service']);
 function serviceRow(uid,id,data){
  if(data.ownerUid!==uid||data.status!=='active')return null;
@@ -16,6 +17,26 @@ function createBusinessServices({db,bucket,sanitizeImage,clock=Date.now,rate,syn
  }
  async function execute(auth,action,data={}){
   const uid=D.id(auth.uid),account=await owner(uid);
+  if(action==='business_cover_read'){
+   const snap=await doc('teyzaBusinessCovers/'+uid).get();
+   const item=snap.exists?snap.data():null;
+   return {imageUrl:item?.ownerUid===uid?item.imageUrl||'':'',photoType:item?.ownerUid===uid?item.photoType||'':null};
+  }
+  if(action==='business_cover_upload'){
+   if(data.consent!==true||!['portrait','premises'].includes(data.photoType))
+     D.fail(422,'Choose an authorised public portrait or premises photograph and confirm public-display consent.');
+   await rate(uid,'business-cover-photo',5,86400000);
+   const bytes=D.imageBytes(data.imageBase64);
+   let jpeg;try{jpeg=await sanitizeImage(bytes);}catch(_){D.fail(422,'Could not read the business cover image.');}
+   const token=crypto.randomUUID(),path='teyza/business-cover/'+uid+'/'+token+'.jpg';
+   await saveUpload(bucket,path,jpeg,{contentType:'image/jpeg',resumable:false,
+     metadata:{metadata:{firebaseStorageDownloadTokens:token}}});
+   const url='https://firebasestorage.googleapis.com/v0/b/'+bucket.name+'/o/'+encodeURIComponent(path)+'?alt=media&token='+token;
+   await doc('teyzaBusinessCovers/'+uid).set({ownerUid:uid,imageUrl:url,objectPath:path,
+     photoType:data.photoType,publicDisplayConsentAt:clock(),updatedAt:clock()});
+   await synchronize(uid);
+   return {imageUrl:url,photoType:data.photoType};
+  }
   if(action==='business_services_list'){
    await rate(uid,'service-list',45,60000);
    const snap=await db.collection('teyzaBusinessServices/'+uid+'/items').limit(101).get();
