@@ -1,0 +1,47 @@
+name: Teyza Ads IAP locked dependencies (feature branch only)
+
+on:
+  push:
+    branches:
+      - feat/teyza-ads-googleplay-storekit-20261111
+    paths:
+      - services/teyza-mobile-v39/package.json
+      - .github/workflows/teyza-ads-iap-lock-refresh.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    if: github.ref == 'refs/heads/feat/teyza-ads-googleplay-storekit-20261111'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: feat/teyza-ads-googleplay-storekit-20261111
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconcile official Apple/Google verification libraries in locked graph
+        working-directory: services/teyza-mobile-v39
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify exact locked install with no build scripts
+        working-directory: services/teyza-mobile-v39
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Commit ONLY backend package-lock to this feature branch
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- services/teyza-mobile-v39/package-lock.json; then
+            echo "Lock file already matches declared dependencies"
+            exit 0
+          fi
+          git config user.name 'teyza-ci-dependency-lock'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- services/teyza-mobile-v39/package-lock.json
+          git diff --cached --name-only | grep -Fx 'services/teyza-mobile-v39/package-lock.json'
+          test "$(git diff --cached --name-only | wc -l)" -eq 1
+          git commit -m "chore(teyza): lock official StoreKit and Play verification dependencies"
+          git push origin HEAD:feat/teyza-ads-googleplay-storekit-20261111

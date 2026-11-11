@@ -24,7 +24,7 @@ const orderPaystack=require('./order-paystack');
 const businessServices=require('./business-services');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
-  getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackWebhookSigningSecret=()=>'',getPaystackPlanCode=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
+  getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackWebhookSigningSecret=()=>'',getPaystackPlanCode=()=>'',getAppleIapApiKey=()=>'',getAppleIapRoots=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
@@ -189,7 +189,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const advertising=wholesaleAdvertising.createWholesaleAdvertising({db,clock,rate});
   const shopperAdCampaigns=shopperAds.createShopperAds({db,bucket,sanitizeImage,clock,rate,
-    getSecret:getPaystackSecret,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch});
+    getSecret:getPaystackSecret,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch,
+    getAppleIapApiKey,getAppleIapRoots});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
     getPlanCode:getPaystackPlanCode,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch,refresh:synchronizeCatalogue});
   const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,

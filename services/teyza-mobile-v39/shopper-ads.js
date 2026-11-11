@@ -7,11 +7,13 @@ const P=require('./publication');
 const {recentAdmin}=require('./seller-experience');
 const {saveUpload}=require('./upload-storage');
 const signature=require('./webhook-signature');
+const storeBilling=require('./shopper-ads-store');
 
 const DAYS=7,DAY_MS=86400000,BASE_CENTS=2900,LOCAL_KM=10,EXTRA_CENTS_PER_KM=200,MAX_KM=50;
 const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 const actions=new Set(['ads_quote','ads_submit','ads_mine','ads_feed','ads_pause',
-  'ads_checkout','ads_confirm','ops_ads_queue','ops_ads_preview','ops_ads_review']);
+  'ads_checkout','ads_confirm','ops_ads_queue','ops_ads_preview','ops_ads_review',
+  ...storeBilling.actions]);
 
 function quote(radiusKm){
  if(!Number.isInteger(radiusKm)||radiusKm<1||radiusKm>MAX_KM)
@@ -38,7 +40,7 @@ function publicRow(id,c){
   imageUrl:ENDPOINT+'?shopperAdPhoto='+encodeURIComponent(id),sponsored:true};
 }
 function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>{},
-  getSecret=()=>'',getSigningSecret=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',
+  getSecret=()=>'',getSigningSecret=()=>'',getAppleIapApiKey=()=>'',getAppleIapRoots=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',
   send=fetch}){
  const doc=p=>db.doc(p);
  const read=async p=>{const r=await doc(p).get();return r.exists?r.data():null;};
@@ -56,6 +58,10 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   if(!pin)D.fail(409,'Save an accurate approved shop location to select your ad radius.');
   return {account,shop,pin};
  }
+ const stores=storeBilling.createStoreBilling({db,read,clock,quote,
+  requireSeller:verifiedSeller,ownAd:(uid,c)=>ownAd(uid,c),rate,
+  verifier:require('./shopper-ads-store-providers').createProviderVerifier({getAppleApiKey:getAppleIapApiKey,
+    getAppleRoots:getAppleIapRoots})});
  function ownAd(uid,c){
   if(!c||c.ownerUid!==uid)D.fail(404,'Advertisement not found for this seller.');
   return c;
@@ -248,6 +254,7 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
    });
    return {paused:true};
   }
+  if(storeBilling.actions.has(action))return stores.execute(auth,action,data);
   if(action==='ads_checkout')return checkout(auth,data);
   if(action==='ads_confirm')return confirm(D.text(data.reference,'payment reference',80),uid);
   if(action==='ops_ads_queue'){
