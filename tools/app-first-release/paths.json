@@ -1,4 +1,5 @@
 [
+  "/ads/index.html",
   "/agents.html",
   "/assets/app-demo.js",
   "/assets/app-first.css",
@@ -19,6 +20,7 @@
   "/for-shop-owners.html",
   "/how-it-works.html",
   "/index.html",
+  "/js/ads-web-billing.mjs",
   "/js/owner-confirm.js",
   "/js/seller-web-billing.mjs",
   "/js/work-auth.mjs",

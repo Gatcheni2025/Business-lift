@@ -1,0 +1,27 @@
+{
+  "policyVersion": "teyza-ads-operator-source-approval-v1",
+  "approvalType": "authorised_project_owner_and_operator",
+  "decision": "approved",
+  "approvedDate": "2026-11-11",
+  "operatorApprovalPr": 149,
+  "operatorApprovalHeadAtTimeOfApproval": "48f668642778bb20fd98a6e359e1381d7eff2e2e",
+  "approvedFiles": [
+    {
+      "file": "web/app-first/public/ads/index.html",
+      "sha256": "6273f912f6a77b894f97dfbb13aeef4cab8a7319c714a9dcaf29672d4244d980",
+      "windowsCrLfSha256": "99820c9ab75619fca188954599a556e464cfe60b884cfdf548d9450103777a6e"
+    },
+    {
+      "file": "web/app-first/public/js/ads-web-billing.mjs",
+      "sha256": "3b3fec7f5ab7fe09ee6ea96b0bd04f76fd1bf56745c5e43a879b0acd14935289",
+      "windowsCrLfSha256": "df590bc65b3da45118a438a269caa2884a4f58ca9db5e216f7272e3ab95494cb"
+    }
+  ],
+  "mirroredRootContentMustMatch": true,
+  "approvedSha256Representation": "Canonical Git checkout LF UTF-8",
+  "lineEndingEquivalenceVerified": true,
+  "waivesExternalThirdPartyMalwareVerdict": true,
+  "externalAnalystVerdict": "not_received",
+  "basis": "Authorised project owner explicitly approved the new independent teyza.co.za/ads/ website source and JavaScript fingerprint for draft PR #149 on 2026-11-11, and waived an external third-party malware verdict. This approval applies to the exact unchanged reviewed source bytes, not to arbitrary subsequent edits.",
+  "scope": "Only standalone Teyza Ads website HTML and JavaScript. Does NOT approve old /pay source changes, public Paystack charge activation, deployment, in-app external checkout redirection, store policy compliance, or bypassing CI, source hashing, or server-side transaction verification."
+}

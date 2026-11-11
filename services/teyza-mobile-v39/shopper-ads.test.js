@@ -95,17 +95,17 @@ test('Ad image stays private until independently approved AND paid; owner and re
 test('Ads checkout stays disabled by default and cannot take unreviewed price or identity',async()=>{
  const f=fixture(),made=await f.call(f.owner,'ads_submit',campaign);
  await f.call(f.admin,'ops_ads_review',{advertisementId:made.advertisementId,decision:'approved',confirmed:true});
- await rejects(f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'direct',amountCents:1}),503);
+ await rejects(f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'website',confirmedSellerUid:f.owner.uid,amountCents:1}),503);
  assert.equal(f.calls.length,0);
 });
-test('Approved direct-mode Paystack transaction is independently verified, then displayed only within radius and seven days',async()=>{
+test('Approved website Paystack transaction is independently verified, then displayed only within radius and seven days',async()=>{
  const f=fixture(),made=await f.call(f.owner,'ads_submit',campaign);
  await f.call(f.admin,'ops_ads_review',{advertisementId:made.advertisementId,decision:'approved',confirmed:true});
- const old=process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED,global=process.env.TEYZA_SELLER_PAYSTACK_ENABLED;
- process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED='true';process.env.TEYZA_SELLER_PAYSTACK_ENABLED='true';
+ const old=process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED;
+ process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED='true';
  try{
-  await rejects(f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'store'}),422);
-  const checkout=await f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'direct',amountCents:1});
+  await rejects(f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'direct',confirmedSellerUid:f.owner.uid}),422);
+  const checkout=await f.call(f.owner,'ads_checkout',{advertisementId:made.advertisementId,checkoutChannel:'website',confirmedSellerUid:f.owner.uid,amountCents:1});
   assert.equal(checkout.amountCents,3900);
   assert.match(checkout.reference,/^TZA-[a-f0-9]{26}$/);
   const init=f.calls.find(c=>c.url.endsWith('/transaction/initialize'));
@@ -122,8 +122,7 @@ test('Approved direct-mode Paystack transaction is independently verified, then 
   assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
   await rejects(f.svc.publicPhoto(made.advertisementId),404);
  }finally{
-  if(old===undefined)delete process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED;else process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED=old;
-  if(global===undefined)delete process.env.TEYZA_SELLER_PAYSTACK_ENABLED;else process.env.TEYZA_SELLER_PAYSTACK_ENABLED=global;
+  if(old===undefined)delete process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED;else process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED=old;
  }
 });
 test('Paid ads cannot become visible after their seller is suspended',async()=>{

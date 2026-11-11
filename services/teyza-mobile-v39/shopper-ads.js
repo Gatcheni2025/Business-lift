@@ -1,6 +1,6 @@
 'use strict';
 // Shopper-facing, location-scoped Teyza ads. Kept separate from private wholesaler offers.
-// Payment rail is OFF by default and only available to separately approved direct APKs.
+// Website advertiser checkout is independently gated. No in-app payment initiation.
 const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
@@ -120,11 +120,11 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   });
  }
  async function checkout(auth,data){
-  if(process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED!=='true'||process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
+  if(process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED!=='true')
    D.fail(503,'Advertising payments are not activated. Your approved ad is saved.');
-  // Store-distributed app purchases must use the respective store billing rail.
-  if(data.checkoutChannel!=='direct')
-   D.fail(422,'This Paystack route is restricted to an approved direct-distribution Android build.');
+  // Store builds never call this endpoint; this is for the independently visited advertiser website.
+  if(data.checkoutChannel!=='website'||data.confirmedSellerUid!==auth.uid)
+   D.fail(422,'Sign in on the advertiser website and confirm the exact shop account.');
   if(auth.email_verified!==true||typeof auth.email!=='string'||!auth.email.includes('@'))
    D.fail(403,'Verify the email on your Firebase seller account before payment.');
   const uid=D.id(auth.uid),id=D.id(data.advertisementId);
@@ -152,12 +152,12 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
      environment:mode,status:'initializing',createdAt:now});
    return {existing:false,amount};
   });
-  if(prepared.existing)return {reference:prepared.reference,checkoutUrl:prepared.url,amountCents:ad.amountCents,alreadyStarted:true};
+  if(prepared.existing)return {reference:prepared.reference,checkoutUrl:prepared.url,amountCents:ad.amountCents,days:DAYS,alreadyStarted:true};
   let url;
   try{
    const result=await paystack('/transaction/initialize','POST',{
     email:auth.email.toLowerCase(),amount:prepared.amount,currency:'ZAR',reference,
-    callback_url:'https://teyza.co.za/',
+    callback_url:'https://teyza.co.za/ads/?payment=return',
     metadata:{teyzaUid:uid,teyzaKind:'shopper_ad',teyzaAdId:id,radiusKm:ad.radiusKm,days:DAYS}});
    url=result.authorization_url;
    if(typeof url!=='string'||!/^https:\/\/checkout\.paystack\.com\/[A-Za-z0-9_-]+(?:\?.*)?$/.test(url))
