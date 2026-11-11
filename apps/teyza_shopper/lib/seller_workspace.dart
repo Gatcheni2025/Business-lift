@@ -68,7 +68,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
-  Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
+  Uint8List? shopPhoto;String? shopPhotoId;String businessCoverUrl='';int photoRequest=0;
   final seenOrderNotices=<String>{};StreamSubscription<void>? pushUpdates;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
@@ -107,7 +107,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;shopLive=results[0]['shopLive']==true;
         approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
-        shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
+        shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};
+        businessCoverUrl=(results[0]['businessCoverUrl']??'').toString();servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -133,7 +134,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     finally{if(mounted&&photoRequest==request)setState(()=>shopPhotoLoading=false);}
   }
   Future<void> openShopPhoto() async {
-    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:widget.mobileApi)));
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:widget.mobileApi,businessCover:shop?.category=='retail')));
     if(changed==true&&mounted){shopPhotoId=null;await refreshActivity();}
   }
   Future<void> enableOrderAlerts() async {
@@ -176,7 +177,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
+      photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};businessCoverUrl='';servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
       loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;shopLive=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
@@ -603,7 +604,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
       premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,
-      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
+      shopPhoto:shopPhoto,coverUrl:businessCoverUrl,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
       onAdd:busy?null:(shop?.category=='retail'?openBusinessServices:chooseProducts),
       onProducts:shop?.category=='wholesale'?openSupplierAdvertising:shop?.category=='retail'?openBusinessServices:openProducts,
