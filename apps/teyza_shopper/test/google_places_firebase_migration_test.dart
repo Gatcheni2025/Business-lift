@@ -78,8 +78,8 @@ void main(){
       return http.Response(jsonEncode({'ok':true,'entries':[
         {'id':'google-generic','name':'Village Corner Spaza','origin':'google_places',
           'primaryType':'convenience_store','latitude':-29.74,'longitude':30.99},
-        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
-          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99,
+        {'id':'google-generic','name':'Village Corner Spaza','origin':'google_places',
+          'primaryType':'convenience_store','latitude':-29.74,'longitude':30.99,
           'photoRef':'places/ChIJ1234/photos/Photo_1234'},
         {'id':'google-superette','name':'Penzance Superette','origin':'google_places'}
       ]}),200);
