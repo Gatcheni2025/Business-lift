@@ -150,7 +150,7 @@ Future<List<OnlineShop>> _osmFallback({
   final types=category=='wholesale'
     ?r'^(wholesale|warehouse|supermarket)$':category=='variety'
     ?r'^(variety_store|department_store|mall|general)$'
-    :r'^(convenience|grocery|kiosk|general)
+    :r'^(convenience|grocery|kiosk|general)$';
   final radius=category=='wholesale'?30000:category=='variety'?15000:12000;
   final query='[out:json][timeout:16];(nwr(around:$radius,$lat,$lon)["shop"~"$types"]["name"];);out center 70;';
   final res=await client.post(Uri.https('overpass-api.de','/api/interpreter'),
@@ -248,43 +248,6 @@ Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
     return <OnlineShop>[];
   }finally{if(client==null)httpClient.close();}
 }
-;
-  final radius=category=='wholesale'?30000:category=='variety'?15000:12000;
-  final query='[out:json][timeout:16];(nwr(around:$radius,$lat,$lon)["shop"~"$types"]["name"];);out center 70;';
-  final res=await client.post(Uri.https('overpass-api.de','/api/interpreter'),
-    body:{'data':query},headers:const{'Accept':'application/json'})
-    .timeout(const Duration(seconds:20));
-  if(res.statusCode!=200)throw StateError('Nearby map directory unavailable.');
-  final data=jsonDecode(utf8.decode(res.bodyBytes));
-  if(data is! Map || data['elements'] is! List)throw const FormatException('Invalid map directory response.');
-  final result=<OnlineShop>[],names=<String>{};
-  for(final item in data['elements'] as List){
-    if(item is! Map || item['tags'] is! Map)continue;
-    final tags=item['tags'] as Map;
-    final name=(tags['name']??'').toString().trim();
-    if(name.length<2 || name.length>110 || !names.add(name.toLowerCase()))continue;
-    final type=(item['type']??'').toString(),id=(item['id']??'').toString();
-    if(!['node','way','relation'].contains(type)||!RegExp(r'^[0-9]+$').hasMatch(id))continue;
-    final center=item['center'] is Map?item['center'] as Map:item;
-    final la=center['lat'],lo=center['lon'];
-    if(la is! num||lo is! num)continue;
-    final address=[tags['addr:housenumber'],tags['addr:street'],tags['addr:suburb']]
-      .where((v)=>v!=null&&v.toString().trim().isNotEmpty)
-      .map((v)=>v.toString().trim()).join(', ');
-    result.add(OnlineShop(
-      'osm-$type-$id',name,(tags['addr:suburb']??tags['addr:city']??'Nearby').toString(),
-      address,'https://www.openstreetmap.org/$type/$id',
-      'openstreetmap','https://teyza.co.za/?auth=register',
-      la.toDouble(),lo.toDouble(),shopCategory:category,
-      providerAttributions:const[
-        {'name':'© OpenStreetMap contributors','url':'https://www.openstreetmap.org/copyright'}
-      ]));
-    if(result.length>=70)break;
-  }
-  _osmCache[key]=(fetched:DateTime.now(),shops:result);
-  return result;
-}
-
 Future<List<OnlineShop>> findOnlineShops({String area='',double? latitude,
   double? longitude,String category='spaza',int? radiusKm,http.Client? client}) async {
   final kind=category=='wholesale'?'wholesale':category=='variety'?'variety':'spaza';
