@@ -201,7 +201,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
  assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });
 
-function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=1000,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
+function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=9900,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
  let records;const calls=[];
  const send=async(url,options)=>{
   calls.push({url,options});let data;
