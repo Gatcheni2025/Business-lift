@@ -126,7 +126,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
        sellerMandateRequestV3:false,adminMandatePdfExport:true,adminNetcashManualSubmission:false,
        sellerPaystackNewCheckoutDisabled:process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true',sellerMembershipBillingMode:process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true'?'paystack_card_subscription':'checkout_disabled',
        adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,membershipInitialChargeCents:9900,subscriptionTermsVersion:'seller-r99-monthly-2026-11',promotionSevenDaysCents:2900,shopperAdsRadiusPricing:true,shopperAdsSevenDays:true,
-        shopperAdsDirectPaystackEnabled:process.env.TEYZA_ADS_DIRECT_PAYSTACK_ENABLED==='true'&&process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true',
+        shopperAdsWebPaystackEnabled:process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED==='true',
         paystackCheckoutAvailable:sellerCheckoutRollout.hasEligibleAudience()&&sellerCheckoutConfigured(),paystackRolloutMode:sellerCheckoutRollout.mode(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
