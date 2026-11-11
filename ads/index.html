@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#063f42">
+<title>Teyza Ads | Secure advertiser payments</title>
+<meta name="description" content="Manage reviewed Teyza advertising campaigns with your verified business account and one-time Paystack checkout.">
+<link rel="icon" href="/assets/app/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://teyza.co.za/ads/">
+<link rel="stylesheet" href="/assets/app-first.css">
+<style>
+:root{color-scheme:light}body{margin:0;background:#f2f6f3;color:#123e3f;font-family:Inter,system-ui,sans-serif}*{box-sizing:border-box}
+header{background:#063f42;color:white}header .inner{max-width:1070px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 22px}
+header img{width:136px}nav{display:flex;gap:18px}nav a{color:white;text-decoration:none;font-weight:600}
+.hero{padding:55px 22px 70px;background:linear-gradient(120deg,#064346,#07856c);color:white}
+.hero .inner{max-width:1070px;margin:auto}.hero small{text-transform:uppercase;letter-spacing:2px;color:#c9f3ae;font-weight:750}
+h1{font-size:clamp(2.4rem,5vw,4.4rem);line-height:1.07;letter-spacing:-.05em;margin:12px 0}h2{margin-top:0}
+.hero p{max-width:670px;line-height:1.6;color:#e8f7ef}
+main{max-width:1070px;padding:0 20px 40px;margin:-32px auto 0;position:relative;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.9fr);gap:22px}
+.panel{background:white;border:1px solid #d8e8e0;border-radius:20px;padding:clamp(18px,3vw,30px);box-shadow:0 12px 30px #063f4212}
+.panel p,.panel li{line-height:1.55;color:#49655e}.entry{display:grid;gap:8px;margin:10px 0 16px;font-weight:650}
+.entry input{font:inherit;padding:13px;border:1px solid #abc9bd;border-radius:10px;width:100%}
+button{font:inherit;background:#08695d;color:white;border:1px solid #08695d;border-radius:10px;padding:12px 16px;font-weight:750;cursor:pointer}
+button.secondary{background:white;color:#08695d;border-color:#abc9bd}button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc48;outline-offset:3px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0}
+.account{background:#f1f9f3;border-radius:12px;padding:15px;overflow-wrap:anywhere}
+.account strong{display:block}.account span{color:#47635b;display:block;margin-top:6px}
+.ad{border:1px solid #d8e7de;border-radius:14px;padding:16px;margin:12px 0}
+.ad strong{display:block;font-size:1.08rem}.ad p{margin:6px 0}.ad .meta{color:#08705b;font-weight:700}
+.ad button{margin-top:9px}.ad[data-selected="true"]{border:2px solid #08705b;background:#f5fbf6}
+.check{display:flex;gap:10px;align-items:flex-start;line-height:1.5;margin:14px 0}.check input{width:20px;height:20px;flex:none}
+#status{padding:13px 15px;border-radius:10px;background:#e8f5ed;min-height:48px;font-weight:600}
+#status[data-kind="error"]{background:#fff0eb;color:#a32f24}#status[data-kind="warning"]{background:#fff6e3;color:#875b16}
+#status[data-kind="success"]{background:#e5f8eb;color:#12683b}
+.note{font-size:.87rem;color:#61786e}footer{text-align:center;padding:20px;color:#657a71}
+[hidden]{display:none!important}
+@media(max-width:760px){main{grid-template-columns:1fr;margin-top:-20px}.hero{padding:40px 20px 55px}}
+</style>
+</head>
+<body>
+<header><div class="inner"><a href="/" aria-label="Teyza home"><img src="/assets/app/wordmark-light.svg" alt="Teyza"></a><nav aria-label="Website navigation"><a href="/">Home</a><a href="/pay">Membership</a><a href="/support.html">Support</a></nav></div></header>
+<section class="hero"><div class="inner"><small>Independent advertiser website</small><h1>Grow locally with<br>Teyza Ads.</h1><p>Submit your creative for independent review in Teyza, then manage approved campaigns here using your original business login. Pay securely by Paystack. No recurring advertising subscription.</p></div></section>
+<main id="ad-web-root">
+<section class="panel">
+<h2>Secure advertiser account</h2>
+<div id="login">
+<p>Sign in with the original Firebase account connected to your approved Teyza shop. Use the same sign-in provider; do not register another business account.</p>
+<form id="emailForm">
+<label class="entry">Existing email address<input id="email" type="email" required autocomplete="username"></label>
+<label class="entry">Password<input id="password" type="password" required autocomplete="current-password"></label>
+<button type="submit">Sign in</button>
+</form>
+<div class="actions"><button class="secondary" id="google" type="button">Google</button><button class="secondary" id="apple" type="button">Apple</button><button class="secondary" id="facebook" type="button">Facebook</button></div>
+</div>
+<div id="signedIn" hidden>
+<div class="account"><strong id="signedEmail"></strong><span id="shopUid"></span><button id="logout" class="secondary" type="button">Switch account</button></div>
+<h2 style="margin-top:24px">My reviewed campaigns</h2>
+<p id="campaignIntro">Only independently approved ads can be purchased. Your campaign radius and amount are locked when you submit the ad.</p>
+<div id="campaigns" aria-live="polite"></div>
+<label class="check"><input type="checkbox" id="ownerConsent"><span>I confirm this is my approved shop and the selected campaign belongs to this exact account.</span></label>
+<label class="check"><input type="checkbox" id="paymentConsent"><span>I authorise this single Paystack charge at the price shown for seven days of advertising, after Teyza's approval. This payment does not automatically renew.</span></label>
+<div class="actions"><button id="checkout" disabled type="button">Continue to secure Paystack payment</button><button id="refresh" type="button" class="secondary">Refresh campaigns</button></div>
+<p class="note">Returning from Paystack is not proof of payment. Teyza activates ads only after its server verifies the exact charge. Do not pay again if confirmation is pending.</p>
+</div>
+<p id="status" role="status" aria-live="polite">Checking secure payment availability…</p>
+</section>
+<aside class="panel"><h2>Your advertising package</h2>
+<p><strong>R29 for 7 days</strong> up to 10 km. Each additional kilometre costs R2, up to a 50 km radius.</p>
+<ul><li>One-time payment, not a monthly subscription</li><li>Radius measured from the verified shop pin</li><li>Creative reviewed before any charge</li><li>Show only to shoppers within the selected radius</li><li>Starts after verified payment; expires after seven days</li></ul>
+<p>Membership is separate: the R99 seller plan and existing R10 membership arrangements are not changed by buying an advertisement.</p>
+<p class="note">An approved ad is not guaranteed a specific number of views or purchases. Ads are shown as Sponsored and remain subject to content moderation.</p>
+<p>Need help? <a href="mailto:support@teyza.co.za">support@teyza.co.za</a></p>
+</aside>
+</main>
+<footer>© 2026 TEYZA SA (PTY) LTD · <a href="/support.html">Support</a></footer>
+<script type="module" src="/js/ads-web-billing.mjs"></script>
+</body></html>
