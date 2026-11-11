@@ -11,6 +11,7 @@ const operations=require('./operations');
 const adminUsers=require('./admin-users');
 const mandate=require('./mandate');
 const wholesaleAdvertising=require('./wholesale-advertising');
+const shopperAds=require('./shopper-ads');
 const fieldAgents=require('./field-agents');
 const ratings=require('./ratings');
 const P=require('./publication');
@@ -187,6 +188,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   const adminUserManagement=adminUsers.createAdminUsers({db,clock,rate,listAuthUsers,getAuthUser,getAuthUserByEmail,createAuthUser,updateAuthUser,revokeAuthTokens,sendPasswordResetEmail});
   const sellerExperience=experience.createSellerExperience({db,clock,rate,getAuthUser,shopAddress});
   const advertising=wholesaleAdvertising.createWholesaleAdvertising({db,clock,rate});
+  const shopperAdCampaigns=shopperAds.createShopperAds({db,bucket,sanitizeImage,clock,rate,
+    getSecret:getPaystackSecret,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch});
   const sellerBilling=billingCheckout.createBilling({db,clock,getSecret:getPaystackSecret,
     getPlanCode:getPaystackPlanCode,getSigningSecret:getPaystackWebhookSigningSecret,send:paystackFetch,refresh:synchronizeCatalogue});
   const shopperOrderPayments=orderPaystack.createOrderPaystack({db,clock,getSecret:getPaystackSecret,
@@ -300,6 +303,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(businessServices.actions.has(action))return businessServiceManager.execute(auth,action,data);
     if(experience.actions.has(action))return sellerExperience.execute(auth,action,data);
     if(wholesaleAdvertising.actions.has(action))return advertising.execute(auth,action,data);
+    if(shopperAds.actions.has(action))return shopperAdCampaigns.execute(auth,action,data);
     if(action==='wholesale_link_request'){
       const account=await read('teyzaSellerAccounts/'+uid);
       if(account?.uid!==uid||account.category!=='spaza'||account.deletionPending===true)
@@ -905,9 +909,12 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
   async function paystackWebhook(raw,signature,event,modernSignature){
     if(event?.event==='charge.success'&&/^TZO-[a-f0-9]{26}$/.test(event?.data?.reference||''))
       return shopperOrderPayments.webhook(raw,signature,event,modernSignature);
+    if(event?.event==='charge.success'&&/^TZA-[a-f0-9]{26}$/.test(event?.data?.reference||''))
+      return shopperAdCampaigns.webhook(raw,signature,event,modernSignature);
     return sellerBilling.webhook(raw,signature,event,modernSignature);
   }
   return {execute,paystackWebhook,synchronizeCatalogue,publicDirectory,reconcilePublicationBatch,refreshShopLocations:shopLocation.refresh,
-    publicShopPhoto:shopFront.publicPhoto};
+    publicShopPhoto:shopFront.publicPhoto,publicShopperAds:shopperAdCampaigns.feed,
+    publicShopperAdPhoto:shopperAdCampaigns.publicPhoto};
 }
 module.exports = {createService};
