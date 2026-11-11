@@ -516,6 +516,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void selectSellerTab(int tab){
     if(tab==1){if(shop?.category=='wholesale')openSupplierAdvertising();
       else if(shop?.category=='retail')openBusinessServices();else openProducts();return;}
+    if(tab==2&&shop?.category=='wholesale'){
+      Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        WholesaleConnectionsPage(session:widget.session,api:widget.mobileApi)));return;
+    }
     setState((){sellerTab=tab;productsView=false;});
   }
   Future<void> signOutSeller() async {
@@ -595,7 +599,19 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       const Padding(padding:EdgeInsets.all(12),child:Text('Your approved, eligible shop can publish its saved products by selecting Publish saved products or Sync product listing. A temporary grant is not a payment.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
-    2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
+    2=>shop?.category=='retail'?
+      Center(child:Padding(padding:const EdgeInsets.all(24),child:Column(
+        mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.mark_unread_chat_alt_outlined,size:40,color:ownerGreen),
+          const SizedBox(height:14),
+          const Text('Service enquiries',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800)),
+          const SizedBox(height:10),
+          const Text('People can enquire about your services through Customer chat. Business services are not grocery checkout orders.',textAlign:TextAlign.center),
+          const SizedBox(height:18),FilledButton.icon(
+            onPressed:()=>selectSellerTab(3),icon:const Icon(Icons.chat_outlined),
+            label:const Text('Open customer chat'))
+        ]))):
+      ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
     3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true,
       onOpenUpdates:openNotifications,unreadUpdates:unread),
     4=>sellerBusiness(),
