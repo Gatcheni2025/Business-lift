@@ -49,7 +49,10 @@ class _TeyzaAdsState extends State<TeyzaAdsPage> with WidgetsBindingObserver{
    storePurchases!.initialize();
   }
   load();
-  WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(confirmReturn());});
+  WidgetsBinding.instance.addPostFrameCallback((_){if(mounted){
+   if(directPaystack)unawaited(confirmReturn());
+   else unawaited(storePurchases?.recover()??Future<void>.value());
+  }});
  }
  @override void didChangeAppLifecycleState(AppLifecycleState state){
   if(state==AppLifecycleState.resumed&&sameSeller){
