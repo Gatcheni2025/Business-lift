@@ -43,9 +43,9 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     return db.runTransaction(async tx=>{
       const accountRef=doc('teyzaSellerAccounts/'+uid),shopRef=doc('teyzaPublicShops/'+uid);
       const setupRef=doc('teyzaSellerOnboarding/'+uid),billRef=doc('teyzaBilling/'+uid);
-      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap,mandateSnap,servicesSnap]=await Promise.all([
+      const [accountSnap,shopSnap,draftSnap,setupSnap,verificationSnap,settingsSnap,frontSnap,locationSnap,billingSnap,photoSnap,mandateSnap,servicesSnap,coverSnap]=await Promise.all([
         tx.get(accountRef),tx.get(shopRef),tx.get(db.collection('teyzaDraftProducts/'+uid+'/items').limit(201)),tx.get(setupRef),tx.get(doc('teyzaMobileVerification/'+uid)),tx.get(doc('teyzaShopSettings/'+uid)),tx.get(doc('teyzaShopFrontPhotos/'+uid)),tx.get(doc('teyzaShopLocations/'+uid)),tx.get(billRef),tx.get(db.collection('teyzaProductPhotos/'+uid+'/items').limit(201)),tx.get(doc('teyzaSellerMandates/'+uid)),
-        tx.get(db.collection('teyzaBusinessServices/'+uid+'/items').limit(101))]);
+        tx.get(db.collection('teyzaBusinessServices/'+uid+'/items').limit(101)),tx.get(doc('teyzaBusinessCovers/'+uid))]);
       let account=accountSnap.exists?accountSnap.data():null;
       // Migrate old trials to free without billing or resetting trial dates.
       if(account?.listingPlan==='trial'){
@@ -98,6 +98,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       // Only an explicit seller product-add/sync can opt a legacy catalogue
       // into publication, and only with approved, active selling entitlement.
       // Background reconciliation must never publish legacy private drafts.
+      if(next&&account.category==='retail'&&next.status==='active'&&
+         coverSnap.exists&&coverSnap.data().ownerUid===uid&&coverSnap.data().publicDisplayConsentAt&&
+         typeof coverSnap.data().imageUrl==='string'){
+        next.photoUrl=coverSnap.data().imageUrl;
+      }
       if(next&&account.category==='retail'){
         // Never mix an independent service business into the spaza product
         // checkout feed, even if old product drafts exist.
@@ -437,11 +442,11 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if (action==='seller_summary') {
       await owner(uid);await synchronizeCatalogue(uid);
       const account=await trialAccount(uid,await owner(uid));
-      const [config,verification,finance,catalogue,photos,publicShop,setup,location,front,billing,promotion]=await Promise.all([
+      const [config,verification,finance,catalogue,photos,publicShop,setup,location,front,billing,promotion,businessCover]=await Promise.all([
         read('teyzaShopSettings/'+uid),read('teyzaMobileVerification/'+uid),
         db.collection('teyzaCreditEnquiries/'+uid+'/requests').orderBy('createdAt','desc').limit(30).get(),
         read('teyzaCatalogueSubmissions/'+uid),db.collection('teyzaProductPhotos/'+uid+'/items').limit(200).get(),
-        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaBilling/'+uid),read('teyzaPromotions/'+uid)]);
+        read('teyzaPublicShops/'+uid),read('teyzaSellerOnboarding/'+uid),read('teyzaShopLocations/'+uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaBilling/'+uid),read('teyzaPromotions/'+uid),read('teyzaBusinessCovers/'+uid)]);
       const publication=P.state(uid,account,setup||{},verification,publicShop,billing,clock()),pin=P.locationFor(uid,account,location,publicShop,clock());
       return {listingPlan:account.listingPlan==='trial'?'free':account.listingPlan||'free',
         listingPaid:P.entitled(uid,account,billing,clock()),
@@ -455,6 +460,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         promotionEndsAt:promotion?.endsAt||null,
         promotionActive:P.entitled(uid,account,billing,clock())&&promotion?.ownerUid===uid&&promotion.status==='active'&&promotion.endsAt>clock(),
          settings:{...(config||{}),...offers.effective(config,publicShop)},shopFront:validShopFront(front,uid)?{photoId:front.photoId}:null,
+         businessCoverUrl:account.category==='retail'&&businessCover?.ownerUid===uid&&businessCover.publicDisplayConsentAt?businessCover.imageUrl||'':'',
         approvalStatus:publication.approved?'approved':'pending',setupComplete:publication.ready,
         // One authoritative business approval; free directory visibility and
         // paid selling/wholesale advertising are independently reported.
