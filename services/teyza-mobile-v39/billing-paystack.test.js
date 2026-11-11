@@ -94,6 +94,23 @@ test('First membership checkout is server-priced at R99 despite client supplied 
  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).kind,'monthly');
  assert.equal(records.has('teyzaBilling/shop1'),false,'Checkout is not payment verification');
 });
+test('An audited complimentary grant may voluntarily upgrade to R99 without erasing its audit or expiry',async()=>{
+  const grant={ownerUid:'shop1',status:'complimentary_access',
+    adminComplimentaryStatus:'active',adminComplimentaryBy:'anotherAdmin',
+    adminComplimentaryReason:'Approved local seller pilot support grant',
+    adminComplimentaryUntil:NOW+7*86400000};
+  const {api,auth,records,requests}=fixture({'teyzaBilling/shop1':grant});
+  const result=await api.execute(auth,'billing_checkout',consent);
+  assert.equal(result.amountCents,9900);
+  assert.equal(result.monthlyCents,9900);
+  assert.equal(result.introductory,false);
+  assert.equal(records.get('teyzaBilling/shop1').adminComplimentaryUntil,
+    grant.adminComplimentaryUntil,'Checkout must not shorten or silently cancel existing free access');
+  assert.equal(records.get('teyzaBilling/shop1').adminComplimentaryBy,'anotherAdmin');
+  assert.equal(requests.filter(x=>x.url.endsWith('/transaction/initialize')).length,1);
+  assert.equal(records.get('teyzaPaystackPayments/'+result.reference).status,'pending',
+    'No selling entitlement or payment is created merely by opening checkout');
+});
 test('Checkout requires explicit consent to the current recurring price',async()=>{
  const {api,auth,records,requests}=fixture();
  await assert.rejects(api.execute(auth,'billing_checkout',{}),e=>e.status===422&&/renewal terms/.test(e.message));
