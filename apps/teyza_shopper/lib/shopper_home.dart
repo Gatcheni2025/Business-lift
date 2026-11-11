@@ -69,6 +69,7 @@ class Shop {
   final double? latitude, longitude;
   final List<Product> products;
   final List<Product> highlights;
+  final List<Map<String,dynamic>> serviceHighlights;
   final String shopCategory;
   final bool? acceptsCard, cashback;
   final bool sponsored,identityVerified;
@@ -84,13 +85,13 @@ class Shop {
   const Shop(this.id, this.name, this.area, this.photo, this.phone,
     this.pickup, this.delivery, this.products,
     {this.latitude, this.longitude,this.shopCategory='spaza',this.address='',this.city='',this.googlePlaceId='',
-    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.highlights=const []});
+    this.acceptsCard,this.cashback,this.sponsored=false,this.identityVerified=false,this.liveChat=true,this.rating,this.ratingCount=0,this.hours=const [],this.deliveryFeeCents=0,this.cashDiscountPercent=0,this.highlights=const [],this.serviceHighlights=const []});
   factory Shop.fromJson(Map<String, dynamic> x) => Shop(
     (x['id'] ?? '').toString(), (x['name'] ?? '').toString(),
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
     (x['whatsappPhone'] ?? '').toString(), x['pickupEnabled'] == true,
     x['deliveryEnabled'] == true,
-    (x['shopCategory']=='wholesale'?<dynamic>[]:((x['products'] as List?) ?? [])).whereType<Map>()
+    (x['shopCategory']=='spaza'?((x['products'] as List?) ?? []):<dynamic>[]).whereType<Map>()
       .map((p) => Product.fromJson(Map<String, dynamic>.from(p)))
       .where((p) => p.id.isNotEmpty && p.name.isNotEmpty &&
         p.priceCents > 0 && p.stock >= 0).toList(),
@@ -109,7 +110,8 @@ class Shop {
     identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     cashDiscountPercent:x['services'] is Map&&(x['services'] as Map)['cashDiscountPercent']==10?10:0,
-    highlights:x['shopCategory']=='wholesale'?const []:mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList());
+    highlights:x['shopCategory']=='spaza'?mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList():const [],
+    serviceHighlights:x['shopCategory']=='retail'?mobileRows(x['serviceHighlights']):const []);
 }
 class ShopProduct {
   final Shop shop;final Product product;
@@ -1485,7 +1487,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Map<String,List<ShopProduct>> get localBusinessProductGroups {
     if(area==null)return {};
     final groups=<String,List<ShopProduct>>{};
-    for(final shop in live.where((s)=>s.shopCategory=='variety'&&
+    for(final shop in live.where((s)=>false&&s.shopCategory=='variety'&&
       shopMatchesArea(s,area,radiusKm:40.0))){
       for(final product in shop.products){
         if(product.priceCents<=0||product.stock<=0||!product.inStock)continue;
@@ -2365,16 +2367,33 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             icon:const Icon(Icons.phone_outlined),label:const Text('Call'))
         ])
       ])),
+    if(shop.shopCategory=='variety')...[
+      section('Services',subtitle:'Services published by this verified Teyza business'),
+      if(shop.serviceHighlights.isEmpty)
+        const Padding(padding:EdgeInsets.all(14),child:Text('No services published yet. Contact the business for details.')),
+      for(final service in shop.serviceHighlights)
+        Card(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          if((service['imageUrl']??'').toString().startsWith('https://'))
+            Image.network(service['imageUrl'] as String,height:160,fit:BoxFit.cover,
+              errorBuilder:(_,error,stack)=>const SizedBox(height:80,child:Icon(Icons.design_services_outlined))),
+          ListTile(leading:const Icon(Icons.design_services_outlined,color:green),
+            title:Text((service['name']??'Service').toString()),
+            subtitle:Text((service['type']??'').toString()+'\n'+(service['description']??'').toString()),
+            isThreeLine:true),
+          if(shop.liveChat)TextButton.icon(onPressed:()=>chatWithShop(shop),
+            icon:const Icon(Icons.chat_bubble_outline),label:const Text('Enquire about this service'))
+        ])),
+    ],
     if(shop.shopCategory=='spaza')merchantServices(shop),
     if(shop.shopCategory=='wholesale')
       const Padding(padding:EdgeInsets.symmetric(vertical:16),child:Text(
         'Wholesaler listing only. Products and supplier prices are not shown in the public shopper app.',
         style:TextStyle(color:muted,fontSize:13))),
-    if(shop.shopCategory!='wholesale'&&shop.rangeProducts.isEmpty)
+    if(shop.shopCategory=='spaza'&&shop.rangeProducts.isEmpty)
       empty('No published products yet',shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id)?
         'The seller can publish saved stock from My Products. You can also message the shop.':
         'This shop has not published products on Teyza yet.'),
-    if(shop.shopCategory!='wholesale'&&shop.rangeProducts.isNotEmpty)...[
+    if(shop.shopCategory=='spaza'&&shop.rangeProducts.isNotEmpty)...[
       section(shop.products.isEmpty?'Sold here':'Available products',subtitle:'Selected by '+shop.name),
       Padding(padding:const EdgeInsets.only(bottom:12),child:TextField(key:ValueKey('search-${shop.id}'),
         onChanged:(value)=>setState(()=>shopProductSearch=value),
