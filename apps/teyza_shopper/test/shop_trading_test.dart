@@ -78,7 +78,7 @@ void main(){
   await fixtures.visibleTap(tester,find.text('Save shop options'));
   expect(api.saved,{'deliveryEnabled':true,'deliveryFeeCents':1500,'deliveryRadiusKm':3,'cardPayments':true,
     'liveChatEnabled':false,'cashDiscountPercent':10,'cardPaymentFeePercent':0});
-  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();api.session.dispose();
  });
  testWidgets('Account switches clear unsaved service values and disable saving',(tester) async {
   final session=fixtures.Session(),api=TradingApi(fixtures.Session());
@@ -106,7 +106,7 @@ void main(){
   SellerPush(session).updates.add(null);await tester.pumpAndSettle();expect(find.text('New order request'),findsOneWidget);
   await fixtures.visibleTap(tester,find.text('View orders'));expect(find.byType(ShopOrdersPanel),findsOneWidget);
   expect(api.calls.any((c)=>c.action=='order_list'&&c.data['asOwner']==true),isTrue);
-  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();api.session.dispose();
  });
  testWidgets('A late shop photo cannot appear after changing accounts',(tester) async {
   final session=fixtures.Session(),api=TradingApi(session)..photoReply=Completer<Map<String,dynamic>>();
@@ -139,7 +139,7 @@ void main(){
   await fixtures.visibleTap(tester,find.text('Directions to shop'));
   await mode.capture(tester,boundary,'shopper-directions-and-messages');
   expect(opened!.path,'/maps/dir/');expect(opened!.queryParameters['destination'],'-29.8587,31.0218');
-  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();
  });
  testWidgets('Checkout shows delivery and cash discount separately and card payments have no surcharge',(tester) async {
   final session=fixtures.Session(),api=TradingApi(fixtures.Session());
@@ -151,7 +151,7 @@ void main(){
   await fixtures.visibleTap(tester,find.text('Collect'));await fixtures.visibleTap(tester,find.text('Card at the shop'));
   expect(find.text('Total: R35.00'),findsOneWidget);expect(find.text('Extra card charge: R0.00'),findsOneWidget);
   expect(find.textContaining('cash discount on items'),findsNothing);
-  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();api.session.dispose();
  });
  testWidgets('A late collection quote cannot replace a newer delivery total',(tester) async {
   final session=fixtures.Session(),api=TradingApi(fixtures.Session())..firstQuote=Completer<Map<String,dynamic>>();
