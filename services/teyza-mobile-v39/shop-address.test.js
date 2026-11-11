@@ -80,3 +80,26 @@ test('A listing opened from discovery is fetched from Google and bound to the au
  await assert.rejects(api.execute('owner','seller_claim_by_id',{placeId:'../bad'}),e=>e.status===422);
  assert.throws(()=>api.claim('another',selected.claim.claimSelection),e=>e.status===422);
 });
+
+test('Signed address detects an exact Google business name at the same location, not every shop sharing a building',async()=>{
+ const requests=[];
+ const api=createShopAddress({getPlacesKey:()=> 'private-key',getSigningKey:()=> 'private-signing-key',
+  clock:()=>1000000,rate:async()=>{},
+  fetchImpl:async(url,options)=>{
+   requests.push({url,options});
+   return {ok:true,json:async()=>url.includes('places:autocomplete')?
+     {suggestions:[{placePrediction:{placeId:full.id,text:{text:full.formattedAddress}}}]}:
+     url.includes('places:searchText')?{places:[
+       {id:'google-corner-shop',displayName:{text:'Corner Spaza'},
+        location:{latitude:-29.74021,longitude:30.99201},businessStatus:'OPERATIONAL'},
+       {id:'another-tenant',displayName:{text:'Beauty Studio'},
+        location:{latitude:-29.74021,longitude:30.99201}}
+     ]}:full};
+  }});
+ const selected=await pick(api);
+ const receipt=selected.selection.addressSelection;
+ assert.equal(await api.matchingBusiness('owner',receipt,'Corner Spaza'),'google-corner-shop');
+ assert.equal(await api.matchingBusiness('owner',receipt,'New Repair Shop'),null);
+ await assert.rejects(api.matchingBusiness('wrong-uid',receipt,'Corner Spaza'),e=>e.status===422);
+ assert(requests.some(x=>x.url.includes('places:searchText')));
+});
