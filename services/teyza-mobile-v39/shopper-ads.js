@@ -40,7 +40,7 @@ function publicRow(id,c){
   imageUrl:ENDPOINT+'?shopperAdPhoto='+encodeURIComponent(id),sponsored:true};
 }
 function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>{},
-  getSecret=()=>'',getSigningSecret=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',
+  getSecret=()=>'',getSigningSecret=()=>'',getAppleIapApiKey=()=>'',getAppleIapRoots=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',
   send=fetch}){
  const doc=p=>db.doc(p);
  const read=async p=>{const r=await doc(p).get();return r.exists?r.data():null;};
@@ -59,7 +59,9 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   return {account,shop,pin};
  }
  const stores=storeBilling.createStoreBilling({db,read,clock,quote,
-  requireSeller:verifiedSeller,ownAd:(uid,c)=>ownAd(uid,c),rate});
+  requireSeller:verifiedSeller,ownAd:(uid,c)=>ownAd(uid,c),rate,
+  verifier:require('./shopper-ads-store-providers').createProviderVerifier({getAppleApiKey:getAppleIapApiKey,
+    getAppleRoots:getAppleIapRoots})});
  function ownAd(uid,c){
   if(!c||c.ownerUid!==uid)D.fail(404,'Advertisement not found for this seller.');
   return c;
