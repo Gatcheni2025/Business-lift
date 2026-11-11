@@ -1172,3 +1172,24 @@ test('A non-business and expired/unapproved business cannot publish services',as
  f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'pending'});
  await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
 });
+
+test('Public business cover requires explicit photo consent and never publishes private identity selfie',async()=>{
+ const f=fixture({
+   'teyzaSellerAccounts/seller1':{...seller,category:'retail'},
+   'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[]},
+   'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved',
+     objectPath:'teyza-private/mobile-verification/seller1/selfie.enc',expiresAt:1000000+DAY}
+ });
+ await rejects(f.service.execute(owner,'business_cover_upload',{
+   photoType:'portrait',imageBase64:jpeg,consent:false}),422);
+ const image=await f.service.execute(owner,'business_cover_upload',{
+   photoType:'portrait',imageBase64:jpeg,consent:true});
+ assert(image.imageUrl.startsWith('https://firebasestorage.googleapis.com/'));
+ const summary=await f.service.execute(owner,'seller_summary');
+ assert.equal(summary.businessCoverUrl,image.imageUrl);
+ const listing=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(listing.photoUrl,image.imageUrl);
+ assert(!JSON.stringify(listing).includes('teyza-private/mobile-verification'));
+ const privatePhoto=f.db.records.get('teyzaMobileVerification/seller1');
+ assert.equal(privatePhoto.objectPath,'teyza-private/mobile-verification/seller1/selfie.enc');
+});
