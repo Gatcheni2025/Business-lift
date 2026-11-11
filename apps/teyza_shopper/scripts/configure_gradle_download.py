@@ -32,6 +32,7 @@ def configure(path: Path = WRAPPER) -> str:
     # Upgrading Flutter/Gradle requires a deliberate checksum review first.
     verified_checksums = {
         "9.3.1": "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06",
+        "9.5.0": "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746",
     }
     if version not in verified_checksums:
         raise ValueError(f"Gradle {version} has no independently verified distribution checksum")

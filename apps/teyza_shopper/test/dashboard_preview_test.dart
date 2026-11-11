@@ -18,9 +18,13 @@ class PreviewOwner extends ShopperSession {
 void main(){
   testWidgets('Seller dashboard renders the premium workspace with offline fixtures',(tester) async{
     await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
+    // Avoid asynchronous font-change frame callbacks during normal functional CI.
+    if(Platform.environment['TEYZA_CAPTURE_UI']=='1'){
     await (FontLoader('PT Sans')..addFont(rootBundle.load('assets/fonts/PTSans-Regular.ttf'))
       ..addFont(rootBundle.load('assets/fonts/PTSans-Bold.ttf'))).load();
     await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      await tester.pumpAndSettle();
+    }
     final session=PreviewOwner();
     final client=MockClient((request) async=>http.Response(jsonEncode(request.url.path.contains('teyzaSellerAccounts')?{'fields':{
       'shopName':{'stringValue':'KwaMashu Fresh Market'},'category':{'stringValue':'spaza'},
@@ -42,6 +46,8 @@ void main(){
       final path=File('build/ui-preview/seller-dashboard.png');await path.parent.create(recursive:true);
       await path.writeAsBytes(data!.buffer.asUint8List());image.dispose();
     });
-    await tester.pumpWidget(const SizedBox.shrink());session.dispose();client.close();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    session.dispose();client.close();
   });
 }

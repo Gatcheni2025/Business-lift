@@ -39,7 +39,7 @@ class SellerSellingDashboard extends StatelessWidget {
   final VoidCallback? onLocation;
   final Uint8List? shopPhoto;
   final bool photoLoading;
-  final VoidCallback? onPhoto,onShop,onEditProfile;
+  final VoidCallback? onPhoto,onShop,onEditProfile,onAds;
   final int unread;
   final int? productCount;
   final VoidCallback? onAdd;
@@ -48,7 +48,7 @@ class SellerSellingDashboard extends StatelessWidget {
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
-    this.onPhoto,this.onShop,this.onEditProfile,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0,this.coverUrl=''});
+    this.onPhoto,this.onShop,this.onEditProfile,this.onAds,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0,this.coverUrl=''});
   bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
   bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
   String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
@@ -126,6 +126,7 @@ class SellerSellingDashboard extends StatelessWidget {
           if(accountType!='retail')_tool(accountType=='wholesale'?'Spaza partnerships':'Customer orders',
             accountType=='wholesale'?'Connect with approved local shops':'Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
           _tool('Customer chat','Reply to customer enquiries',Icons.chat_bubble_outline_rounded,onChat),
+           if(onAds!=null)_tool('Teyza Ads','R29 for 7 days within 10 km · choose your reach',Icons.campaign_outlined,onAds!),
           _tool('Stock finance','Apply for a funding review',Icons.account_balance_outlined,onFinance),
           _tool('Areas around me','Plan your local deliveries',Icons.near_me_outlined,onAreas),
           _tool('My business','Services, photos & settings',Icons.tune_rounded,onBusiness),

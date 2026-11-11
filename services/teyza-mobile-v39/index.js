@@ -92,6 +92,16 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       try{res.json({ok:true,...await service.publicDirectory(req.query.after||'')});}
       catch(error){res.status(error.status||503).json({error:'The approved shop directory is temporarily unavailable.'});}return;
     }
+    if(req.query.featuredAds!==undefined){
+      try{const latitude=Number(req.query.latitude),longitude=Number(req.query.longitude);
+        res.json({ok:true,...await service.publicShopperAds(latitude,longitude)});}
+      catch(error){res.status(error.status||503).json({error:'Local sponsored offers are unavailable.'});}return;
+    }
+    if(req.query.shopperAdPhoto!==undefined){
+      try{const bytes=await service.publicShopperAdPhoto(req.query.shopperAdPhoto);
+        res.set('Cache-Control','public,max-age=60').type('image/jpeg').send(bytes);}
+      catch(error){res.status(error.status||503).json({error:'Sponsored image is unavailable.'});}return;
+    }
     if(req.query.nativeConfig!==undefined){
       const config=require('./native-config.json');
       res.json({projectId:'business-lift-3c19c',androidAppId:config.androidAppId||'',iosAppId:config.iosAppId||'',iosUrlScheme:config.iosUrlScheme||''});return;
@@ -115,7 +125,9 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,sellerNotifications:true,adminReview:true,sellerMandates:false,historicSellerMandatesReadOnly:true,
        sellerMandateRequestV3:false,adminMandatePdfExport:true,adminNetcashManualSubmission:false,
        sellerPaystackNewCheckoutDisabled:process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true',sellerMembershipBillingMode:process.env.TEYZA_SELLER_PAYSTACK_ENABLED==='true'?'paystack_card_subscription':'checkout_disabled',
-       adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,membershipInitialChargeCents:9900,subscriptionTermsVersion:'seller-r99-monthly-2026-11',promotionSevenDaysCents:2900,paystackCheckoutAvailable:sellerCheckoutRollout.hasEligibleAudience()&&sellerCheckoutConfigured(),paystackRolloutMode:sellerCheckoutRollout.mode(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
+       adminOperations:true,adminUsers:true,adminSellerDocuments:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,membershipInitialChargeCents:9900,subscriptionTermsVersion:'seller-r99-monthly-2026-11',promotionSevenDaysCents:2900,shopperAdsRadiusPricing:true,shopperAdsSevenDays:true,
+        shopperAdsWebPaystackEnabled:process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED==='true',
+        paystackCheckoutAvailable:sellerCheckoutRollout.hasEligibleAudience()&&sellerCheckoutConfigured(),paystackRolloutMode:sellerCheckoutRollout.mode(),adminProductReview:false,automaticProductPublication:true,adminPaystackVerify:true,manualReceiptsRetired:true,adminPhonePrecheck:true,adminComplimentaryAccess:true,physicalGoodsPaystack:true,sellerPaystackSubaccounts:true,stockFinanceReview:true,approvalRequired:true,shopLocations:true,addressAutocomplete:Boolean(placesKey.value())});return;
   }
   if(req.method!=='POST'){res.status(405).json({error:'Use POST.'});return;}
   try{
