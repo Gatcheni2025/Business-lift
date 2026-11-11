@@ -27,9 +27,13 @@ class PreviewSelfieCamera implements SelfieCamera {
 void main(){
  testWidgets('Premium seller registration, notification and reviewer screens render with offline fixtures',(tester) async{
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
+  // Brand fonts are only required in screenshot generation, not functional CI.
+  if(Platform.environment['TEYZA_CAPTURE_UI']=='1'){
   await (FontLoader('PT Sans')..addFont(rootBundle.load('assets/fonts/PTSans-Regular.ttf'))
    ..addFont(rootBundle.load('assets/fonts/PTSans-Bold.ttf'))).load();
   await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+   await tester.pumpAndSettle();
+  }
   final session=fixtures.Session(),api=fixtures.ExperienceApi(fixtures.Session());
   final pages=<String,Widget>{
    'seller-onboarding':SellerOnboardingPage(session:session,shop:const SellerShop('KwaMashu Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678'),api:api),
@@ -54,6 +58,7 @@ void main(){
     final path=File('build/ui-preview/${entry.key}.png');await path.parent.create(recursive:true);await path.writeAsBytes(data!.buffer.asUint8List());image.dispose();
    });
    await tester.pumpWidget(const SizedBox.shrink());
+   await tester.pumpAndSettle();
   }
   session.dispose();api.session.dispose();
  });
