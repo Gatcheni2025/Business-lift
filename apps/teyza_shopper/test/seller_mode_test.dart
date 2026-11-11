@@ -95,7 +95,7 @@ void main(){
       sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async{publicReads++;return [];},directoryLoader:(_,__,___) async=>[]))));
     await tester.pumpAndSettle();expect(find.byType(SellerNavigation),findsOneWidget);
-    expect(find.text('Seller dashboard'),findsOneWidget);expect(find.text('Shops'),findsNothing);expect(find.text('Cart'),findsNothing);
+    expect(find.text('Spaza shop dashboard'),findsOneWidget);expect(find.text('Shops'),findsNothing);expect(find.text('Cart'),findsNothing);
     expect(find.byKey(const ValueKey('seller-add-product')),findsNothing);
     expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
     expect(find.text('Upgrade to sell on Teyza'),findsNothing);
@@ -170,7 +170,7 @@ void main(){
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
-    await tester.pumpAndSettle();expect(session.sellerWorkspace,isTrue);expect(find.text('Seller dashboard'),findsOneWidget);
+    await tester.pumpAndSettle();expect(session.sellerWorkspace,isTrue);expect(find.text('Spaza shop dashboard'),findsOneWidget);
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
