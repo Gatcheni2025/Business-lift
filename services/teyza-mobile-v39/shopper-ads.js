@@ -26,9 +26,11 @@ function distanceKm(lat1,lon1,lat2,lon2){
  return 6371*2*Math.asin(Math.min(1,Math.sqrt(h)));
 }
 function isDisplayed(c,now){
- return c&&c.status==='active'&&c.paymentStatus==='paid'&&
-  Number.isFinite(c.startsAt)&&Number.isFinite(c.endsAt)&&c.startsAt<=now&&now<c.endsAt&&
-  P.coordinates(c.latitude,c.longitude)&&quote(c.radiusKm).amountCents===c.amountCents;
+ if(!c||c.status!=='active'||c.paymentStatus!=='paid'||
+    !Number.isFinite(c.startsAt)||!Number.isFinite(c.endsAt)||c.startsAt>now||now>=c.endsAt||
+    !P.coordinates(c.latitude,c.longitude))return false;
+ try{return quote(c.radiusKm).amountCents===c.amountCents;}
+ catch(_){return false;}
 }
 function publicRow(id,c){
  return {id,shopId:c.ownerUid,shopName:c.shopName,title:c.title,
@@ -182,7 +184,10 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
    const c=snap.data();
    if(!isDisplayed(c,clock())||distanceKm(latitude,longitude,c.latitude,c.longitude)>c.radiusKm)continue;
    // Never expose a paid campaign after owner approval or shop publication is revoked.
-   try{await verifiedSeller(c.ownerUid);}catch(_){continue;}
+   try{const seller=await verifiedSeller(c.ownerUid);
+     if(seller.pin.latitude!==c.latitude||seller.pin.longitude!==c.longitude||
+        seller.account.address!==c.locationAddress)continue;
+   }catch(_){continue;}
    matches.push(publicRow(snap.id,c));
    if(matches.length>=8)break;
   }
@@ -192,7 +197,10 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   const id=D.id(adId),c=await read('teyzaShopperAds/'+id);
   if(!isDisplayed(c,clock())||c.objectPath!=='teyza/shopper-ads/'+c.ownerUid+'/'+id+'.jpg')
    D.fail(404,'This advertisement image is not published.');
-  await verifiedSeller(c.ownerUid);
+  const seller=await verifiedSeller(c.ownerUid);
+  if(seller.pin.latitude!==c.latitude||seller.pin.longitude!==c.longitude||
+     seller.account.address!==c.locationAddress)
+   D.fail(404,'The advertiser moved; this sponsored image is no longer published.');
   const [bytes]=await bucket.file(c.objectPath).download();
   return bytes;
  }
