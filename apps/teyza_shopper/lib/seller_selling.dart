@@ -32,7 +32,7 @@ class SellerNavigation extends StatelessWidget {
 }
 
 class SellerSellingDashboard extends StatelessWidget {
-  final String shopName,accountType;
+  final String shopName,accountType,coverUrl;
   final bool live,verified,premiumAccount,hasProductAccess;
   final String? publicationStatus;
   final bool hasLocation;
@@ -48,7 +48,7 @@ class SellerSellingDashboard extends StatelessWidget {
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
-    this.onPhoto,this.onShop,this.onEditProfile,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0});
+    this.onPhoto,this.onShop,this.onEditProfile,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0,this.coverUrl=''});
   bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
   bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
   String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
@@ -56,7 +56,9 @@ class SellerSellingDashboard extends StatelessWidget {
     padding:const EdgeInsets.fromLTRB(18,12,18,28),children:[
       Container(clipBehavior:Clip.antiAlias,decoration:BoxDecoration(
         color:_ink,borderRadius:BorderRadius.circular(25)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          if(shopPhoto!=null)Image.memory(shopPhoto!,height:170,fit:BoxFit.cover,gaplessPlayback:false,
+          if(accountType=='retail'&&coverUrl.startsWith('https://'))Image.network(coverUrl,height:170,fit:BoxFit.cover,
+            key:const ValueKey('business-public-cover'),errorBuilder:(_,error,stack)=>const SizedBox(height:120,child:Icon(Icons.business_outlined,size:55,color:Colors.white)))
+          else if(shopPhoto!=null)Image.memory(shopPhoto!,height:170,fit:BoxFit.cover,gaplessPlayback:false,
             key:const ValueKey('seller-shop-photo'),errorBuilder:(_,error,stack)=>const SizedBox(height:120,child:Icon(Icons.storefront_outlined,size:55,color:Colors.white)))
           else SizedBox(height:120,child:Center(child:photoLoading?const CircularProgressIndicator(color:Colors.white):const Icon(Icons.add_a_photo_outlined,size:46,color:Color(0xFFACDFC2)))),
           Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
