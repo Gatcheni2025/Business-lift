@@ -21,7 +21,9 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   ShopAddressSelection? selectedAddress;
   SellerClaimSelection? claim;
   late final String? uid;
-  String category='spaza',legalType='individual';String? error;bool busy=false,consent=false,saved=false,whatsappConsent=false;
+  String category='spaza',legalType='individual';String? error;
+  bool busy=false,consent=false,saved=false,whatsappConsent=false;
+  bool? listedOnGoogle;bool ownerAuthority=false,ownershipEvidence=false,contactEvidence=false;
   String get categoryExplanation=>switch(category){
     'wholesale'=>'I supply spaza shops: publish bulk stock, pack prices and delivery or collection terms after approval.',
     'retail'=>'I offer other local businesses or services, such as a salon, upholsterer, furniture shop or plumbing service.',
@@ -34,7 +36,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     try{final data=await (widget.api??TeyzaMobileApi(widget.session)).call('seller_claim_by_id',{'placeId':widget.initialGooglePlaceId});
       if(!mounted||uid!=widget.session.userId)return;
       final value=SellerClaimSelection.fromJson(Map<String,dynamic>.from(data['claim'] as Map));
-      setState((){claim=value;selectedAddress=value.address;name.text=value.name;consent=false;});
+      setState((){claim=value;selectedAddress=value.address;name.text=value.name;consent=false;listedOnGoogle=true;});
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error='Could not load that business. Search for it below or register with your address.');}
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -43,6 +45,12 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   Future<void> save() async{
     if(busy||uid!=widget.session.userId||!form.currentState!.validate())return;
     final selected=selectedAddress;if(selected==null){setState(()=>error='Select your full shop address from the suggestions.');return;}
+    if(listedOnGoogle==null){
+      setState(()=>error='Tell us whether this business is already on Google Maps.');return;
+    }
+    if(listedOnGoogle==true&&(claim==null||!ownerAuthority||!ownershipEvidence||!contactEvidence)){
+      setState(()=>error='Select the matching Google business and answer all three ownership-verification questions.');return;
+    }
     if(!consent){setState(()=>error='Confirm that these shop details are yours.');return;}
     setState((){busy=true;error=null;});
     try{
@@ -50,7 +58,12 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         'phone':normalizeMobile(phone.text),'addressSelection':selected.receipt,'unit':unit.text.trim(),
         'companyName':legalType=='company'?company.text.trim():'',
         'registrationNumber':legalType=='company'?number.text.trim():'','consent':true,'locationConsent':true,
-        'whatsappConsent':whatsappConsent,if(claim!=null)'googleClaimSelection':claim!.receipt};
+        'whatsappConsent':whatsappConsent,
+        if(listedOnGoogle==true&&claim!=null)...{
+          'googleClaimSelection':claim!.receipt,
+          'googleClaimAnswers':{'authorized':ownerAuthority,'canProvideEvidence':ownershipEvidence,
+            'canVerifyContact':contactEvidence}}
+      };
       await (widget.api??TeyzaMobileApi(widget.session)).call('seller_register',data);
       if(!mounted||uid!=widget.session.userId)return;
       setState(()=>saved=true);
@@ -80,12 +93,14 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         if(claim!=null)Card(child:ListTile(leading:const Icon(Icons.storefront_outlined),title:Text('Google Maps: ${claim!.name}'),
           subtitle:const Text('Teyza will review your claim. Confirm the details below.'))),
         SellerClaimPicker(session:widget.session,api:widget.api,enabled:!busy,onChanged:(value){
-          if(mounted)setState((){claim=value;selectedAddress=value?.address;consent=false;if(value!=null)name.text=value.name;});}),
+          if(mounted)setState((){claim=value;selectedAddress=value?.address;consent=false;
+            if(value!=null){name.text=value.name;listedOnGoogle=true;}
+          });}),
         const SizedBox(height:16),
-        const Text('Are you a Spaza Shop or a Wholesale Supplier?',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
+        const Text('Choose your Teyza account type',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'I am signing up as',filled:true,fillColor:Colors.white,
           border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
-          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop Owner')),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops')),DropdownMenuItem(value:'retail',child:Text('Other Business / Services'))],
+          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop Owner')),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops')),DropdownMenuItem(value:'retail',child:Text('Business Owner — services'))],
           onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
         const SizedBox(height:8),Text(categoryExplanation,style:const TextStyle(
           color:Color(0xFF547363),fontWeight:FontWeight.w600,height:1.4)),
@@ -104,6 +119,30 @@ class _RegistrationState extends State<SellerRegistrationPage>{
             subtitle:Text(selectedAddress!.address),trailing:TextButton(onPressed:busy?null:()=>setState((){selectedAddress=null;consent=false;}),child:const Text('Change'))))
         else ShopAddressPicker(session:widget.session,api:widget.api,enabled:!busy,
           onChanged:(value){if(mounted)setState((){selectedAddress=value;consent=false;});}),
+        const SizedBox(height:16),
+        Card(child:Column(children:[
+          const ListTile(leading:Icon(Icons.map_outlined),title:Text('Is this business already listed on Google Maps?'),
+            subtitle:Text('If your business name and address match an existing Google listing, you must claim it before Teyza can link the listing.')),
+          RadioListTile<bool>(key:const ValueKey('claim-existing-google-yes'),
+            title:const Text('Yes — claim my existing business'),value:true,groupValue:listedOnGoogle,
+            onChanged:busy?null:(v)=>setState(()=>listedOnGoogle=v)),
+          RadioListTile<bool>(title:const Text('No — this is a new business listing'),
+            value:false,groupValue:listedOnGoogle,onChanged:busy?null:(v)=>setState((){
+              listedOnGoogle=v;claim=null;ownerAuthority=false;ownershipEvidence=false;contactEvidence=false;})),
+          if(listedOnGoogle==true)...[
+            const Padding(padding:EdgeInsets.symmetric(horizontal:16,vertical:6),
+              child:Text('Select the business through Find your business above. Teyza will review ownership evidence before linking it.')),
+            CheckboxListTile(value:ownerAuthority,
+              onChanged:busy?null:(v)=>setState(()=>ownerAuthority=v==true),
+              title:const Text('I own this business or have written authority to represent it.')),
+            CheckboxListTile(value:ownershipEvidence,
+              onChanged:busy?null:(v)=>setState(()=>ownershipEvidence=v==true),
+              title:const Text('I can provide registration or ownership documents if requested.')),
+            CheckboxListTile(value:contactEvidence,
+              onChanged:busy?null:(v)=>setState(()=>contactEvidence=v==true),
+              title:const Text('I can verify the business phone number or another official contact.')),
+          ]
+        ])),
         const SizedBox(height:16),TextFormField(controller:unit,enabled:!busy,maxLength:80,onChanged:(_)=>setState(()=>consent=false),
           decoration:const InputDecoration(labelText:'Shop / unit number (optional)',hintText:'e.g. Shop 4, ground floor',
             counterText:'',filled:true,fillColor:Colors.white,border:OutlineInputBorder())),
