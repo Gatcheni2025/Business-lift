@@ -52,18 +52,19 @@ void main(){
     });
     expect(legacy.displayPhotoUrl,contains('ref='));
   });
-  test('Verified Google type matches stay visible even with generic place names',(){
+  test('Generic Google grocery names are excluded from spaza-only search even when categorized',(){
     final shop=OnlineShop.fromJson({
       'id':'google-ChIJx01','name':'Village Corner 7',
       'shopCategory':'spaza','categorizationVerified':true,
       'origin':'google_places'
     });
-    expect(teyzaMatchesShopCategory(shop,'spaza'),isTrue);
+    expect(teyzaMatchesShopCategory(shop,'spaza'),isFalse);
     expect(shop.photoRef,isNull);
   });
   test('Spaza and variety search do not mix unrelated businesses',(){
     OnlineShop example(String name)=>OnlineShop.fromJson({
-      'id':'google-'+name,'name':name,'origin':'google_places'
+      'id':'google-'+name,'name':name,'origin':'google_places',
+      'shopCategory':RegExp(r'china|salon|mall|tyres').hasMatch(name.toLowerCase())?'variety':'spaza'
     });
     expect(teyzaMatchesShopCategory(example('China Mall'),'variety'),isTrue);
     expect(teyzaMatchesShopCategory(example('Qolo Tuckshop'),'variety'),isFalse);
@@ -75,8 +76,8 @@ void main(){
     final client=MockClient((request) async {
       expect(request.url.queryParameters['radius'],'40000');
       return http.Response(jsonEncode({'ok':true,'entries':[
-        {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
-          'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99},
+        {'id':'google-generic','name':'Village Corner Spaza','origin':'google_places',
+          'primaryType':'convenience_store','latitude':-29.74,'longitude':30.99},
         {'id':'google-generic','name':'Village Corner 7','origin':'google_places',
           'primaryType':'grocery_store','latitude':-29.74,'longitude':30.99,
           'photoRef':'places/ChIJ1234/photos/Photo_1234'},
