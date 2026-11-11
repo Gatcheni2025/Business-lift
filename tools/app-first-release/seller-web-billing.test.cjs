@@ -28,7 +28,19 @@ test('Only a verified, approved, fully onboarded and email-verified shop can sta
  assert.equal(eligibility(seller,false,true,true).eligible,false);
  assert.equal(eligibility(seller,true,false,true).eligible,false);
  assert.equal(eligibility({...seller,listingPaid:true},true,true,true).active,true);
- assert.equal(eligibility({...seller,complimentaryAccess:true},true,true,true).active,true);
+ const complimentary={...seller,complimentaryAccess:true};
+ assert.equal(eligibility(complimentary,true,true,true).eligible,true,
+   'An audited complimentary grant is not a Paystack charge and must not block voluntary Premium checkout');
+ assert.match(eligibility(complimentary,true,true,true).message,/temporary complimentary access/i);
+ assert.match(eligibility(complimentary,true,true,true).message,/not a Paystack payment/i);
+ assert.equal(eligibility(complimentary,true,false,true).eligible,false,
+   'Production checkout must remain unavailable while the server has disabled payment');
+ assert.equal(eligibility({...complimentary,pilotCheckoutEligible:false},true,true,true).eligible,false,
+   'The seller must still be on the exact UID allowlist');
+ assert.equal(eligibility({...complimentary,listingPaid:true},true,true,true).eligible,false,
+   'Never initiate a second charge for an existing paid member');
+ assert.equal(eligibility({...complimentary,setupComplete:false},true,true,true).eligible,false,
+   'Admin access cannot bypass modern onboarding requirements');
  assert.equal(eligibility(seller,true,true).eligible,false,'Contact email is not seller UID proof');
   assert.equal(eligibility({...seller,pilotCheckoutEligible:false},true,true,true).eligible,false,'Pilot restrictions apply to authenticated UID');
  assert.equal(eligibility(seller,true,true,true).eligible,true);
@@ -65,6 +77,8 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert(!page.includes('R10')&&!alias.includes('R10')&&!marketing.includes('R10'));
  assert(js.includes('result.amountCents!==9900')&&js.includes('result.introductory!==false'));
  assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
+ assert(js.includes('Tick both boxes to confirm your own shop'),'Disabled checkout must explain missing seller consent');
+ assert(js.includes('!status.eligible?status.message:'),'Disabled checkout must explain server-controlled access state');
  assert(js.includes('new sdk.FacebookAuthProvider()'),'Existing Facebook-linked sellers need the same UID login');
  assert(js.includes('confirmedMembership(summary,billing,uid)'),'Paystack browser return is not payment proof');
  assert(page.includes('Reopen the app'),'Website guides owner back to the existing signed-in app');
