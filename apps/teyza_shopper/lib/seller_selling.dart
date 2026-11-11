@@ -5,13 +5,17 @@ const _ink=Color(0xFF102C26),_green=Color(0xFF137B54),_muted=Color(0xFF60736B);
 
 class SellerNavigation extends StatelessWidget {
   final int selected;
+  final String accountType;
   final ValueChanged<int> onSelect;
-  const SellerNavigation({super.key,required this.selected,required this.onSelect});
+  const SellerNavigation({super.key,required this.selected,required this.onSelect,this.accountType='spaza'});
   @override Widget build(BuildContext context)=>SafeArea(top:false,child:Material(color:Colors.white,
     child:Row(children:[
-      for(final (index,label,icon) in const [
-        (0,'Dashboard',Icons.space_dashboard_outlined),(1,'Products',Icons.inventory_2_outlined),
-        (2,'Orders',Icons.receipt_long_outlined),(3,'Chat',Icons.chat_bubble_outline_rounded),
+      for(final (index,label,icon) in [
+        (0,'Dashboard',Icons.space_dashboard_outlined),
+        (1,accountType=='retail'?'Services':accountType=='wholesale'?'Advertise':'Products',
+          accountType=='retail'?Icons.design_services_outlined:accountType=='wholesale'?Icons.campaign_outlined:Icons.inventory_2_outlined),
+        (2,accountType=='retail'?'Enquiries':accountType=='wholesale'?'Partners':'Orders',Icons.receipt_long_outlined),
+        (3,'Chat',Icons.chat_bubble_outline_rounded),
         (4,'Business',Icons.tune_rounded)])
         Expanded(child:Semantics(button:true,selected:selected==index,label:'Seller $label',
           child:InkWell(key:ValueKey('seller-nav-$index'),onTap:()=>onSelect(index),
@@ -28,7 +32,7 @@ class SellerNavigation extends StatelessWidget {
 }
 
 class SellerSellingDashboard extends StatelessWidget {
-  final String shopName;
+  final String shopName,accountType;
   final bool live,verified,premiumAccount,hasProductAccess;
   final String? publicationStatus;
   final bool hasLocation;
@@ -40,7 +44,7 @@ class SellerSellingDashboard extends StatelessWidget {
   final int? productCount;
   final VoidCallback? onAdd;
   final VoidCallback onProducts,onOrders,onChat,onFinance,onAreas,onBusiness,onVerify;
-  const SellerSellingDashboard({super.key,required this.shopName,required this.live,required this.verified,
+  const SellerSellingDashboard({super.key,required this.shopName,this.accountType='spaza',required this.live,required this.verified,
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
@@ -91,10 +95,13 @@ class SellerSellingDashboard extends StatelessWidget {
           key:const ValueKey('seller-add-product'),onPressed:onAdd,
           icon:const Icon(Icons.inventory_2_outlined),
           style:FilledButton.styleFrom(backgroundColor:_green,padding:const EdgeInsets.all(16)),
-          label:const Text('Manage my products',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
+          label:Text(accountType=='retail'?'Manage my services':accountType=='wholesale'?'Manage wholesale advertising':'Manage my products',
+            style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))),
       ],
-      const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
-        '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
+      if(accountType=='spaza')...[
+        const SizedBox(height:9),Text(productCount==null?'Product list unavailable. Open Products to retry.':
+          '$productCount saved ${productCount==1?'product':'products'} · keep prices and stock up to date',style:const TextStyle(color:_muted,fontSize:12)),
+      ],
       if(awaitingApproval)...[
         const SizedBox(height:10),const Text('Setup received. Your shop becomes visible to shoppers after Teyza approves it.',style:TextStyle(color:_muted)),
         TextButton(onPressed:onVerify,child:const Text('View review status')),
@@ -104,15 +111,19 @@ class SellerSellingDashboard extends StatelessWidget {
         title:const Text('Help shoppers find your shop'),subtitle:const Text('Save your shop pin and suburb for nearby search.'),
         onTap:onLocation??onBusiness,trailing:const Icon(Icons.chevron_right))),
 
-      const SizedBox(height:22),const Text('Your selling tools',style:TextStyle(color:_ink,fontSize:21,fontWeight:FontWeight.w800)),
+      const SizedBox(height:22),Text(accountType=='retail'?'Your business service tools':accountType=='wholesale'?'Your wholesale partnership tools':'Your selling tools',
+        style:const TextStyle(color:_ink,fontSize:21,fontWeight:FontWeight.w800)),
       const SizedBox(height:12),LayoutBuilder(builder:(context,c)=>GridView.count(
         crossAxisCount:c.maxWidth<310||MediaQuery.textScalerOf(context).scale(14)>19?1:c.maxWidth>700?3:2,
         mainAxisSpacing:12,crossAxisSpacing:12,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
         mainAxisExtent:166+(MediaQuery.textScalerOf(context).scale(14)-14)*5,
         children:[
-          _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
-          _tool('Customer orders','Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
-          _tool('Customer chat','Reply and make the sale',Icons.chat_bubble_outline_rounded,onChat),
+          if(accountType=='retail')_tool('My services','Choose service type, images and description',Icons.design_services_outlined,onProducts)
+          else if(accountType=='wholesale')_tool('Spaza advertising','Manage targeted offers and connections',Icons.campaign_outlined,onProducts)
+          else _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
+          if(accountType!='retail')_tool(accountType=='wholesale'?'Spaza partnerships':'Customer orders',
+            accountType=='wholesale'?'Connect with approved local shops':'Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
+          _tool('Customer chat','Reply to customer enquiries',Icons.chat_bubble_outline_rounded,onChat),
           _tool('Stock finance','Apply for a funding review',Icons.account_balance_outlined,onFinance),
           _tool('Areas around me','Plan your local deliveries',Icons.near_me_outlined,onAreas),
           _tool('My business','Services, photos & settings',Icons.tune_rounded,onBusiness),
