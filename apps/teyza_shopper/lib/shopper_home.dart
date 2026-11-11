@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -297,6 +298,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<OnlineShop> online = [];
   // Independent home preview: not limited to the currently selected shop tab.
   List<OnlineShop> otherBusinesses = [];
+  List<Map<String,dynamic>> sponsoredAds = [];
+  int _sponsoredRequestSerial=0;
   bool loadingOtherBusinesses = false;
   String? otherBusinessesWarning;
   int _otherBusinessRequestSerial = 0;
@@ -785,6 +788,24 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> reloadSponsoredAds() async {
+    final chosen=area,request=++_sponsoredRequestSerial;
+    if(chosen==null||widget.catalogueLoader!=null||widget.directoryLoader!=null){
+      if(mounted)setState(()=>sponsoredAds=[]);return;
+    }
+    try{
+      final endpoint=Uri.parse(teyzaMobileEndpoint).replace(queryParameters:{
+        'featuredAds':'1','latitude':chosen.lat.toString(),'longitude':chosen.lng.toString()});
+      final response=await http.get(endpoint).timeout(const Duration(seconds:12));
+      if(!mounted||request!=_sponsoredRequestSerial)return;
+      if(response.statusCode!=200)throw const FormatException('Sponsored ads unavailable');
+      final decoded=jsonDecode(response.body);
+      if(decoded is! Map||decoded['ok']!=true||decoded['ads'] is! List)
+        throw const FormatException('Sponsored ads response invalid');
+      setState(()=>sponsoredAds=(decoded['ads'] as List)
+        .whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).take(8).toList());
+    }catch(_){if(mounted&&request==_sponsoredRequestSerial)setState(()=>sponsoredAds=[]);}
+  }
   Future<void> chooseArea(Area choice,{bool persist=true}) async {
     setState(() {
       area = choice;
@@ -802,7 +823,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final prefs=await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area',choice.label);
     }
-    await Future.wait<void>([reloadOnline(),reloadOtherBusinesses()]);
+    await Future.wait<void>([reloadOnline(),reloadOtherBusinesses(),reloadSponsoredAds()]);
   }
   Future<void> areaSheet() async {
     if(widget.initialArea==null){await promptDeliveryProfile();return;}
@@ -1703,9 +1724,31 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       }));
   }
 
+  Widget sponsoredBanner(Map<String,dynamic> item){
+    final id=(item['shopId']??'').toString(),image=(item['imageUrl']??'').toString();
+    final merchant=live.where((s)=>s.id==id).toList();
+    return SizedBox(width:268,child:Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(right:10,bottom:5),
+      child:InkWell(onTap:()=>merchant.isNotEmpty?openShop(merchant.first):setState(()=>showAllShops=true),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        if(image.startsWith('https://'))Image.network(image,height:121,fit:BoxFit.cover,
+          errorBuilder:(_,error,stack)=>const SizedBox(height:121,child:Icon(Icons.storefront_outlined,size:42)))
+        else const SizedBox(height:121,child:Icon(Icons.storefront_outlined,size:42)),
+        Padding(padding:const EdgeInsets.fromLTRB(12,8,12,10),child:Column(
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('SPONSORED · TEYZA ADS',style:TextStyle(fontWeight:FontWeight.w800,
+            fontSize:10,color:Color(0xFF0A7453))),
+          const SizedBox(height:3),Text((item['title']??'Local offer').toString(),maxLines:1,
+            overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w800)),
+          Text((item['shopName']??'Local business').toString(),maxLines:1,
+            overflow:TextOverflow.ellipsis,style:const TextStyle(color:muted,fontSize:11)),
+          Text((item['message']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,
+            style:const TextStyle(fontSize:11,color:ink)),
+        ]))
+      ]))));
+  }
   Widget homePage()=>RefreshIndicator(
     onRefresh:() async {
-      await Future.wait<void>([load(),reloadOnline(),reloadOtherBusinesses()]);
+      await Future.wait<void>([load(),reloadOnline(),reloadOtherBusinesses(),reloadSponsoredAds()]);
     },
     child:ListView(key:const PageStorageKey<String>('shopper-home'),
       padding:const EdgeInsets.fromLTRB(16,7,16,28),children:[
@@ -1722,6 +1765,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
       businessFilters(),sellerStories(),
+      if(sponsoredAds.isNotEmpty)...[
+        section('Sponsored near you',subtitle:'Approved 7-day offers within the advertiser-selected radius'),
+        SizedBox(height:255,child:ListView(scrollDirection:Axis.horizontal,
+          key:const PageStorageKey<String>('teyza-sponsored-ads'),
+          children:sponsoredAds.map(sponsoredBanner).toList())),
+      ],
       premiumGroceryHero(),
       const SizedBox(height:4),
       section(teyzaCategoryHeading(discoveryType),
