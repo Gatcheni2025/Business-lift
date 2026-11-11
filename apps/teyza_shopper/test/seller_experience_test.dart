@@ -117,6 +117,7 @@ void main(){
   await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
   await selectAddress(tester);
   tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('No — this is a new business listing'));
   await visibleTap(tester,find.text('I confirm that these are my shop’s details and shoppers may see this business address and map location.'));
   await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
@@ -140,12 +141,17 @@ void main(){
   expect(find.text('Shop address from Google Maps'),findsOneWidget);
   final phone=find.widgetWithText(TextFormField,'Contact number');await tester.ensureVisible(phone);await tester.enterText(phone,'0712345678');
   tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I own this business or have written authority to represent it.'));
+  await visibleTap(tester,find.text('I can provide registration or ownership documents if requested.'));
+  await visibleTap(tester,find.text('I can verify the business phone number or another official contact.'));
   await visibleTap(tester,find.text('I am authorised to represent this business, and shoppers may see its address and map location.'));
   await visibleTap(tester,find.text('Send my approval update and getting-started link on WhatsApp'));
   await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['shopName'],'Neighbourhood Market');expect(request.data['googleClaimSelection'],'claim-receipt');
   expect(request.data['addressSelection'],'address-receipt');expect(request.data['whatsappConsent'],true);
+  expect(request.data['googleClaimAnswers']['authorized'],true);
+  expect(request.data['googleClaimAnswers']['canProvideEvidence'],true);
   expect(find.text('ID or passport'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });

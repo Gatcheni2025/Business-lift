@@ -27,7 +27,19 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
     catalogueApprovalRequired:false,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
+   const existingRegistration=await doc('teyzaSellerAccounts/'+uid).get();
+   if(existingRegistration.exists){D.seller(existingRegistration.data(),uid);return {registered:true,alreadyRegistered:true};}
    const claimedPlaceId=data.googleClaimSelection?shopAddress.claim(uid,data.googleClaimSelection):null;
+   // A location shared with a Google business does not automatically grant
+   // ownership. Require an authenticated Google listing claim first.
+   const matchingPlaceId=await shopAddress.matchingBusiness(uid,data.addressSelection,values.shopName);
+   if(matchingPlaceId&&matchingPlaceId!==claimedPlaceId)
+     D.fail(409,'A Google Maps business matches this name and address. Select Claim existing business, answer its verification questions, and submit evidence for review.');
+   if(claimedPlaceId){
+     const q=data.googleClaimAnswers||{};
+     if(q.authorized!==true||q.canProvideEvidence!==true||q.canVerifyContact!==true)
+       D.fail(422,'Confirm your authority, available ownership evidence and ability to verify the business contact before requesting a Google business claim.');
+   }
    return db.runTransaction(async tx=>{
     const ref=doc('teyzaSellerAccounts/'+uid),snap=await tx.get(ref);
     if(snap.exists){D.seller(snap.data(),uid);return {registered:true,alreadyRegistered:true};}
@@ -36,7 +48,9 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     if(claimedPlaceId){
      const existing=await tx.get(doc('teyzaClaimedPlaces/'+crypto.createHash('sha256').update(claimedPlaceId).digest('hex')));
      if(existing.exists&&existing.data().sellerUid!==uid)D.fail(409,'This business is already linked to another Teyza shop. Contact Teyza support.');
-     tx.set(doc('teyzaShopClaims/'+uid),{ownerUid:uid,placeId:claimedPlaceId,status:'pending',createdAt:clock()});
+     tx.set(doc('teyzaShopClaims/'+uid),{ownerUid:uid,placeId:claimedPlaceId,status:'pending',
+       verificationAnswers:{authorized:true,canProvideEvidence:true,canVerifyContact:true},
+       verificationMethod:'manual_evidence_review',createdAt:clock()});
     }
     if(data.whatsappConsent===true)tx.set(doc('teyzaWhatsAppPreferences/'+uid),{
       ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approval-v1',consentAt:clock()});

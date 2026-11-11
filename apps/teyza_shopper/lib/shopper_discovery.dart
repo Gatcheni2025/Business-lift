@@ -104,28 +104,36 @@ class OnlineShop {
 
 /// Keep categories honest even when older deployed Places functions return
 /// mixed search results. Google results are not verified Teyza merchants.
+// Keep major supermarket and national retail chains out of township spaza searches.
+// Google grocery/supermarket types are too broad to establish that a shop is a spaza.
+bool teyzaIsLargeRetailer(String name) => RegExp(
+  r'\b(checkers|checkers hyper|spar|superspar|kwikspar|shoprite|pick\s*n\s*pay|pnp|woolworths|food\s*lovers|makro|game|boxer\s*(?:superstore|supermarket)|ok\s*foods)\b',
+  caseSensitive:false).hasMatch(name);
+
 bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
-  if(shop.origin != 'google_places') return true;
-  // A vetted R3.4 Google Places result also checks Google primary types.
-  // Old R3.3 responses without this flag still receive client name filtering.
-  if(shop.categorizationVerified) return shop.shopCategory==category;
-  final name = shop.name.toLowerCase();
-  if(category == 'wholesale') {
-    return shop.types.any(const {'wholesaler','warehouse_store'}.contains)||
-      RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
+  if(shop.shopCategory!=category)return false;
+  if(category=='spaza'&&teyzaIsLargeRetailer(shop.name))return false;
+  if(shop.origin!='google_places'&&shop.origin!='openstreetmap')return true;
+  final name=shop.name.toLowerCase();
+  if(category=='spaza'){
+    if(shop.types.contains('supermarket')||shop.types.contains('department_store')||
+       shop.types.contains('shopping_mall'))return false;
+    final local=RegExp(r'\b(spaza|tuck\s*shop|mini\s*market|superette|general\s*dealer|corner\s*shop|kiosk|neighbourhood\s*shop)\b').hasMatch(name);
+    // A Google "grocery_store" type alone could describe a national chain.
+    return local||shop.types.contains('convenience_store');
   }
-  if(category == 'variety') {
+  if(category=='wholesale')return shop.types.any(
+      const {'wholesaler','warehouse_store'}.contains)||
+    RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
+  if(category=='variety'){
     if(RegExp(r'spaza|tuck\s?shop|wholesal|cash\s?(and|&)\s?carry').hasMatch(name))return false;
-    if(shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
+    return shop.categorizationVerified||
+      shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
         'furniture_store','hardware_store','barber_shop','clothing_store',
-        'home_goods_store','shopping_mall','department_store'}.contains))return true;
-    return RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
+        'home_goods_store','shopping_mall','department_store'}.contains)||
+      RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
   }
-  if(category == 'spaza') {
-    return shop.types.any(const {'convenience_store','grocery_store','supermarket','food_store'}.contains)||
-      RegExp(r'spaza|tuck\s?shop|convenience|mini\s?market|supermarket|superette|grocer|general dealer|corner shop|food store').hasMatch(name);
-  }
-  return true;
+  return false;
 }
 
 // Rate-limited in-memory OSM fallback for nearby public map businesses.
@@ -142,7 +150,7 @@ Future<List<OnlineShop>> _osmFallback({
   final types=category=='wholesale'
     ?r'^(wholesale|warehouse|supermarket)$':category=='variety'
     ?r'^(variety_store|department_store|mall|general)$'
-    :r'^(convenience|grocery|kiosk|general|supermarket)$';
+    :r'^(convenience|grocery|kiosk|general)$';
   final radius=category=='wholesale'?30000:category=='variety'?15000:12000;
   final query='[out:json][timeout:16];(nwr(around:$radius,$lat,$lon)["shop"~"$types"]["name"];);out center 70;';
   final res=await client.post(Uri.https('overpass-api.de','/api/interpreter'),
@@ -156,7 +164,8 @@ Future<List<OnlineShop>> _osmFallback({
     if(item is! Map || item['tags'] is! Map)continue;
     final tags=item['tags'] as Map;
     final name=(tags['name']??'').toString().trim();
-    if(name.length<2 || name.length>110 || !names.add(name.toLowerCase()))continue;
+    if(name.length<2 || name.length>110 || !names.add(name.toLowerCase())||
+       (category=='spaza'&&teyzaIsLargeRetailer(name)))continue;
     final type=(item['type']??'').toString(),id=(item['id']??'').toString();
     if(!['node','way','relation'].contains(type)||!RegExp(r'^[0-9]+$').hasMatch(id))continue;
     final center=item['center'] is Map?item['center'] as Map:item;
@@ -170,9 +179,11 @@ Future<List<OnlineShop>> _osmFallback({
       address,'https://www.openstreetmap.org/$type/$id',
       'openstreetmap','https://teyza.co.za/?auth=register',
       la.toDouble(),lo.toDouble(),shopCategory:category,
+      types:[(tags['shop']??'').toString()],
       providerAttributions:const[
         {'name':'© OpenStreetMap contributors','url':'https://www.openstreetmap.org/copyright'}
       ]));
+    if(!teyzaMatchesShopCategory(result.last,category))result.removeLast();
     if(result.length>=70)break;
   }
   _osmCache[key]=(fetched:DateTime.now(),shops:result);

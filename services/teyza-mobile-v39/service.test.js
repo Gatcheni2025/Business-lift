@@ -507,7 +507,7 @@ test('Pending shops cannot add products; approval and product access publish sel
  assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
  assert.equal(publicShop.productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
 });
-test('Retail products publish only after an audited selling grant and explicit owner sync',async()=>{
+test('Retail business products are never published into the spaza feed, even after a grant',async()=>{
  const f=fixture({
   'teyzaSellerAccounts/seller1':{...seller,category:'retail',listingPlan:'free'},
   'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],catalogueEnabled:false,sellingEnabled:false},
@@ -524,13 +524,12 @@ test('Retail products publish only after an audited selling grant and explicit o
  const sync=await f.service.execute(owner,'catalogue_sync');
  assert.equal(sync.publication,'live');
  const publicShop=(await f.service.publicDirectory()).entries.find(p=>p.id==='seller1');
- assert.equal(publicShop.shopCategory,'retail');assert.equal(publicShop.products.length,1);
- assert.equal(publicShop.products[0].name,'Furniture repair');
- assert.equal(publicShop.products[0].category,'Furniture & Repairs');
- assert.equal(publicShop.products[0].priceCents,45000);
+ assert.equal(publicShop.shopCategory,'retail');
+ assert.deepEqual(publicShop.products,[],'A business must publish services rather than grocery products');
+ assert.deepEqual(publicShop.serviceHighlights,[]);
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
- const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
+ const otherSeller={...seller,uid:'seller2',category:'spaza'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
  const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop,
   'teyzaBilling/seller2':{ownerUid:'seller2',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
  await service.execute(owner,'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2500,stockQty:8}]});
@@ -614,7 +613,8 @@ test('Google claim requires explicit reviewer confirmation, links the approved p
  const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
  const selected=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
  await service.execute(newOwner,'seller_register',{...registration,locationConsent:true,whatsappConsent:true,
-  googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection});
+  googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection,
+  googleClaimAnswers:{authorized:true,canProvideEvidence:true,canVerifyContact:true}});
  await service.execute(newOwner,'seller_identity_submit',personal);await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'seller_onboarding_complete');
@@ -639,7 +639,8 @@ test('A previously approved Google claim cannot be taken by another owner',async
  const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
  const claim=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
  await rejects(service.execute(newOwner,'seller_register',{...registration,locationConsent:true,googleClaimSelection:claim.claimSelection,
-  addressSelection:claim.addressSelection.addressSelection}),409);
+  addressSelection:claim.addressSelection.addressSelection,
+  googleClaimAnswers:{authorized:true,canProvideEvidence:true,canVerifyContact:true}}),409);
  assert(!db.records.has('teyzaSellerAccounts/buyer1'));
 });
 test('A stale active flag cannot expose an unapproved shop, accept an order or open customer chat',async()=>{
@@ -1137,4 +1138,58 @@ test('Shopper delivery profile is UID-bound, stores full address and contacts, a
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,email:'not-email'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,phone:'123'}),422);
  await rejects(service.execute(buyer,'shopper_profile_save',{...payload,latitude:0,longitude:0}),422);
+});
+
+test('Local business can save service types and consented photos without exposing grocery products',async()=>{
+ const f=fixture({
+  'teyzaSellerAccounts/seller1':{...seller,category:'retail'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],productHighlights:[]}
+ });
+ const added=await f.service.execute(owner,'business_service_save',{
+   type:'Plumbing',name:'Blocked drain repair',description:'Household plumbing and drain repairs'});
+ assert.equal(added.saved,true);
+ const listing=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(listing.shopCategory,'retail');
+ assert.deepEqual(listing.products,[]);
+ assert.equal(listing.serviceHighlights[0].name,'Blocked drain repair');
+ const preview=await f.service.execute(owner,'business_services_list');
+ assert.equal(preview.services.length,1);
+ await rejects(f.service.execute(buyer,'business_services_list'),403);
+ await rejects(f.service.execute(owner,'business_service_photo',{
+   serviceId:added.serviceId,imageBase64:jpeg,consent:false}),422);
+ const uploaded=await f.service.execute(owner,'business_service_photo',{
+   serviceId:added.serviceId,imageBase64:jpeg,consent:true});
+ assert(uploaded.imageUrl.startsWith('https://firebasestorage.googleapis.com/'));
+ const published=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(published.serviceHighlights[0].imageUrl,uploaded.imageUrl);
+});
+test('A non-business and expired/unapproved business cannot publish services',async()=>{
+ const f=fixture();
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,category:'retail',approvalStatus:'pending'});
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,category:'retail'});
+ f.db.records.set('teyzaBilling/seller1',{ownerUid:'seller1',status:'pending'});
+ await rejects(f.service.execute(owner,'business_service_save',{type:'Plumbing',name:'Drain help'}),403);
+});
+
+test('Public business cover requires explicit photo consent and never publishes private identity selfie',async()=>{
+ const f=fixture({
+   'teyzaSellerAccounts/seller1':{...seller,category:'retail'},
+   'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[]},
+   'teyzaMobileVerification/seller1':{ownerUid:'seller1',status:'approved',
+     objectPath:'teyza-private/mobile-verification/seller1/selfie.enc',expiresAt:1000000+DAY}
+ });
+ await rejects(f.service.execute(owner,'business_cover_upload',{
+   photoType:'portrait',imageBase64:jpeg,consent:false}),422);
+ const image=await f.service.execute(owner,'business_cover_upload',{
+   photoType:'portrait',imageBase64:jpeg,consent:true});
+ assert(image.imageUrl.startsWith('https://firebasestorage.googleapis.com/'));
+ const summary=await f.service.execute(owner,'seller_summary');
+ assert.equal(summary.businessCoverUrl,image.imageUrl);
+ const listing=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.equal(listing.photoUrl,image.imageUrl);
+ assert(!JSON.stringify(listing).includes('teyza-private/mobile-verification'));
+ const privatePhoto=f.db.records.get('teyzaMobileVerification/seller1');
+ assert.equal(privatePhoto.objectPath,'teyza-private/mobile-verification/seller1/selfie.enc');
 });

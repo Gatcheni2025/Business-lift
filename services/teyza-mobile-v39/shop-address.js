@@ -92,6 +92,28 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
   const selected=place;
   return {selection:{...selected,addressSelection:seal({v:1,purpose:'selection',uid,issuedAt,expiresAt:issuedAt+SELECTION_TTL,...selected})}};
  }
+ // Compare the submitted business name with Google Places near the signed,
+ // UID-bound street address. Street address alone is not proof of ownership:
+ // a mall or mixed-use building may contain many unrelated businesses.
+ async function matchingBusiness(uid,addressReceipt,businessName){
+  const selected=open(addressReceipt,uid,'selection');
+  const normalized=v=>String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const query=D.text(businessName,'business name',120)+' '+selected.address;
+  const result=await request('places:searchText',{
+   fields:'places.id,places.displayName,places.formattedAddress,places.location,places.businessStatus',
+   body:{textQuery:query,languageCode:'en',regionCode:'ZA',
+    locationBias:{circle:{center:{latitude:selected.latitude,longitude:selected.longitude},radius:75}}}});
+  const matches=Array.isArray(result.places)?result.places:[];
+  const exact=matches.find(place=>{
+   if(!validPlaceId(place.id)||place.businessStatus==='CLOSED_PERMANENTLY')return false;
+   if(normalized(place.displayName?.text)!==normalized(businessName))return false;
+   const lat=place.location?.latitude,lon=place.location?.longitude;
+   if(!P.coordinates(lat,lon))return false;
+   // Local coordinate comparison only; provider coordinates never grant ownership.
+   return Math.abs(lat-selected.latitude)<0.00065&&Math.abs(lon-selected.longitude)<0.0008;
+  });
+  return exact?.id||null;
+ }
  function claim(uid,receipt){
   const selection=open(receipt,uid,'claim');
   if(!validPlaceId(selection.placeId))D.fail(422,'Search for your business again.');
@@ -107,6 +129,6 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
    latitude:selected.latitude,longitude:selected.longitude,resolvedAt:selected.issuedAt,
    coordinatesExpireAt:selected.issuedAt+COORDINATE_TTL,coordinatesRefreshAt:selected.issuedAt+27*DAY,consentAt:clock(),updatedAt:clock()};
  }
- return {execute,location,claim,refresh:placeId=>details(placeId)};
+ return {execute,location,claim,matchingBusiness,refresh:placeId=>details(placeId)};
 }
 module.exports={actions,createShopAddress,addressDetails,COORDINATE_TTL,DAY};

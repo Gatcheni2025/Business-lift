@@ -24,6 +24,7 @@ import 'seller_notifications.dart';
 import 'seller_premium.dart';
 import 'seller_selling.dart';
 import 'seller_support_chat.dart';
+import 'business_services_page.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
 import 'seller_location.dart';
@@ -67,7 +68,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   bool get canOfferDirectMandate=>teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel);
   double? shopRating;int ratingCount=0;
   Map<String,dynamic> shopServices={};bool servicesReady=false,shopPhotoLoading=false,noticesPrimed=false;
-  Uint8List? shopPhoto;String? shopPhotoId;int photoRequest=0;
+  Uint8List? shopPhoto;String? shopPhotoId;String businessCoverUrl='';int photoRequest=0;
   final seenOrderNotices=<String>{};StreamSubscription<void>? pushUpdates;
   bool get liveUpdates=>widget.apiFactory==null||widget.mobileApi!=null;
   TeyzaMobileApi get mobile=>widget.mobileApi??TeyzaMobileApi(widget.session);
@@ -106,7 +107,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
         publicationStatus=results[0]['publicationStatus']?.toString();sellingEnabled=results[0]['sellingEnabled']==true;identityVerified=results[0]['identityVerified']==true;shopLive=results[0]['shopLive']==true;
         approvalStatus=results[0]['approvalStatus']?.toString()??shop?.approvalStatus??'pending';listingPlan=results[0]['listingPlan']?.toString()??'free';listingPaid=results[0]['listingPaid']==true;complimentaryAccess=results[0]['complimentaryAccess']==true;mandateAccess=results[0]['mandateAccessActive']==true;mandateUntil=(results[0]['mandateAccessUntil'] as num?)?.toInt();promotionActive=results[0]['promotionActive']==true;paidUntil=(results[0]['paidUntil'] as num?)?.toInt();promotionEndsAt=(results[0]['promotionEndsAt'] as num?)?.toInt();hasLocation=results[0]['hasLocation']==true;
         shopRating=(results[0]['rating'] as num?)?.toDouble();ratingCount=(results[0]['ratingCount'] as num?)?.toInt()??0;
-        shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};servicesReady=true;
+        shopServices=results[0]['settings'] is Map?Map<String,dynamic>.from(results[0]['settings'] as Map):{};
+        businessCoverUrl=(results[0]['businessCoverUrl']??'').toString();servicesReady=true;
         final v=results[0]['verification'];verification=v is Map?v['status']?.toString()??'not_submitted':'not_submitted';});
       if(newlyVerifiedMembership&&mounted&&widget.sellerMode){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -132,7 +134,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     finally{if(mounted&&photoRequest==request)setState(()=>shopPhotoLoading=false);}
   }
   Future<void> openShopPhoto() async {
-    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:widget.mobileApi)));
+    final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>SellerShopPhotoPage(session:widget.session,api:widget.mobileApi,businessCover:shop?.category=='retail')));
     if(changed==true&&mounted){shopPhotoId=null;await refreshActivity();}
   }
   Future<void> enableOrderAlerts() async {
@@ -175,7 +177,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void _sessionChanged(){
     final uid=widget.session.userId;
     if(loadedUid!=null&&loadedUid!=uid&&mounted)setState((){
-      photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
+      photoRequest++;shopPhoto=null;shopPhotoId=null;shopPhotoLoading=false;shopServices={};businessCoverUrl='';servicesReady=false;noticesPrimed=false;seenOrderNotices.clear();
       loadedUid=null;api=null;shop=null;drafts=[];productPhotos={};error=null;draftError=null;accessReference=null;unread=0;verification='not_submitted';publicationStatus=null;sellingEnabled=false;identityVerified=false;shopLive=false;approvalStatus='pending';listingPlan='free';listingPaid=false;complimentaryAccess=false;promotionActive=false;paidUntil=null;promotionEndsAt=null;hasLocation=false;shopRating=null;ratingCount=0;
     });
     if(widget.session.idToken==null||uid==null){
@@ -239,8 +241,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:true)));
   void openSpazaSupplierOffers()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
     WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:false)));
+  void openBusinessServices()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
+    BusinessServicesPage(session:widget.session,api:widget.mobileApi)));
   Future<void> openProducts() async {
     if(shop?.category=='wholesale'){openSupplierAdvertising();return;}
+    if(shop?.category=='retail'){openBusinessServices();return;}
     final uid=widget.session.userId;
     setState((){productsView=true;if(widget.sellerMode)sellerTab=1;});
     if(uid==null)return;
@@ -509,7 +514,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   Widget _card(Widget child)=>Card(color:Colors.white,child:Padding(
     padding:const EdgeInsets.all(16),child:child));
   void selectSellerTab(int tab){
-    if(tab==1){if(shop?.category=='wholesale')openSupplierAdvertising();else openProducts();return;}
+    if(tab==1){if(shop?.category=='wholesale')openSupplierAdvertising();
+      else if(shop?.category=='retail')openBusinessServices();else openProducts();return;}
+    if(tab==2&&shop?.category=='wholesale'){
+      Navigator.push(context,MaterialPageRoute(builder:(_)=>
+        WholesaleConnectionsPage(session:widget.session,api:widget.mobileApi)));return;
+    }
     setState((){sellerTab=tab;productsView=false;});
   }
   Future<void> signOutSeller() async {
@@ -531,7 +541,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     child:ListTile(leading:Icon(icon,color:ownerGreen),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),
       subtitle:Text(detail),trailing:const Icon(Icons.chevron_right),onTap:tap));
   Widget sellerBusiness()=>ListView(padding:const EdgeInsets.all(18),children:[
-    Text(shop!.category=='wholesale'?'Wholesaler · '+shop!.name:shop!.category=='spaza'?'Spaza Shop · '+shop!.name:shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
+    Text(shop!.category=='wholesale'?'Wholesaler · '+shop!.name:shop!.category=='spaza'?'Spaza Shop · '+shop!.name:'Local Business · '+shop!.name,style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),
     Text(shop!.address,style:const TextStyle(color:Color(0xFF60736B))),const SizedBox(height:16),
     businessTile(Icons.location_on_outlined,'Shop location',hasLocation?'View or update your shop pin':'Add a pin to appear in nearby search',openLocation),
     businessTile(Icons.near_me_outlined,'Areas around me','Plan local deliveries',openAreas),
@@ -539,7 +549,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     businessTile(Icons.edit_outlined,'Edit shop profile','Delivery, radius, card payments & shop details',editProfile),
     businessTile(Icons.schedule_outlined,'Trading hours','Keep your opening times current',()=>openTool(SellerTool.hours)),
     businessTile(Icons.add_a_photo_outlined,'Shop photo & verification','Shop front, documents, selfie & mobile',()=>openTool(SellerTool.verification)),
-    businessTile(Icons.photo_camera_outlined,'Shop-front photo','View or change the photo on your dashboard and listing',openShopPhoto),
+    businessTile(Icons.photo_camera_outlined,shop?.category=='retail'?'Business cover photo':'Shop-front photo',
+      shop?.category=='retail'?'Use your premises or an optional portrait with public-display consent. Private ID selfies are never exposed.':'View or change the photo on your dashboard and listing',openShopPhoto),
+    if(shop?.category=='retail')businessTile(Icons.design_services_outlined,'My services',
+      'Add service types and images',openBusinessServices),
     if(shop?.category=='wholesale')businessTile(Icons.handshake_outlined,'Spaza partnership requests',
       'Approve connections, set real discounts and delivery fees, then chat',
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
@@ -578,24 +591,40 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       icon:const Icon(Icons.logout),label:const Text('Sign out')),
   ]);
   Widget sellingBody()=>switch(sellerTab){
-    1=>RefreshIndicator(onRefresh:load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
+    1=>shop?.category=='retail'?BusinessServicesPage(session:widget.session,api:widget.mobileApi):
+      RefreshIndicator(onRefresh:load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
       if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(draftError!),
         TextButton(onPressed:load,child:const Text('Retry products'))])),
       productList(),const SizedBox(height:12),
       const Padding(padding:EdgeInsets.all(12),child:Text('Your approved, eligible shop can publish its saved products by selecting Publish saved products or Sync product listing. A temporary grant is not a payment.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B)))),
     ])),
-    2=>ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
+    2=>shop?.category=='retail'?
+      Center(child:Padding(padding:const EdgeInsets.all(24),child:Column(
+        mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.mark_unread_chat_alt_outlined,size:40,color:ownerGreen),
+          const SizedBox(height:14),
+          const Text('Service enquiries',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800)),
+          const SizedBox(height:10),
+          const Text('People can enquire about your services through Customer chat. Business services are not grocery checkout orders.',textAlign:TextAlign.center),
+          const SizedBox(height:18),FilledButton.icon(
+            onPressed:()=>selectSellerTab(3),icon:const Icon(Icons.chat_outlined),
+            label:const Text('Open customer chat'))
+        ]))):
+      ShopOrdersPanel(session:widget.session,asOwner:true,api:widget.mobileApi),
     3=>ShopperChatPage(session:widget.session,api:widget.mobileApi,asOwner:true,
       onOpenUpdates:openNotifications,unreadUpdates:unread),
     4=>sellerBusiness(),
     _=>RefreshIndicator(onRefresh:load,child:SellerSellingDashboard(shopName:shop!.name,
+      accountType:shop!.category,
       live:shopLive,verified:identityVerified,publicationStatus:publicationStatus,
       hasLocation:hasLocation,onLocation:openLocation,productCount:draftError==null?drafts.length:null,
       premiumAccount:premiumAccount,hasProductAccess:hasProductAccess,
-      shopPhoto:shopPhoto,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
+      shopPhoto:shopPhoto,coverUrl:businessCoverUrl,photoLoading:shopPhotoLoading,onPhoto:openShopPhoto,unread:unread,
       onEditProfile:editProfile,
-      onAdd:busy?null:chooseProducts,onProducts:shop?.category=='wholesale'?openSupplierAdvertising:openProducts,onOrders:()=>selectSellerTab(2),
+      onAdd:busy?null:(shop?.category=='retail'?openBusinessServices:chooseProducts),
+      onProducts:shop?.category=='wholesale'?openSupplierAdvertising:shop?.category=='retail'?openBusinessServices:openProducts,
+      onOrders:()=>selectSellerTab(2),
       onShop:shop?.category=='spaza'?()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
@@ -680,11 +709,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           key:const ValueKey('teyza-floating-chat'),
           onPressed:openSellerSupport,
           icon:const Icon(Icons.chat_bubble_outline_rounded),
-          label:const Text('Chat'),
-          tooltip:'Chat with Teyza Support'):null,
+          label:const Text('Support'),
+          tooltip:'Teyza Support — not customer chat'):null,
       floatingActionButtonLocation:FloatingActionButtonLocation.endFloat,
       bottomNavigationBar:widget.sellerMode&&shop?.hasRegisteredCategory==true?
-        SellerNavigation(selected:sellerTab,onSelect:selectSellerTab):null,
+        SellerNavigation(selected:sellerTab,onSelect:selectSellerTab,accountType:shop!.category):null,
       body:SafeArea(child:AnimatedBuilder(animation:session,builder:(ctx,child){
       if(session.idToken==null)return ListView(padding:const EdgeInsets.all(18),children:[
         _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
