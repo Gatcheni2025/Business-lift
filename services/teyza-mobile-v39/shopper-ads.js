@@ -152,7 +152,7 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
      environment:mode,status:'initializing',createdAt:now});
    return {existing:false,amount};
   });
-  if(prepared.existing)return {reference:prepared.reference,checkoutUrl:prepared.url,amountCents:ad.amountCents,alreadyStarted:true};
+  if(prepared.existing)return {reference:prepared.reference,checkoutUrl:prepared.url,amountCents:ad.amountCents,days:DAYS,alreadyStarted:true};
   let url;
   try{
    const result=await paystack('/transaction/initialize','POST',{
