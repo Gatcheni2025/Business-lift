@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'seller_plan.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'teyza_ads_store_billing.dart';
 
 // Seven-day, non-recurring local campaign. Server is authoritative at checkout.
 const int teyzaAdsLocalKm=10,teyzaAdsMaxKm=50,teyzaAdsDays=7;
@@ -31,6 +32,7 @@ class _TeyzaAdsState extends State<TeyzaAdsPage> with WidgetsBindingObserver{
  Uint8List? image;
  int radiusKm=10;
  bool consent=false,busy=false;
+ TeyzaStoreAdPurchase? storePurchases;
  List<Map<String,dynamic>> ads=[];
  String? error,success;
  bool get sameSeller=>uid!=null&&uid==widget.session.userId&&widget.session.idToken!=null;
@@ -38,11 +40,22 @@ class _TeyzaAdsState extends State<TeyzaAdsPage> with WidgetsBindingObserver{
  String get referenceKey=>'teyza_ad_checkout_ref_'+(uid??'none');
  @override void initState(){
   super.initState();WidgetsBinding.instance.addObserver(this);
-  widget.session.addListener(accountChanged);load();
+  widget.session.addListener(accountChanged);
+  if(!directPaystack&&(Platform.isIOS||Platform.isAndroid)){
+   storePurchases=TeyzaStoreAdPurchase(session:widget.session,api:api,
+    onMessage:(message,isError){if(mounted)setState((){
+      if(isError){error=message;success=null;}else{success=message;error=null;}
+    });},onComplete:(){if(mounted)unawaited(load());});
+   storePurchases!.initialize();
+  }
+  load();
   WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(confirmReturn());});
  }
  @override void didChangeAppLifecycleState(AppLifecycleState state){
-  if(state==AppLifecycleState.resumed&&sameSeller)unawaited(confirmReturn());
+  if(state==AppLifecycleState.resumed&&sameSeller){
+   if(directPaystack)unawaited(confirmReturn());
+   else unawaited(storePurchases?.recover()??Future<void>.value());
+  }
  }
  void accountChanged(){
   if(!sameSeller&&mounted)setState((){
@@ -52,6 +65,7 @@ class _TeyzaAdsState extends State<TeyzaAdsPage> with WidgetsBindingObserver{
  @override void dispose(){
   WidgetsBinding.instance.removeObserver(this);
   widget.session.removeListener(accountChanged);
+  storePurchases?.dispose();
   headline.dispose();description.dispose();super.dispose();
  }
  Future<void> load()async{
@@ -181,9 +195,10 @@ class _TeyzaAdsState extends State<TeyzaAdsPage> with WidgetsBindingObserver{
      if(directPaystack)FilledButton.icon(onPressed:busy?null:()=>pay(ad),
        icon:const Icon(Icons.lock_outline),
        label:Text('Pay '+teyzaAdRand(amount)+' with Paystack'))
-     else const Padding(padding:EdgeInsets.only(top:10),
-       child:Text('Payment is not available in this store build. In-app advertising purchases require store billing.',
-        style:TextStyle(color:Color(0xFF875B2F))))
+     else FilledButton.icon(onPressed:busy||!sameSeller?null:()=>storePurchases?.open(ad),
+       icon:const Icon(Icons.shopping_bag_outlined),
+       label:Text('Buy 7-day ad · '+teyzaAdRand(amount)+' via '+(Platform.isIOS?'App Store':'Google Play')))
+
     ],
     if(['active','pending_review','approved_unpaid'].contains(status))
      TextButton.icon(onPressed:busy?null:()=>pause(ad),
