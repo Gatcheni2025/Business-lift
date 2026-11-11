@@ -25,16 +25,16 @@ paths=json.loads((ROOT/'tools/app-first-release/paths.json').read_text(encoding=
 assert '/ads/index.html' in paths and '/js/ads-web-billing.mjs' in paths, 'Hosted advertiser pages are not included in the scoped release overlay'
 for name,item in files.items():
  content=(ROOT/name).read_bytes()
- assert b'\\r' not in content, 'Canonical source line endings changed: '+name
+ assert b'\r' not in content, 'Canonical source line endings changed: '+name
  assert re.fullmatch(r'[a-f0-9]{64}',item['sha256'])
  assert sha256(content).hexdigest()==item['sha256'], 'Unapproved source change: '+name
- assert sha256(content.replace(b'\\n',b'\\r\\n')).hexdigest()==item['windowsCrLfSha256'], 'CRLF equivalence changed: '+name
+ assert sha256(content.replace(b'\n',b'\r\n')).hexdigest()==item['windowsCrLfSha256'], 'CRLF equivalence changed: '+name
  mirror=ROOT/name.removeprefix('web/app-first/public/')
  assert content==mirror.read_bytes(), 'Public root mirror differs: '+name
  print('Operator-approved exact LF SHA-256',name,item['sha256'])
 js=(ROOT/'web/app-first/public/js/ads-web-billing.mjs').read_text(encoding='utf8')
 html=(ROOT/'web/app-first/public/ads/index.html').read_text(encoding='utf8')
-normalized=re.sub(r'\\s+','',js.lower())
+normalized=re.sub(r'\s+','',js.lower())
 for token in ('eval(', 'newfunction(', 'document.write(', 'child_process', 'javascript:', 'data:text/html'):
  assert token not in normalized, 'Potentially unsafe browser source token: '+token
 for required in ('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',
