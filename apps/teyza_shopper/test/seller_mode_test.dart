@@ -124,7 +124,11 @@ void main(){
     expect(session.sellerWorkspace,isFalse);expect(find.byType(SellerNavigation),findsNothing);
     expect(find.text('Home'),findsOneWidget);expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);expect(find.text('Cart'),findsNothing);expect(publicReads,greaterThan(0));
     expect(tester.takeException(),isNull);
-    await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+    // Flush delayed system-font relayout callbacks from FontLoader before the
+    // widget-test binding checks that no animation survived widget disposal.
+    await tester.pumpAndSettle();
+    session.dispose();api.session.dispose();
   });
   testWidgets('Seller updates live inside Messages and shop options live in Edit shop profile',(tester) async {
     SharedPreferences.setMockInitialValues({});
