@@ -159,6 +159,10 @@ jobs:
             fi
             echo 'Android-direct mandate DEBUG APK is only for side-loaded QA testing, not a Play bundle or distribution release. It uses production Firebase; use dedicated test accounts.' >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$QA_SIGNING_ONLY" = true ] && [ "$TARGET_PLATFORMS" != all ]; then
+            echo '::error::Signed QA TestFlight requires platforms=all so the APK, AAB and IPA pass Defender before iOS upload.'
+            exit 1
+          fi
           if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$SIGNING_MODE" != signed ]; then
             echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
             exit 1
@@ -587,7 +591,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload verified signed IPA to TestFlight (explicit opt-in only)
-        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true
+        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true && inputs.qa_signing_only != true
         working-directory: apps/teyza_shopper
         env:
           TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
@@ -723,3 +727,27 @@ jobs:
           }
           Write-Host 'No recent Defender detection was recorded for the signed app binaries.'
           Write-Host 'This is not a Microsoft analyst verdict on the separately flagged website files.'
+
+  # Dedicated QA TestFlight upload happens only AFTER signed APK/AAB/IPA have
+  # all passed the existing Defender scan. Never upload an unscanned QA IPA.
+  upload_qa_testflight_after_scan:
+    name: Upload scanned signed QA IPA to TestFlight
+    if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true && inputs.signed_release == true && inputs.upload_to_testflight == true && inputs.platforms == 'all'
+    needs: qa_binary_defender_scan
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-qa-signed
+          path: apple-upload
+      - name: Verify signed release manifest and upload scanned IPA
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 apps/teyza_shopper/scripts/upload_testflight.py apple-upload
