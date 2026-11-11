@@ -507,7 +507,7 @@ test('Pending shops cannot add products; approval and product access publish sel
  assert.equal(p.priceCents,undefined);assert.equal(p.stock,undefined);assert.equal(p.inStock,true);
  assert.equal(publicShop.productHighlights.some(p=>p.id==='catalog_rice-1-kg'),false);
 });
-test('Retail products publish only after an audited selling grant and explicit owner sync',async()=>{
+test('Retail business products are never published into the spaza feed, even after a grant',async()=>{
  const f=fixture({
   'teyzaSellerAccounts/seller1':{...seller,category:'retail',listingPlan:'free'},
   'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],catalogueEnabled:false,sellingEnabled:false},
@@ -524,13 +524,12 @@ test('Retail products publish only after an audited selling grant and explicit o
  const sync=await f.service.execute(owner,'catalogue_sync');
  assert.equal(sync.publication,'live');
  const publicShop=(await f.service.publicDirectory()).entries.find(p=>p.id==='seller1');
- assert.equal(publicShop.shopCategory,'retail');assert.equal(publicShop.products.length,1);
- assert.equal(publicShop.products[0].name,'Furniture repair');
- assert.equal(publicShop.products[0].category,'Furniture & Repairs');
- assert.equal(publicShop.products[0].priceCents,45000);
+ assert.equal(publicShop.shopCategory,'retail');
+ assert.deepEqual(publicShop.products,[],'A business must publish services rather than grocery products');
+ assert.deepEqual(publicShop.serviceHighlights,[]);
 });
 test('The same template in two shops retains different prices and stock without cross-shop changes',async()=>{
- const otherSeller={...seller,uid:'seller2',category:'retail'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
+ const otherSeller={...seller,uid:'seller2',category:'spaza'},otherShop={...shop,sellerUid:'seller2',name:'Other Shop'};
  const {service,db}=fixture({'teyzaSellerAccounts/seller2':otherSeller,'teyzaPublicShops/seller2':otherShop,
   'teyzaBilling/seller2':{ownerUid:'seller2',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',monthlyCents:9900,paidUntil:1000000+31*DAY,latestPeriod:P.period(1000000)}});
  await service.execute(owner,'catalogue_add',{products:[{templateId:'rice-1-kg',priceCents:2500,stockQty:8}]});
@@ -614,7 +613,8 @@ test('Google claim requires explicit reviewer confirmation, links the approved p
  const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
  const selected=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
  await service.execute(newOwner,'seller_register',{...registration,locationConsent:true,whatsappConsent:true,
-  googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection});
+  googleClaimSelection:selected.claimSelection,addressSelection:selected.addressSelection.addressSelection,
+  googleClaimAnswers:{authorized:true,canProvideEvidence:true,canVerifyContact:true}});
  await service.execute(newOwner,'seller_identity_submit',personal);await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'shop_front_submit',{consent:true,imageBase64:jpeg});
  await service.execute(newOwner,'seller_onboarding_complete');
@@ -639,7 +639,8 @@ test('A previously approved Google claim cannot be taken by another owner',async
  const suggestions=await service.execute(newOwner,'seller_claim_suggest',{query:'New Local Shop Durban',sessionToken:'11111111-1111-4111-8111-111111111111'});
  const claim=(await service.execute(newOwner,'seller_claim_select',{predictionToken:suggestions.suggestions[0].predictionToken})).claim;
  await rejects(service.execute(newOwner,'seller_register',{...registration,locationConsent:true,googleClaimSelection:claim.claimSelection,
-  addressSelection:claim.addressSelection.addressSelection}),409);
+  addressSelection:claim.addressSelection.addressSelection,
+  googleClaimAnswers:{authorized:true,canProvideEvidence:true,canVerifyContact:true}}),409);
  assert(!db.records.has('teyzaSellerAccounts/buyer1'));
 });
 test('A stale active flag cannot expose an unapproved shop, accept an order or open customer chat',async()=>{
