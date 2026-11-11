@@ -244,6 +244,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     WholesaleAdvertisingPage(session:widget.session,api:widget.mobileApi,supplierMode:false)));
   void openBusinessServices()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
     BusinessServicesPage(session:widget.session,api:widget.mobileApi)));
+  bool get shopperAdsVisible=>teyzaPaymentChannel=='direct'||
+     const bool.fromEnvironment('TEYZA_SHOPPER_ADS_PREVIEW',defaultValue:false);
   void openShopperAds()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
      TeyzaAdsPage(session:widget.session,api:widget.mobileApi)));
   Future<void> openProducts() async {
@@ -565,7 +567,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
       ()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
         Scaffold(appBar:AppBar(title:const Text('My wholesale stock orders')),
           body:ShopOrdersPanel(session:widget.session,asOwner:false,wholesaleOnly:true,api:widget.mobileApi))))),
-    if(shop?.category!='wholesale')businessTile(Icons.campaign_outlined,'Teyza Ads · Reach local shoppers',
+    if(shop?.category!='wholesale'&&shopperAdsVisible)businessTile(Icons.campaign_outlined,'Teyza Ads · Reach local shoppers',
        'Upload an image, choose a 1–50 km radius, and request a seven-day sponsored placement.',
        openShopperAds),
     if(shop?.category=='wholesale')businessTile(Icons.campaign_outlined,'Advertise to participating spaza shops',
@@ -635,7 +637,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
-       onAds:shop?.category=='wholesale'?null:openShopperAds)),
+       onAds:shop?.category=='wholesale'||!shopperAdsVisible?null:openShopperAds)),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             if(!sellerApproved)const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your registration is under review. Product access and payments become available after approval.',style:TextStyle(color:Color(0xFF8A5A00),height:1.4))),
