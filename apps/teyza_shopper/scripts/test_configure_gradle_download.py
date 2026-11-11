@@ -29,10 +29,10 @@ class GradleDownloadTests(unittest.TestCase):
         # The generated Flutter wrapper must keep its 9.5.0 version.
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"gradle-wrapper.properties"
-            path.write_text("distributionUrl=https\\\\://services.gradle.org/distributions/gradle-9.5.0-all.zip\\n")
+            path.write_text("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.5.0-all.zip\n")
             self.assertEqual(module.configure(path),"9.5.0")
             updated=path.read_text()
-            self.assertIn("distributionUrl=https\\\\://distfiles.macports.org/gradle/gradle-9.5.0-bin.zip", updated)
+            self.assertIn("distributionUrl=https\\://distfiles.macports.org/gradle/gradle-9.5.0-bin.zip", updated)
             self.assertIn("distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746", updated)
             module.configure(path)
             self.assertEqual(updated,path.read_text(),"Reconfiguration must be idempotent")
