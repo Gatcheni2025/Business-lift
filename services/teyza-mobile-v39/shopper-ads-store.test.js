@@ -29,7 +29,7 @@ const denied=(promise,code)=>assert.rejects(promise,e=>e.status===code);
 function fixture(platform='android',radius=15){
  const adId='ad1',ad={ownerUid:uid,status:'approved_unpaid',
   paymentStatus:'unpaid',radiusKm:radius,amountCents:SKUs.PRICE_CENTS(radius)};
- const db=new DB({'teyzaShopperAds/'+adId:ad});
+ const db=new DB({['teyzaShopperAds/'+adId]:ad});
  let valid=true,now=NOW,claimedProof='play-token-original-1234567890',consumed=0;
  const trusted={
   platform,productId:SKUs.productId(radius),accountToken:providers.tokenForUid(uid),
