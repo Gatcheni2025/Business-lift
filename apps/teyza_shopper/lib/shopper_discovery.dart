@@ -107,7 +107,7 @@ class OnlineShop {
 // Keep major supermarket and national retail chains out of township spaza searches.
 // Google grocery/supermarket types are too broad to establish that a shop is a spaza.
 bool teyzaIsLargeRetailer(String name) => RegExp(
-  r'\\b(checkers|checkers hyper|spar|superspar|kwikspar|shoprite|pick\\s*n\\s*pay|pnp|woolworths|food\\s*lovers|makro|game|boxer\\s*(?:superstore|supermarket)|ok\\s*foods)\\b',
+  r'\b(checkers|checkers hyper|spar|superspar|kwikspar|shoprite|pick\s*n\s*pay|pnp|woolworths|food\s*lovers|makro|game|boxer\s*(?:superstore|supermarket)|ok\s*foods)\b',
   caseSensitive:false).hasMatch(name);
 
 bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
@@ -118,20 +118,20 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
   if(category=='spaza'){
     if(shop.types.contains('supermarket')||shop.types.contains('department_store')||
        shop.types.contains('shopping_mall'))return false;
-    final local=RegExp(r'\\b(spaza|tuck\\s*shop|mini\\s*market|superette|general\\s*dealer|corner\\s*shop|kiosk|neighbourhood\\s*shop)\\b').hasMatch(name);
+    final local=RegExp(r'\b(spaza|tuck\s*shop|mini\s*market|superette|general\s*dealer|corner\s*shop|kiosk|neighbourhood\s*shop)\b').hasMatch(name);
     // A Google "grocery_store" type alone could describe a national chain.
     return local||shop.types.contains('convenience_store');
   }
   if(category=='wholesale')return shop.types.any(
       const {'wholesaler','warehouse_store'}.contains)||
-    RegExp(r'wholesal|cash\\s*(?:&|and|n)\\s*carry|bulk\\s*(?:food|grocery|suppl)|distribut|trading\\s*depot').hasMatch(name);
+    RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
   if(category=='variety'){
-    if(RegExp(r'spaza|tuck\\s?shop|wholesal|cash\\s?(and|&)\\s?carry').hasMatch(name))return false;
+    if(RegExp(r'spaza|tuck\s?shop|wholesal|cash\s?(and|&)\s?carry').hasMatch(name))return false;
     return shop.categorizationVerified||
       shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
         'furniture_store','hardware_store','barber_shop','clothing_store',
         'home_goods_store','shopping_mall','department_store'}.contains)||
-      RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
+      RegExp(r'salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china\s?mall|shopping|mall|variety|department|retail|clothing|fashion|repair|tailor|printing').hasMatch(name);
   }
   return false;
 }
