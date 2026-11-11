@@ -131,7 +131,11 @@ async function start(){
    }else notice('This payment requires manual support review; do not pay again.','warning');
   }catch(e){if(current(uid,g))notice(e.message||'Payment is not yet verified. Do not pay twice.','warning');}
   finally{if(current(uid,g)){busy=false;render();}}
-  if(current(uid,g))await reload();
+  if(current(uid,g)){
+   try{const mine=await api('ads_mine');if(current(uid,g)){
+    ads=Array.isArray(mine.ads)?mine.ads:[];selectedId=null;render();
+   }}catch{/* Keep the confirmation message and let the seller refresh manually. */}
+  }
  }
  try{
   const [firebase,sdkAuth]=await Promise.all([
