@@ -80,7 +80,7 @@ test('Approved seller tapping a welcome button receives a reply menu exactly onc
  const msg=JSON.parse(f.calls[0].opts.body);
  assert.equal(msg.to,'27712345678');assert.equal(msg.type,'interactive');
  assert.equal(msg.interactive.type,'list');assert.ok(msg.interactive.action.sections[0].rows.length>1);
- assert.equal(/https?:\\/\\//.test(f.calls[0].opts.body),false);
+ assert.equal(/https?:\/\//.test(f.calls[0].opts.body),false);
  await f.bot.receive(evt.req,evt.res);await f.bot.deliver(key.split('/')[1]);
  assert.equal(f.calls.length,1);
 });
@@ -92,7 +92,7 @@ test('Interactive list choice sends detailed selling benefits with no checkout l
  const payload=JSON.parse(f.calls[0].opts.body);
  assert.equal(payload.interactive.type,'button');
  assert.match(payload.interactive.body.text,/wholesalers/);
- assert.equal(/teyza\\.co\\.za\\/(?:ads|pay)/.test(f.calls[0].opts.body),false);
+ assert.equal(/teyza\.co\.za\/(?:ads|pay)/.test(f.calls[0].opts.body),false);
 });
 test('Do not send without prior welcome, with revoked consent or after approval removal',async()=>{
  for(const change of [f=>f.noWelcome(),f=>f.optOut(),f=>f.changeStatus()]){
