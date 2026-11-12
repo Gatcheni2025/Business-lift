@@ -20,7 +20,7 @@ function fixture(){
  let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false;
  const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,clock:()=>1000,
   send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
- return {api,records,calls,enableInteractive:()=>{config.interactiveWelcome=true;config.template='teyza_seller_welcome_menu';},
+ return {api,records,calls,enableInteractive:()=>{config.interactiveWelcome=true;config.welcomeTemplateApproved=true;config.template='teyza_seller_welcome_menu';},
   disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
 }
 test('An opted-in, currently approved seller with a verified phone gets one templated message',async()=>{

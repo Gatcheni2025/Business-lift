@@ -215,6 +215,31 @@ exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
 if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
 if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
  const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
+if(process.env.TEYZA_WHATSAPP_WELCOME_MENU_ENABLED==='1'){
+ // Keep this public Meta endpoint isolated from the Firebase bearer-token API.
+ // Its POST requires Meta's raw-body HMAC signature and its GET an opaque token.
+ const metaAppSecret=defineSecret('TEYZA_META_APP_SECRET');
+ const metaWebhookVerifyToken=defineSecret('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN');
+ const welcome=require('./whatsapp-welcome-webhook').createWelcomeWebhook({db,
+  getAuthUser:uid=>admin.auth().getUser(uid),
+  getAppSecret:()=>metaAppSecret.value(),
+  getVerifyToken:()=>metaWebhookVerifyToken.value(),
+  getAccessToken:()=>whatsappToken.value(),
+  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||''})});
+ exports.teyzaWhatsAppWelcomeWebhook=onRequest({region:'us-central1',
+  invoker:'public',maxInstances:3,timeoutSeconds:45,memory:'256MiB',
+  secrets:[metaAppSecret,metaWebhookVerifyToken,whatsappToken]},async(req,res)=>{
+  try{
+   if(req.method==='GET'){welcome.verifyGet(req,res);return;}
+   if(req.method==='POST'){await welcome.receive(req,res);return;}
+   res.status(405).end();
+  }catch(_){res.status(503).end();}
+ });
+ exports.teyzaWhatsAppWelcomeReplyCreated=onDocumentCreated({region:'us-central1',
+  document:'teyzaWhatsAppWelcomeReplies/{reference}',maxInstances:3,
+  secrets:[whatsappToken]},event=>welcome.deliver(event.params.reference));
+}
 if(process.env.TEYZA_WHATSAPP_GROWTH_ENABLED==='1'){
   // Opt-in is recorded by the authenticated seller action. Both templates
   // must be Meta-approved informational templates with NO payment links.
@@ -241,7 +266,9 @@ const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
-  language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||''})});
+  language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
+  interactiveWelcome:process.env.TEYZA_WHATSAPP_WELCOME_MENU_ENABLED==='1',
+  welcomeTemplateApproved:process.env.TEYZA_WHATSAPP_WELCOME_TEMPLATE_APPROVED==='true'})});
 exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaWhatsAppApprovalOutbox/{reference}',secrets:[whatsappToken]},
  event=>whatsappApproval.deliver(event.params.reference));

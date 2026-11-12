@@ -17,7 +17,8 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
   const config=getConfig(),token=getToken();
   const configured=typeof token==='string'&&token.length>10&&/^\d+$/.test(config.phoneNumberId||'')&&
    /^v\d+\.\d+$/.test(config.apiVersion||'')&&/^[a-z0-9_]{1,512}$/.test(config.template||'')&&
-   /^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(config.language||'');
+   /^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(config.language||'')&&
+   (config.interactiveWelcome!==true||config.welcomeTemplateApproved===true);
   const claimed=await db.runTransaction(async tx=>{
    const onceRef=doc('teyzaWhatsAppWelcomeOnce/'+entry.sellerUid);
    const [outbox,account,pref,verification,priorWelcome]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+entry.sellerUid)),
