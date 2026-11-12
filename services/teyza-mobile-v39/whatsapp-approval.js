@@ -2,6 +2,7 @@
 // Only approved sellers who explicitly opted in may receive this message.
 // Never retry an uncertain provider request automatically: that could send twice.
 const {checkedPhone}=require('./onboarding');
+const {welcomeTemplateComponents}=require('./whatsapp-welcome-menu');
 
 function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),send=fetch,clock=Date.now}){
  const doc=p=>db.doc(p);
@@ -18,9 +19,13 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
    /^v\d+\.\d+$/.test(config.apiVersion||'')&&/^[a-z0-9_]{1,512}$/.test(config.template||'')&&
    /^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(config.language||'');
   const claimed=await db.runTransaction(async tx=>{
-   const [outbox,account,pref,verification]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+entry.sellerUid)),
-    tx.get(doc('teyzaWhatsAppPreferences/'+entry.sellerUid)),tx.get(doc('teyzaMobileVerification/'+entry.sellerUid))]);
+   const onceRef=doc('teyzaWhatsAppWelcomeOnce/'+entry.sellerUid);
+   const [outbox,account,pref,verification,priorWelcome]=await Promise.all([tx.get(ref),tx.get(doc('teyzaSellerAccounts/'+entry.sellerUid)),
+    tx.get(doc('teyzaWhatsAppPreferences/'+entry.sellerUid)),tx.get(doc('teyzaMobileVerification/'+entry.sellerUid)),tx.get(onceRef)]);
    if(!outbox.exists||!['queued','configuration_required'].includes(outbox.data().status))return null;
+   if(priorWelcome.exists){
+    tx.update(ref,{status:'skipped',reason:'welcome_already_claimed',updatedAt:clock()});return null;
+   }
    const a=account.exists?account.data():null,p=pref.exists?pref.data():null;
    if(!a||a.uid!==entry.sellerUid||a.approvalStatus!=='approved'||a.deletionPending===true||
       !p||p.ownerUid!==entry.sellerUid||p.optedIn!==true||p.phone!==a.phone||
@@ -31,6 +36,10 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
     tx.update(ref,{status:'skipped',reason:'phone_not_verified',updatedAt:clock()});return null;
    }
    if(!configured){tx.update(ref,{status:'configuration_required',updatedAt:clock()});return null;}
+   // Claim the welcome for this seller before contacting Meta. No second
+   // approval or uncertain provider response can produce another welcome.
+   tx.create(onceRef,{sellerUid:entry.sellerUid,submissionId:entry.submissionId,
+    outboxReference:reference,status:'attempted',createdAt:clock()});
    tx.update(ref,{status:'sending',attemptedAt:clock()});
    return {phone:a.phone.replace(/^\+/,'')};
   });
@@ -39,7 +48,8 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
    const response=await send('https://graph.facebook.com/'+config.apiVersion+'/'+config.phoneNumberId+'/messages',{
     method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
     body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to:claimed.phone,type:'template',
-      template:{name:config.template,language:{code:config.language}}}),signal:AbortSignal.timeout(15000)});
+      template:{name:config.template,language:{code:config.language},
+       ...(config.interactiveWelcome===true?{components:welcomeTemplateComponents()}:{})}}),signal:AbortSignal.timeout(15000)});
    const body=await response.json().catch(()=>null),messageId=body?.messages?.[0]?.id;
    if(!response.ok||typeof messageId!=='string'||!messageId){
     await ref.update({status:'needs_review',reason:'provider_response',httpStatus:response.status||0,updatedAt:clock()});return;
