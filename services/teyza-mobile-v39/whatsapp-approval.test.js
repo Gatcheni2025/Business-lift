@@ -73,7 +73,7 @@ test('Interactive welcome menu covers every service without payment URLs',()=>{
  for(const item of ['TEYZA_SELL_START','TEYZA_SELL_BENEFITS','TEYZA_ADS_START',
   'TEYZA_ADS_BENEFITS','TEYZA_SUPPORT_APPROVAL','TEYZA_SUPPORT_ORDERS','TEYZA_HOME']){
   const response=responseFor(item);assert.ok(response);
-  assert.ok(!/https?:\\/\\/|teyza\\.co\\.za\\/(ads|pay)/i.test(JSON.stringify(response)));
+  assert.ok(!/https?:\/\/|teyza\.co\.za\/(ads|pay)/i.test(JSON.stringify(response)));
  }
  assert.equal(responseFor('UNKNOWN'),null);
 });
