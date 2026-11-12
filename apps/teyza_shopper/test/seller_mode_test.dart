@@ -220,7 +220,11 @@ void main(){
     expect(find.byKey(const ValueKey('support-upgrade-account')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
     expect(find.text('What upgrading can do for you'),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-upgrade')),220,
+      scrollable:find.byType(Scrollable).last);
     expect(find.byKey(const ValueKey('growth-upgrade')),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-advertise')),220,
+      scrollable:find.byType(Scrollable).last);
     expect(find.byKey(const ValueKey('growth-advertise')),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -268,7 +272,11 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('teyza-floating-chat')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
     expect(find.text('What upgrading can do for you'),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-upgrade')),220,
+      scrollable:find.byType(Scrollable).last);
     expect(find.byKey(const ValueKey('growth-upgrade')),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-advertise')),220,
+      scrollable:find.byType(Scrollable).last);
     expect(find.byKey(const ValueKey('growth-advertise')),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();

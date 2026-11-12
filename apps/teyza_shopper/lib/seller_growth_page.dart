@@ -70,7 +70,8 @@ class _SellerGrowthPageState extends State<SellerGrowthPage>{
   }
   @override Widget build(BuildContext context)=>Scaffold(
     backgroundColor:const Color(0xFFF3F8F5),
-    appBar:AppBar(backgroundColor:const Color(0xFFF3F8F5),title:const Text('Grow with Teyza')),
+    appBar:AppBar(backgroundColor:const Color(0xFFF3F8F5),
+      title:Text(widget.initialPurpose=='advertise'?'Advertise locally':'Grow with Teyza')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.fromLTRB(18,10,18,30),children:[
       Container(padding:const EdgeInsets.all(24),
         decoration:BoxDecoration(

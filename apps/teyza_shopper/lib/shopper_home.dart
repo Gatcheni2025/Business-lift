@@ -179,6 +179,11 @@ List<NearbyListing> mergeNearbyListings(List<Shop> merchants,List<OnlineShop> di
   return entries;
 }
 
+/// Only genuine spaza-category listings belong in the Spaza Shops story row.
+List<NearbyListing> teyzaSpazaStoryEntries(Iterable<NearbyListing> entries)=>
+  entries.where((entry)=>
+    (entry.merchant?.shopCategory??entry.directory?.shopCategory)=='spaza').toList();
+
 class Area {
   final String label, city;
   final double lat, lng;
@@ -1677,9 +1682,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget sellerStories(){
     // The Spaza Shops story row must never inherit the All-business filter.
     // If a linked merchant says 'variety', that authoritative seller type wins.
-    final sellers=nearbySellerEntries.where((entry)=>
-      (entry.merchant?.shopCategory??entry.directory?.shopCategory)=='spaza'
-    ).toList();
+    final sellers=teyzaSpazaStoryEntries(nearbySellerEntries);
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
