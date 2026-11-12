@@ -92,7 +92,7 @@ class SellerSellingDashboard extends StatelessWidget {
                 style:const TextStyle(color:_muted)),
           ]))),
       ],
-      if(!premiumAccount&&onUpgrade!=null)...[
+      if(onUpgrade!=null||onAdvertiseInfo!=null)...[
         const SizedBox(height:14),
         Container(key:const ValueKey('seller-growth-callout'),padding:const EdgeInsets.all(16),
           decoration:BoxDecoration(color:const Color(0xFFF0F8F2),
@@ -105,7 +105,8 @@ class SellerSellingDashboard extends StatelessWidget {
             const Text('Sell to more local shoppers, access wholesale offers and explore funding opportunities.',
               style:TextStyle(fontSize:12.5,color:_muted,height:1.4)),
             const SizedBox(height:13),
-            FilledButton.icon(key:const ValueKey('seller-growth-upgrade'),onPressed:onUpgrade,
+            if(!premiumAccount&&onUpgrade!=null)FilledButton.icon(
+              key:const ValueKey('seller-growth-upgrade'),onPressed:onUpgrade,
               icon:const Icon(Icons.rocket_launch_outlined),label:const Text('Upgrade Account')),
             if(onAdvertiseInfo!=null)...[
               const SizedBox(height:8),
