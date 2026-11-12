@@ -1,12 +1,13 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createWhatsAppApproval}=require('./whatsapp-approval');
-const {welcomeTemplateComponents,responseFor}=require('./whatsapp-welcome-menu');
+const {welcomeTemplateComponents,richWelcomeComponents,responseFor}=require('./whatsapp-welcome-menu');
 function fixture(){
  const uid='seller1',phone='+27712345678',submissionId='submission1';
  const records=new Map(Object.entries({
   'teyzaWhatsAppApprovalOutbox/submission1':{sellerUid:uid,submissionId,status:'queued'},
-  'teyzaSellerAccounts/seller1':{uid,phone,approvalStatus:'approved'},
+  'teyzaSellerAccounts/seller1':{uid,phone,shopName:'Thandi Spaza Shop',approvalStatus:'approved'},
+  'teyzaShopperProfiles/seller1':{ownerUid:uid,displayName:'Thandi Ndlovu'},
   'teyzaWhatsAppPreferences/seller1':{ownerUid:uid,phone,optedIn:true},
   'teyzaMobileVerification/seller1':{ownerUid:uid,status:'approved',submissionId}
  }));
@@ -20,7 +21,8 @@ function fixture(){
  let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false;
  const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,clock:()=>1000,
   send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
- return {api,records,calls,enableInteractive:()=>{config.interactiveWelcome=true;config.welcomeTemplateApproved=true;config.template='teyza_seller_welcome_menu';records.set('teyzaWhatsAppPreferences/seller1',{ownerUid:'seller1',phone,optedIn:true,consentVersion:'seller-approved-welcome-services-v1'});},
+ return {api,records,calls,enableInteractive:()=>{config.interactiveWelcome=true;config.welcomeTemplateApproved=true;
+  config.template='teyza_seller_welcome_menu';config.language='en_US';config.welcomeMediaId='1234567890123';records.set('teyzaWhatsAppPreferences/seller1',{ownerUid:'seller1',phone,optedIn:true,consentVersion:'seller-approved-welcome-services-v1'});},
   disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
 }
 test('An opted-in, currently approved seller with a verified phone gets one templated message',async()=>{
@@ -55,7 +57,11 @@ test('Approval greeting has three menu quick replies and welcome is claimed only
  assert.equal(f.calls.length,1);
  const body=JSON.parse(f.calls[0].options.body);
  assert.equal(body.template.name,'teyza_seller_welcome_menu');
- assert.deepEqual(body.template.components,welcomeTemplateComponents());
+ assert.deepEqual(body.template.components,richWelcomeComponents({
+   name:'Thandi Ndlovu',businessName:'Thandi Spaza Shop',imageId:'1234567890123'
+ }));
+ assert.deepEqual(body.template.components.slice(2),welcomeTemplateComponents());
+ assert.equal(body.template.language.code,'en_US');
  assert.equal(f.records.get('teyzaWhatsAppWelcomeOnce/seller1').status,'attempted');
  // A later admin approval may create another outbox, but cannot welcome twice.
  f.records.set('teyzaWhatsAppApprovalOutbox/submission2',
@@ -76,4 +82,23 @@ test('Interactive welcome menu covers every service without payment URLs',()=>{
   assert.ok(!/https?:\/\/|teyza\.co\.za\/(ads|pay)/i.test(JSON.stringify(response)));
  }
  assert.equal(responseFor('UNKNOWN'),null);
+});
+
+test('Marketing welcome does not send without Firebase seller name, approved business name, media or approved template',async()=>{
+ for(const change of [
+  f=>f.records.delete('teyzaShopperProfiles/seller1'),
+  f=>f.records.set('teyzaSellerAccounts/seller1',{uid:'seller1',phone:'+27712345678',approvalStatus:'approved',shopName:''})
+ ]){
+  const f=fixture();f.enableInteractive();change(f);
+  const attempt=await f.api.deliver('submission1');
+  assert.equal(f.calls.length,0);
+  assert.equal(f.records.has('teyzaWhatsAppWelcomeOnce/seller1'),false);
+  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'configuration_required');
+ }
+ const f=fixture();f.enableInteractive();
+ f.records.set('teyzaShopperProfiles/seller1',{ownerUid:'seller1',displayName:'  Thandi {{1}} *Ndlovu*  '});
+ await f.api.deliver('submission1');
+ assert.equal(f.calls.length,1);
+ const body=JSON.parse(f.calls[0].options.body);
+ assert.equal(body.template.components[1].parameters[0].text,'Thandi 1 Ndlovu');
 });
