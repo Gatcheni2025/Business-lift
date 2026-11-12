@@ -8,34 +8,54 @@ The first welcome may be sent **only after Teyza has approved the seller**, and 
 
 The welcome has three WhatsApp **Quick reply** buttons. Each reply arrives through a signature-verified Meta webhook, opens the 24-hour customer service window, and returns interactive service information. No link to paid checkout is present.
 
-## Create one Meta WhatsApp message template
+## Create one personalized image-header Meta WhatsApp template
 
-In WhatsApp Manager → Message templates → Create:
-- Name: `teyza_seller_welcome_menu` (must match backend `TEYZA_WHATSAPP_TEMPLATE_NAME`)
-- Language: English (`en`)
-- Category: **Marketing**, given the promotional seller growth / advertising choices; Meta assigns the final category
-- Header: Optional **text**, `Teyza Business` (no media required)
-- Body:
+IMPORTANT: In WhatsApp Manager, select the **real Teyza WhatsApp Business Account**, not the “Test Messaging Account” shown in the operator's screenshot.
 
+Template settings (must match backend exactly):
+- Name: `teyza_seller_welcome_menu`.
+- Language: English (United States), API code `en_US`.
+- Category: **Marketing**, subject to Meta classification.
+- Header: **Image**, upload the same Teyza spaza shop welcome artwork used as a sample. There is no separate text header when an image header is selected.
+- Body (paste exactly, including sequential variables):
+
+  ```text
+  *Welcome to Teyza! 🌱*
+
+  Congratulations *{{1}}*! Your business *{{2}}* has been approved on Teyza.
+
+  We're excited to welcome you to a community-focused platform helping local businesses grow.
+
+  With Teyza, you can explore selling opportunities, connect with participating wholesalers, reach nearby customers, advertise your business and learn about available business support.
+
+  *What would you like to do today?*
+
+  Please select one of the services below.
   ```
-  Welcome to Teyza! 🌱
 
-  Congratulations! Your business has been approved on Teyza.
+- Body variable sample values: `{{1}} = Thandi Ndlovu`, `{{2}} = Thandi Spaza Shop`. These are non-real examples for Meta review; runtime values come from Firebase.
+- Footer: `Teyza Business · Reply STOP to opt out.`
+- Three **Quick Reply** buttons, in exactly this order (no URL or phone-payment CTA):
+  1. `Start selling on Teyza` → `TEYZA_WELCOME_SELL`
+  2. `Advertise on Teyza` → `TEYZA_WELCOME_ADS`
+  3. `Talk to consultant` → `TEYZA_WELCOME_SUPPORT`
 
-  We are here to help you grow, reach more local customers, connect with participating wholesalers and explore opportunities for your business.
+The template button labels are configured in Meta; backend reply payloads are set when sending. Subsequent **interactive** button labels are limited to 20 characters, so the follow-up menu can use a shorter “Start selling”.
 
-  What would you like to explore today? Choose an option below.
-  ```
+### Firebase database mapping (UID-bound, never from the caller)
 
-- Footer: `Reply STOP to stop WhatsApp updates.`
-- Three **Quick Reply** buttons, **in exactly this order**:
-  1. `Start selling` → backend payload `TEYZA_WELCOME_SELL`
-  2. `Advertise` → backend payload `TEYZA_WELCOME_ADS`
-  3. `Get support` → backend payload `TEYZA_WELCOME_SUPPORT`
-- Do NOT create URL, phone-payment, deep link, copy-code, or checkout buttons.
-- Submit for Meta approval. Do not mark approved locally until Meta's actual template status is **Approved**.
+- Recipient WhatsApp number: `teyzaSellerAccounts/{uid}.phone`, verified against Firebase Auth provider `phone`; consent in `teyzaWhatsAppPreferences/{uid}`.
+- `{{1}}` seller name: `teyzaShopperProfiles/{uid}.displayName` only if `ownerUid === uid`, otherwise the Firebase Auth user's `displayName`. A missing name blocks send rather than inventing one.
+- `{{2}}` approved business name: `teyzaSellerAccounts/{uid}.shopName`. Missing or invalid names block send.
+- Approval: account `approvalStatus === 'approved'`, current `teyzaMobileVerification/{uid}` approved submission, and consent version `seller-approved-welcome-services-v1`.
+- Exactly-once record: `teyzaWhatsAppWelcomeOnce/{uid}` created transactionally **before** the Meta API request. A second admin approval, repeated function invocation or ambiguous provider timeout must not resend the welcome.
+- Audit outbox: `teyzaWhatsAppApprovalOutbox/{submissionId}` records queued, configuration-required, accepted or needs-review. Meta acceptance is NOT handset delivery.
+- Upon the seller's Quick Reply, signed webhook writes `teyzaWhatsAppWelcomeReplies/{hash(messageId)}` and sends service information inside the WhatsApp 24-hour window.
+- The **Talk to consultant** selection additionally creates a deduplicated `teyzaWhatsAppConsultantRequests/{uid}_{UTCday}` record and opens/updates the existing `teyzaSupportTickets/seller_{uid}` admin support inbox with a conversation entry. It is a support request, not a claim that a human is already online or replying in WhatsApp.
 
-The backend sends button payloads as Meta template **components**, so the visible button labels are configured in WhatsApp Manager; payload identifiers are in source code.
+### Dynamic header image provisioning
+
+A sample image uploaded in Meta's template editor is **not** automatically a permanent media identifier to send in every Cloud API message. Upload the image to the real WhatsApp sender's Cloud API media endpoint, or follow the current Media API provisioning process, and record the resulting numeric media ID as `TEYZA_WHATSAPP_WELCOME_MEDIA_ID`. This ID must correspond to the same approved image content. If it is missing, the sending function remains configuration-required and sends **nothing**. Do not store the access token in the app, public website or Git repository.
 
 ## After the customer taps a service
 
@@ -61,7 +81,8 @@ Configure these Firebase function runtime environment variables after verifying 
 - `TEYZA_WHATSAPP_PHONE_NUMBER_ID` (numeric, from WhatsApp Business API setup)
 - `TEYZA_WHATSAPP_API_VERSION` (e.g. `v24.0`, use the current compatible Meta API version)
 - `TEYZA_WHATSAPP_TEMPLATE_NAME=teyza_seller_welcome_menu`
-- `TEYZA_WHATSAPP_TEMPLATE_LANGUAGE=en`
+- `TEYZA_WHATSAPP_WELCOME_MEDIA_ID` — numeric ID for the approved welcome image uploaded via Meta's real WhatsApp sender
+- `TEYZA_WHATSAPP_TEMPLATE_LANGUAGE=en_US`
 
 Store the following separately in **Firebase Secret Manager**, never in the mobile app or source:
 - `TEYZA_WHATSAPP_ACCESS_TOKEN` — valid, appropriately scoped WhatsApp Cloud API sender token
