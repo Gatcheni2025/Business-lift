@@ -63,6 +63,7 @@ function createWelcomeWebhook({db,getAuthUser,getAppSecret=()=>'',getVerifyToken
       if(existing.exists||!welcome.exists||!verification.exists||
          verification.data().status!=='approved')return;
       if(pref.exists&&pref.data().optedIn!==true)return;
+      if(!pref.exists||pref.data().consentVersion!=='seller-approved-welcome-services-v1')return;
       if(optOut){
        tx.set(prefRef,{ownerUid:uid,phone:account.phone,optedIn:false,
          optedOutAt:clock(),updatedAt:clock()},{merge:true});
@@ -97,6 +98,7 @@ function createWelcomeWebhook({db,getAuthUser,getAppSecret=()=>'',getVerifyToken
     content=responseFor(row.data().choice),now=clock();
    if(!content||!a||a.uid!==reply.sellerUid||a.approvalStatus!=='approved'||
       a.deletionPending===true||!p||p.optedIn!==true||p.phone!==a.phone||
+      p.consentVersion!=='seller-approved-welcome-services-v1'||
       !welcome.exists||!verification.exists||verification.data().status!=='approved'||
       !Number.isFinite(row.data().userMessageAt)||now-row.data().userMessageAt>ONE_DAY||
       now<row.data().userMessageAt||

@@ -150,7 +150,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           title:Text(claim==null?'I confirm that these are my shop’s details and shoppers may see this business address and map location.':
             'I am authorised to represent this business, and shoppers may see its address and map location.')),
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:whatsappConsent,onChanged:busy?null:(v)=>setState(()=>whatsappConsent=v==true),
-          title:const Text('Send my approval update and getting-started link on WhatsApp'),
+          title:const Text('After approval, send me one WhatsApp welcome with Teyza selling, advertising and support options (optional marketing messages)'),
           subtitle:const Text('Optional. Uses the contact number above. You can change this in seller verification.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),

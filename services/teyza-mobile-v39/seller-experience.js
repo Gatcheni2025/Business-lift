@@ -53,7 +53,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
        verificationMethod:'manual_evidence_review',createdAt:clock()});
     }
     if(data.whatsappConsent===true)tx.set(doc('teyzaWhatsAppPreferences/'+uid),{
-      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approval-v1',consentAt:clock()});
+      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approved-welcome-services-v1',consentAt:clock()});
     tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
     tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
@@ -62,10 +62,10 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    'The seven-day trial has ended. Registration is free; upgrade when adding products.');
   if(action==='seller_whatsapp_preferences'){
    const account=await owner(uid),ref=doc('teyzaWhatsAppPreferences/'+uid);
-   if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want approval updates on WhatsApp.');
+   if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want a WhatsApp welcome and service information.');
    await rate(uid,'whatsapp-preference',20,3600000);
    await ref.set({ownerUid:uid,optedIn:data.enabled,phone:data.enabled?require('./onboarding').phone(account.phone):'',
-    consentVersion:'seller-approval-v1',consentAt:clock()});
+    consentVersion:'seller-approved-welcome-services-v1',consentAt:clock()});
    return {saved:true,enabled:data.enabled};
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};

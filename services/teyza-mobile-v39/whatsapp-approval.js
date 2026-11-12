@@ -30,6 +30,7 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
    const a=account.exists?account.data():null,p=pref.exists?pref.data():null;
    if(!a||a.uid!==entry.sellerUid||a.approvalStatus!=='approved'||a.deletionPending===true||
       !p||p.ownerUid!==entry.sellerUid||p.optedIn!==true||p.phone!==a.phone||
+      (config.interactiveWelcome===true&&p.consentVersion!=='seller-approved-welcome-services-v1')||
       !verification.exists||verification.data().status!=='approved'||verification.data().submissionId!==entry.submissionId){
     tx.update(ref,{status:'skipped',reason:'approval_or_consent_changed',updatedAt:clock()});return null;
    }

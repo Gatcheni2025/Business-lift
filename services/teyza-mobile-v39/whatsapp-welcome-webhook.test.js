@@ -6,7 +6,7 @@ function fixture(){
   verifyToken='random-verification-token-12345';
  const records=new Map(Object.entries({
   ['teyzaSellerAccounts/'+uid]:{uid,phone,category:'spaza',approvalStatus:'approved'},
-  ['teyzaWhatsAppPreferences/'+uid]:{ownerUid:uid,phone,optedIn:true},
+  ['teyzaWhatsAppPreferences/'+uid]:{ownerUid:uid,phone,optedIn:true,consentVersion:'seller-approved-welcome-services-v1'},
   ['teyzaMobileVerification/'+uid]:{ownerUid:uid,status:'approved'},
   ['teyzaWhatsAppWelcomeOnce/'+uid]:{sellerUid:uid,status:'attempted'}
  }));
@@ -50,7 +50,7 @@ function fixture(){
  }
  return {bot,records,calls,request,now,
   noWelcome:()=>records.delete('teyzaWhatsAppWelcomeOnce/'+uid),
-  optOut:()=>records.set('teyzaWhatsAppPreferences/'+uid,{ownerUid:uid,phone,optedIn:false}),
+  optOut:()=>records.set('teyzaWhatsAppPreferences/'+uid,{ownerUid:uid,phone,optedIn:false,consentVersion:'seller-approved-welcome-services-v1'}),
   changeStatus:()=>records.set('teyzaSellerAccounts/'+uid,{uid,phone,approvalStatus:'pending'}),
   setNow:v=>{nowValue=v;},disableToken:()=>{ready=false;},breakNetwork:()=>{networkError=true;},
   testGet(token){const res={code:200,status(c){this.code=c;return this;},end(){return this;},send(x){this.body=x;return this;}};
