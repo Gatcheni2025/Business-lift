@@ -24,6 +24,7 @@ import 'seller_notifications.dart';
 import 'seller_premium.dart';
 import 'seller_selling.dart';
 import 'seller_support_chat.dart';
+import 'seller_growth_page.dart';
 import 'business_services_page.dart';
 import 'teyza_ads_page.dart';
 import 'seller_areas.dart';
@@ -171,6 +172,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
     SellerSupportChatPage(session:widget.session,api:widget.mobileApi,
       premiumAccount:premiumAccount,businessApproved:sellerApproved)));
+  Future<void> openGrowth({String purpose='upgrade'}) async{
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerGrowthPage(
+      session:widget.session,api:widget.mobileApi,
+      businessApproved:sellerApproved,initialPurpose:purpose)));
+    if(mounted)refreshActivity();
+  }
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
@@ -637,6 +644,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
+      onUpgrade:()=>openGrowth(),onAdvertiseInfo:()=>openGrowth(purpose:'advertise'),
        onAds:shop?.category=='wholesale'||!shopperAdsVisible?null:openShopperAds)),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
