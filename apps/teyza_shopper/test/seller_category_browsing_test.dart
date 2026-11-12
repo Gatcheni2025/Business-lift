@@ -58,7 +58,9 @@ void main(){
     expect(find.byKey(const ValueKey('seller-story-spaza1')),findsNothing);
     await tester.tap(find.byKey(const ValueKey('all-nearby-sellers')));await tester.pumpAndSettle();
     expect(find.text('All nearby sellers'),findsOneWidget);
-    expect(find.text('Corner Shop'),findsWidgets);
+    expect(find.text('Local Salon'),findsWidgets);
+    expect(find.text('Corner Shop'),findsNothing,
+      reason:'Local Businesses must not mix in spaza shops.');
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

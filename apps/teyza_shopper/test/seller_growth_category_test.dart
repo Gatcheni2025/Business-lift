@@ -56,7 +56,11 @@ void main(){
    session:session,api:api,businessApproved:true)));
   await tester.pumpAndSettle();
   expect(find.text('What upgrading can do for you'),findsOneWidget);
+  await tester.scrollUntilVisible(find.text('Access discounted wholesale stock'),180,
+    scrollable:find.byType(Scrollable).last);
   expect(find.text('Access discounted wholesale stock'),findsOneWidget);
+  await tester.scrollUntilVisible(find.text('Explore business finance'),180,
+    scrollable:find.byType(Scrollable).last);
   expect(find.text('Explore business finance'),findsOneWidget);
   await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-upgrade')),220,
     scrollable:find.byType(Scrollable).last);
