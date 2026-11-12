@@ -70,7 +70,7 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
     body:SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.all(16),child:Column(
         crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          const Text('Ask Teyza Support about verification, membership or your shop. Never share passwords, OTPs or card details.',
+          const Text('Ask Teyza Support about verification, account upgrades or your shop. Never share passwords, OTPs or card details.',
             style:TextStyle(height:1.4)),
           const SizedBox(height:10),
           if(!widget.premiumAccount)OutlinedButton.icon(

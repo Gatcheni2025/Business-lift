@@ -774,10 +774,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
-            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
+            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Explore account upgrades and selling benefits.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
           const SizedBox(height:16),
           if(!sellerApproved)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete seller verification')),
-          if(needsMembership)const Padding(padding:EdgeInsets.symmetric(vertical:6),child:Text('Shop is live · Unable to sell until membership is active.',style:TextStyle(fontWeight:FontWeight.w700,color:Color(0xFF8A5A00)))),
+          if(needsMembership)const Padding(padding:EdgeInsets.symmetric(vertical:6),child:Text('Shop is live · Upgrade your account to unlock eligible selling tools.',style:TextStyle(fontWeight:FontWeight.w700,color:Color(0xFF8A5A00)))),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
             if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),

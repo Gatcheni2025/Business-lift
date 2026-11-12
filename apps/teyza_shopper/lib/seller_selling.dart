@@ -86,9 +86,9 @@ class SellerSellingDashboard extends StatelessWidget {
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('Shop is live',style:TextStyle(fontWeight:FontWeight.w800,fontSize:17,color:_ink)),
             const SizedBox(height:5),
-            Text(premiumAccount?'Premium account · Your verified membership enables selling.':
+            Text(premiumAccount?'Your account is upgraded · Eligible selling tools are available.':
                 hasProductAccess?'Temporary selling access · This is not a paid subscription.':
-                'Unable to sell · No active membership. Your shop remains visible to nearby shoppers.',
+                'Your shop is visible. Upgrade your account to access selling tools and growth benefits.',
                 style:const TextStyle(color:_muted)),
           ]))),
       ],
