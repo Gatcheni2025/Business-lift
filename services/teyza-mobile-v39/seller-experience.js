@@ -53,7 +53,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
        verificationMethod:'manual_evidence_review',createdAt:clock()});
     }
     if(data.whatsappConsent===true)tx.set(doc('teyzaWhatsAppPreferences/'+uid),{
-      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approval-v1',consentAt:clock()});
+      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approved-welcome-services-v1',consentAt:clock()});
     tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
     tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
@@ -62,10 +62,10 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    'The seven-day trial has ended. Registration is free; upgrade when adding products.');
   if(action==='seller_whatsapp_preferences'){
    const account=await owner(uid),ref=doc('teyzaWhatsAppPreferences/'+uid);
-   if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want approval updates on WhatsApp.');
+   if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want a WhatsApp welcome and service information.');
    await rate(uid,'whatsapp-preference',20,3600000);
    await ref.set({ownerUid:uid,optedIn:data.enabled,phone:data.enabled?require('./onboarding').phone(account.phone):'',
-    consentVersion:'seller-approval-v1',consentAt:clock()});
+    consentVersion:'seller-approved-welcome-services-v1',consentAt:clock()});
    return {saved:true,enabled:data.enabled};
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
@@ -125,9 +125,10 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     const receiptRef=doc('teyzaVerificationViews/'+uid+'/submissions/'+submissionId);
     const setupRef=doc('teyzaSellerOnboarding/'+sellerUid),idRef=doc('teyzaSellerIdentity/'+sellerUid);
     const claimRef=doc('teyzaShopClaims/'+sellerUid),prefRef=doc('teyzaWhatsAppPreferences/'+sellerUid);
-    const [v,a,s,view,o,i,c,f,l,b,drafts,photos,claimSnap,prefSnap]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
+    const welcomedRef=doc('teyzaWhatsAppWelcomeOnce/'+sellerUid);
+    const [v,a,s,view,o,i,c,f,l,b,drafts,photos,claimSnap,prefSnap,previousWelcome]=await Promise.all([tx.get(ref),tx.get(accountRef),tx.get(shopRef),tx.get(receiptRef),tx.get(setupRef),tx.get(idRef),
       tx.get(doc('teyzaShopSettings/'+sellerUid)),tx.get(doc('teyzaShopFrontPhotos/'+sellerUid)),tx.get(doc('teyzaShopLocations/'+sellerUid)),tx.get(doc('teyzaBilling/'+sellerUid)),
-      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201)),tx.get(db.collection('teyzaProductPhotos/'+sellerUid+'/items').limit(201)),tx.get(claimRef),tx.get(prefRef)]);
+      tx.get(db.collection('teyzaDraftProducts/'+sellerUid+'/items').limit(201)),tx.get(db.collection('teyzaProductPhotos/'+sellerUid+'/items').limit(201)),tx.get(claimRef),tx.get(prefRef),tx.get(welcomedRef)]);
     const setup=o.exists?o.data():{},identity=i.exists?i.data():null;
     const identityView=identity?await tx.get(doc('teyzaIdentityViews/'+uid+'/evidence/'+D.id(identity.evidenceId))):null;
     const claim=claimSnap.exists&&claimSnap.data().ownerUid===sellerUid?claimSnap.data():null;
@@ -184,7 +185,10 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
      if(approved){tx.set(claimIndexRef,{sellerUid,placeId:claim.placeId,approvedAt:clock()});tx.set(doc('teyzaShopLocations/'+sellerUid),location);}
     }
     const pref=prefSnap.exists?prefSnap.data():null;
-    const whatsappQueued=approved&&pref?.ownerUid===sellerUid&&pref.optedIn===true&&pref.phone===existing.phone;
+    const interactiveWelcome=process.env.TEYZA_WHATSAPP_WELCOME_MENU_ENABLED==='1';
+    const whatsappQueued=approved&&!previousWelcome.exists&&
+      pref?.ownerUid===sellerUid&&pref.optedIn===true&&pref.phone===existing.phone&&
+      (!interactiveWelcome||pref.consentVersion==='seller-approved-welcome-services-v1');
     if(whatsappQueued)tx.set(doc('teyzaWhatsAppApprovalOutbox/'+submissionId),{
      sellerUid,submissionId,status:'queued',createdAt:clock()});
     tx.update(ref,{status:data.status,reviewedBy:uid,reviewedAt:clock(),reviewNote:reason});

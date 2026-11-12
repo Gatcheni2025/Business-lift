@@ -11,7 +11,8 @@ const signature=require('./webhook-signature');
 const DAYS=7,DAY_MS=86400000,BASE_CENTS=2900,LOCAL_KM=10,EXTRA_CENTS_PER_KM=200,MAX_KM=50;
 const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 const actions=new Set(['ads_quote','ads_submit','ads_mine','ads_feed','ads_pause',
-  'ads_checkout','ads_confirm','ops_ads_queue','ops_ads_preview','ops_ads_review']);
+  'ads_checkout','ads_confirm','ops_ads_queue','ops_ads_preview','ops_ads_review',
+  'ops_ads_activation_queue','ops_ads_activate']);
 
 function quote(radiusKm){
  if(!Number.isInteger(radiusKm)||radiusKm<1||radiusKm>MAX_KM)
@@ -85,7 +86,12 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
   const payment=await read('teyzaAdPayments/'+reference);
   if(!payment||ownerUid&&payment.ownerUid!==ownerUid)
    D.fail(404,'Advertising payment reference not found.');
-  if(payment.status==='paid')return {paid:true,alreadyConfirmed:true,advertisementId:payment.advertisementId};
+  if(payment.status==='paid'){
+   const existingAd=await read('teyzaShopperAds/'+payment.advertisementId);
+   return {paid:true,alreadyConfirmed:true,advertisementId:payment.advertisementId,
+     publicationStatus:existingAd?.status||'unknown',
+     pendingActivation:existingAd?.status==='paid_pending_activation'};
+  }
   if(payment.status==='refund_review')return {paid:false,refundReviewRequired:true};
   if(!['pending','initializing','needs_attention'].includes(payment.status))
    D.fail(409,'This advertising payment cannot be confirmed.');
@@ -104,15 +110,20 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
    if(!p.exists||p.data().ownerUid!==payment.ownerUid||
       p.data().advertisementId!==payment.advertisementId)
     D.fail(409,'Advertising payment ownership changed.');
-   if(p.data().status==='paid')return {paid:true,alreadyConfirmed:true,advertisementId:payment.advertisementId};
+   if(p.data().status==='paid')return {paid:true,alreadyConfirmed:true,
+     advertisementId:payment.advertisementId,publicationStatus:a.exists?a.data().status:'unknown',
+     pendingActivation:a.exists&&a.data().status==='paid_pending_activation'};
    if(a.exists&&a.data().ownerUid===payment.ownerUid&&
       a.data().status==='approved_unpaid'&&a.data().paymentReference===reference&&
       a.data().amountCents===verified.amount){
     const now=clock();
-    tx.update(adRef,{status:'active',paymentStatus:'paid',startsAt:now,
-      endsAt:now+DAYS*DAY_MS,updatedAt:now});
+    // Payment verification does not itself publish an advertisement. Keep the
+    // seven-day clock stopped until the separate admin publication decision.
+    tx.update(adRef,{status:'paid_pending_activation',paymentStatus:'paid',
+      paymentVerifiedAt:now,startsAt:null,endsAt:null,updatedAt:now});
     tx.update(pRef,{status:'paid',verifiedAt:now,transactionId:String(verified.id)});
-    return {paid:true,advertisementId:payment.advertisementId,startsAt:now,endsAt:now+DAYS*DAY_MS};
+    return {paid:true,advertisementId:payment.advertisementId,
+      publicationStatus:'paid_pending_activation',pendingActivation:true};
    }
    tx.update(pRef,{status:'refund_review',verifiedAt:clock(),
      transactionId:String(verified.id),reviewReason:'campaign_no_longer_approved'});
@@ -255,9 +266,49 @@ function createShopperAds({db,bucket,sanitizeImage,clock=Date.now,rate=async()=>
    const rows=await db.collection('teyzaShopperAds').where('status','==','pending_review').limit(40).get();
    return {ads:rows.docs.map(s=>safeRow(s.id,s.data())),limited:rows.docs.length===40};
   }
+  if(action==='ops_ads_activation_queue'){
+   recentAdmin(auth,clock);await rate(uid,'shopper-ads-activation-queue',30,60000);
+   const rows=await db.collection('teyzaShopperAds')
+     .where('status','==','paid_pending_activation').limit(40).get();
+   return {ads:rows.docs.map(s=>safeRow(s.id,s.data())),limited:rows.docs.length===40};
+  }
+  if(action==='ops_ads_activate'){
+   recentAdmin(auth,clock);
+   if(data.confirmed!==true)D.fail(422,'Confirm you have reviewed the verified paid advertisement.');
+   const id=D.id(data.advertisementId),ad=await read('teyzaShopperAds/'+id);
+   if(!ad||!['paid_pending_activation','active'].includes(ad.status))
+     D.fail(409,'The paid advertisement is not awaiting publication.');
+   if(ad.ownerUid===uid)D.fail(403,'A separate administrator must publish the campaign.');
+   if(ad.status==='active')return {published:true,alreadyPublished:true,advertisementId:id,
+     startsAt:ad.startsAt,endsAt:ad.endsAt};
+   const seller=await verifiedSeller(ad.ownerUid);
+   if(seller.account.category!==ad.category||seller.account.address!==ad.locationAddress||
+     seller.pin.latitude!==ad.latitude||seller.pin.longitude!==ad.longitude)
+    D.fail(409,'The seller or business location changed; request a manual refund review.');
+   if(!/^TZA-[a-f0-9]{26}$/.test(ad.paymentReference||'')||ad.paymentStatus!=='paid')
+    D.fail(409,'No verified charge is attached to this campaign.');
+   return db.runTransaction(async tx=>{
+    const ref=doc('teyzaShopperAds/'+id);
+    const [a,p]=await Promise.all([tx.get(ref),tx.get(doc('teyzaAdPayments/'+ad.paymentReference))]);
+    if(!a.exists||a.data().status!=='paid_pending_activation'||
+       a.data().ownerUid!==ad.ownerUid||a.data().paymentReference!==ad.paymentReference||
+       a.data().paymentStatus!=='paid'||a.data().amountCents!==ad.amountCents||
+       !p.exists||p.data().status!=='paid'||p.data().ownerUid!==ad.ownerUid||
+       p.data().advertisementId!==id||p.data().amountCents!==ad.amountCents||
+       !p.data().transactionId)
+     D.fail(409,'The payment or publication state changed; refresh before publishing.');
+    const now=clock();
+    tx.update(ref,{status:'active',startsAt:now,endsAt:now+DAYS*DAY_MS,
+      activatedBy:uid,activatedAt:now,updatedAt:now});
+    tx.create(doc('teyzaShopperAdAudit/'+crypto.randomUUID()),{
+     actorUid:uid,ownerUid:ad.ownerUid,advertisementId:id,
+     decision:'published_paid_ad',paymentReference:ad.paymentReference,createdAt:now});
+    return {published:true,advertisementId:id,startsAt:now,endsAt:now+DAYS*DAY_MS};
+   });
+  }
   if(action==='ops_ads_preview'){
    recentAdmin(auth,clock);const id=D.id(data.advertisementId),ad=await read('teyzaShopperAds/'+id);
-   if(!ad||!['pending_review','approved_unpaid','active','rejected'].includes(ad.status))
+   if(!ad||!['pending_review','approved_unpaid','paid_pending_activation','active','rejected'].includes(ad.status))
     D.fail(404,'Advertisement not found.');
    if(ad.objectPath!=='teyza/shopper-ads/'+ad.ownerUid+'/'+id+'.jpg')
     D.fail(409,'Advertisement image storage does not match its owner.');

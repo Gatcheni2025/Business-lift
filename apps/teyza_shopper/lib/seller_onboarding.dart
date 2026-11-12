@@ -89,7 +89,7 @@ class _OnboardingState extends State<SellerOnboardingPage> {
     if(busy||changed)return;setState((){busy=true;error=null;});
     try{await api.call('seller_whatsapp_preferences',{'enabled':enabled});
       if(mounted&&uid==widget.session.userId)setState((){progress={...progress,'whatsappOptedIn':enabled};
-        message=enabled?'WhatsApp approval updates enabled.':'WhatsApp approval updates disabled.';});
+        message=enabled?'WhatsApp welcome and service information enabled.':'WhatsApp welcome messages disabled.';});
     }catch(e){if(mounted&&uid==widget.session.userId)setState(()=>error=mobileError(e));}
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -178,7 +178,7 @@ class _OnboardingState extends State<SellerOnboardingPage> {
             const Text('Confirm that you own this number using the SMS code. Your current account and shop stay together.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),const SizedBox(height:14),
             OutlinedButton.icon(onPressed:busy?null:phone,icon:const Icon(Icons.sms_outlined),label:Text(phoneDone?'Verify mobile again':'Verify mobile number')),
             CheckboxListTile(contentPadding:EdgeInsets.zero,value:progress['whatsappOptedIn']==true,onChanged:busy||loading?null:(v)=>setWhatsApp(v==true),
-              title:const Text('Send my approval update on WhatsApp'),subtitle:const Text('Optional. We use the registered mobile number for the approval update and getting-started link.'))])),
+              title:const Text('Send me one WhatsApp welcome after approval, with selling, advertising and support options'),subtitle:const Text('Optional marketing information. Sent only after approval, with consent, to your verified phone. You may opt out.'))])),
           card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             heading('+','Shop-front photo',progress['shopFront'] is Map),const SizedBox(height:12),
             const Text('Help customers recognise your entrance. This photo appears on your published shop listing; your identity documents stay private.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),

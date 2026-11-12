@@ -113,11 +113,28 @@ test('Approved website Paystack transaction is independently verified, then disp
   assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
   const confirmation=await f.call(f.owner,'ads_confirm',{reference:checkout.reference});
   assert.equal(confirmation.paid,true);
+  assert.equal(confirmation.publicationStatus,'paid_pending_activation');
+  assert.equal(confirmation.pendingActivation,true);
+  assert.equal((await f.call(f.owner,'ads_mine')).ads[0].status,'paid_pending_activation');
+  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0,
+    'Payment alone must never display a sponsored card.');
+  await rejects(f.svc.publicPhoto(made.advertisementId),404);
+  assert.equal((await f.call(f.admin,'ops_ads_activation_queue')).ads.length,1);
+  await rejects(f.call(f.owner,'ops_ads_activate',{advertisementId:made.advertisementId,confirmed:true}),403);
+  const activated=await f.call(f.admin,'ops_ads_activate',{
+    advertisementId:made.advertisementId,confirmed:true});
+  assert.equal(activated.published,true);
+  assert.equal(activated.startsAt,NOW,'Seven days start only when published.');
+  assert.equal((await f.call(f.admin,'ops_ads_activation_queue')).ads.length,0);
+  assert.equal((await f.call(f.admin,'ops_ads_activate',{
+    advertisementId:made.advertisementId,confirmed:true})).alreadyPublished,true);
   const displayed=await f.svc.feed(-29.86,31.02);
   assert.equal(displayed.ads.length,1);assert.equal(displayed.ads[0].sponsored,true);
   assert.equal((await f.svc.feed(-29.86,31.5)).ads.length,0);
   assert.equal((await f.svc.publicPhoto(made.advertisementId)).length,113);
-  assert.equal((await f.call(f.owner,'ads_confirm',{reference:checkout.reference})).alreadyConfirmed,true);
+  const repeat=await f.call(f.owner,'ads_confirm',{reference:checkout.reference});
+  assert.equal(repeat.alreadyConfirmed,true);
+  assert.equal(repeat.publicationStatus,'active');
   f.setTime(NOW+7*86400000);
   assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
   await rejects(f.svc.publicPhoto(made.advertisementId),404);
@@ -133,4 +150,33 @@ test('Paid ads cannot become visible after their seller is suspended',async()=>{
  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,1);
  f.db.items.set('teyzaPublicShops/seller1',{...f.db.items.get('teyzaPublicShops/seller1'),status:'suspended'});
  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
+});
+
+test('No sponsored ad can run after verified payment until an independent admin publishes it',async()=>{
+ const f=fixture(),made=await f.call(f.owner,'ads_submit',campaign);
+ const id=made.advertisementId,adm=f.admin;
+ await f.call(adm,'ops_ads_review',{advertisementId:id,decision:'approved',confirmed:true});
+ await rejects(f.call(adm,'ops_ads_activate',{advertisementId:id,confirmed:true}),409);
+ const old=process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED;
+ process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED='true';
+ try{
+  const checkout=await f.call(f.owner,'ads_checkout',{advertisementId:id,
+    checkoutChannel:'website',confirmedSellerUid:'seller1'});
+  await f.call(f.owner,'ads_confirm',{reference:checkout.reference});
+  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
+  await rejects(f.call(adm,'ops_ads_activate',{advertisementId:id,confirmed:false}),422);
+  f.db.items.set('teyzaAdPayments/'+checkout.reference,{
+    ...f.db.items.get('teyzaAdPayments/'+checkout.reference),transactionId:null});
+  await rejects(f.call(adm,'ops_ads_activate',{advertisementId:id,confirmed:true}),409);
+  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
+  f.db.items.set('teyzaAdPayments/'+checkout.reference,{
+    ...f.db.items.get('teyzaAdPayments/'+checkout.reference),transactionId:'122222'});
+  f.db.items.set('teyzaPublicShops/seller1',{
+    ...f.db.items.get('teyzaPublicShops/seller1'),status:'suspended'});
+  await rejects(f.call(adm,'ops_ads_activate',{advertisementId:id,confirmed:true}),403);
+  assert.equal((await f.svc.feed(-29.86,31.02)).ads.length,0);
+ }finally{
+  if(old===undefined)delete process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED;
+  else process.env.TEYZA_ADS_WEB_PAYSTACK_ENABLED=old;
+ }
 });

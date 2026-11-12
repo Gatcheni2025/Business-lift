@@ -14,7 +14,8 @@
 3. Submit for review without paying. The uploaded image is private and is not served publicly.
 4. Another authorised administrator inspects image and copy, then approves or rejects it with a recorded decision. Approval makes the ad **approved_unpaid**, not live.
 5. When a supported payment rail is enabled, the seller pays the quoted **one-time 7-day** price. Separate Paystack charge is signed/verified server-side: exact Teyza reference, shop Firebase UID, ad ID, ZAR amount, environment and customer.
-6. Only once **both approval and paid verification** are present is the ad **active** and visible in the shopper home feed. The seven-day clock starts after the verified payment, not at upload. An ad expires automatically, and suspended owners' or relocated shops' ads disappear from the feed.
+6. Once **both creative approval and verified payment** are present, the ad becomes **paid_pending_activation**. It is NOT yet in the shopper feed; the owner sees **Paid · pending Teyza publication**.
+7. An independent admin inspects the already-approved creative again in **Product activity → Paid, awaiting publication**, checks owner/location and verified charge, then explicitly publishes it with `ops_ads_activate`. Only this transition creates `startsAt` and `endsAt` and makes the ad **active**. The seven-day clock begins upon publication, not upload or payment. Existing expired/suspended/moved advertisements stay hidden.
 
 ## App Store and Google Play payment constraints
 - **Paystack direct APK**: Native Flutter Paystack checkout is available only if built as independently distributed Android with \`TEYZA_PAYMENT_CHANNEL=direct\` *and* separately gated by \`TEYZA_ADS_DIRECT_PAYSTACK_ENABLED=true\` plus \`TEYZA_SELLER_PAYSTACK_ENABLED=true\`. Both are intentionally **disabled** in the production rollout. Treat direct payment as a separate explicitly approved release, not as an automatic extension of the R99 rollout.
@@ -22,7 +23,7 @@
 - Existing monthly seller membership purchase remains website-only and unchanged in this PR.
 
 ## Admin & user safety
-- Admin portal > Product activity contains a separate **Teyza Ads** review panel, distinct from wholesaler promotions.
+- Admin portal > Product activity has separate **Teyza Ads creative review** and **Paid, awaiting publication** queues, distinct from wholesaler promotions.
 - Reviewers must inspect the image before confirming approval. Same-account review forbidden. Rejection requires a meaningful reason. Audits are written.
 - Public creative endpoint serves only actively paid, reviewed, unexpired ads from unchanged approved shop pins.
 - Shopper feed returns no private seller IDs beyond the public shop ref, no personal contact or payment details.

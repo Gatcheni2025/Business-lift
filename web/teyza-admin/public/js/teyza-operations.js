@@ -16,11 +16,11 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
  let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
-      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,shopperAdQueue=[],shopperAdError=null,shopperAdPreview=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
+      tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,shopperAdQueue=[],shopperAdError=null,shopperAdPreview=null,shopperAdActivationQueue=[],shopperAdActivationError=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
- function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;shopperAdActivationQueue=[];shopperAdActivationError=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -564,6 +564,41 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      panel.append(item);
    }
    root.append(panel);
+   const publishPanel=card('Teyza Ads · Paid, awaiting publication',
+     'The charge must be independently verified and the approved creative rechecked. The 7-day duration only starts when you publish the ad.');
+   if(shopperAdActivationError)publishPanel.append(el('p',shopperAdActivationError,'notice warning'));
+   if(!shopperAdActivationQueue.length&&!shopperAdActivationError)
+     publishPanel.append(el('p','No verified paid ads awaiting publication.','footnote'));
+   for(const ad of shopperAdActivationQueue){
+     const item=el('section',undefined,'ops-review-item');
+     item.append(el('h4',ad.shopName+' · '+ad.title),
+       el('p',ad.message),
+       el('p',ad.radiusKm+' km radius · R'+(ad.amountCents/100).toFixed(2)+' verified payment · 7 days AFTER publication'));
+     item.append(button(shopperAdPreview?.id===ad.id?'Hide reviewed image':'Inspect reviewed image',async()=>{
+       if(shopperAdPreview?.id===ad.id){shopperAdPreview=null;show();return;}
+       const preview=await request('ops_ads_preview',{advertisementId:ad.id});
+       if(typeof preview.imageBase64!=='string'||!preview.imageBase64)
+         throw Error('Paid ad creative is missing');
+       shopperAdPreview={id:ad.id,bytes:preview.imageBase64};show();
+     }));
+     if(shopperAdPreview?.id===ad.id){
+       const img=el('img');img.alt='Approved ad from '+ad.shopName;
+       img.src='data:image/jpeg;base64,'+shopperAdPreview.bytes;
+       img.style.cssText='display:block;max-width:100%;max-height:300px;object-fit:contain;margin:12px 0';
+       item.append(img);
+       const form=el('form',undefined,'ops-form');
+       check(form,'I rechecked the paid, approved creative and shop location. Publishing now starts the seven-day campaign.','confirmed');
+       submit(form,'Publish paid ad · Start 7 days',async fd=>{
+         if(!fd.get('confirmed'))throw Error('Confirm the final paid advertisement review.');
+         await request('ops_ads_activate',{advertisementId:ad.id,confirmed:true});
+         shopperAdPreview=null;await refresh();
+         message('Verified paid ad published. Seven-day campaign started.','success');
+       });
+       item.append(form);
+     }else item.append(el('p','Inspect the reviewed creative before publication.','footnote'));
+     publishPanel.append(item);
+   }
+   root.append(publishPanel);
  }
  async function chooseUser(user){
   userSelected=user.uid;userDetail=null;
@@ -790,6 +825,10 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      try{const q=await request('ops_ads_queue');shopperAdQueue=q.ads||[];shopperAdError=null;}
      catch(e){if(e.stale||e.status===401||e.status===403)throw e;
        shopperAdQueue=[];shopperAdError=e.message||'Shopper ad review unavailable';}
+     try{const q=await request('ops_ads_activation_queue');
+       shopperAdActivationQueue=q.ads||[];shopperAdActivationError=null;}
+     catch(e){if(e.stale||e.status===401||e.status===403)throw e;
+       shopperAdActivationQueue=[];shopperAdActivationError=e.message||'Paid ads awaiting publication could not be loaded';}
    }else{
      // Keep the mandate inbox available even when the seller directory fails.
      if(view==='overview'||view==='billing')await refreshMandates();
