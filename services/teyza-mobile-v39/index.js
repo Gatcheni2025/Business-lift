@@ -215,6 +215,28 @@ exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
 if(process.env.TEYZA_ADMIN_DEPLOY_ONLY!=='1'){
 if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
  const whatsappToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
+if(process.env.TEYZA_WHATSAPP_GROWTH_ENABLED==='1'){
+  // Opt-in is recorded by the authenticated seller action. Both templates
+  // must be Meta-approved informational templates with NO payment links.
+  const whatsappGrowth=require('./whatsapp-growth').createWhatsAppGrowth({db,
+   getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
+   getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+    apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',
+    upgradeTemplate:process.env.TEYZA_WHATSAPP_GROWTH_UPGRADE_TEMPLATE||'',
+    advertiseTemplate:process.env.TEYZA_WHATSAPP_GROWTH_ADVERTISE_TEMPLATE||'',
+    language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
+    operatorApproved:process.env.TEYZA_WHATSAPP_GROWTH_TEMPLATE_APPROVED==='true'})});
+  exports.teyzaWhatsAppGrowthCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
+   document:'teyzaWhatsAppGrowthOutbox/{reference}',secrets:[whatsappToken]},
+   event=>whatsappGrowth.deliver(event.params.reference));
+  exports.teyzaWhatsAppGrowthPending=onSchedule({schedule:'every 10 minutes',
+   timeZone:'Africa/Johannesburg',region:'us-central1',maxInstances:1,
+   secrets:[whatsappToken]},async()=>{
+   const rows=await db.collection('teyzaWhatsAppGrowthOutbox')
+    .where('status','in',['queued','configuration_required']).limit(30).get();
+   for(const row of rows.docs)await whatsappGrowth.deliver(row.id);
+  });
+}
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
