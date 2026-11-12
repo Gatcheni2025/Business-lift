@@ -57,9 +57,15 @@ function createWelcomeWebhook({db,getAuthUser,getAppSecret=()=>'',getVerifyToken
      const outbox=doc('teyzaWhatsAppWelcomeReplies/'+replyId);
      const prefRef=doc('teyzaWhatsAppPreferences/'+uid);
      const welcomeRef=doc('teyzaWhatsAppWelcomeOnce/'+uid);
+     const consulting=incomingChoice==='TEYZA_WELCOME_SUPPORT'&&!optOut;
+     const ticketId='seller_'+uid,ticketRef=doc('teyzaSupportTickets/'+ticketId);
+     const supportRequestRef=doc('teyzaWhatsAppConsultantRequests/'+uid+'_'+Math.floor(now/ONE_DAY));
+     const ticketMessageRef=doc('teyzaSupportTickets/'+ticketId+'/messages/wa_'+replyId.slice(0,30));
      await db.runTransaction(async tx=>{
-      const [existing,pref,welcome,verification]=await Promise.all([
-       tx.get(outbox),tx.get(prefRef),tx.get(welcomeRef),tx.get(doc('teyzaMobileVerification/'+uid))]);
+      const [existing,pref,welcome,verification,priorRequest,ticket]=await Promise.all([
+       tx.get(outbox),tx.get(prefRef),tx.get(welcomeRef),tx.get(doc('teyzaMobileVerification/'+uid)),
+       consulting?tx.get(supportRequestRef):Promise.resolve(null),
+       consulting?tx.get(ticketRef):Promise.resolve(null)]);
       if(existing.exists||!welcome.exists||!verification.exists||
          verification.data().status!=='approved')return;
       if(pref.exists&&pref.data().optedIn!==true)return;
@@ -70,6 +76,28 @@ function createWelcomeWebhook({db,getAuthUser,getAppSecret=()=>'',getVerifyToken
        tx.create(outbox,{sellerUid:uid,status:'opted_out',receivedAt:clock(),
          messageHash:replyId});
        return;
+      }
+      // One human-support request per approved seller per UTC day. It appears in
+      // the EXISTING admin support inbox and is tied to the seller's Firebase UID.
+      if(consulting&&!priorRequest.exists){
+       const at=clock(),note='WhatsApp: I would like a Teyza consultant to contact me about selling or advertising.';
+       if(ticket.exists&&(ticket.data().ownerUid!==uid||ticket.data().source!=='seller_admin_chat'))
+         return; // Never attach a WhatsApp request to a different seller's ticket.
+       const count=ticket.exists?(ticket.data().messageCount||0):0;
+       if(!ticket.exists){
+        tx.create(ticketRef,{ownerUid:uid,subject:'Seller and business support',
+         message:'',status:'open',priority:'normal',revision:0,
+         createdBy:uid,createdAt:at,updatedAt:at,source:'seller_admin_chat',
+         shopName:account.shopName||'Business',lastMessage:'',
+         lastMessageAt:at,messageCount:0,sellerUnread:0,adminUnread:0});
+       }
+       tx.create(ticketMessageRef,{senderUid:uid,sender:'seller',text:note,createdAt:at,
+        sequence:count+1,source:'whatsapp_welcome'});
+       tx.set(ticketRef,{lastMessage:note,lastMessageAt:at,updatedAt:at,
+        messageCount:count+1,status:'open',revision:(ticket.exists?(ticket.data().revision||0):0)+1,
+        adminUnread:(ticket.exists?(ticket.data().adminUnread||0):0)+1},{merge:true});
+       tx.create(supportRequestRef,{sellerUid:uid,ticketId,status:'open',
+        source:'whatsapp_welcome',createdAt:at,messageHash:replyId});
       }
       tx.create(outbox,{sellerUid:uid,choice:incomingChoice,status:'queued',
        receivedAt:clock(),userMessageAt:sentAt,phoneHash:crypto.createHash('sha256').update(account.phone).digest('hex')});
