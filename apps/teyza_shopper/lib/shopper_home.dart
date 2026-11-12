@@ -92,7 +92,7 @@ class Shop {
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
     (x['whatsappPhone'] ?? '').toString(), x['pickupEnabled'] == true,
     x['deliveryEnabled'] == true,
-    (!['retail','variety','wholesale'].contains(x['shopCategory'])?((x['products'] as List?) ?? []):<dynamic>[]).whereType<Map>()
+    (teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='spaza'?((x['products'] as List?) ?? []):<dynamic>[]).whereType<Map>()
       .map((p) => Product.fromJson(Map<String, dynamic>.from(p)))
       .where((p) => p.id.isNotEmpty && p.name.isNotEmpty &&
         p.priceCents > 0 && p.stock >= 0).toList(),
@@ -111,8 +111,8 @@ class Shop {
     identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     cashDiscountPercent:x['services'] is Map&&(x['services'] as Map)['cashDiscountPercent']==10?10:0,
-    highlights:!['retail','variety','wholesale'].contains(x['shopCategory'])?mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList():const [],
-    serviceHighlights:x['shopCategory']=='retail'?mobileRows(x['serviceHighlights']):const []);
+    highlights:teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='spaza'?mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList():const [],
+    serviceHighlights:teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='variety'?mobileRows(x['serviceHighlights']):const []);
 }
 class ShopProduct {
   final Shop shop;final Product product;
