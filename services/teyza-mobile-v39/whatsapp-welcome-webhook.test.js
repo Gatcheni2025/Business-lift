@@ -119,3 +119,33 @@ test('Old message is ignored; uncertain provider delivery must never be repeated
  assert.equal(f.records.get(key).status,'needs_review');
  await f.bot.deliver(key.split('/')[1]);assert.equal(f.calls.length,1);
 });
+
+test('Talk to consultant creates a UID-bound ticket in the existing admin Support inbox, at most once daily',async()=>{
+ const f=fixture(),evt=f.request('TEYZA_WELCOME_SUPPORT');
+ await f.bot.receive(evt.req,evt.res);
+ assert.equal(evt.res.code,200);
+ const ticket=f.records.get('teyzaSupportTickets/seller_seller1');
+ assert.ok(ticket);
+ assert.equal(ticket.source,'seller_admin_chat');
+ assert.equal(ticket.ownerUid,'seller1');
+ assert.equal(ticket.adminUnread,1);
+ assert.equal(ticket.messageCount,1);
+ const req=[...f.records.keys()].find(k=>k.startsWith('teyzaWhatsAppConsultantRequests/'));
+ assert.ok(req);
+ assert.equal(f.records.get(req).ticketId,'seller_seller1');
+ const msg=[...f.records.keys()].find(k=>k.startsWith('teyzaSupportTickets/seller_seller1/messages/'));
+ assert.ok(msg);
+ assert.match(f.records.get(msg).text,/Teyza consultant/);
+ // Same signed WhatsApp event is deduplicated.
+ await f.bot.receive(evt.req,evt.res);
+ assert.equal(f.records.get('teyzaSupportTickets/seller_seller1').adminUnread,1);
+ const next=f.request('TEYZA_WELCOME_SUPPORT',{id:'wamid.different_consultant_request'});
+ await f.bot.receive(next.req,next.res);
+ assert.equal(f.records.get('teyzaSupportTickets/seller_seller1').messageCount,1);
+ const outbox=[...f.records.keys()].find(k=>k.startsWith('teyzaWhatsAppWelcomeReplies/'));
+ await f.bot.deliver(outbox.split('/')[1]);
+ assert.equal(f.calls.length,1);
+ const reply=JSON.parse(f.calls[0].opts.body);
+ assert.match(reply.interactive.body.text,/consultant/);
+ assert.ok(!JSON.stringify(reply).includes('teyza.co.za/'));
+});
