@@ -27,7 +27,8 @@ void main(){
     retail=merchant('retail'),unknown=merchant('unrecognised'),
     missing=Shop.fromJson({'id':'legacy','name':'Legacy seller'});
   expect(spaza.shopCategory,'spaza');
-  for(final s in [business,retail,unknown,missing])expect(s.shopCategory,'variety');
+  for(final s in [business,retail,unknown])expect(s.shopCategory,'variety');
+  expect(missing.shopCategory,'spaza',reason:'Legacy uncategorized grocery records stay discoverable.');
   expect(merchant('wholesale').shopCategory,'wholesale');
   expect(publicPlace('business').shopCategory,'variety');
   expect(publicPlace('retail').shopCategory,'variety');

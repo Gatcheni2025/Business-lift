@@ -15,7 +15,9 @@ void main(){
       expect(find.text(primary),findsOneWidget);
       expect(find.text(secondary),findsOneWidget);
       if(category!='spaza')expect(find.text('Products'),findsNothing);
-      expect(find.text('Chat'),findsOneWidget);
+      expect(find.text('Chat'),findsNothing);
+      expect(find.byKey(const ValueKey('seller-nav-3')),findsNothing);
+      expect(find.byKey(const ValueKey('seller-nav-4')),findsOneWidget);
     });
   }
 }

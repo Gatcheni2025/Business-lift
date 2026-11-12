@@ -104,8 +104,10 @@ class OnlineShop {
 
 /// Public seller categories are an explicit allowlist. An unknown or legacy
 /// business type must NEVER be silently labelled as a spaza shop.
+/// Missing category remains spaza only for historical shop records predating categories.
 String teyzaNormalizedShopCategory(dynamic raw){
  final v=raw?.toString().trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'),'_')??'';
+ if(v.isEmpty)return 'spaza'; // Historical grocery listings predate the category field.
  if(const {'spaza','spaza_shop','tuck_shop'}.contains(v))return 'spaza';
  if(const {'wholesale','wholesaler','cash_and_carry'}.contains(v))return 'wholesale';
  return 'variety'; // Includes retail, other business and unknown legacy types.

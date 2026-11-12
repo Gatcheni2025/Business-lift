@@ -1680,13 +1680,18 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return mergeNearbyListings(nearbySellers,mapListings,area:area).take(35).toList();
   }
   Widget sellerStories(){
-    // The Spaza Shops story row must never inherit the All-business filter.
-    // If a linked merchant says 'variety', that authoritative seller type wins.
-    final sellers=teyzaSpazaStoryEntries(nearbySellerEntries);
+    // All starts with only true Spaza Shops. Explicit category filters have
+    // separate headings; a local business must never appear under Spaza Shops.
+    final chosen=sellerFilter=='all'?'spaza':sellerFilter;
+    final sellers=chosen=='spaza'?teyzaSpazaStoryEntries(nearbySellerEntries):
+      nearbySellerEntries.where((entry)=>
+        (entry.merchant?.shopCategory??entry.directory?.shopCategory)==chosen).toList();
+    final heading=chosen=='wholesale'?'Wholesalers':
+      chosen=='variety'?'Local Businesses':'Spaza Shops';
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
+      section(heading,subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
-          onPressed:()=>setState((){showAllSellers=true;sellerFilter='spaza';}),child:const Text('View all'))),
+          onPressed:()=>setState((){showAllSellers=true;sellerFilter=chosen;}),child:const Text('View all'))),
       if(sellers.isEmpty)
         Padding(padding:const EdgeInsets.only(bottom:12),child:Text(
           area==null?'Choose your area to discover nearby sellers.':
