@@ -330,3 +330,33 @@ test('Lightweight profile does not fetch seller statements or payment history af
  assert.equal(profile.membershipPaid,false);
  assert.deepEqual(profile.payments,[]);
 });
+
+test('Admin full seller details safely validate a real current identity document',async()=>{
+ const f=setup();
+ const currentIdentity={ownerUid:'seller1',kind:'id',legalType:'individual',
+  evidenceId:'real_uploaded_identity_1',
+  objectPath:'teyza-private/mobile-verification/seller1/real_uploaded_identity_1.enc',
+  expiresAt:now+86400000};
+ f.db.records.set('teyzaSellerIdentity/seller1',currentIdentity);
+ const before=structuredClone([...f.db.records]);
+ const result=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ const check=result.businessAccount.verificationChecks.find(x=>x.id==='identity');
+ assert.equal(check.complete,true,'Unexpired evidence should be recognized by the admin');
+ assert.deepEqual([...f.db.records],before,'Opening admin detail must not change the seller or payments');
+ const statement=await f.call('seller_billing_statement',{},{
+   uid:'seller1',email_verified:true,auth_time:now/1000});
+ assert.equal(statement.businessAccount.verificationChecks.find(x=>x.id==='identity').complete,true,
+   'Seller billing statement uses the same safe identity read path');
+});
+test('Admin detail treats expired or misowned evidence as incomplete without a server exception',async()=>{
+ const f=setup();
+ for(const evidence of [
+  {ownerUid:'seller1',objectPath:'teyza-private/mobile-verification/seller1/document.enc',expiresAt:now-1},
+  {ownerUid:'another_user',objectPath:'teyza-private/mobile-verification/seller1/document.enc',expiresAt:now+86400000},
+  {ownerUid:'seller1',objectPath:'other-location/document.enc',expiresAt:now+86400000}
+ ]){
+  f.db.records.set('teyzaSellerIdentity/seller1',evidence);
+  const result=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+  assert.equal(result.businessAccount.verificationChecks.find(x=>x.id==='identity').complete,false);
+ }
+});

@@ -199,7 +199,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
    const verifiedEmail=authUser?.emailVerified===true;
    let verifiedPhone=false;
    try{require('./onboarding').checkedPhone(authUser,account.phone);verifiedPhone=true;}catch(_){}
-   const validIdentity=require('./onboarding').current(identity,target,clock());
+   const validIdentity=require('./onboarding').current(identity,target,clock);
    const validSelfie=verification?.ownerUid===target &&
      typeof verification.objectPath==='string'&&verification.expiresAt>clock();
    const validFront=require('./shop-front').valid(front,target);
