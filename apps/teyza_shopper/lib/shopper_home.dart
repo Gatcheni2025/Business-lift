@@ -99,7 +99,7 @@ class Shop {
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
     address:(x['address']??'').toString(),city:(x['city']??'').toString(),googlePlaceId:(x['googlePlaceId']??'').toString(),
-    shopCategory:x['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
+    shopCategory:teyzaNormalizedShopCategory(x['shopCategory']??x['category']),
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
         ?(x['services'] as Map)['cardPayments'] as bool:null,
@@ -1675,11 +1675,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return mergeNearbyListings(nearbySellers,mapListings,area:area).take(35).toList();
   }
   Widget sellerStories(){
-    final sellers=nearbySellerEntries;
+    // The Spaza Shops story row must never inherit the All-business filter.
+    // If a linked merchant says 'variety', that authoritative seller type wins.
+    final sellers=nearbySellerEntries.where((entry)=>
+      (entry.merchant?.shopCategory??entry.directory?.shopCategory)=='spaza'
+    ).toList();
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
-          onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
+          onPressed:()=>setState((){showAllSellers=true;sellerFilter='spaza';}),child:const Text('View all'))),
       if(sellers.isEmpty)
         Padding(padding:const EdgeInsets.only(bottom:12),child:Text(
           area==null?'Choose your area to discover nearby sellers.':

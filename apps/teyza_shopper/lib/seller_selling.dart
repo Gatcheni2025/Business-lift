@@ -15,7 +15,8 @@ class SellerNavigation extends StatelessWidget {
         (1,accountType=='retail'?'Services':accountType=='wholesale'?'Advertise':'Products',
           accountType=='retail'?Icons.design_services_outlined:accountType=='wholesale'?Icons.campaign_outlined:Icons.inventory_2_outlined),
         (2,accountType=='retail'?'Enquiries':accountType=='wholesale'?'Partners':'Orders',Icons.receipt_long_outlined),
-        (3,'Chat',Icons.chat_bubble_outline_rounded),
+        // Customer conversations live behind the dashboard Messages button.
+        // Keep internal tab 3 as the inbox route but remove its duplicate navigation icon.
         (4,'Business',Icons.tune_rounded)])
         Expanded(child:Semantics(button:true,selected:selected==index,label:'Seller $label',
           child:InkWell(key:ValueKey('seller-nav-$index'),onTap:()=>onSelect(index),
@@ -125,7 +126,7 @@ class SellerSellingDashboard extends StatelessWidget {
           else _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
           if(accountType!='retail')_tool(accountType=='wholesale'?'Spaza partnerships':'Customer orders',
             accountType=='wholesale'?'Connect with approved local shops':'Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
-          _tool('Customer chat','Reply to customer enquiries',Icons.chat_bubble_outline_rounded,onChat),
+          // Messages beside Orders is the single customer-inbox entry point.
            if(onAds!=null)_tool('Teyza Ads','R29 for 7 days within 10 km · choose your reach',Icons.campaign_outlined,onAds!),
           _tool('Stock finance','Apply for a funding review',Icons.account_balance_outlined,onFinance),
           _tool('Areas around me','Plan your local deliveries',Icons.near_me_outlined,onAreas),

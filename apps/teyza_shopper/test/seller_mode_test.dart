@@ -113,7 +113,10 @@ void main(){
     await capture(tester,boundary,'seller-products-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-2')));await tester.pumpAndSettle();
     expect(find.text('No orders yet'),findsOneWidget);expect(api.calls.last.action,'order_list');expect(api.calls.last.data,{'asOwner':true});
-    await tester.tap(find.byKey(const ValueKey('seller-nav-3')));await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-nav-3')),findsNothing,
+      reason:'Messages is now the only customer chat entry point on the dashboard.');
+    await tester.tap(find.byKey(const ValueKey('seller-nav-0')));await tester.pumpAndSettle();
+    await tester.tap(find.text('Messages'));await tester.pumpAndSettle();
     expect(find.text('Your customers'),findsOneWidget);
     expect(find.textContaining('Open a registered shop'),findsNothing);
     expect(api.calls.last.action,'chat_list');expect(api.calls.last.data,{'asOwner':true});
@@ -149,7 +152,8 @@ void main(){
     expect(find.text('Order alerts are available'),findsNothing);
     expect(find.byKey(const ValueKey('seller-delivery-toggle')),findsNothing);
     expect(find.byKey(const ValueKey('seller-card-toggle')),findsNothing);
-    await tester.tap(find.byKey(const ValueKey('seller-nav-3')));
+    expect(find.byKey(const ValueKey('seller-nav-3')),findsNothing);
+    await tester.tap(find.text('Messages'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-message-updates')),findsOneWidget);
     expect(find.text('Order & shop updates'),findsOneWidget);
