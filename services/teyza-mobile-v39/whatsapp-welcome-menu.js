@@ -40,13 +40,13 @@ function responseFor(raw){
  const option=String(raw||'').trim();
  switch(option){
   case 'TEYZA_WELCOME_SELL':
-   return list('Welcome to Teyza selling! Choose what you would like to learn. No purchase is initiated here.',[
+   return list('Start selling on Teyza 🌱\nYour benefits may include: being discovered by nearby shoppers, displaying products or services, connecting to participating wholesalers for discounted stock, and applying for stock finance (subject to approval). Choose how to get started or learn more. This WhatsApp menu does not initiate payment.',[
     row('TEYZA_SELL_START','How to start','Verification, upgrade, product listing'),
     row('TEYZA_SELL_BENEFITS','Selling benefits','Local reach, wholesale offers and finance'),
     row('TEYZA_HOME','All services','Back to the welcome menu')
    ],'Selling on Teyza');
   case 'TEYZA_WELCOME_ADS':
-   return list('Welcome to Teyza community advertising. Choose a topic for your local promotion.',[
+   return list('Advertise on Teyza 📢\nPromote your business, products or services to local shoppers. Choose your area from your approved shop pin: R29 for up to 10 km, plus R2 for each additional km. A campaign runs for 7 days only after creative approval, verified payment and final publication. Choose a topic below.',[
     row('TEYZA_ADS_START','How to advertise','Create, submit and review an advert'),
     row('TEYZA_ADS_BENEFITS','Advertising benefits','Reach local shoppers within your radius'),
     row('TEYZA_HOME','All services','Back to the welcome menu')
@@ -58,7 +58,7 @@ function responseFor(raw){
   case 'TEYZA_SELL_BENEFITS':
    return buttons('Benefits for eligible Teyza sellers:\n• Be discovered by nearby shoppers.\n• Showcase products or services and manage enquiries.\n• Connect with participating wholesalers for stock discounts and delivery offers.\n• Request business or stock-finance consideration (subject to approval).\nSelling access depends on account approval and eligibility.');
   case 'TEYZA_ADS_START':
-   return buttons('To advertise to your community:\n1. Prepare your business image and promotional description.\n2. Choose your preferred local advertising radius.\n3. Submit the advert for Teyza review.\n4. Campaigns appear only after moderation and required payment verification.\nFor help, use the Teyza app Support inbox.');
+   return buttons('To advertise to your community:\n1. Prepare your business image and promotional description.\n2. Choose your preferred local advertising radius.\n3. Submit the advert for Teyza review.\n4. After verified payment your campaign stays pending until Teyza publishes it.\n5. See running ads on your Teyza seller dashboard once published.\nFor help, use the Teyza app Support inbox.');
   case 'TEYZA_ADS_BENEFITS':
    return buttons('Teyza Ads can help your business reach shoppers around your approved location. You can select your local radius and promote eligible products, services or offers. All adverts are reviewed before appearing in the app. This message does not initiate advertising payment.');
   case 'TEYZA_SUPPORT_APPROVAL':
