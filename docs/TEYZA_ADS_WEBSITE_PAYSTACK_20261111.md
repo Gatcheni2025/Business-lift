@@ -6,7 +6,7 @@ Based on Ads moderation PR #145; independent of draft Store Billing PR #148.
 - Advertiser portal: `https://teyza.co.za/ads/` (available only **after hosting deployment**). Firebase web sign-in using the *same* original UID, no account duplication. Existing email login and Google, Apple, Facebook popup auth supported subject to configured provider origins.
 - Eligible, approved spaza/retail sellers submit ads from the Teyza seller workspace. Another admin reviews creative first. Approved-unpaid campaigns appear on the standalone advertiser website for selection.
 - **Only** the advertiser website calls `ads_checkout` with `checkoutChannel: 'website'` and exact authenticated `confirmedSellerUid`. Server recalculates fixed radius pricing from stored ad and sends directly to hosted Paystack (R29 up to 10 km; R2/km for 11–50 km). No ad auto-renewal. `/pay` and R99 memberships, including historical R10 entitlements, are untouched.
-- The return URL is `/ads/?payment=return`, which is *not* confirmation. Signed webhook and/or authenticated `ads_confirm` independently verify Paystack ref, exact ZAR amount, UID, creative ID, transaction environment and email before starting seven days. Pending ambiguous transactions require reconciliation; do not start a duplicate charge.
+- The return URL is `/ads/?payment=return`, which is *not* confirmation. Signed webhook and/or authenticated `ads_confirm` independently verify Paystack ref, exact ZAR amount, UID, creative ID, transaction environment and email. On success status changes to **paid_pending_activation**, NOT active. Another admin must use `ops_ads_activate` to publish after inspecting the verified paid campaign. **Seven days start on actual publication.** Pending ambiguous transactions require reconciliation; do not start a duplicate charge.
 - Store app builds have **no ad payment button or website checkout link**. Ads management/status and Sponsored feed remain visible as applicable. Direct Android native ad checkout removed from this branch.
 - Backend enable switch: `TEYZA_ADS_WEB_PAYSTACK_ENABLED=true`. **Default OFF**. Kept independent from the `TEYZA_SELLER_PAYSTACK_ENABLED` membership pilot flag.
 
@@ -26,3 +26,6 @@ This branch permits developing a standalone web portal but **does not certify Ap
 
 ## Status
 Source changes only, on a draft feature branch. No live Paystack calls, Firebase deployments, hosting publishing, store releases or payments have been performed.
+
+## 2026-11-12 website source reapproval blocker
+The JS/HTML were updated solely to tell a paid seller the truthful `paid_pending_activation` status and delayed start. These exact files no longer match PR #149 operator approval; source fingerprint audit intentionally fails closed. See `docs/TEYZA_ADS_CANDIDATE_SOURCE_REAPPROVAL_20261112.md`. DO NOT deploy until new hashes are independently approved by the project operator. Keep web Paystack enablement OFF until app-store review is completed.
