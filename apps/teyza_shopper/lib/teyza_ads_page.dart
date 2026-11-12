@@ -99,16 +99,24 @@ class _TeyzaAdsState extends State<TeyzaAdsPage>{
   finally{if(mounted)setState(()=>busy=false);}
   if(mounted&&sameSeller)unawaited(load());
  }
+ bool isRunning(Map<String,dynamic> ad){
+  final status=(ad['status']??'').toString();
+  final ends=(ad['endsAt'] as num?)?.toInt();
+  return status=='active'&&ends!=null&&
+    DateTime.fromMillisecondsSinceEpoch(ends).isAfter(DateTime.now());
+ }
  String label(String status)=>switch(status){
   'pending_review'=>'Awaiting Teyza review',
   'approved_unpaid'=>'Approved · payment required',
+  'paid_pending_activation'=>'Paid · pending Teyza publication',
   'active'=>'Live · Sponsored',
   'rejected'=>'Rejected · see review note',
   'paused'=>'Paused',
   _=>'Campaign ended'
  };
  Widget campaignCard(Map<String,dynamic> ad){
-  final status=(ad['status']??'').toString();
+  final rawStatus=(ad['status']??'').toString();
+  final status=rawStatus=='active'&&!isRunning(ad)?'ended':rawStatus;
   final amount=(ad['amountCents'] as num?)?.toInt()??2900;
   final expires=(ad['endsAt'] as num?)?.toInt();
   return Card(margin:const EdgeInsets.only(bottom:11),child:Padding(
@@ -122,6 +130,11 @@ class _TeyzaAdsState extends State<TeyzaAdsPage>{
     if(expires!=null)Text('Ends '+DateTime.fromMillisecondsSinceEpoch(expires).toLocal().toString().split('.').first),
     if((ad['reviewNote']??'').toString().isNotEmpty)
      Text('Review note: '+(ad['reviewNote']??'').toString()),
+    if(status=='paid_pending_activation')...[
+     const Padding(padding:EdgeInsets.only(top:10),
+       child:Text('Your payment is verified. Teyza is completing its final publication check. Your seven days have not started yet.',
+         style:TextStyle(color:Color(0xFF875B2F)))),
+    ],
     if(status=='approved_unpaid')...[
      const Padding(padding:EdgeInsets.only(top:10),
        child:Text('Creative approved. Purchase is not available in this app; you may review campaign status here.',
@@ -181,13 +194,24 @@ class _TeyzaAdsState extends State<TeyzaAdsPage>{
    FilledButton.icon(key:const ValueKey('ad-submit'),onPressed:busy||!sameSeller?null:submit,
     icon:const Icon(Icons.fact_check_outlined),label:const Text('Submit ad for approval')),
    const SizedBox(height:12),
-   const Text('Submitting does not charge you. Campaigns run for seven days after separate Teyza approval and verified payment.',
+   const Text('Submitting does not charge you. Paid campaigns remain pending until Teyza publishes them; the seven days start on publication.',
     style:TextStyle(color:Color(0xFF60736B),fontSize:12)),
    const SizedBox(height:20),
    const Text('My campaigns',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800)),
    if(ads.isEmpty&&!busy)const Padding(padding:EdgeInsets.all(12),
     child:Text('No advertising campaigns submitted yet.')),
-   for(final ad in ads)campaignCard(ad),
+   if(ads.isNotEmpty)...[
+     const SizedBox(height:12),
+     Text('Running ads',key:const ValueKey('seller-running-ads'),
+       style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
+     if(!ads.any(isRunning))const Padding(padding:EdgeInsets.symmetric(vertical:12),
+       child:Text('No advertising campaigns are currently running.')),
+     for(final ad in ads.where(isRunning))campaignCard(ad),
+     const SizedBox(height:15),
+     Text('Pending ads & history',key:const ValueKey('seller-pending-ads'),
+       style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
+     for(final ad in ads.where((a)=>!isRunning(a)))campaignCard(ad)
+   ],
    const SizedBox(height:60)
   ]));
 }
