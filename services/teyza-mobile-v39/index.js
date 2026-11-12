@@ -140,7 +140,16 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     const result=await service.execute({...actor,verifiedFirebaseIdToken:bearer[1]},req.body?.action,req.body?.data||{});
     res.json({ok:true,...result});
   }catch(error){
-    if(!error.status)console.error('TEYZA_MOBILE_SERVICE_ERROR',error.code||error.name);
+    if(!error.status){
+      console.error('TEYZA_MOBILE_SERVICE_ERROR',error.code||error.name);
+      if(req.body?.action==='ops_seller_detail'||req.body?.action==='seller_billing_statement'){
+        // Log ONLY bounded source filenames and line numbers. Raw error.stack,
+        // error.message and sensitive seller documents are never logged.
+        console.error('TEYZA_SELLER_DETAIL_DIAGNOSTIC',
+          JSON.stringify(require('./seller-detail-diagnostic')
+            .sellerDetailDiagnostic(error,req.body.action)));
+      }
+    }
     res.status(error.status||503).json({error:error.status?error.message:'Shop services are temporarily unavailable. Please try again.'});
   }
 });
