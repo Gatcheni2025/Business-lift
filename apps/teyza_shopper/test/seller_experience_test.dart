@@ -145,7 +145,7 @@ void main(){
   await visibleTap(tester,find.text('I can provide registration or ownership documents if requested.'));
   await visibleTap(tester,find.text('I can verify the business phone number or another official contact.'));
   await visibleTap(tester,find.text('I am authorised to represent this business, and shoppers may see its address and map location.'));
-  await visibleTap(tester,find.text('Send my approval update and getting-started link on WhatsApp'));
+  await visibleTap(tester,find.text('After approval, send me one WhatsApp welcome with Teyza selling, advertising and support options (optional marketing messages)'));
   await visibleTap(tester,find.text('Continue to seller verification'));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['shopName'],'Neighbourhood Market');expect(request.data['googleClaimSelection'],'claim-receipt');
