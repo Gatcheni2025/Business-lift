@@ -83,7 +83,7 @@ class OnlineShop {
     placeId:(p['placeId']??'').toString(),
     photoRef:p['photoRef'] is String ? p['photoRef'] as String : null,
     photoUrl:p['photoUrl'] is String ? p['photoUrl'] as String : null,
-    shopCategory:p['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(p['shopCategory'])?'variety':'spaza',
+    shopCategory:teyzaNormalizedShopCategory(p['shopCategory']??p['category']),
     categorizationVerified:p['categorizationVerified']==true,
     types:[if(p['primaryType'] is String) p['primaryType'] as String,
       ...((p['types'] as List?)??const []).whereType<String>()],
@@ -100,6 +100,17 @@ class OnlineShop {
       .map((v)=>{'name':(v['name']??'').toString(),'url':(v['url']??'').toString()})
       .where((v)=>v['name']!.isNotEmpty && v['url']!.startsWith('https://'))
       .toList());
+}
+
+/// Public seller categories are an explicit allowlist. An unknown or legacy
+/// business type must NEVER be silently labelled as a spaza shop.
+/// Missing category remains spaza only for historical shop records predating categories.
+String teyzaNormalizedShopCategory(dynamic raw){
+ final v=raw?.toString().trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'),'_')??'';
+ if(v.isEmpty)return 'spaza'; // Historical grocery listings predate the category field.
+ if(const {'spaza','spaza_shop','tuck_shop'}.contains(v))return 'spaza';
+ if(const {'wholesale','wholesaler','cash_and_carry'}.contains(v))return 'wholesale';
+ return 'variety'; // Includes retail, other business and unknown legacy types.
 }
 
 /// Keep categories honest even when older deployed Places functions return

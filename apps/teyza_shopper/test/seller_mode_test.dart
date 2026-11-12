@@ -113,7 +113,10 @@ void main(){
     await capture(tester,boundary,'seller-products-28');
     await tester.tap(find.byKey(const ValueKey('seller-nav-2')));await tester.pumpAndSettle();
     expect(find.text('No orders yet'),findsOneWidget);expect(api.calls.last.action,'order_list');expect(api.calls.last.data,{'asOwner':true});
-    await tester.tap(find.byKey(const ValueKey('seller-nav-3')));await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-nav-3')),findsNothing,
+      reason:'Messages is now the only customer chat entry point on the dashboard.');
+    await tester.tap(find.byKey(const ValueKey('seller-nav-0')));await tester.pumpAndSettle();
+    await tester.tap(find.text('Messages'));await tester.pumpAndSettle();
     expect(find.text('Your customers'),findsOneWidget);
     expect(find.textContaining('Open a registered shop'),findsNothing);
     expect(api.calls.last.action,'chat_list');expect(api.calls.last.data,{'asOwner':true});
@@ -149,7 +152,8 @@ void main(){
     expect(find.text('Order alerts are available'),findsNothing);
     expect(find.byKey(const ValueKey('seller-delivery-toggle')),findsNothing);
     expect(find.byKey(const ValueKey('seller-card-toggle')),findsNothing);
-    await tester.tap(find.byKey(const ValueKey('seller-nav-3')));
+    expect(find.byKey(const ValueKey('seller-nav-3')),findsNothing);
+    await tester.tap(find.text('Messages'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-message-updates')),findsOneWidget);
     expect(find.text('Order & shop updates'),findsOneWidget);
@@ -215,7 +219,13 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('teyza-floating-chat')));await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('support-upgrade-account')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
-    expect(find.text('Membership steps'),findsOneWidget);
+    expect(find.text('What upgrading can do for you'),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-upgrade')),220,
+      scrollable:find.byType(Scrollable).last);
+    expect(find.byKey(const ValueKey('growth-upgrade')),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-advertise')),220,
+      scrollable:find.byType(Scrollable).last);
+    expect(find.byKey(const ValueKey('growth-advertise')),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
@@ -261,7 +271,13 @@ void main(){
     expect(find.byKey(const ValueKey('teyza-floating-chat')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('teyza-floating-chat')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('support-upgrade-account')));await tester.pumpAndSettle();
-    expect(find.text('Membership steps'),findsOneWidget);
+    expect(find.text('What upgrading can do for you'),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-upgrade')),220,
+      scrollable:find.byType(Scrollable).last);
+    expect(find.byKey(const ValueKey('growth-upgrade')),findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('growth-advertise')),220,
+      scrollable:find.byType(Scrollable).last);
+    expect(find.byKey(const ValueKey('growth-advertise')),findsOneWidget);
     expect(api.calls.where((c)=>c.action=='billing_checkout'),isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });

@@ -15,7 +15,8 @@ class SellerNavigation extends StatelessWidget {
         (1,accountType=='retail'?'Services':accountType=='wholesale'?'Advertise':'Products',
           accountType=='retail'?Icons.design_services_outlined:accountType=='wholesale'?Icons.campaign_outlined:Icons.inventory_2_outlined),
         (2,accountType=='retail'?'Enquiries':accountType=='wholesale'?'Partners':'Orders',Icons.receipt_long_outlined),
-        (3,'Chat',Icons.chat_bubble_outline_rounded),
+        // Customer conversations live behind the dashboard Messages button.
+        // Keep internal tab 3 as the inbox route but remove its duplicate navigation icon.
         (4,'Business',Icons.tune_rounded)])
         Expanded(child:Semantics(button:true,selected:selected==index,label:'Seller $label',
           child:InkWell(key:ValueKey('seller-nav-$index'),onTap:()=>onSelect(index),
@@ -39,7 +40,7 @@ class SellerSellingDashboard extends StatelessWidget {
   final VoidCallback? onLocation;
   final Uint8List? shopPhoto;
   final bool photoLoading;
-  final VoidCallback? onPhoto,onShop,onEditProfile,onAds;
+  final VoidCallback? onPhoto,onShop,onEditProfile,onAds,onUpgrade,onAdvertiseInfo;
   final int unread;
   final int? productCount;
   final VoidCallback? onAdd;
@@ -48,7 +49,7 @@ class SellerSellingDashboard extends StatelessWidget {
     required this.productCount,required this.onAdd,required this.onProducts,required this.onOrders,
     required this.onChat,required this.onFinance,required this.onAreas,required this.onBusiness,required this.onVerify,
     this.publicationStatus,this.hasLocation=true,this.onLocation,this.shopPhoto,this.photoLoading=false,
-    this.onPhoto,this.onShop,this.onEditProfile,this.onAds,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0,this.coverUrl=''});
+    this.onPhoto,this.onShop,this.onEditProfile,this.onAds,this.onUpgrade,this.onAdvertiseInfo,this.premiumAccount=false,this.hasProductAccess=false,this.unread=0,this.coverUrl=''});
   bool get approvedLive=>live&&verified&&(publicationStatus==null||publicationStatus=='active');
   bool get awaitingApproval=>publicationStatus=='pending_review'||((live||publicationStatus=='active')&&!verified);
   String get statusLabel=>approvedLive?'Shop is live':awaitingApproval?'Awaiting approval':publicationStatus=='suspended'?'Listing is paused':'Shop setup needed';
@@ -85,11 +86,34 @@ class SellerSellingDashboard extends StatelessWidget {
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             const Text('Shop is live',style:TextStyle(fontWeight:FontWeight.w800,fontSize:17,color:_ink)),
             const SizedBox(height:5),
-            Text(premiumAccount?'Premium account · Your verified membership enables selling.':
+            Text(premiumAccount?'Your account is upgraded · Eligible selling tools are available.':
                 hasProductAccess?'Temporary selling access · This is not a paid subscription.':
-                'Unable to sell · No active membership. Your shop remains visible to nearby shoppers.',
+                'Your shop is visible. Upgrade your account to access selling tools and growth benefits.',
                 style:const TextStyle(color:_muted)),
           ]))),
+      ],
+      if(onUpgrade!=null||onAdvertiseInfo!=null)...[
+        const SizedBox(height:14),
+        Container(key:const ValueKey('seller-growth-callout'),padding:const EdgeInsets.all(16),
+          decoration:BoxDecoration(color:const Color(0xFFF0F8F2),
+            borderRadius:BorderRadius.circular(18),
+            border:Border.all(color:const Color(0xFFD5EBDC))),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            const Text('Grow your business with Teyza',style:TextStyle(
+              fontSize:17,fontWeight:FontWeight.w900,color:_ink)),
+            const SizedBox(height:6),
+            const Text('Sell to more local shoppers, access wholesale offers and explore funding opportunities.',
+              style:TextStyle(fontSize:12.5,color:_muted,height:1.4)),
+            const SizedBox(height:13),
+            if(!premiumAccount&&onUpgrade!=null)FilledButton.icon(
+              key:const ValueKey('seller-growth-upgrade'),onPressed:onUpgrade,
+              icon:const Icon(Icons.rocket_launch_outlined),label:const Text('Upgrade Account')),
+            if(onAdvertiseInfo!=null)...[
+              const SizedBox(height:8),
+              OutlinedButton.icon(key:const ValueKey('seller-growth-advertise'),onPressed:onAdvertiseInfo,
+                icon:const Icon(Icons.campaign_outlined),label:const Text('Advertise')),
+            ]
+          ])),
       ],
       if(hasProductAccess)...[
         const SizedBox(height:16),
@@ -125,7 +149,7 @@ class SellerSellingDashboard extends StatelessWidget {
           else _tool('My products','List, price & manage stock',Icons.inventory_2_outlined,onProducts),
           if(accountType!='retail')_tool(accountType=='wholesale'?'Spaza partnerships':'Customer orders',
             accountType=='wholesale'?'Connect with approved local shops':'Confirm, prepare & fulfil',Icons.receipt_long_outlined,onOrders),
-          _tool('Customer chat','Reply to customer enquiries',Icons.chat_bubble_outline_rounded,onChat),
+          // Messages beside Orders is the single customer-inbox entry point.
            if(onAds!=null)_tool('Teyza Ads','R29 for 7 days within 10 km · choose your reach',Icons.campaign_outlined,onAds!),
           _tool('Stock finance','Apply for a funding review',Icons.account_balance_outlined,onFinance),
           _tool('Areas around me','Plan your local deliveries',Icons.near_me_outlined,onAreas),

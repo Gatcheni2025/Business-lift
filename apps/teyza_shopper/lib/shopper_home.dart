@@ -92,14 +92,14 @@ class Shop {
     (x['area'] ?? '').toString(), (x['photoUrl'] ?? '').toString(),
     (x['whatsappPhone'] ?? '').toString(), x['pickupEnabled'] == true,
     x['deliveryEnabled'] == true,
-    (!['retail','variety','wholesale'].contains(x['shopCategory'])?((x['products'] as List?) ?? []):<dynamic>[]).whereType<Map>()
+    (teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='spaza'?((x['products'] as List?) ?? []):<dynamic>[]).whereType<Map>()
       .map((p) => Product.fromJson(Map<String, dynamic>.from(p)))
       .where((p) => p.id.isNotEmpty && p.name.isNotEmpty &&
         p.priceCents > 0 && p.stock >= 0).toList(),
     latitude: (x['latitude'] as num?)?.toDouble(),
     longitude: (x['longitude'] as num?)?.toDouble(),
     address:(x['address']??'').toString(),city:(x['city']??'').toString(),googlePlaceId:(x['googlePlaceId']??'').toString(),
-    shopCategory:x['shopCategory']=='wholesale'?'wholesale':['variety','retail'].contains(x['shopCategory'])?'variety':'spaza',
+    shopCategory:teyzaNormalizedShopCategory(x['shopCategory']??x['category']),
     acceptsCard:x['services'] is Map &&
       (x['services'] as Map)['cardPayments'] is bool
         ?(x['services'] as Map)['cardPayments'] as bool:null,
@@ -111,8 +111,8 @@ class Shop {
     identityVerified:x['identityVerified']==true,sponsored:x['sponsored']==true,hours:mobileRows(x['hours']).map(TradingDay.fromJson).toList(),
     deliveryFeeCents:(x['deliveryFeeCents'] as num?)?.toInt()??0,
     cashDiscountPercent:x['services'] is Map&&(x['services'] as Map)['cashDiscountPercent']==10?10:0,
-    highlights:!['retail','variety','wholesale'].contains(x['shopCategory'])?mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList():const [],
-    serviceHighlights:x['shopCategory']=='retail'?mobileRows(x['serviceHighlights']):const []);
+    highlights:teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='spaza'?mobileRows(x['productHighlights']).map(Product.fromJson).where((p)=>p.id.isNotEmpty&&p.name.isNotEmpty).toList():const [],
+    serviceHighlights:teyzaNormalizedShopCategory(x['shopCategory']??x['category'])=='variety'?mobileRows(x['serviceHighlights']):const []);
 }
 class ShopProduct {
   final Shop shop;final Product product;
@@ -178,6 +178,11 @@ List<NearbyListing> mergeNearbyListings(List<Shop> merchants,List<OnlineShop> di
   });
   return entries;
 }
+
+/// Only genuine spaza-category listings belong in the Spaza Shops story row.
+List<NearbyListing> teyzaSpazaStoryEntries(Iterable<NearbyListing> entries)=>
+  entries.where((entry)=>
+    (entry.merchant?.shopCategory??entry.directory?.shopCategory)=='spaza').toList();
 
 class Area {
   final String label, city;
@@ -1675,11 +1680,18 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     return mergeNearbyListings(nearbySellers,mapListings,area:area).take(35).toList();
   }
   Widget sellerStories(){
-    final sellers=nearbySellerEntries;
+    // All starts with only true Spaza Shops. Explicit category filters have
+    // separate headings; a local business must never appear under Spaza Shops.
+    final chosen=sellerFilter=='all'?'spaza':sellerFilter;
+    final sellers=chosen=='spaza'?teyzaSpazaStoryEntries(nearbySellerEntries):
+      nearbySellerEntries.where((entry)=>
+        (entry.merchant?.shopCategory??entry.directory?.shopCategory)==chosen).toList();
+    final heading=chosen=='wholesale'?'Wholesalers':
+      chosen=='variety'?'Local Businesses':'Spaza Shops';
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
+      section(heading,subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
-          onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
+          onPressed:()=>setState((){showAllSellers=true;sellerFilter=chosen;}),child:const Text('View all'))),
       if(sellers.isEmpty)
         Padding(padding:const EdgeInsets.only(bottom:12),child:Text(
           area==null?'Choose your area to discover nearby sellers.':

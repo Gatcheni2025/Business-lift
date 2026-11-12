@@ -22,10 +22,12 @@ const billingCheckout=require('./billing-paystack');
 const paystackRollout=require('./paystack-rollout');
 const orderPaystack=require('./order-paystack');
 const businessServices=require('./business-services');
+const growth=require('./seller-growth');
 
 function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser=async()=>null,deleteAuthUser,disableAuthUser,revokeAuthTokens,revokeAppleToken,createPhoneToken,listAuthUsers,getAuthUserByEmail,createAuthUser,updateAuthUser,sendPasswordResetEmail,
   getPlacesKey=()=>'',getAddressSigningKey=()=>'',getPaystackSecret=()=>'',getPaystackWebhookSigningSecret=()=>'',getPaystackPlanCode=()=>'',paystackFetch=fetch,addressFetch=fetch,clock=Date.now}) {
   const doc = path => db.doc(path);
+  const sellerGrowth=growth.createSellerGrowth({db,getAuthUser,clock});
   const read = async path => { const snap = await doc(path).get(); return snap.exists?snap.data():null; };
   const owner = async uid => D.seller(await read('teyzaSellerAccounts/'+uid),uid);
   // Never start a trial during login, approval or product browsing.
@@ -260,6 +262,8 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       await doc('teyzaShopperProfiles/'+uid).set(profile,{merge:true});
       return {saved:true,profile};
     }
+    // WhatsApp information requests are identity-bound and never initiate checkout.
+    if(growth.actions.has(action))return sellerGrowth.execute(auth,action,data);
     if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);

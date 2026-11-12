@@ -41,8 +41,8 @@ void main(){
       Shop.fromJson({'id':'unverified','name':'Pending Shop','area':'Durban',
         'latitude':-29.8587,'longitude':31.0218,'identityVerified':false})]);
     expect(find.byKey(const ValueKey('seller-story-spaza1')),findsOneWidget);
-    expect(find.byKey(const ValueKey('seller-story-retail1')),findsOneWidget);
-    expect(find.byKey(const ValueKey('seller-story-bulk1')),findsOneWidget);
+    expect(find.byKey(const ValueKey('seller-story-retail1')),findsNothing);
+    expect(find.byKey(const ValueKey('seller-story-bulk1')),findsNothing);
     expect(find.byKey(const ValueKey('seller-story-unverified')),findsOneWidget);
     await tester.ensureVisible(find.byKey(const ValueKey('business-filter-spaza')));
     await tester.tap(find.byKey(const ValueKey('business-filter-spaza')));await tester.pumpAndSettle();
@@ -50,10 +50,17 @@ void main(){
     expect(find.byKey(const ValueKey('seller-story-retail1')),findsNothing);
     await tester.ensureVisible(find.byKey(const ValueKey('business-filter-all')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('business-filter-all')));await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('seller-story-retail1')),findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('business-filter-variety')));
+    await tester.tap(find.byKey(const ValueKey('business-filter-variety')));await tester.pumpAndSettle();
+    expect(find.text('Local Businesses'),findsWidgets);
     expect(find.byKey(const ValueKey('seller-story-retail1')),findsOneWidget);
+    expect(find.byKey(const ValueKey('seller-story-spaza1')),findsNothing);
     await tester.tap(find.byKey(const ValueKey('all-nearby-sellers')));await tester.pumpAndSettle();
     expect(find.text('All nearby sellers'),findsOneWidget);
-    expect(find.text('Corner Shop'),findsWidgets);
+    expect(find.text('Local Salon'),findsWidgets);
+    expect(find.text('Corner Shop'),findsNothing,
+      reason:'Local Businesses must not mix in spaza shops.');
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -153,6 +160,8 @@ void main(){
       'serviceHighlights':[{'id':'braid','name':'Braiding','type':'Beauty & hair',
         'description':'Hair styling'}],
       'products':[{'id':'cream','name':'Hair cream','priceCents':2500,'stock':3}]})]);
+    await tester.ensureVisible(find.byKey(const ValueKey('business-filter-variety')));
+    await tester.tap(find.byKey(const ValueKey('business-filter-variety')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('seller-story-salon')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('seller-profile-salon')),findsOneWidget);

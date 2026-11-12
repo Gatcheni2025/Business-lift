@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'seller_growth_page.dart';
 
 /// Dedicated seller-to-Teyza support chat, separate from customer chat.
 /// Neither the chat nor its messages initiate membership payments.
@@ -59,33 +60,8 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
     finally{if(mounted)setState(()=>sending=false);}
   }
   void explainUpgrade(){
-    showModalBottomSheet<void>(context:context,isScrollControlled:true,
-      showDragHandle:true,builder:(sheetContext)=>SafeArea(child:SingleChildScrollView(child:Padding(
-        padding:const EdgeInsets.fromLTRB(20,8,20,24),
-        child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-          const Text('Upgrade Account',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
-          const SizedBox(height:12),
-          Text(widget.businessApproved?'Your business is verified and can appear in the community for free.':
-            'First complete your business registration and verification. Your shop can be listed free after approval.'),
-          const SizedBox(height:14),
-          const Text('Membership steps',style:TextStyle(fontWeight:FontWeight.w700)),
-          const SizedBox(height:8),
-          const Text('1. Finish email, phone, ID, selfie, shop-front and location verification.'),
-          const SizedBox(height:7),
-          const Text('2. Confirm your business has received final approval.'),
-          const SizedBox(height:7),
-          const Text('3. Review the available Premium membership terms and give consent through a supported purchase process.'),
-          const SizedBox(height:7),
-          const Text('4. After Teyza independently verifies an active subscription for your Firebase account, the app updates to Premium account and unlocks eligible selling or wholesale tools.'),
-          const SizedBox(height:14),
-          const Text('Membership information: introductory R10 if eligible, otherwise R99; monthly renewal R99 until cancelled. This chat cannot accept payments or activate Premium.',
-            style:TextStyle(fontSize:12)),
-          const SizedBox(height:16),
-          Align(alignment:Alignment.centerRight,
-            child:TextButton(onPressed:()=>Navigator.pop(sheetContext),
-              child:const Text('Close')))
-        ]),
-      ))));
+    Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerGrowthPage(
+      session:widget.session,api:widget.api,businessApproved:widget.businessApproved)));
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Chat with Teyza Support'),actions:[
@@ -94,7 +70,7 @@ class _SellerSupportChatPageState extends State<SellerSupportChatPage>{
     body:SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.all(16),child:Column(
         crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          const Text('Ask Teyza Support about verification, membership or your shop. Never share passwords, OTPs or card details.',
+          const Text('Ask Teyza Support about verification, account upgrades or your shop. Never share passwords, OTPs or card details.',
             style:TextStyle(height:1.4)),
           const SizedBox(height:10),
           if(!widget.premiumAccount)OutlinedButton.icon(

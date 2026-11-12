@@ -24,6 +24,7 @@ import 'seller_notifications.dart';
 import 'seller_premium.dart';
 import 'seller_selling.dart';
 import 'seller_support_chat.dart';
+import 'seller_growth_page.dart';
 import 'business_services_page.dart';
 import 'teyza_ads_page.dart';
 import 'seller_areas.dart';
@@ -171,6 +172,12 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
   void openSellerSupport()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>
     SellerSupportChatPage(session:widget.session,api:widget.mobileApi,
       premiumAccount:premiumAccount,businessApproved:sellerApproved)));
+  Future<void> openGrowth({String purpose='upgrade'}) async{
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerGrowthPage(
+      session:widget.session,api:widget.mobileApi,
+      businessApproved:sellerApproved,initialPurpose:purpose)));
+    if(mounted)refreshActivity();
+  }
   Future<void> openNotifications() async{
     await Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerNotificationsPage(session:widget.session,api:widget.mobileApi,onOpen:openDestination)));
     if(mounted){refreshActivity();load();}
@@ -637,6 +644,7 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
          WholesaleMarketPage(session:widget.session,api:widget.mobileApi,businessAddress:shop?.address??''))):null,
        onChat:()=>selectSellerTab(3),onFinance:()=>openTool(SellerTool.finance),onAreas:openAreas,
       onBusiness:()=>selectSellerTab(4),onVerify:()=>openTool(SellerTool.verification),
+      onUpgrade:()=>openGrowth(),onAdvertiseInfo:()=>openGrowth(purpose:'advertise'),
        onAds:shop?.category=='wholesale'||!shopperAdsVisible?null:openShopperAds)),
   };
   Widget productList()=>_card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -766,10 +774,10 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
           if(!hasProductAccess)Card(child:ListTile(
             leading:Icon(Icons.storefront_outlined),
             title:Text('Your business registration is free'),
-            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Review the membership options before publishing products.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
+            subtitle:Text(canOfferDirectMandate?'Once approved, your shop can appear nearby. Explore account upgrades and selling benefits.':'Once approved, your shop can appear nearby. Product tools become available when the account is eligible.'))),
           const SizedBox(height:16),
           if(!sellerApproved)FilledButton.icon(onPressed:()=>openTool(SellerTool.verification),icon:const Icon(Icons.verified_user_outlined),label:const Text('Complete seller verification')),
-          if(needsMembership)const Padding(padding:EdgeInsets.symmetric(vertical:6),child:Text('Shop is live · Unable to sell until membership is active.',style:TextStyle(fontWeight:FontWeight.w700,color:Color(0xFF8A5A00)))),
+          if(needsMembership)const Padding(padding:EdgeInsets.symmetric(vertical:6),child:Text('Shop is live · Upgrade your account to unlock eligible selling tools.',style:TextStyle(fontWeight:FontWeight.w700,color:Color(0xFF8A5A00)))),
           if(draftError!=null)_card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(draftError!,style:const TextStyle(color:Color(0xFF8A5A00))),
             if(accessReference!=null)Text('Support reference: $accessReference',style:const TextStyle(fontSize:12)),
