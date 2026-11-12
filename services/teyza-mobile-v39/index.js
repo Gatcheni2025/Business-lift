@@ -268,7 +268,8 @@ const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
   language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
   interactiveWelcome:process.env.TEYZA_WHATSAPP_WELCOME_MENU_ENABLED==='1',
-  welcomeTemplateApproved:process.env.TEYZA_WHATSAPP_WELCOME_TEMPLATE_APPROVED==='true'})});
+  welcomeTemplateApproved:process.env.TEYZA_WHATSAPP_WELCOME_TEMPLATE_APPROVED==='true',
+  welcomeMediaId:process.env.TEYZA_WHATSAPP_WELCOME_MEDIA_ID||''})});
 exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaWhatsAppApprovalOutbox/{reference}',secrets:[whatsappToken]},
  event=>whatsappApproval.deliver(event.params.reference));

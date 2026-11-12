@@ -2,9 +2,9 @@
 // These predefined, link-free menus are returned ONLY within an authenticated
 // WhatsApp 24-hour customer service window after the seller replies.
 const WELCOME_BUTTONS=Object.freeze([
- {index:'0',payload:'TEYZA_WELCOME_SELL',title:'Start selling'},
- {index:'1',payload:'TEYZA_WELCOME_ADS',title:'Advertise'},
- {index:'2',payload:'TEYZA_WELCOME_SUPPORT',title:'Get support'}
+ {index:'0',payload:'TEYZA_WELCOME_SELL',title:'Start selling on Teyza'},
+ {index:'1',payload:'TEYZA_WELCOME_ADS',title:'Advertise on Teyza'},
+ {index:'2',payload:'TEYZA_WELCOME_SUPPORT',title:'Talk to consultant'}
 ]);
 function welcomeTemplateComponents(){
  return WELCOME_BUTTONS.map(({index,payload})=>({
@@ -12,10 +12,22 @@ function welcomeTemplateComponents(){
   parameters:[{type:'payload',payload}]
  }));
 }
+function richWelcomeComponents({name,businessName,imageId}){
+ if(!/^[0-9]{6,40}$/.test(String(imageId||'')))throw Error('Meta welcome image media ID is required.');
+ if(!name||!businessName)throw Error('Approved seller name and business name are required.');
+ return [
+  {type:'header',parameters:[{type:'image',image:{id:imageId}}]},
+  {type:'body',parameters:[
+    {type:'text',text:name},
+    {type:'text',text:businessName}
+  ]},
+  ...welcomeTemplateComponents()
+ ];
+}
 function buttons(body){
  return {messaging_product:'whatsapp',type:'interactive',interactive:{
   type:'button',body:{text:body},action:{buttons:WELCOME_BUTTONS.map(({payload,title})=>({
-   type:'reply',reply:{id:payload,title}
+   type:'reply',reply:{id:payload,title:title.length<=20?title:'Start selling'}
   }))}}};
 }
 function list(body,rows,title){
@@ -40,11 +52,7 @@ function responseFor(raw){
     row('TEYZA_HOME','All services','Back to the welcome menu')
    ],'Teyza advertising');
   case 'TEYZA_WELCOME_SUPPORT':
-   return list('How can Teyza Support help you? Choose a topic.',[
-    row('TEYZA_SUPPORT_APPROVAL','Account approval','Check ID, photo, business review'),
-    row('TEYZA_SUPPORT_ORDERS','Orders & messages','Find customer orders and chats'),
-    row('TEYZA_HOME','All services','Back to the welcome menu')
-   ],'Teyza support');
+   return buttons('Thank you! Your request to speak with a friendly Teyza consultant has been added to the Teyza Support inbox. Our team can assist with account approvals, selling, advertising and general enquiries. Please never share passwords or OTPs here. Reply with another service option to explore while your request is reviewed.');
   case 'TEYZA_SELL_START':
    return buttons('How to start selling on Teyza:\n1. Register your spaza shop or business.\n2. Verify your phone, owner ID and business location.\n3. Wait for Teyza approval.\n4. Review available account upgrade options.\n5. Once eligible access is verified, add your products or services.\nUse the Teyza app for account help. Reply STOP to end WhatsApp updates.');
   case 'TEYZA_SELL_BENEFITS':
@@ -62,4 +70,4 @@ function responseFor(raw){
   default:return null;
  }
 }
-module.exports={WELCOME_BUTTONS,welcomeTemplateComponents,responseFor};
+module.exports={WELCOME_BUTTONS,welcomeTemplateComponents,richWelcomeComponents,responseFor};
