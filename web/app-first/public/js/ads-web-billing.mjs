@@ -127,7 +127,13 @@ async function start(){
    if(result.paid===true){
     sessionStorage.removeItem(receiptKey(uid));
     history.replaceState(null,'',location.pathname);
-    notice('Verified payment! Your reviewed ad is now active for seven days.','success');
+    if(result.publicationStatus==='active'){
+      notice('Payment verified. Your sponsored ad is running. The seven-day period started when Teyza published it.','success');
+    }else if(result.pendingActivation===true||result.publicationStatus==='paid_pending_activation'){
+      notice('Payment verified. Your advertisement is pending final publication by Teyza. Your seven days have not started yet.','success');
+    }else{
+      notice('Payment verified. Refresh the campaign status or contact support before assuming it is live.','warning');
+    }
    }else notice('This payment requires manual support review; do not pay again.','warning');
   }catch(e){if(current(uid,g))notice(e.message||'Payment is not yet verified. Do not pay twice.','warning');}
   finally{if(current(uid,g)){busy=false;render();}}
