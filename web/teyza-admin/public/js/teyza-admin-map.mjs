@@ -81,8 +81,8 @@ export function createAdminMap({api,report}){
   const timer=setTimeout(()=>finish(Error('Google Maps did not initialize. Check Maps JavaScript API activation, browser-key referrers and billing in Google Cloud.')),16000);
   function finish(error){
     if(settled)return;settled=true;clearTimeout(timer);
-    delete window[callback];window.gm_authFailure=previousFailure;
-    if(error){script.remove();reject(error);}else resolve(window.google);
+    delete window[callback];
+    if(error){window.gm_authFailure=previousFailure;script.remove();reject(error);}else resolve(window.google);
   }
   window.gm_authFailure=()=>finish(Error('Google Maps rejected this browser key. Enable billing and Maps JavaScript API, and allow https://teyza.co.za/* as an HTTP referrer.'));
   window[callback]=()=>{
