@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createBilling,verifySignature,validCheckoutUrl,nextMonth,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION}=require('./billing-paystack');
+const {createBilling,verifySignature,validCheckoutUrl,nextMonth,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION,PRORATED_TERMS_VERSION}=require('./billing-paystack');
 const NOW=Date.parse('2026-11-04T07:00:00+02:00');
 const consent={recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION};
 function fixture(seed={},options={}) {
@@ -201,7 +201,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
  assert.equal(records.get('teyzaPaystackPayments/'+ref).kind,'renewal');assert.equal(refreshes,2);
 });
 
-function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=9900,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false}={}){
+function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=9900,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false,prorated=false}={}){
  let records;const calls=[];
  const send=async(url,options)=>{
   calls.push({url,options});let data;
@@ -228,7 +228,7 @@ function recurringFixture({failInitialization=false,failSubscription=false,verif
   }else throw Error('Unexpected Paystack request '+url);
   return {ok:true,json:async()=>({status:true,data})};
  };
- const f=fixture({}, {send,getSecret:()=> 'sk_'+mode+'_SYNTHETIC',getProjectId:()=>project});records=f.records;return {...f,calls};
+ const f=fixture({}, {send,getSecret:()=> 'sk_'+mode+'_SYNTHETIC',getProjectId:()=>project,getProrationEnabled:()=>prorated});records=f.records;return {...f,calls};
 }
 
 test('Repeated and concurrent checkout requests cannot create two payable references',async()=>{
@@ -477,4 +477,59 @@ test('Seller billing accepts Paystack modern signing-secret ping and rejects bad
  await assert.rejects(api.webhook(raw,legacy,{event:'ping',data:{}},
    't='+stamp+',v1=whk_seller123:'+('0'.repeat(128))),e=>e.status===401);
  assert.equal(records.has('teyzaBilling/shop1'),false,'Signed ping never creates a billing record');
+});
+
+test('Opt-in first-month proration charges only remaining November days and renews at unchanged R99',async()=>{
+ const f=recurringFixture({prorated:true});
+ const input={recurringConsent:true,termsVersion:PRORATED_TERMS_VERSION,
+  expectedAmountCents:8910,expectedQuoteDate:'2026-11-04'};
+ const checkout=await f.api.execute(f.auth,'billing_checkout',input);
+ assert.equal(checkout.amountCents,8910,'27 of 30 November days cost R89.10');
+ assert.equal(checkout.monthlyCents,9900);
+ assert.equal(checkout.quoteDate,'2026-11-04');
+ const init=JSON.parse(f.calls.find(c=>c.url.endsWith('/transaction/initialize')).options.body);
+ assert.equal(init.amount,8910);
+ assert.equal(init.plan,undefined,'Initial payment must not subscribe at the wrong price');
+ const record=f.records.get('teyzaPaystackPayments/'+checkout.reference);
+ assert.equal(record.prorationQuoteDate,'2026-11-04');
+ assert.equal(record.termsVersion,PRORATED_TERMS_VERSION);
+ assert.equal(record.prorationDaysInMonth,30);
+ assert.equal(record.prorationDaysRemaining,27);
+ const paid=await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(paid.paid,true);assert.equal(paid.paidUntil,nextMonth(NOW));
+ const subscription=JSON.parse(f.calls.find(c=>c.url.endsWith('/subscription')).options.body);
+ assert.equal(subscription.plan,'PLN_TEST99');
+ assert.equal(subscription.start_date,new Date(nextMonth(NOW)).toISOString());
+ const bill=f.records.get('teyzaBilling/shop1');
+ assert.equal(bill.monthlyCents,9900,'Do not turn 89.10 into the recurring amount');
+ assert.equal(bill.firstPaymentCents,8910);
+ assert.equal(bill.renewalSetup,'scheduled');
+ await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,1);
+});
+test('Prorated checkout refuses stale quote, forged price and old recurring terms before Paystack initialization',async()=>{
+ const f=recurringFixture({prorated:true});
+ const base={recurringConsent:true,termsVersion:PRORATED_TERMS_VERSION,
+  expectedAmountCents:8910,expectedQuoteDate:'2026-11-04'};
+ for(const data of [
+  {...base,expectedAmountCents:1},
+  {...base,expectedAmountCents:9900},
+  {...base,expectedQuoteDate:'2026-11-03'},
+  {...base,termsVersion:SUBSCRIPTION_TERMS_VERSION},
+  {...base,recurringConsent:false},
+ ]){
+  await assert.rejects(f.api.execute(f.auth,'billing_checkout',data),e=>[409,422].includes(e.status));
+ }
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/transaction/initialize')).length,0);
+});
+test('Prorated checkout paid after quote day is held for review without paid access or duplicate charge',async()=>{
+ const f=recurringFixture({prorated:true,paidAt:NOW+86400000});
+ const checkout=await f.api.execute(f.auth,'billing_checkout',{
+  recurringConsent:true,termsVersion:PRORATED_TERMS_VERSION,
+  expectedAmountCents:8910,expectedQuoteDate:'2026-11-04'});
+ const result=await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
+ assert.equal(result.paid,false);assert.equal(result.refundReviewRequired,true);
+ assert.equal(f.records.get('teyzaPaystackPayments/'+checkout.reference).status,'refund_review');
+ assert.equal(f.records.has('teyzaBilling/shop1'),false,'A stale daily amount must not activate a subscription');
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/subscription')).length,0);
 });
