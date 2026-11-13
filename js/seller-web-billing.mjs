@@ -31,7 +31,7 @@ export function backendReady(health){
     (health.membershipProrationEnabled===true?
       Number.isSafeInteger(health.membershipInitialChargeCents)&&
       health.membershipInitialChargeCents>0&&health.membershipInitialChargeCents<=9900&&
-      /^\\d{4}-\\d{2}-\\d{2}$/.test(health.membershipProrationQuoteDate||'')&&
+      /^\d{4}-\d{2}-\d{2}$/.test(health.membershipProrationQuoteDate||'')&&
       health.subscriptionTermsVersion===PRORATED_TERMS_VERSION:
       health.membershipInitialChargeCents===9900&&
       health.subscriptionTermsVersion===TERMS_VERSION));
