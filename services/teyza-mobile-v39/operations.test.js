@@ -387,3 +387,14 @@ test('WhatsApp admin status never exposes access tokens or recipient contact inf
  assert.equal(JSON.stringify(d).includes('+27712345678'),false);
  await rejects(f.call('ops_whatsapp_status',{}, {uid:'seller1',email_verified:true}),403);
 });
+
+test('WhatsApp webhook admin diagnostics return only aggregate signed event categories',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaWhatsAppWebhookEvents/id-1',{kind:'inbound',eventType:'text',sender:'SHOULD_NOT_SHOW'});
+ f.db.records.set('teyzaWhatsAppWebhookEvents/id-2',{kind:'status',eventType:'delivered',phone:'SHOULD_NOT_SHOW'});
+ const result=await f.call('ops_whatsapp_status');
+ assert.equal(result.webhookEvents.counts.inbound,1);
+ assert.equal(result.webhookEvents.counts.delivered,1);
+ assert(!JSON.stringify(result).includes('SHOULD_NOT_SHOW'));
+ await rejects(f.call('ops_whatsapp_status',{}, {uid:'seller1',email_verified:true}),403);
+});
