@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
-const actions=new Set(['ops_sellers','ops_map_shops','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
+const actions=new Set(['ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
@@ -124,6 +124,22 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
         paymentStatus:billing?.status||'not_started'};
     }));
     return {submissions:rows.filter(Boolean),limited:result.docs.length===50};
+  }
+  if(action==='ops_whatsapp_status'){
+    // Status only: never expose Meta bearer credentials or private phone numbers.
+    const enabled=process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1';
+    const fields={phoneNumberId:/^\\d+$/.test(process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||''),
+      apiVersion:/^v\\d+\\.\\d+$/.test(process.env.TEYZA_WHATSAPP_API_VERSION||''),
+      templateName:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
+      language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
+      headerImage:process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE==='true',
+      headerImageUrlConfigured:Boolean(process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL),
+      bodyFields:process.env.TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS||''};
+    const rows=await db.collection('teyzaWhatsAppApprovalOutbox').limit(101).get();
+    const counts={};for(const row of rows.docs){const status=row.data().status||'unknown';counts[status]=(counts[status]||0)+1;}
+    return {enabled,fields,counts,sampled:rows.docs.length,sampleLimited:rows.docs.length>100,
+      tokenVerified:false,phoneSenderVerified:false,webhookVerified:false,
+      warning:'An approved Meta template is not proof that Teyza has a valid sender token, matching WABA phone number, recipient opt-in, or webhook delivery acknowledgement.'};
   }
   if(action==='ops_map_shops'){
     // Read-only, bounded national inventory of published Teyza shops. This is
