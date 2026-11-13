@@ -84,7 +84,11 @@ export function createAdminMap({api,report}){
     delete window[callback];
     if(error){window.gm_authFailure=previousFailure;script.remove();reject(error);}else resolve(window.google);
   }
-  window.gm_authFailure=()=>finish(Error('Google Maps rejected this browser key. Enable billing and Maps JavaScript API, and allow https://teyza.co.za/* as an HTTP referrer.'));
+  window.gm_authFailure=()=>{
+    const error=Error('Google Maps rejected this browser key. Enable billing and Maps JavaScript API, and allow https://teyza.co.za/* as an HTTP referrer.');
+    if(!settled){finish(error);return;}
+    status.textContent=error.message;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;report?.(error);
+  };
   window[callback]=()=>{
     if(!window.google?.maps?.Map)return finish(Error('Google Maps loaded without a usable Maps JavaScript API.'));
     finish(null);
