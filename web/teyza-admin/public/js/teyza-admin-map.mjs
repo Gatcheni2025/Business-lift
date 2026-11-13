@@ -17,6 +17,10 @@ export function createAdminMap({api,report}){
  const node=(tag,copy)=>{const n=document.createElement(tag);if(copy!==undefined)n.textContent=copy;return n;};
  const panel=node('section');panel.className='panel';
  const introduction=node('p','Map South African Teyza-registered shops and compare nearby Google-listed businesses. Google searches are local and do not constitute a national census.');
+ const helpLink=node('a','Set up a Google Maps browser key in Google Cloud');
+ helpLink.href='https://console.cloud.google.com/google/maps-apis/credentials?project=business-lift-3c19c';
+ helpLink.target='_blank';helpLink.rel='noopener noreferrer';
+ const guidance=node('p','A browser key needs Maps JavaScript API enabled, billing enabled and HTTP referrers allowing https://teyza.co.za/* and https://www.teyza.co.za/*. Never use your server-side Google Places key here.');
  const keyLabel=node('label','Google Maps browser key (restricted to teyza.co.za)');
  const key=node('input');key.type='password';key.autocomplete='off';key.placeholder='Browser-restricted Maps JavaScript key';keyLabel.append(key);
  const start=node('button','Open coverage map');start.className='button primary';start.type='button';
@@ -32,7 +36,7 @@ export function createAdminMap({api,report}){
  controls.append(categoryLabel,search,refresh);
  const summary=node('p','Teyza-only: 0 · Google + Teyza: 0 · Google-only nearby: 0');
  const results=node('div');results.setAttribute('aria-live','polite');
- panel.append(introduction,keyLabel,start,status,controls,mapBox,summary,results);
+ panel.append(introduction,helpLink,guidance,keyLabel,start,status,controls,mapBox,summary,results);
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
  function display(){if(!google||!map)return;
@@ -66,21 +70,32 @@ export function createAdminMap({api,report}){
     status.textContent='Loaded '+registered.length+' verified mapped Teyza shops…';
   }while(next&&attempts<20);
   partial=Boolean(next);display();
-  status.textContent='Showing '+registered.length+' verified mapped Teyza locations'+(partial+'').replace('true',' (additional records available; narrow the review)').replace('false','')+'.';
+  status.textContent='Showing '+registered.length+' verified mapped Teyza locations'+(partial?' (additional records exist; this is a partial view)':'')+'.';
  }
  function loadGoogle(keyValue){return new Promise((resolve,reject)=>{
-  if(window.google?.maps){resolve(window.google);return;}
+  if(window.google?.maps?.Map){resolve(window.google);return;}
   const callback='teyzaMapLoaded_'+Math.random().toString(36).slice(2);
-  let settled=false;const timer=setTimeout(()=>finish(Error('Google Maps load timed out')),20000);
-  function finish(error){if(settled)return;settled=true;clearTimeout(timer);delete window[callback];if(error)reject(error);else resolve(window.google);}
-  window[callback]=()=>finish(null);
-  const script=node('script');script.async=true;script.onerror=()=>finish(Error('Google Maps could not load. Check your API restrictions.'));
+  const previousFailure=window.gm_authFailure;
+  let settled=false;
+  const script=node('script');
+  const timer=setTimeout(()=>finish(Error('Google Maps did not initialize. Check Maps JavaScript API activation, browser-key referrers and billing in Google Cloud.')),16000);
+  function finish(error){
+    if(settled)return;settled=true;clearTimeout(timer);
+    delete window[callback];window.gm_authFailure=previousFailure;
+    if(error){script.remove();reject(error);}else resolve(window.google);
+  }
+  window.gm_authFailure=()=>finish(Error('Google Maps rejected this browser key. Enable billing and Maps JavaScript API, and allow https://teyza.co.za/* as an HTTP referrer.'));
+  window[callback]=()=>{
+    if(!window.google?.maps?.Map)return finish(Error('Google Maps loaded without a usable Maps JavaScript API.'));
+    finish(null);
+  };
+  script.async=true;script.onerror=()=>finish(Error('Could not load maps.googleapis.com. Check browser extensions, network access and Google Cloud key restrictions.'));
   script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(keyValue)+'&callback='+encodeURIComponent(callback)+'&v=weekly';
   document.head.append(script);
  });}
  start.onclick=async()=>{
   if(started)return;const value=key.value.trim();
-  if(!/^[A-Za-z0-9_-]{20,150}$/.test(value)){status.textContent='Enter a browser-restricted Google Maps JavaScript API key.';return;}
+  if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value)){status.textContent='Enter the actual Google Maps browser API key (normally starts with AIza), not the API key name, project ID or Google Places server key.';return;}
   started=true;start.disabled=true;key.value='';
   try{google=await loadGoogle(value);map=new google.maps.Map(mapBox,{center:CENTER,zoom:5,mapTypeControl:false});
     search.disabled=false;refresh.disabled=false;await loadRegistered();
@@ -93,5 +108,5 @@ export function createAdminMap({api,report}){
     const data=await response.json();googleEntries=Array.isArray(data.entries)?data.entries:[];display();
     status.textContent='Google results for this area: '+googleEntries.length+' (limited provider sample; not exhaustive).';
   }catch(e){status.textContent=e.message||'Google search failed.';report?.(e);}finally{search.disabled=false;}};
- return {panel,clear(){clearMarkers();registered=[];googleEntries=[];next=null;partial=false;if(map)map=null;google=null;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;status.textContent='Start a new administrator map session.';}};
+ return {panel,clear(){clearMarkers();registered=[];googleEntries=[];next=null;partial=false;map=null;google=null;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;status.textContent='Start a new administrator map session.';}};
 }
