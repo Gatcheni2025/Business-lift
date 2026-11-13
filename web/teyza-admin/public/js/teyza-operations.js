@@ -52,6 +52,11 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const counts=Object.entries(s.counts||{}).sort((a,b)=>a[0].localeCompare(b[0]));
   cardNode.append(table(['Outbox status','Records (sample)'],counts.map(([state,count])=>[state,count])));
   cardNode.append(el('p','Based on first '+s.sampled+' outbox entries'+(s.sampleLimited?' (more exist)':'')+'. Provider “accepted” means API acceptance, not delivered to recipient.','footnote'));
+  const webhook=s.webhookEvents||{counts:{},sampled:0,sampleLimited:false};
+  cardNode.append(el('h3','Signed WhatsApp webhook events'));
+  cardNode.append(table(['Event status','Records (sample)'],Object.entries(webhook.counts||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([kind,count])=>[kind,count])));
+  cardNode.append(el('p','Sampled '+webhook.sampled+' signed metadata events'+(webhook.sampleLimited?' (more exist)':'')+'. No message bodies, phone numbers or Meta tokens are shown. Zero events does not prove Meta is subscribed.','footnote'));
+
   cardNode.append(el('p',s.warning||'Never share Meta API tokens or private WhatsApp phone numbers.','footnote'));
   root.append(cardNode);
  }

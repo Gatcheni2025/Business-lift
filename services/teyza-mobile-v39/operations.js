@@ -137,9 +137,21 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
       bodyFields:process.env.TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS||''};
     const rows=await db.collection('teyzaWhatsAppApprovalOutbox').limit(101).get();
     const counts={};for(const row of rows.docs){const status=row.data().status||'unknown';counts[status]=(counts[status]||0)+1;}
+    // Counts from a bounded, signed-webhook-only metadata collection.
+    // Never expose provider IDs, recipient contacts, payloads or event documents.
+    const webhookSample=await db.collection('teyzaWhatsAppWebhookEvents').limit(101).get();
+    const webhookKinds={};
+    for(const row of webhookSample.docs){
+      const event=row.data();
+      if(!['status','inbound'].includes(event.kind))continue;
+      const state=event.kind==='status'&&['sent','delivered','read','failed','deleted','played'].includes(event.eventType)
+        ?event.eventType:event.kind;
+      webhookKinds[state]=(webhookKinds[state]||0)+1;
+    }
     return {enabled,fields,counts,sampled:rows.docs.length,sampleLimited:rows.docs.length>100,
+      webhookEvents:{counts:webhookKinds,sampled:webhookSample.docs.length,sampleLimited:webhookSample.docs.length>100},
       tokenVerified:false,phoneSenderVerified:false,webhookVerified:false,
-      warning:'An approved Meta template is not proof that Teyza has a valid sender token, matching WABA phone number, recipient opt-in, or webhook delivery acknowledgement.'};
+      warning:'Webhook event counts show valid signed requests stored by Teyza. No test callback has yet established that Meta is subscribed; API acceptance also does not prove message delivery.'};
   }
   if(action==='ops_map_shops'){
     // Read-only, bounded national inventory of published Teyza shops. This is

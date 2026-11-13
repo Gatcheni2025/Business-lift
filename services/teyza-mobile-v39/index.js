@@ -17,6 +17,10 @@ const paystackSigningKey=defineSecret('TEYZA_PAYSTACK_WEBHOOK_SIGNING_SECRET');
 // Admin-only deployment must not register an optional WhatsApp secret.
 // Firebase detects defineSecret during module evaluation even for exports
 // excluded via --only.
+// The webhook is always a separate HTTPS function. These secrets are bound
+// only to that function; the optional outbound WhatsApp sender stays OFF.
+const whatsAppWebhookVerifyToken=defineSecret('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN');
+const whatsAppWebhookAppSecret=defineSecret('TEYZA_WHATSAPP_APP_SECRET');
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -78,6 +82,16 @@ function sellerCheckoutConfigured(){
  return Boolean(/^sk_(test|live)_/.test(key)&&process.env.TEYZA_PAYSTACK_MONTHLY_PLAN_CODE&&
   (!key.startsWith('sk_test_')||(project&&project!=='business-lift-3c19c')));
 }
+// Public GET challenge and HMAC-authenticated POST delivery receipts/inbound events.
+// No WhatsApp message sender or scheduled worker is enabled by this export.
+const whatsappWebhook=require('./whatsapp-webhook').createWebhook({db,
+ getVerifyToken:()=>whatsAppWebhookVerifyToken.value(),
+ getAppSecret:()=>whatsAppWebhookAppSecret.value(),
+ logger:require('firebase-functions/logger')});
+exports.teyzaWhatsAppWebhook=onRequest({region:'us-central1',invoker:'public',cors:false,
+ maxInstances:3,memory:'256MiB',timeoutSeconds:30,
+ secrets:[whatsAppWebhookVerifyToken,whatsAppWebhookAppSecret]},
+ (req,res)=>whatsappWebhook.handle(req,res));
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
