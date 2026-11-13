@@ -6,6 +6,8 @@ const {checkedPhone}=require('./onboarding');
 // Build only parameters declared by the *actual approved* Meta template.
 // Never guess the media header or body placeholders from a template name.
 function approvedTemplatePayload(config,account){
+ if(config.template==='teyza_seller_welcome_menu' && (config.headerImageRequired!==true ||
+     config.bodyFields!=='ownerFirstName,shopName'))return null;
  const fields=String(config.bodyFields||'').split(',').map(x=>x.trim()).filter(Boolean);
  if(fields.length>5||fields.some(x=>!['ownerFirstName','shopName'].includes(x)))return null;
  const body=fields.map(field=>{
