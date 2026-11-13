@@ -57,7 +57,7 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
    const template=configured?approvedTemplatePayload(config,a):null;
    if(!template){tx.update(ref,{status:'configuration_required',reason:'approved_template_parameters_missing',updatedAt:clock()});return null;}
    tx.update(ref,{status:'sending',attemptedAt:clock()});
-   return {phone:a.phone.replace(/^\+/,'')};
+   return {phone:a.phone.replace(/^\+/,''),template};
   });
   if(!claimed)return;
   try{
