@@ -62,3 +62,19 @@ test('no verified charge or a sandbox charge cannot activate membership',()=>{
  assert.equal(untrusted.transactions[0].paymentVerified,false);
  assert.throws(()=>summarize('wrong',a,active(uid),[],NOW),/identity/);
 });
+
+test('Approved unpaid seller sees today’s prorated first payment, not a fabricated overdue invoice',()=>{
+ const at=Date.parse('2026-11-12T11:00:00+02:00');
+ const account={uid:'seller-prorated',approvalStatus:'approved',shopName:'Teyza Shop'};
+ const info=summarize('seller-prorated',account,null,[],at,true);
+ assert.equal(info.firstPaymentQuote.amountCents,6270);
+ assert.equal(info.firstPaymentQuote.daysRemaining,19);
+ assert.equal(info.firstPaymentQuote.daysInMonth,30);
+ assert.equal(info.firstPaymentQuote.quoteDate,'2026-11-12');
+ assert.equal(info.firstPaymentQuote.monthlyCents,9900);
+ assert.equal(info.paymentRequiredCents,6270);
+ assert.equal(info.amountDueCents,null,'An unstarted membership is not an invoiced debt');
+ assert.equal(info.nextBillAmountCents,null,'No Paystack subscription exists yet');
+ const old=summarize('seller-prorated',account,null,[],at,false);
+ assert.equal(old.paymentRequiredCents,9900,'Flag off preserves current production pricing');
+});

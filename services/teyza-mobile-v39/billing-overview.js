@@ -1,9 +1,11 @@
 'use strict';
 const P=require('./publication');
 const {MONTHLY_CENTS}=require('./billing-paystack');
+const {quote:calendarQuote}=require('./billing-proration');
 const validTime=value=>Number.isFinite(value)&&value>0?value:null;
 const expiry=(billing,now)=>validTime(billing?.paidUntil)>now?billing.paidUntil:null;
-function summarize(uid,account,billing,transactions=[],now=Date.now()){
+function summarize(uid,account,billing,transactions=[],now=Date.now(),
+  prorated=process.env.TEYZA_SELLER_PRORATION_ENABLED==='true'){
   if(account?.uid!==uid)throw Error('Seller identity does not match billing request');
   // An account is paid only if Paystack's verified live payment was recorded.
   // Historical manual receipts, Netcash and sandbox transactions are NOT paid.
@@ -27,6 +29,7 @@ function summarize(uid,account,billing,transactions=[],now=Date.now()){
   // An amount to pay is NOT the same as a debt or raised invoice. Only show a
   // payable renewal on a provider-reported failure after paid coverage ended.
   const amountDueCents=paymentFailed&&!livePaid?MONTHLY_CENTS:null;
+  const firstPaymentQuote=calendarQuote(now,prorated);
   const rows=transactions.filter(row=>row?.ownerUid===uid&&row?.kind!=='promotion')
     .map(row=>({
       reference:typeof row.reference==='string'?row.reference:'',
@@ -41,12 +44,12 @@ function summarize(uid,account,billing,transactions=[],now=Date.now()){
   return {
     sellerUid:uid,shopName:account.shopName||'',businessType:account.category,
     provider:'paystack',currency:'ZAR',
-    monthlyFeeCents:MONTHLY_CENTS,
+    monthlyFeeCents:MONTHLY_CENTS,firstPaymentQuote,
     status,accessActive:P.eligible(uid,account,billing,now),
     paymentVerified:livePaid,renewalStatus:renewal,
     paidThrough:through,nextBillingAt,nextBillAmountCents:nextBillingAt?MONTHLY_CENTS:null,
     amountDueCents,amountDueIsInvoice:false,
-    paymentRequiredCents:!livePaid&&account.approvalStatus==='approved'?MONTHLY_CENTS:null,
+    paymentRequiredCents:!livePaid&&account.approvalStatus==='approved'?firstPaymentQuote.amountCents:null,
     temporaryAccessUntil:complimentary?state.adminComplimentaryUntil:
       legacyAccess?state.mandateAccessUntil:null,
     temporaryAccessKind:complimentary?'admin_grant':legacyAccess?'historic_mandate_processing':null,

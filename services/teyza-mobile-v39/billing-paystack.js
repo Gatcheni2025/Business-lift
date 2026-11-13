@@ -4,6 +4,7 @@ const crypto=require('node:crypto');
 const D=require('./domain');
 const P=require('./publication');
 const webhookSignature=require('./webhook-signature');
+const {quote:calendarQuote,PRORATED_TERMS_VERSION}=require('./billing-proration');
 const MONTHLY_CENTS=9900,PROMO_CENTS=2900,PROMO_MS=7*86400000;
 const SUBSCRIPTION_TERMS_VERSION='seller-r99-monthly-2026-11';
 const {recentAdmin}=require('./seller-experience');
@@ -20,7 +21,9 @@ function validCheckoutUrl(value) {
   catch (_) {return false;}
 }
 const verifySignature=webhookSignature.verifyLegacy;
-function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',getPlanCode=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',send=fetch,refresh=async()=>{}}) {
+function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',getPlanCode=()=>'',getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||'',
+  getProrationEnabled=()=>process.env.TEYZA_SELLER_PRORATION_ENABLED==='true',
+  send=fetch,refresh=async()=>{}}) {
   const doc=p=>db.doc(p);
   const environment=()=>getSecret().startsWith('sk_live_')?'live':'test';
   async function read(path) {const x=await doc(path).get();return x.exists?x.data():null;}
@@ -75,8 +78,16 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
     // legacy account-level approval is not sufficient proof of SMS/ID/selfie.
     if(webCheckout&&setup?.requiredVersion!==2)
       D.fail(409,'Complete this shop’s current phone OTP and identity onboarding before website checkout.');
-    if(!isPromo&&(data.recurringConsent!==true||data.termsVersion!==SUBSCRIPTION_TERMS_VERSION))
-      D.fail(422,'Confirm the monthly renewal terms before starting payment.');
+    const prorated=!isPromo&&getProrationEnabled()===true;
+    const price=calendarQuote(now,prorated);
+    const activeTerms=prorated?PRORATED_TERMS_VERSION:SUBSCRIPTION_TERMS_VERSION;
+    if(!isPromo&&(data.recurringConsent!==true||data.termsVersion!==activeTerms))
+      D.fail(422,'Confirm the current initial charge and monthly renewal terms before starting payment.');
+    // Prevent client-side stale quotes and fabricated browser prices. The quote
+    // is computed again by the backend from South African calendar time.
+    if(prorated&&(data.expectedAmountCents!==price.amountCents||
+       data.expectedQuoteDate!==price.quoteDate))
+      D.fail(409,'The first-month price changed. Refresh the website quote before paying.');
     if(isPromo&&!P.entitled(uid,account,billing,now))D.fail(403,'Upgrade your seller membership before promoting your business.');
     if(!isPromo&&P.entitled(uid,account,billing,now))D.fail(409,'Your seller membership is already paid.');
     const plan=getPlanCode();
@@ -97,7 +108,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
           D.fail(409,'A subscription may still renew. Manage or cancel it before starting another.');
       }
     }
-    const amount=isPromo?PROMO_CENTS:MONTHLY_CENTS;
+    const amount=isPromo?PROMO_CENTS:price.amountCents;
     if(!isPromo&&nextMonth(now)-now<86400000)
       D.fail(409,'Monthly renewal starts on the first day of the next month. New signups are paused during the final 24 hours to avoid charging twice in quick succession. Return on the first.');
     const reference=(isPromo?'TZP-':'TZM-')+crypto.randomBytes(13).toString('hex');
@@ -119,7 +130,7 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
         if(!isPromo&&old?.ownerUid===uid&&old.kind==='intro')
           D.fail(409,'An earlier introductory checkout is still unresolved. Contact support to reconcile that Paystack reference before starting the R99 membership.');
         if(old?.ownerUid===uid&&old.status==='pending'&&old.environment===mode&&validCheckoutUrl(old.checkoutUrl)&&
-          (isPromo?old.kind==='promotion':old.kind==='monthly'&&old.amountCents===MONTHLY_CENTS))
+          (isPromo?old.kind==='promotion':old.kind==='monthly'&&old.amountCents===amount&&old.termsVersion===activeTerms))
           return {existing:old};
         D.fail(409,'A payment is already being prepared. Please contact support before trying another checkout.');
       }
@@ -127,20 +138,23 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
         customerEmail:auth.email.toLowerCase(),environment:mode,checkoutChannel:webCheckout?'web':'direct',
         previousSubscriptionCode:billing?.paystackSubscriptionCode||'',
         renewalStrategy:isPromo?'none':'delayed_plan',
-        ...(isPromo?{}:{recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION,consentedAt:now}),
+        ...(isPromo?{}:{recurringConsent:true,termsVersion:activeTerms,consentedAt:now,
+          ...(prorated?{prorationQuoteDate:price.quoteDate,prorationDaysInMonth:price.daysInMonth,
+            prorationDaysRemaining:price.daysRemaining}: {})}),
         amountCents:amount,currency:'ZAR',status:'pending',createdAt:now});
       tx.set(lockRef,{ownerUid:uid,reference,status:'preparing',environment:mode,createdAt:now});
       return {existing:null};
     });
     if(started.existing){const old=started.existing;return {reference:old.reference,checkoutUrl:old.checkoutUrl,
       amountCents:old.amountCents,introductory:false,monthlyCents:MONTHLY_CENTS,
+      ...(old.prorationQuoteDate?{quoteDate:old.prorationQuoteDate}:{}),
       promotionDays:isPromo?7:null,requiresReturnVerification:true,alreadyStarted:true};}
     const payload={email:auth.email,amount,currency:'ZAR',channels:['card'],reference,
       callback_url:webCheckout?'https://teyza.co.za/pay?payment=return':
         'https://www.teyza.co.za/?payment=return',
       metadata:{teyzaUid:uid,teyzaKind:isPromo?'promotion':'membership'}};
-    // Charge the server-priced R99 membership once;
-    // first-of-month renewal is independently scheduled only after
+    // Charge the strictly verified server-quoted initial amount once;
+    // the regular R99 first-of-month renewal is scheduled only after
     // server-side Paystack verification and recurring consent.
     let result;
     try{
@@ -161,6 +175,8 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
     }
     return {reference,checkoutUrl:result.authorization_url,
       amountCents:amount,introductory:false,monthlyCents:MONTHLY_CENTS,
+      ...(prorated?{quoteDate:price.quoteDate,daysRemaining:price.daysRemaining,
+        daysInMonth:price.daysInMonth}:{}),
       promotionDays:isPromo?7:null,requiresReturnVerification:true};
   }
   async function verify(reference,expectedEnvironment) {
@@ -236,6 +252,19 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
         if(lockSnap.exists&&lockSnap.data().reference===reference)tx.update(lockRef,{status:'refund_review',updatedAt:now});
         return {paid:false,kind:pay.kind,reference,refundReviewRequired:true};
       }
+      // An already initialized Paystack link can be completed after the
+      // South African calendar day changes. Do not grant access for an
+      // outdated per-day quote; hold the charge for reconciliation/refund.
+      if(pay.kind==='monthly'&&pay.termsVersion===PRORATED_TERMS_VERSION&&
+         (typeof pay.prorationQuoteDate!=='string'||
+          calendarQuote(paidAt,true).quoteDate!==pay.prorationQuoteDate)){
+        tx.update(payRef,{status:'refund_review',verifiedAt:now,
+          transactionId:String(verified.id||''),paymentEnvironment:entry.environment,
+          reviewReason:'prorated_checkout_paid_after_quote_day'});
+        if(lockSnap.exists&&lockSnap.data().reference===reference)
+          tx.update(lockRef,{status:'refund_review',updatedAt:now});
+        return {paid:false,kind:pay.kind,reference,refundReviewRequired:true};
+      }
       if(pay.kind==='promotion') {
         if(!P.entitled(uid,account,bill,now))D.fail(403,'Promotion requires a current paid seller membership.');
         const start=Math.max(now,promoSnap.exists?promoSnap.data()?.endsAt||0:0);
@@ -244,7 +273,10 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
       } else {
         const base=Math.max(paidAt,Number(bill?.paidUntil)||0),paidUntil=nextMonth(base);
         tx.set(billRef,{ownerUid:uid,status:'paid',introUsed:bill?.introUsed===true||pay.kind==='intro',
-          monthlyCents:pay.amountCents,standardMonthlyCents:MONTHLY_CENTS,
+          monthlyCents:pay.termsVersion===PRORATED_TERMS_VERSION?MONTHLY_CENTS:pay.amountCents,
+          ...(pay.termsVersion===PRORATED_TERMS_VERSION?{
+            firstPaymentCents:pay.amountCents,firstPaymentQuoteDate:pay.prorationQuoteDate
+          }:{}),standardMonthlyCents:MONTHLY_CENTS,
           paidUntil,lastReference:reference,latestPeriod:P.period(now),
           paymentProvider:'paystack',paymentEnvironment:entry.environment,paystackCustomerCode:verified.customer?.customer_code||bill?.paystackCustomerCode||'',
           renewalSetup:entry.renewalStrategy==='delayed_plan'?'pending':bill?.renewalSetup||'action_required',
@@ -463,4 +495,4 @@ function createBilling({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>
   return {execute,webhook,actions,grant};
 }
 module.exports={createBilling,actions,nextMonth,verifySignature,validCheckoutUrl,
-  MONTHLY_CENTS,PROMO_CENTS,PROMO_MS,SUBSCRIPTION_TERMS_VERSION};
+  MONTHLY_CENTS,PROMO_CENTS,PROMO_MS,SUBSCRIPTION_TERMS_VERSION,PRORATED_TERMS_VERSION};

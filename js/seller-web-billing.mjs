@@ -1,6 +1,7 @@
 // SECURITY REMEDIATION: independently rewritten, fail-closed Teyza seller portal.
 // No card details or Paystack secrets are handled here. Pending independent review.
 export const TERMS_VERSION='seller-r99-monthly-2026-11';
+export const PRORATED_TERMS_VERSION='seller-r99-calendar-proration-2026-11';
 export const SERVICE_URL='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile';
 const config={
   apiKey:'AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U',
@@ -26,8 +27,29 @@ export function backendReady(health){
     (v[0]>3 || v[0]===3 && v[1]>=25) &&
     health.approvalRequired===true && health.sellerApprovalBeforeCheckout===true &&
     health.paystackCheckoutAvailable===true && health.billingMode==='paystack_checkout' &&
-    health.membershipInitialChargeCents===9900 && health.subscriptionMonthlyCents===9900 &&
-    health.subscriptionTermsVersion===TERMS_VERSION);
+    health.subscriptionMonthlyCents===9900 &&
+    (health.membershipProrationEnabled===true?
+      Number.isSafeInteger(health.membershipInitialChargeCents)&&
+      health.membershipInitialChargeCents>0&&health.membershipInitialChargeCents<=9900&&
+      /^\d{4}-\d{2}-\d{2}$/.test(health.membershipProrationQuoteDate||'')&&
+      health.subscriptionTermsVersion===PRORATED_TERMS_VERSION:
+      health.membershipInitialChargeCents===9900&&
+      health.subscriptionTermsVersion===TERMS_VERSION));
+}
+export function verifiedInitialQuote(health,billing,uid){
+ if(!backendReady(health)||billing?.sellerUid!==uid)return null;
+ if(health.membershipProrationEnabled!==true)
+   return {amountCents:9900,monthlyCents:9900,prorated:false,
+     termsVersion:TERMS_VERSION};
+ const q=billing?.firstPaymentQuote;
+ if(!q||q.prorated!==true||q.currency!=='ZAR'||
+    !Number.isSafeInteger(q.amountCents)||q.amountCents!==health.membershipInitialChargeCents||
+    q.monthlyCents!==9900||q.quoteDate!==health.membershipProrationQuoteDate||
+    !Number.isInteger(q.daysRemaining)||!Number.isInteger(q.daysInMonth)||
+    q.daysRemaining<1||q.daysInMonth>31||q.daysInMonth<28||
+    q.daysRemaining>q.daysInMonth||!Number.isFinite(q.nextRenewalAt)||
+    !Number.isFinite(q.quoteExpiresAt))return null;
+ return {...q,termsVersion:PRORATED_TERMS_VERSION};
 }
 export function eligibility(summary,verified,ready,matched=false){
   if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
@@ -39,7 +61,7 @@ export function eligibility(summary,verified,ready,matched=false){
   if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
   if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
   if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'Membership checkout is not yet open for this business account. Your shop remains listed for free.'};
-  return {eligible:true,message:'R99 initial payment for the current calendar month, then R99 on the first of each following month.'};
+  return {eligible:true,message:'First payment is shown below for the current month, then R99 on the 1st of following months.'};
 }
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
@@ -69,13 +91,18 @@ async function startup(){
   }
   function render(){
     const user=auth?.currentUser,uid=user?.uid,matched=Boolean(uid&&billing?.sellerUid===uid);
-    const status=eligibility(summary,user?.emailVerified===true,backendReady(health),matched);
+    const quote=matched?verifiedInitialQuote(health,billing,uid):null;
+    const ready=backendReady(health)&&(health?.membershipProrationEnabled!==true||quote!==null);
+    const status=eligibility(summary,user?.emailVerified===true,ready,matched);
     show('webLogin',!user);show('webAccount',!!user);
     el('webAccountEmail').textContent=user?.email||'';
     el('webShopName').textContent=matched?billing.shopName||'Unnamed shop':'Not verified';
     el('webShopType').textContent=matched?({spaza:'Spaza shop',retail:'Other business',wholesale:'Wholesaler'}[billing.businessType]||'Business'):'Not verified';
     el('webShopUid').textContent=matched?uid:'No matching seller';
-    el('webAccess').textContent=status.message;
+    el('webAccess').textContent=status.eligible&&quote?.prorated?
+      'First payment '+billingMoney(quote.amountCents)+' for '+quote.daysRemaining+
+      ' of '+quote.daysInMonth+' calendar days, followed by R99 on the 1st of each month.':
+      status.message;
     el('webBillingStatus').textContent=matched?({
       paid:'Paid · active',complimentary_access:'Temporary complimentary access',
       legacy_temporary_access:'Historic temporary access · not a Paystack payment',
@@ -85,8 +112,14 @@ async function startup(){
     el('webPaidThrough').textContent=matched&&billing.paymentVerified?billingDate(billing.paidThrough):'No verified live payment';
     el('webNextBill').textContent=matched?billingDate(billing.nextBillingAt):'Not scheduled';
     el('webAmountDue').textContent=matched?billingMoney(billing.amountDueCents):'No confirmed amount';
-    el('webPrice').textContent='R99';
-    el('webPriceDetail').textContent='First month at R99, then R99 on the 1st';
+    el('webPrice').textContent=quote?billingMoney(quote.amountCents):'—';
+    el('webPriceDetail').textContent=quote?.prorated?
+      quote.daysRemaining+' of '+quote.daysInMonth+' calendar days, billed through month-end':
+      'Full first month at R99, then R99 on the 1st';
+    el('webTermsText').textContent=quote?.prorated?
+      'I authorise an initial prorated Paystack charge of '+billingMoney(quote.amountCents)+
+      ' for the remaining '+quote.daysRemaining+' calendar days of this month, and recurring R99 charges on the first of each following month until cancelled. I understand this is a recurring subscription.':
+      'I authorise an initial R99 Paystack card charge for access until the end of the current calendar month and recurring R99 charges on the first of each following month until cancelled. I understand this is a recurring subscription.';
     const historyNode=el('webPaymentHistory');historyNode.replaceChildren();
     const records=matched&&Array.isArray(billing.transactions)?billing.transactions.slice(0,30):[];
     if(!records.length){
@@ -106,7 +139,7 @@ async function startup(){
     show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
     show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
     show('webConfirm',Boolean(uid&&receipt(uid)));
-    el('webCheckout').disabled=busy||!status.eligible||!el('webTerms').checked||!el('webOwnShop').checked;
+    el('webCheckout').disabled=busy||!status.eligible||!quote||!el('webTerms').checked||!el('webOwnShop').checked;
     el('webRefresh').disabled=busy;
   }
   async function api(action,data={}){
@@ -181,10 +214,16 @@ async function startup(){
       !el('webOwnShop').checked||!el('webTerms').checked)return notice('Confirm your shop identity and subscription terms.','warning');
     busy=true;render();notice('Preparing verified Paystack checkout…');
     try{
+      const quote=verifiedInitialQuote(health,billing,uid);
+      if(!quote)throw Error('The initial payment quote is out of date. Refresh your account before proceeding.');
       const result=await api('billing_checkout',{checkoutChannel:'web',confirmedSellerUid:uid,
-        recurringConsent:true,termsVersion:TERMS_VERSION});
+        recurringConsent:true,termsVersion:quote.termsVersion,
+        ...(quote.prorated?{expectedAmountCents:quote.amountCents,
+          expectedQuoteDate:quote.quoteDate}:{})});
       if(!validReceipt(result.reference)||!validCheckoutUrl(result.checkoutUrl)||
-        result.amountCents!==9900||result.monthlyCents!==9900||result.introductory!==false)
+        result.amountCents!==quote.amountCents||result.monthlyCents!==9900||
+        (quote.prorated&&result.quoteDate!==quote.quoteDate)||
+        result.introductory!==false)
         throw Error('Unexpected checkout details.');
       if(!current(uid,generation))return;
       sessionStorage.setItem(receiptKey(uid),JSON.stringify({reference:result.reference,createdAt:Date.now()}));

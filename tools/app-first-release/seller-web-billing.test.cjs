@@ -51,7 +51,7 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
  for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple','webFacebook','webReturnGuidance',
    'webShopName','webShopUid','webShopType','webBillingStatus','webPaidThrough','webNextBill','webAmountDue','webPaymentHistory','webOwnShop','webTerms','webCheckout',
-   'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm']){
+   'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm','webTermsText']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
  assert(page.includes('noindex,nofollow'));
@@ -61,9 +61,9 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  assert(!page.includes('id="mandateAccountNumber"')&&!page.includes('id="mandateSign"'));
  assert(js.includes('seller_billing_overview')&&js.includes("confirmedSellerUid:uid"));
  assert(js.includes("billing_checkout")&&js.includes("billing_confirm"));
- assert(js.includes('getIdToken(true)')&&js.includes('membershipInitialChargeCents===9900')&&js.includes('subscriptionTermsVersion===TERMS_VERSION'));
+ assert(js.includes('getIdToken(true)')&&js.includes('membershipInitialChargeCents===9900')&&js.includes('subscriptionTermsVersion===TERMS_VERSION')&&js.includes('verifiedInitialQuote('));
  assert(!page.includes('R10')&&!alias.includes('R10')&&!marketing.includes('R10'));
- assert(js.includes('result.amountCents!==9900')&&js.includes('result.introductory!==false'));
+ assert(js.includes('result.amountCents!==quote.amountCents')&&js.includes('result.introductory!==false'));
  assert(!js.includes('sk_live_')&&!page.includes('sk_live_'));
  assert(js.includes('new sdk.FacebookAuthProvider()'),'Existing Facebook-linked sellers need the same UID login');
  assert(js.includes('confirmedMembership(summary,billing,uid)'),'Paystack browser return is not payment proof');
@@ -138,4 +138,44 @@ test('Account switch invalidates asynchronous reads and navigation before state 
  assert(src.includes("confirmedMembership(summary,billing,uid)"),'Backend access state controls success');
  assert(src.includes("url.hostname!=='paystack.com'||url.username||url.password||url.port"),
   'Subscription management navigation must refuse unsafe URL authority');
+});
+
+test('Prorated membership website requires matching health, exact seller UID and server-only first payment quote',async()=>{
+ const {backendReady,verifiedInitialQuote,PRORATED_TERMS_VERSION}=await service();
+ const health={ok:true,version:'3.25.0',approvalRequired:true,sellerApprovalBeforeCheckout:true,
+  paystackCheckoutAvailable:true,billingMode:'paystack_checkout',subscriptionMonthlyCents:9900,
+  membershipProrationEnabled:true,membershipInitialChargeCents:6270,
+  membershipProrationQuoteDate:'2026-11-12',
+  subscriptionTermsVersion:PRORATED_TERMS_VERSION};
+ const billing={sellerUid:'seller1',firstPaymentQuote:{
+  amountCents:6270,monthlyCents:9900,currency:'ZAR',prorated:true,
+  daysRemaining:19,daysInMonth:30,quoteDate:'2026-11-12',
+  quoteExpiresAt:Date.parse('2026-11-12T22:00:00Z'),
+  nextRenewalAt:Date.parse('2026-12-01T00:00:00Z')}};
+ assert.equal(backendReady(health),true);
+ assert.equal(verifiedInitialQuote(health,billing,'seller1').amountCents,6270);
+ assert.equal(verifiedInitialQuote(health,billing,'seller1').termsVersion,PRORATED_TERMS_VERSION);
+ for(const invalid of [
+  {...health,membershipInitialChargeCents:9900},
+  {...health,membershipProrationQuoteDate:'2026-11-13'},
+  {...health,subscriptionTermsVersion:'seller-r99-monthly-2026-11'},
+  {...health,membershipInitialChargeCents:0},
+ ]){
+  assert.equal(verifiedInitialQuote(invalid,billing,'seller1'),null,
+   'Never navigate to checkout for mismatched or stale quote');
+ }
+ assert.equal(verifiedInitialQuote(health,billing,'other-seller'),null);
+ assert.equal(verifiedInitialQuote(health,{...billing,firstPaymentQuote:{...billing.firstPaymentQuote,amountCents:1}},'seller1'),null);
+ assert.equal(verifiedInitialQuote(health,{...billing,firstPaymentQuote:{...billing.firstPaymentQuote,quoteDate:'2026-11-11'}},'seller1'),null);
+});
+test('Website displays explicit variable amount consent and does not trust a client-entered charge',()=>{
+ const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ const page=fs.readFileSync(path.join(web,'pay.html'),'utf8');
+ assert(js.includes('expectedAmountCents:quote.amountCents'));
+ assert(js.includes('expectedQuoteDate:quote.quoteDate'));
+ assert(js.includes('termsVersion:quote.termsVersion'));
+ assert(js.includes("el('webTermsText').textContent"));
+ assert(page.includes('id="webTermsText"'));
+ assert(!page.includes('it is not prorated'));
+ assert(!js.includes('amount:el('));
 });
