@@ -46,3 +46,20 @@ test('Missing provider configuration waits; an uncertain provider request is nev
  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'needs_review');
  await f.api.deliver('submission1');assert.equal(f.calls.length,1);
 });
+
+test('Approved marketing template supports image header and named personalisation safely',async()=>{
+ const {approvedTemplatePayload}=require('./whatsapp-approval');
+ const config={template:'teyza_seller_welcome_menu',language:'en',headerImageRequired:true,
+   headerImageUrl:'https://teyza.co.za/assets/teyza-whatsapp-welcome.jpg',bodyFields:'ownerFirstName,shopName'};
+ const owner={firstName:'Thandi',shopName:"Thandi's Spaza Shop"};
+ assert.deepEqual(approvedTemplatePayload(config,owner),{
+   name:'teyza_seller_welcome_menu',language:{code:'en'},components:[
+     {type:'header',parameters:[{type:'image',image:{link:config.headerImageUrl}}]},
+     {type:'body',parameters:[{type:'text',text:'Thandi'},{type:'text',text:"Thandi's Spaza Shop"}]}
+   ]
+ });
+ assert.equal(approvedTemplatePayload({...config,headerImageUrl:'http://malicious.example/pic'},owner),null);
+ assert.equal(approvedTemplatePayload({...config,headerImageUrl:''},owner),null);
+ assert.equal(approvedTemplatePayload({...config,bodyFields:'password'},owner),null);
+ assert.equal(approvedTemplatePayload(config,{shopName:'Shop'}),null);
+});
