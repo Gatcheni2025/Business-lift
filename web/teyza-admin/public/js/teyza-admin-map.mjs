@@ -3,6 +3,15 @@
 // Requires a browser-restricted Google Maps JavaScript API key supplied by an admin.
 const PLACES='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover';
 const CENTER={lat:-28.8,lng:24.6};
+const KEY_STORAGE='teyza_admin_maps_browser_key_v1';
+export function mapCentreCoordinates(map){
+ const c=map?.getCenter?.();
+ const lat=typeof c?.lat==='function'?c.lat():typeof c?.lat==='number'?c.lat:NaN;
+ const lon=typeof c?.lng==='function'?c.lng():typeof c?.lng==='number'?c.lng:NaN;
+ if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+ if(lat < -35 || lat > -22 || lon < 16 || lon > 34)return null;
+ return {lat,lon};
+}
 export function groupGooglePlaces(googleEntries,teyzaEntries){
  const linked=new Set(teyzaEntries.map(p=>p.googlePlaceId).filter(Boolean));
  const seen=new Set();
@@ -23,6 +32,12 @@ export function createAdminMap({api,report}){
  const guidance=node('p','A browser key needs Maps JavaScript API enabled, billing enabled and HTTP referrers allowing https://teyza.co.za/* and https://www.teyza.co.za/*. Never use your server-side Google Places key here.');
  const keyLabel=node('label','Google Maps browser key (restricted to teyza.co.za)');
  const key=node('input');key.type='password';key.autocomplete='off';key.placeholder='Browser-restricted Maps JavaScript key';keyLabel.append(key);
+ const rememberLabel=node('label');
+ const remember=node('input');remember.type='checkbox';remember.checked=false;
+ rememberLabel.append(remember,node('span',' Remember restricted browser key on this device'));
+ const forget=node('button','Forget saved browser key');forget.type='button';forget.className='button quiet';
+ forget.onclick=()=>{try{localStorage.removeItem(KEY_STORAGE);}catch(_){}key.value='';remember.checked=false;status.textContent='Saved browser key cleared from this device.';};
+ try{const saved=localStorage.getItem(KEY_STORAGE);if(saved && /^AIza[A-Za-z0-9_-]{30,80}$/.test(saved)){key.value=saved;remember.checked=true;}}catch(_){} 
  const start=node('button','Open coverage map');start.className='button primary';start.type='button';
  const status=node('p','Sign in and load the registered Teyza locations.');status.setAttribute('role','status');
  const mapBox=node('div');mapBox.style.cssText='height:min(68vh,620px);min-height:360px;border-radius:16px;border:1px solid #c8d7d2;overflow:hidden;background:#e6f0ed';mapBox.setAttribute('aria-label','Google Map showing Teyza and Google-listed shops');
@@ -36,7 +51,7 @@ export function createAdminMap({api,report}){
  controls.append(categoryLabel,search,refresh);
  const summary=node('p','Teyza-only: 0 · Google + Teyza: 0 · Google-only nearby: 0');
  const results=node('div');results.setAttribute('aria-live','polite');
- panel.append(introduction,helpLink,guidance,keyLabel,start,status,controls,mapBox,summary,results);
+ panel.append(introduction,helpLink,guidance,keyLabel,rememberLabel,forget,start,status,controls,mapBox,summary,results);
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
  function display(){if(!google||!map)return;
@@ -102,12 +117,19 @@ export function createAdminMap({api,report}){
   if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value)){status.textContent='Enter the actual Google Maps browser API key (normally starts with AIza), not the API key name, project ID or Google Places server key.';return;}
   started=true;start.disabled=true;key.value='';
   try{google=await loadGoogle(value);map=new google.maps.Map(mapBox,{center:CENTER,zoom:5,mapTypeControl:false});
+    if(remember.checked){try{localStorage.setItem(KEY_STORAGE,value);}catch(_){status.textContent='Map loaded, but this browser blocked saving the key.';}}
+    else {try{localStorage.removeItem(KEY_STORAGE);}catch(_){}}
     search.disabled=false;refresh.disabled=false;await loadRegistered();
   }catch(e){started=false;start.disabled=false;status.textContent=e.message||'Unable to load map.';report?.(e);}
  };
  refresh.onclick=async()=>{refresh.disabled=true;try{await loadRegistered();}catch(e){status.textContent=e.message;report?.(e);}finally{refresh.disabled=false;}};
  search.onclick=async()=>{if(!map)return;search.disabled=true;status.textContent='Searching Google Places around map centre…';
-  try{const c=map.getCenter(),u=new URL(PLACES);u.searchParams.set('lat',String(c.lat()));u.searchParams.set('lon',String(c.lng()));u.searchParams.set('radius','20000');u.searchParams.set('category',category.value);
+  try{
+    const centre=mapCentreCoordinates(map);
+    if(!centre)throw Error('Google Maps has not supplied a valid South African map centre yet. Move the map slightly, then retry your local search.');
+    const u=new URL(PLACES);
+    u.searchParams.set('lat',String(centre.lat));u.searchParams.set('lon',String(centre.lon));
+    u.searchParams.set('radius','20000');u.searchParams.set('category',category.value);
     const response=await fetch(u,{cache:'no-store'});if(!response.ok)throw Error('Google Places search unavailable');
     const data=await response.json();googleEntries=Array.isArray(data.entries)?data.entries:[];display();
     status.textContent='Google results for this area: '+googleEntries.length+' (limited provider sample; not exhaustive).';
