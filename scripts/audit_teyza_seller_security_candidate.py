@@ -20,7 +20,7 @@ assert approval['externalAnalystVerdict']=='not_received'
 assert approval['approvedFile']=='web/app-first/public/js/seller-web-billing.mjs'
 reviewed_browser_sha256=approval['approvedSha256']
 assert re.fullmatch(r'[a-f0-9]{64}',reviewed_browser_sha256), 'Missing exact operator-approved SHA-256'
-assert approval['operatorApprovalPr']==154
+assert approval['operatorApprovalPr']==155
 assert approval['canonicalRepositorySha256']==reviewed_browser_sha256
 
 with zipfile.ZipFile(archive) as z:
