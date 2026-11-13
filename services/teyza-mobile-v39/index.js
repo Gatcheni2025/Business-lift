@@ -233,7 +233,10 @@ const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
-  language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||''})});
+  language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
+  headerImageRequired:process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE==='true',
+  headerImageUrl:process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL||'',
+  bodyFields:process.env.TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS||''})});
 exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',maxInstances:3,
  document:'teyzaWhatsAppApprovalOutbox/{reference}',secrets:[whatsappToken]},
  event=>whatsappApproval.deliver(event.params.reference));

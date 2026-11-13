@@ -360,3 +360,30 @@ test('Admin detail treats expired or misowned evidence as incomplete without a s
   assert.equal(result.businessAccount.verificationChecks.find(x=>x.id==='identity').complete,false);
  }
 });
+
+test('National admin map lists only fresh verified public Teyza shops and separates linked Google places',async()=>{
+ const f=setup();
+ const base={sellerUid:'seller1',name:'Township Grocer',shopCategory:'spaza',status:'active',approvalStatus:'approved',identityVerified:true,
+   latitude:-29.85,longitude:31.02,coordinateSource:'google_places',coordinatesExpireAt:now+86400000,googlePlaceId:'ChIJapproved1234'};
+ f.db.records.set('teyzaPublicShops/seller1',base);
+ f.db.records.set('teyzaPublicShops/seller2',{...base,sellerUid:'seller2',name:'Old pending',approvalStatus:'pending'});
+ f.db.records.set('teyzaPublicShops/seller3',{...base,sellerUid:'seller3',name:'Expired location',coordinatesExpireAt:now-1000});
+ f.db.records.set('teyzaPublicShops/seller4',{...base,sellerUid:'seller4',name:'Not published',status:'pending_review'});
+ let rows=await f.call('ops_map_shops');
+ assert.equal(rows.scope,'published_teyza_shops_only');
+ assert.equal(rows.googlePlacesCensus,false);
+ assert.equal(rows.shops.length,1);
+ assert.equal(rows.shops[0].source,'google_and_teyza');
+ assert.equal(rows.shops[0].googlePlaceId,'ChIJapproved1234');
+ assert.equal(rows.shops[0].ownerEmail,undefined);
+ await rejects(f.call('ops_map_shops',{}, {uid:'seller1',email_verified:true}),403);
+});
+test('WhatsApp admin status never exposes access tokens or recipient contact information',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/abc',{status:'queued',sellerUid:'seller1',phone:'+27712345678'});
+ const d=await f.call('ops_whatsapp_status');
+ assert.equal(d.counts.queued,1);
+ assert.equal(d.tokenVerified,false);
+ assert.equal(JSON.stringify(d).includes('+27712345678'),false);
+ await rejects(f.call('ops_whatsapp_status',{}, {uid:'seller1',email_verified:true}),403);
+});
