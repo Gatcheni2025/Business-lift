@@ -5,14 +5,15 @@ const {checkedPhone}=require('./onboarding');
 
 // Build only parameters declared by the *actual approved* Meta template.
 // Never guess the media header or body placeholders from a template name.
-function approvedTemplatePayload(config,account){
+function approvedTemplatePayload(config,account,authUser=null){
  if(config.template==='teyza_seller_welcome_menu' && (config.headerImageRequired!==true ||
      config.bodyFields!=='ownerFirstName,shopName'))return null;
  const fields=String(config.bodyFields||'').split(',').map(x=>x.trim()).filter(Boolean);
  if(fields.length>5||fields.some(x=>!['ownerFirstName','shopName'].includes(x)))return null;
  const body=fields.map(field=>{
+   const display=typeof authUser?.displayName==='string'?authUser.displayName.trim():'';
    const text=field==='shopName'?account.shopName:
-     (account.firstName||account.ownerFirstName||String(account.ownerName||'').split(/\\s+/)[0]);
+     (account.firstName||account.ownerFirstName||String(account.ownerName||display).trim().split(/\\s+/)[0]||'Seller');
    return typeof text==='string'&&text.trim()?text.trim().slice(0,120):null;
  });
  if(body.some(x=>!x))return null;
@@ -54,7 +55,7 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
    try{checkedPhone(authUser,a.phone);}catch(_){
     tx.update(ref,{status:'skipped',reason:'phone_not_verified',updatedAt:clock()});return null;
    }
-   const template=configured?approvedTemplatePayload(config,a):null;
+   const template=configured?approvedTemplatePayload(config,a,authUser):null;
    if(!template){tx.update(ref,{status:'configuration_required',reason:'approved_template_parameters_missing',updatedAt:clock()});return null;}
    tx.update(ref,{status:'sending',attemptedAt:clock()});
    return {phone:a.phone.replace(/^\+/,''),template};
