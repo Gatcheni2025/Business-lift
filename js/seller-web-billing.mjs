@@ -76,7 +76,7 @@ async function startup(){
   if(!root) return;
   const show=(id,on)=>{el(id).hidden=!on;};
   const notice=(message,level='')=>{el('webCheckoutStatus').textContent=message;root.dataset.status=level;};
-  let sdk=null,auth=null,summary=null,billing=null,health=null,busy=false,accountGeneration=0;
+  let sdk=null,auth=null,summary=null,billing=null,health=null,busy=false,accountGeneration=0,paymentSuccess=false;
   const current=(uid,generation)=>auth?.currentUser?.uid===uid && accountGeneration===generation;
   function receipt(uid){
     if(!uid) return null;
@@ -134,7 +134,8 @@ async function startup(){
     el('webAvailabilityNotice').textContent=backendReady(health)?
       'Checkout is available only to approved and verified sellers.':
       'New membership checkout is disabled while security verification is completed.';
-    show('webReturnGuidance',confirmedMembership(summary,billing,uid));
+    show('webPaymentSuccess',paymentSuccess&&confirmedMembership(summary,billing,uid));
+    show('webReturnGuidance',confirmedMembership(summary,billing,uid)&&!paymentSuccess);
     el('webReturnGuidance').textContent='Verified membership is linked to this account. Reopen the app to refresh selling access.';
     show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
     show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
@@ -173,7 +174,8 @@ async function startup(){
         sessionStorage.removeItem(receiptKey(uid));
         if(new URLSearchParams(location.search).get('payment')==='return'){
           history.replaceState(null,'',location.pathname);
-          notice('Membership verified by Firebase. Reopen Teyza to use your selling tools.','success');
+          paymentSuccess=true;
+          notice('Payment successful! Your membership is active. You can now return to the Teyza app.','success');
         }
       }else if(shouldConfirmReturn(new URLSearchParams(location.search),receipt(uid),false)){
         // Return parameters are navigation hints, not payment proof.
@@ -184,7 +186,7 @@ async function startup(){
       }
     }catch(error){
       if(current(uid,generation)){
-        summary=null;billing=null;health=null;
+        summary=null;billing=null;health=null;paymentSuccess=false;
         notice(error.message||'Account check unavailable.','error');
       }
     }finally{if(current(uid,generation)){busy=false;render();}}
@@ -204,7 +206,8 @@ async function startup(){
       if(!confirmedMembership(summary,billing,uid))throw Error('Payment not yet reflected as active seller membership.');
       sessionStorage.removeItem(receiptKey(uid));
       history.replaceState(null,'',location.pathname);
-      notice('Verified payment activated. Reopen the Teyza app.','success');
+      paymentSuccess=true;
+      notice('Payment successful! Your membership is active. You can now return to the Teyza app.','success');
     }catch(error){if(current(uid,generation))notice(error.message||'Unable to confirm payment.','warning');}
     finally{if(current(uid,generation)){busy=false;render();}}
   }
@@ -242,7 +245,7 @@ async function startup(){
     await sdk.setPersistence(auth,sdk.browserSessionPersistence);
     sdk.onAuthStateChanged(auth,async user=>{
       accountGeneration++;
-      summary=null;billing=null;health=null;busy=false;
+      summary=null;billing=null;health=null;busy=false;paymentSuccess=false;
       el('webOwnShop').checked=false;el('webTerms').checked=false;render();
       if(user)await reload();
       else notice('Sign in using the original Firebase account for your approved Teyza shop.');
