@@ -13,7 +13,7 @@ function approvedTemplatePayload(config,account,authUser=null){
  const body=fields.map(field=>{
    const display=typeof authUser?.displayName==='string'?authUser.displayName.trim():'';
    const text=field==='shopName'?account.shopName:
-     (account.firstName||account.ownerFirstName||String(account.ownerName||display).trim().split(/\\s+/)[0]||'Seller');
+     (account.firstName||account.ownerFirstName||String(account.ownerName||display).trim().split(/\s+/)[0]||'Seller');
    return typeof text==='string'&&text.trim()?text.trim().slice(0,120):null;
  });
  if(body.some(x=>!x))return null;
