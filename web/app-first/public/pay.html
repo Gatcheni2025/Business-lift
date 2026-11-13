@@ -42,6 +42,8 @@
 [data-status="error"] .pay-status{background:#fff2ee;color:#9a301e}
 [data-status="warning"] .pay-status{background:#fff5e0;color:#916004}
 [data-status="success"] .pay-status{background:#e8f8ec;color:#126b3c}
+.pay-success{border:2px solid #5fba80;background:#e8f8ec;border-radius:17px;padding:23px;margin:18px 0 22px;color:#124b31;box-shadow:0 6px 18px rgba(20,93,50,.08)}
+.pay-success h3{font-size:clamp(1.4rem,3vw,1.9rem);margin:0 0 9px;color:#115233}.pay-success p{margin:0;color:#275d42;line-height:1.6}.pay-success .pay-success-mark{display:inline-flex;background:#177d4b;color:#fff;border-radius:999px;width:37px;height:37px;align-items:center;justify-content:center;font-size:23px;margin-bottom:11px;font-weight:800}
 .pay-note{font-size:13px;color:#637b70}.pay-info ul{padding-left:21px}
 .pay-divider{height:1px;background:#e2eee5;margin:22px 0}
 .pay-foot{max-width:1050px;margin:0 auto 42px;text-align:center;padding:0 22px;color:#64766d;font-size:13px}
@@ -69,6 +71,11 @@
 <dl><dt>Shop name</dt><dd id="webShopName">Checking…</dd><dt>Business type</dt><dd id="webShopType">Checking…</dd><dt>Signed-in email</dt><dd id="webAccountEmail"></dd><dt>Seller account ID</dt><dd id="webShopUid"></dd></dl>
 </div>
 <p id="webAccess" role="status">Checking shop approval and payment eligibility…</p>
+<section id="webPaymentSuccess" class="pay-success" role="status" aria-live="polite" aria-labelledby="webSuccessHeading" hidden>
+<span class="pay-success-mark" aria-hidden="true">✓</span>
+<h3 id="webSuccessHeading">Payment successful!</h3>
+<p>Your payment has been verified and your Teyza seller membership is active. You can now open the <strong>Teyza app</strong> and start using your selling tools. No additional payment is needed.</p>
+</section>
 <p class="pay-status" id="webReturnGuidance" role="status" hidden>Verified selling access is available in your Teyza app. Reopen the app to refresh your seller dashboard.</p>
 <div class="pay-grid"><div class="pay-metric"><span>Initial membership charge</span><strong id="webPrice">—</strong><small id="webPriceDetail">Current calendar month until the next 1st</small></div><div class="pay-metric"><span>Monthly renewal</span><strong>R99.00</strong><small>First of each next calendar month (South Africa)</small></div></div>
 <section aria-label="Your billing statement" class="pay-account" style="margin:12px 0 19px">
