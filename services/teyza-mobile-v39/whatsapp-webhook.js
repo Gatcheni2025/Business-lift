@@ -18,7 +18,7 @@ function checkSignature(raw,header,secret){
  return crypto.timingSafeEqual(supplied,expected);
 }
 function identifier(value){
- return typeof value==='string'&&/^[A-Za-z0-9_:-]{1,300}$/.test(value)?value:null;
+ return typeof value==='string'&&/^[A-Za-z0-9_.:=+/-]{1,512}$/.test(value)?value:null;
 }
 function safeEvents(payload){
  if(!payload||payload.object!=='whatsapp_business_account'||!Array.isArray(payload.entry)||payload.entry.length>50) return [];
