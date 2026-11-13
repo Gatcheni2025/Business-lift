@@ -134,8 +134,13 @@ async function startup(){
     el('webAvailabilityNotice').textContent=backendReady(health)?
       'Checkout is available only to approved and verified sellers.':
       'New membership checkout is disabled while security verification is completed.';
-    show('webPaymentSuccess',paymentSuccess&&confirmedMembership(summary,billing,uid));
-    show('webReturnGuidance',confirmedMembership(summary,billing,uid)&&!paymentSuccess);
+    const paidMembership=confirmedMembership(summary,billing,uid);
+    show('webPaymentSuccess',paidMembership);
+    el('webSuccessHeading').textContent=paymentSuccess?'Payment successful!':'Payment confirmed!';
+    el('webSuccessDetail').textContent=paymentSuccess?
+      'Your payment has been verified and your Teyza seller membership is active. You can now return to the Teyza app and use your selling tools. No additional payment is needed.':
+      'Your verified Teyza membership is active. You can now return to the Teyza app and use your selling tools. No additional payment is needed.';
+    show('webReturnGuidance',false);
     el('webReturnGuidance').textContent='Verified membership is linked to this account. Reopen the app to refresh selling access.';
     show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
     show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
