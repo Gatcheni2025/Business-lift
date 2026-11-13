@@ -185,10 +185,24 @@ test('Payment success banner appears only after verified membership confirmation
  const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
  assert(page.includes('id="webPaymentSuccess"') && page.includes('Payment successful!'));
  assert(page.includes('aria-live="polite"') && page.includes('id="webPaymentSuccess"') && page.includes('hidden>'));
- assert(js.includes("show('webPaymentSuccess',paymentSuccess&&confirmedMembership(summary,billing,uid))"));
+ assert(js.includes("const paidMembership=confirmedMembership(summary,billing,uid)"));
+ assert(js.includes("show('webPaymentSuccess',paidMembership)"));
+ assert(js.includes("el('webSuccessHeading').textContent=paymentSuccess?'Payment successful!':'Payment confirmed!'"));
  assert(js.includes("if(confirmedMembership(summary,billing,uid)){"));
  assert(js.includes("if(!confirmedMembership(summary,billing,uid))throw Error("));
  assert(js.includes("paymentSuccess=false;"));
  assert(js.includes("paymentSuccess=true;"));
  assert(!js.includes("params?.get('payment')==='return' && paymentSuccess=true"));
+});
+
+test('Previously verified paid seller sees a confirmation on revisit without suggesting a new charge',()=>{
+ const html=fs.readFileSync(path.join(web,'pay.html'),'utf8');
+ const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ assert(html.includes('id="webSuccessHeading">Payment confirmed!'));
+ assert(html.includes('id="webSuccessDetail"'));
+ assert(js.includes("show('webPaymentSuccess',paidMembership)"));
+ assert(js.includes("show('webReturnGuidance',false)"));
+ assert(js.includes("'Your verified Teyza membership is active."));
+ assert(js.includes("const paidMembership=confirmedMembership(summary,billing,uid)"));
+ assert(js.includes("paymentSuccess=false;"));
 });
