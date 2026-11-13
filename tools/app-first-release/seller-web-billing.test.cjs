@@ -179,3 +179,16 @@ test('Website displays explicit variable amount consent and does not trust a cli
  assert(!page.includes('it is not prorated'));
  assert(!js.includes('amount:el('));
 });
+
+test('Payment success banner appears only after verified membership confirmation',()=>{
+ const page=fs.readFileSync(path.join(web,'pay.html'),'utf8');
+ const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
+ assert(page.includes('id="webPaymentSuccess"') && page.includes('Payment successful!'));
+ assert(page.includes('aria-live="polite"') && page.includes('id="webPaymentSuccess"') && page.includes('hidden>'));
+ assert(js.includes("show('webPaymentSuccess',paymentSuccess&&confirmedMembership(summary,billing,uid))"));
+ assert(js.includes("if(confirmedMembership(summary,billing,uid)){"));
+ assert(js.includes("if(!confirmedMembership(summary,billing,uid))throw Error("));
+ assert(js.includes("paymentSuccess=false;"));
+ assert(js.includes("paymentSuccess=true;"));
+ assert(!js.includes("params?.get('payment')==='return' && paymentSuccess=true"));
+});
