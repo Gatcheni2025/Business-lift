@@ -61,5 +61,6 @@ test('Approved marketing template supports image header and named personalisatio
  assert.equal(approvedTemplatePayload({...config,headerImageUrl:'http://malicious.example/pic'},owner),null);
  assert.equal(approvedTemplatePayload({...config,headerImageUrl:''},owner),null);
  assert.equal(approvedTemplatePayload({...config,bodyFields:'password'},owner),null);
- assert.equal(approvedTemplatePayload(config,{shopName:'Shop'}),null);
+ assert.equal(approvedTemplatePayload(config,{shopName:'Shop'},{displayName:'Thandi Smith'}).components[1].parameters[0].text,'Thandi');
+ assert.equal(approvedTemplatePayload(config,{shopName:'Shop'}).components[1].parameters[0].text,'Seller');
 });
