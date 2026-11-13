@@ -202,7 +202,7 @@ test('Verified invoice renewal extends the membership once; duplicate or wrong-p
 });
 
 function recurringFixture({failInitialization=false,failSubscription=false,verifiedDomain,oldStatus='cancelled',refundAmount=9900,mode='test',project='teyza-isolated-test',paidAt=NOW,nextPaymentDate=new Date(nextMonth(NOW)).toISOString(),skipNextPaymentDate=false,prorated=false}={}){
- let records;const calls=[];
+ let records;const calls=[];let currentTime=NOW;
  const send=async(url,options)=>{
   calls.push({url,options});let data;
   if(url.includes('/plan/'))data={plan_code:'PLN_TEST99',amount:9900,interval:'monthly',currency:'ZAR',domain:mode};
@@ -228,7 +228,9 @@ function recurringFixture({failInitialization=false,failSubscription=false,verif
   }else throw Error('Unexpected Paystack request '+url);
   return {ok:true,json:async()=>({status:true,data})};
  };
- const f=fixture({}, {send,getSecret:()=> 'sk_'+mode+'_SYNTHETIC',getProjectId:()=>project,getProrationEnabled:()=>prorated});records=f.records;return {...f,calls};
+ const f=fixture({}, {send,getSecret:()=> 'sk_'+mode+'_SYNTHETIC',getProjectId:()=>project,
+  getProrationEnabled:()=>prorated,clock:()=>currentTime});records=f.records;
+ return {...f,calls,advanceClock:ms=>{currentTime=ms;}};
 }
 
 test('Repeated and concurrent checkout requests cannot create two payable references',async()=>{
@@ -527,6 +529,7 @@ test('Prorated checkout paid after quote day is held for review without paid acc
  const checkout=await f.api.execute(f.auth,'billing_checkout',{
   recurringConsent:true,termsVersion:PRORATED_TERMS_VERSION,
   expectedAmountCents:8910,expectedQuoteDate:'2026-11-04'});
+ f.advanceClock(NOW+86400000);
  const result=await f.api.execute(f.auth,'billing_confirm',{reference:checkout.reference});
  assert.equal(result.paid,false);assert.equal(result.refundReviewRequired,true);
  assert.equal(f.records.get('teyzaPaystackPayments/'+checkout.reference).status,'refund_review');
