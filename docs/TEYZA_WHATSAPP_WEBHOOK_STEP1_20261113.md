@@ -22,9 +22,10 @@ Set-Location "$HOME\Downloads\Business-lift"
 $firebase = '.\tools\admin-release\node_modules\firebase-tools\lib\bin\firebase.js'
 if (-not (Test-Path $firebase)) { npm ci --prefix .\tools\admin-release --no-audit --no-fund }
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
-$bytes = [byte[]]::new(32)
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-$verifyToken = [Convert]::ToHexString($bytes).ToLowerInvariant()
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+$verifyToken = -join ($bytes | ForEach-Object { $_.ToString('x2') })
 Set-Clipboard -Value $verifyToken
 Write-Host 'Random webhook verification token copied to clipboard (not printed). Save it securely and paste into the Firebase prompt.'
 node $firebase functions:secrets:set TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN --project business-lift-3c19c
