@@ -27,6 +27,14 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
     catalogueApprovalRequired:false,createdAt:new Date(clock()),updatedAt:new Date(clock())};
    if(values.shopName.length<2||values.phone.length<9)D.fail(422,'Enter your shop name and a valid contact number.');
+   // The seller's WhatsApp number must match their OTP-verified registration
+   // phone; no arbitrary WhatsApp destination can be supplied by clients.
+   if(data.whatsappConsent===true&&data.whatsappPhone!==undefined&&
+      require('./onboarding').phone(data.whatsappPhone)!==values.phone)
+     D.fail(422,'To receive WhatsApp updates, enter your WhatsApp number as the mobile number you will verify.');
+   if(data.whatsappConsent===true&&data.whatsappConsentVersion!==undefined&&
+      data.whatsappConsentVersion!=='seller-approval-v2')
+     D.fail(422,'Update Teyza before opting in to WhatsApp notifications.');
    const existingRegistration=await doc('teyzaSellerAccounts/'+uid).get();
    if(existingRegistration.exists){D.seller(existingRegistration.data(),uid);return {registered:true,alreadyRegistered:true};}
    const claimedPlaceId=data.googleClaimSelection?shopAddress.claim(uid,data.googleClaimSelection):null;
@@ -53,7 +61,9 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
        verificationMethod:'manual_evidence_review',createdAt:clock()});
     }
     if(data.whatsappConsent===true)tx.set(doc('teyzaWhatsAppPreferences/'+uid),{
-      ownerUid:uid,phone:values.phone,optedIn:true,consentVersion:'seller-approval-v1',consentAt:clock()});
+      ownerUid:uid,phone:values.phone,optedIn:true,
+      consentVersion:data.whatsappConsentVersion==='seller-approval-v2'?'seller-approval-v2':'seller-approval-v1',
+      consentAt:clock()});
     tx.set(ref,{...values,address:location.address});tx.set(doc('teyzaShopLocations/'+uid),location);
     tx.set(doc('teyzaSellerOnboarding/'+uid),{requiredVersion:2,legalType,sellingStatus:'not_started',createdAt:clock()});return {registered:true,approvalStatus:'pending'};
    });
