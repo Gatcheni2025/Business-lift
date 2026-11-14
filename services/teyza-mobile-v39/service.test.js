@@ -1193,3 +1193,24 @@ test('Public business cover requires explicit photo consent and never publishes 
  const privatePhoto=f.db.records.get('teyzaMobileVerification/seller1');
  assert.equal(privatePhoto.objectPath,'teyza-private/mobile-verification/seller1/selfie.enc');
 });
+
+test('Seller registration WhatsApp opt-in is explicit, linked to the registered mobile and revocable',async()=>{
+ const plain=fixture(),userData={category:'spaza',shopName:'KZN Shop',phone:'0712345678',consent:true};
+ await register(plain.service,buyer,{...userData,whatsappConsent:false,whatsappConsentVersion:'seller-approval-v2'});
+ assert.equal(plain.db.records.has('teyzaWhatsAppPreferences/buyer1'),false);
+ const invalid=fixture();
+ await rejects(register(invalid.service,buyer,{...userData,whatsappConsent:true,
+   whatsappPhone:'+27799999999',whatsappConsentVersion:'seller-approval-v2'}),422);
+ assert.equal(invalid.db.records.has('teyzaSellerAccounts/buyer1'),false);
+ const opted=fixture();
+ await register(opted.service,buyer,{...userData,whatsappConsent:true,
+   whatsappPhone:'+27712345678',whatsappConsentVersion:'seller-approval-v2'});
+ const entry=opted.db.records.get('teyzaWhatsAppPreferences/buyer1');
+ assert.equal(entry.optedIn,true);
+ assert.equal(entry.phone,'+27712345678');
+ assert.equal(entry.consentVersion,'seller-approval-v2');
+ await opted.service.execute(buyer,'seller_whatsapp_preferences',{enabled:false});
+ const withdrawn=opted.db.records.get('teyzaWhatsAppPreferences/buyer1');
+ assert.equal(withdrawn.optedIn,false);
+ assert.equal(withdrawn.phone,'');
+});
