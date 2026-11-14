@@ -22,7 +22,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   SellerClaimSelection? claim;
   late final String? uid;
   String category='spaza',legalType='individual';String? error;
-  bool busy=false,consent=false,saved=false,whatsappConsent=false;
+  bool busy=false,consent=false,saved=false,whatsappConsent=false,whatsappNumberConfirmed=false;
   bool? listedOnGoogle;bool ownerAuthority=false,ownershipEvidence=false,contactEvidence=false;
   String get categoryExplanation=>switch(category){
     'wholesale'=>'I supply spaza shops: publish bulk stock, pack prices and delivery or collection terms after approval.',
@@ -52,13 +52,16 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       setState(()=>error='Select the matching Google business and answer all three ownership-verification questions.');return;
     }
     if(!consent){setState(()=>error='Confirm that these shop details are yours.');return;}
+    if(whatsappConsent&&!whatsappNumberConfirmed){setState(()=>error='Confirm that the contact number is also your WhatsApp number.');return;}
     setState((){busy=true;error=null;});
     try{
       final data={'category':category,'legalType':legalType,'shopName':name.text.trim(),
         'phone':normalizeMobile(phone.text),'addressSelection':selected.receipt,'unit':unit.text.trim(),
         'companyName':legalType=='company'?company.text.trim():'',
         'registrationNumber':legalType=='company'?number.text.trim():'','consent':true,'locationConsent':true,
-        'whatsappConsent':whatsappConsent,
+        'whatsappConsent':whatsappConsent&&whatsappNumberConfirmed,
+        'whatsappPhone':whatsappConsent?normalizeMobile(phone.text):'',
+        'whatsappConsentVersion':'seller-approval-v2',
         if(listedOnGoogle==true&&claim!=null)...{
           'googleClaimSelection':claim!.receipt,
           'googleClaimAnswers':{'authorized':ownerAuthority,'canProvideEvidence':ownershipEvidence,
@@ -108,9 +111,10 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         DropdownButtonFormField<String>(initialValue:legalType,isExpanded:true,decoration:const InputDecoration(labelText:'Register as',border:OutlineInputBorder()),
           items:const [DropdownMenuItem(value:'individual',child:Text('Individual seller')),DropdownMenuItem(value:'company',child:Text('Registered company'))],
           onChanged:busy?null:(v)=>setState(()=>legalType=v??'individual')),const SizedBox(height:16),
-        for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),
+        for(final f in [(name,'Shop name',120,true),(phone,'Mobile / WhatsApp number (+27)',25,true),
           if(legalType=='company')(company,'Registered company name',160,true),if(legalType=='company')(number,'Company registration number',50,true)])Padding(padding:const EdgeInsets.only(bottom:16),
           child:TextFormField(controller:f.$1,maxLength:f.$3,enabled:!busy,keyboardType:f.$1==phone?TextInputType.phone:TextInputType.text,
+            onChanged:f.$1==phone?(_)=>setState(()=>whatsappNumberConfirmed=false):null,
             decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
               border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
             validator:(v)=>f.$4&&(v??'').trim().length<(f.$1==phone?9:2)?'Enter ${f.$2.toLowerCase()}':null)),
@@ -149,9 +153,20 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:busy?null:(v)=>setState(()=>consent=v==true),
           title:Text(claim==null?'I confirm that these are my shop’s details and shoppers may see this business address and map location.':
             'I am authorised to represent this business, and shoppers may see its address and map location.')),
-        CheckboxListTile(contentPadding:EdgeInsets.zero,value:whatsappConsent,onChanged:busy?null:(v)=>setState(()=>whatsappConsent=v==true),
-          title:const Text('Send my approval update and getting-started link on WhatsApp'),
-          subtitle:const Text('Optional. Uses the contact number above. You can change this in seller verification.')),
+        const SizedBox(height:8),
+        const Text('WhatsApp updates (optional)',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700)),
+        const Text('If you would like Teyza to send your shop approval result and getting-started information by WhatsApp, use your WhatsApp number in the mobile field above. This number must be confirmed by OTP before we send any message. Registration remains available without WhatsApp.'),
+        CheckboxListTile(contentPadding:EdgeInsets.zero,value:whatsappNumberConfirmed,
+          onChanged:busy?null:(v)=>setState((){
+            whatsappNumberConfirmed=v==true;
+            if(!whatsappNumberConfirmed)whatsappConsent=false;
+          }),
+          title:const Text('The mobile number entered above is my WhatsApp number'),
+          subtitle:Text('Number: ${phone.text.trim().isEmpty?'Not entered':phone.text.trim()}. If different, use your WhatsApp number as your registered mobile number.')),
+        CheckboxListTile(contentPadding:EdgeInsets.zero,value:whatsappConsent,
+          onChanged:busy||!whatsappNumberConfirmed?null:(v)=>setState(()=>whatsappConsent=v==true),
+          title:const Text('Yes, send me my Teyza approval result and getting-started information on WhatsApp'),
+          subtitle:const Text('Optional, not preselected. You can turn this off at any time. No WhatsApp message will be sent until number verification and approval are complete.')),
         const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
           label:Text(busy?'Saving shop…':'Continue to seller verification')),
         const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After approval your shop can appear nearby for free. Product publishing is subject to verification and seller account eligibility. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
