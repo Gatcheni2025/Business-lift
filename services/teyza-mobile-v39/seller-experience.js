@@ -75,7 +75,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
    if(typeof data.enabled!=='boolean')D.fail(422,'Choose whether you want approval updates on WhatsApp.');
    await rate(uid,'whatsapp-preference',20,3600000);
    await ref.set({ownerUid:uid,optedIn:data.enabled,phone:data.enabled?require('./onboarding').phone(account.phone):'',
-    consentVersion:'seller-approval-v1',consentAt:clock()});
+    consentVersion:'seller-approval-v2',consentAt:clock()});
    return {saved:true,enabled:data.enabled};
   }
   if(action==='admin_access')return {admin:auth.teyzaAdmin===true};
