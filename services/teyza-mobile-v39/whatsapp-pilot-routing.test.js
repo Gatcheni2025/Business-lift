@@ -14,7 +14,7 @@ function fake(){
   ['teyzaWhatsAppPreferences/seller1',{ownerUid:'seller1',phone:'+27712345678',optedIn:true}],
   ['teyzaWhatsAppApprovalOutbox/sub1',{sellerUid:'seller1',status:'accepted',providerMessageId:'wamid.sent1'}]
  ]);
- const doc=path=>({id:path.split('/').at(-1),ref:null,get:async()=>({exists:data.has(path),data:()=>data.get(path)}),
+ const doc=path=>({path,id:path.split('/').at(-1),get:async()=>({exists:data.has(path),data:()=>data.get(path)}),
   create:async value=>{if(data.has(path))throw Error('already exists');data.set(path,structuredClone(value));},
   set:async value=>data.set(path,structuredClone(value)),
   update:async value=>data.set(path,{...data.get(path),...structuredClone(value)})});
