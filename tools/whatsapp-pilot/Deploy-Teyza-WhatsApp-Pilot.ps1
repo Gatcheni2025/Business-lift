@@ -64,8 +64,11 @@ if(!(Test-Path $envPath)){throw 'Current project .env file not found; refusing t
 $env:FUNCTIONS_DISCOVERY_TIMEOUT='60'
 # Preserve every existing Paystack and other environment setting.
 $original=[IO.File]::ReadAllText($envPath)
-if($original -match '(?m)^TEYZA_ADMIN_DEPLOY_ONLY=1\s*
-$workerFlag=if($EnableWorkers){'1'}else{'0'}
+if($original -match '(?m)^TEYZA_ADMIN_DEPLOY_ONLY=1\s*$'){
+ throw 'Admin-only discovery override is enabled. WhatsApp worker exports are hidden.'
+}
+$workerFlag = '0'
+if($EnableWorkers){ $workerFlag = '1' }
 $updates=[ordered]@{
  'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'=$workerFlag
  'TEYZA_WHATSAPP_PILOT_SELLER_UID'=$PilotSellerUid
@@ -77,11 +80,10 @@ $updates=[ordered]@{
  'TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL'=$banner
  'TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS'='ownerFirstName,shopName'
 }
-# Only newly approved records are eligible after the initial pilot activation.
+# Only approval records created AFTER worker activation may be attempted.
 if($EnableWorkers){
  $updates['TEYZA_WHATSAPP_PILOT_STARTED_AT']=[string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 }else{
- # Do not lose an existing pilot cutoff when updating webhook alone.
  $existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_PILOT_STARTED_AT=([^\r\n]+)')
  if($existing.Success){$updates['TEYZA_WHATSAPP_PILOT_STARTED_AT']=$existing.Groups[1].Value}
 }
@@ -95,61 +97,17 @@ $backup="$envPath.whatsapp-pilot-backup-$(Get-Date -Format yyyyMMddHHmmss)"
 Copy-Item $envPath $backup
 try{
  [IO.File]::WriteAllText($envPath,$modified)
- $scope=if($EnableWorkers){
-   'functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppApprovalCreated,functions:teyza-mobile:teyzaWhatsAppApprovalPending'
- }else{'functions:teyza-mobile:teyzaWhatsAppWebhook'}
+ if($EnableWorkers){
+  $scope='functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppApprovalCreated,functions:teyza-mobile:teyzaWhatsAppApprovalPending'
+ }else{
+  $scope='functions:teyza-mobile:teyzaWhatsAppWebhook'
+ }
  Write-Host "Deploying only $scope to $project"
  & node $firebase deploy --project $project --config firebase.teyza-mobile-v39.json --only $scope --non-interactive
- if($LASTEXITCODE -ne 0){throw 'Firebase deploy failed. Review the output; never retry blindly.'}
+ if($LASTEXITCODE -ne 0){throw 'Firebase deploy failed. Do not retry blindly.'}
  Write-Host 'Scope-limited WhatsApp deployment completed.'
 }finally{
- # Preserve local original environment config. Runtime env was uploaded as part of selected functions.
  [IO.File]::WriteAllText($envPath,$original)
  Remove-Item $backup -Force -ErrorAction SilentlyContinue
  Write-Host 'Original local .env restored.'
-}
-){
- throw 'Admin-only discovery override is enabled. The WhatsApp worker exports would be hidden.'
-}
-$workerFlag=if($EnableWorkers){'1'}else{'0'}
-$updates=[ordered]@{
- 'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'=$workerFlag
- 'TEYZA_WHATSAPP_PILOT_SELLER_UID'=$PilotSellerUid
- 'TEYZA_WHATSAPP_PHONE_NUMBER_ID'='1466599163197469'
- 'TEYZA_WHATSAPP_API_VERSION'='v26.0'
- 'TEYZA_WHATSAPP_TEMPLATE_NAME'='teyza_seller_welcome_menu'
- 'TEYZA_WHATSAPP_TEMPLATE_LANGUAGE'='en'
- 'TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE'='true'
- 'TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL'=$banner
- 'TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS'='ownerFirstName,shopName'
-}
-# Only newly approved records are eligible after the initial pilot activation.
-if($EnableWorkers){
- $updates['TEYZA_WHATSAPP_PILOT_STARTED_AT']=[string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-}else{
- # Do not lose an existing pilot cutoff when updating webhook alone.
- $existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_PILOT_STARTED_AT=([^\r\n]+)')
- if($existing.Success){$updates['TEYZA_WHATSAPP_PILOT_STARTED_AT']=$existing.Groups[1].Value}
-}
-$modified=$original
-foreach($key in $updates.Keys){
- $modified=[regex]::Replace($modified,"(?m)^$key=.*\r?\n?",'')
-}
-$modified=$modified.TrimEnd()+"`r`n"
-foreach($key in $updates.Keys){$modified+="$key=$($updates[$key])`r`n"}
-$backup="$envPath.whatsapp-pilot-backup-$(Get-Date -Format yyyyMMddHHmmss)"
-Copy-Item $envPath $backup
-try{
- [IO.File]::WriteAllText($envPath,$modified)
- $scope=if($EnableWorkers){
-   'functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppApprovalCreated,functions:teyza-mobile:teyzaWhatsAppApprovalPending'
- }else{'functions:teyza-mobile:teyzaWhatsAppWebhook'}
- Write-Host "Deploying only $scope to $project"
- & node $firebase deploy --project $project --config firebase.teyza-mobile-v39.json --only $scope --non-interactive
- if($LASTEXITCODE -ne 0){throw 'Firebase deploy failed. Review the output; never retry blindly.'}
- Write-Host 'Scope-limited WhatsApp deployment completed.'
-}finally{
- # Preserve local original environment config. Runtime env was uploaded as part of selected functions.
- [IO.File]::WriteAllText($envPath,$original)
- Write-Host "Original local .env restored. Backup: $backup"
 }
