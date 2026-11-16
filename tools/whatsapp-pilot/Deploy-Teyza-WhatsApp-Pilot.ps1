@@ -6,7 +6,7 @@ Usage, AFTER PR #164 is merged:
   .\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-Pilot.ps1 -PilotSellerUid "UID" -DeployWebhook
   .\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-Pilot.ps1 -PilotSellerUid "UID" -EnableWorkers -ConfirmPilotReady
 #>
-[CmdletBinding(DefaultParameterSetName='Inspect')]
+[CmdletBinding()]
 param(
  [Parameter(Mandatory=$true)][ValidatePattern('^[A-Za-z0-9_-]{6,128}$')][string]$PilotSellerUid,
  [Parameter(ParameterSetName='Webhook')][switch]$DeployWebhook,
