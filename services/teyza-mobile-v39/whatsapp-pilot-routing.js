@@ -34,6 +34,26 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,clock=Date.now}){
   const pilotUid=getPilotUid();
   const numberId=getPhoneNumberId();
   if(!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
+  // Reconcile Meta receipts with the one pilot seller's accepted outbox.
+  // Delivery is not inferred from a successful API send; only signed status
+  // callbacks may write the deliveryStatus field.
+  for(const entry of Array.isArray(payload?.entry)?payload.entry.slice(0,50):[])
+  for(const change of Array.isArray(entry.changes)?entry.changes.slice(0,50):[]){
+   if(change?.field!=='messages'||change.value?.metadata?.phone_number_id!==numberId)continue;
+   for(const status of Array.isArray(change.value.statuses)?change.value.statuses.slice(0,100):[]){
+    if(!['sent','delivered','read','failed'].includes(status?.status)||
+       typeof status.id!=='string'||!/^wamid[.][A-Za-z0-9_.:=+/-]{1,500}$/.test(status.id))continue;
+    const results=await db.collection('teyzaWhatsAppApprovalOutbox').where('providerMessageId','==',status.id).limit(3).get();
+    for(const doc of results.docs){
+     if(doc.data()?.sellerUid!==pilotUid||doc.data()?.status!=='accepted')continue;
+     // Never turn a delivered/read receipt backwards to sent.
+     const previous=doc.data()?.deliveryStatus;
+     const rank={sent:1,delivered:2,read:3,failed:4};
+     if(previous&&rank[previous]>=rank[status.status])continue;
+     await doc.ref.update({deliveryStatus:status.status,deliveryStatusAt:clock()});
+    }
+   }
+  }
   for(const event of extractActions(payload,numberId)){
    // Scope all pilot interactions to the one authorised seller.
    // Read phone only transiently; never persist it in the interaction audit.
