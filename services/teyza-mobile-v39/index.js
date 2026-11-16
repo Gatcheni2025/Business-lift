@@ -250,6 +250,7 @@ if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
+ getPilotStartAt:()=>process.env.TEYZA_WHATSAPP_PILOT_STARTED_AT||'',
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
   language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
