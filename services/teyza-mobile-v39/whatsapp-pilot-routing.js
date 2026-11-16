@@ -75,9 +75,23 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,clock=Date.now}){
     if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return;
     if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return;
     const at=clock();
-    tx.create(ref,{sellerUid:pilotUid,action:event.action,
+    const destination=event.action==='start_selling'?'/seller-getting-started.html':
+      event.action==='advertise'?'/ads/':
+      event.action==='consultant'?'seller_support':'none';
+    tx.create(ref,{sellerUid:pilotUid,action:event.action,destination,
       state:event.action==='stop'?'completed':'pending',
       source:'signed_meta_whatsapp',createdAt:at});
+    if(event.action==='consultant'){
+     // Admin's existing support queue lists all teyzaSupportTickets. The
+     // generated request carries no chat body or phone; staff respond using
+     // their normal authenticated support workflow.
+     tx.create(db.doc('teyzaSupportTickets/wa_'+id),{
+      ownerUid:pilotUid,subject:'WhatsApp consultant request',
+      message:'Approved seller selected Talk to consultant in the welcome menu.',
+      status:'open',priority:'normal',revision:0,createdBy:pilotUid,
+      createdAt:at,updatedAt:at,source:'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
+     });
+    }
     if(event.action==='stop'){
      tx.set(preferenceRef,{...fresh.data(),ownerUid:pilotUid,optedIn:false,phone:'',
        optedOutAt:at,updatedAt:at,consentVersion:'seller-approval-v2'});
