@@ -20,8 +20,15 @@ env:
 permissions:
   contents: read
 
+# The original PR #97 debug APK certificate is PR-cache scoped and unavailable
+# on newer branches. Preserve this legacy testing workflow for an intentional
+# manual workflow_dispatch; do not make it a PR release gate or substitute the
+# production Play upload certificate for the original test certificate.
+# Android/iOS signed release verification remains enforced by
+# teyza-mobile-release.yml; backend / Flutter quality retain their own PR jobs.
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

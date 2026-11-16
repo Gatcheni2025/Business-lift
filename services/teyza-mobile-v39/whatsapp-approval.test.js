@@ -4,7 +4,7 @@ const {createWhatsAppApproval}=require('./whatsapp-approval');
 function fixture(){
  const uid='seller1',phone='+27712345678',submissionId='submission1';
  const records=new Map(Object.entries({
-  'teyzaWhatsAppApprovalOutbox/submission1':{sellerUid:uid,submissionId,status:'queued'},
+  'teyzaWhatsAppApprovalOutbox/submission1':{sellerUid:uid,submissionId,status:'queued',createdAt:1000},
   'teyzaSellerAccounts/seller1':{uid,phone,approvalStatus:'approved'},
   'teyzaWhatsAppPreferences/seller1':{ownerUid:uid,phone,optedIn:true},
   'teyzaMobileVerification/seller1':{ownerUid:uid,status:'approved',submissionId}
@@ -16,9 +16,11 @@ function fixture(){
    const result=await fn(tx);for(const write of writes)await write();return result;});queue=result.catch(()=>{});return result;}};
  let config={phoneNumberId:'123456',apiVersion:'v24.0',template:'teyza_seller_approved',language:'en'};
  let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false;
- const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,clock:()=>1000,
+ let pilotUid='seller1',pilotStartAt=500;
+ const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,
+  getPilotUid:()=>pilotUid,getPilotStartAt:()=>pilotStartAt,clock:()=>1000,
   send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
- return {api,records,calls,disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
+ return {api,records,calls,disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},setPilotUid:v=>{pilotUid=v;},setPilotStartAt:v=>{pilotStartAt=v;},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
 }
 test('An opted-in, currently approved seller with a verified phone gets one templated message',async()=>{
  const f=fixture();await Promise.all([f.api.deliver('submission1'),f.api.deliver('submission1')]);
@@ -63,4 +65,18 @@ test('Approved marketing template supports image header and named personalisatio
  assert.equal(approvedTemplatePayload({...config,bodyFields:'password'},owner),null);
  assert.equal(approvedTemplatePayload(config,{shopName:'Shop'},{displayName:'Thandi Smith'}).components[1].parameters[0].text,'Thandi');
  assert.equal(approvedTemplatePayload(config,{shopName:'Shop'}).components[1].parameters[0].text,'Seller');
+});
+
+test('Pilot sender refuses missing or unrelated UID without changing the outbox',async()=>{
+ for(const uid of ['', 'otherSellerUid']){
+  const f=fixture();f.setPilotUid(uid);await f.api.deliver('submission1');
+  assert.equal(f.calls.length,0);
+  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'queued');
+ }
+});
+
+test('Pilot never sends approvals created before activation time',async()=>{
+ const f=fixture();f.setPilotStartAt(1001);await f.api.deliver('submission1');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'queued');
 });

@@ -48,7 +48,7 @@ function safeEvents(payload){
  }
  return out;
 }
-function createWebhook({db,getVerifyToken,getAppSecret,clock=Date.now,logger={warn(){},error(){}}}){
+function createWebhook({db,getVerifyToken,getAppSecret,onInteraction=async()=>{},clock=Date.now,logger={warn(){},error(){}}}){
  if(!db||typeof getVerifyToken!=='function'||typeof getAppSecret!=='function')throw Error('Webhook dependencies missing');
  const collection=db.collection('teyzaWhatsAppWebhookEvents');
  async function handle(req,res){
@@ -79,6 +79,9 @@ function createWebhook({db,getVerifyToken,getAppSecret,clock=Date.now,logger={wa
     try{await collection.doc(dedupeKey).create(record);}
     catch(error){if(error?.code!==6&&error?.code!=='already-exists'&&error?.code!=='ALREADY_EXISTS')throw error;}
    }
+   // Route only after HMAC verification. The router uses a separate durable
+   // idempotency record, so Meta retries can safely repair partial failures.
+   await onInteraction(payload);
   }catch(error){
    logger.error('WhatsApp webhook persistence unavailable', {code:String(error?.code||'unknown')});
    res.status(503).send('Temporarily unavailable');return;
