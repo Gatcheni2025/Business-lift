@@ -28,7 +28,7 @@ function approvedTemplatePayload(config,account,authUser=null){
  return {name:config.template,language:{code:config.language},...(components.length?{components}:{})};
 }
 
-function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),getPilotUid=()=>'',send=fetch,clock=Date.now}){
+function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),getPilotUid=()=>'',getPilotStartAt=()=>0,send=fetch,clock=Date.now}){
  const doc=p=>db.doc(p);
  async function deliver(reference){
   const ref=doc('teyzaWhatsAppApprovalOutbox/'+reference),initial=await ref.get();
@@ -37,7 +37,10 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
   // Fail closed unless one explicit seller Firebase UID is configured.
   // Other sellers' queued records must stay untouched during this pilot.
   const pilotUid=getPilotUid();
-  if(typeof pilotUid!=='string'||!/^\w[\w-]{5,127}$/.test(pilotUid)||entry.sellerUid!==pilotUid)return;
+  const startedAt=Number(getPilotStartAt());
+  if(typeof pilotUid!=='string'||!/^\w[\w-]{5,127}$/.test(pilotUid)||entry.sellerUid!==pilotUid||
+     !Number.isSafeInteger(startedAt)||startedAt<=0||
+     typeof entry.createdAt!=='number'||entry.createdAt<startedAt)return;
   let authUser;try{authUser=await getAuthUser(entry.sellerUid);}catch(error){
    if(error?.code==='auth/user-not-found')authUser=null;
    else return; // Retry transient Auth errors before any provider request.
