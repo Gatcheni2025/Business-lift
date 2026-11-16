@@ -1,7 +1,7 @@
 name: Teyza field work and search readiness
 on:
   pull_request:
-    paths: ['services/teyza-mobile-v39/**', 'web/app-first/**', 'web/teyza-admin/public/admin.html', 'tools/app-first-release/**', 'tools/admin-release/field-work.browser.cjs', 'scripts/package_field_work.py', 'DEPLOY-FIELD-WORK.ps1', 'RESUME-FIELD-WORK.ps1', 'docs/TEYZA_FIELD_WORK_AND_SEO.md', '.github/workflows/teyza-field-work.yml']
+    paths: ['services/teyza-mobile-v39/**', 'web/app-first/**', 'web/teyza-admin/public/admin.html', 'tools/app-first-release/**', 'tools/whatsapp-pilot/**', 'tools/admin-release/field-work.browser.cjs', 'scripts/package_field_work.py', 'DEPLOY-FIELD-WORK.ps1', 'RESUME-FIELD-WORK.ps1', 'docs/TEYZA_FIELD_WORK_AND_SEO.md', '.github/workflows/teyza-field-work.yml']
   workflow_dispatch:
 permissions:
   contents: read
