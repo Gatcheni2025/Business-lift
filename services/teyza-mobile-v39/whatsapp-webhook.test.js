@@ -66,3 +66,26 @@ test('Firestore failures return 503 so Meta retries, not false 200',async()=>{
  await svc.handle({method:'POST',rawBody:raw,get:()=>sig},res);
  assert.equal(res.statusCode,503);
 });
+
+test('Webhook routes only HMAC-authenticated messages, and retries router failures',async()=>{
+ let routed=0,fail=true;
+ const docs=new Map(),db={collection:()=>({doc:id=>({create:async record=>{
+  if(docs.has(id)){const e=Error('exists');e.code=6;throw e;}
+  docs.set(id,record);
+ }})})};
+ const webhook=createWebhook({db,getVerifyToken:()=>verify,getAppSecret:()=>secret,
+  onInteraction:async()=>{routed++;if(fail)throw Error('temporary failure');}});
+ const raw=Buffer.from(JSON.stringify(payload)),sig='sha256='+crypto.createHmac('sha256',secret).update(raw).digest('hex');
+ const request=async signature=>{
+  const res={statusCode:0,set(){return this;},status(n){this.statusCode=n;return this;},send(){return this;}};
+  await webhook.handle({method:'POST',rawBody:raw,get:()=>signature},res);
+  return res.statusCode;
+ };
+ assert.equal(await request('sha256='+'0'.repeat(64)),403);
+ assert.equal(routed,0);
+ assert.equal(await request(sig),503);
+ fail=false;
+ assert.equal(await request(sig),200);
+ assert.equal(routed,2);
+ assert.equal(docs.size,2);
+});
