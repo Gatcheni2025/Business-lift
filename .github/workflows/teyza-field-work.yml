@@ -36,6 +36,17 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $f),[ref]$t,[ref]$e) | Out-Null
             if ($e.Count -gt 0) { throw ($e | Out-String) }
           }
+          # A valid script can still fail PowerShell parameter binding.
+          # Assert that -PilotSellerUid alone selects the no-write preflight.
+          $pilot = Get-Command (Join-Path $pwd 'tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-Pilot.ps1')
+          $metadata = [System.Management.Automation.CommandMetadata]::new($pilot)
+          if ($metadata.DefaultParameterSetName -ne 'Inspect') {
+            throw "WhatsApp preflight must be the default parameter set."
+          }
+          $sets = @($pilot.ParameterSets.Name)
+          if (@('Inspect','Webhook','Workers') | Where-Object { $_ -notin $sets }) {
+            throw "WhatsApp deployment command is missing an expected parameter set."
+          }
       - name: Install browser test tools
         run: npm ci --prefix tools/admin-release --ignore-scripts --no-audit --no-fund
       - name: Test guided work pages and phone layouts with synthetic accounts
