@@ -30,3 +30,14 @@ test('Reserved Firebase initialization files may regenerate but cannot disappear
  next.delete('/__/firebase/init.json');
  assert.throws(()=>verifyOneFileChange(old,next,hash),/file count|reserved initialization/);
 });
+
+test('Advertising route is optional while all existing advert assets remain untouched',()=>{
+ const before=new Map(base);before.delete('/ads/index.html');
+ const after=new Map(before);after.set(FILE,hash);
+ assert.doesNotThrow(()=>verifyOneFileChange(before,after,hash));
+ const withAds=new Map(base);withAds.set('/ads.html','existing-advert-checkout');
+ const published=new Map(withAds);published.set(FILE,hash);
+ assert.doesNotThrow(()=>verifyOneFileChange(withAds,published,hash));
+ published.set('/ads.html','unexpected-alteration');
+ assert.throws(()=>verifyOneFileChange(withAds,published,hash),/Unrelated Hosting file changed/);
+});
