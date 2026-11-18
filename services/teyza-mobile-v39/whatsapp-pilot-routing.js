@@ -4,6 +4,7 @@
 const crypto=require('node:crypto');
 const choices=new Map([
  ['Start selling on Teyza','start_selling'],
+ ['Start selling','start_selling'],
  ['Advertise on Teyza','advertise'],
  ['Talk to consultant','consultant']
 ]);
@@ -121,7 +122,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
       type:'interactive',interactive:{type:'button',
        body:{text:'Welcome to Teyza! Choose an option below. You can type MENU again whenever you need to return here.'},
        action:{buttons:[
-        {type:'reply',reply:{id:'teyza_start_selling',title:'Start selling on Teyza'}},
+        {type:'reply',reply:{id:'teyza_start_selling',title:'Start selling'}},
         {type:'reply',reply:{id:'teyza_advertise',title:'Advertise on Teyza'}},
         {type:'reply',reply:{id:'teyza_consultant',title:'Talk to consultant'}}
        ]}}}:
