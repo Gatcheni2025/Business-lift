@@ -20,7 +20,7 @@ h1{font-size:clamp(2.4rem,5vw,4.4rem);line-height:1.07;letter-spacing:-.05em;mar
 main{max-width:1070px;padding:0 20px 40px;margin:-32px auto 0;position:relative;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.9fr);gap:22px}
 .panel{background:white;border:1px solid #d8e8e0;border-radius:20px;padding:clamp(18px,3vw,30px);box-shadow:0 12px 30px #063f4212}
 .panel p,.panel li{line-height:1.55;color:#49655e}.entry{display:grid;gap:8px;margin:10px 0 16px;font-weight:650}
-.entry input{font:inherit;padding:13px;border:1px solid #abc9bd;border-radius:10px;width:100%}
+.entry input,.entry textarea,.entry select{font:inherit;padding:13px;border:1px solid #abc9bd;border-radius:10px;width:100%;background:white;color:#123e3f}.entry textarea{min-height:95px;resize:vertical}.create-panel{margin:22px 0;padding:20px;border:1px solid #cde5d7;border-radius:16px;background:#f6faf7}.create-panel h3{margin:0 0 10px}.price-preview{padding:13px 16px;border-radius:10px;background:#e5f5eb;font-weight:700}.status-note{font-size:.88rem;color:#50695f}.ad .meta{overflow-wrap:anywhere}
 button{font:inherit;background:#08695d;color:white;border:1px solid #08695d;border-radius:10px;padding:12px 16px;font-weight:750;cursor:pointer}
 button.secondary{background:white;color:#08695d;border-color:#abc9bd}button:disabled{opacity:.5;cursor:not-allowed}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc48;outline-offset:3px}
@@ -41,7 +41,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc
 </head>
 <body>
 <header><div class="inner"><a href="/" aria-label="Teyza home"><img src="/assets/app/wordmark-light.svg" alt="Teyza"></a><nav aria-label="Website navigation"><a href="/">Home</a><a href="/pay">Membership</a><a href="/support.html">Support</a></nav></div></header>
-<section class="hero"><div class="inner"><small>Independent advertiser website</small><h1>Grow locally with<br>Teyza Ads.</h1><p>Submit your creative for independent review in Teyza, then manage approved campaigns here using your original business login. Pay securely by Paystack. No recurring advertising subscription.</p></div></section>
+<section class="hero"><div class="inner"><small>Independent advertiser website</small><h1>Grow locally with<br>Teyza Ads.</h1><p>Create and submit your creative here for independent review, then pay for approved campaigns using your original business login. Pay securely by Paystack. No recurring advertising subscription.</p></div></section>
 <main id="ad-web-root">
 <section class="panel">
 <h2>Secure advertiser account</h2>
@@ -56,6 +56,20 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc
 </div>
 <div id="signedIn" hidden>
 <div class="account"><strong id="signedEmail"></strong><span id="shopUid"></span><button id="logout" class="secondary" type="button">Switch account</button></div>
+<section class="create-panel" aria-labelledby="createAdHeading">
+<h3 id="createAdHeading">Create an advertisement</h3>
+<p>Already approved as a Teyza seller? Submit your ad here for independent review. No payment is taken until Teyza approves the campaign.</p>
+<form id="createAdForm">
+<label class="entry">Campaign headline (5–80 characters)<input id="adTitle" name="title" required minlength="5" maxlength="80" placeholder="Fresh groceries near you"></label>
+<label class="entry">Short description (12–240 characters)<textarea id="adMessage" name="message" required minlength="12" maxlength="240" placeholder="Tell local shoppers what makes your offer worth visiting."></textarea></label>
+<label class="entry">Creative image (JPEG or PNG, under 2 MB)<input id="adImage" name="image" type="file" accept="image/jpeg,image/png" required></label>
+<label class="entry">Advertising radius (km)<select id="adRadius" name="radiusKm"><option value="5">5 km</option><option value="10" selected>10 km</option><option value="15">15 km</option><option value="20">20 km</option><option value="25">25 km</option><option value="30">30 km</option><option value="40">40 km</option><option value="50">50 km</option></select></label>
+<p id="adPricePreview" class="price-preview" aria-live="polite">Estimated charge: R29.00 for 7 days · 10 km</p>
+<p class="status-note">The backend confirms the final price from your approved shop's location. The creative is not public until independently approved and paid.</p>
+<label class="check"><input id="adPublicConsent" type="checkbox" required><span>I own or have permission to use this image and agree to display the advertisement as Sponsored after approval and verified payment.</span></label>
+<button id="submitAd" type="submit">Submit advertisement for review</button>
+</form>
+</section>
 <h2 style="margin-top:24px">My reviewed campaigns</h2>
 <p id="campaignIntro">Only independently approved ads can be purchased. Your campaign radius and amount are locked when you submit the ad.</p>
 <div id="campaigns" aria-live="polite"></div>
