@@ -51,8 +51,8 @@ async function main(){
     throw Error('Windows billing JS cannot be normalized to approved source');
   return normalized;
  };
- const raw=canonicalize(original),mirror=canonicalize(mirrorRaw);
- if(!raw.equals(mirror))throw Error('Mirrored seller billing JS differs; no publication');
+ const raw=canonicalize(original),mirrorBytes=canonicalize(mirrorRaw);
+ if(!raw.equals(mirrorBytes))throw Error('Mirrored seller billing JS differs; no publication');
  const sha=crypto.createHash('sha256').update(raw).digest('hex');
  if(approval.operatorApprovalPr!==173||approval.approvedSha256!==sha||
     approval.canonicalRepositorySha256!==sha||approval.decision!=='approved')
