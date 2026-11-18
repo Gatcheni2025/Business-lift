@@ -40,7 +40,7 @@ async function main(){
  if(!raw.equals(mirror))throw Error('Seller guide root/overlay mismatch. Refusing publication');
  const page=raw.toString('utf8');
  if(!page.includes('R99 per full calendar month')||page.includes('R49 for the first')||
-    !page.includes('/pay/')||!page.includes('/download.html'))throw Error('Seller guide content failed release review');
+    !page.includes('/pay/')||!page.includes('/ads/')||!page.includes('Already approved?'))throw Error('Seller guide content failed release review');
  const compressed=zlib.gzipSync(raw,{level:9});
  const hash=crypto.createHash('sha256').update(compressed).digest('hex');
  const c=await connect();
