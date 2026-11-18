@@ -12,7 +12,7 @@ async function clone(c,source){
  const start=Date.now();
  while(!result.done){
   if(Date.now()-start>300000)throw Error('Clone timed out; no live release published');
-  await sleep(1000);result=await c.hosting('GET','/'+result.name.replace(/^\\/+/,'')); 
+  await sleep(1000);result=await c.hosting('GET','/'+(result.name.startsWith('/')?result.name.slice(1):result.name)); 
  }
  if(result.error)throw Error(result.error.message||'Hosting clone failed');
  return versionName(result.response?.name);
