@@ -40,8 +40,19 @@ async function main(){
  const source=path.join(repo,'web/app-first/public/js/seller-web-billing.mjs');
  const mirror=path.join(repo,'js/seller-web-billing.mjs');
  const approval=JSON.parse(fs.readFileSync(path.join(repo,'docs/TEYZA_PAY_OPERATOR_SOURCE_APPROVAL_20261110.json'),'utf8'));
- const raw=fs.readFileSync(source),mirrorRaw=fs.readFileSync(mirror);
- if(!raw.equals(mirrorRaw))throw Error('Mirrored seller billing JS differs; no publication');
+ const original=fs.readFileSync(source),mirrorRaw=fs.readFileSync(mirror);
+ const canonicalize=bytes=>{
+  const rawSha=crypto.createHash('sha256').update(bytes).digest('hex');
+  if(rawSha===approval.approvedSha256)return bytes;
+  if(rawSha!==approval.windowsWorktreeCrLfSha256)
+    throw Error('Local billing JS does not match approved LF or exact reviewed Windows CRLF fingerprint');
+  const normalized=Buffer.from(bytes.toString('utf8').replace(/\r\n/g,'\n'),'utf8');
+  if(crypto.createHash('sha256').update(normalized).digest('hex')!==approval.approvedSha256)
+    throw Error('Windows billing JS cannot be normalized to approved source');
+  return normalized;
+ };
+ const raw=canonicalize(original),mirror=canonicalize(mirrorRaw);
+ if(!raw.equals(mirror))throw Error('Mirrored seller billing JS differs; no publication');
  const sha=crypto.createHash('sha256').update(raw).digest('hex');
  if(approval.operatorApprovalPr!==173||approval.approvedSha256!==sha||
     approval.canonicalRepositorySha256!==sha||approval.decision!=='approved')
