@@ -31,7 +31,9 @@ async function main(){
  const domain=await c.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Unexpected domain');
  const beforeVersion=await current(c),before=await allFiles(c,beforeVersion);
- if(!before.has(FILE))throw Error('Seller guide not present on live Hosting. Refusing to create a new route blindly.');
+ const existedBefore=before.has(FILE);
+ if(!before.has('/index.html'))throw Error('Expected live site index.html missing. Refusing publication.');
+ console.log(existedBefore?'Replacing existing seller guide only.':'Creating missing seller guide file only; existing files will be preserved.');
  const next=await clone(c,beforeVersion);
  const backup=path.join(repo,'hosting-backup-seller-guide.json');
  fs.writeFileSync(backup,JSON.stringify({site:PROJECT,sourceVersion:beforeVersion,patchedVersion:next,
@@ -43,7 +45,8 @@ async function main(){
  }
  const after=await allFiles(c,next);
  if(after.get(FILE)!==hash)throw Error('Seller guide failed hash check');
- if(after.size!==before.size)throw Error('Live Hosting file count changed');
+ const expectedCount=before.size+(existedBefore?0:1);
+ if(after.size!==expectedCount)throw Error('Unexpected Hosting file count: expected '+expectedCount+' but saw '+after.size);
  for(const [file,value] of before){if(file!==FILE&&after.get(file)!==value)throw Error('Unrelated Hosting file changed: '+file);}
  await c.hosting('PATCH','/'+next,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(c)!==beforeVersion)throw Error('Concurrent Hosting publication detected; nothing published');
