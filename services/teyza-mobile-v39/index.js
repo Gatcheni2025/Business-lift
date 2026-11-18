@@ -3,6 +3,7 @@ const {onRequest}=require('firebase-functions/v2/https');
 const {onSchedule}=require('firebase-functions/v2/scheduler');
 const {onDocumentWritten,onDocumentCreated}=require('firebase-functions/v2/firestore');
 const {createNotifications,notificationFor}=require('./notifications');
+const {createLifecycleNotifications,createWhatsAppLifecycleSender}=require('./ads-lifecycle-notifications');
 const catalogue=require('./catalogue');
 const {expiredIdentity}=require('./verification-cleanup');
 const {productPhoto}=require('./catalogue-photos');
@@ -27,6 +28,7 @@ const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
 const db=admin.firestore();
 const notifications=createNotifications({db,messaging:admin.messaging()});
+const adsLifecycle=createLifecycleNotifications({db,notifications});
 const bucket=admin.storage().bucket('business-lift-3c19c.firebasestorage.app');
 let readinessCache=null,readinessUntil=0;
 async function readiness(){
@@ -192,8 +194,19 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
   if(!event.data?.after.exists)return;
   const before=event.data.before.data()||{},after=event.data.after.data();
   await notifications.queue(event.id,notificationFor('listing',before,after,event.params.sellerUid));
+  await adsLifecycle.onSellingWrite(event.id,event.params.sellerUid,before,after);
   if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled&&before.sellingEnabled===after.sellingEnabled)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
+});
+// A campaign submission creates an idempotent admin support-queue alert; only
+// the authenticated ops_ads_review action can approve the actual campaign.
+// Approval is unpaid; the server requires verified Paystack before public display.
+exports.teyzaShopperAdLifecycleNotification=onDocumentWritten({...catalogueTrigger,
+  document:'teyzaShopperAds/{advertisementId}'},async event=>{
+  if(!event.data)return;
+  await adsLifecycle.onAdWrite(event.id,event.params.advertisementId,
+    event.data.before.exists?event.data.before.data():null,
+    event.data.after.exists?event.data.after.data():null);
 });
 exports.teyzaCatalogueApprovalChanged=onDocumentWritten({...catalogueTrigger,
   document:'teyzaSellerAccounts/{sellerUid}'},async event=>{
@@ -243,6 +256,25 @@ exports.teyzaSellerMessageNotification=onDocumentCreated({...catalogueTrigger,
 });
 exports.teyzaSellerPushNotification=onDocumentCreated({...catalogueTrigger,
  document:'teyzaSellerNotifications/{sellerUid}/items/{notificationId}'},event=>notifications.deliver(event.data.ref));
+// Event WhatsApp notifications are opt-in and use separately approved Meta
+// templates. Disabled by default. No new sender is deployed by main backend
+// unless explicitly enabled and the named function is deployed separately.
+if(process.env.TEYZA_WHATSAPP_EVENT_NOTIFICATIONS_ENABLED==='1'){
+ const eventSender=createWhatsAppLifecycleSender({db,
+  getAuthUser:uid=>admin.auth().getUser(uid),
+  getToken:()=>whatsAppWebhookReplyToken.value(),
+  getConfig:()=>({
+   phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
+   language:process.env.TEYZA_WHATSAPP_EVENT_TEMPLATE_LANGUAGE||'en',
+   adApprovedTemplate:process.env.TEYZA_WHATSAPP_AD_APPROVED_TEMPLATE||'',
+   sellingReadyTemplate:process.env.TEYZA_WHATSAPP_SELLING_READY_TEMPLATE||''
+  })});
+ exports.teyzaWhatsAppEventCreated=onDocumentCreated({region:'us-central1',
+  maxInstances:3,document:'teyzaWhatsAppEventOutbox/{reference}',
+  secrets:[whatsAppWebhookReplyToken]},
+  event=>eventSender.deliver(event.params.reference));
+}
 // WhatsApp notifications are optional: never register the Meta secret when
 // deploying the core seller API unless explicitly enabled by the operator.
 // Set TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1 only after provisioning an
