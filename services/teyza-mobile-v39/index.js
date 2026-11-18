@@ -21,6 +21,7 @@ const paystackSigningKey=defineSecret('TEYZA_PAYSTACK_WEBHOOK_SIGNING_SECRET');
 // only to that function; the optional outbound WhatsApp sender stays OFF.
 const whatsAppWebhookVerifyToken=defineSecret('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN');
 const whatsAppWebhookAppSecret=defineSecret('TEYZA_WHATSAPP_APP_SECRET');
+const whatsAppWebhookReplyToken=defineSecret('TEYZA_WHATSAPP_ACCESS_TOKEN');
 const {createService}=require('./service');
 const {uploadReadiness}=require('./upload-storage');
 if(!admin.apps.length)admin.initializeApp();
@@ -86,7 +87,9 @@ function sellerCheckoutConfigured(){
 // No WhatsApp message sender or scheduled worker is enabled by this export.
 const pilotRouting=require('./whatsapp-pilot-routing').createPilotRouter({db,
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
- getPhoneNumberId:()=>process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||''});
+ getPhoneNumberId:()=>process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+ getApiVersion:()=>process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
+ getAccessToken:()=>whatsAppWebhookReplyToken.value()});
 const whatsappWebhook=require('./whatsapp-webhook').createWebhook({db,
  onInteraction:payload=>pilotRouting.route(payload),
  getVerifyToken:()=>whatsAppWebhookVerifyToken.value(),
@@ -94,7 +97,7 @@ const whatsappWebhook=require('./whatsapp-webhook').createWebhook({db,
  logger:require('firebase-functions/logger')});
 exports.teyzaWhatsAppWebhook=onRequest({region:'us-central1',invoker:'public',cors:false,
  maxInstances:3,memory:'256MiB',timeoutSeconds:30,
- secrets:[whatsAppWebhookVerifyToken,whatsAppWebhookAppSecret]},
+ secrets:[whatsAppWebhookVerifyToken,whatsAppWebhookAppSecret,whatsAppWebhookReplyToken]},
  (req,res)=>whatsappWebhook.handle(req,res));
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
