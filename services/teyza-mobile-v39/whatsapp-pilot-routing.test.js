@@ -8,7 +8,7 @@ function payload(messages=[],statuses=[],numberId='1466599163197469'){
  return {object:'whatsapp_business_account',entry:[{changes:[{field:'messages',value:{
   metadata:{phone_number_id:numberId},messages,statuses}}]}]};
 }
-function fake(){
+function fake(options={}){
  const data=new Map([
   ['teyzaSellerAccounts/seller1',{uid:'seller1',phone:'+27712345678',approvalStatus:'approved'}],
   ['teyzaWhatsAppPreferences/seller1',{ownerUid:'seller1',phone:'+27712345678',optedIn:true}],
@@ -29,7 +29,8 @@ function fake(){
  }};
  let uid='seller1';
  return {data,router:createPilotRouter({db,getPilotUid:()=>uid,
-  getPhoneNumberId:()=> '1466599163197469',clock:()=>777}),
+  getPhoneNumberId:()=> '1466599163197469',clock:()=>777,
+  getAccessToken:()=>options.token||'',send:options.send||fetch}),
   setPilotUid:v=>{uid=v;}};
 }
 test('Signed quick replies are mapped to the three pilot intents, not arbitrary text',()=>{
@@ -83,4 +84,38 @@ test('Only signed status data for the pilot outbox updates delivery receipt',asy
  assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'delivered');
  await f.router.route(payload([],[{id:'wamid.sent1',status:'sent'}]));
  assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'delivered');
+});
+
+test('Quick reply receives one URL or support confirmation and never repeats after Meta webhook redelivery',async()=>{
+ const sent=[];
+ const f=fake({token:'token-test-only-not-real-credential',
+  send:async(url,request)=>{
+   sent.push({url,body:JSON.parse(request.body)});
+   return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.reply'+sent.length}]})};
+  }});
+ const p=payload([
+  message('wamid.sell','button',{button:{text:'Start selling on Teyza'}}),
+  message('wamid.ad','button',{button:{text:'Advertise on Teyza'}}),
+  message('wamid.consult','button',{button:{text:'Talk to consultant'}})
+ ]);
+ await f.router.route(p);
+ await f.router.route(p);
+ assert.equal(sent.length,3);
+ assert(sent[0].body.text.body.includes('https://teyza.co.za/seller-getting-started.html'));
+ assert(sent[1].body.text.body.includes('https://teyza.co.za/ads/'));
+ assert(sent[2].body.text.body.includes('consultant'));
+ assert(sent.every(x=>x.url.endsWith('/1466599163197469/messages')));
+ const actions=[...f.data].filter(([k])=>k.startsWith('teyzaWhatsAppPilotActions/'));
+ assert(actions.every(([,v])=>v.state==='completed'&&v.replyStatus==='accepted'&&v.replyMessageId));
+ assert.equal([...f.data].filter(([k])=>k.startsWith('teyzaSupportTickets/')).length,1);
+});
+test('Unknown provider outcome is recorded without retry or duplicate response',async()=>{
+ let count=0;const f=fake({token:'token-test-only-not-real-credential',
+  send:async()=>{count++;throw Error('uncertain network outcome');}});
+ const p=payload([message('wamid.uncertain','button',{button:{text:'Advertise on Teyza'}})]);
+ await f.router.route(p);await f.router.route(p);
+ assert.equal(count,1);
+ const action=[...f.data].find(([k])=>k.startsWith('teyzaWhatsAppPilotActions/'))[1];
+ assert.equal(action.state,'needs_review');
+ assert.equal(action.replyStatus,'delivery_uncertain');
 });
