@@ -5,13 +5,21 @@ const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),
 const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE='sites/'+PROJECT,FILE='/seller-getting-started.html';
+const GENERATED_FIREBASE_FILES=new Set(['/__/firebase/init.js','/__/firebase/init.json']);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function verifyOneFileChange(before,after,expectedHash){
  if(after.get(FILE)!==expectedHash)throw Error('Seller guide failed hash check');
  const expectedCount=before.size+(before.has(FILE)?0:1);
  if(after.size!==expectedCount)throw Error('Unexpected Hosting file count: expected '+expectedCount+' but saw '+after.size);
  for(const [file,value] of before){
-  if(file!==FILE&&after.get(file)!==value)throw Error('Unrelated Hosting file changed: '+file);
+  if(file===FILE)continue;
+  if(GENERATED_FIREBASE_FILES.has(file)){
+   // Firebase Hosting regenerates these reserved resources in cloned versions.
+   // They must exist in both versions; every other file remains hash-pinned.
+   if(!/^[a-f0-9]{64}$/.test(value)||!/^[a-f0-9]{64}$/.test(after.get(file)||'')){
+    throw Error('Firebase reserved file missing or invalid: '+file);
+   }
+  }else if(after.get(file)!==value)throw Error('Unrelated Hosting file changed: '+file);
  }
 }
 async function current(c){return versionName((await c.hosting('GET','/'+SITE+'/channels/live')).release?.version?.name);}
@@ -53,6 +61,11 @@ async function main(){
  }
  const after=await allFiles(c,next);
  verifyOneFileChange(before,after,hash);
+ // Cloning must not modify Hosting routing, redirects, headers, or rewrites.
+ const sourceConfig=(await c.hosting('GET','/'+beforeVersion)).config||{};
+ const draftConfig=(await c.hosting('GET','/'+next)).config||{};
+ const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort()):v);
+ if(canonical(sourceConfig)!==canonical(draftConfig))throw Error('Hosting configuration changed during clone');
  await c.hosting('PATCH','/'+next,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(c)!==beforeVersion)throw Error('Concurrent Hosting publication detected; nothing published');
  await c.hosting('POST','/'+SITE+'/channels/live/releases',{message:'Correct Teyza seller welcome guide only'},{versionName:next});

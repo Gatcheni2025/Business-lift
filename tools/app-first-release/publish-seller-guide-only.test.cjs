@@ -26,3 +26,19 @@ test('Missing, changed, or extra existing files prevent publication',()=>{
  const incorrect=new Map([...original,[page,'wrong']]);
  assert.throws(()=>verifyOneFileChange(original,incorrect,hash),/Seller guide failed hash check/);
 });
+
+test('Firebase reserved initialization hashes may differ but both paths remain present',()=>{
+ const init='/__/firebase/init.js',json='/__/firebase/init.json';
+ const before=new Map([...original,[init,'a'.repeat(64)],[json,'b'.repeat(64)]]);
+ const after=new Map([...before,[page,hash]]);
+ after.set(init,'c'.repeat(64));after.set(json,'d'.repeat(64));
+ assert.doesNotThrow(()=>verifyOneFileChange(before,after,hash));
+});
+test('Reserved Firebase files cannot be missing or malformed',()=>{
+ const init='/__/firebase/init.js',json='/__/firebase/init.json';
+ const before=new Map([...original,[init,'a'.repeat(64)],[json,'b'.repeat(64)]]);
+ const missing=new Map([...before,[page,hash]]);missing.delete(init);missing.set('/unexpected','a'.repeat(64));
+ assert.throws(()=>verifyOneFileChange(before,missing,hash),/Firebase reserved file missing or invalid/);
+ const invalid=new Map([...before,[page,hash]]);invalid.set(json,'invalid');
+ assert.throws(()=>verifyOneFileChange(before,invalid,hash),/Firebase reserved file missing or invalid/);
+});
