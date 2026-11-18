@@ -6,6 +6,14 @@ const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE='sites/'+PROJECT,FILE='/seller-getting-started.html';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function verifyOneFileChange(before,after,expectedHash){
+ if(after.get(FILE)!==expectedHash)throw Error('Seller guide failed hash check');
+ const expectedCount=before.size+(before.has(FILE)?0:1);
+ if(after.size!==expectedCount)throw Error('Unexpected Hosting file count: expected '+expectedCount+' but saw '+after.size);
+ for(const [file,value] of before){
+  if(file!==FILE&&after.get(file)!==value)throw Error('Unrelated Hosting file changed: '+file);
+ }
+}
 async function current(c){return versionName((await c.hosting('GET','/'+SITE+'/channels/live')).release?.version?.name);}
 async function clone(c,source){
  let result=await c.hosting('POST','/'+SITE+'/versions:clone',{sourceVersion:source,finalize:false});
@@ -31,7 +39,9 @@ async function main(){
  const domain=await c.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Unexpected domain');
  const beforeVersion=await current(c),before=await allFiles(c,beforeVersion);
- if(!before.has(FILE))throw Error('Seller guide not present on live Hosting. Refusing to create a new route blindly.');
+ const existedBefore=before.has(FILE);
+ if(!before.has('/index.html'))throw Error('Expected live site index.html missing. Refusing publication.');
+ console.log(existedBefore?'Replacing existing seller guide only.':'Creating missing seller guide file only; existing files will be preserved.');
  const next=await clone(c,beforeVersion);
  const backup=path.join(repo,'hosting-backup-seller-guide.json');
  fs.writeFileSync(backup,JSON.stringify({site:PROJECT,sourceVersion:beforeVersion,patchedVersion:next,
@@ -42,9 +52,7 @@ async function main(){
   await c.upload(result.uploadUrl+'/'+h,compressed);
  }
  const after=await allFiles(c,next);
- if(after.get(FILE)!==hash)throw Error('Seller guide failed hash check');
- if(after.size!==before.size)throw Error('Live Hosting file count changed');
- for(const [file,value] of before){if(file!==FILE&&after.get(file)!==value)throw Error('Unrelated Hosting file changed: '+file);}
+ verifyOneFileChange(before,after,hash);
  await c.hosting('PATCH','/'+next,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(c)!==beforeVersion)throw Error('Concurrent Hosting publication detected; nothing published');
  await c.hosting('POST','/'+SITE+'/channels/live/releases',{message:'Correct Teyza seller welcome guide only'},{versionName:next});
@@ -56,4 +64,4 @@ async function main(){
  console.log('Rollback version details saved in '+backup);
 }
 if(require.main===module)main().catch(error=>{console.error('Seller guide NOT published:',error.message);process.exitCode=1;});
-module.exports={main};
+module.exports={main,verifyOneFileChange};
