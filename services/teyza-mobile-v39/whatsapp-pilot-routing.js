@@ -36,7 +36,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
  async function route(payload){
   const pilotUid=getPilotUid();
   const numberId=getPhoneNumberId();
-  if(!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
+  if(!/^\d{5,25}$/.test(numberId||''))return;
   // Reconcile Meta receipts with the one pilot seller's accepted outbox.
   // Delivery is not inferred from a successful API send; only signed status
   // callbacks may write the deliveryStatus field.
@@ -48,15 +48,29 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
        typeof status.id!=='string'||!/^wamid[.][A-Za-z0-9_.:=+/-]{1,500}$/.test(status.id))continue;
     const results=await db.collection('teyzaWhatsAppApprovalOutbox').where('providerMessageId','==',status.id).limit(3).get();
     for(const doc of results.docs){
-     if(doc.data()?.sellerUid!==pilotUid||doc.data()?.status!=='accepted')continue;
+     if(!uidValid(pilotUid)||doc.data()?.sellerUid!==pilotUid||doc.data()?.status!=='accepted')continue;
      // Never turn a delivered/read receipt backwards to sent.
      const previous=doc.data()?.deliveryStatus;
      const rank={sent:1,delivered:2,read:3,failed:4};
      if(previous&&rank[previous]>=rank[status.status])continue;
      await doc.ref.update({deliveryStatus:status.status,deliveryStatusAt:clock()});
     }
+    // A reviewed Ads approval may be sent to ANY opted-in seller, not just
+    // the one welcome-menu pilot UID. The enclosing webhook validated
+    // Meta's HMAC signature before this route is invoked.
+    const lifecycle=await db.collection('teyzaWhatsAppEventOutbox')
+      .where('providerMessageId','==',status.id).limit(3).get();
+    for(const item of lifecycle.docs){
+     const entry=item.data();
+     if(entry?.status!=='accepted'||!uidValid(entry.sellerUid)||
+        !['ad_approved','selling_ready'].includes(entry.kind))continue;
+     const rank={sent:1,delivered:2,read:3,failed:4};
+     if(entry.deliveryStatus&&rank[entry.deliveryStatus]>=rank[status.status])continue;
+     await item.ref.update({deliveryStatus:status.status,deliveryStatusAt:clock()});
+    }
    }
   }
+  if(!uidValid(pilotUid))return;
   for(const event of extractActions(payload,numberId)){
    // Scope all pilot interactions to the one authorised seller.
    // Read phone only transiently; never persist it in the interaction audit.
