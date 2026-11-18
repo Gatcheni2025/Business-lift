@@ -11,6 +11,22 @@ export function validAdCheckoutUrl(v){
 }
 export const validAdPrice=(cents,radius)=>Number.isInteger(radius)&&radius>=1&&radius<=50&&
  Number.isInteger(cents)&&cents===2900+Math.max(0,radius-10)*200;
+export const estimatedAdCents=radius=>Number.isInteger(radius)&&radius>=1&&radius<=50?
+  2900+Math.max(0,radius-10)*200:null;
+export const validAdDraft=({title,message,radiusKm,consent})=>
+ typeof title==='string'&&title.trim().length>=5&&title.trim().length<=80&&
+ typeof message==='string'&&message.trim().length>=12&&message.trim().length<=240&&
+ estimatedAdCents(radiusKm)!==null&&consent===true;
+export const validAdImageFile=file=>Boolean(file&&['image/jpeg','image/png'].includes(file.type)&&
+ Number.isFinite(file.size)&&file.size>=100&&file.size<=2000000);
+export const adStatusLabel=status=>({
+ pending_review:'Awaiting Teyza admin review',
+ approved_unpaid:'Approved — ready for one-time payment',
+ active:'Live sponsored campaign',
+ rejected:'Not approved — review reason below',
+ paused:'Paused'
+})[status]||'Campaign status: '+String(status||'unknown');
+
 export const canPurchaseAd=(ad,user,ready)=>Boolean(ready&&user?.emailVerified===true&&
  ad?.status==='approved_unpaid'&&ad.paymentStatus!=='paid'&&!ad.paymentReference&&
  validAdPrice(ad.amountCents,ad.radiusKm));
@@ -37,10 +53,11 @@ async function start(){
   el('signedEmail').textContent=user.email||'Original Firebase business account';
   el('shopUid').textContent='Seller account ID: '+user.uid;
   const ready=health?.ok===true&&health.shopperAdsWebPaystackEnabled===true;
-  if(!ads.length){const p=document.createElement('p');p.textContent='No campaigns yet. Submit a creative in your Teyza seller workspace for review.';el('campaigns').append(p);}
+  if(!ads.length){const p=document.createElement('p');p.textContent='No campaigns yet. Use the Create an advertisement form above to submit your first campaign.';el('campaigns').append(p);}
   for(const ad of ads){
    const box=document.createElement('article');box.className='ad';box.dataset.selected=String(selectedId===ad.id);
    const h=document.createElement('strong');h.textContent=ad.title||'Local advertisement';box.append(h);
+   const statusLine=document.createElement('p');statusLine.textContent=adStatusLabel(ad.status);statusLine.className='status-note';box.append(statusLine);
    const p=document.createElement('p');p.textContent=[ad.status.replaceAll('_',' '),
      ad.radiusKm+' km',money(ad.amountCents),'7 days'].join(' · ');p.className='meta';box.append(p);
    if(ad.reviewNote){const note=document.createElement('p');note.textContent='Review note: '+ad.reviewNote;box.append(note);}
@@ -62,6 +79,8 @@ async function start(){
   el('checkout').disabled=busy||!canPurchaseAd(selected,user,ready)||
    !el('ownerConsent').checked||!el('paymentConsent').checked;
   el('refresh').disabled=busy;
+  el('submitAd').disabled=busy||user.emailVerified!==true;
+  el('createAdForm').setAttribute('aria-busy',String(busy));
  }
  async function api(action,data={}){
   if(!auth?.currentUser)throw Error('Sign in to the approved account first.');
@@ -75,6 +94,53 @@ async function start(){
   if(!current(uid,g))throw Error('The signed-in account changed.');
   if(!r.ok||json.ok!==true)throw Error(json.error||'Secure request unavailable.');
   return json;
+ }
+ function updateAdPrice(){
+  const radius=Number(el('adRadius').value),cents=estimatedAdCents(radius);
+  el('adPricePreview').textContent=cents===null?'Choose a valid 1–50 km radius':
+    'Estimated charge: '+money(cents)+' for 7 days · '+radius+' km';
+ }
+ async function fileAsBase64(file){
+  if(!validAdImageFile(file))throw Error('Choose a JPEG or PNG image under 2 MB.');
+  return new Promise((resolve,reject)=>{
+   const reader=new FileReader();
+   reader.onerror=()=>reject(Error('Could not read the image. Choose another file.'));
+   reader.onload=()=>{
+    const data=String(reader.result||''),match=/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+    if(!match||match[2].length>3000000)return reject(Error('Invalid or oversized image.'));
+    resolve(match[2]);
+   };
+   reader.readAsDataURL(file);
+  });
+ }
+ async function submitAd(event){
+  event.preventDefault();
+  const user=auth?.currentUser;if(!user||busy)return;
+  const uid=user.uid,g=generation,form=el('createAdForm');
+  const title=el('adTitle').value.trim(),message=el('adMessage').value.trim();
+  const radiusKm=Number(el('adRadius').value),consent=el('adPublicConsent').checked;
+  if(user.emailVerified!==true)return notice('Verify your Firebase email before submitting an advertisement.','warning');
+  if(!validAdDraft({title,message,radiusKm,consent}))
+   return notice('Add a valid headline, description, radius, and confirm image permission.','warning');
+  const file=el('adImage').files?.[0];
+  if(!validAdImageFile(file))return notice('Upload a JPEG or PNG image under 2 MB.','warning');
+  busy=true;render();notice('Preparing your advertisement for Teyza admin review…');
+  try{
+   const imageBase64=await fileAsBase64(file);
+   if(!current(uid,g))return;
+   const result=await api('ads_submit',{title,message,radiusKm,imageBase64,publicDisplayConsent:true});
+   if(!current(uid,g))return;
+   if(typeof result.advertisementId!=='string'||result.status!=='pending_review'||
+     result.amountCents!==estimatedAdCents(radiusKm))
+    throw Error('Campaign submission could not be confirmed. Refresh before retrying.');
+   form.reset();updateAdPrice();
+   const mine=await api('ads_mine');
+   if(!current(uid,g))return;
+   ads=Array.isArray(mine.ads)?mine.ads.filter(a=>typeof a.id==='string'):[];
+   selectedId=null;
+   notice('Campaign submitted successfully. It is awaiting independent Teyza admin review; no payment is due yet.','success');
+  }catch(e){if(current(uid,g))notice(e.message||'Could not submit the campaign. Refresh before retrying.','error');}
+  finally{if(current(uid,g)){busy=false;render();}}
  }
  async function reload(){
   const uid=auth?.currentUser?.uid,g=generation;if(!uid||busy)return;
@@ -157,6 +223,8 @@ async function start(){
   }
   el('logout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>notice(e.message,'error')));
   el('refresh').addEventListener('click',reload);
+  el('createAdForm').addEventListener('submit',submitAd);
+  el('adRadius').addEventListener('change',updateAdPrice);updateAdPrice();
   el('checkout').addEventListener('click',checkout);
   el('ownerConsent').addEventListener('change',render);el('paymentConsent').addEventListener('change',render);
   render();
