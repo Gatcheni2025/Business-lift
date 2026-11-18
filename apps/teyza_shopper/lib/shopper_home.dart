@@ -458,9 +458,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(state==AppLifecycleState.resumed) {
       refreshUnread();
       load(silent:true);startCatalogueWatch();
+      unawaited(reloadSponsoredAds());
       // Don't clear a shop/cart when returning from Google Maps.
       if(area==null) _restoreSavedArea();
-    }else{catalogueWatch?.cancel();catalogueWatch=null;}
+    }else{
+      catalogueWatch?.cancel();catalogueWatch=null;
+      _sponsoredRotationTimer?.cancel();_sponsoredRotationTimer=null;
+    }
   }
   void startCatalogueWatch(){
     catalogueWatch?.cancel();if(session.sellerWorkspace)return;
