@@ -198,6 +198,17 @@ exports.teyzaCatalogueShopChanged=onDocumentWritten({...catalogueTrigger,
   if(event.data.before.exists&&before.status===after.status&&before.sellerUid===after.sellerUid&&before.catalogueEnabled===after.catalogueEnabled&&before.sellingEnabled===after.sellingEnabled)return;
   await service.synchronizeCatalogue(event.params.sellerUid);
 });
+// Catch campaigns already pending before notification triggers were enabled.
+// The downstream alert uses a deterministic campaign ID and is idempotent;
+// it never approves, charges, or changes the campaign itself.
+exports.teyzaShopperAdReviewInboxReconcile=onSchedule({
+  schedule:'every 30 minutes',timeZone:'Africa/Johannesburg',
+  region:'us-central1',maxInstances:1},async()=>{
+  const pending=await db.collection('teyzaShopperAds')
+    .where('status','==','pending_review').limit(100).get();
+  for(const row of pending.docs)
+    await adsLifecycle.onAdWrite('reconcile:'+row.id,row.id,null,row.data());
+});
 // A campaign submission creates an idempotent admin support-queue alert; only
 // the authenticated ops_ads_review action can approve the actual campaign.
 // Approval is unpaid; the server requires verified Paystack before public display.
