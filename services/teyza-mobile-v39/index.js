@@ -208,6 +208,19 @@ exports.teyzaShopperAdReviewInboxReconcile=onSchedule({
     .where('status','==','pending_review').limit(100).get();
   for(const row of pending.docs)
     await adsLifecycle.onAdWrite('reconcile:'+row.id,row.id,null,row.data());
+  // Campaigns already approved before the notification trigger was deployed
+  // were otherwise missed. Reconcile only recently approved UNPAID ads,
+  // never already-paid, expired or independently unreviewed campaigns.
+  const now=Date.now();
+  const approved=await db.collection('teyzaShopperAds')
+    .where('status','==','approved_unpaid').limit(100).get();
+  for(const row of approved.docs){
+   const ad=row.data(),age=now-Number(ad.reviewedAt);
+   if(!Number.isFinite(age)||age<0||age>7*86400000||
+      ad.paymentStatus!=='unpaid'||!ad.reviewedBy||ad.reviewedBy===ad.ownerUid)continue;
+   await adsLifecycle.onAdWrite('reconcile-approved:'+row.id,row.id,
+     {...ad,status:'pending_review'},ad);
+  }
 });
 // A campaign submission creates an idempotent admin support-queue alert; only
 // the authenticated ops_ads_review action can approve the actual campaign.
