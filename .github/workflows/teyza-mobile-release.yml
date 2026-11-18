@@ -159,6 +159,10 @@ jobs:
             fi
             echo 'Android-direct mandate DEBUG APK is only for side-loaded QA testing, not a Play bundle or distribution release. It uses production Firebase; use dedicated test accounts.' >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$QA_SIGNING_ONLY" = true ] && [ "$TARGET_PLATFORMS" != all ]; then
+            echo '::error::Signed QA TestFlight requires platforms=all so the APK, AAB and IPA pass Defender before iOS upload.'
+            exit 1
+          fi
           if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$SIGNING_MODE" != signed ]; then
             echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
             exit 1
@@ -369,9 +373,11 @@ jobs:
           python3 scripts/prepare_mobile_release.py android --signing "$SIGNING_MODE"
           python3 -m pip install --quiet pillow cairosvg
           python3 scripts/make_launcher_icon.py
+      # QA-only: preview moderated Ads UI with payments disabled in store builds.
+      # Standard signed production builds keep Ads hidden until StoreKit/Play Billing is verified.
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
       - name: Verify merged bundle has no advertising permissions
         working-directory: apps/teyza_shopper
         run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
@@ -388,7 +394,7 @@ jobs:
         if: env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload verified signed Android APK for direct device testing
@@ -571,7 +577,7 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store --dart-define=TEYZA_SHOPPER_ADS_PREVIEW="$QA_SIGNING_ONLY"
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
             flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
@@ -585,7 +591,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload verified signed IPA to TestFlight (explicit opt-in only)
-        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true
+        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true && inputs.qa_signing_only != true
         working-directory: apps/teyza_shopper
         env:
           TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
@@ -721,3 +727,27 @@ jobs:
           }
           Write-Host 'No recent Defender detection was recorded for the signed app binaries.'
           Write-Host 'This is not a Microsoft analyst verdict on the separately flagged website files.'
+
+  # Dedicated QA TestFlight upload happens only AFTER signed APK/AAB/IPA have
+  # all passed the existing Defender scan. Never upload an unscanned QA IPA.
+  upload_qa_testflight_after_scan:
+    name: Upload scanned signed QA IPA to TestFlight
+    if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true && inputs.signed_release == true && inputs.upload_to_testflight == true && inputs.platforms == 'all'
+    needs: qa_binary_defender_scan
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-qa-signed
+          path: apple-upload
+      - name: Verify signed release manifest and upload scanned IPA
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 apps/teyza_shopper/scripts/upload_testflight.py apple-upload
