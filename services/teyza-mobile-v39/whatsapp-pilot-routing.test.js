@@ -86,6 +86,29 @@ test('Only signed status data for the pilot outbox updates delivery receipt',asy
  assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'delivered');
 });
 
+test('Signed Meta receipts confirm delivered or read status for Ads approved messages beyond welcome pilot',async()=>{
+ const f=fake();
+ f.data.set('teyzaWhatsAppEventOutbox/approved123',{
+  sellerUid:'seller999',kind:'ad_approved',status:'accepted',providerMessageId:'wamid.lifecycle1'
+ });
+ f.setPilotUid('');
+ await f.router.route(payload([], [{id:'wamid.lifecycle1',status:'sent'}]));
+ await f.router.route(payload([], [{id:'wamid.lifecycle1',status:'delivered'}]));
+ await f.router.route(payload([], [{id:'wamid.lifecycle1',status:'read'}]));
+ await f.router.route(payload([], [{id:'wamid.lifecycle1',status:'sent'}]));
+ assert.equal(f.data.get('teyzaWhatsAppEventOutbox/approved123').deliveryStatus,'read');
+ const wrong=payload([], [{id:'wamid.lifecycle1',status:'failed'}],'other-phone-number');
+ await f.router.route(wrong);
+ assert.equal(f.data.get('teyzaWhatsAppEventOutbox/approved123').deliveryStatus,'read');
+});
+test('Never mark an unaccepted or unknown WhatsApp approval as delivered',async()=>{
+ const f=fake();
+ f.data.set('teyzaWhatsAppEventOutbox/queued123',{
+  sellerUid:'seller999',kind:'ad_approved',status:'queued',providerMessageId:'wamid.queued1'
+ });
+ await f.router.route(payload([], [{id:'wamid.queued1',status:'delivered'}]));
+ assert.equal(f.data.get('teyzaWhatsAppEventOutbox/queued123').deliveryStatus,undefined);
+});
 test('Quick reply receives one URL or support confirmation and never repeats after Meta webhook redelivery',async()=>{
  const sent=[];
  const f=fake({token:'token-test-only-not-real-credential',
