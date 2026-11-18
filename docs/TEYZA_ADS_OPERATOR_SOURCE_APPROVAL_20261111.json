@@ -2,19 +2,19 @@
   "policyVersion": "teyza-ads-operator-source-approval-v1",
   "approvalType": "authorised_project_owner_and_operator",
   "decision": "approved",
-  "approvedDate": "2026-11-11",
-  "operatorApprovalPr": 149,
-  "operatorApprovalHeadAtTimeOfApproval": "48f668642778bb20fd98a6e359e1381d7eff2e2e",
+  "approvedDate": "2026-11-18",
+  "operatorApprovalPr": 177,
+  "operatorApprovalHeadAtTimeOfApproval": "821fe917f2975ee8010bc3f5a2fa546e88894730",
   "approvedFiles": [
     {
       "file": "web/app-first/public/ads/index.html",
-      "sha256": "6273f912f6a77b894f97dfbb13aeef4cab8a7319c714a9dcaf29672d4244d980",
-      "windowsCrLfSha256": "99820c9ab75619fca188954599a556e464cfe60b884cfdf548d9450103777a6e"
+      "sha256": "a36466ffbcc5c78cb851fa261165f5c39324c94df40ec735a04d46ed8b045bb3",
+      "windowsCrLfSha256": "86f7da7545d3ad2e6d1542029da19288d49f404519d2a201ddd9763d84cd86d7"
     },
     {
       "file": "web/app-first/public/js/ads-web-billing.mjs",
-      "sha256": "3b3fec7f5ab7fe09ee6ea96b0bd04f76fd1bf56745c5e43a879b0acd14935289",
-      "windowsCrLfSha256": "df590bc65b3da45118a438a269caa2884a4f58ca9db5e216f7272e3ab95494cb"
+      "sha256": "3486c055633528e125ee97dd77c99e05b663a0951fd185e25737364fb7978e03",
+      "windowsCrLfSha256": "8fee649e9574f5ed4f06e0e6f106429e967e2176e837587cff1c595fbc4ac369"
     }
   ],
   "mirroredRootContentMustMatch": true,
@@ -22,6 +22,23 @@
   "lineEndingEquivalenceVerified": true,
   "waivesExternalThirdPartyMalwareVerdict": true,
   "externalAnalystVerdict": "not_received",
-  "basis": "Authorised project owner explicitly approved the new independent teyza.co.za/ads/ website source and JavaScript fingerprint for draft PR #149 on 2026-11-11, and waived an external third-party malware verdict. This approval applies to the exact unchanged reviewed source bytes, not to arbitrary subsequent edits.",
-  "scope": "Only standalone Teyza Ads website HTML and JavaScript. Does NOT approve old /pay source changes, public Paystack charge activation, deployment, in-app external checkout redirection, store policy compliance, or bypassing CI, source hashing, or server-side transaction verification."
+  "basis": "On 2026-11-18, the authorised project owner explicitly reviewed PR #177's standalone advertising website and checkout JS and approved the Windows working-tree SHA-256 fingerprints 86f7da7545d3ad2e6d1542029da19288d49f404519d2a201ddd9763d84cd86d7 and 8fee649e9574f5ed4f06e0e6f106429e967e2176e837587cff1c595fbc4ac369, retaining the waiver of an external third-party malware verdict. Exact deterministic LF-to-CRLF conversion of Git source yields those fingerprints; canonical Git LF SHA-256 values are separately recorded under approvedFiles[].sha256. Both are pinned to exactly the same reviewed source content.",
+  "scope": "Exact approved source for PR #177 Ads HTML and JS, including create-campaign form, 7-day ad price preview, authenticated pending-review submission and approved-campaign checkout. Does not alter or independently approve Paystack backend, approve a seller's own advertisement, bypass source checks, authorize any duplicate payment, or modify /pay/ membership sources.",
+  "previousApproval": {
+    "approvedDate": "2026-11-11",
+    "operatorApprovalPr": 149,
+    "approvedFiles": [
+      {
+        "file": "web/app-first/public/ads/index.html",
+        "sha256": "6273f912f6a77b894f97dfbb13aeef4cab8a7319c714a9dcaf29672d4244d980",
+        "windowsCrLfSha256": "99820c9ab75619fca188954599a556e464cfe60b884cfdf548d9450103777a6e"
+      },
+      {
+        "file": "web/app-first/public/js/ads-web-billing.mjs",
+        "sha256": "3b3fec7f5ab7fe09ee6ea96b0bd04f76fd1bf56745c5e43a879b0acd14935289",
+        "windowsCrLfSha256": "df590bc65b3da45118a438a269caa2884a4f58ca9db5e216f7272e3ab95494cb"
+      }
+    ],
+    "basis": "Authorised project owner explicitly approved the new independent teyza.co.za/ads/ website source and JavaScript fingerprint for draft PR #149 on 2026-11-11, and waived an external third-party malware verdict. This approval applies to the exact unchanged reviewed source bytes, not to arbitrary subsequent edits."
+  }
 }
