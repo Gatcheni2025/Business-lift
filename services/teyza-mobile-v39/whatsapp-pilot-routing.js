@@ -28,7 +28,7 @@ function extractActions(payload,numberId){
  }
  return result.slice(0,500);
 }
-function createPilotRouter({db,getPilotUid,getPhoneNumberId,clock=Date.now}){
+function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'',getApiVersion=()=> 'v26.0',send=fetch,clock=Date.now}){
  if(!db||typeof getPilotUid!=='function'||typeof getPhoneNumberId!=='function')throw Error('Pilot router dependencies missing');
  async function route(payload){
   const pilotUid=getPilotUid();
@@ -68,12 +68,12 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,clock=Date.now}){
    const id=crypto.createHash('sha256').update(JSON.stringify([numberId,event.id,event.action])).digest('hex');
    const ref=db.doc('teyzaWhatsAppPilotActions/'+id);
    const preferenceRef=db.doc('teyzaWhatsAppPreferences/'+pilotUid);
-   await db.runTransaction(async tx=>{
+   const created=await db.runTransaction(async tx=>{
     const previous=await tx.get(ref);
-    if(previous.exists)return;
+    if(previous.exists)return false;
     const fresh=await tx.get(preferenceRef);
-    if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return;
-    if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return;
+    if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return false;
+    if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return false;
     const at=clock();
     const destination=event.action==='start_selling'?'/seller-getting-started.html':
       event.action==='advertise'?'/ads/':
@@ -96,7 +96,40 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,clock=Date.now}){
      tx.set(preferenceRef,{...fresh.data(),ownerUid:pilotUid,optedIn:false,phone:'',
        optedOutAt:at,updatedAt:at,consentVersion:'seller-approval-v2'});
     }
+    return true;
    });
+   if(!created||event.action==='stop')continue;
+   // A quick reply is an inbound message, not a browser redirect. Send
+   // a single WhatsApp service response with the next actionable URL.
+   // The transaction-created action is the durable idempotency barrier:
+   // webhook redelivery must NEVER generate a second response.
+   const token=getAccessToken(),version=getApiVersion();
+   if(typeof token!=='string'||token.length<20||!/^v\\d+\\.\\d+$/.test(version)){
+    await ref.update({state:'needs_review',replyStatus:'sender_configuration_missing',updatedAt:clock()});
+    continue;
+   }
+   const text=event.action==='start_selling'?
+    'Your Teyza business has been approved. Continue with seller setup here: https://teyza.co.za/seller-getting-started.html':
+    event.action==='advertise'?
+    'You can create and manage a Teyza advertisement here: https://teyza.co.za/ads/':
+    'Your request to speak to a Teyza consultant has been recorded. Our support team will follow up.';
+   try{
+    const response=await send('https://graph.facebook.com/'+version+'/'+numberId+'/messages',{
+     method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+     body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',
+      to:event.from.slice(1),type:'text',text:{preview_url:true,body:text}}),
+     signal:AbortSignal.timeout(10000)
+    });
+    const body=await response.json().catch(()=>null),messageId=body?.messages?.[0]?.id;
+    if(!response.ok||typeof messageId!=='string'||!messageId){
+     await ref.update({state:'needs_review',replyStatus:'provider_rejected',httpStatus:response.status||0,updatedAt:clock()});
+    }else{
+     await ref.update({state:'completed',replyStatus:'accepted',replyMessageId:messageId,updatedAt:clock()});
+    }
+   }catch(_){
+    // Unknown network outcome: never retry automatically (duplicate risk).
+    await ref.update({state:'needs_review',replyStatus:'delivery_uncertain',updatedAt:clock()});
+   }
   }
  }
  return {route};
