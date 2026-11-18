@@ -114,7 +114,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
    const text=event.action==='main_menu'?null:event.action==='start_selling'?
     'Your approved Teyza business can activate selling for R99 per full calendar month (initial charge prorated when eligible). Read the benefits: https://teyza.co.za/seller-getting-started.html\n\nReply MENU for more options.':
     event.action==='advertise'?
-    'Create your advertisement in your Teyza seller app and submit it for review. After approval, sign in with the same business account to pay here: https://teyza.co.za/ads/\n\nReply MENU anytime to see the choices again.':
+    'Create your advertisement at https://teyza.co.za/ads/ using your approved seller account. Teyza admin reviews it first; only approved campaigns can then be paid for securely on the same page.\n\nReply MENU anytime to see the choices again.':
     'Your request to speak to a Teyza consultant has been recorded. Our support team will follow up.\n\nReply MENU anytime to see the choices again.';
    try{
     const outbound=event.action==='main_menu'?
