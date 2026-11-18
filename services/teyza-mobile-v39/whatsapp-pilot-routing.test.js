@@ -151,3 +151,37 @@ test('MENU respects STOP opt-out and never responds to an unapproved owner',asyn
  const v=f.data.get('teyzaWhatsAppPreferences/seller1');
  assert.equal(v.optedIn,false);
 });
+
+test('HI, HELLO, START and mixed-case Menu reopen the interactive menu for the approved pilot seller',async()=>{
+ const sent=[];
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async(_url,request)=>{
+   sent.push(JSON.parse(request.body));
+   return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.greeting'+sent.length}]})};
+  }});
+ const p=payload([
+  message('wamid.hi','text',{text:{body:'Hi'}}),
+  message('wamid.hello','text',{text:{body:' HELLO '}}),
+  message('wamid.start','text',{text:{body:'start'}}),
+  message('wamid.menu3','text',{text:{body:'mEnU'}})
+ ]);
+ await f.router.route(p);
+ await f.router.route(p);
+ assert.equal(sent.length,4,'Each distinct inbound greeting gets one reply, redelivery gets none');
+ assert(sent.every(x=>x.type==='interactive'&&x.interactive.type==='button'));
+ assert(sent.every(x=>x.interactive.action.buttons.length===3));
+ const actions=[...f.data].filter(([key])=>key.startsWith('teyzaWhatsAppPilotActions/'));
+ assert.equal(actions.length,4);
+ assert(actions.every(([,v])=>v.action==='main_menu'));
+});
+test('HI does not bypass approval or consent restrictions',async()=>{
+ let count=0;
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async()=>{count++;return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.never'}]})};}});
+ f.data.get('teyzaWhatsAppPreferences/seller1').optedIn=false;
+ await f.router.route(payload([message('wamid.nooptin','text',{text:{body:'Hi'}})]));
+ f.data.get('teyzaWhatsAppPreferences/seller1').optedIn=true;
+ f.data.get('teyzaSellerAccounts/seller1').approvalStatus='pending';
+ await f.router.route(payload([message('wamid.unapproved','text',{text:{body:'Hello'}})]));
+ assert.equal(count,0);
+});

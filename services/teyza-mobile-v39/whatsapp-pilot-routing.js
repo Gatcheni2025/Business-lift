@@ -24,7 +24,7 @@ function extractActions(payload,numberId){
      m.type==='interactive'&&m.interactive?.type==='button_reply'?
      (m.interactive.button_reply?.title||m.interactive.button_reply?.id):'';
    const action=typeof text==='string'&&/^\s*STOP\s*$/i.test(text)?'stop':
-     typeof text==='string'&&/^\s*(?:MAIN\s*MENU|MENU)\s*$/i.test(text)?'main_menu':
+     typeof text==='string'&&/^\s*(?:MAIN\s*MENU|MENU|HI|HELLO|START)\s*$/i.test(text)?'main_menu':
      choices.get(response)||({teyza_start_selling:'start_selling',teyza_advertise:'advertise',teyza_consultant:'consultant'}[response]);
    if(action)result.push({action,from:'+'+from,id:m.id});
   }
