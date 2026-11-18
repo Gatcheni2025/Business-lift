@@ -285,6 +285,18 @@ if(process.env.TEYZA_WHATSAPP_EVENT_NOTIFICATIONS_ENABLED==='1'){
   maxInstances:3,document:'teyzaWhatsAppEventOutbox/{reference}',
   secrets:[whatsAppWebhookReplyToken]},
   event=>eventSender.deliver(event.params.reference));
+ // A template may become approved after an event was queued; a separate
+ // idempotent worker delivers only not-yet-attempted events and never blindly
+ // retries uncertain provider responses.
+ exports.teyzaWhatsAppEventsPending=onSchedule({region:'us-central1',
+  maxInstances:1,schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',
+  secrets:[whatsAppWebhookReplyToken]},async()=>{
+  for(const status of ['queued','configuration_required']){
+   const rows=await db.collection('teyzaWhatsAppEventOutbox')
+    .where('status','==',status).limit(50).get();
+   for(const entry of rows.docs)await eventSender.deliver(entry.id);
+  }
+ });
 }
 // WhatsApp notifications are optional: never register the Meta secret when
 // deploying the core seller API unless explicitly enabled by the operator.
