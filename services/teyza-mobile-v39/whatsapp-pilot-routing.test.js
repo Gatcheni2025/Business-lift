@@ -102,6 +102,8 @@ test('Quick reply receives one URL or support confirmation and never repeats aft
  await f.router.route(p);
  assert.equal(sent.length,3);
  assert(sent[0].body.text.body.includes('https://teyza.co.za/seller-getting-started.html'));
+ assert(sent[0].body.text.body.includes('https://teyza.co.za/pay/'));
+ assert(!sent[0].body.text.body.includes('/download.html'));
  assert(sent[1].body.text.body.includes('https://teyza.co.za/ads/'));
  assert(sent[2].body.text.body.includes('consultant'));
  assert(sent.every(x=>x.url.endsWith('/1466599163197469/messages')));
