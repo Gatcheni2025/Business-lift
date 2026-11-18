@@ -24,6 +24,7 @@ import 'seller_push.dart';
 import 'seller_notifications.dart';
 import 'seller_firestore.dart';
 import 'shop_directions.dart';
+import 'sponsored_ad_rotation.dart';
 
 const ink = Color(0xFF0B1C2C);
 const deep = Color(0xFF010F1C);
@@ -300,6 +301,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<OnlineShop> otherBusinesses = [];
   List<Map<String,dynamic>> sponsoredAds = [];
   int _sponsoredRequestSerial=0;
+  int _sponsoredIndex=0;
+  Timer? _sponsoredRotationTimer;
+  bool _sponsoredRotationInProgress=false;
   bool loadingOtherBusinesses = false;
   String? otherBusinessesWarning;
   int _otherBusinessRequestSerial = 0;
@@ -382,7 +386,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(seller!=_wasSeller){
       _wasSeller=seller;
       if(seller){cart.clear();basketShop=null;selected=null;directorySelected=null;
-        catalogueWatch?.cancel();catalogueWatch=null;_onlineRequestSerial++;}
+        catalogueWatch?.cancel();
+    _sponsoredRotationTimer?.cancel();catalogueWatch=null;_onlineRequestSerial++;}
       else{
         _launchReady=true;
         if(widget.enableBackgroundServices)startCatalogueWatch();
@@ -453,9 +458,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(state==AppLifecycleState.resumed) {
       refreshUnread();
       load(silent:true);startCatalogueWatch();
+      unawaited(reloadSponsoredAds());
       // Don't clear a shop/cart when returning from Google Maps.
       if(area==null) _restoreSavedArea();
-    }else{catalogueWatch?.cancel();catalogueWatch=null;}
+    }else{
+      catalogueWatch?.cancel();catalogueWatch=null;
+      _sponsoredRotationTimer?.cancel();_sponsoredRotationTimer=null;
+    }
   }
   void startCatalogueWatch(){
     catalogueWatch?.cancel();if(session.sellerWorkspace)return;
@@ -788,10 +797,47 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
+  List<Map<String,dynamic>> get _eligibleHomeAds=>
+    teyzaHomeEligibleAds(sponsoredAds,DateTime.now());
+
+  void _syncSponsoredRotationTimer(){
+    if(_eligibleHomeAds.length<2){
+      _sponsoredRotationTimer?.cancel();
+      _sponsoredRotationTimer=null;
+      _sponsoredIndex=0;
+      return;
+    }
+    _sponsoredRotationTimer??=Timer.periodic(
+      teyzaHomeAdRotationInterval,(_)=>unawaited(_advanceSponsoredAd()));
+  }
+
+  Future<void> _advanceSponsoredAd() async {
+    if(_sponsoredRotationInProgress||!mounted)return;
+    _sponsoredRotationInProgress=true;
+    try{
+      final before=_eligibleHomeAds;
+      final currentId=before.isEmpty?null:before[_sponsoredIndex%before.length]['id'];
+      // Server checks approval, verified Paystack payment, expiry, seller
+      // publication and the current shopper's advertising radius on every tick.
+      await reloadSponsoredAds();
+      if(!mounted)return;
+      final after=_eligibleHomeAds;
+      setState((){
+        final previous=after.indexWhere((ad)=>ad['id']==currentId);
+        _sponsoredIndex=after.isEmpty?0:
+          teyzaNextHomeAdIndex(previous<0?-1:previous,after.length);
+      });
+    }finally{_sponsoredRotationInProgress=false;}
+  }
+
   Future<void> reloadSponsoredAds() async {
     final chosen=area,request=++_sponsoredRequestSerial;
     if(chosen==null||widget.catalogueLoader!=null||widget.directoryLoader!=null){
-      if(mounted)setState(()=>sponsoredAds=[]);return;
+      _sponsoredRotationTimer?.cancel();_sponsoredRotationTimer=null;
+      if(mounted)setState((){
+        sponsoredAds=[];_sponsoredIndex=0;
+      });
+      return;
     }
     try{
       final endpoint=Uri.parse(teyzaMobileEndpoint).replace(queryParameters:{
@@ -802,9 +848,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final decoded=jsonDecode(response.body);
       if(decoded is! Map||decoded['ok']!=true||decoded['ads'] is! List)
         throw const FormatException('Sponsored ads response invalid');
-      setState(()=>sponsoredAds=(decoded['ads'] as List)
-        .whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).take(8).toList());
-    }catch(_){if(mounted&&request==_sponsoredRequestSerial)setState(()=>sponsoredAds=[]);}
+      final valid=teyzaHomeEligibleAds((decoded['ads'] as List)
+        .whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList(),
+        DateTime.now());
+      final previous=_eligibleHomeAds;
+      final previousId=previous.isEmpty?null:previous[_sponsoredIndex%previous.length]['id'];
+      setState((){
+        sponsoredAds=valid;
+        final previousPosition=valid.indexWhere((ad)=>ad['id']==previousId);
+        _sponsoredIndex=previousPosition>=0?previousPosition:0;
+      });
+      _syncSponsoredRotationTimer();
+    }catch(_){
+      if(mounted&&request==_sponsoredRequestSerial){
+        _sponsoredRotationTimer?.cancel();_sponsoredRotationTimer=null;
+        setState((){sponsoredAds=[];_sponsoredIndex=0;});
+      }
+    }
   }
   Future<void> chooseArea(Area choice,{bool persist=true}) async {
     setState(() {
@@ -1502,6 +1562,72 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       SizedBox(width:128,height:154,child:Image.asset('assets/images/grocery-basket.png',fit:BoxFit.contain))
     ]));
 
+  Widget sponsoredGroceryHero(Map<String,dynamic> ad,int position,int total){
+    final id=(ad['shopId']??'').toString();
+    final merchant=live.where((s)=>s.id==id).toList();
+    final image=(ad['imageUrl']??'').toString();
+    return Semantics(label:'Sponsored local advertisement, ${position+1} of $total',
+      child:Container(
+      key:const ValueKey('teyza-home-sponsored-hero'),
+      margin:const EdgeInsets.only(bottom:3,top:7),
+      decoration:BoxDecoration(color:const Color(0xFFE4F3EA),
+        borderRadius:BorderRadius.circular(21)),
+      clipBehavior:Clip.antiAlias,
+      child:InkWell(
+        onTap:()=>merchant.isNotEmpty?openShop(merchant.first):setState(()=>showAllShops=true),
+        child:Row(children:[
+          Expanded(child:Padding(padding:const EdgeInsets.fromLTRB(16,13,5,13),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(children:[
+                const Icon(Icons.campaign_rounded,size:15,color:Color(0xFF0A7453)),
+                const SizedBox(width:5),
+                const Expanded(child:Text('SPONSORED · LOCAL OFFER',
+                  style:TextStyle(fontWeight:FontWeight.w800,fontSize:9,color:Color(0xFF0A7453)))),
+                Text('${position+1}/$total',style:const TextStyle(fontSize:10,color:muted)),
+              ]),
+              const SizedBox(height:8),
+              Text((ad['title']??'Local offer').toString(),maxLines:2,
+                overflow:TextOverflow.ellipsis,style:const TextStyle(
+                  color:deep,fontSize:18,fontWeight:FontWeight.w800,height:1.1)),
+              const SizedBox(height:4),
+              Text((ad['shopName']??'Local shop').toString(),
+                maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Color(0xFF3D6251),fontSize:11,
+                  fontWeight:FontWeight.w700)),
+              const SizedBox(height:4),
+              Text((ad['message']??'').toString(),maxLines:2,
+                overflow:TextOverflow.ellipsis,style:const TextStyle(color:ink,fontSize:10)),
+              const SizedBox(height:8),
+              Row(children:[
+                const Icon(Icons.touch_app_outlined,size:15,color:Color(0xFF0A7453)),
+                const SizedBox(width:4),
+                const Expanded(child:Text('Explore this shop',style:TextStyle(
+                  color:Color(0xFF0A7453),fontWeight:FontWeight.w800,fontSize:10))),
+                Tooltip(message:'Report this sponsored ad',child:IconButton(
+                  key:const ValueKey('teyza-home-sponsored-report'),
+                  visualDensity:VisualDensity.compact,
+                  icon:const Icon(Icons.flag_outlined,size:18),
+                  onPressed:() async {
+                    final email=Uri(scheme:'mailto',path:'support@teyza.co.za',
+                      queryParameters:{'subject':'Report Teyza sponsored ad',
+                        'body':'Advertisement ID: ${ad['id']}\nReason: '});
+                    try{await launchUrl(email,mode:LaunchMode.externalApplication);}
+                    catch(_){
+                      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content:Text('Email support@teyza.co.za to report this ad.')));
+                    }
+                  },
+                )),
+              ]),
+            ]))),
+          SizedBox(width:130,height:174,child:Image.network(image,fit:BoxFit.cover,
+            errorBuilder:(_,error,stack)=>const ColoredBox(
+              color:Color(0xFFD8EEE2),child:Center(child:Icon(
+                Icons.storefront_outlined,color:Color(0xFF0A7453),size:42))))),
+        ]),
+      )));
+  }
+
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
   // Product cards come only from the server-published merchant catalogue,
   // never from private seller drafts or protected wholesale offers.
@@ -1776,13 +1902,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
       businessFilters(),sellerStories(),
-      if(sponsoredAds.isNotEmpty)...[
-        section('Sponsored near you',subtitle:'Approved 7-day offers within the advertiser-selected radius'),
-        SizedBox(height:255,child:ListView(scrollDirection:Axis.horizontal,
-          key:const PageStorageKey<String>('teyza-sponsored-ads'),
-          children:sponsoredAds.map(sponsoredBanner).toList())),
-      ],
-      premiumGroceryHero(),
+      if(_eligibleHomeAds.isNotEmpty)
+        sponsoredGroceryHero(_eligibleHomeAds[_sponsoredIndex%_eligibleHomeAds.length],
+          _sponsoredIndex%_eligibleHomeAds.length,_eligibleHomeAds.length)
+      else premiumGroceryHero(),
       const SizedBox(height:4),
       section(teyzaCategoryHeading(discoveryType),
          subtitle:area==null?'Choose your area to find nearby shops':
