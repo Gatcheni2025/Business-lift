@@ -42,6 +42,7 @@ test('Only real status transitions cause lifecycle events',()=>{
 test('Submitted ad enters admin support queue idempotently with an authenticated review path',async()=>{
  const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
  const pending={ownerUid:seller,status:'pending_review',paymentStatus:'unpaid'};
+ f.data.set('teyzaShopperAds/'+adId,{...pending});
  await svc.onAdWrite('evt-submitted',adId,null,pending);
  await svc.onAdWrite('evt-submitted',adId,null,pending);
  const tickets=[...f.data.entries()].filter(([key])=>key.startsWith('teyzaSupportTickets/'));
@@ -53,6 +54,7 @@ test('Submitted ad enters admin support queue idempotently with an authenticated
 test('Admin ticket resolves only after independent review, never just after submission',async()=>{
  const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
  const pending={ownerUid:seller,status:'pending_review',paymentStatus:'unpaid'};
+ f.data.set('teyzaShopperAds/'+adId,{...pending});
  await svc.onAdWrite('submitted',adId,null,pending);
  const ticketId='teyzaSupportTickets/ads_'+eventId('admin',adId);
  assert.equal(f.data.get(ticketId).status,'open');
