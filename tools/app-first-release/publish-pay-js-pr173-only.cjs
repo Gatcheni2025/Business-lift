@@ -66,7 +66,10 @@ async function main(){
  const domain=await c.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Unexpected Hosting domain');
  const beforeVersion=await current(c),before=await allFiles(c,beforeVersion);
- for(const page of ['/pay/index.html','/ads/index.html','/index.html',FILE]){
+ // The active Hosting site may serve advertising from /ads.html or rewrites.
+ // This publisher does not touch advertisement files or routes; it preserves
+ // the exact live file set, whether /ads/index.html exists or not.
+ for(const page of ['/pay/index.html','/index.html',FILE]){
   if(!before.has(page))throw Error('Expected live Hosting file missing: '+page);
  }
  const next=await clone(c,beforeVersion);
