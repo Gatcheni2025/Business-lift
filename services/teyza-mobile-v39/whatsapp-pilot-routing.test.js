@@ -105,6 +105,8 @@ test('Quick reply receives one URL or support confirmation and never repeats aft
  assert(!sent[0].body.text.body.includes('https://teyza.co.za/pay/'),'WhatsApp must link only to the seller guide');
  assert(!sent[0].body.text.body.includes('/download.html'));
  assert(sent[1].body.text.body.includes('https://teyza.co.za/ads/'));
+ assert(sent[1].body.text.body.includes('Create your advertisement at'), 'WhatsApp must direct seller to web campaign creation');
+ assert(sent[1].body.text.body.includes('reviews it first'), 'WhatsApp must explain review before payment');
  assert(sent[2].body.text.body.includes('consultant'));
  assert(sent.every(x=>x.url.endsWith('/1466599163197469/messages')));
  const actions=[...f.data].filter(([k])=>k.startsWith('teyzaWhatsAppPilotActions/'));
