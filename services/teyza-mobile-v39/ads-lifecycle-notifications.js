@@ -39,6 +39,16 @@ function createLifecycleNotifications({db,notifications,clock=Date.now}){
    });
    return;
   }
+  if(event.kind==='ad_approved'||event.kind==='ad_rejected'){
+   const ticket=db.doc('teyzaSupportTickets/ads_'+eventId('admin',id));
+   await db.runTransaction(async tx=>{
+    const found=await tx.get(ticket);
+    if(!found.exists||found.data().source!=='ads_pending_review'||
+       found.data().status==='resolved')return;
+    tx.update(ticket,{status:'resolved',revision:(found.data().revision||0)+1,
+      updatedAt:clock(),reviewOutcome:event.kind});
+   });
+  }
   const wording={
    ad_approved:['Advertisement approved — payment available',
     'Your advertisement passed independent review. Open teyza.co.za/ads/ and pay once to activate seven days of advertising.'],
