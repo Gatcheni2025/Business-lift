@@ -192,3 +192,30 @@ test('Payment success banner appears only after verified membership confirmation
  assert(js.includes("paymentSuccess=true;"));
  assert(!js.includes("params?.get('payment')==='return' && paymentSuccess=true"));
 });
+
+test('Existing paid or potentially renewing memberships cannot initiate a duplicate checkout',async()=>{
+ const {eligibility}=await service();
+ const seller={approvalStatus:'approved',identityVerified:true,setupComplete:true,
+  listingPaid:false,complimentaryAccess:false,pilotCheckoutEligible:true};
+ for(const billing of [{status:'paid'},{status:'not_subscribed',renewalStatus:'scheduled'},
+   {status:'payment_failed',renewalStatus:'active'}]){
+  const e=eligibility(seller,true,true,true,billing);
+  assert.equal(e.eligible,false);
+  assert.equal(e.active,true);
+ }
+ assert.equal(eligibility(seller,true,true,true,{status:'not_subscribed',renewalStatus:'not_started'}).eligible,true);
+});
+test('Disabled checkout reports explicit verification, pilot, quote and consent reasons',async()=>{
+ const {checkoutBlockers}=await service();
+ const seller={approvalStatus:'approved',identityVerified:true,setupComplete:true,
+  listingPaid:false,complimentaryAccess:false,pilotCheckoutEligible:true};
+ const ready={summary:seller,billing:{status:'not_subscribed'},verified:true,
+   ready:true,matched:true,quote:{amountCents:6000},ownsShop:true,termsAccepted:true,busy:false};
+ assert.deepEqual(checkoutBlockers(ready),[]);
+ assert.match(checkoutBlockers({...ready,ownsShop:false}).join(' '),/recognise and own/);
+ assert.match(checkoutBlockers({...ready,termsAccepted:false}).join(' '),/subscription terms/);
+ assert.match(checkoutBlockers({...ready,quote:null}).join(' '),/server-issued/);
+ assert.match(checkoutBlockers({...ready,summary:{...seller,pilotCheckoutEligible:false}}).join(' '),/seller UID/);
+ assert.match(checkoutBlockers({...ready,verified:false}).join(' '),/email is not verified/);
+ assert.match(checkoutBlockers({...ready,billing:{status:'paid'}}).join(' '),/already active/);
+});
