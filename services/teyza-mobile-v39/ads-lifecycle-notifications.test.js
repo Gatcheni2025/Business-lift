@@ -63,6 +63,15 @@ test('Independent admin approval creates seller notification and a single WhatsA
  assert.match(f.notices[0].value.body,/pay once/);
  assert.equal(f.data.get('teyzaShopperAds/'+adId).status,'approved_unpaid');
 });
+test('A seller without WhatsApp consent still gets an in-app update, but no outbound WhatsApp event',async()=>{
+ const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
+ f.data.get('teyzaWhatsAppPreferences/'+seller).optedIn=false;
+ const pending={ownerUid:seller,status:'pending_review',paymentStatus:'unpaid'};
+ await svc.onAdWrite('evt-approved-no-consent',adId,pending,
+  {...pending,status:'approved_unpaid',reviewedBy:'admin99'});
+ assert.equal(f.notices.length,1);
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('teyzaWhatsAppEventOutbox/')).length,0);
+});
 test('Seller selling-ready requires verified approved active selling entitlement',async()=>{
  const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
  await svc.onSellingWrite('evt-ready',seller,{sellingEnabled:false},{sellerUid:seller,
