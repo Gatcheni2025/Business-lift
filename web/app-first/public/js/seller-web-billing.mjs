@@ -51,17 +51,33 @@ export function verifiedInitialQuote(health,billing,uid){
     !Number.isFinite(q.quoteExpiresAt))return null;
  return {...q,termsVersion:PRORATED_TERMS_VERSION};
 }
-export function eligibility(summary,verified,ready,matched=false){
+export function eligibility(summary,verified,ready,matched=false,billing=null){
   if(!summary || !matched) return {eligible:false,message:'Sign in using the original Firebase account for your shop.'};
-  if(summary.listingPaid===true) return {eligible:false,active:true,message:'Verified membership active. Open the Teyza app to manage products.'};
+  // A current verified Paystack membership must never trigger another checkout.
+  if(summary.listingPaid===true || billing?.status==='paid')
+    return {eligible:false,active:true,message:'Your verified membership is already active. No second payment is required. Manage your subscription below.'};
+  // The Paystack subscription may still renew even if the current paid period
+  // has expired or entitlement is delayed. Never silently create another one.
+  if(['scheduled','active','processing','needs_attention'].includes(billing?.renewalStatus))
+    return {eligible:false,active:true,message:'An existing Paystack subscription may still renew. Refresh status or contact support before another payment.'};
   if(summary.complimentaryAccess===true) return {eligible:false,active:true,message:'Temporary complimentary access is active. This is not a Paystack payment.'};
   if(summary.approvalStatus!=='approved' || summary.identityVerified!==true)
-    return {eligible:false,message:'Shop approval and identity review must be completed first.'};
-  if(summary.setupComplete!==true) return {eligible:false,message:'Complete phone verification and seller onboarding in Teyza.'};
-  if(!verified) return {eligible:false,message:'Verify the email on the same seller account before payment.'};
-  if(!ready) return {eligible:false,message:'Secure seller payments are currently disabled. No charge will be initiated.'};
-  if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'Membership checkout is not yet open for this business account. Your shop remains listed for free.'};
-  return {eligible:true,message:'First payment is shown below for the current month, then R99 on the 1st of following months.'};
+    return {eligible:false,message:'Seller approval and ID/selfie review must be completed before payment.'};
+  if(summary.setupComplete!==true) return {eligible:false,message:'Complete verified phone OTP and the required seller onboarding steps first.'};
+  if(!verified) return {eligible:false,message:'Your Firebase email is not verified. Use the same verified Google/Apple/Facebook account, or verify your existing email login.'};
+  if(summary.pilotCheckoutEligible!==true) return {eligible:false,message:'This seller UID is not enabled for membership checkout yet. Contact Teyza support; approval alone does not enable pilot payments.'};
+  if(!ready) return {eligible:false,message:'Secure checkout is unavailable or the server payment quote is missing or stale. Refresh status; no charge has been initiated.'};
+  return {eligible:true,message:'Account verified. Review the first payment and R99 monthly renewal, then accept both confirmations to unlock checkout.'};
+}
+export function checkoutBlockers({summary,billing,verified,ready,matched,quote,ownsShop,termsAccepted,busy}){
+  if(busy)return ['Checking account or processing a payment request'];
+  const result=eligibility(summary,verified,ready,matched,billing);
+  if(!result.eligible)return [result.message];
+  const reasons=[];
+  if(!quote)reasons.push('A valid server-issued payment quote is required. Refresh account status.');
+  if(!ownsShop)reasons.push('Confirm that you recognise and own this approved shop.');
+  if(!termsAccepted)reasons.push('Accept the displayed initial charge and recurring subscription terms.');
+  return reasons;
 }
 export const billingMoney=cents=>Number.isSafeInteger(cents)&&cents>=0?'R'+(cents/100).toFixed(2):'No confirmed amount';
 export const billingDate=value=>Number.isFinite(value)&&value>0?
@@ -93,7 +109,10 @@ async function startup(){
     const user=auth?.currentUser,uid=user?.uid,matched=Boolean(uid&&billing?.sellerUid===uid);
     const quote=matched?verifiedInitialQuote(health,billing,uid):null;
     const ready=backendReady(health)&&(health?.membershipProrationEnabled!==true||quote!==null);
-    const status=eligibility(summary,user?.emailVerified===true,ready,matched);
+    const status=eligibility(summary,user?.emailVerified===true,ready,matched,billing);
+    const blockers=checkoutBlockers({summary,billing,verified:user?.emailVerified===true,
+      ready,matched,quote,ownsShop:el('webOwnShop').checked,
+      termsAccepted:el('webTerms').checked,busy});
     show('webLogin',!user);show('webAccount',!!user);
     el('webAccountEmail').textContent=user?.email||'';
     el('webShopName').textContent=matched?billing.shopName||'Unnamed shop':'Not verified';
@@ -140,7 +159,12 @@ async function startup(){
     show('webVerifyEmail',Boolean(user&&user.email&&!user.emailVerified));
     show('webManage',Boolean(matched&&['scheduled','active'].includes(billing.renewalStatus)&&Number.isFinite(billing.nextBillingAt)));
     show('webConfirm',Boolean(uid&&receipt(uid)));
-    el('webCheckout').disabled=busy||!status.eligible||!quote||!el('webTerms').checked||!el('webOwnShop').checked;
+    el('webCheckout').disabled=blockers.length>0;
+    el('webCheckout').title=blockers.join(' ');
+    // The existing visible access panel explains every disable reason;
+    // the button never changes backend rollout, verification or Paystack gates.
+    if(user&&status.eligible&&blockers.length)
+      el('webAccess').textContent=blockers.join(' ');
     el('webRefresh').disabled=busy;
   }
   async function api(action,data={}){
@@ -169,7 +193,10 @@ async function startup(){
       ]);
       if(!current(uid,generation))return;
       if(b?.sellerUid!==uid)throw Error('Seller identity does not match billing record.');
-      health=h;summary=s;billing=b;notice('Shop identity and seller status verified.');
+      health=h;summary=s;billing=b;
+      notice(eligibility(summary,auth.currentUser?.emailVerified===true,
+        backendReady(health)&&(health?.membershipProrationEnabled!==true||
+          verifiedInitialQuote(health,billing,uid)!==null),true,billing).message);
       if(confirmedMembership(summary,billing,uid)){
         sessionStorage.removeItem(receiptKey(uid));
         if(new URLSearchParams(location.search).get('payment')==='return'){
@@ -213,7 +240,7 @@ async function startup(){
   }
   async function checkout(){
     const uid=auth?.currentUser?.uid,generation=accountGeneration;
-    if(!uid||busy||!eligibility(summary,auth.currentUser.emailVerified,backendReady(health),billing?.sellerUid===uid).eligible||
+    if(!uid||busy||!eligibility(summary,auth.currentUser.emailVerified,backendReady(health),billing?.sellerUid===uid,billing).eligible||
       !el('webOwnShop').checked||!el('webTerms').checked)return notice('Confirm your shop identity and subscription terms.','warning');
     busy=true;render();notice('Preparing verified Paystack checkout…');
     try{
