@@ -70,7 +70,7 @@ async function main(){
  for(const p of ['/index.html','/pay/index.html','/js/seller-web-billing.mjs'])
   if(!before.has(p))throw Error('Existing working website missing: '+p);
  const config=(await client.hosting('GET','/'+source)).config||{};
- const backupPath=path.join(repo,'hosting-backup-ads-web-r1.json');
+ const backupPath=path.join(repo,'hosting-backup-ads-web-campaign-r2.json');
  if(fs.existsSync(backupPath))throw Error('Ads rollback record already exists; inspect before retrying');
  const target=await clone(client,source);
  fs.writeFileSync(backupPath,JSON.stringify({site:PROJECT,sourceVersion:source,
@@ -90,7 +90,7 @@ async function main(){
  await client.hosting('PATCH','/'+target,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(client)!==source)throw Error('Another release was published concurrently; no ads release published');
  await client.hosting('POST','/'+SITE+'/channels/live/releases',
-  {message:'Teyza reviewed advertising checkout frontend only'},{versionName:target});
+  {message:'Teyza advertiser campaign creation form and reviewed checkout'},{versionName:target});
  if(await current(client)!==target)throw Error('Ads release not confirmed on live channel');
  fs.writeFileSync(backupPath,JSON.stringify({site:PROJECT,sourceVersion:source,
   patchedVersion:target,paths:ASSETS,publishedAt:new Date().toISOString()},null,2),{mode:0o600});
