@@ -75,7 +75,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return false;
     if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return false;
     const at=clock();
-    const destination=event.action==='start_selling'?'/seller-subscriptions.html':
+    const destination=event.action==='start_selling'?'/seller-getting-started.html':
       event.action==='advertise'?'/ads/':
       event.action==='consultant'?'seller_support':'none';
     tx.create(ref,{sellerUid:pilotUid,action:event.action,destination,
@@ -109,7 +109,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     continue;
    }
    const text=event.action==='start_selling'?
-    'Your Teyza business has been approved. Continue with seller setup here: https://teyza.co.za/seller-subscriptions.html':
+    'Your Teyza business has been approved. Continue with seller setup here: https://teyza.co.za/seller-getting-started.html':
     event.action==='advertise'?
     'You can create and manage a Teyza advertisement here: https://teyza.co.za/ads/':
     'Your request to speak to a Teyza consultant has been recorded. Our support team will follow up.';
