@@ -104,7 +104,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
    // The transaction-created action is the durable idempotency barrier:
    // webhook redelivery must NEVER generate a second response.
    const token=getAccessToken(),version=getApiVersion();
-   if(typeof token!=='string'||token.length<20||!/^v\\d+\\.\\d+$/.test(version)){
+   if(typeof token!=='string'||token.length<20||!/^v\d+\.\d+$/.test(version)){
     await ref.update({state:'needs_review',replyStatus:'sender_configuration_missing',updatedAt:clock()});
     continue;
    }
