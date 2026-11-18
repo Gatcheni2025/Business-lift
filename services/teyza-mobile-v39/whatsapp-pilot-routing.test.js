@@ -119,3 +119,35 @@ test('Unknown provider outcome is recorded without retry or duplicate response',
  assert.equal(action.state,'needs_review');
  assert.equal(action.replyStatus,'delivery_uncertain');
 });
+
+test('MENU and MAIN MENU create reusable WhatsApp button menus for the allowlisted seller only',async()=>{
+ const sent=[];
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async(url,request)=>{
+   const body=JSON.parse(request.body);sent.push(body);
+   return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.menu'+sent.length}]})};
+  }});
+ await f.router.route(payload([message('wamid.menu1','text',{text:{body:'MENU'}})]));
+ await f.router.route(payload([message('wamid.menu1','text',{text:{body:'MENU'}})]));
+ await f.router.route(payload([message('wamid.menu2','text',{text:{body:'Main Menu'}})]));
+ assert.equal(sent.length,2,'Meta replay must not resend, new MENU command must work');
+ assert(sent.every(x=>x.type==='interactive'&&x.interactive.type==='button'));
+ const titles=sent[0].interactive.action.buttons.map(x=>x.reply.title);
+ assert.deepEqual(titles,['Start selling','Advertise on Teyza','Talk to consultant']);
+ assert(titles.every(t=>t.length<=20),'Meta interactive buttons permit at most 20 characters');
+ await f.router.route(payload([message('wamid.frommenu','interactive',{interactive:{type:'button_reply',
+  button_reply:{id:'teyza_start_selling',title:'Start selling'}}})]));
+ assert.equal(sent.length,3);
+ assert(sent[2].text.body.includes('/seller-getting-started.html'));
+ assert(sent[2].text.body.includes('Reply MENU'));
+});
+test('MENU respects STOP opt-out and never responds to an unapproved owner',async()=>{
+ let count=0;
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async()=>{count++;return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.ok'}]})};}});
+ await f.router.route(payload([message('wamid.stop-first','text',{text:{body:'STOP'}})]));
+ await f.router.route(payload([message('wamid.menu-after-stop','text',{text:{body:'MENU'}})]));
+ assert.equal(count,0);
+ const v=f.data.get('teyzaWhatsAppPreferences/seller1');
+ assert.equal(v.optedIn,false);
+});

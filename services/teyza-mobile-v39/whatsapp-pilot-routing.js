@@ -4,6 +4,7 @@
 const crypto=require('node:crypto');
 const choices=new Map([
  ['Start selling on Teyza','start_selling'],
+ ['Start selling','start_selling'],
  ['Advertise on Teyza','advertise'],
  ['Talk to consultant','consultant']
 ]);
@@ -22,7 +23,9 @@ function extractActions(payload,numberId){
    const response=m.type==='button'?m.button?.text:
      m.type==='interactive'&&m.interactive?.type==='button_reply'?
      (m.interactive.button_reply?.title||m.interactive.button_reply?.id):'';
-   const action=typeof text==='string'&&/^\s*STOP\s*$/i.test(text)?'stop':choices.get(response);
+   const action=typeof text==='string'&&/^\s*STOP\s*$/i.test(text)?'stop':
+     typeof text==='string'&&/^\s*(?:MAIN\s*MENU|MENU)\s*$/i.test(text)?'main_menu':
+     choices.get(response)||({teyza_start_selling:'start_selling',teyza_advertise:'advertise',teyza_consultant:'consultant'}[response]);
    if(action)result.push({action,from:'+'+from,id:m.id});
   }
  }
@@ -108,17 +111,26 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     await ref.update({state:'needs_review',replyStatus:'sender_configuration_missing',updatedAt:clock()});
     continue;
    }
-   const text=event.action==='start_selling'?
-    'Your Teyza business has been approved. Continue with seller setup here: https://teyza.co.za/seller-getting-started.html':
+   const text=event.action==='main_menu'?null:event.action==='start_selling'?
+    'Your Teyza business has been approved. Start with your seller setup guide: https://teyza.co.za/seller-getting-started.html\n\nReply MENU anytime to see the choices again.':
     event.action==='advertise'?
-    'You can create and manage a Teyza advertisement here: https://teyza.co.za/ads/':
-    'Your request to speak to a Teyza consultant has been recorded. Our support team will follow up.';
+    'Create your advertisement in your Teyza seller app and submit it for review. After approval, sign in with the same business account to pay here: https://teyza.co.za/ads/\n\nReply MENU anytime to see the choices again.':
+    'Your request to speak to a Teyza consultant has been recorded. Our support team will follow up.\n\nReply MENU anytime to see the choices again.';
    try{
+    const outbound=event.action==='main_menu'?
+     {messaging_product:'whatsapp',recipient_type:'individual',to:event.from.slice(1),
+      type:'interactive',interactive:{type:'button',
+       body:{text:'Welcome to Teyza! Choose an option below. You can type MENU again whenever you need to return here.'},
+       action:{buttons:[
+        {type:'reply',reply:{id:'teyza_start_selling',title:'Start selling'}},
+        {type:'reply',reply:{id:'teyza_advertise',title:'Advertise on Teyza'}},
+        {type:'reply',reply:{id:'teyza_consultant',title:'Talk to consultant'}}
+       ]}}}:
+     {messaging_product:'whatsapp',recipient_type:'individual',to:event.from.slice(1),
+      type:'text',text:{preview_url:true,body:text}};
     const response=await send('https://graph.facebook.com/'+version+'/'+numberId+'/messages',{
      method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-     body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',
-      to:event.from.slice(1),type:'text',text:{preview_url:true,body:text}}),
-     signal:AbortSignal.timeout(10000)
+     body:JSON.stringify(outbound),signal:AbortSignal.timeout(10000)
     });
     const body=await response.json().catch(()=>null),messageId=body?.messages?.[0]?.id;
     if(!response.ok||typeof messageId!=='string'||!messageId){
