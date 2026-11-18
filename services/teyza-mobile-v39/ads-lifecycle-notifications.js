@@ -31,7 +31,13 @@ function createLifecycleNotifications({db,notifications,clock=Date.now}){
   if(event.kind==='ad_submitted'){
    const ref=db.doc('teyzaSupportTickets/ads_'+eventId('admin',id));
    await db.runTransaction(async tx=>{
-    const old=await tx.get(ref);if(old.exists)return;
+    const [old,current]=await Promise.all([
+     tx.get(ref),tx.get(db.doc('teyzaShopperAds/'+id))
+    ]);
+    // Firestore events may arrive out of order. Never create a stale admin
+    // "pending" ticket after the campaign has already been reviewed.
+    if(old.exists||!current.exists||current.data().status!=='pending_review'||
+       current.data().ownerUid!==event.ownerUid)return;
     tx.create(ref,{ownerUid:event.ownerUid,subject:'Advertising campaign awaiting admin review',
       message:'Campaign '+id+' is pending independent approval. Open the authenticated Ads review queue using ops_ads_queue, preview via ops_ads_preview, then decide via ops_ads_review. Do not request payment before approval.',
       status:'open',priority:'normal',revision:0,createdBy:'system_ads_lifecycle',
