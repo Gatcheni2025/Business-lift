@@ -59,7 +59,16 @@ function createLifecycleNotifications({db,notifications,clock=Date.now}){
  async function queueWhatsApp(event,kind){
   const ref=db.doc('teyzaWhatsAppEventOutbox/'+eventId(kind,kind==='ad_approved'?event.adId:event.ownerUid));
   await db.runTransaction(async tx=>{
-   const existing=await tx.get(ref);if(existing.exists)return;
+   const [existing,account,pref]=await Promise.all([
+    tx.get(ref),
+    tx.get(db.doc('teyzaSellerAccounts/'+event.ownerUid)),
+    tx.get(db.doc('teyzaWhatsAppPreferences/'+event.ownerUid))
+   ]);
+   if(existing.exists)return;
+   const a=account.exists?account.data():null,p=pref.exists?pref.data():null;
+   // A WhatsApp event must be consented at event time AND at delivery time.
+   if(!a||a.uid!==event.ownerUid||a.approvalStatus!=='approved'||
+      !p||p.ownerUid!==event.ownerUid||p.optedIn!==true||p.phone!==a.phone)return;
    tx.create(ref,{sellerUid:event.ownerUid,kind,advertisementId:event.adId||'',
      status:'queued',createdAt:clock()});
   });
@@ -103,7 +112,8 @@ function createWhatsAppLifecycleSender({db,getAuthUser,getToken,getConfig,send=f
    try{checkedPhone(authUser,a?.phone);}catch(_){valid=false;}
    if(message.kind==='ad_approved')valid=valid&&!!ad?.exists&&
     ad.data().ownerUid===uid&&ad.data().status==='approved_unpaid'&&
-    ad.data().paymentStatus==='unpaid'&&ad.data().reviewedBy!==uid;
+    ad.data().paymentStatus==='unpaid'&&typeof ad.data().reviewedBy==='string'&&
+    ad.data().reviewedBy.length>=6&&ad.data().reviewedBy!==uid;
    else valid=valid&&!!shop?.exists&&shop.data().sellerUid===uid&&
     shop.data().status==='active'&&shop.data().sellingEnabled===true;
    if(!valid){
