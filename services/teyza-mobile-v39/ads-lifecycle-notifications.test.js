@@ -50,6 +50,20 @@ test('Submitted ad enters admin support queue idempotently with an authenticated
  assert.match(tickets[0][1].message,/ops_ads_review/);
  assert.equal(f.notices.length,0,'Seller cannot pay or receive approval from submission alone');
 });
+test('Admin ticket resolves only after independent review, never just after submission',async()=>{
+ const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
+ const pending={ownerUid:seller,status:'pending_review',paymentStatus:'unpaid'};
+ await svc.onAdWrite('submitted',adId,null,pending);
+ const ticketId='teyzaSupportTickets/ads_'+eventId('admin',adId);
+ assert.equal(f.data.get(ticketId).status,'open');
+ await svc.onAdWrite('approved',adId,pending,
+  {...pending,status:'approved_unpaid',reviewedBy:'admin99'});
+ assert.equal(f.data.get(ticketId).status,'resolved');
+ assert.equal(f.data.get(ticketId).reviewOutcome,'ad_approved');
+ await svc.onAdWrite('approved',adId,pending,
+  {...pending,status:'approved_unpaid',reviewedBy:'admin99'});
+ assert.equal(f.data.get(ticketId).revision,1);
+});
 test('Independent admin approval creates seller notification and a single WhatsApp outbox entry',async()=>{
  const f=fixture(),svc=createLifecycleNotifications({db:f.db,notifications:f.notifications,clock:()=>when});
  const pending={ownerUid:seller,status:'pending_review',paymentStatus:'unpaid'};
