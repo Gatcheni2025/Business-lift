@@ -49,11 +49,22 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
  const marketing=fs.readFileSync(path.join(web,'seller-subscriptions.html'),'utf8');
  const js=fs.readFileSync(path.join(web,'js/seller-web-billing.mjs'),'utf8');
  assert.equal(page,alias,'Clean URL and directory alias must behave consistently');
- for(const id of ['teyza-web-membership','webEmailForm','webGoogle','webApple','webFacebook','webReturnGuidance',
+ for(const id of ['teyza-web-membership','webGoogle','webApple','webFacebook','webReturnGuidance',
    'webShopName','webShopUid','webShopType','webBillingStatus','webPaidThrough','webNextBill','webAmountDue','webPaymentHistory','webOwnShop','webTerms','webCheckout',
    'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm','webTermsText']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
+ assert(!page.includes('id="webEmailForm"')&&!page.includes('id="webEmail"')&&!page.includes('id="webPassword"'),
+  'Membership sign-in must not show email/password');
+ assert(!js.includes('signInWithEmailAndPassword')&&!js.includes('webEmailForm'),
+  'Removed login form must have no orphaned auth event handler');
+ for(const label of ['Continue with Google','Continue with Facebook','Continue with Apple',
+   'New to Teyza?','WhatsApp sign-in is being prepared','Why become a Teyza seller?',
+   'R99 per full calendar month']) assert(page.includes(label),'Missing seller UX copy: '+label);
+ assert(page.includes('WhatsApp messages and the seller welcome menu are not identity verification'),
+  'WhatsApp messages must not be represented as Firebase login');
+ assert.equal(js,fs.readFileSync(path.resolve(web,'../../../js/seller-web-billing.mjs'),'utf8'),
+  'Root seller billing JS must match the app-first Hosting overlay');
  assert(page.includes('noindex,nofollow'));
  assert(page.includes('src="/js/seller-web-billing.mjs"'));
  assert(marketing.includes('href="/pay"'));
