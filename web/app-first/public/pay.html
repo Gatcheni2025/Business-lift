@@ -89,6 +89,17 @@
 @media(max-width:780px){.pay-head{padding:14px 18px}.pay-head nav{gap:12px;font-size:12px}.pay-hero{padding:40px 19px 60px}.pay-wrap{padding:0 13px;gap:15px}.pay-panel,.pay-info{border-radius:18px}.pay-steps{grid-template-columns:1fr 1fr 1fr}.pay-price-highlight{align-items:flex-start}}
 @media(max-width:390px){.pay-steps{grid-template-columns:1fr}.pay-head nav{gap:9px}.pay-provider-stack{gap:9px}}
 @media(prefers-reduced-motion:reduce){.pay-site .pay-provider{transition:none}.pay-site .pay-provider:hover:not(:disabled){transform:none}}
+
+.pay-legacy-access{margin:14px 0 17px;background:#f7f9fa;border:1px solid #d6e5e0;border-radius:14px;padding:13px 16px}
+.pay-legacy-access summary{cursor:pointer;font-size:13px;color:#376158;font-weight:750;line-height:1.5}
+.pay-legacy-access summary:focus-visible{outline:3px solid #b8eb6c;outline-offset:3px}
+.pay-legacy-access[open]{border-color:#5fbea1}
+.pay-legacy-access .pay-inputs{margin-top:12px}
+.pay-link-account{margin:17px 0;padding:16px;border:1px solid #b6dacb;border-radius:15px;background:#f4faf7}
+.pay-link-account strong{color:#104d3f}
+.pay-link-account p{font-size:13px;line-height:1.5;margin:7px 0 12px}
+.pay-link-actions{display:flex;gap:9px;flex-wrap:wrap}
+.pay-site .pay-link-actions button{font-size:13px;padding:10px 12px}
 </style>
 </head>
 <body class="pay-site">
@@ -105,6 +116,13 @@
 <button type="button" class="pay-provider pay-provider-apple" id="webApple"><span class="pay-provider-symbol" aria-hidden="true">●</span> Continue with Apple</button>
 </div>
 <p class="pay-provider-help"><strong>New to Teyza?</strong> <a href="/download.html">Create your free business profile in the Teyza app.</a><br>Only have an older email/password login? <a href="/support.html">Contact support to link a secure sign-in method</a> without losing your seller account.</p>
+<details id="webLegacyAccess" class="pay-legacy-access"><summary>Already registered with email? Existing sellers only</summary>
+<p class="pay-provider-help">Use this only if you registered before Teyza introduced social sign-in. Your original account and seller UID will be preserved. New email registrations are not available.</p>
+<form id="webEmailForm" class="pay-inputs" autocomplete="on">
+<label>Existing account email<input id="webEmail" type="email" maxlength="254" autocomplete="username" required></label>
+<label>Existing password<input id="webPassword" type="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in to existing account</button>
+</form></details>
 <div class="pay-whatsapp-guidance" role="note"><span class="pay-whatsapp-icon" aria-hidden="true">W</span><div><strong>WhatsApp sign-in is being prepared</strong><p>WhatsApp messages and the seller welcome menu are not identity verification. Until secure OTP login is approved and linked to your existing Firebase UID, use your current Google, Facebook or Apple sign-in. <a href="/support.html">Get account-access help</a>.</p></div></div>
 <div class="pay-steps" aria-label="Payment steps">
 <div class="pay-step"><b>01 · Sign in</b>Use your registered seller account</div>
@@ -117,6 +135,15 @@
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong>Account verified with Firebase</strong><button id="webLogout" type="button" class="text">Switch account</button></div>
 <dl><dt>Shop name</dt><dd id="webShopName">Checking…</dd><dt>Business type</dt><dd id="webShopType">Checking…</dd><dt>Signed-in email</dt><dd id="webAccountEmail"></dd><dt>Seller account ID</dt><dd id="webShopUid"></dd></dl>
 </div>
+<section id="webProviderLink" class="pay-link-account" aria-label="Upgrade your older sign-in" hidden>
+<strong>Keep your existing Teyza business account</strong>
+<p>Signed in through an older email/password account? Link a secure provider while you are signed in. This keeps your verified shop, payment history and the same Firebase account ID. Never create a second seller account.</p>
+<div class="pay-link-actions">
+<button type="button" class="secondary" id="webLinkGoogle">Link Google</button>
+<button type="button" class="secondary" id="webLinkFacebook">Link Facebook</button>
+<button type="button" class="secondary" id="webLinkApple">Link Apple</button>
+</div>
+</section>
 <p id="webAccess" role="status">Checking shop approval and payment eligibility…</p>
 <section id="webPaymentSuccess" class="pay-success" role="status" aria-live="polite" aria-labelledby="webSuccessHeading" hidden>
 <span class="pay-success-mark" aria-hidden="true">✓</span>
