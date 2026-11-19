@@ -121,6 +121,11 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           ])),
         const SizedBox(height:15),
         if(busy&&claim==null&&widget.initialGooglePlaceId!=null)const LinearProgressIndicator(),
+        if(claim!=null&&registrationStep==0)Card(
+          child:ListTile(leading:const Icon(Icons.verified_outlined,
+            color:Color(0xFF168657)),
+            title:Text('Google Maps: ${claim!.name}'),
+            subtitle:const Text('Shop address from Google Maps'))),
         if(registrationStep==1)...[
         if(claim!=null)Card(child:ListTile(leading:const Icon(Icons.storefront_outlined),title:Text('Google Maps: ${claim!.name}'),
           subtitle:const Text('Teyza will review your claim. Confirm the details below.'))),
