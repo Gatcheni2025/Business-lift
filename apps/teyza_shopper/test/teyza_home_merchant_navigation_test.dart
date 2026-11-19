@@ -34,12 +34,19 @@ void main(){
     final spaza=find.byKey(const ValueKey('teyza-spaza-grid'));
     final business=find.byKey(const ValueKey('teyza-businesses-grid'));
     expect(spaza,findsOneWidget);
-    expect(business,findsOneWidget);
     expect(find.descendant(of:spaza,matching:find.text('Spaza Corner')),findsOneWidget);
     expect(find.descendant(of:spaza,matching:find.text('Neighbourhood Salon')),findsNothing);
+    expect(find.descendant(of:spaza,matching:find.text('Wholesaler Test')),findsNothing);
+    // The home feed builds lower sections lazily. Scroll to the second
+    // independent grid, not to an assumed immediately-mounted element.
+    final home=find.byKey(const PageStorageKey<String>('shopper-home'));
+    for(var attempt=0;attempt<12&&business.evaluate().isEmpty;attempt++){
+      await tester.drag(home,const Offset(0,-160));
+      await tester.pumpAndSettle();
+    }
+    expect(business,findsOneWidget);
     expect(find.descendant(of:business,matching:find.text('Neighbourhood Salon')),findsOneWidget);
     expect(find.descendant(of:business,matching:find.text('Spaza Corner')),findsNothing);
-    expect(find.descendant(of:spaza,matching:find.text('Wholesaler Test')),findsNothing);
     expect(find.descendant(of:business,matching:find.text('Wholesaler Test')),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
