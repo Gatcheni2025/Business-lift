@@ -106,7 +106,10 @@ void main(){
   await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
   for(var i=0;i<4;i++){
-    await fixtures.visibleTap(tester,next);await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(next);
+    await tester.pumpAndSettle();
   }
   final finish=find.widgetWithText(FilledButton,'Submit for review');
   expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
