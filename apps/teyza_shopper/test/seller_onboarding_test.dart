@@ -102,7 +102,8 @@ void main(){
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
   final next=find.byKey(const ValueKey('teyza-onboarding-next'));
-  await tester.ensureVisible(next);await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);
+  await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
   for(var i=0;i<4;i++){
     await fixtures.visibleTap(tester,next);await tester.pumpAndSettle();
