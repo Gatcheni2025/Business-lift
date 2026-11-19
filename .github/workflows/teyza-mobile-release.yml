@@ -122,6 +122,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test signed QA preview isolation from production release gating
         run: python3 scripts/test_teyza_signed_qa.py
+      - name: Test calendar-prorated seller billing release gate
+        run: python3 scripts/test_teyza_release_proration_gate.py
       - name: Guard against duplicate Google Play version codes
         run: python3 apps/teyza_shopper/scripts/test_play_version_code.py
       - name: Declare release signing mode and reject contradictory TestFlight requests
@@ -195,6 +197,7 @@ jobs:
           python3 - <<'PY_GATE'
           import os, urllib.request, json
           from urllib.error import HTTPError, URLError
+          from scripts.teyza_release_proration_gate import validate_billing_health
           url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
           try:
               with urllib.request.urlopen(url,timeout=30) as response:
@@ -213,14 +216,15 @@ jobs:
           required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           required_exact={'version':'3.25.0','billingMode':'paystack_checkout',
-                          'subscriptionMonthlyCents':9900,'membershipInitialChargeCents':9900,
-                          'subscriptionTermsVersion':'seller-r99-monthly-2026-11',
-                          'promotionSevenDaysCents':2900}
+                          'subscriptionMonthlyCents':9900,'promotionSevenDaysCents':2900}
           failures=[]
           failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
           failures.extend(field+' (expected false)' for field in required_false if health.get(field) is not False)
           failures.extend(field+' (unexpected value '+repr(health.get(field))+')'
                           for field,expected in required_exact.items() if health.get(field)!=expected)
+          # Exact terms and calendar amount must agree with the live, SA-date-based
+          # prorated R99 contract; never bypass the guard or switch billing off.
+          failures.extend(validate_billing_health(health))
           failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
                           if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)
                           or health[field]<minimum)
