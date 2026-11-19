@@ -23,6 +23,8 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   late final String? uid;
   String category='spaza',legalType='individual';String? error;
   bool busy=false,consent=false,saved=false,whatsappConsent=false;
+  int registrationStep=0;
+  static const registrationSteps=['Business details','Shop address','Review & consent'];
   bool? listedOnGoogle;bool ownerAuthority=false,ownershipEvidence=false,contactEvidence=false;
   String get categoryExplanation=>switch(category){
     'wholesale'=>'I supply spaza shops: publish bulk stock, pack prices and delivery or collection terms after approval.',
@@ -42,8 +44,24 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   }
   void changed(){if(mounted&&uid!=widget.session.userId)setState(()=>error='Your account changed. Close this page and sign in again.');}
   @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,unit,company,number]){c.dispose();}super.dispose();}
+  bool get firstStageReady=>name.text.trim().length>=2&&
+    phone.text.trim().length>=9&&
+    (legalType!='company'||(company.text.trim().length>=2&&registration.text.trim().length>=2));
+  void nextStage(){
+    if(busy)return;
+    if(registrationStep==0){
+      if(!form.currentState!.validate()||!firstStageReady)return;
+    }else if(registrationStep==1){
+      if(selectedAddress==null){setState(()=>error='Select your complete shop address from Google suggestions.');return;}
+      if(listedOnGoogle==null){setState(()=>error='Choose whether the business is listed on Google Maps.');return;}
+      if(listedOnGoogle==true&&(claim==null||!ownerAuthority||!ownershipEvidence||!contactEvidence)){
+        setState(()=>error='Select the existing Google business and confirm the three ownership checks.');return;
+      }
+    }
+    setState((){registrationStep++;error=null;});
+  }
   Future<void> save() async{
-    if(busy||uid!=widget.session.userId||!form.currentState!.validate())return;
+    if(busy||uid!=widget.session.userId||!firstStageReady)return;
     final selected=selectedAddress;if(selected==null){setState(()=>error='Select your full shop address from the suggestions.');return;}
     if(listedOnGoogle==null){
       setState(()=>error='Tell us whether this business is already on Google Maps.');return;
@@ -89,13 +107,28 @@ class _RegistrationState extends State<SellerRegistrationPage>{
       const SizedBox(height:22),
       if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412)))),
       if(uid==widget.session.userId)Form(key:form,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Container(key:const ValueKey('teyza-registration-step-progress'),
+          padding:const EdgeInsets.all(12),
+          decoration:BoxDecoration(color:const Color(0xFFE7F0FC),
+            borderRadius:BorderRadius.circular(14)),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('Step ${registrationStep+1} of 3 · ${registrationSteps[registrationStep]}',
+              style:const TextStyle(fontWeight:FontWeight.w800,color:Color(0xFF28559B))),
+            const SizedBox(height:10),
+            LinearProgressIndicator(value:(registrationStep+1)/3,
+              color:const Color(0xFF2878CF),backgroundColor:const Color(0xFFD1E1F5)),
+          ])),
+        const SizedBox(height:15),
         if(busy&&claim==null&&widget.initialGooglePlaceId!=null)const LinearProgressIndicator(),
+        if(registrationStep==1)...[
         if(claim!=null)Card(child:ListTile(leading:const Icon(Icons.storefront_outlined),title:Text('Google Maps: ${claim!.name}'),
           subtitle:const Text('Teyza will review your claim. Confirm the details below.'))),
         SellerClaimPicker(session:widget.session,api:widget.api,enabled:!busy,onChanged:(value){
           if(mounted)setState((){claim=value;selectedAddress=value?.address;consent=false;
             if(value!=null){name.text=value.name;listedOnGoogle=true;}
           });}),
+        ],
+        if(registrationStep==0)...[
         const SizedBox(height:16),
         const Text('Choose your Teyza account type',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'I am signing up as',filled:true,fillColor:Colors.white,
@@ -114,6 +147,8 @@ class _RegistrationState extends State<SellerRegistrationPage>{
             decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
               border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
             validator:(v)=>f.$4&&(v??'').trim().length<(f.$1==phone?9:2)?'Enter ${f.$2.toLowerCase()}':null)),
+        ],
+        if(registrationStep==1)...[
         if(claim?.address!=null&&selectedAddress==claim?.address)
           Card(child:ListTile(leading:const Icon(Icons.location_on_outlined),title:const Text('Shop address from Google Maps'),
             subtitle:Text(selectedAddress!.address),trailing:TextButton(onPressed:busy?null:()=>setState((){selectedAddress=null;consent=false;}),child:const Text('Change'))))
@@ -146,14 +181,45 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         const SizedBox(height:16),TextFormField(controller:unit,enabled:!busy,maxLength:80,onChanged:(_)=>setState(()=>consent=false),
           decoration:const InputDecoration(labelText:'Shop / unit number (optional)',hintText:'e.g. Shop 4, ground floor',
             counterText:'',filled:true,fillColor:Colors.white,border:OutlineInputBorder())),
+        ],
+        if(registrationStep==2)...[
+        Card(color:const Color(0xFFE5F7EF),child:Padding(
+          padding:const EdgeInsets.all(14),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('Review your account',style:TextStyle(
+              fontSize:17,fontWeight:FontWeight.w800,color:Color(0xFF087D5E))),
+            const SizedBox(height:7),
+            Text('Account: ${category=='spaza'?'Spaza shop':category=='retail'?'Local business':'Wholesaler'}'),
+            Text('Business: ${name.text.trim()}'),
+            Text('Mobile: ${phone.text.trim()}'),
+            Text('Location: ${selectedAddress?.address??'Missing'}'),
+            const SizedBox(height:6),
+            const Text('Your business will be submitted for independent Teyza verification.',
+              style:TextStyle(fontSize:12)),
+          ]))),
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:consent,onChanged:busy?null:(v)=>setState(()=>consent=v==true),
           title:Text(claim==null?'I confirm that these are my shop’s details and shoppers may see this business address and map location.':
             'I am authorised to represent this business, and shoppers may see its address and map location.')),
         CheckboxListTile(contentPadding:EdgeInsets.zero,value:whatsappConsent,onChanged:busy?null:(v)=>setState(()=>whatsappConsent=v==true),
           title:const Text('Send my approval update and getting-started link on WhatsApp'),
           subtitle:const Text('Optional. Uses the contact number above. You can change this in seller verification.')),
-        const SizedBox(height:12),FilledButton.icon(onPressed:busy||saved?null:save,icon:const Icon(Icons.camera_alt_outlined),
-          label:Text(busy?'Saving shop…':'Continue to seller verification')),
+        ],
+        const SizedBox(height:12),
+        Row(children:[
+          if(registrationStep>0)Expanded(child:OutlinedButton.icon(
+            key:const ValueKey('teyza-registration-back'),
+            onPressed:busy||saved?null:()=>setState((){
+              registrationStep--;error=null;
+            }),
+            icon:const Icon(Icons.arrow_back),label:const Text('Back'))),
+          if(registrationStep>0)const SizedBox(width:10),
+          Expanded(child:FilledButton.icon(
+            key:const ValueKey('teyza-registration-next'),
+            onPressed:busy||saved?null:registrationStep==2?save:nextStage,
+            icon:Icon(registrationStep==2?Icons.verified_user_outlined:Icons.arrow_forward),
+            label:Text(busy?'Saving shop…':registrationStep==2?
+              'Submit & verify':'Next'))),
+        ]),
         const SizedBox(height:12),const Text('Registration is free for spaza shops, wholesalers and other businesses. After approval your shop can appear nearby for free. Product publishing is subject to verification and seller account eligibility. Wholesalers publish their own bulk stock prices for approved spaza buyers; public Google listings cannot sell through Teyza until registered.',
           style:TextStyle(color:Color(0xFF6C7880),height:1.5))
       ]))
