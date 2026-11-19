@@ -24,9 +24,14 @@ class ShopperAccountPanel extends StatefulWidget {
 class _AccountState extends State<ShopperAccountPanel> {
   final formKey=GlobalKey<FormState>();
   final email=TextEditingController(), password=TextEditingController(), name=TextEditingController();
-  bool registering=false, working=false, hidden=true;
+  bool registering=false, working=false, hidden=true, showLegacyEmail=false;
   String? audience; // Choose the account purpose before offering sign-in.
-  bool get ownerMode=>audience=='owner';
+  bool get ownerMode=>audience!=null&&audience!='shopper';
+  String get ownerAudienceLabel=>switch(audience){
+    'business'=>'Business owner',
+    'wholesale'=>'Wholesaler',
+    _=>'Spaza shop owner'
+  };
   String? status;
   bool failure=false;
   ShopperDeliveryProfile? loadedProfile;
@@ -246,7 +251,9 @@ class _AccountState extends State<ShopperAccountPanel> {
         child:Padding(padding:const EdgeInsets.all(18),child:Row(children:[
           Container(width:58,height:58,
             decoration:BoxDecoration(
-              color:value=='shopper'?const Color(0xFFE1F6EB):const Color(0xFFE8EFF4),
+              color:value=='shopper'?const Color(0xFFE1F6EB):
+                value=='wholesale'?const Color(0xFFFFEBD2):
+                value=='business'?const Color(0xFFE8EEFC):const Color(0xFFE8EFF4),
               borderRadius:BorderRadius.circular(17)),
             child:Icon(icon,color:value=='shopper'
               ?const Color(0xFF3BB77E):const Color(0xFF010F1C),size:29)),
@@ -279,14 +286,14 @@ class _AccountState extends State<ShopperAccountPanel> {
             const SizedBox(height:10),
             if(logged)const Text('My Teyza account',style:TextStyle(
               fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF078E66))),
-            Text(logged?displayName:audience==null?'Welcome to Teyza':registering?'Join Teyza':ownerMode?'Shop owner sign in':'Shopper sign in',
+            Text(logged?displayName:audience==null?'Welcome to Teyza':registering?'New to Teyza':ownerMode?'$ownerAudienceLabel sign in':'Shopper sign in',
               style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
             const SizedBox(height:6),
             Text(logged?'Your saved shopping profile' :
               audience==null?'How would you like to continue?':
               registering?
                 'Create your account securely with Google, Facebook or Apple. No email password or separate email verification required. Shop owners complete SMS and document verification afterward.':
-                ownerMode?'Sign in with the existing account registered for your shop.':'Sign in to manage your profile and shop enquiries.',
+                ownerMode?'Sign in securely to manage your ${ownerAudienceLabel.toLowerCase()} account.':'Discover nearby shops and shop with your community.',
               textAlign:TextAlign.center,
               style:const TextStyle(color:Color(0xFF60746B))),
           ])),
@@ -300,7 +307,15 @@ class _AccountState extends State<ShopperAccountPanel> {
           const SizedBox(height:13),
           accountRoleTile(value:'owner',icon:Icons.storefront_rounded,
             title:'Continue as Shop Owner',
-            description:'Spaza shops, other retail and wholesale owners. Open your saved shop workspace.'),
+            description:'Spaza shop owners, local products and nearby customers.'),
+          const SizedBox(height:13),
+          accountRoleTile(value:'business',icon:Icons.business_center_rounded,
+            title:'Continue as Business Owner',
+            description:'Manage your local service business and reach nearby customers.'),
+          const SizedBox(height:13),
+          accountRoleTile(value:'wholesale',icon:Icons.inventory_2_rounded,
+            title:'Continue as Wholesaler',
+            description:'Connect with spaza shops and manage wholesale supply.'),
           const SizedBox(height:18),
           const Text('You can browse nearby shops without an account.',
             textAlign:TextAlign.center,style:TextStyle(
@@ -439,8 +454,29 @@ class _AccountState extends State<ShopperAccountPanel> {
             }),icon:const Icon(Icons.arrow_back_rounded,size:18),
             label:const Text('Change account type'))),
           const SizedBox(height:12),
-          Form(key:formKey,child:Column(children:[
-            if(!registering)...[
+          Container(key:const ValueKey('teyza-social-login-card'),
+            padding:const EdgeInsets.all(20),
+            decoration:BoxDecoration(color:Colors.white,
+              borderRadius:BorderRadius.circular(24),
+              border:Border.all(color:const Color(0xFFDFE9E8)),
+              boxShadow:const [BoxShadow(color:Color(0x0D103C31),blurRadius:16,offset:Offset(0,7))]),
+            child:Form(key:formKey,child:Column(
+              crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              Container(padding:const EdgeInsets.all(12),
+                decoration:BoxDecoration(color:ownerMode?const Color(0xFFE8EEFC):
+                  const Color(0xFFE1F6EB),borderRadius:BorderRadius.circular(14)),
+                child:Row(children:[
+                  Icon(ownerMode?Icons.storefront_outlined:Icons.shopping_basket_outlined,
+                    color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66)),
+                  const SizedBox(width:10),
+                  Expanded(child:Text(ownerMode?'Secure ${ownerAudienceLabel.toLowerCase()} access':'Shopper account',
+                    style:TextStyle(fontWeight:FontWeight.w800,
+                      color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66))))
+                ])),
+              const SizedBox(height:12),
+              const Text('Choose a secure sign-in method',textAlign:TextAlign.center,
+                style:TextStyle(fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF60746B))),
+              if(!registering&&showLegacyEmail)...[
             TextFormField(controller:email,keyboardType:TextInputType.emailAddress,
               autofillHints:const [AutofillHints.email],
               decoration:const InputDecoration(labelText:'Email address',
@@ -460,41 +496,71 @@ class _AccountState extends State<ShopperAccountPanel> {
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
               child:Text(working?'Please wait…':ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
             const SizedBox(height:10),
-            const Text('Existing email account? Use your email and password above.',
+            const Text('Existing registered email accounts only.',
               style:TextStyle(fontSize:12,color:Color(0xFF60746B))),
             ],
             if(widget.session.googleSignInAvailable)...[
             const SizedBox(height:12),
             SizedBox(width:double.infinity,child:OutlinedButton.icon(
+              key:const ValueKey('teyza-google-login'),
+              style:OutlinedButton.styleFrom(backgroundColor:Colors.white,
+                foregroundColor:const Color(0xFF174EA6),
+                side:const BorderSide(color:Color(0xFFAAC4F8),width:1.5),
+                padding:const EdgeInsets.symmetric(vertical:16),
+                shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),
               onPressed:working?null:googleLogin,
-              icon:const Icon(Icons.account_circle_outlined),
-              label:const Text('Continue with Google'))),
+              icon:const Icon(Icons.g_mobiledata_rounded,size:27),
+              label:const Text('Continue with Google',
+                style:TextStyle(fontWeight:FontWeight.w800)))),
             ],
             if(widget.session.appleSignInAvailable)...[
               const SizedBox(height:12),SizedBox(width:double.infinity,child:FilledButton.icon(
-                style:FilledButton.styleFrom(backgroundColor:Colors.black,foregroundColor:Colors.white),
+                style:FilledButton.styleFrom(backgroundColor:const Color(0xFF111827),
+                  foregroundColor:Colors.white,padding:const EdgeInsets.symmetric(vertical:16),
+                  shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),
                 onPressed:working?null:appleLogin,icon:const Icon(Icons.apple),label:const Text('Continue with Apple'))),
             ],
             if(widget.session.facebookSignInAvailable)...[
-              const SizedBox(height:12),SizedBox(width:double.infinity,child:OutlinedButton.icon(
-                onPressed:working?null:facebookLogin,icon:const Icon(Icons.facebook),label:const Text('Continue with Facebook'))),
+              const SizedBox(height:12),SizedBox(width:double.infinity,child:FilledButton.icon(
+                key:const ValueKey('teyza-facebook-login'),
+                style:FilledButton.styleFrom(
+                  backgroundColor:const Color(0xFF1877F2),foregroundColor:Colors.white,
+                  padding:const EdgeInsets.symmetric(vertical:16),
+                  shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),
+                onPressed:working?null:facebookLogin,icon:const Icon(Icons.facebook),
+                label:const Text('Continue with Facebook',
+                  style:TextStyle(fontWeight:FontWeight.w800)))),
             ],
             const SizedBox(height:7),
             if(registering)const Padding(padding:EdgeInsets.only(top:12),
               child:Text('Choose a provider above. Your name and phone can be saved after sign-in; a separate email confirmation is not required.',
                 textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF60746B),fontSize:12))),
-            if(ownerMode&&!registering)
-              TextButton.icon(onPressed:working?null:registerShopOwner,
-                icon:const Icon(Icons.add_business_outlined,size:17),
-                label:const Text('New shop owner? Register your shop'))
-            else TextButton(onPressed:working?null:()=>setState(() {
-              registering=!registering;status=null;
-            }),child:Text(registering?'Already registered? Sign in with email':
-              'New to Teyza? Register with Google, Facebook or Apple')),
-            if(!registering)
+            const SizedBox(height:12),
+            Container(key:const ValueKey('teyza-new-account-cta'),
+              decoration:BoxDecoration(color:const Color(0xFFE5F7EF),
+                borderRadius:BorderRadius.circular(17),
+                border:Border.all(color:const Color(0xFFBAE7D0))),
+              child:TextButton.icon(
+                onPressed:working?null:()=>setState((){
+                  registering=!registering;showLegacyEmail=false;status=null;
+                }),
+                icon:const Icon(Icons.person_add_alt_1_rounded,color:Color(0xFF078E66)),
+                label:Text(registering?'Already on Teyza? Sign in':
+                  'New to Teyza? Get started for free',
+                  style:const TextStyle(color:Color(0xFF087D5E),fontWeight:FontWeight.w800)))),
+            if(ownerMode&&registering)const Padding(
+              padding:EdgeInsets.only(top:8),child:Text(
+                'After sign-in, complete your business type, identity checks and shop location.',
+                textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF60746B),fontSize:12))),
+            if(!registering)TextButton.icon(
+              key:const ValueKey('teyza-existing-email-toggle'),
+              onPressed:working?null:()=>setState(()=>showLegacyEmail=!showLegacyEmail),
+              icon:Icon(showLegacyEmail?Icons.expand_less:Icons.lock_outline,size:17),
+              label:Text(showLegacyEmail?'Hide existing email sign-in':'Already registered with email?')),
+            if(!registering&&showLegacyEmail)
               TextButton(onPressed:working?null:reset,
                 child:const Text('Forgot password?')),
-          ])),
+          ]))),
         ],
         // Never display a failed provider login from a previous attempt after
         // another method has successfully authenticated the Firebase user.
