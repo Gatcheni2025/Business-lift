@@ -1,14 +1,14 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createWhatsAppLoginPilot}=require('./whatsapp-login-otp-pilot');
-const UID='B3bfibm62LeGZY530WRb8ciS3o83',PHONE='+27713515133';
+const UID='test-seller-uid-001',PHONE='+15555550123';
 class FakeDb{
  constructor(){
   this.rows=new Map([
-   ['teyzaSellerAccounts/'+UID,{uid:UID,phone:PHONE,approvalStatus:'approved',identityVerified:true,
-     phoneVerified:true,setupComplete:true}],
+   ['teyzaSellerAccounts/'+UID,{uid:UID,phone:PHONE,approvalStatus:'approved',deletionPending:false}],
    ['teyzaWhatsAppPreferences/'+UID,{ownerUid:UID,phone:PHONE,loginOtpOptIn:true,
-     loginOtpConsentVersion:'whatsapp-login-otp-v1'}]
+     loginOtpConsentVersion:'whatsapp-login-otp-v1'}],
+   ['teyzaMobileVerification/'+UID,{ownerUid:UID,status:'approved',submissionId:'test-record'}]
   ]);this.queue=Promise.resolve();
  }
  snap(path){
@@ -45,7 +45,7 @@ class FakeDb{
 function fixture(options={}){
  let ms=options.now??1000000,deliver=[],issued=[],disabled=false,nextId=0;
  const db=new FakeDb(),auth={
-  getUser:async uid=>{if(uid!==UID)throw Error('User missing');return {uid,disabled};},
+  getUser:async uid=>{if(uid!==UID)throw Error('User missing');return {uid,disabled,phoneNumber:PHONE,providerData:[{providerId:'phone',phoneNumber:PHONE}]};},
   createCustomToken:async uid=>{issued.push(uid);return 'firebase-token-'+uid;}
  };
  const make=()=>createWhatsAppLoginPilot({
@@ -97,8 +97,8 @@ test('a challenge cannot outlive five minutes',async()=>{
 test('pilot UID mismatch and unapproved or non-consenting accounts fail closed',async()=>{
  for(const change of [
   db=>db.rows.get('teyzaSellerAccounts/'+UID).approvalStatus='pending',
-  db=>db.rows.get('teyzaSellerAccounts/'+UID).identityVerified=false,
-  db=>db.rows.get('teyzaSellerAccounts/'+UID).phoneVerified=false,
+  db=>db.rows.get('teyzaSellerAccounts/'+UID).deletionPending=true,
+  db=>db.rows.get('teyzaMobileVerification/'+UID).status='pending_review',
   db=>db.rows.get('teyzaWhatsAppPreferences/'+UID).loginOtpOptIn=false,
   db=>db.rows.get('teyzaWhatsAppPreferences/'+UID).loginOtpConsentVersion='seller-approval-v2'
  ]){
