@@ -269,10 +269,6 @@ class _AccountState extends State<ShopperAccountPanel> {
         ]))),
     );
 
-  Future<void> registerShopOwner() async {
-    setState((){registering=true;status=null;});
-  }
-
   @override
   Widget build(BuildContext context)=>AnimatedBuilder(
     animation:widget.session,
