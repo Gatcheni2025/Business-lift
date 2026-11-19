@@ -277,12 +277,6 @@ async function startup(){
       if(user)await reload();
       else notice('Sign in using the original Firebase account for your approved Teyza shop.');
     });
-    el('webEmailForm').addEventListener('submit',async event=>{
-      event.preventDefault();
-      try{await sdk.signInWithEmailAndPassword(auth,el('webEmail').value.trim(),el('webPassword').value);}
-      catch(error){notice(error.message||'Sign-in unavailable.','error');}
-      finally{el('webPassword').value='';}
-    });
     el('webGoogle').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider());}
       catch(error){notice(error.message||'Google sign-in failed.','error');}
