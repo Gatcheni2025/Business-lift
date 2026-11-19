@@ -54,11 +54,11 @@ void main(){
   await tester.tap(find.text('Open setup'));await tester.pumpAndSettle();
   for(var step=0;step<4;step++){
     final next=find.byKey(const ValueKey('teyza-onboarding-next'));
-    await tester.ensureVisible(next);await fixtures.visibleTap(tester,next);
+    await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,next);
     await tester.pumpAndSettle();
   }
   final finish=find.widgetWithText(FilledButton,'Submit for review');
-  await tester.ensureVisible(finish);await fixtures.visibleTap(tester,finish);
+  await tester.scrollUntilVisible(finish,230,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,finish);
   expect(find.text('Open setup'),findsOneWidget);expect(find.text('Setup submitted. Your shop will be visible after Teyza approves it.'),findsOneWidget);
   expect(api.calls.where((c)=>c=='seller_onboarding_complete').length,1);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -92,13 +92,13 @@ void main(){
   await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
   expect(captured,true);await tester.scrollUntilVisible(find.byType(Image),-150,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.byType(Image),findsOneWidget);
   final next=find.byKey(const ValueKey('teyza-onboarding-next'));
-  await tester.ensureVisible(next);await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(next).onPressed,isNull);
   expect(api.calls.contains('seller_onboarding_complete'),false);
   session.switchAccount();await tester.pump();expect(find.byType(Image),findsNothing);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
- testWidgets('All three server-confirmed steps enable completion while pending manual review',(tester) async{
+ testWidgets('All five server-confirmed steps enable completion while pending manual review',(tester) async{
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
   final next=find.byKey(const ValueKey('teyza-onboarding-next'));
