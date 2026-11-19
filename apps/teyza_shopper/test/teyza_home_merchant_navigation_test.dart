@@ -31,7 +31,6 @@ void main(){
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     await _start(tester);
-    final home=find.byKey(const PageStorageKey<String>('shopper-home'));
     final spaza=find.byKey(const ValueKey('teyza-spaza-grid'));
     final business=find.byKey(const ValueKey('teyza-businesses-grid'));
     expect(spaza,findsOneWidget);
@@ -40,7 +39,8 @@ void main(){
     expect(find.descendant(of:spaza,matching:find.text('Neighbourhood Salon')),findsNothing);
     expect(find.descendant(of:business,matching:find.text('Neighbourhood Salon')),findsOneWidget);
     expect(find.descendant(of:business,matching:find.text('Spaza Corner')),findsNothing);
-    expect(find.descendant(of:home,matching:find.text('Wholesaler Test')),findsNothing);
+    expect(find.descendant(of:spaza,matching:find.text('Wholesaler Test')),findsNothing);
+    expect(find.descendant(of:business,matching:find.text('Wholesaler Test')),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
