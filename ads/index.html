@@ -77,6 +77,14 @@ button.provider-apple{background:#17212b;color:white;border-color:#17212b}
 @media(max-width:760px){header .inner{flex-wrap:wrap;padding:15px 18px}nav{gap:12px;font-size:13px}main{padding:0 13px 35px;gap:14px}.panel{border-radius:18px}.hero{padding:38px 18px 57px}}
 @media(max-width:390px){.how-steps{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){button.provider{transition:none}button.provider:hover:not(:disabled){transform:none}.preview-frame{animation:none}}
+
+.legacy-access{padding:13px 15px;margin:14px 0;background:#f7faf9;border:1px solid #d5e7df;border-radius:14px}
+.legacy-access summary{cursor:pointer;color:#3d605a;font-size:13px;font-weight:760;line-height:1.5}
+.legacy-access summary:focus-visible{outline:3px solid #7dcc48;outline-offset:3px}
+.legacy-access[open]{border-color:#66b899}
+.legacy-link{background:#f2faf6;border:1px solid #bfdccb;border-radius:15px;padding:16px;margin:18px 0}
+.legacy-link strong{color:#144e3e}.legacy-link p{font-size:13px;line-height:1.5;margin:7px 0 10px}
+.legacy-link .actions button{font-size:13px;padding:10px 13px}
 </style>
 </head>
 <body>
@@ -94,6 +102,13 @@ button.provider-apple{background:#17212b;color:white;border-color:#17212b}
 <button class="provider provider-apple" id="apple" type="button"><span class="provider-mark" aria-hidden="true">●</span> Continue with Apple</button>
 </div>
 <p class="auth-small"><strong>New to Teyza?</strong> <a href="/download.html">Register your business in the app first.</a><br>Only have a previous email/password account? <a href="/support.html">Ask support to help preserve and link your existing account</a>.</p>
+<details id="legacyAccess" class="legacy-access"><summary>Already registered with email? Existing sellers only</summary>
+<p class="auth-small">If you previously used email/password, sign in to the <strong>same original account</strong>. New email registrations are not available. You can then link Google, Facebook or Apple without changing your shop's Firebase account ID.</p>
+<form id="emailForm" autocomplete="on">
+<label class="entry">Existing account email<input id="email" type="email" maxlength="254" autocomplete="username" required></label>
+<label class="entry">Existing password<input id="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in to existing account</button>
+</form></details>
 <div class="whatsapp-note" role="note"><span class="whatsapp-symbol" aria-hidden="true">W</span><div><b>WhatsApp sign-in is not active yet</b><p>Receiving Teyza WhatsApp messages does not sign you in or authorise payments. Secure WhatsApp OTP identity verification will need a separate approved setup. <a href="/support.html">Contact Teyza support</a> for account access.</p></div></div>
 <div class="how-steps" aria-label="Advertising steps">
 <div class="how-step"><b>01 · Create</b>Upload a photo and select your radius</div>
@@ -103,6 +118,15 @@ button.provider-apple{background:#17212b;color:white;border-color:#17212b}
 </div>
 <div id="signedIn" hidden>
 <div class="account"><strong id="signedEmail"></strong><span id="shopUid"></span><button id="logout" class="secondary" type="button">Switch account</button></div>
+<section class="legacy-link" id="linkProviders" aria-label="Upgrade your existing seller sign-in" hidden>
+<strong>Preserve your existing seller account</strong>
+<p>Link another secure sign-in method directly to your current Firebase account. This keeps your verified shop, approved ads and payment history together. Do not register again.</p>
+<div class="actions">
+<button id="linkGoogle" type="button" class="secondary">Link Google</button>
+<button id="linkFacebook" type="button" class="secondary">Link Facebook</button>
+<button id="linkApple" type="button" class="secondary">Link Apple</button>
+</div>
+</section>
 <section class="create-panel" aria-labelledby="createAdHeading">
 <h3 id="createAdHeading">Create an advertisement</h3>
 <p>Already approved as a Teyza seller? Submit your ad here for independent review. No payment is taken until Teyza approves the campaign.</p>
