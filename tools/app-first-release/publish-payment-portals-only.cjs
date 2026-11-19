@@ -19,6 +19,17 @@ const FILES=Object.freeze([
 const GENERATED=new Set(['/__/firebase/init.js','/__/firebase/init.json']);
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const canonicalSource=(bytes,expectedLf,expectedCrLf,name)=>{
+ if(sha(bytes)===expectedLf)return bytes;
+ if(sha(bytes)===expectedCrLf&&bytes.includes(13)){
+  const text=bytes.toString('utf8');
+  if(text.replace(/\\r\\n/g,'').includes('\\r'))throw Error('Unexpected mixed line endings: '+name);
+  const normal=Buffer.from(text.replace(/\\r\\n/g,'\\n'),'utf8');
+  if(sha(normal)===expectedLf)return normal;
+ }
+ throw Error('Unapproved source bytes: '+name);
+};
+
 function checkReviewedFiles(root){
  const publicDir=path.join(root,'web/app-first/public');
  const pay=JSON.parse(fs.readFileSync(path.join(root,'docs/TEYZA_PAY_OPERATOR_SOURCE_APPROVAL_20261110.json'),'utf8'));
@@ -28,22 +39,24 @@ function checkReviewedFiles(root){
  if(pay.approvedHtmlFile!=='web/app-first/public/pay.html'||
    pay.approvedFile!=='web/app-first/public/js/seller-web-billing.mjs')throw Error('Unexpected membership approval files');
  const hashes=new Map([
-  ['/pay.html',pay.approvedHtmlSha256],
-  ['/pay/index.html',pay.approvedHtmlSha256],
-  ['/js/seller-web-billing.mjs',pay.approvedSha256],
-  ...ads.approvedFiles.map(f=>['/'+f.file.replace('web/app-first/public/',''),f.sha256])
+  ['/pay.html',{lf:pay.approvedHtmlSha256,win:pay.approvedHtmlWindowsCrLfSha256}],
+  ['/pay/index.html',{lf:pay.approvedHtmlSha256,win:pay.approvedHtmlWindowsCrLfSha256}],
+  ['/js/seller-web-billing.mjs',{lf:pay.approvedSha256,win:pay.windowsWorktreeCrLfSha256}],
+  ...ads.approvedFiles.map(f=>['/'+f.file.replace('web/app-first/public/',''),
+    {lf:f.sha256,win:f.windowsCrLfSha256}])
  ]);
  if(hashes.size!==FILES.length||FILES.some(f=>!hashes.has(f)))throw Error('Source approvals do not cover exactly five payment portal files');
  const reviewed=new Map();
  for(const file of FILES){
-  const bytes=fs.readFileSync(path.join(publicDir,file.slice(1)));
-  if(bytes.includes(13))throw Error('Noncanonical CRLF in approved file '+file);
-  const hex=sha(bytes);
-  if(hex!==hashes.get(file))throw Error('Unapproved source bytes: '+file);
+  const approval=hashes.get(file);
+  const bytes=canonicalSource(fs.readFileSync(path.join(publicDir,file.slice(1))),
+    approval.lf,approval.win,file);
   reviewed.set(file,{raw:bytes,gzip:zlib.gzipSync(bytes,{level:9})});
  }
  for(const file of ['/ads/index.html','/js/ads-web-billing.mjs','/js/seller-web-billing.mjs']){
-  const mirror=fs.readFileSync(path.join(root,file.slice(1)));
+  const approval=hashes.get(file);
+  const mirror=canonicalSource(fs.readFileSync(path.join(root,file.slice(1))),
+    approval.lf,approval.win,file+' root mirror');
   if(!mirror.equals(reviewed.get(file).raw))throw Error('Root mirror differs: '+file);
  }
  if(!reviewed.get('/pay.html').raw.equals(reviewed.get('/pay/index.html').raw))throw Error('Membership route aliases differ');
