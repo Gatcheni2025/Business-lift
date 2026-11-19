@@ -114,6 +114,10 @@ async function startup(){
       ready,matched,quote,ownsShop:el('webOwnShop').checked,
       termsAccepted:el('webTerms').checked,busy});
     show('webLogin',!user);show('webAccount',!!user);
+    // Legacy sellers retain a safe way to migrate without changing Firebase UID.
+    // Do not offer a new email registration path, and never switch users on linking.
+    show('webProviderLink',Boolean(user&&
+      !user.providerData?.some(p=>p.providerId&&p.providerId!=='password')));
     el('webAccountEmail').textContent=user?.email||'';
     el('webShopName').textContent=matched?billing.shopName||'Unnamed shop':'Not verified';
     el('webShopType').textContent=matched?({spaza:'Spaza shop',retail:'Other business',wholesale:'Wholesaler'}[billing.businessType]||'Business'):'Not verified';
@@ -277,12 +281,41 @@ async function startup(){
       if(user)await reload();
       else notice('Sign in using the original Firebase account for your approved Teyza shop.');
     });
+    // Transitional existing-account access only; no email account creation.
     el('webEmailForm').addEventListener('submit',async event=>{
       event.preventDefault();
-      try{await sdk.signInWithEmailAndPassword(auth,el('webEmail').value.trim(),el('webPassword').value);}
-      catch(error){notice(error.message||'Sign-in unavailable.','error');}
-      finally{el('webPassword').value='';}
+      const password=el('webPassword').value;
+      try{
+        await sdk.signInWithEmailAndPassword(auth,el('webEmail').value.trim(),password);
+      }catch(error){
+        notice('Could not sign in to that existing account. Check credentials or contact Teyza support.','error');
+      }finally{el('webPassword').value='';}
     });
+    async function linkExistingAccount(providerName){
+      const user=auth?.currentUser;
+      if(!user||busy)return;
+      const uid=user.uid;
+      const provider=providerName==='google'?new sdk.GoogleAuthProvider():
+        providerName==='facebook'?new sdk.FacebookAuthProvider():new sdk.OAuthProvider('apple.com');
+      try{
+        // Must link to the existing authenticated user; signInWithPopup here
+        // would create/switch a UID and orphan the seller membership.
+        const result=await sdk.linkWithPopup(user,provider);
+        if(!auth?.currentUser||auth.currentUser.uid!==uid||result.user.uid!==uid)
+          throw Error('Account changed. No further action taken.');
+        notice('Secure provider linked to your original Teyza account. Your shop and payments remain attached to the same account.');
+        render();
+      }catch(error){
+        const conflict=['auth/credential-already-in-use','auth/email-already-in-use',
+          'auth/provider-already-linked'].includes(error?.code);
+        notice(conflict?
+          'This provider belongs to another account. Contact Teyza support; we cannot merge seller accounts automatically.':
+          'Provider linking did not complete. Confirm the account is still signed in and try again or contact support.','error');
+      }
+    }
+    for(const [id,providerName] of [['webLinkGoogle','google'],['webLinkFacebook','facebook'],['webLinkApple','apple']]){
+      el(id).addEventListener('click',()=>linkExistingAccount(providerName));
+    }
     el('webGoogle').addEventListener('click',async()=>{
       try{await sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider());}
       catch(error){notice(error.message||'Google sign-in failed.','error');}

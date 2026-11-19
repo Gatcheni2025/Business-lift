@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 approval=json.loads((ROOT/'docs/TEYZA_ADS_OPERATOR_SOURCE_APPROVAL_20261111.json').read_text(encoding='utf8'))
 assert approval['policyVersion']=='teyza-ads-operator-source-approval-v1'
 assert approval['approvalType']=='authorised_project_owner_and_operator'
-assert approval['decision']=='approved' and approval['operatorApprovalPr']==177
+assert approval['decision']=='approved' and approval['operatorApprovalPr']==185
 assert approval['waivesExternalThirdPartyMalwareVerdict'] is True
 assert approval['externalAnalystVerdict']=='not_received'
 assert approval['lineEndingEquivalenceVerified'] is True

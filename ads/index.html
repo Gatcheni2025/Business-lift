@@ -37,32 +37,103 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc
 .note{font-size:.87rem;color:#61786e}footer{text-align:center;padding:20px;color:#657a71}
 [hidden]{display:none!important}
 @media(max-width:760px){main{grid-template-columns:1fr;margin-top:-20px}.hero{padding:40px 20px 55px}}
+
+/* Shared visual language with /pay; no changes to pricing or Paystack calls. */
+body{background:linear-gradient(180deg,#edf7f3,#f8faf7 48%,#f4f8f4)}
+.hero{background:radial-gradient(circle at 82% 16%,rgba(187,237,117,.22),transparent 30%),linear-gradient(120deg,#063d45 0%,#07584f 58%,#0c876b 100%);position:relative;overflow:hidden}
+.hero:after{content:"";position:absolute;width:34rem;height:34rem;border:1px solid #ffffff29;border-radius:50%;right:-11rem;top:-12rem;pointer-events:none}
+.hero .inner{position:relative;z-index:1}.hero h1{max-width:730px}
+.hero-pill{display:inline-block;padding:8px 13px;border:1px solid #ffffff4c;background:#ffffff1b;border-radius:99px;font-size:13px;font-weight:700;color:white}
+.panel{box-shadow:0 22px 54px #063f4214}
+.auth-eyebrow{display:inline-flex;color:#077059;font-weight:850;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.provider-stack{display:grid;gap:11px;margin:18px 0 14px}
+button.provider{width:100%;min-height:55px;display:inline-flex;align-items:center;justify-content:center;gap:12px;font-size:16px;border-radius:14px;transition:transform .18s ease,box-shadow .18s ease;box-shadow:0 5px 14px #073e3a15}
+button.provider:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 21px #073e3a29}
+button.provider-google{background:white;color:#123a40;border:1.5px solid #bdd5cb}
+button.provider-facebook{background:#1667d9;color:white;border-color:#1667d9}
+button.provider-apple{background:#17212b;color:white;border-color:#17212b}
+.provider-mark{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;font-size:20px;font-weight:900}
+.provider-google .provider-mark{color:#4285f4;text-shadow:-1.5px 0 #ea4335,0 1.5px #34a853,1.5px 0 #fbbc05}
+.provider-facebook .provider-mark{font-family:Arial,sans-serif}
+.auth-small{color:#4e6e64;font-size:13px;line-height:1.55}
+.auth-small a,.benefit-card a{color:#076855}
+.whatsapp-note{display:flex;gap:12px;padding:14px 15px;background:#f0faf4;border:1px solid #bde6ca;border-radius:15px;margin:17px 0}
+.whatsapp-note b{font-size:14px;color:#155d42}.whatsapp-note p{font-size:13px;margin:4px 0 0;line-height:1.5}
+.whatsapp-symbol{display:grid;place-items:center;flex:none;background:#19a667;color:white;width:35px;height:35px;border-radius:12px;font-size:19px;font-weight:900}
+.how-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:17px 0}
+.how-step{background:#f0f8f3;border:1px solid #d9ebde;border-radius:12px;padding:12px;font-size:12px;line-height:1.45;color:#31554c}
+.how-step b{display:block;font-size:15px;color:#086e56;margin-bottom:4px}
+.benefits{display:grid;gap:11px;margin:17px 0}
+.benefit-card{display:flex;gap:11px;align-items:flex-start;padding:13px;background:#f2faf4;border:1px solid #dfeee2;border-radius:14px}
+.benefit-icon{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:11px;background:#dcf4df;color:#075647;font-size:18px}
+.benefit-card strong{font-size:14px;color:#14483d}.benefit-card p{margin:3px 0 0;font-size:13px;line-height:1.45}
+.ad-plan-summary{display:flex;justify-content:space-between;gap:13px;padding:16px;border-radius:15px;background:#e9f5e9;margin:15px 0}
+.ad-plan-summary b{font-size:29px;color:#07574c}
+.ad-plan-summary p{margin:4px 0 0;font-size:12px}
+.preview-frame{border-radius:16px;overflow:hidden;background:#e7f5ed;border:1px solid #b7e2c4;margin:14px 0;animation:creative-appears .45s ease-out both}
+.preview-frame img{display:block;width:100%;height:auto;max-height:230px;object-fit:contain;background:#d8eade}
+.preview-frame figcaption{padding:11px 14px;font-size:13px;color:#0d6049;font-weight:680}
+@keyframes creative-appears{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+@media(max-width:760px){header .inner{flex-wrap:wrap;padding:15px 18px}nav{gap:12px;font-size:13px}main{padding:0 13px 35px;gap:14px}.panel{border-radius:18px}.hero{padding:38px 18px 57px}}
+@media(max-width:390px){.how-steps{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){button.provider{transition:none}button.provider:hover:not(:disabled){transform:none}.preview-frame{animation:none}}
+
+.legacy-access{padding:13px 15px;margin:14px 0;background:#f7faf9;border:1px solid #d5e7df;border-radius:14px}
+.legacy-access summary{cursor:pointer;color:#3d605a;font-size:13px;font-weight:760;line-height:1.5}
+.legacy-access summary:focus-visible{outline:3px solid #7dcc48;outline-offset:3px}
+.legacy-access[open]{border-color:#66b899}
+.legacy-link{background:#f2faf6;border:1px solid #bfdccb;border-radius:15px;padding:16px;margin:18px 0}
+.legacy-link strong{color:#144e3e}.legacy-link p{font-size:13px;line-height:1.5;margin:7px 0 10px}
+.legacy-link .actions button{font-size:13px;padding:10px 13px}
 </style>
 </head>
 <body>
 <header><div class="inner"><a href="/" aria-label="Teyza home"><img src="/assets/app/wordmark-light.svg" alt="Teyza"></a><nav aria-label="Website navigation"><a href="/">Home</a><a href="/pay">Membership</a><a href="/support.html">Support</a></nav></div></header>
-<section class="hero"><div class="inner"><small>Independent advertiser website</small><h1>Grow locally with<br>Teyza Ads.</h1><p>Create and submit your creative here for independent review, then pay for approved campaigns using your original business login. Pay securely by Paystack. No recurring advertising subscription.</p></div></section>
+<section class="hero"><div class="inner"><small>Independent advertiser website</small><h1>Put your business in front of nearby shoppers.</h1><p>Create a local campaign, select how far it should reach, and submit it for review. Pay securely only after your ad is approved. Your original Teyza business account stays in control.</p><span class="hero-pill">R29 for 7 days up to 10 km · +R2 per extra km</span></div></section>
 <main id="ad-web-root">
 <section class="panel">
 <h2>Secure advertiser account</h2>
 <div id="login">
-<p>Sign in with the original Firebase account connected to your approved Teyza shop. Use the same sign-in provider; do not register another business account.</p>
-<form id="emailForm">
-<label class="entry">Existing email address<input id="email" type="email" required autocomplete="username"></label>
-<label class="entry">Password<input id="password" type="password" required autocomplete="current-password"></label>
-<button type="submit">Sign in</button>
-</form>
-<div class="actions"><button class="secondary" id="google" type="button">Google</button><button class="secondary" id="apple" type="button">Apple</button><button class="secondary" id="facebook" type="button">Facebook</button></div>
+<span class="auth-eyebrow">Step 1 · Verify your advertiser account</span>
+<p>Use the <strong>same Google, Facebook or Apple account</strong> linked to your approved Spaza Shop, Business or Wholesaler. Signing in with another account cannot access that business's campaigns.</p>
+<div class="provider-stack" role="group" aria-label="Choose your existing account sign-in method">
+<button class="provider provider-google" id="google" type="button"><span class="provider-mark" aria-hidden="true">G</span> Continue with Google</button>
+<button class="provider provider-facebook" id="facebook" type="button"><span class="provider-mark" aria-hidden="true">f</span> Continue with Facebook</button>
+<button class="provider provider-apple" id="apple" type="button"><span class="provider-mark" aria-hidden="true">●</span> Continue with Apple</button>
+</div>
+<p class="auth-small"><strong>New to Teyza?</strong> <a href="/download.html">Register your business in the app first.</a><br>Only have a previous email/password account? <a href="/support.html">Ask support to help preserve and link your existing account</a>.</p>
+<details id="legacyAccess" class="legacy-access"><summary>Already registered with email? Existing sellers only</summary>
+<p class="auth-small">If you previously used email/password, sign in to the <strong>same original account</strong>. New email registrations are not available. You can then link Google, Facebook or Apple without changing your shop's Firebase account ID.</p>
+<form id="emailForm" autocomplete="on">
+<label class="entry">Existing account email<input id="email" type="email" maxlength="254" autocomplete="username" required></label>
+<label class="entry">Existing password<input id="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in to existing account</button>
+</form></details>
+<div class="whatsapp-note" role="note"><span class="whatsapp-symbol" aria-hidden="true">W</span><div><b>WhatsApp sign-in is not active yet</b><p>Receiving Teyza WhatsApp messages does not sign you in or authorise payments. Secure WhatsApp OTP identity verification will need a separate approved setup. <a href="/support.html">Contact Teyza support</a> for account access.</p></div></div>
+<div class="how-steps" aria-label="Advertising steps">
+<div class="how-step"><b>01 · Create</b>Upload a photo and select your radius</div>
+<div class="how-step"><b>02 · Review</b>Teyza checks the ad before charging</div>
+<div class="how-step"><b>03 · Promote</b>Pay once and run for seven days</div>
+</div>
 </div>
 <div id="signedIn" hidden>
 <div class="account"><strong id="signedEmail"></strong><span id="shopUid"></span><button id="logout" class="secondary" type="button">Switch account</button></div>
+<section class="legacy-link" id="linkProviders" aria-label="Upgrade your existing seller sign-in" hidden>
+<strong>Preserve your existing seller account</strong>
+<p>Link another secure sign-in method directly to your current Firebase account. This keeps your verified shop, approved ads and payment history together. Do not register again.</p>
+<div class="actions">
+<button id="linkGoogle" type="button" class="secondary">Link Google</button>
+<button id="linkFacebook" type="button" class="secondary">Link Facebook</button>
+<button id="linkApple" type="button" class="secondary">Link Apple</button>
+</div>
+</section>
 <section class="create-panel" aria-labelledby="createAdHeading">
 <h3 id="createAdHeading">Create an advertisement</h3>
 <p>Already approved as a Teyza seller? Submit your ad here for independent review. No payment is taken until Teyza approves the campaign.</p>
 <form id="createAdForm">
 <label class="entry">Campaign headline (5–80 characters)<input id="adTitle" name="title" required minlength="5" maxlength="80" placeholder="Fresh groceries near you"></label>
 <label class="entry">Short description (12–240 characters)<textarea id="adMessage" name="message" required minlength="12" maxlength="240" placeholder="Tell local shoppers what makes your offer worth visiting."></textarea></label>
-<label class="entry">Creative image (JPEG or PNG, under 2 MB)<input id="adImage" name="image" type="file" accept="image/jpeg,image/png" required></label>
+<label class="entry">Creative image (JPEG or PNG, under 2 MB)<input id="adImage" name="image" type="file" accept="image/jpeg,image/png" required aria-describedby="adImageHint"></label><p class="status-note" id="adImageHint">Choose a clear single image you own. A preview will appear here before you submit.</p><figure class="preview-frame" id="adCreativePreview" hidden><img id="adCreativePreviewImage" alt="Preview of the advertisement you selected"><figcaption id="adCreativePreviewCaption">Image selected</figcaption></figure>
 <label class="entry">Advertising radius (km)<select id="adRadius" name="radiusKm"><option value="5">5 km</option><option value="10" selected>10 km</option><option value="15">15 km</option><option value="20">20 km</option><option value="25">25 km</option><option value="30">30 km</option><option value="40">40 km</option><option value="50">50 km</option></select></label>
 <p id="adPricePreview" class="price-preview" aria-live="polite">Estimated charge: R29.00 for 7 days · 10 km</p>
 <p class="status-note">The backend confirms the final price from your approved shop's location. The creative is not public until independently approved and paid.</p>
@@ -80,7 +151,14 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dcc
 </div>
 <p id="status" role="status" aria-live="polite">Checking secure payment availability…</p>
 </section>
-<aside class="panel"><h2>Your advertising package</h2>
+<aside class="panel"><span class="auth-eyebrow">Local growth with Teyza</span><h2>Reach the customers around you.</h2>
+<div class="ad-plan-summary"><div><strong>7-day local sponsored campaign</strong><p>Up to 10 km around your verified business</p></div><b>R29</b></div>
+<div class="benefits">
+<div class="benefit-card"><span class="benefit-icon" aria-hidden="true">◎</span><div><strong>Choose your reach</strong><p>Set your campaign radius from 5 to 50 km. Every kilometre beyond 10 km adds R2.</p></div></div>
+<div class="benefit-card"><span class="benefit-icon" aria-hidden="true">▣</span><div><strong>Show your offer</strong><p>Add a business image, a clear headline and a local promotion.</p></div></div>
+<div class="benefit-card"><span class="benefit-icon" aria-hidden="true">✓</span><div><strong>Reviewed before payment</strong><p>Nothing is charged or displayed before independent approval and verified Paystack payment.</p></div></div>
+<div class="benefit-card"><span class="benefit-icon" aria-hidden="true">↗</span><div><strong>One charge, no renewal</strong><p>Approved campaigns run for seven days; advertising has no automatic monthly renewal.</p></div></div>
+</div><h2>Your advertising package</h2>
 <p><strong>R29 for 7 days</strong> up to 10 km. Each additional kilometre costs R2, up to a 50 km radius.</p>
 <ul><li>One-time payment, not a monthly subscription</li><li>Radius measured from the verified shop pin</li><li>Creative reviewed before any charge</li><li>Show only to shoppers within the selected radius</li><li>Starts after verified payment; expires after seven days</li></ul>
 <p>Membership is separate: the R99 seller plan and existing R10 membership arrangements are not changed by buying an advertisement.</p>

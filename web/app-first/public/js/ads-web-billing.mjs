@@ -48,6 +48,7 @@ async function start(){
  function render(){
   const user=auth?.currentUser;
   el('login').hidden=!!user;el('signedIn').hidden=!user;
+  el('linkProviders').hidden=!user||Boolean(user.providerData?.some(p=>p.providerId&&p.providerId!=='password'));
   el('campaigns').replaceChildren();
   if(!user)return;
   el('signedEmail').textContent=user.email||'Original Firebase business account';
@@ -214,16 +215,59 @@ async function start(){
    el('ownerConsent').checked=false;el('paymentConsent').checked=false;
    render();if(user)void reload();else notice('Sign in to manage approved Teyza advertising campaigns.');
   });
+  // Existing email-only sellers sign in to their original Firebase UID;
+  // link providers without creating a new account or initiating payment.
   el('emailForm').addEventListener('submit',async event=>{
-   event.preventDefault();try{await sdk.signInWithEmailAndPassword(auth,el('email').value.trim(),el('password').value);}
-   catch(e){notice(e.message||'Sign-in failed.','error');}finally{el('password').value='';}
+   event.preventDefault();
+   const password=el('password').value;
+   try{await sdk.signInWithEmailAndPassword(auth,el('email').value.trim(),password);}
+   catch{notice('Could not sign in to that existing account. Check credentials or contact Teyza support.','error');}
+   finally{el('password').value='';}
   });
+  async function linkExistingAccount(providerName){
+   const user=auth?.currentUser;if(!user||busy)return;
+   const uid=user.uid;
+   const provider=providerName==='google'?new sdk.GoogleAuthProvider():
+     providerName==='facebook'?new sdk.FacebookAuthProvider():new sdk.OAuthProvider('apple.com');
+   try{
+    const result=await sdk.linkWithPopup(user,provider);
+    if(!auth?.currentUser||auth.currentUser.uid!==uid||result.user.uid!==uid)
+      throw Error('Account changed. No further action taken.');
+    notice('Provider linked successfully to your existing Teyza business account.');
+    render();
+   }catch(error){
+    const conflict=['auth/credential-already-in-use','auth/email-already-in-use',
+     'auth/provider-already-linked'].includes(error?.code);
+    notice(conflict?
+     'This provider is linked to another account. Contact Teyza support for verified recovery.':
+     'Provider linking did not complete. Try again with your original account or contact support.','error');
+   }
+  }
+  for(const [id,providerName] of [['linkGoogle','google'],['linkFacebook','facebook'],['linkApple','apple']]){
+   el(id).addEventListener('click',()=>linkExistingAccount(providerName));
+  }
   for(const [id,provider] of [['google',()=>new sdk.GoogleAuthProvider()],['apple',()=>new sdk.OAuthProvider('apple.com')],['facebook',()=>new sdk.FacebookAuthProvider()]]){
    el(id).addEventListener('click',async()=>{try{await sdk.signInWithPopup(auth,provider());}catch(e){notice(e.message||'Sign-in failed.','error');}});
   }
   el('logout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>notice(e.message,'error')));
   el('refresh').addEventListener('click',reload);
   el('createAdForm').addEventListener('submit',submitAd);
+  // Preview only the local image chosen by the owner. No file is uploaded
+  // until the existing authenticated advertisement submission is accepted.
+  let localPreviewUrl=null;
+  el('adImage').addEventListener('change',()=>{
+   if(localPreviewUrl){URL.revokeObjectURL(localPreviewUrl);localPreviewUrl=null;}
+   const file=el('adImage').files?.[0],frame=el('adCreativePreview');
+   if(!file){frame.hidden=true;el('adCreativePreviewImage').removeAttribute('src');return;}
+   if(!['image/jpeg','image/png'].includes(file.type)||file.size>2*1024*1024||!file.size){
+    frame.hidden=true;el('adCreativePreviewImage').removeAttribute('src');
+    el('adImage').value='';notice('Please choose a JPEG or PNG image smaller than 2 MB.','warning');return;
+   }
+   localPreviewUrl=URL.createObjectURL(file);
+   el('adCreativePreviewImage').src=localPreviewUrl;
+   el('adCreativePreviewCaption').textContent='Photo selected: '+file.name;
+   frame.hidden=false;
+  });
   el('adRadius').addEventListener('change',updateAdPrice);updateAdPrice();
   el('checkout').addEventListener('click',checkout);
   el('ownerConsent').addEventListener('change',render);el('paymentConsent').addEventListener('change',render);

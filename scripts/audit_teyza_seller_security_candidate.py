@@ -20,7 +20,17 @@ assert approval['externalAnalystVerdict']=='not_received'
 assert approval['approvedFile']=='web/app-first/public/js/seller-web-billing.mjs'
 reviewed_browser_sha256=approval['approvedSha256']
 assert re.fullmatch(r'[a-f0-9]{64}',reviewed_browser_sha256), 'Missing exact operator-approved SHA-256'
-assert approval['operatorApprovalPr']==173
+assert approval['operatorApprovalPr']==185
+# The refreshed UI is also byte-pinned; /pay.html and /pay/ must match.
+pay_html=(root/'web/app-first/public/pay.html').read_bytes()
+pay_alias=(root/'web/app-first/public/pay/index.html').read_bytes()
+assert pay_html==pay_alias, 'Membership payment pages differ'
+assert b'\r' not in pay_html, 'Membership HTML has noncanonical line endings'
+assert sha256(pay_html).hexdigest()==approval['approvedHtmlSha256'], 'Unapproved membership HTML changes'
+assert sha256(pay_html.replace(b'\n',b'\r\n')).hexdigest()==approval['approvedHtmlWindowsCrLfSha256'], 'Membership HTML Windows equivalence differs'
+assert approval['approvedHtmlFile']=='web/app-first/public/pay.html'
+assert b'id="webEmailForm"' in pay_html and b'<details id="webLegacyAccess"' in pay_html, 'Legacy account safety missing'
+assert b'id="webGoogle"' in pay_html and b'id="webCheckout"' in pay_html, 'Missing secure membership login or checkout'
 assert approval['canonicalRepositorySha256']==reviewed_browser_sha256
 
 with zipfile.ZipFile(archive) as z:
