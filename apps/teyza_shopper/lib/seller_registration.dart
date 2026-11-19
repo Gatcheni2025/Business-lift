@@ -21,7 +21,8 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   ShopAddressSelection? selectedAddress;
   SellerClaimSelection? claim;
   late final String? uid;
-  String category='spaza',legalType='individual';String? error;
+  late String category=widget.session.requestedSellerCategory??'spaza';
+  String legalType='individual';String? error;
   bool busy=false,consent=false,saved=false,whatsappConsent=false;
   int registrationStep=0;
   static const registrationSteps=['Business details','Shop address','Review & consent'];
