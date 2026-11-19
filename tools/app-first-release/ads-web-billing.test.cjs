@@ -7,6 +7,25 @@ const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/ad
 const dart=fs.readFileSync(path.resolve(__dirname,'../../apps/teyza_shopper/lib/teyza_ads_page.dart'),'utf8');
 test('Independent advertiser portal uses Firebase web auth, not an in-app payment WebView',()=>{
  assert.match(html,/Secure advertiser account/);
+ const root=fs.readFileSync(path.resolve(__dirname,'../../ads/index.html'),'utf8');
+ const js=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/js/ads-web-billing.mjs'),'utf8');
+ const rootJs=fs.readFileSync(path.resolve(__dirname,'../../js/ads-web-billing.mjs'),'utf8');
+ assert.equal(root,html,'Ads root and app-first HTML must remain identical');
+ assert.equal(js,rootJs,'Ads root and app-first JS must remain identical');
+ assert.doesNotMatch(html,/id="emailForm"|id="email"|id="password"/,
+  'Remove public email-password login controls');
+ assert.doesNotMatch(js,/signInWithEmailAndPassword|emailForm/,
+  'No orphaned email-password JS handlers');
+ for(const label of ['Continue with Google','Continue with Facebook','Continue with Apple',
+ 'WhatsApp sign-in is not active yet','New to Teyza?',
+ '7-day local sponsored campaign','Step 1','R29','adCreativePreview']) {
+  assert.ok(html.includes(label),'Missing advertiser UX copy/element: '+label);
+ }
+ assert.match(js,/URL\.createObjectURL/,'Ad creative preview should use only a local object URL');
+ assert.match(js,/URL\.revokeObjectURL/,'Local image preview should revoke previous object URLs');
+ assert.match(html,/Receiving Teyza WhatsApp messages does not sign you in/,
+  'Never imply support messaging is identity verification');
+
  assert.match(html,/ads-web-billing\.mjs/);
  assert.doesNotMatch(dart,/ads_checkout|checkout\.paystack\.com|launchUrl\(/);
  assert.doesNotMatch(html,/seller-web-billing\.mjs/);
