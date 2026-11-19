@@ -23,8 +23,8 @@ const canonicalSource=(bytes,expectedLf,expectedCrLf,name)=>{
  if(sha(bytes)===expectedLf)return bytes;
  if(sha(bytes)===expectedCrLf&&bytes.includes(13)){
   const text=bytes.toString('utf8');
-  if(text.replace(/\\r\\n/g,'').includes('\\r'))throw Error('Unexpected mixed line endings: '+name);
-  const normal=Buffer.from(text.replace(/\\r\\n/g,'\\n'),'utf8');
+  if(text.replace(/\r\n/g,'').includes('\r'))throw Error('Unexpected mixed line endings: '+name);
+  const normal=Buffer.from(text.replace(/\r\n/g,'\n'),'utf8');
   if(sha(normal)===expectedLf)return normal;
  }
  throw Error('Unapproved source bytes: '+name);
