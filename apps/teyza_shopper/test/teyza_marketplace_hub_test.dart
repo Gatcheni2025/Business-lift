@@ -9,7 +9,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home:Scaffold(
       body:SingleChildScrollView(child:TeyzaMarketplaceHub(
         onDestination:selected.add)))));
-    expect(find.text('Spaza Shops'),findsOneWidget);
+    expect(find.text('Find local shops'),findsOneWidget);
     expect(find.text('Businesses'),findsOneWidget);
     expect(find.text('Wholesalers'),findsOneWidget);
     expect(find.text('Products'),findsOneWidget);
