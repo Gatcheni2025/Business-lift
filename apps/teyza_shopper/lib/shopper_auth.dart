@@ -76,7 +76,7 @@ String authMessage(Object error) {
   }
   if (value.contains('INVALID_IDP_RESPONSE') || value.contains('INVALID_OAUTH_CLIENT_ID') ||
       value.contains('INVALID_CERT_HASH')) {
-    return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google/Apple provider and registered app configuration in Firebase.';
+    return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google, Apple or Facebook app identity and provider configuration in Firebase.';
   }
   if (value.contains('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')) return 'This email uses another sign-in method. Use your original method or reset your password.';
   if (value.contains('USER_DISABLED')) return 'This account is closed or disabled. If you requested deletion, you cannot sign back in. Keep your deletion reference to ask Teyza support about the remaining data-erasure process.';
