@@ -2048,6 +2048,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      // Keep the existing merchant-type selector and verified seller circles
+      // visible for repeat users, then show the two independent merchant grids.
+      businessFilters(),
+      sellerStories(),
+      const SizedBox(height:12),
       section('Spaza Shops',
         subtitle:area==null?'Choose your location to discover neighbourhood shops':
           'Discover participating neighbourhood stores near you',
@@ -2067,9 +2072,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else if(loadingOtherBusinesses)
         const SizedBox(height:104,child:Center(child:CircularProgressIndicator()))
       else merchantCategoryGrid('businesses',const <NearbyListing>[]),
-      const SizedBox(height:12),
-      businessFilters(),
-      sellerStories(),
       const SizedBox(height:15),
       TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
       const SizedBox(height:16),
