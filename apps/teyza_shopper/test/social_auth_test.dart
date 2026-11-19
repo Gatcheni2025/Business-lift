@@ -46,6 +46,10 @@ void main(){
   await t.enterText(find.byType(TextFormField).at(1),'password123');
   await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
   expect(session.userId,'email-user');
+  // The new social card is taller; after the legacy login button is tapped,
+  // the list can remain scrolled down even though the account is authenticated.
+  await t.drag(find.byType(ListView).first,const Offset(0,1200));
+  await t.pumpAndSettle();
   expect(find.text('My Teyza account'),findsOneWidget);
   expect(find.textContaining('Google sign-in configuration mismatch'),findsNothing);
   // The success status may be below a lazily-built ListView viewport.
