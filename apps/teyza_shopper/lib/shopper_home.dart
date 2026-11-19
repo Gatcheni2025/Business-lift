@@ -1937,19 +1937,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       businessFilters(),
       sellerStories(),
       const SizedBox(height:10),
-      TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
-      const SizedBox(height:16),
-      if(_eligibleHomeAds.isNotEmpty)
-        sponsoredGroceryHero(_eligibleHomeAds[_sponsoredIndex%_eligibleHomeAds.length],
-          _sponsoredIndex%_eligibleHomeAds.length,_eligibleHomeAds.length)
-      else premiumGroceryHero(),
-      section('Everyday essentials',
-        subtitle:'Products from approved Teyza spaza shops',
-        action:TextButton(onPressed:()=>navigateToTab(1),child:const Text('View all'))),
-      const Text('Shop by category',style:TextStyle(fontSize:14,
-        fontWeight:FontWeight.w800,color:ink)),
-      const SizedBox(height:9),
-      TeyzaHomeProductCategories(onSelect:browseProductCategory),
       section('Spaza shops in your area',
         subtitle:area==null?'Choose your location for neighbourhood stores':
           'Neighbourhood stores around '+locationName,
@@ -1965,6 +1952,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       else InkWell(onTap:areaSheet,
         child:empty('Discover Spaza Shops',
           'Choose your delivery area to find Teyza and public neighbourhood shops.')),
+
+      TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
+      const SizedBox(height:16),
+      if(_eligibleHomeAds.isNotEmpty)
+        sponsoredGroceryHero(_eligibleHomeAds[_sponsoredIndex%_eligibleHomeAds.length],
+          _sponsoredIndex%_eligibleHomeAds.length,_eligibleHomeAds.length)
+      else premiumGroceryHero(),
+      section('Everyday essentials',
+        subtitle:'Products from approved Teyza spaza shops',
+        action:TextButton(onPressed:()=>navigateToTab(1),child:const Text('View all'))),
+      const Text('Shop by category',style:TextStyle(fontSize:14,
+        fontWeight:FontWeight.w800,color:ink)),
+      const SizedBox(height:9),
+      TeyzaHomeProductCategories(onSelect:browseProductCategory),
       section('Popular local products',
         subtitle:'Browse groceries by category, then choose your shop',
         action:TextButton(onPressed:()=>navigateToTab(1),
