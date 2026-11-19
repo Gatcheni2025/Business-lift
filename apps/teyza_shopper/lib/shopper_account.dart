@@ -19,9 +19,21 @@ class ShopperAccountPanel extends StatefulWidget {
   const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse,
     this.onChangeDeliveryAddress,this.savedDeliveryAddress,this.savedProfile,this.deliveryStore,this.paymentStore});
   @override
-  State<ShopperAccountPanel> createState()=>_AccountState();
+  State<ShopperAccountPanel> createState()=>ShopperAccountPanelState();
 }
-class _AccountState extends State<ShopperAccountPanel> {
+class ShopperAccountPanelState extends State<ShopperAccountPanel> {
+  /// Return to the role chooser before leaving the account tab.
+  /// Used by the Android system back button and the Teyza app bar.
+  bool backToRoleChoice() {
+    if(working||audience==null||
+      widget.session.idToken!=null&&!widget.session.anonymousShopper)return false;
+    setState((){
+      audience=null;registering=false;showLegacyEmail=false;
+      status=null;failure=false;
+    });
+    return true;
+  }
+
   final formKey=GlobalKey<FormState>();
   final email=TextEditingController(), password=TextEditingController(), name=TextEditingController();
   bool registering=false, working=false, hidden=true, showLegacyEmail=false;
@@ -274,13 +286,27 @@ class _AccountState extends State<ShopperAccountPanel> {
         ]))),
     );
 
+  Future<void> openSupport() async {
+    try {
+      final sent=await launchUrl(Uri.parse('mailto:support@teyza.co.za'),
+        mode:LaunchMode.externalApplication);
+      if(!sent)throw StateError('Email unavailable');
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text(
+          'Email support@teyza.co.za for account assistance.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context)=>AnimatedBuilder(
     animation:widget.session,
     builder:(context,child){
       final logged=widget.session.idToken!=null&&!widget.session.anonymousShopper;
-      return ListView(padding:const EdgeInsets.fromLTRB(20,22,20,36),children:[
-        Container(alignment:Alignment.center,padding:const EdgeInsets.symmetric(vertical:17),
+      return ColoredBox(
+        color:logged?const Color(0xFF090E21):const Color(0xFFF7F9F7),
+        child:ListView(padding:const EdgeInsets.fromLTRB(20,22,20,36),children:[
+        if(!logged)Container(alignment:Alignment.center,padding:const EdgeInsets.symmetric(vertical:17),
           child:Column(children:[
             const CircleAvatar(radius:32,backgroundColor:Color(0xFFE0F3EA),
               child:Icon(Icons.person_rounded,size:38,color:Color(0xFF078E66))),
@@ -324,31 +350,36 @@ class _AccountState extends State<ShopperAccountPanel> {
         ]
         else if(logged) ...[
           Container(key:const ValueKey('teyza-premium-account-dashboard'),
-            padding:const EdgeInsets.all(21),
+            padding:const EdgeInsets.fromLTRB(20,25,20,24),
             decoration:BoxDecoration(
-              gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-                colors:[Color(0xFF0A1023),Color(0xFF0D4650)]),
-              borderRadius:BorderRadius.circular(23)),
-            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Row(children:[
-                Container(width:43,height:43,
-                  decoration:BoxDecoration(color:const Color(0xFF263C48),
-                    borderRadius:BorderRadius.circular(14)),
-                  child:const Icon(Icons.verified_user_rounded,color:Color(0xFF7AE7BC))),
-                const SizedBox(width:12),
-                const Expanded(child:Text('MY TEYZA ACCOUNT',
-                  style:TextStyle(color:Color(0xFF7AE7BC),fontSize:11,
-                    letterSpacing:1.3,fontWeight:FontWeight.w900))),
-                if(widget.session.phoneVerified)
-                  const Tooltip(message:'Verified mobile number',
-                    child:Icon(Icons.verified_rounded,color:Color(0xFF7AE7BC)))
-              ]),
-              const SizedBox(height:14),
+              gradient:const LinearGradient(begin:Alignment.topCenter,
+                end:Alignment.bottomRight,
+                colors:[Color(0xFF0B344A),Color(0xFF007D82)]),
+              borderRadius:BorderRadius.circular(26)),
+            child:Column(children:[
+              Stack(clipBehavior:Clip.none,alignment:Alignment.bottomRight,
+                children:[
+                  const CircleAvatar(radius:42,backgroundColor:Color(0xFF233C52),
+                    child:Icon(Icons.person_rounded,size:52,color:Color(0xFFD8F6E8))),
+                  if(widget.session.phoneVerified)
+                    const Positioned(right:0,bottom:0,
+                      child:CircleAvatar(radius:13,
+                        backgroundColor:Color(0xFF65D5A5),
+                        child:Icon(Icons.verified_rounded,
+                          size:16,color:Color(0xFF0B344A))))
+                ]),
+              const SizedBox(height:13),
               Text(displayName,maxLines:1,overflow:TextOverflow.ellipsis,
-                style:const TextStyle(color:Colors.white,fontSize:25,fontWeight:FontWeight.w900)),
-              const SizedBox(height:6),
-              const Text('Your neighbourhood shopping, messages, orders and account details in one place.',
-                style:TextStyle(color:Color(0xFFD2E2E4),height:1.45,fontSize:12))
+                style:const TextStyle(color:Colors.white,
+                  fontSize:27,fontWeight:FontWeight.w900)),
+              const SizedBox(height:5),
+              Text(displayPhone,
+                textAlign:TextAlign.center,
+                style:const TextStyle(color:Color(0xFFD5ECEC),
+                  fontSize:14,letterSpacing:.5)),
+              const SizedBox(height:10),
+              const Text('Your saved shopping profile',
+                style:TextStyle(color:Color(0xFFBEEADD),fontSize:12))
             ])),
           const SizedBox(height:14),
           Wrap(spacing:8,runSpacing:8,children:[
@@ -358,14 +389,20 @@ class _AccountState extends State<ShopperAccountPanel> {
           ]),
           const SizedBox(height:14),
           const Padding(padding:EdgeInsets.fromLTRB(4,10,4,12),
-            child:Text('My details & settings',style:TextStyle(
-              fontSize:21,fontWeight:FontWeight.w900,color:Color(0xFF0B1C2C)))),
-          Material(key:const ValueKey('teyza-premium-account-settings'),
-            color:Colors.white,
-            shape:RoundedRectangleBorder(
-              borderRadius:BorderRadius.circular(19),
-              side:const BorderSide(color:Color(0xFFE0E8E8))),
-            child:Column(children:[
+            child:Text('My profile',style:TextStyle(
+              fontSize:21,fontWeight:FontWeight.w900,color:Colors.white))),
+          Theme(
+            data:Theme.of(context).copyWith(
+              dividerColor:const Color(0xFF45516A),
+              listTileTheme:const ListTileThemeData(
+                textColor:Colors.white,
+                iconColor:Color(0xFFB6C7D4))),
+            child:Material(key:const ValueKey('teyza-premium-account-settings'),
+              color:const Color(0xFF20293E),
+              shape:RoundedRectangleBorder(
+                borderRadius:BorderRadius.circular(19),
+                side:const BorderSide(color:Color(0xFF334159))),
+              child:Column(children:[
             ListTile(leading:const Icon(Icons.badge_outlined),
               title:const Text('Display name'),subtitle:Text(displayName),
               trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
@@ -442,6 +479,11 @@ class _AccountState extends State<ShopperAccountPanel> {
               ],
             ],
             const Divider(height:1),
+            const Padding(padding:EdgeInsets.fromLTRB(16,15,16,4),
+              child:Align(alignment:Alignment.centerLeft,
+                child:Text('SHOPPING & PAYMENTS',
+                  style:TextStyle(color:Color(0xFF7BE3C0),
+                    fontSize:11,fontWeight:FontWeight.w900,letterSpacing:1.1)))),
             ListTile(leading:const Icon(Icons.location_on_outlined),
               title:const Text('Saved delivery address'),
               subtitle:Text(shopperProfile?.address??widget.savedDeliveryAddress??'Add your delivery address'),
@@ -462,7 +504,7 @@ class _AccountState extends State<ShopperAccountPanel> {
               title:const Text('Terms of Service'),
               subtitle:const Text('Review Teyza shopping and account terms'),
               trailing:const Icon(Icons.open_in_new_outlined),onTap:openTerms)
-          ])),
+          ]))),
           const SizedBox(height:16),
           if(widget.session.hasAdminClaim&&widget.session.emailVerified)
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerReviewPage(session:widget.session))),
@@ -471,14 +513,40 @@ class _AccountState extends State<ShopperAccountPanel> {
             OutlinedButton.icon(onPressed:()=>Navigator.push(context,
               MaterialPageRoute(builder:(_)=>ChatModerationPage(session:widget.session))),
               icon:const Icon(Icons.flag_outlined),label:const Text('Chat moderation reports')),
-          OutlinedButton.icon(
-            onPressed:working?null:()=>Navigator.push(context,
-              MaterialPageRoute(builder:(_)=>TeyzaDeleteAccountPage(session:widget.session))),
-            icon:const Icon(Icons.delete_outline,color:Colors.red),
-            label:const Text('Privacy & Security · Delete My Account')),
-          const SizedBox(height:10),
-          OutlinedButton.icon(onPressed:working?null:widget.session.signOut,
-            icon:const Icon(Icons.logout),label:const Text('Sign out')),
+          const Padding(padding:EdgeInsets.fromLTRB(4,10,4,12),
+            child:Text('Manage & support',style:TextStyle(
+              color:Colors.white,fontSize:21,fontWeight:FontWeight.w900))),
+          Material(
+            key:const ValueKey('teyza-account-support-menu'),
+            color:const Color(0xFF20293E),
+            borderRadius:BorderRadius.circular(19),
+            child:ListTileTheme(
+              textColor:Colors.white,
+              iconColor:const Color(0xFFB6C7D4),
+              child:Column(children:[
+                ListTile(
+                  leading:const Icon(Icons.help_outline_rounded),
+                  title:const Text('Get help'),
+                  subtitle:const Text('Contact Teyza support'),
+                  trailing:const Icon(Icons.chevron_right_rounded),
+                  onTap:openSupport),
+                const Divider(height:1,color:Color(0xFF45516A)),
+                ListTile(
+                  leading:const Icon(Icons.security_rounded),
+                  title:const Text('Privacy & security'),
+                  subtitle:const Text('Manage and delete your account'),
+                  trailing:const Icon(Icons.chevron_right_rounded),
+                  onTap:working?null:()=>Navigator.push(context,
+                    MaterialPageRoute(builder:(_)=>
+                      TeyzaDeleteAccountPage(session:widget.session)))),
+                const Divider(height:1,color:Color(0xFF45516A)),
+                ListTile(
+                  leading:const Icon(Icons.logout_rounded),
+                  title:const Text('Log out'),
+                  trailing:const Icon(Icons.chevron_right_rounded),
+                  onTap:working?null:widget.session.signOut)
+              ]))),
+          const SizedBox(height:12),
         ] else ...[
           Align(alignment:Alignment.centerLeft,child:TextButton.icon(
             onPressed:working?null:()=>setState(() {
@@ -604,6 +672,6 @@ class _AccountState extends State<ShopperAccountPanel> {
         const Text('Your account is private. Location is optional; '
           'the app only uses it to find shops in your area.',
           textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF657B72),fontSize:12))
-      ]);
+      ]));
     });
 }
