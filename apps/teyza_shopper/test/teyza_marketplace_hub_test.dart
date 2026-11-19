@@ -30,9 +30,9 @@ void main() {
     expect(TeyzaHomeProductCategories.categories.length,8);
     expect(find.text('Fruit & Veg'),findsOneWidget);
     expect(find.text('Household'),findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('teyza-category-Household')));
+    await tester.tap(find.byKey(const ValueKey('product-category-Household')));
     expect(chosen,'Household');
-    await tester.tap(find.byKey(const ValueKey('teyza-category-Fruit & Veg')));
+    await tester.tap(find.byKey(const ValueKey('product-category-Fruit & Veg')));
     expect(chosen,'Fruit & Veg');
   });
 
