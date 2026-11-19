@@ -53,7 +53,13 @@ String authMessage(Object error) {
   if (value.contains('WEAK_PASSWORD')) return 'Choose a stronger password (at least six characters).';
   if (value.contains('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many attempts. Please try again later.';
   if (value.contains('OPERATION_NOT_ALLOWED')) return 'This sign-in method is not enabled yet. Try email login or contact Teyza support.';
-  if(value.contains('Facebook sign-in is not configured'))return 'Facebook login is not enabled for this build yet. Use Google, Apple or email.';
+  if(value.toLowerCase().contains('url blocked') ||
+      value.toLowerCase().contains('redirect uri is not whitelisted') ||
+      value.toLowerCase().contains('redirect_uri is not whitelisted') ||
+      value.contains('auth/unauthorized-domain')) {
+    return 'Facebook login is blocked by Meta OAuth settings. Teyza support must allow the Firebase authentication redirect in the Facebook app. Use Google, Apple or your existing email login while this is corrected.';
+  }
+  if(value.contains('Facebook sign-in is not configured'))return 'Facebook login is not enabled for this build yet. Use Google, Apple or an existing email login.';
   if(value.contains('Facebook sign-in failed'))return 'Facebook could not complete sign-in. Please try again or use another method.';
   if (value.contains('Google sign-in is not configured')) return 'Google login setup is not complete for this build. Use email login while Teyza connects it.';
   if (error is SignInWithAppleAuthorizationException) return 'Could not complete Apple sign-in. Please try again or use email login.';
