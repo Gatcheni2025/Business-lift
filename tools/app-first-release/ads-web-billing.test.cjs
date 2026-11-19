@@ -12,10 +12,13 @@ test('Independent advertiser portal uses Firebase web auth, not an in-app paymen
  const rootJs=fs.readFileSync(path.resolve(__dirname,'../../js/ads-web-billing.mjs'),'utf8');
  assert.equal(root,html,'Ads root and app-first HTML must remain identical');
  assert.equal(js,rootJs,'Ads root and app-first JS must remain identical');
- assert.doesNotMatch(html,/id="emailForm"|id="email"|id="password"/,
-  'Remove public email-password login controls');
- assert.doesNotMatch(js,/signInWithEmailAndPassword|emailForm/,
-  'No orphaned email-password JS handlers');
+ assert.match(html,/<details id="legacyAccess"/,
+  'Existing sellers must have hidden legacy access, rather than visible email as primary login');
+ assert.match(html,/id="emailForm"/,'A verified legacy account can sign in');
+ assert.match(js,/signInWithEmailAndPassword/,'Only existing accounts may use email/password');
+ assert.match(js,/linkWithPopup\(user,provider\)/,'Link secure providers to the existing UID');
+ assert.match(js,/auth\.currentUser\.uid!==uid\|\|result\.user\.uid!==uid/,'No UID switching during account linking');
+ assert.doesNotMatch(js,/createUserWithEmailAndPassword/,'New email registration stays disabled');
  for(const label of ['Continue with Google','Continue with Facebook','Continue with Apple',
  'WhatsApp sign-in is not active yet','New to Teyza?',
  '7-day local sponsored campaign','Step 1','R29','adCreativePreview']) {
