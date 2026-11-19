@@ -50,28 +50,25 @@ class TeyzaMerchantGrid extends StatelessWidget {
           style:const TextStyle(color:mint,fontSize:10,
             fontWeight:FontWeight.w900,letterSpacing:1.1)),
         const SizedBox(height:13),
-        LayoutBuilder(builder:(context,size)=>GridView.builder(
+        LayoutBuilder(builder:(context,size)=>GridView(
           shrinkWrap:true,
           physics:const NeverScrollableScrollPhysics(),
-          itemCount:shown.length+(hasMore?1:0),
           gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount:size.maxWidth<285?3:4,
             crossAxisSpacing:6,mainAxisSpacing:14,mainAxisExtent:116),
-          itemBuilder:(context,index){
-            if(index>=shown.length){
-              return _tile(
-                key:ValueKey('teyza-$categoryKey-view-all'),
-                name:'View all',
-                image:const Icon(Icons.arrow_forward_rounded,color:mint,size:28),
-                onTap:onViewAll,
-                highlight:true);
-            }
-            final item=shown[index];
-            return _tile(
-              key:ValueKey('teyza-$categoryKey-${item.id}'),
-              name:item.name,image:item.image,onTap:item.onTap,
-              verified:item.verified);
-          }))
+          children:[
+            for(final item in shown)
+              _tile(
+                // Keep the established nearby card lookup and tap semantics.
+                key:ValueKey('nearby-${item.id}'),
+                name:item.name,image:item.image,onTap:item.onTap,
+                verified:item.verified),
+            if(hasMore)_tile(
+              key:ValueKey('teyza-$categoryKey-view-all'),
+              name:'View all',
+              image:const Icon(Icons.arrow_forward_rounded,color:mint,size:28),
+              onTap:onViewAll,highlight:true),
+          ]))
       ]));
   }
 
