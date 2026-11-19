@@ -48,6 +48,7 @@ async function start(){
  function render(){
   const user=auth?.currentUser;
   el('login').hidden=!!user;el('signedIn').hidden=!user;
+  el('linkProviders').hidden=!user||Boolean(user.providerData?.some(p=>p.providerId&&p.providerId!=='password'));
   el('campaigns').replaceChildren();
   if(!user)return;
   el('signedEmail').textContent=user.email||'Original Firebase business account';
@@ -214,6 +215,37 @@ async function start(){
    el('ownerConsent').checked=false;el('paymentConsent').checked=false;
    render();if(user)void reload();else notice('Sign in to manage approved Teyza advertising campaigns.');
   });
+  // Existing email-only sellers sign in to their original Firebase UID;
+  // link providers without creating a new account or initiating payment.
+  el('emailForm').addEventListener('submit',async event=>{
+   event.preventDefault();
+   const password=el('password').value;
+   try{await sdk.signInWithEmailAndPassword(auth,el('email').value.trim(),password);}
+   catch{notice('Could not sign in to that existing account. Check credentials or contact Teyza support.','error');}
+   finally{el('password').value='';}
+  });
+  async function linkExistingAccount(providerName){
+   const user=auth?.currentUser;if(!user||busy)return;
+   const uid=user.uid;
+   const provider=providerName==='google'?new sdk.GoogleAuthProvider():
+     providerName==='facebook'?new sdk.FacebookAuthProvider():new sdk.OAuthProvider('apple.com');
+   try{
+    const result=await sdk.linkWithPopup(user,provider);
+    if(!auth?.currentUser||auth.currentUser.uid!==uid||result.user.uid!==uid)
+      throw Error('Account changed. No further action taken.');
+    notice('Provider linked successfully to your existing Teyza business account.');
+    render();
+   }catch(error){
+    const conflict=['auth/credential-already-in-use','auth/email-already-in-use',
+     'auth/provider-already-linked'].includes(error?.code);
+    notice(conflict?
+     'This provider is linked to another account. Contact Teyza support for verified recovery.':
+     'Provider linking did not complete. Try again with your original account or contact support.','error');
+   }
+  }
+  for(const [id,providerName] of [['linkGoogle','google'],['linkFacebook','facebook'],['linkApple','apple']]){
+   el(id).addEventListener('click',()=>linkExistingAccount(providerName));
+  }
   for(const [id,provider] of [['google',()=>new sdk.GoogleAuthProvider()],['apple',()=>new sdk.OAuthProvider('apple.com')],['facebook',()=>new sdk.FacebookAuthProvider()]]){
    el(id).addEventListener('click',async()=>{try{await sdk.signInWithPopup(auth,provider());}catch(e){notice(e.message||'Sign-in failed.','error');}});
   }
