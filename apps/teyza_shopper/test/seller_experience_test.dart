@@ -92,8 +92,10 @@ void main(){
  testWidgets('Seller registration is native and cannot continue without required shop details',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
-  final button=find.text('Continue to seller verification');await visibleTap(tester,button);
-  expect(api.calls,isEmpty);expect(find.text('Enter shop name'),findsOneWidget);
+  final next=find.byKey(const ValueKey('teyza-registration-next'));
+  await tester.scrollUntilVisible(next,200,scrollable:find.byType(Scrollable).first);
+  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  expect(api.calls,isEmpty);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Owner camera preview requires consent and submits a pending review, never an approval',(tester) async{
@@ -115,11 +117,15 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
   await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
   await selectAddress(tester);
   tester.testTextInput.hide();await tester.pumpAndSettle();
   await visibleTap(tester,find.text('No — this is a new business listing'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
   await visibleTap(tester,find.text('I confirm that these are my shop’s details and shoppers may see this business address and map location.'));
-  await visibleTap(tester,find.text('Continue to seller verification'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
   expect(request.data['addressSelection'],'address-receipt');expect(request.data['locationConsent'],true);
@@ -127,26 +133,33 @@ void main(){
   expect(find.textContaining('7-day'),findsNothing);
   expect(api.calls.any((r)=>r.action=='seller_plan_select'),false,
     reason:'Registration must never activate a trial or subscription');
-  expect(find.text('ID or passport'),findsOneWidget);await tester.scrollUntilVisible(find.text('Mobile number & OTP'),250,scrollable:find.byType(Scrollable).first);expect(find.text('Mobile number & OTP'),findsOneWidget);
+  expect(find.text('ID or passport'),findsWidgets);
+  expect(find.text('Step 1 of 5'),findsNothing);
+  expect(find.byKey(const ValueKey('teyza-onboarding-step-title')),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('A Google business claim pre-fills the shop and address but still requires seller verification',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.enterText(find.widgetWithText(TextFormField,'Shop name'),'Neighbourhood Market');
+  await tester.enterText(find.widgetWithText(TextFormField,'Contact number'),'0712345678');
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
   await visibleTap(tester,find.text('Already on Google Maps? Find your business'));
   final search=find.byKey(const ValueKey('seller-claim-search'));await tester.enterText(search,'Neighbourhood Market');
   tester.testTextInput.hide();await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
   await visibleTap(tester,find.widgetWithText(ListTile,'Neighbourhood Market, Durban'));
   expect(find.text('Shop address from Google Maps'),findsOneWidget);
-  final phone=find.widgetWithText(TextFormField,'Contact number');await tester.ensureVisible(phone);await tester.enterText(phone,'0712345678');
   tester.testTextInput.hide();await tester.pumpAndSettle();
   await visibleTap(tester,find.text('I own this business or have written authority to represent it.'));
   await visibleTap(tester,find.text('I can provide registration or ownership documents if requested.'));
   await visibleTap(tester,find.text('I can verify the business phone number or another official contact.'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
   await visibleTap(tester,find.text('I am authorised to represent this business, and shoppers may see its address and map location.'));
   await visibleTap(tester,find.text('Send my approval update and getting-started link on WhatsApp'));
-  await visibleTap(tester,find.text('Continue to seller verification'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
   final request=api.calls.firstWhere((r)=>r.action=='seller_register');
   expect(request.data['shopName'],'Neighbourhood Market');expect(request.data['googleClaimSelection'],'claim-receipt');
   expect(request.data['addressSelection'],'address-receipt');expect(request.data['whatsappConsent'],true);
