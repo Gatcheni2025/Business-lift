@@ -1177,6 +1177,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(selected!=null||directorySelected!=null){
       final restore=_detailOriginSaved;
       final priorType=_detailOriginDiscoveryType;
+      final needsDirectoryReload=restore&&discoveryType!=priorType;
       setState((){
         selected=null;directorySelected=null;selectedDirectoryPhone=null;
         ++_directoryContactRequest;
@@ -1188,7 +1189,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       });
       // Restore the old directory scope when a business profile was opened
       // from the independent Spaza Shops home shelf (or vice versa).
-      if(restore&&discoveryType!=priorType)unawaited(reloadOnline());
+      if(needsDirectoryReload)unawaited(reloadOnline());
       return;
     }
     if(tab==4&&_accountPanelKey.currentState?.backToRoleChoice()==true)return;
