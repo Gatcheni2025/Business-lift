@@ -24,16 +24,19 @@ void main(){
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Local Market');await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
+  await fixtures.visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
   final field=find.byKey(const ValueKey('shop-address-search'));await tester.ensureVisible(field);await tester.enterText(field,'Main Road');
   tester.testTextInput.hide();await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
-  await fixtures.visibleTap(tester,find.text('Continue to seller verification'));
-  expect(find.text('Select your full shop address from the suggestions.'),findsOneWidget);
+  final next=find.byKey(const ValueKey('teyza-registration-next'));
+  expect(tester.widget<FilledButton>(next).onPressed,isNull);
   expect(api.calls.where((c)=>c.action=='seller_register'),isEmpty);
   await fixtures.selectAddress(tester);expect(find.text('Full address selected'),findsOneWidget);
   await tester.ensureVisible(field);await tester.enterText(field,'Different street');tester.testTextInput.hide();
   await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
   expect(find.text('Full address selected'),findsNothing);
-  await fixtures.visibleTap(tester,find.text('Continue to seller verification'));expect(api.calls.where((c)=>c.action=='seller_register'),isEmpty);
+  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  expect(api.calls.where((c)=>c.action=='seller_register'),isEmpty);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('A delayed result cannot replace suggestions for the latest address',(tester) async {
