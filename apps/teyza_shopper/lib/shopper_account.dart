@@ -62,6 +62,13 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     final saved=shopperProfile?.phone.trim()??'';
     return saved.isNotEmpty?saved:(widget.session.phoneNumber??'Not provided');
   }
+  // Show a privacy-safe header number; the full saved phone stays available
+  // in the account detail row for editing and verification.
+  String get maskedHeaderPhone {
+    final value=displayPhone;
+    if(RegExp(r'\d').allMatches(value).length<7)return value;
+    return '${value.substring(0,3)} *** ${value.substring(value.length-4)}';
+  }
   String get contactEmail{
     final saved=shopperProfile?.email.trim()??'';
     return saved.isNotEmpty?saved:(widget.session.email??'Not provided');
@@ -377,7 +384,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                 style:const TextStyle(color:Colors.white,
                   fontSize:27,fontWeight:FontWeight.w900)),
               const SizedBox(height:5),
-              Text(displayPhone,
+              Text(maskedHeaderPhone,
                 textAlign:TextAlign.center,
                 style:const TextStyle(color:Color(0xFFD5ECEC),
                   fontSize:14,letterSpacing:.5)),
