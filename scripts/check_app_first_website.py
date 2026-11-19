@@ -24,10 +24,16 @@ for p in PUBLIC.glob('*.html'):
  page=Page();text=p.read_text();page.feed(text)
  if p.name in ['work.html','owner-confirm.html','pay.html']:
   assert page.meta.get('robots')=='noindex,nofollow',p.name
-  assert '<form' in text and 'type="module"' in text,p.name
+  assert 'type="module"' in text,p.name
   if p.name=='pay.html':
-   assert 'id="webShopUid"' in text and 'id="webCheckout"' in text
+   # The updated premium login uses Firebase provider buttons and deliberately
+   # has no public email/password form. Checkout remains backend authorised.
+   assert '<form' not in text and 'id="webEmailForm"' not in text,p.name
+   assert all('id="'+value+'"' in text for value in (
+       'webGoogle','webFacebook','webApple','webShopUid','webCheckout')),p.name
    assert text==(PUBLIC/'pay/index.html').read_text(),'Pay clean-url alias has diverged'
+  else:
+   assert '<form' in text,p.name
   continue
  assert page.headings==1,p.name
  assert page.meta['description'] and page.canonical.startswith('https://teyza.co.za/'),p.name
