@@ -26,9 +26,10 @@ for p in PUBLIC.glob('*.html'):
   assert page.meta.get('robots')=='noindex,nofollow',p.name
   assert 'type="module"' in text,p.name
   if p.name=='pay.html':
-   # The updated premium login uses Firebase provider buttons and deliberately
-   # has no public email/password form. Checkout remains backend authorised.
-   assert '<form' not in text and 'id="webEmailForm"' not in text,p.name
+   # Google, Facebook, Apple are the primary sign-in methods; existing
+   # email-only sellers retain a collapsed, explicit legacy sign-in so that
+   # they can link another provider without losing the original Firebase UID.
+   assert '<details id="webLegacyAccess"' in text and 'id="webEmailForm"' in text,p.name
    assert all('id="'+value+'"' in text for value in (
        'webGoogle','webFacebook','webApple','webShopUid','webCheckout')),p.name
    assert text==(PUBLIC/'pay/index.html').read_text(),'Pay clean-url alias has diverged'
