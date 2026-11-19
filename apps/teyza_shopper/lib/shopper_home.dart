@@ -288,6 +288,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String productTabSearch='';
   final productTabController=TextEditingController();
   int tab = 0;
+  int _previousRootTab=0;
+  final _accountPanelKey=GlobalKey<ShopperAccountPanelState>();
+  int _detailOriginTab=0;
+  bool _detailOriginAllShops=false,_detailOriginAllSellers=false;
+  bool _detailOriginSaved=false;
+  String _detailOriginCategory='All';
+  String _detailOriginDiscoveryType='spaza';
   final cart = <String, int>{};
   late final session = widget.session??ShopperSession();
   String? _observedUid,_checkedSellerUid;
@@ -1155,7 +1162,56 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(cart.isEmpty)basketShop=null;
     });
   }
+  void _rememberDetailOrigin(){
+    if(selected!=null||directorySelected!=null)return;
+    _detailOriginTab=tab;
+    _detailOriginAllShops=showAllShops;
+    _detailOriginAllSellers=showAllSellers;
+    _detailOriginCategory=category;
+    _detailOriginDiscoveryType=discoveryType;
+    _detailOriginSaved=true;
+  }
+  bool get _canNavigateBack=>selected!=null||directorySelected!=null||
+    showAllSellers||showAllShops||tab!=0;
+  void _navigateBack(){
+    if(selected!=null||directorySelected!=null){
+      final restore=_detailOriginSaved;
+      final priorType=_detailOriginDiscoveryType;
+      setState((){
+        selected=null;directorySelected=null;selectedDirectoryPhone=null;
+        ++_directoryContactRequest;
+        tab=restore?_detailOriginTab:0;
+        showAllShops=restore?_detailOriginAllShops:true;
+        showAllSellers=restore?_detailOriginAllSellers:false;
+        if(restore){category=_detailOriginCategory;discoveryType=priorType;}
+        _detailOriginSaved=false;
+      });
+      // Restore the old directory scope when a business profile was opened
+      // from the independent Spaza Shops home shelf (or vice versa).
+      if(restore&&discoveryType!=priorType)unawaited(reloadOnline());
+      return;
+    }
+    if(tab==4&&_accountPanelKey.currentState?.backToRoleChoice()==true)return;
+    if(showAllSellers||showAllShops){
+      setState((){
+        showAllSellers=false;showAllShops=false;
+        search='';
+      });
+      return;
+    }
+    if(tab!=0){
+      final previous=_previousRootTab!=tab?_previousRootTab:0;
+      setState((){
+        tab=previous;
+        _previousRootTab=0;
+        selected=null;directorySelected=null;
+        showAllShops=false;showAllSellers=false;
+      });
+    }
+  }
+
   void openShop(Shop shop) {
+    _rememberDetailOrigin();
     final changed=discoveryType!=shop.shopCategory;
     setState((){
       shopProductSearch='';selected=shop;directorySelected=null;
@@ -1170,6 +1226,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   void selectDirectory(OnlineShop shop){
+    _rememberDetailOrigin();
     final request=++_directoryContactRequest;
     final changed=discoveryType!=shop.shopCategory;
     setState((){
@@ -1333,10 +1390,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     await openOwnerWorkspace();
   }
   void browseNearby()=>setState((){
+    if(tab!=0)_previousRootTab=tab;
     tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;
   });
   void navigateToTab(int index){
     setState(() {
+      if(index!=tab)_previousRootTab=tab;
       if(index==5){
         tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;search='';
         return;
@@ -1402,8 +1461,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       initialTarget:_sellerInitialTarget,initialClaimPlaceId:_pendingClaimPlaceId,
       openLogin:(){if(mounted)setState(()=>tab=0);});
     if(!_launchReady)return const ShopperLaunchScreen();
-    return Scaffold(
+    return PopScope<void>(
+      canPop:!_canNavigateBack,
+      onPopInvokedWithResult:(didPop,result){
+        if(!didPop&&_canNavigateBack)_navigateBack();
+      },
+      child:Scaffold(
       appBar:AppBar(backgroundColor:Colors.white,foregroundColor:ink,
+        automaticallyImplyLeading:false,
+        leading:_canNavigateBack?IconButton(
+          key:const ValueKey('teyza-back'),
+          tooltip:'Back',
+          onPressed:_navigateBack,
+          icon:const Icon(Icons.arrow_back_rounded)):null,
         elevation:0,toolbarHeight:56,titleSpacing:14,
         title:Row(children:[
           Semantics(label:'Teyza',child:SvgPicture.asset(
@@ -1430,7 +1500,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               child:const Icon(Icons.notifications_none_rounded,size:25))),
           const SizedBox(width:3)
         ]),
-      body:tab==4?ShopperAccountPanel(session:session,
+      body:tab==4?ShopperAccountPanel(key:_accountPanelKey,session:session,
           onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
           onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby,
           savedDeliveryAddress:deliveryProfile?.address,savedProfile:deliveryProfile,
@@ -1461,7 +1531,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         if(count>0&&tab!=2)floatingCart(),
         premiumNavigation(),
       ]),
-    );
+    ));
   }
 
 
@@ -2426,7 +2496,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   Widget directoryPage(OnlineShop shop)=>ListView(
     padding:const EdgeInsets.all(18),children:[
-      TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
+      TextButton.icon(onPressed:_navigateBack,
         icon:const Icon(Icons.arrow_back),
         label:Text(teyzaBrowseLabel(shop.shopCategory))),
       const SizedBox(height:10),
@@ -2571,7 +2641,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(chosen!=null&&mounted)openShop(chosen);
   }
   Widget shopPage(Shop shop)=>RefreshIndicator(onRefresh:()=>load(silent:true),child:ListView(key:PageStorageKey<String>('shop-profile-${shop.id}'),physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(16),children:[
-    TextButton.icon(onPressed:()=>backToCategory(shop.shopCategory),
+    TextButton.icon(onPressed:_navigateBack,
       icon:const Icon(Icons.arrow_back),
       label:Text(teyzaBrowseLabel(shop.shopCategory))),
     ClipRRect(borderRadius:BorderRadius.circular(24),child:SizedBox(
