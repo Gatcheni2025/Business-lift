@@ -54,10 +54,15 @@ test('Dedicated /pay is self-contained and seller plans only link from website',
    'webCheckoutStatus','webAvailabilityNotice','webManage','webConfirm','webTermsText']){
    assert(page.includes('id="'+id+'"'),'Missing secure payment field '+id);
  }
- assert(!page.includes('id="webEmailForm"')&&!page.includes('id="webEmail"')&&!page.includes('id="webPassword"'),
-  'Membership sign-in must not show email/password');
- assert(!js.includes('signInWithEmailAndPassword')&&!js.includes('webEmailForm'),
-  'Removed login form must have no orphaned auth event handler');
+ assert(page.includes('<details id="webLegacyAccess"')&&page.includes('id="webEmailForm"'),
+  'Existing email-only sellers require a secondary collapsible sign-in');
+ assert(page.includes('Already registered with email? Existing sellers only'));
+ assert(js.includes('signInWithEmailAndPassword')&&js.includes('linkWithPopup(user,provider)'),
+  'Legacy authentication and social linking must preserve the same Firebase UID');
+ assert(js.includes('result.user.uid!==uid')&&js.includes('auth.currentUser.uid!==uid'),
+  'Never accept a changed user UID after provider linking');
+ assert(!page.includes('Create account with email')&&!js.includes('createUserWithEmailAndPassword'),
+  'Never allow new public email registration');
  for(const label of ['Continue with Google','Continue with Facebook','Continue with Apple',
    'New to Teyza?','WhatsApp sign-in is being prepared','Why become a Teyza seller?',
    'R99 per full calendar month']) assert(page.includes(label),'Missing seller UX copy: '+label);
