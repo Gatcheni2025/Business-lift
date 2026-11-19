@@ -369,6 +369,10 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                           size:16,color:Color(0xFF0B344A))))
                 ]),
               const SizedBox(height:13),
+              const Text('My Teyza account',style:TextStyle(
+                color:Color(0xFFBEEADD),fontSize:12,
+                fontWeight:FontWeight.w800)),
+              const SizedBox(height:5),
               Text(displayName,maxLines:1,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:Colors.white,
                   fontSize:27,fontWeight:FontWeight.w900)),
