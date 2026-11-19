@@ -20,7 +20,8 @@ class OnboardApi extends TeyzaMobileApi {
  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
   calls.add(action);if(offline)throw const ShopServiceUnavailable();
   if(action=='seller_onboarding')return {'legalType':'individual','phone':'+27712345678','phoneVerified':complete,
-   if(complete)'identity':{'kind':'id'},if(complete)'selfie':{'status':'pending_review'}};
+   if(complete)'identity':{'kind':'id'},if(complete)'selfie':{'status':'pending_review'},
+   if(complete)'shopFront':{'photoId':'front-photo'},if(complete)'locationSaved':true};
   return {'settings':{},'sellingStatus':'pending_approval','verificationStatus':'pending_review'};
  }
 }
@@ -51,8 +52,13 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:TextButton(
     onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:session,shop:shop,api:api))),child:const Text('Open setup'))))));
   await tester.tap(find.text('Open setup'));await tester.pumpAndSettle();
-  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');
-  await tester.scrollUntilVisible(finish,220,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,finish);
+  for(var step=0;step<4;step++){
+    final next=find.byKey(const ValueKey('teyza-onboarding-next'));
+    await tester.ensureVisible(next);await fixtures.visibleTap(tester,next);
+    await tester.pumpAndSettle();
+  }
+  final finish=find.widgetWithText(FilledButton,'Submit for review');
+  await tester.ensureVisible(finish);await fixtures.visibleTap(tester,finish);
   expect(find.text('Open setup'),findsOneWidget);expect(find.text('Setup submitted. Your shop will be visible after Teyza approves it.'),findsOneWidget);
   expect(api.calls.where((c)=>c=='seller_onboarding_complete').length,1);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -85,8 +91,9 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api,captureDocument:(_) async{captured=true;return bytes;})));
   await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
   expect(captured,true);await tester.scrollUntilVisible(find.byType(Image),-150,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.byType(Image),findsOneWidget);
-  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');
-  await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(tester.widget<FilledButton>(finish).onPressed,isNull);
+  final next=find.byKey(const ValueKey('teyza-onboarding-next'));
+  await tester.ensureVisible(next);await tester.pumpAndSettle();
+  expect(tester.widget<FilledButton>(next).onPressed,isNull);
   expect(api.calls.contains('seller_onboarding_complete'),false);
   session.switchAccount();await tester.pump();expect(find.byType(Image),findsNothing);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
@@ -94,7 +101,13 @@ void main(){
  testWidgets('All three server-confirmed steps enable completion while pending manual review',(tester) async{
   final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
   await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
-  final finish=find.widgetWithText(FilledButton,'Finish setup & submit for review');await tester.scrollUntilVisible(finish,250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
+  final next=find.byKey(const ValueKey('teyza-onboarding-next'));
+  await tester.ensureVisible(next);await tester.pumpAndSettle();
+  expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
+  for(var i=0;i<4;i++){
+    await fixtures.visibleTap(tester,next);await tester.pumpAndSettle();
+  }
+  final finish=find.widgetWithText(FilledButton,'Submit for review');
   expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
