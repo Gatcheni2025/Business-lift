@@ -333,7 +333,15 @@ void main(){
     // The new Back action returns to the same home shelf instead of
     // automatically switching into an unrelated merchant category.
     final returnHome=find.byKey(const PageStorageKey<String>('shopper-home'));
-    for(var i=0;i<15&&find.text('Businesses nearby').evaluate().isEmpty;i++){
+    expect(returnHome,findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-back')),findsNothing);
+    // PageStorage may restore the viewport below the category heading.
+    // Check scrolling up *and* down rather than assuming one offset.
+    for(var i=0;i<10&&find.text('Businesses nearby').evaluate().isEmpty;i++){
+      await tester.drag(returnHome,const Offset(0,190));
+      await tester.pumpAndSettle();
+    }
+    for(var i=0;i<16&&find.text('Businesses nearby').evaluate().isEmpty;i++){
       await tester.drag(returnHome,const Offset(0,-160));
       await tester.pumpAndSettle();
     }
