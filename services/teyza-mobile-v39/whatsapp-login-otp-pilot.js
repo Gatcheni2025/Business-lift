@@ -25,7 +25,7 @@ function createWhatsAppLoginPilot({
  randomId=()=>crypto.randomBytes(24).toString('hex')
 }={}){
  if(!db||typeof db.doc!=='function'||typeof db.collection!=='function'||typeof db.runTransaction!=='function'||
-    !auth||typeof auth.getUser!=='function'||typeof auth.createCustomToken!=='function'||
+    !auth||typeof auth.getUser!=='function'||typeof auth.createCustomToken!=='function'||typeof auth.verifyIdToken!=='function'||
     typeof sendAuthenticationTemplate!=='function'||typeof enabled!=='function'||typeof pilotSellerUid!=='function'||
     typeof serverSecret!=='string'||serverSecret.length<32)throw Error('Missing WhatsApp login security dependencies');
  const digest=(scope,...parts)=>crypto.createHmac('sha256',serverSecret)
@@ -60,6 +60,35 @@ function createWhatsAppLoginPilot({
    tx.set(ir,{windowStart:b.windowStart,count:b.count+1,updatedAt:nowMs});
    return true;
   });
+ }
+ async function setConsent({idToken,agree}={}){
+  if(!active()||typeof idToken!=='string'||idToken.length<20||
+     (agree!==true&&agree!==false))return fail();
+  // Consent must be granted by a currently authenticated user, never by
+  // possession of an unverified phone number or a marketing opt-in.
+  const actor=await auth.verifyIdToken(idToken,true);
+  const uid=actor?.uid;
+  if(uid!==pilotSellerUid())return fail();
+  const firebaseUser=await auth.getUser(uid);
+  const sellerRef=db.doc('teyzaSellerAccounts/'+uid),
+    prefRef=db.doc('teyzaWhatsAppPreferences/'+uid),
+    verificationRef=db.doc('teyzaMobileVerification/'+uid);
+  await db.runTransaction(async tx=>{
+    const [seller,pref,verification]=await Promise.all([
+      tx.get(sellerRef),tx.get(prefRef),tx.get(verificationRef)]);
+    const phone=seller.data()?.phone,v=verification.data?.();
+    if(!seller.exists||seller.data().uid!==uid||
+       seller.data().approvalStatus!=='approved'||seller.data().deletionPending===true||
+       !verification.exists||v?.ownerUid!==uid||v?.status!=='approved'||
+       !pref.exists||pref.data()?.ownerUid!==uid||pref.data()?.phone!==phone||
+       !phoneValid(phone)||!authPhoneVerified(firebaseUser,phone))return fail();
+    const at=now();
+    tx.update(prefRef,{loginOtpOptIn:agree,
+      loginOtpConsentVersion:'whatsapp-login-otp-v1',
+      loginOtpConsentAt:agree?at:null,
+      loginOtpRevokedAt:agree?null:at,updatedAt:at});
+  });
+  return {enabled:agree};
  }
  async function begin({phone,ip}={}){
   if(!active()||!phoneValid(phone)||typeof ip!=='string'||ip.length<3||ip.length>128)return fail();
@@ -138,6 +167,6 @@ function createWhatsAppLoginPilot({
   const token=await auth.createCustomToken(answer.uid,{teyzaWhatsAppOtp:true});
   return {customToken:token,uid:answer.uid};
  }
- return {begin,verify};
+ return {begin,verify,setConsent};
 }
 module.exports={createWhatsAppLoginPilot};
