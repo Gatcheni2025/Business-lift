@@ -6,7 +6,7 @@ class PremiumShopperNavigation extends StatelessWidget {
   final ValueChanged<int> onSelect;
   const PremiumShopperNavigation({super.key,required this.selectedIndex,
     required this.onSelect});
-  static const green=Color(0xFF3BB77E),ink=Color(0xFF010F1C),muted=Color(0xFF89929B);
+  static const green=Color(0xFF60D5A5),ink=Color(0xFF090F21),muted=Color(0xFFB1C0CB);
 
   Widget destination(int index,String label,IconData active,IconData idle){
     final selected=selectedIndex==index;
@@ -18,7 +18,7 @@ class PremiumShopperNavigation extends StatelessWidget {
             child:Column(mainAxisSize:MainAxisSize.min,children:[
               AnimatedContainer(duration:const Duration(milliseconds:180),
                 padding:const EdgeInsets.symmetric(horizontal:14,vertical:4),
-                decoration:BoxDecoration(color:selected?const Color(0xFFE6F7EE):Colors.transparent,
+                decoration:BoxDecoration(color:selected?const Color(0xFF284B49):Colors.transparent,
                   borderRadius:BorderRadius.circular(13)),
                 child:Icon(selected?active:idle,color:selected?green:muted,size:23)),
               const SizedBox(height:2),
@@ -31,10 +31,10 @@ class PremiumShopperNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context)=>SafeArea(top:false,
     child:Padding(padding:const EdgeInsets.fromLTRB(12,4,12,10),
-      child:Container(decoration:BoxDecoration(color:Colors.white,
+      child:Container(decoration:BoxDecoration(color:const Color(0xFF141C2D),
         borderRadius:BorderRadius.circular(27),
-        border:Border.all(color:const Color(0xFFF0F1F2)),
-        boxShadow:const [BoxShadow(color:Color(0x0C010F1C),blurRadius:24,offset:Offset(0,5))]),
+        border:Border.all(color:const Color(0xFF33425A)),
+        boxShadow:const [BoxShadow(color:Color(0x30010F1C),blurRadius:24,offset:Offset(0,5))]),
         child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(27),
           child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
             destination(0,'Home',Icons.home_rounded,Icons.home_outlined),

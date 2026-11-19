@@ -17,6 +17,7 @@ import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
 import 'shopper_splash.dart';
 import 'premium_navigation.dart';
+import 'teyza_marketplace_hub.dart';
 import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
@@ -1333,6 +1334,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         showAllSellers=false;category='All';productTabSearch='';productTabController.clear();}
     });
   }
+  // Separate destinations: the home page never mixes spaza shops and
+  // service businesses, and wholesalers remain B2B-only.
+  void openMarketplaceDestination(String type){
+    if(type=='products'){navigateToTab(1);return;}
+    final next=type=='businesses'?'variety':type=='wholesale'?'wholesale':'spaza';
+    unawaited(() async {
+      await setDiscoveryType(next);
+      if(mounted)setState((){
+        tab=0;selected=null;directorySelected=null;
+        showAllShops=true;showAllSellers=false;
+      });
+    }());
+  }
+  void browseProductCategory(String selectedCategory){
+    navigateToTab(1);
+    setState(()=>category=selectedCategory);
+  }
   void findEssential(String name){
     setState((){
       tab=1;selected=null;directorySelected=null;showAllShops=false;showAllSellers=false;category='All';
@@ -1629,14 +1647,29 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   List<NearbyListing> get nearbyListings=>mergeNearbyListings(displayShops,displayedOnline,area:area);
+  // Independent home shelves. A currently selected Local Businesses tab
+  // cannot silently feed businesses into the Spaza Shops home shelf.
+  List<NearbyListing> get homeSpazaListings {
+    final sellers=nearbyReal.where((s)=>s.shopCategory=='spaza').toList();
+    final places=discoveryType=='spaza'
+      ?displayedOnline.where((s)=>s.shopCategory=='spaza'&&
+          (teyzaMatchesShopCategory(s,'spaza')||
+           (s.origin=='openstreetmap'&&s.categorizationVerified&&
+            !teyzaIsLargeRetailer(s.name)))).toList()
+      :<OnlineShop>[];
+    return mergeNearbyListings(sellers,places,area:area);
+  }
+  List<ShopProduct> get homeGroceryProducts=>
+    discoverShopProducts(nearbyReal,type:'spaza',category:'All',limit:18);
+
   // Product cards come only from the server-published merchant catalogue,
   // never from private seller drafts or protected wholesale offers.
   List<NearbyListing> get nearbyOtherBusinesses {
     if(area==null)return [];
     final verified=live.where((shop)=>shop.shopCategory=='variety'&&
       shopMatchesArea(shop,area,radiusKm:40.0)).toList();
-    final publicResults=discoveryType=='variety'&&online.isNotEmpty
-      ?online:otherBusinesses;
+    final publicResults=(discoveryType=='variety'&&online.isNotEmpty
+      ?online:otherBusinesses).where((s)=>teyzaMatchesShopCategory(s,'variety')).toList();
     return mergeNearbyListings(verified,publicResults,area:area);
   }
   Shop? verifiedMerchantFor(OnlineShop publicPlace){
@@ -1803,7 +1836,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget sellerStories(){
     final sellers=nearbySellerEntries;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Spaza Shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
+      section('Nearby shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
@@ -1901,39 +1934,46 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
-      businessFilters(),sellerStories(),
+      businessFilters(),
+      sellerStories(),
+      const SizedBox(height:10),
+      section('Spaza Shops',
+        subtitle:area==null?'Choose your location for neighbourhood stores':
+          'Neighbourhood stores around '+locationName,
+        action:TextButton(onPressed:()=>openMarketplaceDestination('spaza'),
+          child:const Text('See all'))),
+      if(homeSpazaListings.isNotEmpty)
+        SizedBox(height:282,child:ListView(
+          key:const PageStorageKey<String>('home-spaza-only'),
+          scrollDirection:Axis.horizontal,
+          children:homeSpazaListings.take(24).map(nearbyCard).toList()))
+      else if(loadingOnline)
+        const SizedBox(height:106,child:Center(child:CircularProgressIndicator()))
+      else InkWell(onTap:areaSheet,
+        child:empty('Discover Spaza Shops',
+          'Choose your delivery area to find Teyza and public neighbourhood shops.')),
+
+      TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
+      const SizedBox(height:16),
       if(_eligibleHomeAds.isNotEmpty)
         sponsoredGroceryHero(_eligibleHomeAds[_sponsoredIndex%_eligibleHomeAds.length],
           _sponsoredIndex%_eligibleHomeAds.length,_eligibleHomeAds.length)
       else premiumGroceryHero(),
-      const SizedBox(height:4),
-      section(teyzaCategoryHeading(discoveryType),
-         subtitle:area==null?'Choose your area to find nearby shops':
-          'Local shops around '+locationName,
-        action:TextButton(onPressed:()=>setState(()=>showAllShops=true),
-          child:const Text('See all'))),
-      if(displayedOnline.isNotEmpty||displayShops.isNotEmpty)
-        SizedBox(height:282,child:ListView(key:const PageStorageKey<String>('home-nearby-shops'),scrollDirection:Axis.horizontal,
-          children:nearbyListings.take(30).map(nearbyCard).toList()))
-      else if(loadingOnline)const SizedBox(height:106,
-        child:Center(child:CircularProgressIndicator()))
-      else InkWell(onTap:areaSheet,child:empty('Find nearby shops',
-        'Use your current location or select a shopping area.')),
+      section('Everyday essentials',
+        subtitle:'Products from approved Teyza spaza shops',
+        action:TextButton(onPressed:()=>navigateToTab(1),child:const Text('View all'))),
+      const Text('Shop by category',style:TextStyle(fontSize:14,
+        fontWeight:FontWeight.w800,color:ink)),
       const SizedBox(height:9),
-      section(discoveryType=='spaza'?'Everyday essentials':discoveryType=='wholesale'?'Wholesale suppliers':'Explore local businesses',
-        subtitle:discoveryType=='spaza'?'Everyday essentials, closer to home':
-          discoveryType=='wholesale'?'Google-linked wholesalers · buying requires verified Teyza supplier':'Salons, upholstery, furniture, plumbers and local businesses',
-        action:TextButton(onPressed:discoveryType=='spaza'?()=>navigateToTab(1):
-          ()=>setState(()=>showAllShops=true),
-          child:const Text('Explore all'))),
-      if(discoveryType=='spaza')...[
-        const Text('Shop by category',style:TextStyle(
-          fontSize:14,fontWeight:FontWeight.w800,color:ink)),
-        const SizedBox(height:9),
-        groceryAisles(),
-        const SizedBox(height:7),
-      ],
-      if(featured.isNotEmpty)productShelf(featured)else if(discoveryType=='spaza')essentialsShelf(),
+      TeyzaHomeProductCategories(onSelect:browseProductCategory),
+      section('Popular local products',
+        subtitle:'Browse groceries by category, then choose your shop',
+        action:TextButton(onPressed:()=>navigateToTab(1),
+          child:const Text('All products'))),
+      if(homeGroceryProducts.isNotEmpty)
+        productShelf(homeGroceryProducts)
+      else essentialsShelf(),
+      const SizedBox(height:10),
       Material(color:deep,borderRadius:BorderRadius.circular(20),
         child:InkWell(borderRadius:BorderRadius.circular(20),
           onTap:()=>Navigator.of(context).push(MaterialPageRoute(
@@ -1967,11 +2007,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       // Show local businesses on the home page without requiring a
       // category switch, directly below Services offered and above Join Teyza.
       section('Local Businesses',
-        subtitle:'Salons, furniture, upholstery, plumbers and local services',
-        action:TextButton(onPressed:() async {
-          await setDiscoveryType('variety');
-          if(mounted)setState(()=>showAllShops=true);
-        },child:const Text('Explore'))),
+        subtitle:'Independent from Spaza Shops: salons, furniture, upholstery, plumbers and more',
+        action:TextButton(onPressed:()=>openMarketplaceDestination('businesses'),
+          child:const Text('See businesses'))),
       if(nearbyOtherBusinesses.isNotEmpty)
         SizedBox(height:282,child:ListView(key:const PageStorageKey<String>('home-local-businesses'),scrollDirection:Axis.horizontal,
           children:nearbyOtherBusinesses.take(12).map(nearbyCard).toList()))
@@ -1981,6 +2019,17 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         child:Text(area==null?'Add your delivery address to find local businesses nearby.':
           otherBusinessesWarning??'No local businesses found nearby. Try another area.',
           style:const TextStyle(color:muted,fontSize:12))),
+      Padding(padding:const EdgeInsets.only(top:10,bottom:8),
+        child:Material(key:const ValueKey('teyza-wholesale-supply-entry'),
+          color:const Color(0xFFE7F5EC),
+          borderRadius:BorderRadius.circular(18),
+          child:ListTile(
+          leading:const Icon(Icons.inventory_2_rounded,color:Color(0xFF087657),size:30),
+          title:const Text('Wholesalers & stock supply',
+            style:TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:const Text('A separate B2B space for approved spaza shop owners. Wholesale offers are not shopper checkout products.'),
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>openMarketplaceDestination('wholesale')))),
       // Services are separate from the grocery cart; shoppers enter an
       // approved local business profile to view photos and send enquiries.
       Card(color:const Color(0xFFE5F4ED),elevation:0,
