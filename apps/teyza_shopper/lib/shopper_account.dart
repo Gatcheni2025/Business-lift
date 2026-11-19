@@ -360,10 +360,11 @@ class _AccountState extends State<ShopperAccountPanel> {
           const Padding(padding:EdgeInsets.fromLTRB(4,10,4,12),
             child:Text('My details & settings',style:TextStyle(
               fontSize:21,fontWeight:FontWeight.w900,color:Color(0xFF0B1C2C)))),
-          Container(key:const ValueKey('teyza-premium-account-settings'),
-            decoration:BoxDecoration(color:Colors.white,
+          Material(key:const ValueKey('teyza-premium-account-settings'),
+            color:Colors.white,
+            shape:RoundedRectangleBorder(
               borderRadius:BorderRadius.circular(19),
-              border:Border.all(color:Color(0xFFE0E8E8))),
+              side:const BorderSide(color:Color(0xFFE0E8E8))),
             child:Column(children:[
             ListTile(leading:const Icon(Icons.badge_outlined),
               title:const Text('Display name'),subtitle:Text(displayName),
