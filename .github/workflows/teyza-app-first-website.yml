@@ -23,6 +23,11 @@ jobs:
         run: python3 scripts/audit_teyza_ads_operator_source.py
       - name: Regression checks for independently hosted Ads Paystack website
         run: node --test tools/app-first-release/ads-web-billing.test.cjs
+      - name: Verify operator-approved scoped payment portal publisher
+        run: |
+          node --check tools/app-first-release/publish-payment-portals-only.cjs
+          node --test tools/app-first-release/publish-payment-portals-only.test.cjs
+          node tools/app-first-release/publish-payment-portals-only.cjs --check
       - name: Test trusted ad-review lifecycle and opt-in WhatsApp event notifications
         run: node --test services/teyza-mobile-v39/ads-lifecycle-notifications.test.js
       - run: node --test tools/app-first-release/hosting.test.cjs tools/app-first-release/store-links.test.cjs tools/app-first-release/premium-site.test.cjs tools/app-first-release/pay-site-patch.test.cjs tools/app-first-release/seller-web-billing.test.cjs
