@@ -52,20 +52,20 @@ function response(){
   out.end=()=>out;
   return out;
 }
-function request({origin='https://teyza.co.za',method='POST',route='/start',body={phone:'+15555550123'},appCheck='app-check-token-valid-fixture-value',ip='192.0.2.3'}={}){
-  const headers={'origin':origin,'content-type':'application/json','x-firebase-appcheck':appCheck};
+function request({origin='https://teyza.co.za',method='POST',route='/start',body={phone:'+15555550123'},appCheck='app-check-token-valid-fixture-value',ip='192.0.2.3',authToken=''}={}){
+  const headers={'origin':origin,'content-type':'application/json','x-firebase-appcheck':appCheck,'authorization':authToken};
   return {method,path:route,body,socket:{remoteAddress:ip},
     get:key=>headers[key.toLowerCase()]};
 }
 test('OTP endpoints remain HTTP 404 unless explicitly enabled',async()=>{
-  const handler=createWhatsAppOtpHttp({engine:{begin:async()=>({challengeId:'a'.repeat(48),expiresInSeconds:300}),
+  const handler=createWhatsAppOtpHttp({engine:{setConsent:async()=>({enabled:true}),begin:async()=>({challengeId:'a'.repeat(48),expiresInSeconds:300}),
     verify:async()=>({uid:'seller-1',customToken:'synthetic-custom-token'})},
     verifyAppCheck:async()=>{},enabled:()=>false});
   const res=response();await handler.handle(request(),res);
   assert.equal(res.statusCode,404);
 });
 test('OTP API requires Firebase App Check and an approved origin',async()=>{
-  const handler=createWhatsAppOtpHttp({engine:{begin:async()=>({challengeId:'a'.repeat(48),expiresInSeconds:300}),
+  const handler=createWhatsAppOtpHttp({engine:{setConsent:async()=>({enabled:true}),begin:async()=>({challengeId:'a'.repeat(48),expiresInSeconds:300}),
     verify:async()=>({uid:'seller-1',customToken:'synthetic-custom-token'})},
     verifyAppCheck:async token=>{if(!token.startsWith('app-check-'))throw Error('invalid');},
     enabled:()=>true});
@@ -80,7 +80,7 @@ test('OTP API requires Firebase App Check and an approved origin',async()=>{
 });
 test('OTP verification returns only an existing-UID Firebase custom token',async()=>{
   let call=0;
-  const handler=createWhatsAppOtpHttp({engine:{
+  const handler=createWhatsAppOtpHttp({engine:{setConsent:async()=>({enabled:true}),
     begin:async()=>{throw Error('not expected');},
     verify:async details=>{call++;assert.equal(details.code,'123456');
       return {uid:'seller-existing-01',customToken:'firebase-issued-token'};} },
@@ -91,11 +91,29 @@ test('OTP verification returns only an existing-UID Firebase custom token',async
   assert.deepEqual(res.body,{uid:'seller-existing-01',customToken:'firebase-issued-token'});
 });
 test('OTP API refuses unknown JSON keys, paths and methods without exposing account details',async()=>{
-  const handler=createWhatsAppOtpHttp({engine:{begin:async()=>({}),verify:async()=>({})},
+  const handler=createWhatsAppOtpHttp({engine:{setConsent:async()=>({enabled:true}),begin:async()=>({}),verify:async()=>({})},
     verifyAppCheck:async()=>{},enabled:()=>true});
   for(const req of [request({route:'/surprise'}),request({body:{phone:'+15555550123',uid:'hijack'}}),
     request({method:'GET'})]){
     const res=response();await handler.handle(req,res);
     assert([400,404,405].includes(res.statusCode));
   }
+});
+
+test('login OTP consent endpoint requires a Firebase ID token and explicit choice',async()=>{
+ let called=0;
+ const handler=createWhatsAppOtpHttp({enabled:()=>true,verifyAppCheck:async()=>{},
+   engine:{
+     begin:async()=>{throw Error('unexpected');},
+     verify:async()=>{throw Error('unexpected');},
+     setConsent:async details=>{called++;assert.equal(details.agree,true);
+       assert.equal(details.idToken,'synthetic-existing-user-session-token');return {enabled:true};}
+   }});
+ const noAuth=response();
+ await handler.handle(request({route:'/consent',body:{agree:true}}),noAuth);
+ assert.equal(noAuth.statusCode,401);
+ const ok=response();
+ await handler.handle(request({route:'/consent',body:{agree:true},
+   authToken:'Bearer synthetic-existing-user-session-token'}),ok);
+ assert.equal(ok.statusCode,200);assert.deepEqual(ok.body,{enabled:true});assert.equal(called,1);
 });
