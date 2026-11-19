@@ -230,12 +230,14 @@ void main(){
     }
     expect(find.text('Durban Hair Studio'),findsOneWidget);
     final salonCard=find.byKey(const ValueKey('nearby-local-salon'));
-    expect(find.descendant(of:salonCard,matching:find.text('More')),findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-businesses-grid')),findsOneWidget);
+    expect(find.descendant(of:salonCard,
+      matching:find.text('Durban Hair Studio')),findsOneWidget);
     expect(find.text('Buy here'),findsNothing);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('Public shop offers Buy here without an ordering error',(tester)async{
+  testWidgets('Public spaza tile opens shop details without an ordering error',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final directory=OnlineShop.fromJson({
@@ -249,11 +251,10 @@ void main(){
     await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
     expect(find.text('Ordering not available'),findsNothing);
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
-    final buy=find.descendant(of:card,matching:find.text('Buy here'));
-    await revealShopperHome(tester,buy);
-    await tester.tap(buy);await tester.pumpAndSettle();
+    await revealShopperHome(tester,card);
+    await tester.tap(card);await tester.pumpAndSettle();
     expect(find.text('Browse all shops'),findsOneWidget,
-      reason:'Buy here opens shop details without inventing products or checkout');
+      reason:'The spaza tile opens shop details without inventing products or checkout');
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -267,7 +268,7 @@ void main(){
     expect(teyzaCategoryHeading('variety'),'Local Businesses');
   });
 
-  testWidgets('Local business More opens details, Chat, Call and correct back list',(tester)async{
+  testWidgets('Local business tile opens details, Chat, Call and correct back list',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final launches=<Uri>[];
@@ -292,7 +293,7 @@ void main(){
     }
     expect(salonCard,findsOneWidget);
     await tester.ensureVisible(salonCard);await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of:salonCard,matching:find.text('More')));
+    await tester.tap(salonCard);
     await tester.pumpAndSettle();
     expect(find.text('Browse local businesses'),findsOneWidget);
     expect(find.text('Local Business details'),findsOneWidget);
