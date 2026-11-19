@@ -43,7 +43,7 @@ class FakeDb{
  }
 }
 function fixture(options={}){
- let ms=options.now??1000000,deliver=[],issued=[],disabled=false;
+ let ms=options.now??1000000,deliver=[],issued=[],disabled=false,nextId=0;
  const db=new FakeDb(),auth={
   getUser:async uid=>{if(uid!==UID)throw Error('User missing');return {uid,disabled};},
   createCustomToken:async uid=>{issued.push(uid);return 'firebase-token-'+uid;}
@@ -51,7 +51,7 @@ function fixture(options={}){
  const make=()=>createWhatsAppLoginPilot({
   db,auth,enabled:()=>options.enabled!==false,pilotSellerUid:()=>options.pilot??UID,
   serverSecret:'test-only-secret-not-used-in-production-000000000000',
-  now:()=>ms,randomCode:()=>'123456',randomId:()=>'a'.repeat(48),
+  now:()=>ms,randomCode:()=>'123456',randomId:()=>options.uniqueIds?String(++nextId).padStart(48,'a'):'a'.repeat(48),
   sendAuthenticationTemplate:async request=>{
    deliver.push({...request});if(options.deliveryFails)throw Error('Provider outcome unknown');
    return {accepted:true};
@@ -76,7 +76,7 @@ test('an opted-in approved seller receives a 5-minute challenge and the SAME UID
  assert(!JSON.stringify(stored).includes('123456'),'Challenge must never store OTP');
  const verified=await verify(f,challenge.challengeId);
  assert.equal(verified.uid,UID);assert.equal(verified.customToken,'firebase-token-'+UID);
- assert.deepEqual(f.issued,[UID]);assert.equal(stored.state,'pending','Copy must be immutable');
+ assert.deepEqual(f.issued,[UID]);assert.equal(stored.state,'sent','Copy must be immutable after OTP verification');
  assert.equal(f.db.rows.get('teyzaWhatsAppLoginChallenges/'+challenge.challengeId).state,'used');
 });
 test('a used OTP cannot be replayed or mint a second token',async()=>{
@@ -128,7 +128,7 @@ test('revoke account approval or change registered phone after sending OTP',asyn
  await reject(verify(f,challengeId));assert.equal(f.issued.length,0);
 });
 test('seller phone or IP rate limits prevent continued challenge guessing',async()=>{
- const f=fixture();const engine=f.make();
+ const f=fixture({uniqueIds:true});const engine=f.make();
  // Distinct transaction ids are supplied per attempt.
  await engine.begin({phone:PHONE,ip:'198.51.100.42'});
  for(let i=0;i<3;i++){
