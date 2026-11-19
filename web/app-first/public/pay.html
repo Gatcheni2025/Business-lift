@@ -49,21 +49,68 @@
 .pay-foot{max-width:1050px;margin:0 auto 42px;text-align:center;padding:0 22px;color:#64766d;font-size:13px}
 [hidden]{display:none!important}
 @media(max-width:780px){.pay-wrap{grid-template-columns:1fr;margin-top:-22px}.pay-hero{padding:42px 24px 57px}.pay-account dl{grid-template-columns:100px 1fr}.pay-grid{grid-template-columns:1fr}}
+
+/* Premium responsive seller sign-in and benefit-led checkout guidance.
+   UI-only: checkout and account authorisation remain server verified. */
+.pay-site{background:linear-gradient(180deg,#eef9f8 0,#f5f8f3 52%,#f7faf8 100%)}
+.pay-hero{position:relative;overflow:hidden;background:radial-gradient(circle at 83% 14%,rgba(182,240,113,.22),transparent 31%),linear-gradient(125deg,#07343d 0%,#06574f 55%,#0c7866 100%)}
+.pay-hero:after{content:"";position:absolute;right:-8rem;bottom:-15rem;width:34rem;height:34rem;border:1px solid rgba(255,255,255,.14);border-radius:50%;pointer-events:none}
+.pay-hero-inner{position:relative;z-index:1}.pay-hero h1{max-width:800px}
+.pay-hero .pay-hero-tagline{display:inline-flex;gap:8px;align-items:center;background:#ffffff1c;border:1px solid #ffffff43;color:white;font-size:13px;font-weight:700;border-radius:99px;padding:8px 14px;margin-top:9px}
+.pay-panel,.pay-info{box-shadow:0 22px 56px rgba(0,59,53,.085)}
+.pay-auth-eyebrow{display:inline-flex;color:#076f59;text-transform:uppercase;letter-spacing:.11em;font-size:12px;font-weight:850;margin-bottom:8px}
+.pay-provider-stack{display:grid;gap:11px;margin:20px 0 12px}
+.pay-site .pay-provider{width:100%;min-height:55px;padding:14px 18px;gap:12px;justify-content:center;border-radius:14px;font-size:16px;line-height:1.2;font-weight:760;box-shadow:0 5px 15px rgba(15,40,41,.08);transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.pay-site .pay-provider:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 18px rgba(14,48,51,.15)}
+.pay-site .pay-provider-google{background:#fff;border:1.5px solid #bdd5cb;color:#143c40}
+.pay-site .pay-provider-facebook{background:#1667d9;border:1.5px solid #1667d9;color:white}
+.pay-site .pay-provider-apple{background:#16212c;border:1.5px solid #16212c;color:white}
+.pay-provider-symbol{display:inline-grid;place-items:center;width:22px;height:22px;flex:none;font-size:18px;font-weight:900;line-height:1;letter-spacing:-.04em}
+.pay-provider-google .pay-provider-symbol{color:#4285f4;text-shadow:-1.5px 0 #ea4335,0 1.5px #34a853,1.5px 0 #fbbc05}
+.pay-provider-facebook .pay-provider-symbol{font-family:Arial,sans-serif;font-size:22px}
+.pay-provider-help{font-size:13px;margin:12px 0;line-height:1.55;color:#4a6f68}
+.pay-provider-help a,.pay-benefit-card a{color:#075e56}
+.pay-whatsapp-guidance{display:flex;align-items:flex-start;gap:12px;margin-top:18px;padding:15px 16px;background:#f1faf4;border:1px solid #bae7c9;border-radius:15px}
+.pay-whatsapp-icon{display:inline-grid;place-items:center;flex:none;width:35px;height:35px;background:#17a565;color:white;border-radius:12px;font-size:20px;font-weight:900}
+.pay-whatsapp-guidance strong{display:block;color:#164e39}
+.pay-whatsapp-guidance p{font-size:13px;line-height:1.5;margin:3px 0 0}
+.pay-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:18px 0 9px}
+.pay-step{background:#eef8f2;border:1px solid #d4eadb;border-radius:12px;padding:11px 10px;line-height:1.4;color:#265349;font-size:12px;font-weight:650}
+.pay-step b{display:block;color:#075e56;font-size:15px;margin-bottom:2px}
+.pay-benefits{display:grid;gap:11px;margin:18px 0}
+.pay-benefit-card{display:flex;align-items:flex-start;gap:12px;background:#f4faf6;border:1px solid #e0efe4;border-radius:14px;padding:13px}
+.pay-benefit-icon{width:36px;height:36px;flex:none;display:grid;place-items:center;font-size:17px;background:#dbf5de;color:#094b3f;border-radius:11px}
+.pay-benefit-card strong{display:block;font-size:14px;color:#143d39}
+.pay-benefit-card p{margin:3px 0 0;font-size:13px;line-height:1.45}
+.pay-price-highlight{display:flex;justify-content:space-between;align-items:center;gap:16px;background:#eaf6ec;border-radius:15px;padding:15px;margin:16px 0}
+.pay-price-highlight b{font-size:27px;color:#075448;white-space:nowrap}
+.pay-price-highlight span{display:block;color:#526c64;font-size:12px}
+.pay-panel h2{line-height:1.2}
+@media(max-width:780px){.pay-head{padding:14px 18px}.pay-head nav{gap:12px;font-size:12px}.pay-hero{padding:40px 19px 60px}.pay-wrap{padding:0 13px;gap:15px}.pay-panel,.pay-info{border-radius:18px}.pay-steps{grid-template-columns:1fr 1fr 1fr}.pay-price-highlight{align-items:flex-start}}
+@media(max-width:390px){.pay-steps{grid-template-columns:1fr}.pay-head nav{gap:9px}.pay-provider-stack{gap:9px}}
+@media(prefers-reduced-motion:reduce){.pay-site .pay-provider{transition:none}.pay-site .pay-provider:hover:not(:disabled){transform:none}}
 </style>
 </head>
 <body class="pay-site">
 <header class="pay-top"><div class="pay-head"><a class="pay-brand" href="/" aria-label="Teyza home"><img src="/assets/app/wordmark-light.svg" alt="Teyza" width="146" height="44"></a><nav aria-label="Website navigation"><a href="/">Home</a><a href="/for-shop-owners.html">For businesses</a><a href="/support.html">Support</a></nav></div></header>
-<section class="pay-hero"><div class="pay-hero-inner"><span class="pay-label">Teyza secure business account</span><h1>Membership payments.<br>Verified to your shop.</h1><p>Sign in to the exact business account you own. Review your subscription before any payment. Your Teyza seller login and verified shop registration determine where access is granted.</p></div></section>
+<section class="pay-hero"><div class="pay-hero-inner"><span class="pay-label">Teyza secure business account</span><h1>Start selling with confidence.</h1><p>One business account. More ways to reach your community. Sign in, review your exact first-month amount, and activate Teyza selling tools after secure payment verification.</p><span class="pay-hero-tagline">Free to be discovered · R99 per full month to sell</span></div></section>
 <main class="pay-wrap" id="teyza-web-membership">
 <section class="pay-panel" aria-labelledby="pay-title"><h2 id="pay-title">Secure seller sign-in</h2>
 <div id="webLogin">
-<p>Use the same Google, Apple, Facebook or existing email-password sign-in you used for your Teyza seller account. Do not create a second account. The exact Firebase account ID must match your approved shop; a shared contact email cannot authorise payment for someone else's shop.</p>
-<form id="webEmailForm" class="pay-inputs">
-<label>Email address<input id="webEmail" type="email" maxlength="254" autocomplete="username" required></label>
-<label>Password<input id="webPassword" type="password" autocomplete="current-password" required></label>
-<button type="submit">Sign in securely</button>
-</form>
-<div class="pay-actions"><button type="button" class="secondary" id="webGoogle">Continue with Google</button><button type="button" class="secondary" id="webApple">Continue with Apple</button><button type="button" class="secondary" id="webFacebook">Continue with Facebook</button></div>
+<span class="pay-auth-eyebrow">Step 1 · Your business identity</span>
+<p>Continue with <strong>the same sign-in provider and Firebase account</strong> used to register your Spaza Shop, Business or Wholesaler. We will check the account's approval before allowing payment. Never create another account to pay.</p>
+<div class="pay-provider-stack" role="group" aria-label="Choose an existing account sign-in method">
+<button type="button" class="pay-provider pay-provider-google" id="webGoogle"><span class="pay-provider-symbol" aria-hidden="true">G</span> Continue with Google</button>
+<button type="button" class="pay-provider pay-provider-facebook" id="webFacebook"><span class="pay-provider-symbol" aria-hidden="true">f</span> Continue with Facebook</button>
+<button type="button" class="pay-provider pay-provider-apple" id="webApple"><span class="pay-provider-symbol" aria-hidden="true">●</span> Continue with Apple</button>
+</div>
+<p class="pay-provider-help"><strong>New to Teyza?</strong> <a href="/download.html">Create your free business profile in the Teyza app.</a><br>Only have an older email/password login? <a href="/support.html">Contact support to link a secure sign-in method</a> without losing your seller account.</p>
+<div class="pay-whatsapp-guidance" role="note"><span class="pay-whatsapp-icon" aria-hidden="true">W</span><div><strong>WhatsApp sign-in is being prepared</strong><p>WhatsApp messages and the seller welcome menu are not identity verification. Until secure OTP login is approved and linked to your existing Firebase UID, use your current Google, Facebook or Apple sign-in. <a href="/support.html">Get account-access help</a>.</p></div></div>
+<div class="pay-steps" aria-label="Payment steps">
+<div class="pay-step"><b>01 · Sign in</b>Use your registered seller account</div>
+<div class="pay-step"><b>02 · Review</b>Confirm your shop and exact charge</div>
+<div class="pay-step"><b>03 · Activate</b>Pay securely, then reopen the app</div>
+</div>
 </div>
 <div id="webAccount" hidden>
 <div class="pay-account">
@@ -104,7 +151,15 @@
 <div class="pay-divider"></div>
 <p class="pay-note">The Paystack card checkout opens only after a fresh login and verified seller identity. Teyza never takes your card PIN or OTP on this page. A previous Netcash mandate is not Paystack authorisation and will not be charged or migrated.</p>
 </section>
-<aside class="pay-info"><h2>How we protect your payment</h2><ul>
+<aside class="pay-info"><span class="pay-auth-eyebrow">Why become a Teyza seller?</span><h2>More than a shop listing</h2><p>Your verified profile can be discoverable for free. Activate selling when you are ready to take the next step.</p>
+<div class="pay-price-highlight"><div><span>Recurring seller membership</span><strong>R99 per full calendar month</strong><span>First month prorated when eligible, shown before checkout.</span></div><b>R99</b></div>
+<div class="pay-benefits">
+<div class="pay-benefit-card"><span class="pay-benefit-icon" aria-hidden="true">▣</span><div><strong>Sell to people nearby</strong><p>Publish eligible products or business services and manage customer enquiries from your seller dashboard.</p></div></div>
+<div class="pay-benefit-card"><span class="pay-benefit-icon" aria-hidden="true">◎</span><div><strong>Be found by your community</strong><p>Show shoppers your verified business, location and opening information.</p></div></div>
+<div class="pay-benefit-card"><span class="pay-benefit-icon" aria-hidden="true">⇄</span><div><strong>Connect with wholesalers</strong><p>Explore eligible wholesale pricing and stock delivery offers from participating suppliers.</p></div></div>
+<div class="pay-benefit-card"><span class="pay-benefit-icon" aria-hidden="true">↗</span><div><strong>Grow when you are ready</strong><p>Manage orders and discover advertising and business-finance opportunities subject to approval and availability.</p></div></div>
+</div>
+<div class="pay-divider"></div><h2>How we protect your payment</h2><ul>
 <li><strong>Correct business account:</strong> the payment attaches to your signed-in Firebase UID, never a typed email or URL parameter.</li>
 <li><strong>Verified seller:</strong> Teyza checks seller registration, selfie approval, phone OTP and shop setup on the server.</li>
 <li><strong>Secure checkout:</strong> your card details are entered only on Paystack's hosted payment page.</li>
