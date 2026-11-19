@@ -93,6 +93,13 @@ void main(){
   expect(message,contains('Firebase'));
   expect(message,contains('Google Play'));
  });
+ test('Meta OAuth blocked redirect explains Facebook provider setup without exposing token details',(){
+   final message=authMessage(StateError('URL Blocked: redirect URI is not whitelisted in the app Client OAuth Settings'));
+   expect(message,contains('Meta OAuth settings'));
+   expect(message,contains('Firebase authentication redirect'));
+   expect(message,contains('existing email login'));
+   expect(message, isNot(contains('Client OAuth Settings')));
+ });
  test('Google and Apple iPhone configuration errors have actionable messages',(){
   debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
