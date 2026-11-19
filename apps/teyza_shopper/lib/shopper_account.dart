@@ -323,10 +323,33 @@ class _AccountState extends State<ShopperAccountPanel> {
               fontSize:12,color:Color(0xFF737C82))),
         ]
         else if(logged) ...[
-          Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xFF010F1C),borderRadius:BorderRadius.circular(23)),
-            child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Text('Your local shopping, made easy',style:TextStyle(color:Colors.white,fontSize:23,fontWeight:FontWeight.w800)),
-              SizedBox(height:8),Text('Browse shops, message an owner, and choose delivery or collection.',style:TextStyle(color:Color(0xFFCAE9D9),height:1.4))])),
+          Container(key:const ValueKey('teyza-premium-account-dashboard'),
+            padding:const EdgeInsets.all(21),
+            decoration:BoxDecoration(
+              gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
+                colors:[Color(0xFF0A1023),Color(0xFF0D4650)]),
+              borderRadius:BorderRadius.circular(23)),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(children:[
+                Container(width:43,height:43,
+                  decoration:BoxDecoration(color:const Color(0xFF263C48),
+                    borderRadius:BorderRadius.circular(14)),
+                  child:const Icon(Icons.verified_user_rounded,color:Color(0xFF7AE7BC))),
+                const SizedBox(width:12),
+                const Expanded(child:Text('MY TEYZA ACCOUNT',
+                  style:TextStyle(color:Color(0xFF7AE7BC),fontSize:11,
+                    letterSpacing:1.3,fontWeight:FontWeight.w900))),
+                if(widget.session.phoneVerified)
+                  const Tooltip(message:'Verified mobile number',
+                    child:Icon(Icons.verified_rounded,color:Color(0xFF7AE7BC)))
+              ]),
+              const SizedBox(height:14),
+              Text(displayName,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,fontSize:25,fontWeight:FontWeight.w900)),
+              const SizedBox(height:6),
+              const Text('Your neighbourhood shopping, messages, orders and account details in one place.',
+                style:TextStyle(color:Color(0xFFD2E2E4),height:1.45,fontSize:12))
+            ])),
           const SizedBox(height:14),
           Wrap(spacing:8,runSpacing:8,children:[
             if(widget.onBrowse!=null)ActionChip(avatar:const Icon(Icons.storefront_outlined),label:const Text('Browse shops'),onPressed:widget.onBrowse),
@@ -334,7 +357,14 @@ class _AccountState extends State<ShopperAccountPanel> {
             if(widget.onOrders!=null)ActionChip(avatar:const Icon(Icons.receipt_long_outlined),label:const Text('My orders'),onPressed:widget.onOrders),
           ]),
           const SizedBox(height:14),
-          Card(color:Colors.white,child:Column(children:[
+          const Padding(padding:EdgeInsets.fromLTRB(4,10,4,12),
+            child:Text('My details & settings',style:TextStyle(
+              fontSize:21,fontWeight:FontWeight.w900,color:Color(0xFF0B1C2C)))),
+          Container(key:const ValueKey('teyza-premium-account-settings'),
+            decoration:BoxDecoration(color:Colors.white,
+              borderRadius:BorderRadius.circular(19),
+              border:Border.all(color:Color(0xFFE0E8E8))),
+            child:Column(children:[
             ListTile(leading:const Icon(Icons.badge_outlined),
               title:const Text('Display name'),subtitle:Text(displayName),
               trailing:const Icon(Icons.edit_outlined),onTap:widget.onChangeDeliveryAddress),
