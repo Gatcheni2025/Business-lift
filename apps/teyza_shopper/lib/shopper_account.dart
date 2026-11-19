@@ -247,7 +247,12 @@ class _AccountState extends State<ShopperAccountPanel> {
       borderRadius:BorderRadius.circular(22),
       child:InkWell(
         borderRadius:BorderRadius.circular(22),
-        onTap:()=>setState(() {audience=value;registering=false;status=null;}),
+        onTap:()=>setState(() {
+          audience=value;registering=false;showLegacyEmail=false;status=null;
+          widget.session.requestedSellerCategory=switch(value){
+            'owner'=>'spaza','business'=>'retail','wholesale'=>'wholesale',_=>null
+          };
+        }),
         child:Padding(padding:const EdgeInsets.all(18),child:Row(children:[
           Container(width:58,height:58,
             decoration:BoxDecoration(
