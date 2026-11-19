@@ -1937,7 +1937,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       businessFilters(),
       sellerStories(),
       const SizedBox(height:10),
-      section('Spaza shops in your area',
+      section('Spaza Shops',
         subtitle:area==null?'Choose your location for neighbourhood stores':
           'Neighbourhood stores around '+locationName,
         action:TextButton(onPressed:()=>openMarketplaceDestination('spaza'),
