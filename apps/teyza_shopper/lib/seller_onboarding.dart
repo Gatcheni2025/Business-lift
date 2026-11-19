@@ -182,10 +182,15 @@ class _OnboardingState extends State<SellerOnboardingPage> {
             ],
             if(identityDone&&document==null)const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text('Document received. Add a new photo only if you need to replace it.',style:TextStyle(color:Color(0xFF168657)))),
             if(document!=null)Padding(padding:const EdgeInsets.symmetric(vertical:12),
-              child:AnimatedScale(key:const ValueKey('teyza-document-upload-preview'),
-                scale:busy?0.92:1,curve:Curves.easeOutBack,
-                duration:const Duration(milliseconds:400),
-                child:ClipRRect(borderRadius:BorderRadius.circular(16),
+              child:AnimatedSwitcher(
+                duration:const Duration(milliseconds:450),
+                switchInCurve:Curves.easeOutBack,
+                transitionBuilder:(child,animation)=>ScaleTransition(
+                  scale:Tween<double>(begin:0.85,end:1).animate(animation),
+                  child:FadeTransition(opacity:animation,child:child)),
+                child:ClipRRect(
+                  key:ValueKey<int>(document!.length),
+                  borderRadius:BorderRadius.circular(16),
                   child:Image.memory(document!,height:200,fit:BoxFit.contain)))),
             if(document!=null)const Padding(padding:EdgeInsets.only(bottom:8),
               child:Row(children:[Icon(Icons.check_circle,color:Color(0xFF168657)),
