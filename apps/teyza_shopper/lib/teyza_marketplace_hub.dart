@@ -100,7 +100,7 @@ class TeyzaHomeProductCategories extends StatelessWidget {
       return Wrap(spacing:4,runSpacing:12,children:[
         for(final item in categories)
           SizedBox(width:width,child:Semantics(button:true,label:'Shop ${item.$1} products',
-            child:InkWell(key:ValueKey('teyza-category-${item.$1}'),
+            child:InkWell(key:ValueKey('product-category-${item.$1}'),
               borderRadius:BorderRadius.circular(15),
               onTap:()=>onSelect(item.$1),
               child:Padding(padding:const EdgeInsets.symmetric(vertical:5,horizontal:2),
