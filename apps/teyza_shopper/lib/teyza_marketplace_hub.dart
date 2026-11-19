@@ -30,7 +30,7 @@ class TeyzaMarketplaceHub extends StatelessWidget {
             const SizedBox(height:4),
             Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
               style:const TextStyle(color:Color(0xFFC8D2D9),fontSize:11,height:1.25))
-          ]))))));
+          ])))));
   }
 
   @override
