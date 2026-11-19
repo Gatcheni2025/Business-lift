@@ -11,7 +11,7 @@
 const SAFE_ORIGINS=new Set(['https://teyza.co.za','https://www.teyza.co.za']);
 function createWhatsAppOtpHttp({engine,verifyAppCheck,enabled=()=>false,
    origins=SAFE_ORIGINS,ipFromRequest=req=>req.socket?.remoteAddress}={}){
-  if(!engine||typeof engine.begin!=='function'||typeof engine.verify!=='function'||
+  if(!engine||typeof engine.begin!=='function'||typeof engine.verify!=='function'||typeof engine.setConsent!=='function'||
     typeof verifyAppCheck!=='function'||typeof enabled!=='function')
     throw Error('Incomplete OTP endpoint dependencies');
   async function handle(req,res){
@@ -34,7 +34,7 @@ function createWhatsAppOtpHttp({engine,verifyAppCheck,enabled=()=>false,
     }
     if(req.method!=='POST'){res.set('Allow','POST, OPTIONS');res.status(405).json({error:'Method not allowed'});return;}
     const route=(req.path||'').replace(/\/$/,'');
-    if(route!=='/start'&&route!=='/verify'){res.status(404).json({error:'Not found'});return;}
+    if(route!=='/start'&&route!=='/verify'&&route!=='/consent'){res.status(404).json({error:'Not found'});return;}
     const type=(req.get('Content-Type')||'').split(';')[0].trim().toLowerCase();
     const json=req.body;
     const length=Number(req.get('Content-Length')||0);
@@ -50,6 +50,17 @@ function createWhatsAppOtpHttp({engine,verifyAppCheck,enabled=()=>false,
     catch{res.status(401).json({error:'App verification required'});return;}
     const keyset=Object.keys(json).sort().join(',');
     try{
+      if(route==='/consent'){
+        if(keyset!=='agree'||typeof json.agree!=='boolean'){
+          res.status(400).json({error:'Invalid request'});return;
+        }
+        const bearer=req.get('Authorization')||'';
+        if(!/^Bearer [^ ]{20,4096}$/.test(bearer)){
+          res.status(401).json({error:'Sign in required'});return;
+        }
+        const state=await engine.setConsent({idToken:bearer.slice(7),agree:json.agree});
+        res.status(200).json({enabled:state.enabled===true});return;
+      }
       if(route==='/start'){
         if(keyset!=='phone'){res.status(400).json({error:'Invalid request'});return;}
         const remote=ipFromRequest(req);
