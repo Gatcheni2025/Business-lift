@@ -30,14 +30,17 @@ function createWhatsAppLoginPilot({
     typeof serverSecret!=='string'||serverSecret.length<32)throw Error('Missing WhatsApp login security dependencies');
  const digest=(scope,...parts)=>crypto.createHmac('sha256',serverSecret)
   .update(JSON.stringify([scope,...parts])).digest('hex');
- const accountReady=(seller,uid,phone,pref)=>{
-  const data=seller?.data?.();
+ const accountReady=(seller,uid,phone,pref,verification)=>{
+  const data=seller?.data?.(),v=verification?.data?.();
   return seller?.exists===true&&data?.uid===uid&&data?.phone===phone&&
-    data?.approvalStatus==='approved'&&data?.identityVerified===true&&
-    data?.phoneVerified===true&&data?.setupComplete===true&&
+    data?.approvalStatus==='approved'&&data?.deletionPending!==true&&
+    verification?.exists===true&&v?.ownerUid===uid&&v?.status==='approved'&&
     pref?.exists===true&&pref.data()?.ownerUid===uid&&pref.data()?.phone===phone&&
     pref.data()?.loginOtpOptIn===true&&pref.data()?.loginOtpConsentVersion==='whatsapp-login-otp-v1';
  };
+ const authPhoneVerified=(user,phone)=>user?.disabled!==true&&
+   user?.phoneNumber===phone&&Array.isArray(user?.providerData)&&
+   user.providerData.some(p=>p.providerId==='phone'&&p.phoneNumber===phone);
  function active(){return enabled()===true&&/^[A-Za-z0-9_-]{6,128}$/.test(pilotSellerUid());}
  async function consumeLimit(phoneDigest,ipDigest){
   const nowMs=now(),pr=db.doc('teyzaWhatsAppLoginLimits/p_'+phoneDigest),
@@ -68,10 +71,12 @@ function createWhatsAppLoginPilot({
   if(found.docs.length!==1)return fail();
   const seller=found.docs[0],uid=seller.id;
   if(uid!==pilotSellerUid())return fail();
-  const pref=await db.doc('teyzaWhatsAppPreferences/'+uid).get();
-  if(!accountReady(seller,uid,phone,pref))return fail();
-  const firebaseUser=await auth.getUser(uid);
-  if(firebaseUser.disabled===true)return fail();
+  const [pref,verification,firebaseUser]=await Promise.all([
+    db.doc('teyzaWhatsAppPreferences/'+uid).get(),
+    db.doc('teyzaMobileVerification/'+uid).get(),
+    auth.getUser(uid)]);
+  if(!accountReady(seller,uid,phone,pref,verification)||
+     !authPhoneVerified(firebaseUser,phone))return fail();
   const challengeId=randomId(),otp=randomCode();
   if(!challengeValid(challengeId)||!codeValid(otp))throw Error('Invalid secure random generator');
   const created=now(),ref=db.doc('teyzaWhatsAppLoginChallenges/'+challengeId);
@@ -109,11 +114,13 @@ function createWhatsAppLoginPilot({
    if(uid!==pilotSellerUid())return null;
    // Recheck current owner approval, identity and explicit OTP consent.
    const sellerRef=db.doc('teyzaSellerAccounts/'+uid),
-     prefRef=db.doc('teyzaWhatsAppPreferences/'+uid);
-   const [seller,pref]=await Promise.all([tx.get(sellerRef),tx.get(prefRef)]);
+     prefRef=db.doc('teyzaWhatsAppPreferences/'+uid),
+     verificationRef=db.doc('teyzaMobileVerification/'+uid);
+   const [seller,pref,verification]=await Promise.all([
+     tx.get(sellerRef),tx.get(prefRef),tx.get(verificationRef)]);
    const linkedPhone=seller.data()?.phone;
    const authorized=phoneValid(linkedPhone)&&same(d.phoneDigest,digest('phone',linkedPhone))&&
-     accountReady(seller,uid,linkedPhone,pref);
+     accountReady(seller,uid,linkedPhone,pref,verification);
    const matched=same(d.codeDigest,digest('otp',challengeId,code));
    const attempts=d.attempts+1;
    if(!authorized||!matched){
@@ -121,13 +128,13 @@ function createWhatsAppLoginPilot({
     return null;
    }
    tx.update(ref,{state:'used',attempts,usedAt:at,codeDigest:''});
-   return {uid};
+   return {uid,phone:linkedPhone};
   });
   if(!answer)return fail();
   // Tokens are created only after one-use transaction commits. A disabled or
   // deleted Firebase user cannot receive a new custom token.
   const firebaseUser=await auth.getUser(answer.uid);
-  if(firebaseUser.disabled===true)return fail();
+  if(!authPhoneVerified(firebaseUser,answer.phone))return fail();
   const token=await auth.createCustomToken(answer.uid,{teyzaWhatsAppOtp:true});
   return {customToken:token,uid:answer.uid};
  }
