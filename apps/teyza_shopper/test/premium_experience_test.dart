@@ -179,12 +179,16 @@ void main(){
     await capture('essentials');
     // After scrolling down to Bread, the lazily-built See all control is
     // above the viewport. Scroll home to the top before opening nearby shops.
-    for(var attempt=0;attempt<8&&find.text('See all').evaluate().isEmpty;attempt++){
+    for(var attempt=0;attempt<8&&find.text('Spaza Shops').evaluate().isEmpty;attempt++){
       await tester.drag(find.byType(ListView).first,const Offset(0,600));
       await tester.pumpAndSettle();
     }
-    expect(find.text('See all'),findsOneWidget);
-    await tester.tap(find.text('See all'));await tester.pumpAndSettle();
+    final spazaHeader=find.ancestor(of:find.text('Spaza Shops'),
+      matching:find.byType(Row)).first;
+    final spazaSeeAll=find.descendant(of:spazaHeader,matching:find.text('See all'));
+    expect(spazaSeeAll,findsOneWidget);
+    await tester.ensureVisible(spazaSeeAll);
+    await tester.tap(spazaSeeAll);await tester.pumpAndSettle();
     expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
     await capture('shops');
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
@@ -326,7 +330,14 @@ void main(){
     await tester.pumpAndSettle();
     await tester.tap(find.text('Browse local businesses'));
     await tester.pumpAndSettle();
-    expect(find.text('Local Businesses'),findsWidgets);
+    // The new Back action returns to the same home shelf instead of
+    // automatically switching into an unrelated merchant category.
+    final returnHome=find.byKey(const PageStorageKey<String>('shopper-home'));
+    for(var i=0;i<15&&find.text('Businesses nearby').evaluate().isEmpty;i++){
+      await tester.drag(returnHome,const Offset(0,-160));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Businesses nearby'),findsOneWidget);
     expect(find.text('Browse all shops'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
