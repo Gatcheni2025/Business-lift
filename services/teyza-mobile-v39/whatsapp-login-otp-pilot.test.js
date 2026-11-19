@@ -46,6 +46,7 @@ function fixture(options={}){
  let ms=options.now??1000000,deliver=[],issued=[],disabled=false,nextId=0;
  const db=new FakeDb(),auth={
   getUser:async uid=>{if(uid!==UID)throw Error('User missing');return {uid,disabled,phoneNumber:PHONE,providerData:[{providerId:'phone',phoneNumber:PHONE}]};},
+  verifyIdToken:async token=>{if(token!=='synthetic-id-token-for-existing-account')throw Error('Invalid token');return {uid:UID};},
   createCustomToken:async uid=>{issued.push(uid);return 'firebase-token-'+uid;}
  };
  const make=()=>createWhatsAppLoginPilot({
@@ -145,4 +146,19 @@ test('parallel verification can consume a challenge only once',async()=>{
  const responses=await Promise.allSettled([verify(f,challengeId),verify(f,challengeId)]);
  assert.equal(responses.filter(r=>r.status==='fulfilled').length,1);
  assert.equal(f.issued.length,1);
+});
+
+test('separate OTP consent requires existing signed-in seller and supports revocation',async()=>{
+ const f=fixture();
+ const pref=f.db.rows.get('teyzaWhatsAppPreferences/'+UID);
+ pref.loginOtpOptIn=false;
+ const engine=f.make();
+ await assert.rejects(engine.setConsent({idToken:'bad',agree:true}));
+ assert.equal(pref.loginOtpOptIn,false);
+ const result=await engine.setConsent({idToken:'synthetic-id-token-for-existing-account',agree:true});
+ assert.deepEqual(result,{enabled:true});
+ assert.equal(f.db.rows.get('teyzaWhatsAppPreferences/'+UID).loginOtpOptIn,true);
+ const revoke=await engine.setConsent({idToken:'synthetic-id-token-for-existing-account',agree:false});
+ assert.deepEqual(revoke,{enabled:false});
+ await reject(start(f));
 });
