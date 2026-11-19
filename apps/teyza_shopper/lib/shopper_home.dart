@@ -1652,7 +1652,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<NearbyListing> get homeSpazaListings {
     final sellers=nearbyReal.where((s)=>s.shopCategory=='spaza').toList();
     final places=discoveryType=='spaza'
-      ?displayedOnline.where((s)=>teyzaMatchesShopCategory(s,'spaza')).toList()
+      ?displayedOnline.where((s)=>s.shopCategory=='spaza'&&
+          (teyzaMatchesShopCategory(s,'spaza')||
+           (s.origin=='openstreetmap'&&s.categorizationVerified&&
+            !teyzaIsLargeRetailer(s.name)))).toList()
       :<OnlineShop>[];
     return mergeNearbyListings(sellers,places,area:area);
   }
@@ -1833,7 +1836,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget sellerStories(){
     final sellers=nearbySellerEntries;
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      section('Nearby sellers',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
+      section('Nearby shops',subtitle:'Green: Teyza verified · yellow: not Teyza verified',
         action:sellers.isEmpty?null:TextButton(key:const ValueKey('all-nearby-sellers'),
           onPressed:()=>setState(()=>showAllSellers=true),child:const Text('View all'))),
       if(sellers.isEmpty)
@@ -1931,10 +1934,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           onTap:promptDeliveryProfile)),
       if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
         child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
-      TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
-      const SizedBox(height:12),
       businessFilters(),
       sellerStories(),
+      const SizedBox(height:10),
+      TeyzaMarketplaceHub(onDestination:openMarketplaceDestination),
       const SizedBox(height:16),
       if(_eligibleHomeAds.isNotEmpty)
         sponsoredGroceryHero(_eligibleHomeAds[_sponsoredIndex%_eligibleHomeAds.length],
@@ -1947,7 +1950,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         fontWeight:FontWeight.w800,color:ink)),
       const SizedBox(height:9),
       TeyzaHomeProductCategories(onSelect:browseProductCategory),
-      section('Nearby shops',
+      section('Spaza shops in your area',
         subtitle:area==null?'Choose your location for neighbourhood stores':
           'Neighbourhood stores around '+locationName,
         action:TextButton(onPressed:()=>openMarketplaceDestination('spaza'),
