@@ -2058,7 +2058,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         const SizedBox(height:104,child:Center(child:CircularProgressIndicator()))
       else merchantCategoryGrid('spaza',const <NearbyListing>[]),
       section('Businesses nearby',
-        subtitle:'Salons, repair services, furniture, trades and more — separate from Spaza Shops',
+        subtitle:'Local Businesses',
         action:TextButton(onPressed:()=>openMarketplaceDestination('businesses'),
           child:const Text('See all'))),
       if(nearbyOtherBusinesses.isNotEmpty)
