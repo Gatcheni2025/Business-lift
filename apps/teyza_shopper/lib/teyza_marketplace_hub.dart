@@ -60,7 +60,7 @@ class TeyzaMarketplaceHub extends StatelessWidget {
         return Wrap(spacing:10,runSpacing:10,children:[
           SizedBox(width:width,child:destination('products','Products','Groceries and essentials',
             Icons.shopping_bag_rounded,accent:const Color(0xFFFFCE79))),
-          SizedBox(width:width,child:destination('spaza','Spaza Shops','Local neighbourhood stores',
+          SizedBox(width:width,child:destination('spaza','Find local shops','Spaza shops in your area',
             Icons.storefront_rounded,accent:mint)),
           SizedBox(width:width,child:destination('businesses','Businesses','Services and specialists',
             Icons.business_center_rounded,accent:const Color(0xFF89B9FF))),
