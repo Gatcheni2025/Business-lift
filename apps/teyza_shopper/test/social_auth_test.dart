@@ -40,10 +40,16 @@ void main(){
   await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
   await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
   expect(session.googleCalls,1);
+  final legacy=find.text('Already registered with email?');
+  await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
   await t.enterText(find.byType(TextFormField).at(1),'password123');
   await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
   expect(session.userId,'email-user');
+  // The new social card is taller; after the legacy login button is tapped,
+  // the list can remain scrolled down even though the account is authenticated.
+  await t.drag(find.byType(ListView).first,const Offset(0,1200));
+  await t.pumpAndSettle();
   expect(find.text('My Teyza account'),findsOneWidget);
   expect(find.textContaining('Google sign-in configuration mismatch'),findsNothing);
   // The success status may be below a lazily-built ListView viewport.
@@ -59,19 +65,20 @@ void main(){
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
   await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));
   await t.pumpAndSettle();
-  final signup=owner?find.text('New shop owner? Register your shop'):
-    find.text('New to Teyza? Register with Google, Facebook or Apple');
+  final signup=find.text('New to Teyza? Get started for free');
   await t.ensureVisible(signup);await t.pumpAndSettle();
   await t.tap(signup);await t.pumpAndSettle();
-  expect(find.text('Join Teyza'),findsOneWidget);
+  expect(find.text('New to Teyza'),findsOneWidget);
   expect(find.byType(TextFormField),findsNothing);
   expect(find.text('Continue with Google'),findsOneWidget);
   expect(find.text('Continue with Facebook'),findsOneWidget);
   expect(find.text('Create shopper account'),findsNothing);
   expect(find.text('Create shop owner account'),findsNothing);
-  final login=find.text('Already registered? Sign in with email');
+  final login=find.text('Already on Teyza? Sign in');
   await t.ensureVisible(login);await t.pumpAndSettle();
   await t.tap(login);await t.pumpAndSettle();
+  final legacy=find.text('Already registered with email?');
+  await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   expect(find.byType(TextFormField),findsNWidgets(2));
   expect(find.text(owner?'Sign in as shop owner':'Sign in as shopper'),findsOneWidget);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();

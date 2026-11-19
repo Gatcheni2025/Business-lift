@@ -31,6 +31,8 @@ class _OnboardingState extends State<SellerOnboardingPage> {
   Uint8List? document;
   Map<String,dynamic> progress={};
   bool loading=false,busy=false,consent=false,changed=false;
+  int setupStep=0;
+  static const setupLabels=['Identity','Owner selfie','Mobile OTP','Shop photo','Shop location'];
   @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(accountChanged);load();}
   void accountChanged(){if(mounted&&uid!=widget.session.userId){document=null;number.clear();company.clear();registration.clear();
     setState((){changed=true;consent=false;progress={};error='Your account changed. Close this page and sign in again.';});}}
@@ -113,13 +115,40 @@ class _OnboardingState extends State<SellerOnboardingPage> {
   Widget card(Widget child)=>Padding(padding:const EdgeInsets.only(bottom:18),child:Material(color:Colors.white,
     shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24),side:const BorderSide(color:Color(0xFFE4EADF))),
     child:Padding(padding:const EdgeInsets.all(20),child:child)));
+  // Celebrate server-confirmed uploads without displaying private selfie bytes.
+  // Progress is loaded from the verified seller setup response, never guessed.
+  Widget uploadSavedBadge(String label,bool completed)=>AnimatedSwitcher(
+    duration:const Duration(milliseconds:420),
+    switchInCurve:Curves.easeOutBack,
+    transitionBuilder:(child,animation)=>FadeTransition(
+      opacity:animation,child:ScaleTransition(
+        scale:Tween<double>(begin:0.92,end:1).animate(animation),child:child)),
+    child:completed
+      ?Container(key:ValueKey('teyza-upload-confirmed-$label'),
+        padding:const EdgeInsets.symmetric(horizontal:13,vertical:12),
+        margin:const EdgeInsets.only(bottom:12),
+        decoration:BoxDecoration(color:const Color(0xFFE5F9EF),
+          border:Border.all(color:const Color(0xFF88D9B5)),
+          borderRadius:BorderRadius.circular(13)),
+        child:Row(children:[
+          const Icon(Icons.check_circle_rounded,color:Color(0xFF13885C)),
+          const SizedBox(width:10),
+          Expanded(child:Text(label,style:const TextStyle(
+            color:Color(0xFF08734F),fontWeight:FontWeight.w800)))
+        ]))
+      :const SizedBox.shrink(key:ValueKey('teyza-upload-awaiting')),
+  );
   Widget heading(String step,String title,bool done)=>Row(children:[Container(width:34,height:34,decoration:BoxDecoration(
     color:done?const Color(0xFFE3F5EB):const Color(0xFFF1F2EA),borderRadius:BorderRadius.circular(12)),
     child:Center(child:done?const Icon(Icons.check,size:19,color:Color(0xFF168657)):Text(step,style:const TextStyle(fontWeight:FontWeight.w800)))),
     const SizedBox(width:12),Expanded(child:Text(title,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:ownerInk)))]);
   @override Widget build(BuildContext context){
     final identityDone=progress['identity'] is Map,selfieDone=progress['selfie'] is Map,phoneDone=progress['phoneVerified']==true;
-    final allDone=identityDone&&selfieDone&&phoneDone;
+    final photoDone=progress['shopFront'] is Map;
+    final locationDone=progress['locationSaved']==true;
+    final completed=[identityDone,selfieDone,phoneDone,photoDone,locationDone];
+    final allDone=completed.every((ready)=>ready);
+    final currentDone=completed[setupStep];
     final selfieInfo=progress['selfie'];
     final correction= selfieInfo is Map ? (selfieInfo['reviewNote']??'').toString().trim() : '';
     final correctionSent= selfieInfo is Map && selfieInfo['complianceRequestedAt']!=null;
@@ -131,9 +160,10 @@ class _OnboardingState extends State<SellerOnboardingPage> {
             const Text('YOUR NEXT CHAPTER',style:TextStyle(color:Color(0xFF9DDFC0),fontSize:11,letterSpacing:1.5)),const SizedBox(height:12),
             Text(widget.shop.name,style:const TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w800)),const SizedBox(height:10),
             const Text('Submit your document, selfie and verified mobile. Teyza reviews your registration before your shop is published.',style:TextStyle(color:Color(0xFFD0E0D7),height:1.5)),
-            const SizedBox(height:18),LinearProgressIndicator(value:[identityDone,selfieDone,phoneDone].where((v)=>v).length/3,
+            const SizedBox(height:18),LinearProgressIndicator(value:completed.where((v)=>v).length/5,
               color:ownerGreen,backgroundColor:const Color(0xFF35433B),borderRadius:BorderRadius.circular(8)),const SizedBox(height:8),
-            Text('${[identityDone,selfieDone,phoneDone].where((v)=>v).length} of 3 complete',style:const TextStyle(color:Colors.white,fontSize:12))])),
+            Text('${completed.where((v)=>v).length} of 5 complete · Step ${setupStep+1} of 5',
+              style:const TextStyle(color:Colors.white,fontSize:12))])),
         const SizedBox(height:20),if(loading)const LinearProgressIndicator(),
         if(error!=null)Padding(padding:const EdgeInsets.only(bottom:18),child:Text(error!,style:const TextStyle(color:Color(0xFF9A3412),height:1.4))),
         if(message!=null)Padding(padding:const EdgeInsets.only(bottom:18),child:Text(message!,style:const TextStyle(color:Color(0xFF168657)))),
@@ -146,7 +176,20 @@ class _OnboardingState extends State<SellerOnboardingPage> {
               style:TextStyle(fontSize:12,color:Color(0xFF704F20)))
           ]))),
         if(!changed)...[
-          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          Semantics(label:'Setup step ${setupStep+1} of 5: ${setupLabels[setupStep]}',
+            child:Row(children:[
+              for(var i=0;i<setupLabels.length;i++)Expanded(child:Container(
+                height:6,margin:const EdgeInsets.symmetric(horizontal:3),
+                decoration:BoxDecoration(
+                  color:completed[i]?const Color(0xFF168657):
+                    i==setupStep?const Color(0xFF3279D5):const Color(0xFFDBE4E0),
+                  borderRadius:BorderRadius.circular(6)))),
+            ])),
+          const SizedBox(height:14),
+          Text(setupLabels[setupStep],key:const ValueKey('teyza-onboarding-step-title'),
+            style:const TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:ownerInk)),
+          const SizedBox(height:12),
+          if(setupStep==0)card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             heading('1',legalType=='company'?'Company registration':'ID or passport',identityDone),const SizedBox(height:14),
             Text(legalType=='company'?'Photograph your company registration certificate. Your registered name and number must be legible.':
               'Photograph the details page of your ID or passport. Keep all corners and text clear. This document stays private.',style:const TextStyle(height:1.5,color:Color(0xFF6C7880))),
@@ -160,8 +203,22 @@ class _OnboardingState extends State<SellerOnboardingPage> {
               TextField(controller:company,maxLength:160,enabled:!busy,decoration:const InputDecoration(labelText:'Registered company name',border:OutlineInputBorder())),const SizedBox(height:10),
               TextField(controller:registration,maxLength:50,enabled:!busy,decoration:const InputDecoration(labelText:'Company registration number',border:OutlineInputBorder()))
             ],
-            if(identityDone&&document==null)const Padding(padding:EdgeInsets.symmetric(vertical:10),child:Text('Document received. Add a new photo only if you need to replace it.',style:TextStyle(color:Color(0xFF168657)))),
-            if(document!=null)Padding(padding:const EdgeInsets.symmetric(vertical:12),child:ClipRRect(borderRadius:BorderRadius.circular(16),child:Image.memory(document!,height:200,fit:BoxFit.contain))),
+            if(identityDone&&document==null)uploadSavedBadge('Private document saved securely',true),
+            if(document!=null)Padding(padding:const EdgeInsets.symmetric(vertical:12),
+              child:AnimatedSwitcher(
+                duration:const Duration(milliseconds:450),
+                switchInCurve:Curves.easeOutBack,
+                transitionBuilder:(child,animation)=>ScaleTransition(
+                  scale:Tween<double>(begin:0.85,end:1).animate(animation),
+                  child:FadeTransition(opacity:animation,child:child)),
+                child:ClipRRect(
+                  key:ValueKey<int>(document!.length),
+                  borderRadius:BorderRadius.circular(16),
+                  child:Image.memory(document!,height:200,fit:BoxFit.contain)))),
+            if(document!=null)const Padding(padding:EdgeInsets.only(bottom:8),
+              child:Row(children:[Icon(Icons.check_circle,color:Color(0xFF168657)),
+                SizedBox(width:8),Text('Image ready — submit to save',
+                  style:TextStyle(color:Color(0xFF168657),fontWeight:FontWeight.w700))])),
             OutlinedButton.icon(onPressed:busy?null:()=>capture(ImageSource.camera),icon:const Icon(Icons.camera_alt_outlined),label:const Text('Photograph document')),
             TextButton.icon(onPressed:busy?null:()=>capture(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('Choose document photo')),
             if(document!=null)...[
@@ -170,27 +227,45 @@ class _OnboardingState extends State<SellerOnboardingPage> {
               FilledButton(onPressed:busy?null:submitDocument,child:Text(busy?'Please wait…':'Submit document'))
             ]
           ])),
-          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('2','Owner selfie',selfieDone),const SizedBox(height:12),
+          if(setupStep==1)card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('2','Owner selfie',selfieDone),const SizedBox(height:12),
             const Text('Use the front camera to take a clear photo of the person responsible for this shop.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),const SizedBox(height:14),
+             uploadSavedBadge('Owner selfie saved privately',selfieDone),
             OutlinedButton.icon(onPressed:busy?null:selfie,icon:const Icon(Icons.face_retouching_natural),label:Text(selfieDone?'View or retake selfie':'Open selfie camera'))])),
-          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('3','Mobile number & OTP',phoneDone),const SizedBox(height:12),
+          if(setupStep==2)card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('3','Mobile number & OTP',phoneDone),const SizedBox(height:12),
             Text(progress['phone']?.toString()??widget.shop.phone,style:const TextStyle(fontSize:18,fontWeight:FontWeight.w700)),const SizedBox(height:8),
             const Text('Confirm that you own this number using the SMS code. Your current account and shop stay together.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),const SizedBox(height:14),
             OutlinedButton.icon(onPressed:busy?null:phone,icon:const Icon(Icons.sms_outlined),label:Text(phoneDone?'Verify mobile again':'Verify mobile number')),
             CheckboxListTile(contentPadding:EdgeInsets.zero,value:progress['whatsappOptedIn']==true,onChanged:busy||loading?null:(v)=>setWhatsApp(v==true),
               title:const Text('Send my approval update on WhatsApp'),subtitle:const Text('Optional. We use the registered mobile number for the approval update and getting-started link.'))])),
-          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-            heading('+','Shop-front photo',progress['shopFront'] is Map),const SizedBox(height:12),
+          if(setupStep==3)card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            heading('4','Shop-front photo',photoDone),const SizedBox(height:12),
             const Text('Help customers recognise your entrance. This photo appears on your published shop listing; your identity documents stay private.',style:TextStyle(height:1.5,color:Color(0xFF6C7880))),
-            const SizedBox(height:12),OutlinedButton.icon(onPressed:busy?null:shopPhoto,icon:const Icon(Icons.storefront_outlined),
+            const SizedBox(height:12),uploadSavedBadge('Shop-front image uploaded',photoDone),
+             OutlinedButton.icon(onPressed:busy?null:shopPhoto,icon:const Icon(Icons.storefront_outlined),
               label:Text(progress['shopFront'] is Map?'View or replace shop photo':'Add shop-front photo'))])),
-          card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('+','Shop map location',progress['locationSaved']==true),
+          if(setupStep==4)card(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[heading('5','Shop map location',locationDone),
             const SizedBox(height:12),const Text('Save your shop pin and suburb so shoppers can find your approved shop in their area.'),
             const SizedBox(height:12),OutlinedButton.icon(onPressed:busy?null:location,icon:const Icon(Icons.location_on_outlined),
               label:Text(progress['locationSaved']==true?'View shop location':'Set shop location'))])),
           if(progress['moderationBlocked']==true)const Padding(padding:EdgeInsets.only(bottom:16),child:Text('An administrator needs to review your registration before selling can resume.',style:TextStyle(color:Color(0xFF9A3412)))),
           if(progress['sellingStatus']=='pending_approval')const Padding(padding:EdgeInsets.only(bottom:12),child:Text('Your setup is complete and awaiting Teyza approval.')),
-          FilledButton.icon(onPressed:busy||loading||!allDone||progress['moderationBlocked']==true?null:complete,icon:const Icon(Icons.storefront_outlined),label:Text(busy?'Please wait…':'Finish setup & submit for review')),
+          Row(children:[
+            if(setupStep>0)Expanded(child:OutlinedButton.icon(
+              key:const ValueKey('teyza-onboarding-back'),
+              onPressed:busy?null:()=>setState(()=>setupStep--),
+              icon:const Icon(Icons.arrow_back),label:const Text('Back'))),
+            if(setupStep>0)const SizedBox(width:12),
+            Expanded(child:FilledButton.icon(
+              key:const ValueKey('teyza-onboarding-next'),
+              onPressed:busy||loading||!currentDone?null:
+                setupStep==4?(allDone&&progress['moderationBlocked']!=true?complete:null):
+                ()=>setState(()=>setupStep++),
+              icon:Icon(setupStep==4?Icons.verified_user_outlined:Icons.arrow_forward),
+              label:Text(busy?'Please wait…':setupStep==4?'Submit for review':'Next'))),
+          ]),
+          if(!currentDone)Padding(padding:const EdgeInsets.only(top:8),child:Text(
+            'Complete ${setupLabels[setupStep].toLowerCase()} before continuing.',
+            style:const TextStyle(color:Color(0xFF925913),fontWeight:FontWeight.w600,fontSize:12))),
           const SizedBox(height:12),const Text('An administrator reviews your documents and selfie first. Once approved, you can activate product access and add products.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFF6C7880),fontSize:12,height:1.5))
         ]
       ])));

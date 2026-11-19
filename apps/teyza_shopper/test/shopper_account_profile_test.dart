@@ -97,15 +97,22 @@ void main(){
    await t.pumpAndSettle();
    await t.tap(find.text('Continue as Shopper'));
    await t.pumpAndSettle();
-   final signup=find.text('New to Teyza? Register with Google, Facebook or Apple');
+   expect(find.byKey(const ValueKey('teyza-social-login-card')),findsOneWidget);
+   expect(find.byKey(const ValueKey('teyza-existing-email-toggle')),findsOneWidget);
+   expect(find.byType(TextFormField),findsNothing,
+     reason:'Legacy email is hidden by default for new shoppers');
+   final signup=find.text('New to Teyza? Get started for free');
    await t.ensureVisible(signup);await t.tap(signup);await t.pumpAndSettle();
-   expect(find.text('Join Teyza'),findsOneWidget);
+   expect(find.text('New to Teyza'),findsOneWidget);
    expect(find.text('Continue with Google'),findsOneWidget);
    expect(find.textContaining('separate email confirmation is not required'),findsOneWidget);
    expect(find.widgetWithText(TextFormField,'Email address'),findsNothing);
    expect(find.byType(TextFormField),findsNothing);
-   final oldLogin=find.text('Already registered? Sign in with email');
+   final oldLogin=find.text('Already on Teyza? Sign in');
    await t.ensureVisible(oldLogin);await t.tap(oldLogin);await t.pumpAndSettle();
+   expect(find.byType(TextFormField),findsNothing);
+   final legacy=find.text('Already registered with email?');
+   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
    expect(find.text('Sign in as shopper'),findsOneWidget);
    // Flutter verifies debug foundation variables before addTearDown runs.

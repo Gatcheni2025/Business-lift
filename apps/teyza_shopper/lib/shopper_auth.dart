@@ -102,6 +102,8 @@ class ShopperSession extends ChangeNotifier {
   bool appleProviderLinked=false;
   bool googleProviderLinked=false;
   bool anonymousShopper=false;
+  // Transient registration preference only: never used to grant seller permissions.
+  String? requestedSellerCategory;
   // Set only after server-confirmed account deletion, never normal logout.
   bool forgetDeviceLocationOnSignOut=false;
   // A UID-bound presentation preference only. Seller permissions still come
@@ -177,7 +179,7 @@ class ShopperSession extends ChangeNotifier {
     await operation;
   }
   Future<void> _clear() async {
-    _sellerWorkspaceUid=null;
+    _sellerWorkspaceUid=null;requestedSellerCategory=null;
     idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;googleProviderLinked=false;googleProviderLinked=false;anonymousShopper=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_anonymous_shopper_uid']){

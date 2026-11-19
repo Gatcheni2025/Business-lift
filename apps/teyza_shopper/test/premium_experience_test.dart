@@ -74,6 +74,8 @@ void main(){
         session:session,onOpenOwner:()=>openedOwner=true,onShopperSignedIn:()=>openedShopper=true))));
       await tester.tap(find.text('Continue as '+role));
       await tester.pumpAndSettle();
+      final legacy=find.text('Already registered with email?');
+      await tester.ensureVisible(legacy);await tester.tap(legacy);await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField).at(0),'shop@example.test');
       await tester.enterText(find.byType(TextFormField).at(1),'password123');
       final button=find.text(role=='Shop Owner'?'Sign in as shop owner':'Sign in as shopper');
