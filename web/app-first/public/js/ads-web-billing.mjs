@@ -214,16 +214,28 @@ async function start(){
    el('ownerConsent').checked=false;el('paymentConsent').checked=false;
    render();if(user)void reload();else notice('Sign in to manage approved Teyza advertising campaigns.');
   });
-  el('emailForm').addEventListener('submit',async event=>{
-   event.preventDefault();try{await sdk.signInWithEmailAndPassword(auth,el('email').value.trim(),el('password').value);}
-   catch(e){notice(e.message||'Sign-in failed.','error');}finally{el('password').value='';}
-  });
   for(const [id,provider] of [['google',()=>new sdk.GoogleAuthProvider()],['apple',()=>new sdk.OAuthProvider('apple.com')],['facebook',()=>new sdk.FacebookAuthProvider()]]){
    el(id).addEventListener('click',async()=>{try{await sdk.signInWithPopup(auth,provider());}catch(e){notice(e.message||'Sign-in failed.','error');}});
   }
   el('logout').addEventListener('click',()=>sdk.signOut(auth).catch(e=>notice(e.message,'error')));
   el('refresh').addEventListener('click',reload);
   el('createAdForm').addEventListener('submit',submitAd);
+  // Preview only the local image chosen by the owner. No file is uploaded
+  // until the existing authenticated advertisement submission is accepted.
+  let localPreviewUrl=null;
+  el('adImage').addEventListener('change',()=>{
+   if(localPreviewUrl){URL.revokeObjectURL(localPreviewUrl);localPreviewUrl=null;}
+   const file=el('adImage').files?.[0],frame=el('adCreativePreview');
+   if(!file){frame.hidden=true;el('adCreativePreviewImage').removeAttribute('src');return;}
+   if(!['image/jpeg','image/png'].includes(file.type)||file.size>2*1024*1024||!file.size){
+    frame.hidden=true;el('adCreativePreviewImage').removeAttribute('src');
+    el('adImage').value='';notice('Please choose a JPEG or PNG image smaller than 2 MB.','warning');return;
+   }
+   localPreviewUrl=URL.createObjectURL(file);
+   el('adCreativePreviewImage').src=localPreviewUrl;
+   el('adCreativePreviewCaption').textContent='Photo selected: '+file.name;
+   frame.hidden=false;
+  });
   el('adRadius').addEventListener('change',updateAdPrice);updateAdPrice();
   el('checkout').addEventListener('click',checkout);
   el('ownerConsent').addEventListener('change',render);el('paymentConsent').addEventListener('change',render);
