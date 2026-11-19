@@ -46,7 +46,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   @override void dispose(){widget.session.removeListener(changed);for(final c in [name,phone,unit,company,number]){c.dispose();}super.dispose();}
   bool get firstStageReady=>name.text.trim().length>=2&&
     phone.text.trim().length>=9&&
-    (legalType!='company'||(company.text.trim().length>=2&&registration.text.trim().length>=2));
+    (legalType!='company'||(company.text.trim().length>=2&&number.text.trim().length>=2));
   void nextStage(){
     if(busy)return;
     if(registrationStep==0){
@@ -62,6 +62,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   }
   Future<void> save() async{
     if(busy||uid!=widget.session.userId||!firstStageReady)return;
+    if(!firstStageReady){setState(()=>error='Complete the business details and registered contact number first.');return;}
     final selected=selectedAddress;if(selected==null){setState(()=>error='Select your full shop address from the suggestions.');return;}
     if(listedOnGoogle==null){
       setState(()=>error='Tell us whether this business is already on Google Maps.');return;
@@ -144,6 +145,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         for(final f in [(name,'Shop name',120,true),(phone,'Contact number',25,true),
           if(legalType=='company')(company,'Registered company name',160,true),if(legalType=='company')(number,'Company registration number',50,true)])Padding(padding:const EdgeInsets.only(bottom:16),
           child:TextFormField(controller:f.$1,maxLength:f.$3,enabled:!busy,keyboardType:f.$1==phone?TextInputType.phone:TextInputType.text,
+            onChanged:(_)=>setState((){consent=false;}),
             decoration:InputDecoration(labelText:f.$2,counterText:'',filled:true,fillColor:Colors.white,
               border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
             validator:(v)=>f.$4&&(v??'').trim().length<(f.$1==phone?9:2)?'Enter ${f.$2.toLowerCase()}':null)),
@@ -215,7 +217,12 @@ class _RegistrationState extends State<SellerRegistrationPage>{
           if(registrationStep>0)const SizedBox(width:10),
           Expanded(child:FilledButton.icon(
             key:const ValueKey('teyza-registration-next'),
-            onPressed:busy||saved?null:registrationStep==2?save:nextStage,
+            onPressed:busy||saved||
+              (registrationStep==0&&!firstStageReady)||
+              (registrationStep==1&&(selectedAddress==null||listedOnGoogle==null||
+                (listedOnGoogle==true&&(claim==null||!ownerAuthority||!ownershipEvidence||!contactEvidence))))||
+              (registrationStep==2&&!consent)?null:
+              registrationStep==2?save:nextStage,
             icon:Icon(registrationStep==2?Icons.verified_user_outlined:Icons.arrow_forward),
             label:Text(busy?'Saving shop…':registrationStep==2?
               'Submit & verify':'Next'))),
