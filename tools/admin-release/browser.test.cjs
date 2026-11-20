@@ -302,7 +302,7 @@ async function main(){
     await f.context.close();
   });
   await check('HR navigation stays in admin with document review, area management and signups',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
    assert(!f.page.url().includes('work.html'));
    await f.page.getByRole('button',{name:'Open ID/passport and CV'}).first().click();
@@ -327,7 +327,7 @@ async function main(){
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('HR can upload an ID/passport and CV for an existing account',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
    const form=f.page.locator('.field-upload-form');
    await form.locator('select').selectOption('passport');
@@ -356,7 +356,7 @@ async function main(){
     }
     return false;
    }});
-   await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
    const form=f.page.locator('.field-upload-form');
    await form.locator('select').selectOption('passport');
