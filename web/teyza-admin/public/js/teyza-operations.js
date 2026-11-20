@@ -15,14 +15,14 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(dialog.open)dialog.close();dialog.replaceChildren();dialog.remove();
  }}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
+ let generation=0,ready=false,view='map',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,shopperAdQueue=[],shopperAdError=null,shopperAdPreview=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null,whatsappState=null;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
  const coverageMap=createAdminMap({api:(action,data)=>request(action,data),report:onError});
- function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
