@@ -91,7 +91,11 @@ for p in PUBLIC.rglob('*'):
    # root Work entry is independently managed. Do not force-copy either page:
    # doing so could replace a newer React-based workspace in deployment.
    overlay=p.read_text(encoding='utf-8')
-   root_work=(ROOT/'work.html').read_text(encoding='utf-8')
+   # Validate the committed root entry rather than an uncommitted local
+   # React Work replacement. The latter is not part of this PR or deployment.
+   root_work=subprocess.check_output(
+    ['git','-C',str(ROOT),'show','HEAD:work.html'],
+   ).decode('utf-8')
    for name,page in [('overlay',overlay),('root',root_work)]:
     assert 'noindex,nofollow' in page,(name,'Work must stay private')
     assert 'id="loginForm"' in page and 'id="applyForm"' in page,(name,'Work forms missing')
