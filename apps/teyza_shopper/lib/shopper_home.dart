@@ -2046,8 +2046,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           title:const Text('Add your delivery address'),
           subtitle:const Text('Enter your delivery address to see local shops. No registration needed.'),
           onTap:promptDeliveryProfile)),
-      if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
-        child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      if(catalogueError!=null)Card(key:const ValueKey('teyza-approved-merchant-load-error'),
+        color:const Color(0xFFFFF2DE),
+        child:ListTile(
+          leading:const Icon(Icons.cloud_off_outlined,color:Color(0xFF916027)),
+          title:const Text('Approved Teyza shops could not load'),
+          subtitle:Text(catalogueError!),
+          trailing:TextButton(onPressed:loading?null:()=>load(),
+            child:const Text('Retry')))),
+      if(onlineWarning!=null&&homeSpazaListings.isEmpty)
+        Card(key:const ValueKey('teyza-places-load-error'),
+          color:const Color(0xFFFFF2DE),
+          child:ListTile(
+            leading:const Icon(Icons.wifi_off_rounded,color:Color(0xFF916027)),
+            title:const Text('Nearby public shops could not load'),
+            subtitle:Text(onlineWarning!),
+            trailing:TextButton(onPressed:loadingOnline?null:()=>reloadOnline(),
+              child:const Text('Retry')))),
+      if(otherBusinessesWarning!=null&&nearbyOtherBusinesses.isEmpty)
+        Card(key:const ValueKey('teyza-businesses-load-error'),
+          color:const Color(0xFFFFF2DE),
+          child:ListTile(
+            leading:const Icon(Icons.wifi_off_rounded,color:Color(0xFF916027)),
+            title:const Text('Nearby businesses could not load'),
+            subtitle:Text(otherBusinessesWarning!),
+            trailing:TextButton(onPressed:loadingOtherBusinesses?null:()=>reloadOtherBusinesses(),
+              child:const Text('Retry')))),
       // Keep the existing merchant-type selector and verified seller circles
       // visible for repeat users, then show the two independent merchant grids.
       businessFilters(),
@@ -2122,8 +2146,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         trailing:const Icon(Icons.chevron_right),
         onTap:()=>openOwnerWorkspace())),
       // Nearby shops merges public listings with verified Teyza sellers.
-      if(onlineWarning!=null)Text(onlineWarning!,
-        style:const TextStyle(color:muted,fontSize:12)),
       Padding(padding:const EdgeInsets.only(top:10,bottom:8),
         child:Material(key:const ValueKey('teyza-wholesale-supply-entry'),
           color:const Color(0xFFE7F5EC),
