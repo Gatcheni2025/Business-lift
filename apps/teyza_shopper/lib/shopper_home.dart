@@ -212,6 +212,16 @@ const areas = <Area>[
   Area('Pretoria', 'Pretoria', -25.7479, 28.2293),
   Area('Cape Town', 'Cape Town', -33.9249, 18.4241),
 ];
+// Older Teyza versions saved only a manually selected neighbourhood label.
+// Migrate ONLY exact recognized cities, never guess GPS coordinates.
+Area? teyzaLegacySavedArea(String? selected){
+  final label=selected?.trim().toLowerCase()??'';
+  if(label.isEmpty||label=='gps')return null;
+  for(final choice in areas){
+    if(choice.label.toLowerCase()==label)return choice;
+  }
+  return null;
+}
 double km(double latA, double lngA, double latB, double lngB) {
   const radius = 6371.0;
   final a = (latB - latA) * math.pi / 180;
@@ -370,6 +380,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         rememberedLocation=null;area=null;locationName='Choose your area';
         unawaited(deliveryProfileStore.clearDeviceLocation()
           .catchError((Object _){/* Profile clearing is retried by deletion page. */}));
+        // Account deletion must also clear the legacy area-only preference.
+        // Otherwise a later upgrade could restore a location the user deleted.
+        unawaited(() async {
+          try{
+            final prefs=await SharedPreferences.getInstance();
+            await prefs.remove('teyza_selected_area');
+          }catch(_){/* Local prefs cleanup is best effort. */}
+        }());
       }else if(previousUid!=null&&uid==null&&priorProfile!=null){
         // Ordinary logout retains only the delivery destination, not contact.
         rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(priorProfile);
@@ -573,10 +591,27 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         });
       }
     }else if(_launchReady) {
-      WidgetsBinding.instance.addPostFrameCallback((_){
-        if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
-            !_deliverySheetOpen)unawaited(promptDeliveryProfile());
-      });
+      // Old releases stored a selected location in SharedPreferences rather
+      // than the newer encrypted delivery-profile store. Without this
+      // migration, upgrading could make *all* nearby categories appear empty
+      // even though the backend and signed build are functioning.
+      Area? previouslySelected;
+      try{
+        final prefs=await SharedPreferences.getInstance();
+        previouslySelected=teyzaLegacySavedArea(prefs.getString('teyza_selected_area'));
+      }catch(_){/* Fall through to the standard delivery-address prompt. */}
+      if(!mounted||request!=_deliveryProfileRequest||session.userId!=uid||
+         session.sellerWorkspace)return;
+      if(previouslySelected!=null){
+        await chooseArea(previouslySelected,persist:false);
+        if(mounted&&request==_deliveryProfileRequest)setState(()=>
+          locationWarning='Showing shops around your previously selected area. Add a delivery address to see closer results.');
+      }else{
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
+              !_deliverySheetOpen)unawaited(promptDeliveryProfile());
+        });
+      }
     }
   }
   Future<void> promptDeliveryProfile()async{
