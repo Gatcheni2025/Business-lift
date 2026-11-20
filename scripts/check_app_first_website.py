@@ -21,7 +21,7 @@ class Page(HTMLParser):
  def handle_endtag(self,tag):
   if tag=='script' and self.in_schema:self.schemas.append(json.loads(self.buffer));self.in_schema=False
 for p in PUBLIC.glob('*.html'):
- page=Page();text=p.read_text();page.feed(text)
+ page=Page();text=p.read_text(encoding='utf-8');page.feed(text)
  if p.name in ['work.html','owner-confirm.html','pay.html']:
   assert page.meta.get('robots')=='noindex,nofollow',p.name
   assert 'type="module"' in text,p.name
@@ -32,7 +32,7 @@ for p in PUBLIC.glob('*.html'):
    assert '<details id="webLegacyAccess"' in text and 'id="webEmailForm"' in text,p.name
    assert all('id="'+value+'"' in text for value in (
        'webGoogle','webFacebook','webApple','webShopUid','webCheckout')),p.name
-   assert text==(PUBLIC/'pay/index.html').read_text(),'Pay clean-url alias has diverged'
+   assert text==(PUBLIC/'pay/index.html').read_text(encoding='utf-8'),'Pay clean-url alias has diverged'
   else:
    assert '<form' in text,p.name
   continue
@@ -65,13 +65,13 @@ for p in PUBLIC.glob('*.html'):
   assert 'https://apps.apple.com/za/app/id6827037733' in page.links
   assert 'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye' in page.links
   assert 'App Store release coming soon' not in text
-sitemap=ET.fromstring((PUBLIC/'sitemap.xml').read_text())
+sitemap=ET.fromstring((PUBLIC/'sitemap.xml').read_text(encoding='utf-8'))
 urls=[e.text for e in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
 assert len(urls)==len(set(urls))==9
 assert not any('/agents.html' in u or '/work-privacy.html' in u for u in urls)
 assert not any(u.endswith('/work.html') or 'owner-confirm' in u for u in urls)
 assert not any('register' in u or 'admin' in u for u in urls)
-assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_text()
+assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_text(encoding='utf-8')
 for p in PUBLIC.rglob('*'):
  if p.is_file():
   relative=p.relative_to(PUBLIC)
