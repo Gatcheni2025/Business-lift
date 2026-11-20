@@ -78,5 +78,18 @@ for p in PUBLIC.rglob('*'):
   # Dedicated /pay is deployed from the scoped Hosting overlay only.
   # All existing root-mirrored marketing pages remain parity checked.
   if relative==Path('pay.html') or relative.parts[0]=='pay':continue
+  if relative==Path('work.html'):
+   # The public app-first Work overlay is deliberately map-enabled while the
+   # root Work entry is independently managed. Do not force-copy either page:
+   # doing so could replace a newer React-based workspace in deployment.
+   overlay=p.read_text(encoding='utf-8')
+   root_work=(ROOT/'work.html').read_text(encoding='utf-8')
+   for name,page in [('overlay',overlay),('root',root_work)]:
+    assert 'noindex,nofollow' in page,(name,'Work must stay private')
+    assert 'id="loginForm"' in page and 'id="applyForm"' in page,(name,'Work forms missing')
+    assert '/work-privacy.html' in page,(name,'Work privacy notice missing')
+   assert '/assets/agent-map-first.css' in overlay,'Map-first Work overlay missing stylesheet'
+   assert '/js/work.js' in overlay,'Map-first Work overlay missing authenticated script'
+   continue
   assert p.read_bytes()==(ROOT/relative).read_bytes(),p
 print('Marketing pages, links, image metadata, JSON-LD, sitemap, registration removal and root/overlay parity pass.')
