@@ -9,7 +9,8 @@ export function createFieldMap({onError=()=>{}}={}){
  const status=document.createElement('p');status.className='field-map-status';status.setAttribute('role','status');status.textContent='Choose your location or search an address to view nearby shops.';
  root.append(heading,canvas,status);
  let map=null,markers=[],googlePromise=null;
- const key=()=>String(window.TEYZA_BROWSER_MAPS_KEY||document.querySelector('meta[name="teyza-browser-map-key"]')?.content||'').trim();
+ const key=()=>{let remembered='';try{remembered=localStorage.getItem('teyza_admin_maps_browser_key_v1')||'';}catch(_){}
+  return String(window.TEYZA_BROWSER_MAPS_KEY||document.querySelector('meta[name="teyza-browser-map-key"]')?.content||remembered).trim();};
  function loadMaps(){
   if(window.google?.maps?.Map)return Promise.resolve(window.google.maps);
   if(googlePromise)return googlePromise;
