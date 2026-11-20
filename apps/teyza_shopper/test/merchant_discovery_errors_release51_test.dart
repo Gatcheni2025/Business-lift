@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teyza_shopper/shopper_home.dart';
+import 'package:teyza_shopper/shopper_auth.dart';
+import 'package:teyza_shopper/shopper_delivery_profile.dart';
+import 'session_test.dart' show MemoryStore;
 
 void main(){
   testWidgets('A failed public directory shows a retry instead of claiming no shops exist',
@@ -29,5 +33,33 @@ void main(){
       expect(find.text('Nearby businesses could not load'),findsOneWidget);
       expect(tester.takeException(),isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+  testWidgets('Older manually chosen location continues loading shops after AAB upgrade',
+    (tester)async{
+      SharedPreferences.setMockInitialValues({'teyza_selected_area':'KwaMashu'});
+      await tester.binding.setSurfaceSize(const Size(390,844));
+      addTearDown(()=>tester.binding.setSurfaceSize(null));
+      final vault=MemoryStore();
+      final session=ShopperSession(store:vault)..isReady=true;
+      final locations=<String>[];
+      await tester.pumpWidget(MaterialApp(home:ShopperHome(
+        session:session,
+        shopperProfileStore:ShopperDeliveryProfileStore(vault:vault),
+        enableBackgroundServices:false,
+        catalogueLoader:()async=>[],
+        directoryLoader:(area,type,radius)async{
+          locations.add('$type:${area.label}');
+          return [];
+        }
+      )));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds:500));
+      await tester.pumpAndSettle();
+      expect(locations,contains('spaza:KwaMashu'));
+      expect(locations,contains('variety:KwaMashu'));
+      expect(find.textContaining('previously selected area'),findsWidgets);
+      await tester.pumpWidget(const SizedBox.shrink());
+      session.dispose();
     });
 }
