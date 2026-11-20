@@ -24,10 +24,10 @@ export function groupGooglePlaces(googleEntries,teyzaEntries){
 export function createAdminMap({api,report}){
  let map=null,google=null,markers=[],registered=[],googleEntries=[],next=null,partial=false,started=false;
  const node=(tag,copy)=>{const n=document.createElement(tag);if(copy!==undefined)n.textContent=copy;return n;};
- const panel=node('section');panel.className='panel';
+ const panel=node('section');panel.className='panel coverage-dashboard';
  const introduction=node('p','Map South African Teyza-registered shops and compare nearby Google-listed businesses. Google searches are local and do not constitute a national census.');
  const helpLink=node('a','Set up a Google Maps browser key in Google Cloud');
- helpLink.href='https://console.cloud.google.com/google/maps-apis/credentials?project=business-lift-3c19c';
+ helpLink.href='https://console.cloud.google.com/google/maps-apis/credentials?project=teyza-maps';
  helpLink.target='_blank';helpLink.rel='noopener noreferrer';
  const guidance=node('p','A browser key needs Maps JavaScript API enabled, billing enabled and HTTP referrers allowing https://teyza.co.za/* and https://www.teyza.co.za/*. Never use your server-side Google Places key here.');
  const keyLabel=node('label','Google Maps browser key (restricted to teyza.co.za)');
@@ -49,15 +49,37 @@ export function createAdminMap({api,report}){
  const search=node('button','Search Google near map centre');search.className='button quiet';search.type='button';search.disabled=true;
  const refresh=node('button','Refresh Teyza shops');refresh.className='button quiet';refresh.type='button';refresh.disabled=true;
  controls.append(categoryLabel,search,refresh);
- const summary=node('p','Teyza-only: 0 · Google + Teyza: 0 · Google-only nearby: 0');
+ const summary=node('p','Loading coverage metrics…');
+ const kpis=node('div');kpis.className='coverage-kpis';
+ const metric=label=>{const c=node('article');c.className='coverage-kpi';const n=node('strong','—');c.append(node('span',label),n);kpis.append(c);return n;};
+ const teyzaMetric=metric('Registered on Teyza · loaded');
+ const googleMetric=metric('Google only · latest local search');
+ const agentMetric=metric('Agent-attributed registrations · pending attribution');
+ const leaders=node('article');leaders.className='coverage-kpi';leaders.append(node('span','Leading agents'));
+ const teamButton=node('button','View HR & field team →');teamButton.className='button quiet';teamButton.type='button';teamButton.onclick=()=>document.querySelector('[data-admin-view="field"]')?.click();leaders.append(teamButton);kpis.append(leaders);
+ const title=node('h3','National shop coverage');
+ const legend=node('div');legend.className='coverage-legend';
+ const teyzaToggle=node('input');teyzaToggle.type='checkbox';teyzaToggle.checked=true;
+ const googleToggle=node('input');googleToggle.type='checkbox';googleToggle.checked=true;
+ const legendItem=(input,label)=>{const l=node('label');l.append(input,node('span',label));legend.append(l);};
+ legendItem(teyzaToggle,'● Registered on Teyza');legendItem(googleToggle,'● Google-listed only');
+ teyzaToggle.addEventListener('change',()=>display());googleToggle.addEventListener('change',()=>display());
+ const mapWrap=node('div');mapWrap.className='coverage-map-wrap';mapWrap.append(mapBox,legend);
+ const insights=node('aside');insights.className='coverage-insights';
+ const insight=node('section');insight.className='coverage-insight';insight.append(node('h3','Coverage summary'),summary,node('p','Google counts reflect only the latest searched area, not all of South Africa.'));
+ const agentInsight=node('section');agentInsight.className='coverage-insight';agentInsight.append(node('h3','Agent performance'),node('p','Agent rankings require verified registration attribution. Work-visit approvals alone do not prove a successful shop registration.'));
+ const agentGo=node('button','Open agent records →');agentGo.type='button';agentGo.className='button quiet';agentGo.onclick=()=>document.querySelector('[data-admin-view="field"]')?.click();agentInsight.append(agentGo);
+ insights.append(insight,agentInsight);
+ const layout=node('div');layout.className='coverage-layout';layout.append(mapWrap,insights);
+ const setup=node('details');setup.className='coverage-key-setup';setup.open=true;setup.append(node('summary','Browser map key settings'),helpLink,guidance,keyLabel,rememberLabel,forget);
  const results=node('div');results.setAttribute('aria-live','polite');
- panel.append(introduction,helpLink,guidance,keyLabel,rememberLabel,forget,start,status,controls,mapBox,summary,results);
+ panel.append(kpis,title,introduction,controls,start,status,layout,setup,results);
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
  function display(){if(!google||!map)return;
   clearMarkers();const nearby=groupGooglePlaces(googleEntries,registered);
-  const all=[...registered.map(p=>({...p,label:p.source==='google_and_teyza'?'Google + Teyza':'Teyza only'})),
-    ...nearby.map(p=>({...p,label:'Google only',name:p.name||'Google-listed shop'}))].filter(valid);
+  const all=[...(teyzaToggle.checked?registered:[]).map(p=>({...p,label:p.source==='google_and_teyza'?'Google + Teyza':'Teyza only'})),
+    ...(googleToggle.checked?nearby:[]).map(p=>({...p,label:'Google only',name:p.name||'Google-listed shop'}))].filter(valid);
   const colors={'Teyza only':'#00796c','Google + Teyza':'#248b42','Google only':'#345fb4'};
   for(const p of all){const marker=new google.maps.Marker({map,position:{lat:p.latitude,lng:p.longitude},title:p.name+' · '+p.label,
     icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:colors[p.label],fillOpacity:0.93,strokeColor:'#ffffff',strokeWeight:1.7}});
@@ -73,7 +95,8 @@ export function createAdminMap({api,report}){
     ' · Google + Teyza: '+registered.filter(p=>p.source==='google_and_teyza').length+
     ' · Google-only in latest local search: '+nearby.length+
     (partial?' · Registered records limited to first 1,500 pages/items loaded':'');
-  results.replaceChildren();
+  teyzaMetric.textContent=String(registered.length)+(partial?'+':'');googleMetric.textContent=String(nearby.length);agentMetric.textContent='—';
+   results.replaceChildren();
   const help=node('p','Google-listed shops are from the current nearby search only; they may not be registered or verified by Teyza. No Google Places data is retained or exported. Google Maps attribution appears on the map.');
   results.append(help);
  }
