@@ -91,9 +91,14 @@ async function main(){
   await page.goto(url+'/admin');await page.bringToFront();
   if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
    const nav=page.getByRole('button',{name:'Business accounts',exact:true});await nav.waitFor({state:'visible'});
-   if(startView==='approvals'){
-     // Overview's verification queue remains accessible even when the seller directory fails.
-     await page.locator('.overview-stat').first().click();
+   if(startView==='overview'||startView==='approvals'){
+     // Map-first Admin opens national coverage; overview tests navigate explicitly.
+     await page.locator('[data-admin-view="overview"]').click();
+     await page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor({state:'visible'});
+     if(startView==='approvals'){
+       // Verification queue remains accessible through the overview summary.
+       await page.locator('.overview-stat').first().click();
+     }
    }
   }
   return {context,page,calls,errors};
@@ -121,7 +126,7 @@ async function main(){
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
     assert(order.indexOf('Choose a business for finance')<order.indexOf('Historic Netcash mandate archive — read-only'));
     assert.equal(await f.page.locator('.ops-legacy-archive').evaluate(el=>el.open),false,'Historical mandate archive is collapsed by default');
-    await f.page.getByRole('button',{name:'Overview',exact:true}).click();
+    await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
     await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
     await f.page.setViewportSize({width:393,height:852});
@@ -318,7 +323,7 @@ async function main(){
    await f.page.getByRole('button',{name:'Approve work'}).click();
    await f.page.getByText('Field visit review saved.').waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
-   await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('HR can upload an ID/passport and CV for an existing account',async()=>{
@@ -368,7 +373,7 @@ async function main(){
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Seller products',{exact:true}).count(),0,'Finance keeps catalogue controls separate');
     await f.page.getByRole('button',{name:'Shop & selling',exact:true}).click();
