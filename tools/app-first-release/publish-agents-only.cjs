@@ -38,7 +38,18 @@ function verify(before,after,managed){
  for(const [p,hash] of before)if(!managed.has(p)&&after.get(p)!==hash)throw Error('Unrelated Hosting asset changed: '+p);
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
+function assertR90Ready(health){
+ if(health?.ok!==true||health.agentCommissionEnabled!==true||health.agentCommissionCents!==9000){
+  throw Error('R90 registration commissions are not confirmed active in the backend. Public Agents publication stopped; Admin can deploy separately.');
+ }
+}
+async function checkR90Ready(){
+ const response=await fetch('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000)});
+ if(!response.ok)throw Error('Field commission health request failed.');
+ assertR90Ready(await response.json());
+}
 async function deploy(client){
+ await checkR90Ready();
  const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+SITE+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');
  const source=await current(client);
@@ -84,4 +95,4 @@ if(require.main===module){
  if(!['deploy','rollback'].includes(action))throw Error('Use deploy or rollback.');
  connect().then(client=>action==='deploy'?deploy(client):rollback(client)).catch(e=>{console.error('Scoped Agents release stopped: '+e.message);process.exitCode=1;});
 }
-module.exports={paths,verify,files,deploy,rollback};
+module.exports={paths,verify,files,assertR90Ready,deploy,rollback};
