@@ -2,9 +2,16 @@
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
-import json,xml.etree.ElementTree as ET
+import json,subprocess,xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC=ROOT/'web/app-first/public'
+# Local development may contain untracked, private Work backups or built bundles.
+# Validate the Git-tracked website content that CI and release packaging use.
+tracked_output=subprocess.check_output(
+ ['git','-C',str(ROOT),'ls-files','-z','--','web/app-first/public'],
+)
+TRACKED_PUBLIC={ROOT/path for item in tracked_output.split(b'\\0') if item
+                for path in [Path(item.decode('utf-8'))]}
 class Page(HTMLParser):
  def __init__(self):super().__init__();self.links=[];self.meta={};self.headings=0;self.schemas=[];self.in_schema=False;self.buffer='';self.canonical=None
  def handle_starttag(self,tag,attrs):
@@ -21,6 +28,7 @@ class Page(HTMLParser):
  def handle_endtag(self,tag):
   if tag=='script' and self.in_schema:self.schemas.append(json.loads(self.buffer));self.in_schema=False
 for p in PUBLIC.glob('*.html'):
+ if p not in TRACKED_PUBLIC:continue
  page=Page();text=p.read_text(encoding='utf-8');page.feed(text)
  if p.name in ['work.html','owner-confirm.html','pay.html']:
   assert page.meta.get('robots')=='noindex,nofollow',p.name
@@ -73,7 +81,7 @@ assert not any(u.endswith('/work.html') or 'owner-confirm' in u for u in urls)
 assert not any('register' in u or 'admin' in u for u in urls)
 assert 'Sitemap: https://teyza.co.za/sitemap.xml' in (PUBLIC/'robots.txt').read_text(encoding='utf-8')
 for p in PUBLIC.rglob('*'):
- if p.is_file():
+ if p.is_file() and p in TRACKED_PUBLIC:
   relative=p.relative_to(PUBLIC)
   # Dedicated /pay is deployed from the scoped Hosting overlay only.
   # All existing root-mirrored marketing pages remain parity checked.
