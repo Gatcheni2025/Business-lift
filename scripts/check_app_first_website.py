@@ -10,7 +10,7 @@ PUBLIC=ROOT/'web/app-first/public'
 tracked_output=subprocess.check_output(
  ['git','-C',str(ROOT),'ls-files','-z','--','web/app-first/public'],
 )
-TRACKED_PUBLIC={ROOT/path for item in tracked_output.split(b'\\0') if item
+TRACKED_PUBLIC={ROOT/path for item in tracked_output.split(bytes([0])) if item
                 for path in [Path(item.decode('utf-8'))]}
 class Page(HTMLParser):
  def __init__(self):super().__init__();self.links=[];self.meta={};self.headings=0;self.schemas=[];self.in_schema=False;self.buffer='';self.canonical=None
