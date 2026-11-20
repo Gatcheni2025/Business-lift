@@ -50,9 +50,11 @@ void main(){
     });
     final places=await findOnlineShops(latitude:-29.8221,longitude:31.0418,
       area:'Durban',category:'wholesale',client:client);
-    expect(places,singleElement(predicate<OnlineShop>((s)=>
-      s.shopCategory=='wholesale' && s.origin=='openstreetmap' &&
-      !s.categorizationVerified && s.name=='Fresh Depot Suppliers')));
+    expect(places,hasLength(1));
+    expect(places.single.shopCategory,'wholesale');
+    expect(places.single.origin,'openstreetmap');
+    expect(places.single.categorizationVerified,isFalse);
+    expect(places.single.name,'Fresh Depot Suppliers');
   });
 
   test('OSM variety_store is treated as independent local business',()async{
