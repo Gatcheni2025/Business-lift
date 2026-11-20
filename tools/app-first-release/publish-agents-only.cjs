@@ -27,7 +27,7 @@ async function clone(client,source){
  while(!response.done){
   if(Date.now()-started>300000)throw Error('Hosting clone timed out; no release published.');
   await wait(1000);
-  response=await client.hosting('GET','/'+response.name.replace(/^\\/+/,''));
+  response=await client.hosting('GET','/'+(response.name.startsWith('/')?response.name.slice(1):response.name));
  }
  if(response.error)throw Error(response.error.message||'Hosting clone failed.');
  return versionName(response.response?.name);
