@@ -157,5 +157,8 @@ export function createAdminMap({api,report}){
     const data=await response.json();googleEntries=Array.isArray(data.entries)?data.entries:[];display();
     status.textContent='Google results for this area: '+googleEntries.length+' (limited provider sample; not exhaustive).';
   }catch(e){status.textContent=e.message||'Google search failed.';report?.(e);}finally{search.disabled=false;}};
+ // When an administrator opted to remember a browser-restricted key, open the map on landing.
+ const observer=new MutationObserver(()=>{if(!panel.isConnected)return;observer.disconnect();if(remember.checked&&key.value&&!started)queueMicrotask(()=>{if(panel.isConnected)start.click();});});
+ observer.observe(document.body,{childList:true,subtree:true});
  return {panel,clear(){clearMarkers();registered=[];googleEntries=[];next=null;partial=false;map=null;google=null;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;status.textContent='Start a new administrator map session.';}};
 }
