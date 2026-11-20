@@ -6,6 +6,13 @@ import 'package:teyza_shopper/shopper_discovery.dart';
 import 'package:teyza_shopper/shopper_home.dart';
 
 void main(){
+  test('Only a known legacy manual area can be restored without guessing GPS',(){
+    expect(teyzaLegacySavedArea('Durban')?.city,'Durban');
+    expect(teyzaLegacySavedArea('  kwAMASHu  ')?.label,'KwaMashu');
+    expect(teyzaLegacySavedArea('gps'),isNull);
+    expect(teyzaLegacySavedArea('Unknown city'),isNull);
+    expect(teyzaLegacySavedArea(null),isNull);
+  });
   test('Google-only spaza protection still excludes large retailers',(){
     final checkers=OnlineShop('google-checkers','Checkers','Durban','Durban',
       'https://maps.google.com','google_places','',-29.858,31.02,
