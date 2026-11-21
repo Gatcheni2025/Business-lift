@@ -83,7 +83,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
      D.fail(409,'Agent registration attribution or approved agent status is missing.');
     const record={sellerUid,agentUid:visit.agentUid,visitId,amountCents:REWARD_CENTS,currency:'ZAR',
       status:'approved_pending_payment',approvedBy:uid,approvedAt:clock(),source:'verified_new_seller_registration'};
-    tx.create?.(rewardRef,record)??tx.set(rewardRef,record);
+    if(typeof tx.create==='function')tx.create(rewardRef,record);else tx.set(rewardRef,record);
     audit(tx,uid,action,sellerUid,{visitId,amountCents:REWARD_CENTS});
     return {approved:true,amountCents:REWARD_CENTS,status:'approved_pending_payment'};
    });
