@@ -1,7 +1,7 @@
 name: teyza_shopper
 description: Teyza Shopper - discover spaza shops, variety stores and verified local stock.
 publish_to: none
-version: 1.0.40+51
+version: 1.0.41+52
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -14,6 +14,7 @@ dependencies:
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^8.2.0
   crypto: ^3.0.6
+  google_maps_flutter: ^2.17.1
   image_picker: ^1.2.4
   camera: 0.12.1
   firebase_auth: 6.5.4
