@@ -1,7 +1,7 @@
 // Google Maps is the only basemap on which Google Places results may appear.
 // Results remain ephemeral, scoped to one searched area, and are never exported.
 const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover';
-const KEY_STORAGE='teyza_admin_maps_browser_key_v1';
+const CONFIG='/assets/teyza-maps-config.json';
 const SA={lat:-28.8,lng:24.6};
 const good=p=>Number.isFinite(p?.latitude)&&Number.isFinite(p?.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
 const elt=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e;};
@@ -9,29 +9,29 @@ export function unmatchedGoogle(places,registered){
  const ids=new Set(registered.map(p=>p.googlePlaceId).filter(Boolean)),seen=new Set();
  return places.filter(p=>{if(!good(p)||!p.placeId||ids.has(p.placeId)||seen.has(p.placeId))return false;seen.add(p.placeId);return true;});
 }
-export function createCombinedCoverage({report}={}){
+export function createCombinedCoverage({report,onReady}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false;
  const panel=elt('section');panel.className='tp-combined';
  const title=elt('h3','Combined Google + Teyza map');
  const note=elt('p','Google businesses are discovered within one area at a time. This is not a national Google directory; WhatsApp consent and Teyza verification must come from Teyza records.');
  const controls=elt('div');controls.className='tp-combined-controls';
- const key=elt('input');key.type='password';key.autocomplete='off';key.placeholder='Restricted Google Maps browser key';key.setAttribute('aria-label','Google Maps browser key');key.style.minWidth='220px';
+
  const town=elt('input');town.type='search';town.placeholder='Town or municipality (e.g. eThekwini)';town.setAttribute('aria-label','Town or municipality');
  const province=elt('select');province.setAttribute('aria-label','Province');
  for(const p of ['All provinces','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){const o=elt('option',p);o.value=p;province.append(o);}
  const category=elt('select');category.setAttribute('aria-label','Google business type');
  for(const [id,t] of [['spaza','Spaza and local shops'],['variety','Other small businesses'],['wholesale','Wholesalers']]){const o=elt('option',t);o.value=id;category.append(o);}
- const start=elt('button','Open combined Google map');start.type='button';start.className='button primary';
+ const start=elt('button','Retry Google map');start.type='button';start.className='button primary';
  const search=elt('button','Search this area on Google');search.type='button';search.className='button quiet';search.disabled=true;
  const showT=elt('input');showT.type='checkbox';showT.checked=true;
  const showG=elt('input');showG.type='checkbox';showG.checked=true;
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
- const status=elt('p','Choose the Google map to begin. Registered Teyza shops remain visible on the national outline until then.');status.setAttribute('role','status');
+ const status=elt('p','Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
  const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText='height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
- controls.append(key,town,province,category,start,search,toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
+ controls.append(town,province,category,search,toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
  panel.append(title,note,controls,status,canvas,list);
- try{const remembered=localStorage.getItem(KEY_STORAGE);if(/^AIza[A-Za-z0-9_-]{30,80}$/.test(remembered||''))key.value=remembered;}catch(_){}
+
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
   const body=elt('div');body.append(elt('strong',p.name||'Shop'));
@@ -72,14 +72,29 @@ export function createCombinedCoverage({report}={}){
   script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(apiKey)+'&callback='+encodeURIComponent(cb)+'&v=weekly';
   script.async=true;script.onerror=()=>finish(Error('Cannot load Google Maps script.'));document.head.append(script);
  });}
- start.onclick=async()=>{
+ async function startMap(){
   if(active)return;
-  const value=key.value.trim();if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value)){status.textContent='Enter a browser-restricted Maps JavaScript key. The server-side Places key must not be used.';return;}
-  active=true;start.disabled=true;status.textContent='Loading Google map…';
-  try{google=await loadMap(value);map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});
-   shown=true;search.disabled=false;key.value='';status.textContent='Combined map ready. Select a town or move the map, then search Google locally.';render();
-  }catch(e){active=false;start.disabled=false;status.textContent=e.message;report?.(e);}
- };
+  active=true;start.disabled=true;status.textContent='Loading configured Google map…';
+  try{
+   const response=await fetch(CONFIG,{cache:'no-store'});
+   if(!response.ok)throw Error('Google Maps is not configured for this site yet. The national Teyza map remains available.');
+   const configuration=await response.json();
+   const value=configuration?.browserKey;
+   if(typeof value!=='string'||!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value))
+    throw Error('Google Maps browser configuration is invalid. The national Teyza map remains available.');
+   google=await loadMap(value);
+   map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});
+   shown=true;search.disabled=false;
+   status.textContent='Google map ready. Select a province or town and search locally for additional Google-listed businesses.';
+   onReady?.();render();
+  }catch(e){
+   active=false;start.disabled=false;
+   if(!start.isConnected)controls.prepend(start);
+   status.textContent=e.message||'Google Maps unavailable; the national Teyza map remains available.';
+   report?.(e);
+  }
+ }
+ start.onclick=startMap;
  async function locate(){
   const q=town.value.trim(),p=province.value;
   if(!q&&p==='All provinces')return;
@@ -100,5 +115,5 @@ export function createCombinedCoverage({report}={}){
   }catch(e){status.textContent=e.message;report?.(e);}finally{search.disabled=false;}
  };
  showT.onchange=render;showG.onchange=render;
- return {panel,setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
 }
