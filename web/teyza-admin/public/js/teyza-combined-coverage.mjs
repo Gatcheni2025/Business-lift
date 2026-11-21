@@ -38,8 +38,8 @@ export function createCombinedCoverage({report}={}){
   const rows=[
    ['Source',p._googleOnly?'Google listing only':p.googlePlaceId?'Google + Teyza':'Teyza registered'],
    ['Address',[p.address,p.area,p.city,p.province].filter(Boolean).join(', ')||'Map location'],
-   ['Registered on Teyza',p._googleOnly?'No matching Teyza record': 'Yes'],
-   ['Teyza verified',p._googleOnly?'Not verified by Teyza':human(p.verified)],
+   ['Registered on Teyza',p._googleOnly?'No matching published Teyza record': 'Yes'],
+   ['Teyza verified',p._googleOnly?'Not established':human(p.verified)],
    ['WhatsApp opted in',p._googleOnly?'Unknown':human(p.whatsappOptIn)],
    ['Registering agent',p._googleOnly?'Not applicable':p.agentName||'Not attributed']
   ];
