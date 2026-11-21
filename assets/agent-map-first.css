@@ -1,0 +1,14 @@
+/* TEYZA field map-first enhancement; all existing approval/evidence UX retained. */
+.field-dashboard-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0 20px}
+.field-dashboard-card{min-width:0;display:flex;flex-direction:column;gap:11px;padding:18px;background:linear-gradient(140deg,#fff,#edf8f3);border:1px solid #dae9e2;border-radius:18px;box-shadow:0 8px 24px rgba(4,53,38,.07)}
+.field-dashboard-card:nth-child(2){background:linear-gradient(140deg,#fff,#fffaed)}
+.field-dashboard-card:nth-child(3){background:linear-gradient(140deg,#fff,#e9f9fb)}
+.field-dashboard-card.field-commission{background:linear-gradient(120deg,#095549,#087e54);color:white}
+.field-dashboard-card span{font-size:12px;font-weight:700}.field-dashboard-card strong{font-size:clamp(22px,2.5vw,31px);line-height:1.05}.field-dashboard-card small{font-size:11px;line-height:1.5;opacity:.8}
+.field-map-shell{margin:18px 0 20px;background:#fff;border:1px solid #d7e9e0;border-radius:20px;padding:15px;box-shadow:0 8px 22px rgba(4,53,38,.06)}
+.field-map-heading{display:flex;justify-content:space-between;gap:20px;align-items:baseline;margin:3px 6px 12px}
+.field-map-heading h3{font-size:18px;color:#08483d;margin:0}.field-map-heading p{font-size:12px;color:#618078;max-width:560px;line-height:1.5;margin:0}
+.field-map-canvas{height:min(58vh,570px);min-height:380px;border-radius:16px;border:1px solid #cfe6dc;background:linear-gradient(135deg,#e5f3ed,#cbe4d9)}
+.field-map-status{font-size:12px;color:#55736b;margin:11px 4px 2px}
+@media(max-width:1040px){.field-dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.field-map-heading{display:block}.field-map-heading p{margin-top:5px}}
+@media(max-width:590px){.field-dashboard-cards{grid-template-columns:1fr}.field-map-canvas{min-height:340px}.field-map-shell{padding:10px}}

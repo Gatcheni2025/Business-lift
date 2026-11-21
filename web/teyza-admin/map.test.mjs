@@ -41,3 +41,50 @@ test('Map persistence is opt-in and supports local removal of the restricted bro
  assert(source.includes('mapCentreCoordinates(map)'));
  assert(!source.includes('localStorage.setItem(KEY_STORAGE,key.value)'));
 });
+
+test('Premium national map uses Teyza-hosted geography, never volunteer OSM tiles, and ignores credential autofill',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {createRequire}=await import('node:module');
+ const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(premium.includes("'/assets/teyza-southern-africa-land.geojson'"));
+ assert(premium.includes('leaflet.geoJSON(boundaries'));
+ assert(!premium.includes('tile.openstreetmap.org'));
+ assert(!premium.includes('leaflet.tileLayer('));
+ assert(premium.includes("raw.includes('@')"));
+ assert(premium.includes("term.value.includes('@')"));
+ const land=JSON.parse(readFileSync(new URL('./public/assets/teyza-southern-africa-land.geojson',import.meta.url),'utf8'));
+ assert.equal(land.type,'FeatureCollection');
+ assert(land.features.some(f=>f.properties.name==='South Africa'));
+ assert(land.features.every(f=>['Polygon','MultiPolygon'].includes(f.geometry.type)));
+});
+
+test('National coverage details are sourced from real Teyza shop fields, without guessing WhatsApp or agent status',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(source.includes("['WhatsApp opt-in',readable(p.whatsappOptIn)]"));
+ assert(source.includes("['Verified',readable(p.verified)]"));
+ assert(source.includes("['Registered by agent',agentName(p)||'Not attributed']"));
+ assert(source.includes("const readable=(v)=>v===true?'Yes':v===false?'No':'Not provided'"));
+ assert(source.includes("counts.set(agentName(p)"));
+ assert(source.includes("googleCount.textContent='Search'"));
+ assert(source.includes("point.bindPopup(shopDetail(p))"));
+});
+
+test('Combined Google map filters claimed listings and preserves explicit unknown statuses',async()=>{
+ const {unmatchedGoogle}=await import('./public/js/teyza-combined-coverage.mjs');
+ const items=[{placeId:'linked',name:'Claimed',latitude:-29.8,longitude:31},
+  {placeId:'unclaimed',name:'Unclaimed',latitude:-29.7,longitude:31.1},
+  {placeId:'unclaimed',name:'Duplicate',latitude:-29.7,longitude:31.1},
+  {placeId:'bad',latitude:0,longitude:0}];
+ assert.deepEqual(unmatchedGoogle(items,[{googlePlaceId:'linked'}]).map(p=>p.placeId),['unclaimed']);
+ const {readFileSync}=await import('node:fs');
+ const code=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ assert(code.includes('Google listing only'));
+ assert(code.includes("['WhatsApp opted in',p._googleOnly?'Unknown':human(p.whatsappOptIn)]"));
+ assert(code.includes("componentRestrictions:{country:'ZA'}"));
+ assert(code.includes("url.searchParams.set('radius','20000')"));
+ assert(!code.includes('localStorage.setItem('));
+ const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(premium.includes('combined.panel'));
+ assert(premium.includes('combined.setShops(filtered)'));
+});

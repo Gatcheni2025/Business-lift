@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
-test('Admin release accepts disabled checkout or a tightly scoped live proration pilot',()=>{
+test('Admin release accepts disabled checkout or strictly verified R99 prorated pilot/full rollout',()=>{
  const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
    agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
@@ -16,8 +16,12 @@ test('Admin release accepts disabled checkout or a tightly scoped live proration
    paystackCheckoutAvailable:true,paystackRolloutMode:'pilot',membershipProrationEnabled:true,
    subscriptionMonthlyCents:9900,subscriptionTermsVersion:'seller-r99-calendar-proration-2026-11'};
  assert.doesNotThrow(()=>assertAdminBackend(pilot));
- for(const unsafe of [{...pilot,paystackRolloutMode:'full'},{...pilot,subscriptionMonthlyCents:1000},
-    {...pilot,subscriptionTermsVersion:'seller-r99-monthly-2026-11'}])assert.throws(()=>assertAdminBackend(unsafe));
+ const full={...pilot,paystackRolloutMode:'full'};
+ assert.doesNotThrow(()=>assertAdminBackend(full));
+ for(const unsafe of [{...pilot,paystackRolloutMode:'unexpected'},{...full,sellerPaystackNewCheckoutDisabled:true},
+    {...full,paystackCheckoutAvailable:false},{...full,membershipProrationEnabled:false},
+    {...full,subscriptionMonthlyCents:1000},
+    {...full,subscriptionTermsVersion:'seller-r99-monthly-2026-11'}])assert.throws(()=>assertAdminBackend(unsafe));
 
  for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},
    {...ready,adminProductReview:true},{...ready,automaticProductPublication:false},
@@ -74,7 +78,13 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,18);
+ const files=overlay(root);assert.equal(files.size,21);
+ assert(files.has('/assets/teyza-map-first.css'));
+ assert(files.has('/assets/teyza-southern-africa-land.geojson'));
+ const geography=JSON.parse(require('node:zlib').gunzipSync(files.get('/assets/teyza-southern-africa-land.geojson').bytes).toString('utf8'));
+ assert(geography.features.some(f=>f.properties.name==='South Africa'));
+ assert(geography.features.some(f=>f.properties.name==='Lesotho'));
+ assert(files.has('/js/teyza-premium-coverage.mjs'));
   assert(files.has('/js/teyza-mandate-pdf.mjs'));
   assert(files.has('/js/teyza-admin-map.mjs'));
   assert(fs.readFileSync(path.join(root,'admin.html'),'utf8').includes('data-admin-view="map"'));
@@ -83,7 +93,7 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
   assert(pdfSource.includes('NOT BANK-AUTHENTICATED'));
  const config=servingConfig({rewrites:[{glob:'/admin',path:'/old.html'},{glob:'**',path:'/404.html'}]});
  assert.deepEqual(config.rewrites[0],{glob:'/admin',path:'/admin.html'});assert.equal(config.rewrites.at(-1).path,'/404.html');
- const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R333-single-business-account"'));
+ const html=fs.readFileSync(path.join(root,'admin.html'),'utf8');assert(html.includes('content="R335-local-vector-map"'));
  // Inline SVG sprite references are fragment-only; fetched assets remain root-relative.
  for(const match of html.matchAll(/(?:href|src)="([^"]+)"/g))assert(match[1].startsWith('/')||match[1].startsWith('#'));
  assert(!html.includes('.php'));assert(![...files.keys()].some(p=>p.includes('api/')));

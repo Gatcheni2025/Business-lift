@@ -15,14 +15,14 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(dialog.open)dialog.close();dialog.replaceChildren();dialog.remove();
  }}
  document.getElementById('photoDialog').addEventListener('close',clearMandatePhoto);
- let generation=0,ready=false,view='overview',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
+ let generation=0,ready=false,view='map',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,shopperAdQueue=[],shopperAdError=null,shopperAdPreview=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
      moreFinance=null,moreTickets=null,busy=false,mandateError=null,whatsappState=null;
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
  const coverageMap=createAdminMap({api:(action,data)=>request(action,data),report:onError});
- function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='overview';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -37,8 +37,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   else if(/^(rejected|declined|suspended|failed)\b/i.test(label))pill.classList.add('status-alert');
   return pill;}
  function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));if(view==='overview')text.append(el('p','The people, reviews and requests that keep your marketplace moving.'));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
- function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;heading();if(!ready)return;
-  if(view==='map')root.append(coverageMap.panel);if(view==='whatsapp')whatsappView();if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
+ function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;if(view==='map')root.replaceChildren();else heading();if(!ready)return;
+  if(view==='map'){root.append(coverageMap.panel);coverageMap.activate();}if(view==='whatsapp')whatsappView();if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
  function whatsappView(){
   const cardNode=card('Meta WhatsApp approval messages','Only opted-in verified sellers should receive the approved template after account approval. Meta template approval alone does not authenticate the sender.');
   if(!whatsappState){cardNode.append(el('p','Unable to retrieve the WhatsApp readiness snapshot.','footnote'));root.append(cardNode);return;}

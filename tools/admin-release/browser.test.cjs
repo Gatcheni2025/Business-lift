@@ -53,6 +53,7 @@ async function main(){
    const body=route.request().postDataJSON();calls.push(body);
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
+   if(body.action==='ops_map_shops')result={ok:true,shops:[{sellerUid:'seller1',name:'Synthetic Verified Spaza',category:'spaza',latitude:-29.86,longitude:31.01,city:'Durban',area:'Umlazi',verified:true,source:'teyza_only'}],next:null};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
    if(body.action==='ops_catalogue_queue')result={ok:true,submissions:[{sellerUid:rows[0].sellerUid,shopName:rows[0].shopName,ownerEmail:rows[0].ownerEmail,approvalStatus:'approved',productCount:1,paymentStatus:'not_started',paidMembership:false}],limited:false};
    if(body.action==='ops_seller_detail')result={ok:true,seller:{...rows[0],listingPlan:'free'},billing:{status:'not_started'},paystackMode:'test',membershipPaid:false,payments:[],
@@ -91,15 +92,30 @@ async function main(){
   await page.goto(url+'/admin');await page.bringToFront();
   if(identity&&identity.claims?.teyzaAdmin!==false&&identity.claims?.email_verified!==false){
    const nav=page.getByRole('button',{name:'Business accounts',exact:true});await nav.waitFor({state:'visible'});
-   if(startView==='approvals'){
-     // Overview's verification queue remains accessible even when the seller directory fails.
-     await page.locator('.overview-stat').first().click();
+   if(startView==='overview'||startView==='approvals'){
+     // Map-first Admin opens national coverage; overview tests navigate explicitly.
+     await page.locator('[data-admin-view="overview"]').click();
+     await page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor({state:'visible'});
+     if(startView==='approvals'){
+       // Verification queue remains accessible through the overview summary.
+       await page.locator('.overview-stat').first().click();
+     }
    }
   }
   return {context,page,calls,errors};
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('National map automatically displays authenticated registered-shop count without Google browser key',async()=>{
+   const f=await pageFor({startView:'map'});
+   await f.page.locator('.tp-shop-row').getByText('Synthetic Verified Spaza').waitFor();
+   assert.equal(await f.page.locator('.tp-card.tp-green .tp-card-value').innerText(),'1');
+   assert(await f.page.locator('.tp-advanced').evaluate(el=>!el.open));
+   assert(f.calls.some(c=>c.action==='ops_map_shops'));
+   assert.equal(await f.page.locator('.tp-premium-google-key').count(),0);
+   assert.deepEqual(f.errors,[]);
+   await f.context.close();
+  });
   await check('Overview uses loaded counts and the sidebar opens mandate and seller reviews on desktop and phone',async()=>{
     const f=await pageFor({startView:'overview'});
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
@@ -121,7 +137,7 @@ async function main(){
     const order=await f.page.locator('#operationsPanel').locator('h3').allTextContents();
     assert(order.indexOf('Choose a business for finance')<order.indexOf('Historic Netcash mandate archive — read-only'));
     assert.equal(await f.page.locator('.ops-legacy-archive').evaluate(el=>el.open),false,'Historical mandate archive is collapsed by default');
-    await f.page.getByRole('button',{name:'Overview',exact:true}).click();
+    await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
     await f.page.screenshot({path:path.join(output,'admin-overview-desktop.png'),fullPage:true});
     await f.page.setViewportSize({width:393,height:852});
@@ -297,7 +313,7 @@ async function main(){
     await f.context.close();
   });
   await check('HR navigation stays in admin with document review, area management and signups',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
    assert(!f.page.url().includes('work.html'));
    await f.page.getByRole('button',{name:'Open ID/passport and CV'}).first().click();
@@ -318,11 +334,11 @@ async function main(){
    await f.page.getByRole('button',{name:'Approve work'}).click();
    await f.page.getByText('Field visit review saved.').waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
-   await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('HR can upload an ID/passport and CV for an existing account',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
    const form=f.page.locator('.field-upload-form');
    await form.locator('select').selectOption('passport');
@@ -351,7 +367,7 @@ async function main(){
     }
     return false;
    }});
-   await f.page.getByRole('button',{name:'HR & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();
    const form=f.page.locator('.field-upload-form');
    await form.locator('select').selectOption('passport');
@@ -368,7 +384,7 @@ async function main(){
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Operations overview, billing statement, support and finance workspaces render without browser errors',async()=>{
-   const f=await pageFor();await f.page.getByRole('button',{name:'Overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   const f=await pageFor();await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    await f.page.getByRole('button',{name:'Finance & payments',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().click();await f.page.getByText('Paystack seller membership',{exact:true}).waitFor();
    assert.equal(await f.page.getByText('Seller products',{exact:true}).count(),0,'Finance keeps catalogue controls separate');
     await f.page.getByRole('button',{name:'Shop & selling',exact:true}).click();
