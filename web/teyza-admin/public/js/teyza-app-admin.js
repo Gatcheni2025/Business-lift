@@ -279,7 +279,8 @@ $('approveSeller').addEventListener('click',()=>decide('approved'));$('rejectSel
 $('requestPhoto').addEventListener('click',()=>decide('needs_new_photo'));
 $('requestCompliance').addEventListener('click',()=>decide('needs_correction'));
 function filterSections(){
-  const term=$('sectionSearch').value.trim().toLocaleLowerCase();let shown=0;
+  const typed=$('sectionSearch').value.trim();
+  const term=typed.includes('@')?'':typed.toLocaleLowerCase();let shown=0;
   for(const item of document.querySelectorAll('[data-admin-view]')){
     const match=!term||(item.textContent+' '+(item.dataset.keywords||'')).toLocaleLowerCase().includes(term);
     item.hidden=!match;if(match)shown++;
