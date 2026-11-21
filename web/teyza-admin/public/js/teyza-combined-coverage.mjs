@@ -135,6 +135,8 @@ export function createCombinedCoverage({report,onReady}={}){
   try{
    await locate();const c=map.getCenter(),lat=c.lat(),lon=c.lng();
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
+   if(!town.value.trim()&&province.value==='All provinces'&&Math.abs(lat-SA.lat)<0.02&&Math.abs(lon-SA.lng)<0.02)
+    throw Error('Enter a town (such as Durban) or move the map to a populated area before searching.');
    // Each click is an explicit, bounded regional search. The existing Firebase
    // Places service holds the server key; this browser never accesses it.
    const kinds=category.value==='all'?['spaza','variety','wholesale']:[category.value];
