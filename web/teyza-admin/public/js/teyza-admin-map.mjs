@@ -1,4 +1,4 @@
-import {createPremiumCoverage} from '/js/teyza-premium-coverage.mjs';
+import {createPremiumCoverage} from './teyza-premium-coverage.mjs';
 // Admin-only Teyza national coverage explorer. Maps use Google Maps so
 // Google Places data is never placed on a non-Google basemap or bulk cached.
 // Requires a browser-restricted Google Maps JavaScript API key supplied by an admin.
