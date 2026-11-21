@@ -9,7 +9,7 @@ function relevantPlace(p,kind){
  if(kind==='variety')return /salon|barber|beauty|furniture|upholster|plumb|hardware|electrician|tailor|repair|china\s*(?:shop|mall)|general business/.test(name)||
   ['beauty_salon','hair_care','furniture_store','hardware_store','plumber','electrician','barber_shop'].some(t=>types.has(t));
  if(/\b(?:shoprite|superspar|spar|boxer|checkers|woolworths|pick\s*n\s*pay|freshstop)\b/.test(name))return false;
- return /spaza|tuck\s*shop|mini\s*market|general dealer|corner shop|superette|grocery|convenience|\\bshop\\b/.test(name)||
+ return /spaza|tuck\s*shop|mini\s*market|general dealer|corner shop|superette|grocery|convenience|\bshop\b/.test(name)||
   ['convenience_store','grocery_store','food_store'].some(t=>types.has(t));
 }
 const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
