@@ -22,3 +22,15 @@
 .nearby-card a,.nearby-card button{margin-top:5px}
 .nearby-controls label{min-width:210px}
 @media(max-width:700px){.field-rewards{flex-direction:column;align-items:flex-start}}
+
+/* Agent-first guided visit: one prominent next action and consented owner invitation. */
+.visit-flow-intro{border:1px solid #b9ddc9;border-radius:12px;background:#ecf8f1;padding:13px 16px;line-height:1.6;font-weight:600;color:#125840}
+.owner-invite{display:grid;gap:12px;margin-top:12px;background:#f5faf7;border:1px solid #c9e7d3;padding:16px;border-radius:12px}
+.owner-invite label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.owner-invite input[type="tel"]{min-width:0;max-width:420px;padding:12px;border:1px solid #bfd6c8;border-radius:9px;background:white}
+.owner-invite label.check{display:flex;align-items:flex-start;gap:9px}
+.owner-invite button{max-width:max-content}
+.task-complete{opacity:.78}.task-complete .step-dot{background:#daf2e4;color:#0d7651}
+.nearby-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.nearby-controls label{flex:1 1 200px}.nearby-controls button{min-height:45px}
+@media(max-width:700px){.nearby-controls>*{width:100%}.owner-invite button{width:100%;max-width:none}}
