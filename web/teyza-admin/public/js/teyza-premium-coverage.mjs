@@ -103,23 +103,13 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
    ' verified locations'+(partial?' · more records are available; this is a partial inventory':'')+'.');
  }
  async function activate(){
-  if(ready)return;ready=true;const stamp=++generation;showStatus('Loading Teyza registered shops…');
-  try{
-   // Load verified first-party shop inventory independently of map SDK.
-   shops=[];let after=null,attempts=0;
-   do{
-    const page=await api('ops_map_shops',after?{after}:{});
-    if(stamp!==generation)return;
-    if(!Array.isArray(page.shops))throw Error('Invalid registered-shop response.');
-    shops.push(...page.shops.filter(p=>p.verified===true&&valid(p)));
-    after=page.next||null;attempts++;
-    showStatus('Loaded '+shops.length.toLocaleString('en-ZA')+' verified shop locations…');
-   }while(after&&attempts<20);
-   partial=Boolean(after);next=after;filter();
-  }catch(e){if(stamp===generation){showStatus('Registered shops could not load: '+(e.message||'Please retry.'));report?.(e);}}
-  if(stamp!==generation)return;
-  try{
-   leaflet=await loadLeaflet();if(stamp!==generation)return;
+  if(ready)return;
+  ready=true;const stamp=++generation;
+  showStatus('Opening national map and loading verified shops…');
+  // Start loading the basemap immediately; Teyza records load independently.
+  const basemap=loadLeaflet().then(L=>{
+   if(stamp!==generation)return;
+   leaflet=L;
    map=leaflet.map(mapCanvas,{zoomControl:false,scrollWheelZoom:false}).setView(SA.center,SA.zoom);
    leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
@@ -127,7 +117,34 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
    }).addTo(map);
    leaflet.control.zoom({position:'bottomright'}).addTo(map);
    filter();queueMicrotask(()=>map?.invalidateSize());
-  }catch(e){if(stamp===generation)showStatus('Interactive map unavailable. The verified shop list remains accessible. '+(e.message||''));}
+  }).catch(e=>{
+   if(stamp===generation){
+    showStatus('Interactive basemap unavailable. Registered shops are still listed. '+(e.message||''));
+   }
+  });
+  try{
+   shops=[];let after=null,attempts=0;
+   do{
+    const page=await api('ops_map_shops',after?{after}:{});
+    if(stamp!==generation)return;
+    if(!Array.isArray(page.shops))throw Error('Invalid registered-shop response.');
+    shops.push(...page.shops.filter(p=>p.verified===true&&valid(p)));
+    after=page.next||null;attempts++;
+    partial=Boolean(after);filter();
+   }while(after&&attempts<20);
+   next=after;
+   const provincesAvailable=shops.some(p=>Boolean(getProvince(p)));
+   province.disabled=!provincesAvailable;
+   province.title=provincesAvailable?'Filter by recorded province':'Province filtering awaits verified province data from the backend';
+   filter();
+  }catch(e){
+   if(stamp===generation){
+    partial=true;filter();
+    showStatus('Partial inventory: '+shops.length+' locations loaded. '+(e.message||'Further pages unavailable.'));
+    report?.(e);
+   }
+  }
+  await basemap;
  }
  function clear(){generation++;ready=false;if(map){map.remove();map=null;}markers=[];leaflet=null;shops=[];next=null;partial=false;teyzaCount.textContent='—';recentList.replaceChildren();showStatus('Preparing national coverage…');}
  province.addEventListener('change',filter);category.addEventListener('change',filter);term.addEventListener('input',filter);
