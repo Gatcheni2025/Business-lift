@@ -78,8 +78,9 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,19);
+ const files=overlay(root);assert.equal(files.size,20);
  assert(files.has('/assets/teyza-map-first.css'));
+ assert(files.has('/js/teyza-premium-coverage.mjs'));
   assert(files.has('/js/teyza-mandate-pdf.mjs'));
   assert(files.has('/js/teyza-admin-map.mjs'));
   assert(fs.readFileSync(path.join(root,'admin.html'),'utf8').includes('data-admin-view="map"'));
