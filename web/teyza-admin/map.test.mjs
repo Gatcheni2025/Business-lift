@@ -136,3 +136,23 @@ test('Google listings KPI tracks local live results and failed searches without 
  assert(premium.includes("result.state==='ready'?String(result.potential)"));
  assert(!premium.includes("googleCount.textContent='Search'"));
 });
+
+test('Google Places categories show independently counted spaza, business and wholesale markers',async()=>{
+ const {categoryCounts,matchGoogle}=await import('./public/js/teyza-combined-coverage.mjs');
+ const places=[
+  {placeId:'a',latitude:-29.8,longitude:31.0,shopCategory:'spaza'},
+  {placeId:'b',latitude:-29.8,longitude:31.1,shopCategory:'variety'},
+  {placeId:'c',latitude:-29.8,longitude:31.2,shopCategory:'wholesale'},
+  {placeId:'c',latitude:-29.8,longitude:31.2,shopCategory:'wholesale'}
+ ];
+ const matched=matchGoogle(places,[]);
+ assert.deepEqual(categoryCounts(matched.potential),{spaza:1,variety:1,wholesale:1});
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ assert(source.includes("category.value='all'"),'initial area discovery must include all three types');
+ assert(source.includes("['variety','Other businesses']"));
+ assert(source.includes("['wholesale','Wholesalers']"));
+ assert(source.includes("layers[p.shopCategory]?.checked!==false"));
+ assert(source.includes("p.shopCategory==='wholesale'?'#a563d7'"));
+ assert(source.includes("p.shopCategory==='variety'?'#ed8b27'"));
+});
