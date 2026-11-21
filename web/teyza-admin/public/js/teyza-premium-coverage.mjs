@@ -52,14 +52,15 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  const category=select('Category',['All shop categories','Spaza shops','Retail businesses','Wholesalers']);
  const termLabel=node('label');termLabel.append(node('span','Find a shop or town'));const term=node('input');term.type='search';term.placeholder='Search loaded shops';term.autocomplete='off';term.name='teyza_shop_location_lookup';term.setAttribute('data-lpignore','true');termLabel.append(term);filters.append(termLabel);
  const reset=node('button','Reset filters','tp-reset');reset.type='button';filters.append(reset);
- const combined=createCombinedCoverage({report});
+ let fallback;
+ const combined=createCombinedCoverage({report,onReady:()=>{if(fallback)fallback.open=false;}});
  const mapShell=node('div',undefined,'tp-map-shell');
  const mapCanvas=node('div',undefined,'tp-map-canvas');mapCanvas.setAttribute('aria-label','Map of registered Teyza shops in South Africa');
  const legend=node('div',undefined,'tp-legend');
  legend.append(node('strong','Shop status · map'),node('p','🟢  Verified on Teyza'),node('p','🟡  Attribution pending'),node('p','🔵  Google-only: separate Google map'),node('small','The national layer contains Teyza data only; Google results need a Google map.'));
  mapShell.append(mapCanvas,legend);
  const status=node('p','Preparing national coverage…','tp-status');status.setAttribute('role','status');
- const fallback=node('details');const fallbackHeading=node('summary','Teyza-only national outline (works without Google Maps)');fallback.append(fallbackHeading,mapShell,status);
+ fallback=node('details');fallback.open=true;const fallbackHeading=node('summary','Teyza-only national outline (works without Google Maps)');fallback.append(fallbackHeading,mapShell,status);
  coverage.append(heading,filters,combined.panel,fallback);
  const aside=node('aside',undefined,'tp-side');
  const agents=node('section',undefined,'tp-side-card');agents.append(node('h3','♙  Registered by agents'),node('p','Only named agents supplied by verified shop records are counted. Missing attribution is not guessed.','tp-muted'));
@@ -135,6 +136,7 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  async function activate(){
   if(ready)return;
   ready=true;const stamp=++generation;
+  void combined.activate();
   showStatus('Opening national map and loading verified shops…');
   if(term.value.includes('@'))term.value=''; // Ignore browser credential autofill.
   // Start loading the basemap immediately; Teyza records load independently.
