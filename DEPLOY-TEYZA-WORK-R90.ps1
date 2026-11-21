@@ -57,7 +57,7 @@ npm test --prefix .\tools\app-first-release
 if ($LASTEXITCODE -ne 0) { throw 'Work and scoped publishing tests failed. No deployment occurred.' }
 
 Write-Host 'Deploying the existing teyzaMobile HTTPS function only. Other functions and Hosting are not targeted.'
-& firebase deploy --config .\firebase.teyza-mobile-v39.json --only functions:teyzaMobile --project $project
+& firebase deploy --config .\firebase.teyza-mobile-v39.json --only 'functions:teyza-mobile:teyzaMobile' --project $project
 if ($LASTEXITCODE -ne 0) { throw 'Targeted backend deployment failed. Work Hosting was not published.' }
 
 $after = Invoke-RestMethod -Uri $healthUri -TimeoutSec 30
