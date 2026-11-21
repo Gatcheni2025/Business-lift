@@ -31,8 +31,9 @@ function drawVisits(){$('visitCount').textContent=visits.length;$('reviewCount')
 async function selectVisit(id){const r=await api('agent_visit_get',{visitId:id});selected=r.visit;renderVisit();drawVisits();}
 function task(root,number,title,text,done){const box=el('section',undefined,'task'+(done?' task-complete':' task-next')),dot=el('span',done?'✓':String(number),'step-dot'),body=el('div');body.append(el('h3',title),el('p',text));box.append(dot,body);root.append(box);return body;}
 function whatsappInviteUrl(url,shopName,ownerPhone){
- const digits=String(ownerPhone||'').replace(/[^0-9]/g,'');
- if(!/^(27[0-9]{9}|[1-9][0-9]{7,14})$/.test(digits))throw Error('Enter the owner’s WhatsApp number with country code, for example 27 followed by nine digits.');
+ let digits=String(ownerPhone||'').replace(/[^0-9]/g,'');
+ if(/^0[0-9]{9}$/.test(digits))digits='27'+digits.slice(1);
+ if(!/^(27[0-9]{9}|[1-9][0-9]{7,14})$/.test(digits))throw Error('Enter a valid owner WhatsApp number such as 082 123 4567 or +27 82 123 4567.');
  const text='Hello. As agreed during our Teyza shop visit for '+shopName+', please download the Teyza app at https://teyza.co.za/download.html and sign in using your own account. Then open this private confirmation link to confirm the agent visit: '+url+'. Your shop registration is free. Admin will review verification separately; selling requires an optional Premium membership. Do not share passwords or OTPs.';
  return 'https://wa.me/'+digits+'?text='+encodeURIComponent(text);
 }
