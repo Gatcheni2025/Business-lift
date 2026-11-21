@@ -301,7 +301,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
         TextButton.icon(onPressed:()=>_startVisit(row),icon:const Icon(Icons.add_circle_outline,size:17),label:const Text('Visit & register')),
      ])
     ]))
-   ]))));
+   ])));
  }
  Widget _header(){
   return Container(padding:const EdgeInsets.fromLTRB(20,18,20,14),
@@ -337,9 +337,9 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:busy?null:()=>_operate(_search),icon:const Icon(Icons.refresh),label:const Text('Refresh shops')))]),
    const SizedBox(height:8),
    SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
-    for(const (code,label) in [('all','All'),('spaza','Spaza'),('variety','Businesses'),('wholesale','Wholesalers')])
-     Padding(padding:const EdgeInsets.only(right:6),child:ChoiceChip(label:Text(label),selected:category==code,
-      onSelected:(_){setState(()=>category=code);_operate(_search);})),
+    for(final entry in const <String,String>{'all':'All','spaza':'Spaza','variety':'Businesses','wholesale':'Wholesalers'}.entries)
+     Padding(padding:const EdgeInsets.only(right:6),child:ChoiceChip(label:Text(entry.value),selected:category==entry.key,
+      onSelected:(_){setState(()=>category=entry.key);_operate(_search);})),
    ])),
    const SizedBox(height:10),_mapPane(),const SizedBox(height:13),
    Row(children:[Expanded(child:Text(registeredOnly?'Registered on Teyza':'Potential onboarding leads',
@@ -347,7 +347,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      TextButton(onPressed:()=>setState(()=>registeredOnly=!registeredOnly),child:Text(registeredOnly?'Show Google leads':'See registered'))]),
    if(message.isNotEmpty)Text(message,style:const TextStyle(fontSize:12,color:Colors.orange)),
    if(rows.isEmpty)const Padding(padding:EdgeInsets.all(22),child:Text('No shops loaded in this area. Try another town or refresh. This does not mean none exist.')),
-   for(const row in rows.take(60))_shopCard(row,alreadyRegistered:registeredOnly),
+   for(final row in rows.take(60))_shopCard(row,alreadyRegistered:registeredOnly),
    const SizedBox(height:90),
   ]));
  }
