@@ -28,10 +28,11 @@ function servingConfig(original){
  config.redirects=(config.redirects||[]).filter(r=>!routes.includes(r.glob)&&!aliases.includes(r.glob));
  config.rewrites=[{glob:'/admin',path:'/admin.html'},{glob:'/admin/**',path:'/admin.html'},
   ...(config.rewrites||[]).filter(r=>!routes.includes(r.glob))];
- // Retain every unrelated header and route, and make private-review pages non-cacheable.
- config.headers=[...(config.headers||[]),
+ // Retain unrelated headers. Admin routes require an origin Referer for Google Maps\n // browser-key authorization; never use no-referrer for these routes.\n // strict-origin-when-cross-origin sends only the site origin to Google.\n // Replace stale Admin-specific entries inherited from previous releases.
+ const managedGlobs=['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/js/teyza-admin-map.mjs','/js/teyza-premium-coverage.mjs','/js/teyza-combined-coverage.mjs','/assets/teyza-maps-config.json','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/assets/teyza-southern-africa-land.geojson'];
+ config.headers=[...(config.headers||[]).filter(h=>!managedGlobs.includes(h.glob)),
   ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/js/teyza-admin-map.mjs','/js/teyza-premium-coverage.mjs','/js/teyza-combined-coverage.mjs','/assets/teyza-maps-config.json','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/assets/teyza-southern-africa-land.geojson'].map(glob=>({glob,headers:{
-   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}}))];
+   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Robots-Tag':'noindex, nofollow'}}))];
  return config;
 }
 async function allFiles(client,version){
