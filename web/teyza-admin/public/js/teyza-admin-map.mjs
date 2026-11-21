@@ -1,3 +1,4 @@
+import {createPremiumCoverage} from '/js/teyza-premium-coverage.mjs';
 // Admin-only Teyza national coverage explorer. Maps use Google Maps so
 // Google Places data is never placed on a non-Google basemap or bulk cached.
 // Requires a browser-restricted Google Maps JavaScript API key supplied by an admin.
@@ -25,6 +26,16 @@ export function createAdminMap({api,report}){
  let map=null,google=null,markers=[],registered=[],googleEntries=[],next=null,partial=false,started=false;
  const node=(tag,copy)=>{const n=document.createElement(tag);if(copy!==undefined)n.textContent=copy;return n;};
  const panel=node('section');panel.className='panel coverage-dashboard';
+ const premium=createPremiumCoverage({
+  api,report,
+  openAgents:()=>document.querySelector('[data-admin-view="field"]')?.click(),
+  openShops:()=>document.querySelector('[data-admin-view="sellers"]')?.click(),
+  openGoogle:()=>{advanced.open=true;advanced.scrollIntoView({behavior:'smooth',block:'start'});}
+ });
+ const advanced=node('details');advanced.className='tp-advanced';
+ const advancedTitle=node('summary','Optional Google Maps explorer · local searches only');
+ advanced.append(advancedTitle);
+
  const introduction=node('p','Map South African Teyza-registered shops and compare nearby Google-listed businesses. Google searches are local and do not constitute a national census.');
  const helpLink=node('a','Set up a Google Maps browser key in Google Cloud');
  helpLink.href='https://console.cloud.google.com/google/maps-apis/credentials?project=teyza-maps';
@@ -73,7 +84,8 @@ export function createAdminMap({api,report}){
  const layout=node('div');layout.className='coverage-layout';layout.append(mapWrap,insights);
  const setup=node('details');setup.className='coverage-key-setup';setup.open=true;setup.append(node('summary','Browser map key settings'),helpLink,guidance,keyLabel,rememberLabel,forget);
  const results=node('div');results.setAttribute('aria-live','polite');
- panel.append(kpis,title,introduction,controls,start,status,layout,setup,results);
+ advanced.append(kpis,title,introduction,controls,start,status,layout,setup,results);
+ panel.append(premium.panel,advanced);
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
  function display(){if(!google||!map)return;
@@ -160,5 +172,5 @@ export function createAdminMap({api,report}){
  // When an administrator opted to remember a browser-restricted key, open the map on landing.
  const observer=new MutationObserver(()=>{if(!panel.isConnected)return;observer.disconnect();if(remember.checked&&key.value&&!started)queueMicrotask(()=>{if(panel.isConnected)start.click();});});
  observer.observe(document.body,{childList:true,subtree:true});
- return {panel,clear(){clearMarkers();registered=[];googleEntries=[];next=null;partial=false;map=null;google=null;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;status.textContent='Start a new administrator map session.';}};
+ return {panel,activate:()=>premium.activate(),clear(){premium.clear();clearMarkers();registered=[];googleEntries=[];next=null;partial=false;map=null;google=null;started=false;start.disabled=false;search.disabled=true;refresh.disabled=true;status.textContent='Start a new administrator map session.';}};
 }
