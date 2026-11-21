@@ -27,7 +27,7 @@ export function createCombinedCoverage({report,onReady}={}){
  const showG=elt('input');showG.type='checkbox';showG.checked=true;
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
  const status=elt('p','Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
- const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText='height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
+ const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText='display:none;height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
  controls.append(town,province,category,search,toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
  panel.append(title,note,controls,status,canvas,list);
@@ -83,6 +83,7 @@ export function createCombinedCoverage({report,onReady}={}){
    if(typeof value!=='string'||!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value))
     throw Error('Google Maps browser configuration is invalid. The national Teyza map remains available.');
    google=await loadMap(value);
+   canvas.style.display='block';
    map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});
    shown=true;search.disabled=false;
    status.textContent='Google map ready. Select a province or town and search locally for additional Google-listed businesses.';
@@ -115,5 +116,5 @@ export function createCombinedCoverage({report,onReady}={}){
   }catch(e){status.textContent=e.message;report?.(e);}finally{search.disabled=false;}
  };
  showT.onchange=render;showG.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
 }
