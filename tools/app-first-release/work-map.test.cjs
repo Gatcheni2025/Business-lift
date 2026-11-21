@@ -70,7 +70,7 @@ test('Work simplifies registration to area, capture, and owner consent without i
  assert(work.includes('window.open(link'));
  assert(work.includes('https://wa.me/'));
  assert(work.includes("digits='27'+digits.slice(1)"));
- assert(work.includes('onboarding'));
+ assert(work.includes('STEP 2 OF 3 · VISIT AND CAPTURE'));
  assert(work.includes('WhatsApp verification and Premium notifications require separate consented server-side templates'));
  assert(work.includes("api('agent_owner_link'"));
  assert(work.includes("api('agent_visit_submit'"));
