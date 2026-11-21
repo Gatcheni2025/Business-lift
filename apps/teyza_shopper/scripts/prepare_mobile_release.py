@@ -73,6 +73,14 @@ def android(signing):
                 manifest.remove(existing)
         ET.SubElement(manifest, "uses-permission", {key + "name": name, tools + "node": "remove"})
     manifest.find("application").set(key + "label", "Teyza")
+    # Google Maps Android SDK uses its own package/SHA-restricted mobile key.
+    # A website HTTP-referrer key or Firebase Auth key must never be reused.
+    maps_key = os.environ.get("TEYZA_GOOGLE_MAPS_ANDROID_KEY", "").strip()
+    if maps_key:
+        if not re.fullmatch(r"AIza[A-Za-z0-9_-]{30,80}", maps_key):
+            raise SystemExit("Invalid native Android Maps key format.")
+        ET.SubElement(manifest.find("application"), "meta-data",
+            {key + "name": "com.google.android.geo.API_KEY", key + "value": maps_key})
     main = next((a for a in manifest.find("application").findall("activity")
                  if a.get(key + "name", "").endswith("MainActivity")), None)
     if main is None:
@@ -311,6 +319,19 @@ def ios(signing='unsigned'):
     }
     '''
         delegate.write_text("import FirebaseCore\n" + source.replace(marker, bootstrap + marker, 1))
+    # iOS Maps SDK API key is restricted by the iOS app's bundle ID in Google Cloud.
+    maps_key = os.environ.get("TEYZA_GOOGLE_MAPS_IOS_KEY", "").strip()
+    if maps_key:
+        if not re.fullmatch(r"AIza[A-Za-z0-9_-]{30,80}", maps_key):
+            raise SystemExit("Invalid native iOS Maps key format.")
+        delegate = ROOT / "ios/Runner/AppDelegate.swift"
+        source = delegate.read_text()
+        marker = "return super.application(application, didFinishLaunchingWithOptions: launchOptions)"
+        if marker not in source:
+            raise SystemExit("Could not configure iOS Google Maps startup.")
+        source = "import GoogleMaps\n" + source.replace(
+            marker, 'GMSServices.provideAPIKey("' + maps_key + '")\n    ' + marker, 1)
+        delegate.write_text(source)
     ios_client = os.environ.get("TEYZA_GOOGLE_IOS_CLIENT_ID", "").strip()
     web_client = os.environ.get("TEYZA_GOOGLE_WEB_CLIENT_ID", "").strip()
     if ios_client and web_client:

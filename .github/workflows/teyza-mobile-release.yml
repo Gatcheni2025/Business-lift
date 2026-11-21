@@ -74,6 +74,8 @@ env:
   TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID || '1:983479810697:ios:4aae4823892dd145db2458' }}
   TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
   TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
+  TEYZA_GOOGLE_MAPS_ANDROID_KEY: ${{ secrets.TEYZA_GOOGLE_MAPS_ANDROID_KEY }}
+  TEYZA_GOOGLE_MAPS_IOS_KEY: ${{ secrets.TEYZA_GOOGLE_MAPS_IOS_KEY }}
   TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
   SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
   QA_SIGNING_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'true' || 'false' }}
@@ -189,6 +191,18 @@ jobs:
           print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
           print('Do not use the QA binaries as production-ready or claim R324 seller approval is live.')
           PY_QA
+      - name: Require mobile Maps SDK keys for signed Agent map release
+        if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
+        shell: bash
+        run: |
+          if [ "${{ inputs.platforms }}" != ios ] && [ -z "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" ]; then
+            echo '::error::Configure TEYZA_GOOGLE_MAPS_ANDROID_KEY with an Android package/certificate-restricted Maps SDK key.'
+            exit 1
+          fi
+          if [ "${{ inputs.platforms }}" != android ] && [ -z "$TEYZA_GOOGLE_MAPS_IOS_KEY" ]; then
+            echo '::error::Configure TEYZA_GOOGLE_MAPS_IOS_KEY with an iOS bundle-restricted Maps SDK key.'
+            exit 1
+          fi
       - name: Require current seller service before a signed store build
         if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
         env:
@@ -377,7 +391,7 @@ jobs:
           python3 scripts/make_launcher_icon.py
       - name: Build Android App Bundle
         working-directory: apps/teyza_shopper
-        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
       - name: Verify merged bundle has no advertising permissions
         working-directory: apps/teyza_shopper
         run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
@@ -394,7 +408,7 @@ jobs:
         if: env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_store_apk.py
       - name: Upload verified signed Android APK for direct device testing
@@ -414,7 +428,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa == true && inputs.qa_signing_only == true && env.SIGNING_MODE == 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
           python3 ../../scripts/package_teyza_direct_mandate_qa.py
       - name: Upload Android-direct mandate QA APK (NOT GOOGLE PLAY)
@@ -432,7 +446,7 @@ jobs:
           # Debug APK is installable for smoke tests, but not Play upload signed.
           # Keep it separate from the unsigned release AAB.
           python3 scripts/prepare_mobile_release.py android --signing test
-          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
       - name: Upload installable Android test APK
         if: env.SIGNING_MODE != 'signed'
@@ -448,7 +462,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true && env.SIGNING_MODE != 'signed'
         working-directory: apps/teyza_shopper
         run: |
-          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
           mkdir -p build/direct-mandate-debug-qa
           cp build/app/outputs/flutter-apk/app-debug.apk build/direct-mandate-debug-qa/Teyza-Direct-Mandate-DEBUG-QA.apk
@@ -577,10 +591,10 @@ jobs:
         shell: bash
         run: |
           if [ "$SIGNING_MODE" = signed ]; then
-            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_IOS_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
             test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
           else
-            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_IOS_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           fi
           python3 scripts/package_mobile_release.py ios
       - name: Upload iOS release archive
@@ -639,7 +653,7 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-infos
           flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
-          flutter build apk --debug --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          flutter build apk --debug --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
 
   qa_binary_defender_scan:

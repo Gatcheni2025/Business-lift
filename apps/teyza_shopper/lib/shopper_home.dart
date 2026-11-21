@@ -12,6 +12,8 @@ import 'shopper_auth.dart';
 import 'shopper_delivery_profile.dart';
 import 'shopper_account.dart';
 import 'seller_workspace.dart';
+import 'agent_workspace.dart';
+import 'teyza_mode_chooser.dart';
 import 'shopper_discovery.dart';
 import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
@@ -303,6 +305,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   String? _pendingClaimPlaceId;
   int _sellerEntry=0;
   Future<void>? _workspaceResolution;
+  String? _checkedAgentUid;
+  bool _agentApproved=false,_agentMode=false,_rolePicker=false;
   SellerPush? sellerPush;
   StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
@@ -377,7 +381,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           .catchError((Object _){/* Keep the in-memory location on logout. */}));
       }
       if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
-      _observedUid=uid;_checkedSellerUid=null;
+      _observedUid=uid;_checkedSellerUid=null;_checkedAgentUid=null;
+      _agentApproved=false;_agentMode=false;_rolePicker=false;
       _workspaceResolution=null;
       _sellerInitialTarget=null;if(previousUid!=null)_pendingClaimPlaceId=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
@@ -411,6 +416,30 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       (widget.enableBackgroundServices||widget.sellerApiFactory!=null)){
       _checkedSellerUid=uid;_workspaceResolution=resolveSellerWorkspace(uid);
     }
+    if(uid!=null&&session.isReady&&!session.isBusy&&_checkedAgentUid!=uid&&
+       (widget.enableBackgroundServices||widget.sellerMobileApi!=null)){
+      _checkedAgentUid=uid;unawaited(_resolveAgentRole(uid));
+    }
+  }
+  Future<void> _resolveAgentRole(String uid) async {
+    try{
+      final api=widget.sellerMobileApi??TeyzaMobileApi(session);
+      final response=await api.call('agent_profile');
+      if(!mounted||session.userId!=uid||session.idToken==null)return;
+      if(agentShouldOfferMode(response,currentUid:uid)){
+        setState((){_agentApproved=true;_rolePicker=true;_agentMode=false;});
+      }
+    }catch(_){
+      // A missing, pending, suspended or unreachable agent profile never grants access.
+      // Normal Shopper/Seller login continues; agents can retry after Admin approval.
+    }
+  }
+  void _chooseRole(String value){
+    if(!mounted||session.userId==null||session.idToken==null)return;
+    if(value=='agent'&&!_agentApproved)return;
+    setState((){_rolePicker=false;_agentMode=value=='agent';});
+    if(value=='shopper'||value=='agent')session.useShopperWorkspace();
+    if(value=='seller')session.useSellerWorkspace();
   }
   Future<void> resolveSellerWorkspace(String uid) async {
     try{
@@ -1380,6 +1409,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   Future<void> openOwnerWorkspace({bool notification=false,String? target}) async {
     if(session.idToken==null){navigateToTab(4);return;}
+    _agentMode=false;_rolePicker=false;
     _sellerInitialTarget=notification?(target??'notifications'):null;
     if(notification)_sellerEntry++;
     session.useSellerWorkspace();
@@ -1457,6 +1487,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if(_rolePicker&&_agentApproved&&session.userId!=null)return TeyzaModeChooser(
+      agentApproved:true,onShopper:()=>_chooseRole('shopper'),
+      onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
+    if(_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
+      key:ValueKey('agent-${session.userId}'),session:session,mobileApi:widget.sellerMobileApi,
+      onShopper:()=>_chooseRole('shopper'),onSeller:()=>_chooseRole('seller'));
     if(session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
       session:session,sellerMode:true,apiFactory:widget.sellerApiFactory,mobileApi:widget.sellerMobileApi,
       initialTarget:_sellerInitialTarget,initialClaimPlaceId:_pendingClaimPlaceId,
@@ -1495,6 +1531,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             ]))))
         ]),
         actions:[
+          if(_agentApproved&&session.userId!=null)
+            IconButton(key:const ValueKey('teyza-mode-switch'),tooltip:'Switch role',
+              onPressed:()=>setState(()=>_rolePicker=true),icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
