@@ -36,8 +36,10 @@ const agentTowns=<AgentTown>[
   AgentTown('Kimberley','Northern Cape',-28.7282,24.7499),
 ];
 bool agentApproved(Map<String,dynamic>? record)=>record?['status']=='approved';
-bool agentShouldOfferMode(Map<String,dynamic>? response)=>agentApproved(
- response?['profile'] is Map?Map<String,dynamic>.from(response!['profile'] as Map):null);
+bool agentShouldOfferMode(Map<String,dynamic>? response,{String? currentUid}){
+ final p=response?['profile'] is Map?Map<String,dynamic>.from(response!['profile'] as Map):null;
+ return agentApproved(p)&&(currentUid==null||p?['uid']==currentUid);
+}
 String agentCategoryName(String raw)=>raw=='wholesale'?'Wholesaler':
  raw=='variety'||raw=='business'||raw=='service'||raw=='retail'?'Business':'Spaza / local shop';
 String agentVisitStatus(String status)=>switch(status){
@@ -93,7 +95,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      final data=await service.call('agent_profile');
      if(!mounted||ticket!=request||widget.session.userId!=uid)return;
      final p=data['profile'] is Map?Map<String,dynamic>.from(data['profile'] as Map):null;
-     if(!agentApproved(p)){setState((){profile=p;loading=false;error='Your field-agent account is not approved. Contact Teyza Admin.';});return;}
+     if(!agentShouldOfferMode({'profile':p},currentUid:uid)){setState((){profile=p;loading=false;error='Your field-agent account is not approved. Contact Teyza Admin.';});return;}
      setState((){profile=p;loading=false;error='';});
      await Future.wait([_search(),_loadVisits()]);
    }catch(e){if(mounted&&ticket==request)setState((){loading=false;error=mobileError(e);});}
