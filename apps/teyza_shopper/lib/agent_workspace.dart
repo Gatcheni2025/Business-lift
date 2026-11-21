@@ -97,7 +97,8 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      final p=data['profile'] is Map?Map<String,dynamic>.from(data['profile'] as Map):null;
      if(!agentShouldOfferMode({'profile':p},currentUid:uid)){setState((){profile=p;loading=false;error='Your field-agent account is not approved. Contact Teyza Admin.';});return;}
      setState((){profile=p;loading=false;error='';});
-     await Future.wait([_search(),_loadVisits()]);
+     try{await Future.wait([_search(),_loadVisits()]);}
+     catch(e){if(mounted&&widget.session.userId==uid)setState(()=>error=mobileError(e));}
    }catch(e){if(mounted&&ticket==request)setState((){loading=false;error=mobileError(e);});}
  }
  Future<void> _search()async{
