@@ -92,7 +92,7 @@ export function createCombinedCoverage({report,onReady}={}){
    active=false;start.disabled=false;
    if(!start.isConnected)controls.prepend(start);
    status.textContent=e.message||'Google Maps unavailable; the national Teyza map remains available.';
-   report?.(e);
+   if(!String(e.message||'').includes('not configured for this site'))report?.(e);
   }
  }
  start.onclick=startMap;
