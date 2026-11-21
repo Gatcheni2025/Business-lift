@@ -99,3 +99,16 @@
 .tp-map-canvas .leaflet-control-attribution{font-size:10px;background:#ffffffeb!important;color:#276261}
 .tp-map-canvas .leaflet-control-attribution a{color:#096f6d}
 .tp-map-canvas .leaflet-popup-content strong{font-weight:800;color:#075143}
+
+/* Primary on-demand Google Maps explorer; Teyza outline remains an offline-key fallback. */
+.tp-combined{padding:14px;border:1px solid #cce8db;border-radius:16px;background:#f7fcf9;margin:12px 0}
+.tp-combined h3{margin:0 0 8px;font-size:17px;color:#064c45}
+.tp-combined>p{font-size:12px;color:#52766e;line-height:1.5}
+.tp-combined-controls{display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+.tp-combined-controls input:not([type=checkbox]),.tp-combined-controls select{border:1px solid #d7e7e0;border-radius:10px;min-height:41px;padding:8px 10px;background:#fff;color:#063b37;max-width:100%}
+.tp-combined-controls label{display:inline-flex;align-items:center;font-size:12px;gap:4px;color:#285d52}
+.tp-combined-map{background:linear-gradient(145deg,#b6d7d5,#e4f3e7)}
+.tp-combined-results{display:flex;flex-wrap:wrap;gap:9px;padding:10px 0}
+.tp-combined-results>p{flex-basis:100%;font-size:12px;color:#536e64}
+.tp-map-card details>summary{cursor:pointer;color:#157568;font-size:12px;margin:12px 0;font-weight:700}
+@media(max-width:600px){.tp-combined-controls>*{width:100%}.tp-combined-controls label{width:auto}.tp-combined-map{height:370px!important}}
