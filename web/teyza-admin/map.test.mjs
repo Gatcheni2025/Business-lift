@@ -120,7 +120,7 @@ test('Google Places onboarding search separates matched Teyza IDs from potential
  assert(source.includes('No matching published Teyza listing'));
  assert(source.includes('Promise.allSettled(kinds.map'));
  assert(source.includes("url.searchParams.set('category',kind)"));
- assert(source.includes('potential onboarding leads'));
+ assert(source.includes('potential leads'));
  assert(!source.includes('localStorage.setItem('));
 });
 
@@ -130,7 +130,7 @@ test('Google listings KPI tracks local live results and failed searches without 
  const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
  assert(combined.includes("onDiscovery?.({state:'loading'"));
  assert(combined.includes("onDiscovery?.({state:'error'"));
- assert(combined.includes('searchCompleted=true;render()'));
+ assert(combined.includes('searchCompleted=true;searchPending=false;render()'));
  assert(combined.includes('void searchArea(true)'));
  assert(combined.includes("map.setCenter({lat:-29.8587,lng:31.0218})"));
  assert(premium.includes("result.state==='ready'?String(result.potential)"));
