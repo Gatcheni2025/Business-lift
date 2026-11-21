@@ -3,18 +3,25 @@ export function createFieldMap({onError=()=>{}}={}){
  const root=document.createElement('section');root.className='field-map-shell';root.setAttribute('aria-label','Map of nearby registered and Google-listed shops');
  const heading=document.createElement('div');heading.className='field-map-heading';
  const title=document.createElement('h3');title.textContent='Nearby shop coverage map';
- const note=document.createElement('p');note.textContent='Green: Teyza registered · Blue: Google-listed · Purple: field lead. Google data covers the searched area only.';
+ const note=document.createElement('p');note.textContent='Green: registered on Teyza · Blue: spaza shops · Orange: other businesses · Violet: wholesalers · Purple: team-recorded leads. Tap a pin for directions.';
  heading.append(title,note);
  const canvas=document.createElement('div');canvas.className='field-map-canvas';
  const status=document.createElement('p');status.className='field-map-status';status.setAttribute('role','status');status.textContent='Choose your location or search an address to view nearby shops.';
  root.append(heading,canvas,status);
  let map=null,markers=[],googlePromise=null;
- const key=()=>{let remembered='';try{remembered=localStorage.getItem('teyza_admin_maps_browser_key_v1')||'';}catch(_){}
-  return String(window.TEYZA_BROWSER_MAPS_KEY||document.querySelector('meta[name="teyza-browser-map-key"]')?.content||remembered).trim();};
- function loadMaps(){
+ async function key(){
+  // Reuse the website's browser-restricted Google Maps key; never request an API key from an agent.
+  const response=await fetch('/assets/teyza-maps-config.json',{cache:'no-store'});
+  if(!response.ok)throw Error('Teyza field map configuration is unavailable. Shop lists still work.');
+  const config=await response.json();
+  const value=String(config?.browserKey||'').trim();
+  if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value))throw Error('Teyza field map key configuration is invalid.');
+  return value;
+ }
+ async function loadMaps(){
   if(window.google?.maps?.Map)return Promise.resolve(window.google.maps);
   if(googlePromise)return googlePromise;
-  const token=key();
+  const token=await key();
   if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(token))return Promise.reject(Error('Map preview needs the website-restricted Maps JavaScript API key configured by Teyza. Shop lists and registration tools remain available.'));
   googlePromise=new Promise((resolve,reject)=>{
    const cb='teyzaFieldMaps_'+Math.random().toString(36).slice(2),script=document.createElement('script');
@@ -37,7 +44,7 @@ export function createFieldMap({onError=()=>{}}={}){
    const linked=new Set(registered.map(x=>x.googlePlaceId).filter(Boolean));
    const seen=new Set();
    const all=[...registered.map(x=>({x,kind:'Registered on Teyza',color:'#07895f'})),
-    ...google.filter(x=>{const id=x.placeId||x.googlePlaceId;if(id&& (linked.has(id)||seen.has(id)))return false;if(id)seen.add(id);return true;}).map(x=>({x,kind:'Google-listed · verify Teyza status',color:'#286ad6'})),
+    ...google.filter(x=>{const id=x.placeId||x.googlePlaceId;if(id&& (linked.has(id)||seen.has(id)))return false;if(id)seen.add(id);return true;}).map(x=>({x,kind:'Google-listed · '+(x.shopCategory==='wholesale'?'Wholesaler':x.shopCategory==='variety'?'Other business':'Spaza/local shop')+' · verify Teyza status',color:x.shopCategory==='wholesale'?'#a563d7':x.shopCategory==='variety'?'#ed8b27':'#286ad6'})),
     ...leads.map(x=>({x,kind:'Field lead · unverified',color:'#8c43db'}))];
    const info=new maps.InfoWindow();for(const {x,kind,color} of all){
     if(!Number.isFinite(x.latitude)||!Number.isFinite(x.longitude))continue;

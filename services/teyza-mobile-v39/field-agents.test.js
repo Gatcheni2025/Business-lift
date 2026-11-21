@@ -190,3 +190,70 @@ test('Approved agents can update only their own contact details without changing
  await f.call('agent_profile_update',update);const p=f.db.records.get('teyzaFieldAgents/agent1');assert.equal(p.address,update.address);assert.equal(p.status,'approved');assert.equal(p.revision,1);
  await rejects(f.call('agent_profile_update',update),409);
 });
+
+test('R90 reward needs newly registered Admin-approved seller, approved agent work and verified attribution',async()=>{
+ const f=setup();
+ await approved(f);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ account.createdAt=new Date(start+1000);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ account.approvalStatus='approved';
+ const credited=await f.call('agent_admin_reward_approve',{visitId:'visit1'},admin);
+ assert.equal(credited.amountCents,9000);
+ assert.equal(credited.status,'approved_pending_payment');
+ const ledger=f.db.records.get('teyzaAgentRewards/seller1');
+ assert.equal(ledger.agentUid,'agent1');
+ assert.equal(ledger.currency,'ZAR');
+ assert.equal(ledger.approvedBy,'admin');
+ assert.equal(ledger.paidAt,undefined);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ const summary=await f.call('agent_rewards');
+ assert.equal(summary.approvedPendingPaymentCents,9000);
+ assert.equal(summary.approvedCount,1);
+ assert.equal(summary.rewards[0].amountCents,9000);
+ const other=await f.call('agent_rewards',{}, {uid:'other',email_verified:true}).catch(e=>e);
+ assert.equal(other.status,403);
+});
+test('R90 reward rejects older registrations, inaccurate locations and forged agent attribution',async()=>{
+ const f=setup();await approved(f);
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ account.approvalStatus='approved';account.createdAt=new Date(start-1000);
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ account.createdAt=new Date(start+1000);
+ f.db.records.get('teyzaShopLocations/seller1').latitude=-28.9;
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ f.db.records.get('teyzaShopLocations/seller1').latitude=-29.85;
+ f.db.records.get('teyzaSellerAgentAttribution/seller1').agentUid='different';
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ assert.equal(f.db.records.get('teyzaAgentRewards/seller1'),undefined);
+});
+
+test('Field discovery separates local shops, other businesses and wholesalers for approved agent map',async()=>{
+ const {categoryOf,SEARCH_TERMS,relevantPlace}=require('./field-discovery');
+ assert.equal(categoryOf('all'),'all');assert.equal(categoryOf('wholesale'),'wholesale');
+ assert.equal(categoryOf('not-trusted'),'spaza');
+ assert.equal(SEARCH_TERMS.spaza.length,3);
+ assert.equal(relevantPlace({displayName:{text:'City Spaza Shop'}},'spaza'),true);
+ assert.equal(relevantPlace({displayName:{text:'Shoprite Durban'}},'spaza'),false);
+ assert.equal(relevantPlace({displayName:{text:'Hair Salon'}},'variety'),true);
+ assert.equal(relevantPlace({displayName:{text:'Durban Cash and Carry Wholesale'}},'wholesale'),true);
+ const queried=[];
+ const near={latitude:-29.85,longitude:31.02};
+ const fetchImpl=async(_url,options)=>{
+  const req=JSON.parse(options.body);queried.push(req.textQuery);
+  const category=req.textQuery.includes('salon')||req.textQuery.includes('furniture')||req.textQuery.includes('plumber')?'variety':
+   req.textQuery.includes('wholesale')?'wholesale':'spaza';
+  const names={spaza:'New Spaza Shop',variety:'Durban Hair Salon',wholesale:'Durban Wholesale Cash and Carry'};
+  return new Response(JSON.stringify({places:[{id:'google-'+category,displayName:{text:names[category]},
+   formattedAddress:'Durban, South Africa',location:near,primaryType:category==='variety'?'beauty_salon':category==='wholesale'?'wholesaler':'grocery_store'}]}),{status:200,headers:{'content-type':'application/json'}});
+ };
+ const f=setup({getPlacesKey:()=> 'test',fetchImpl});
+ const result=await f.call('agent_nearby',{...near,category:'all'});
+ assert.equal(queried.length,9);
+ assert.deepEqual([...new Set(result.google.map(p=>p.shopCategory))].sort(),['spaza','variety','wholesale']);
+ assert.equal(result.google.length,3);
+ assert(result.google.every(p=>p.placeId&&p.mapsUrl&&p.distanceMeters===0));
+});
