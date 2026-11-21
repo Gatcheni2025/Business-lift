@@ -112,3 +112,14 @@
 .tp-combined-results>p{flex-basis:100%;font-size:12px;color:#536e64}
 .tp-map-card details>summary{cursor:pointer;color:#157568;font-size:12px;margin:12px 0;font-weight:700}
 @media(max-width:600px){.tp-combined-controls>*{width:100%}.tp-combined-controls label{width:auto}.tp-combined-map{height:370px!important}}
+
+/* Google Places onboarding leads: show searchable area results alongside map. */
+.tp-discovery-counts{margin:10px 0;color:#07554e;font-size:13px}
+.tp-discovery-result{display:flex;flex-direction:column;text-align:left;gap:4px;
+ padding:12px 14px;background:#fff;border:1px solid #d5e9e1;border-radius:11px;cursor:pointer;
+ min-width:210px;flex:1 1 220px;color:#0b453d}
+.tp-discovery-result:hover,.tp-discovery-result:focus-visible{outline:2px solid #16a477;outline-offset:1px}
+.tp-discovery-result strong{font-size:13px}
+.tp-discovery-result span{font-size:12px;color:#60776f}
+.tp-discovery-result small{font-size:11px;color:#235e91}
+.tp-google-credit{font-size:11px!important;color:#667975!important}
