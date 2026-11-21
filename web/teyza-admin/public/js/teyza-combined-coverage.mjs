@@ -14,8 +14,8 @@ export function unmatchedGoogle(places,registered){
  const ids=new Set(registered.map(p=>p.googlePlaceId).filter(Boolean)),seen=new Set();
  return places.filter(p=>{if(!good(p)||!p.placeId||ids.has(p.placeId)||seen.has(p.placeId))return false;seen.add(p.placeId);return true;});
 }
-export function createCombinedCoverage({report,onReady}={}){
- let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false;
+export function createCombinedCoverage({report,onReady,onDiscovery}={}){
+ let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false;
  const panel=elt('section');panel.className='tp-combined';
  const title=elt('h3','Google Places · shop registration opportunities');
  const note=elt('p','Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
@@ -59,8 +59,9 @@ export function createCombinedCoverage({report,onReady}={}){
  const boundsFor=(p)=>({lat:p.latitude,lng:p.longitude});
  function render(){
   const groups=matchGoogle(places,registered),listed=groups.potential;
+  onDiscovery?.({state:searchCompleted?'ready':'not-searched',total:places.length,potential:listed.length,matched:groups.linked.length});
   count.replaceChildren();
-  count.append(elt('strong',registered.length+' Teyza mapped · '+groups.linked.length+' Google listings matched · '+listed.length+' potential onboarding leads in searched area'));
+  count.append(elt('strong',registered.length+' Teyza mapped · '+(searchCompleted?groups.linked.length+' Google listings matched · '+listed.length+' potential onboarding leads':'Google Places search not completed')));
   list.replaceChildren();
   const hint=elt('p',places.length?'Potential leads are Google-listed businesses without a matching published Teyza Place ID. Verify the shop and owner before contacting or assigning an agent.':'Search a town or the current Google map area to see Google-listed shops and businesses.');
   list.append(hint);
@@ -113,6 +114,10 @@ export function createCombinedCoverage({report,onReady}={}){
    shown=true;search.disabled=false;
    status.textContent='Google map ready. Select a province or town and search locally for additional Google-listed businesses.';
    onReady?.();render();
+   // One bounded, non-recurring discovery sample gives operators live evidence
+   // rather than an empty map. No national background crawling is performed.
+   town.value='Durban';province.value='KwaZulu-Natal';category.value='spaza';
+   void searchArea();
   }catch(e){
    active=false;start.disabled=false;
    if(!start.isConnected)controls.prepend(start);
@@ -129,9 +134,10 @@ export function createCombinedCoverage({report,onReady}={}){
   const matches=await new Promise((resolve,reject)=>geocoder.geocode({address,componentRestrictions:{country:'ZA'}},(results,code)=>code==='OK'&&results?.length?resolve(results):reject(Error('Could not locate that South African town/municipality.'))));
   const point=matches[0].geometry.location;map.setCenter(point);map.setZoom(q?11:7);
  }
- search.onclick=async()=>{
+ async function searchArea(){
   if(!map)return;
   search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
+  onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
    await locate();const c=map.getCenter(),lat=c.lat(),lon=c.lng();
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
@@ -145,7 +151,8 @@ export function createCombinedCoverage({report,onReady}={}){
     url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
     url.searchParams.set('radius','20000');url.searchParams.set('category',kind);
     const res=await fetch(url,{cache:'no-store'});
-    if(!res.ok)throw Error(kind+' discovery HTTP '+res.status);
+    if(!res.ok){let detail='';try{const body=await res.json();detail=String(body.error||'').slice(0,120);}catch(_){}
+     throw Error(kind+' discovery HTTP '+res.status+(detail?' ('+detail+')':''));}
     const data=await res.json();
     if(!Array.isArray(data.entries))throw Error(kind+' discovery returned no entries array');
     return {entries:data.entries.filter(good),warning:data.warning};
@@ -154,14 +161,16 @@ export function createCombinedCoverage({report,onReady}={}){
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
    const unique=new Map();
    for(const item of successful)for(const p of item.value.entries)if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);
-   places=[...unique.values()];render();
+   places=[...unique.values()];searchCompleted=true;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings: '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.'+
     (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
-  }catch(e){status.textContent='Google discovery failed: '+e.message;report?.(e);}
+  }catch(e){status.textContent='Google discovery failed: '+e.message;
+   onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
   finally{search.disabled=false;}
- };
+ }
+ search.onclick=searchArea;
  showT.onchange=render;showG.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
 }
