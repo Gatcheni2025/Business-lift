@@ -115,6 +115,12 @@ class ShopperSession extends ChangeNotifier {
     _sellerWorkspaceUid=userId;_changed();
     unawaited(_persist().catchError((Object _){}));
   }
+  void useShopperWorkspace(){
+    if(idToken==null||userId==null)return;
+    _sellerWorkspaceUid=null;
+    _changed();
+    unawaited(_persist().catchError((Object _){}));
+  }
   bool get contactVerified=>emailVerified||phoneVerified;
   Future<void> Function()? beforeSignOut;
   bool get hasAdminClaim {
