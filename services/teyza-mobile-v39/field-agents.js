@@ -1,8 +1,10 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
+const REWARD_CENTS=9000;
+const timestampMs=value=>value?.toMillis?.()??(value instanceof Date?value.getTime():typeof value==='number'?value:NaN);
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
 function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
 function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v.area,province:v.province,status:v.status,revision:v.revision,createdAt:v.createdAt,
@@ -47,6 +49,45 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   await rate(uid,'field-agent',80,60000);
   // Retire the old write route for cached clients; retain historical records.
   if(action==='agent_admin_commission_paid')D.fail(410,'Agent commission tracking has been retired.');
+  if(action==='agent_rewards'){
+   await agent(uid);
+   const rewards=await db.collection('teyzaAgentRewards').where('agentUid','==',uid).orderBy('__name__').limit(101).get();
+   const rows=rewards.docs.slice(0,100).map(s=>s.data()).filter(r=>r.agentUid===uid&&r.amountCents===REWARD_CENTS&&r.status==='approved_pending_payment')
+    .map(r=>({visitId:r.visitId,amountCents:r.amountCents,status:r.status,approvedAt:r.approvedAt}));
+   return {rewardCents:REWARD_CENTS,approvedPendingPaymentCents:rows.reduce((sum,r)=>sum+r.amountCents,0),approvedCount:rows.length,partial:rewards.docs.length>100,rewards:rows};
+  }
+  if(action==='agent_admin_reward_approve'){
+   const visitId=D.id(data.visitId),ref=doc('teyzaAgentVisits/'+visitId);
+   return db.runTransaction(async tx=>{
+    const visitSnap=await tx.get(ref),visit=visitSnap.exists?visitSnap.data():null;
+    if(!visit||visit.status!=='approved'||!visit.sellerUid||!visit.agentUid||visit.agentUid===uid||visit.sellerUid===uid)
+     D.fail(409,'Approve the verified visit and owner confirmation before reviewing the reward.');
+    const sellerUid=D.id(visit.sellerUid),rewardRef=doc('teyzaAgentRewards/'+sellerUid);
+    const [prior,seller,location,attribution,agentProfile]=await Promise.all([
+      tx.get(rewardRef),tx.get(doc('teyzaSellerAccounts/'+sellerUid)),
+      tx.get(doc('teyzaShopLocations/'+sellerUid)),
+      tx.get(doc('teyzaSellerAgentAttribution/'+sellerUid)),
+      tx.get(doc('teyzaFieldAgents/'+visit.agentUid))
+    ]);
+    if(prior.exists)D.fail(409,'A registration reward already exists for this seller.');
+    const account=seller.exists?seller.data():null,loc=location.exists?location.data():null,at=attribution.exists?attribution.data():null;
+    const created=timestampMs(account?.createdAt),visited=timestampMs(visit.createdAt);
+    if(!account||account.uid!==sellerUid||account.approvalStatus!=='approved'||!['spaza','retail','business','service','wholesale','wholesaler'].includes(account.category))
+     D.fail(409,'Seller registration must be approved and verified before rewarding.');
+    if(!Number.isFinite(created)||!Number.isFinite(visited)||created<visited)
+     D.fail(409,'Existing or undated seller registrations are not eligible for a new registration reward.');
+    if(!loc||!Number.isFinite(loc.latitude)||!Number.isFinite(loc.longitude)||distance(visit.location,loc)===null||distance(visit.location,loc)>250)
+     D.fail(409,'Verified shop location must match the agent visit.');
+    if(!at||at.sellerUid!==sellerUid||at.agentUid!==visit.agentUid||at.visitId!==visitId||
+      agentProfile.data()?.status!=='approved')
+     D.fail(409,'Agent registration attribution or approved agent status is missing.');
+    const record={sellerUid,agentUid:visit.agentUid,visitId,amountCents:REWARD_CENTS,currency:'ZAR',
+      status:'approved_pending_payment',approvedBy:uid,approvedAt:clock(),source:'verified_new_seller_registration'};
+    tx.create?.(rewardRef,record)??tx.set(rewardRef,record);
+    audit(tx,uid,action,sellerUid,{visitId,amountCents:REWARD_CENTS});
+    return {approved:true,amountCents:REWARD_CENTS,status:'approved_pending_payment'};
+   });
+  }
   if(action==='agent_profile')return {profile:profileView(await read('teyzaFieldAgents/'+uid)),provinces};
   if(action==='agent_apply'){
    if(data.consent!==true)D.fail(422,'Agree to the work evidence privacy notice.');
