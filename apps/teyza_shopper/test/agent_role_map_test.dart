@@ -27,7 +27,10 @@ class MockAgentService extends TeyzaMobileApi{
 }
 void main(){
  test('Agent mode requires an approved profile attached to the signed-in UID',(){
-  expect(agentShouldOfferMode({'profile':{'status':'approved'}}),isTrue);
+  expect(agentShouldOfferMode({'profile':{'uid':'verifiedAgent','status':'approved'}},
+   currentUid:'verifiedAgent'),isTrue);
+  expect(agentShouldOfferMode({'profile':{'uid':'otherAgent','status':'approved'}},
+   currentUid:'verifiedAgent'),isFalse);
   for(final value in ['pending','suspended','rejected','unknown']){
    expect(agentShouldOfferMode({'profile':{'status':value}}),isFalse);
   }
