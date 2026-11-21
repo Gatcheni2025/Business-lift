@@ -103,3 +103,23 @@ test('National map loads automatically and has no visible manual API key field',
  assert(admin.includes('panel.append(premium.panel);'));
  assert(!admin.includes('panel.append(premium.panel,advanced)'));
 });
+
+test('Google Places onboarding search separates matched Teyza IDs from potential leads and preserves provenance',async()=>{
+ const {matchGoogle}=await import('./public/js/teyza-combined-coverage.mjs');
+ const found=[{placeId:'linked',latitude:-29.8,longitude:31,name:'Verified shop'},
+  {placeId:'prospect',latitude:-29.9,longitude:31.1,name:'Nearby shop'},
+  {placeId:'prospect',latitude:-29.9,longitude:31.1,name:'Duplicate'},
+  {placeId:'outside',latitude:40,longitude:31,name:'Outside South Africa'}];
+ const {linked,potential}=matchGoogle(found,[{googlePlaceId:'linked',verified:true}]);
+ assert.deepEqual(linked.map(p=>p.placeId),['linked']);
+ assert.deepEqual(potential.map(p=>p.placeId),['prospect']);
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ assert(source.includes("['spaza','variety','wholesale']"));
+ assert(source.includes("Find shops needing Teyza registration"));
+ assert(source.includes('No matching published Teyza listing'));
+ assert(source.includes('Promise.allSettled(kinds.map'));
+ assert(source.includes("url.searchParams.set('category',kind)"));
+ assert(source.includes('potential onboarding leads'));
+ assert(!source.includes('localStorage.setItem('));
+});
