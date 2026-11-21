@@ -53,6 +53,7 @@ async function main(){
    const body=route.request().postDataJSON();calls.push(body);
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
+   if(body.action==='ops_map_shops')result={ok:true,shops:[{sellerUid:'seller1',name:'Synthetic Verified Spaza',category:'spaza',latitude:-29.86,longitude:31.01,city:'Durban',area:'Umlazi',verified:true,source:'teyza_only'}],next:null};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
    if(body.action==='ops_catalogue_queue')result={ok:true,submissions:[{sellerUid:rows[0].sellerUid,shopName:rows[0].shopName,ownerEmail:rows[0].ownerEmail,approvalStatus:'approved',productCount:1,paymentStatus:'not_started',paidMembership:false}],limited:false};
    if(body.action==='ops_seller_detail')result={ok:true,seller:{...rows[0],listingPlan:'free'},billing:{status:'not_started'},paystackMode:'test',membershipPaid:false,payments:[],
@@ -105,6 +106,16 @@ async function main(){
  }
  async function check(name,fn){await fn();count++;console.log('PASS '+name);}
  try{
+  await check('National map automatically displays authenticated registered-shop count without Google browser key',async()=>{
+   const f=await pageFor({startView:'map'});
+   await f.page.locator('.tp-shop-row').getByText('Synthetic Verified Spaza').waitFor();
+   assert.equal(await f.page.locator('.tp-card.tp-green .tp-card-value').innerText(),'1');
+   assert(await f.page.locator('.tp-advanced').evaluate(el=>!el.open));
+   assert(f.calls.some(c=>c.action==='ops_map_shops'));
+   assert.equal(await f.page.locator('.tp-premium-google-key').count(),0);
+   assert.deepEqual(f.errors,[]);
+   await f.context.close();
+  });
   await check('Overview uses loaded counts and the sidebar opens mandate and seller reviews on desktop and phone',async()=>{
     const f=await pageFor({startView:'overview'});
     await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();
