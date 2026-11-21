@@ -4,13 +4,22 @@ const {PROJECT}=require('./firebase-client.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=['/admin.html','/admin-review.html','/admin-sellers.html','/admin-login.html','/admin-dashboard.html','/admin/index.html','/admin-payments.html','/admin-support.html','/admin-users.html'];
 const assets=['/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/assets/teyza-southern-africa-land.geojson','/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-app-admin-firebase.mjs','/js/teyza-operations.js','/js/teyza-mandate-pdf.mjs','/js/teyza-operations-model.mjs','/js/teyza-field-admin.js','/js/teyza-admin-map.mjs','/js/teyza-premium-coverage.mjs','/js/teyza-combined-coverage.mjs'];
-const overlayPaths=new Set([...aliases,...assets]);
+const MAP_CONFIG='/assets/teyza-maps-config.json';
+const overlayPaths=new Set([...aliases,...assets,MAP_CONFIG]);
 function overlay(root){
  const files=new Map();
- for(const publicPath of overlayPaths){
+ for(const publicPath of [...aliases,...assets]){
   const source=aliases.includes(publicPath)?'admin.html':publicPath.slice(1);
   const bytes=zlib.gzipSync(fs.readFileSync(path.join(root,source)),{level:9});
   files.set(publicPath,{hash:crypto.createHash('sha256').update(bytes).digest('hex'),bytes});
+ }
+ // A browser key is public by nature; Google Cloud MUST restrict it to the site
+ // HTTP referrers and only Maps JavaScript/Geocoding APIs. Never use a Places server key.
+ const key=(process.env.TEYZA_MAPS_BROWSER_KEY||'').trim();
+ if(key){
+  if(!/^AIza[A-Za-z0-9_-]{30,80}$/.test(key))throw Error('Invalid browser-restricted Google Maps key configuration.');
+  const bytes=zlib.gzipSync(Buffer.from(JSON.stringify({browserKey:key})+'\n','utf8'),{level:9});
+  files.set(MAP_CONFIG,{hash:crypto.createHash('sha256').update(bytes).digest('hex'),bytes});
  }
  return files;
 }
@@ -21,7 +30,7 @@ function servingConfig(original){
   ...(config.rewrites||[]).filter(r=>!routes.includes(r.glob))];
  // Retain every unrelated header and route, and make private-review pages non-cacheable.
  config.headers=[...(config.headers||[]),
-  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/js/teyza-admin-map.mjs','/js/teyza-premium-coverage.mjs','/js/teyza-combined-coverage.mjs','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/assets/teyza-southern-africa-land.geojson'].map(glob=>({glob,headers:{
+  ...['/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}','/js/teyza-app-admin*','/js/teyza-operations*','/js/teyza-mandate-pdf.mjs','/js/teyza-field-admin.js','/js/teyza-admin-map.mjs','/js/teyza-premium-coverage.mjs','/js/teyza-combined-coverage.mjs','/assets/teyza-maps-config.json','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/assets/teyza-southern-africa-land.geojson'].map(glob=>({glob,headers:{
    'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}}))];
  return config;
 }

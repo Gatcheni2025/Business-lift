@@ -110,7 +110,9 @@ async function main(){
    const f=await pageFor({startView:'map'});
    await f.page.locator('.tp-shop-row').getByText('Synthetic Verified Spaza').waitFor();
    assert.equal(await f.page.locator('.tp-card.tp-green .tp-card-value').innerText(),'1');
-   assert(await f.page.locator('.tp-advanced').evaluate(el=>!el.open));
+   assert.equal(await f.page.locator('.tp-advanced').count(),0);
+   assert(await f.page.locator('.tp-map-card details').first().evaluate(el=>el.open));
+   assert.equal(await f.page.locator('.tp-combined input[type=password]').count(),0);
    assert(f.calls.some(c=>c.action==='ops_map_shops'));
    assert.equal(await f.page.locator('.tp-premium-google-key').count(),0);
    assert.deepEqual(f.errors,[]);

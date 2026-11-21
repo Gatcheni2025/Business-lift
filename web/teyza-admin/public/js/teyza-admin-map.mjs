@@ -30,7 +30,7 @@ export function createAdminMap({api,report}){
   api,report,
   openAgents:()=>document.querySelector('[data-admin-view="field"]')?.click(),
   openShops:()=>document.querySelector('[data-admin-view="sellers"]')?.click(),
-  openGoogle:()=>{advanced.open=true;advanced.scrollIntoView({behavior:'smooth',block:'start'});}
+  openGoogle:()=>premium.panel.querySelector('.tp-combined')?.scrollIntoView({behavior:'smooth',block:'start'})
  });
  const advanced=node('details');advanced.className='tp-advanced';
  const advancedTitle=node('summary','Optional Google Maps explorer · local searches only');
@@ -85,7 +85,7 @@ export function createAdminMap({api,report}){
  const setup=node('details');setup.className='coverage-key-setup';setup.open=true;setup.append(node('summary','Browser map key settings'),helpLink,guidance,keyLabel,rememberLabel,forget);
  const results=node('div');results.setAttribute('aria-live','polite');
  advanced.append(kpis,title,introduction,controls,start,status,layout,setup,results);
- panel.append(premium.panel,advanced);
+ panel.append(premium.panel); // Legacy manual-key explorer is not part of the dashboard.
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
  function display(){if(!google||!map)return;

@@ -88,3 +88,18 @@ test('Combined Google map filters claimed listings and preserves explicit unknow
  assert(premium.includes('combined.panel'));
  assert(premium.includes('combined.setShops(filtered)'));
 });
+
+test('National map loads automatically and has no visible manual API key field',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const combined=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ const admin=readFileSync(new URL('./public/js/teyza-admin-map.mjs',import.meta.url),'utf8');
+ assert(combined.includes("const CONFIG='/assets/teyza-maps-config.json'"));
+ assert(combined.includes("void")===false || combined.includes('startMap'));
+ assert(combined.includes('activate:()=>startMap()'));
+ assert(!combined.includes("key.type='password'"));
+ assert(premium.includes('fallback.open=true'));
+ assert(premium.includes('void combined.activate()'));
+ assert(admin.includes('panel.append(premium.panel);'));
+ assert(!admin.includes('panel.append(premium.panel,advanced)'));
+});
