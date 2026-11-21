@@ -265,11 +265,11 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
   final rows=[...registered.map((x)=>{...x,'status':'registered'}),...opportunities];
   if(!_nativeMapsReady)return Container(key:const ValueKey('agent-maps-setup'),
    height:250,decoration:BoxDecoration(color:const Color(0xFFEAF1FA),borderRadius:BorderRadius.circular(22)),
-   child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-    const Icon(Icons.map_outlined,size:50,color:_forest),const SizedBox(height:12),
-    const Text('Shop search and directions are ready',textAlign:TextAlign.center,style:TextStyle(fontSize:18,fontWeight:FontWeight.w800,color:_forest)),
-    const SizedBox(height:8),const Text('An interactive Google map needs Android/iOS Maps SDK keys. Use the live shop list below and tap Directions meanwhile.',textAlign:TextAlign.center),
-   ])));
+   child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(mainAxisSize:MainAxisSize.min,children:[
+    const Icon(Icons.map_outlined,size:42,color:_forest),const SizedBox(height:8),
+    const Text('Shop search and directions are ready',textAlign:TextAlign.center,style:TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:_forest)),
+    const SizedBox(height:7),const Text('The interactive map requires mobile Maps SDK keys. Use the live shop list and tap Directions meanwhile.',textAlign:TextAlign.center,style:TextStyle(fontSize:12)),
+   ]))));
   final pins=<Marker>{};
   for(var i=0;i<rows.length;i++){
    final row=rows[i],lat=(row['latitude'] as num?)?.toDouble(),lon=(row['longitude'] as num?)?.toDouble();
@@ -333,9 +333,9 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    Text('Find shops near you',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w800,color:_forest)),
    const SizedBox(height:4),const Text('Choose an area, view verified shops and contact new owners only with permission.'),
    const SizedBox(height:12),
-   DropdownButtonFormField<AgentTown>(value:agentTowns.contains(area)?area:agentTowns.first,
+   DropdownButtonFormField<AgentTown>(isExpanded:true,value:agentTowns.contains(area)?area:agentTowns.first,
     decoration:InputDecoration(labelText:'Area / town',prefixIcon:const Icon(Icons.place_outlined),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14))),
-    items:agentTowns.map((t)=>DropdownMenuItem(value:t,child:Text(t.name+' · '+t.province,overflow:TextOverflow.ellipsis))).toList(),
+    items:agentTowns.map((t)=>DropdownMenuItem(value:t,child:Text(t.name+' · '+t.province,maxLines:1,overflow:TextOverflow.ellipsis))).toList(),
     onChanged:(value){if(value!=null)_selectTown(value);}),
    const SizedBox(height:8),
    Row(children:[Expanded(child:OutlinedButton.icon(onPressed:busy?null:_currentArea,icon:const Icon(Icons.my_location),label:const Text('My location'))),
@@ -433,9 +433,14 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
  }
  Widget _nav(IconData icon,String label,int target){
   final active=target==page||(target==1&&page==2);
-  return TextButton.icon(style:TextButton.styleFrom(foregroundColor:active?_forest:const Color(0xFF657D7A),
-   backgroundColor:active?_mint:Colors.transparent),
-   onPressed:()=>target==3?widget.onShopper():setState(()=>page=target),
-   icon:Icon(icon),label:Text(label));
+  return Expanded(child:InkWell(borderRadius:BorderRadius.circular(12),
+   onTap:()=>target==3?widget.onShopper():setState(()=>page=target),
+   child:Container(padding:const EdgeInsets.symmetric(vertical:5),decoration:BoxDecoration(
+    color:active?_mint:Colors.transparent,borderRadius:BorderRadius.circular(12)),
+    child:Column(mainAxisSize:MainAxisSize.min,children:[
+     Icon(icon,color:active?_forest:const Color(0xFF657D7A),size:22),
+     const SizedBox(height:3),Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
+      style:TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:active?_forest:const Color(0xFF657D7A))),
+    ]))));
  }
 }
