@@ -15,8 +15,14 @@ test('Work discovery supports all business types, directions, guided visits and 
  const source=read('web/app-first/public/js/work-discovery.mjs');
  assert(source.includes("['all','All shops, businesses and wholesalers']"));
  assert(source.includes('Directions ↗'));
- assert(source.includes('Start owner-approved visit'));
- assert(source.includes('How to register a shop and qualify for R90 review'));
+ assert(source.includes('Visit and register this shop'));
+ assert(source.includes('Show shops in this area'));
+ assert(source.includes('Choose your area'));
+ assert(source.includes('Pinetown'));
+ assert(source.includes('Gqeberha'));
+ assert(source.includes("if(!admin&&tab!=='registered')"));
+ assert(source.includes('Registration steps and R90 eligibility'));
+ assert(source.includes('ownerApp.href=\'/download.html\''));
  assert(source.includes("onStartVisit({name:x.name"));
  assert(source.includes('category:category.value'));
  const work=read('web/app-first/public/js/work.js');
@@ -52,4 +58,22 @@ test('Approved agents have a UID-bound check approval action and stale applicati
  assert(script.includes("profile?.status==='approved'"));
  assert(script.includes("$('checkApproval').onclick"));
  assert(script.includes("await auth.currentUser?.getIdToken(true);await refreshAccount()"));
+});
+
+test('Work simplifies registration to area, capture, and owner consent without inventing automated WhatsApp',()=>{
+ const html=read('web/app-first/public/work.html'),work=read('web/app-first/public/js/work.js');
+ assert(html.includes('class="agent-journey"'));
+ for(const step of ['Choose your area','Visit and capture','Owner confirms'])assert(html.includes(step));
+ assert(!html.includes('class="field-dashboard-cards"'));
+ assert(work.includes('Open WhatsApp invitation'));
+ assert(work.includes('The owner asked me to send the Teyza invitation'));
+ assert(work.includes('window.open(link'));
+ assert(work.includes('https://wa.me/'));
+ assert(work.includes("digits='27'+digits.slice(1)"));
+ assert(work.includes('onboarding'));
+ assert(work.includes('WhatsApp verification and Premium notifications require separate consented server-side templates'));
+ assert(work.includes("api('agent_owner_link'"));
+ assert(work.includes("api('agent_visit_submit'"));
+ assert(work.includes('The owner must sign in and confirm personally'));
+ assert(!work.includes('TEYZA_WHATSAPP_ACCESS_TOKEN'));
 });
