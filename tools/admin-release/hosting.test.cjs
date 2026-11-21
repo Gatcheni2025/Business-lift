@@ -131,3 +131,17 @@ test('Scoped publisher includes restricted map config only when operator supplie
   else process.env.TEYZA_MAPS_BROWSER_KEY=previous;
  }
 });
+
+test('Admin Google Maps authorization retains only origin referrer while removing stale no-referrer headers',()=>{
+ const managed='/admin{,/**,.html,-review.html,-sellers.html,-login.html,-dashboard.html,-payments.html,-support.html,-users.html}';
+ const config=servingConfig({headers:[
+  {glob:'/**',headers:{'X-Frame-Options':'DENY'}},
+  {glob:managed,headers:{'Referrer-Policy':'no-referrer'}},
+  {glob:'/js/teyza-combined-coverage.mjs',headers:{'Referrer-Policy':'no-referrer'}}
+ ]});
+ assert.equal(config.headers.filter(x=>x.glob===managed).length,1);
+ assert.equal(config.headers.filter(x=>x.glob==='/js/teyza-combined-coverage.mjs').length,1);
+ assert(config.headers.some(x=>x.glob==='/**'&&x.headers['X-Frame-Options']==='DENY'));
+ for(const h of config.headers.filter(x=>x.glob===managed||x.glob.includes('teyza-')||x.glob.startsWith('/assets/')))
+  assert.equal(h.headers['Referrer-Policy'],'strict-origin-when-cross-origin');
+});
