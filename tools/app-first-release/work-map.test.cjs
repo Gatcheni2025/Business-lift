@@ -41,3 +41,15 @@ test('R90 deployment targets only teyzaMobile in named Firebase codebase',()=>{
  assert(deployment.includes('agentRewardReviewEnabled'));
  assert(deployment.includes('publish-work-only.cjs deploy'));
 });
+
+test('Approved agents have a UID-bound check approval action and stale application errors clear',()=>{
+ const page=read('web/app-first/public/work.html'),script=read('web/app-first/public/js/work.js');
+ assert(page.includes('id="checkApproval"'));
+ assert(page.includes('id="pendingAccount"'));
+ assert(script.includes("api('agent_profile')"));
+ assert(script.includes("$('notice').hidden=true"));
+ assert(script.includes("auth.currentUser.uid.slice(-8)"));
+ assert(script.includes("profile?.status==='approved'"));
+ assert(script.includes("$('checkApproval').onclick"));
+ assert(script.includes("await auth.currentUser?.getIdToken(true);await refreshAccount()"));
+});
