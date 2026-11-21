@@ -321,7 +321,7 @@ async function main(){
    await f.page.getByRole('button',{name:'Open ID/passport and CV'}).first().click();
    for(const type of ['ID / passport','CV']){await f.page.getByRole('button',{name:'View '+type}).click();await f.page.locator('#fieldEvidenceDialog').getByRole('button',{name:'Close'}).click();}
    await f.page.getByRole('button',{name:'Approve applicant'}).first().click();
-   await f.page.getByText('HR application decision saved.').waitFor();
+   await f.page.getByText('Agent approved for Teyza Work.',{exact:false}).waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_profile_decide'&&c.data.agentUid==='applicant1'));
    await f.page.getByRole('button',{name:'Area management',exact:true}).click();
    await f.page.locator('.ops-form input').fill('Pinetown');
