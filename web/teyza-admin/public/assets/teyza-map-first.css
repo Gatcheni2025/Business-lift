@@ -90,3 +90,12 @@
 
 #workspace .dashboard-sidebar{position:sticky;top:0;max-height:100vh;overflow-y:auto}
 @media(max-width:850px){#workspace .dashboard-sidebar{position:static;max-height:none}}
+
+/* Self-hosted national map: no third-party tile dependencies or blocked 403 images. */
+.tp-map-shell,.tp-map-canvas,.tp-map-canvas.leaflet-container{background:linear-gradient(145deg,#a2ccd0 0%,#beddd7 54%,#c8e5e1 100%)!important}
+.tp-map-canvas .leaflet-pane svg{filter:drop-shadow(0 4px 9px rgba(0,65,57,.08))}
+.tp-city-label{border:0!important;background:transparent!important;box-shadow:none!important;pointer-events:none}
+.tp-city-label span{display:inline-block;max-width:112px;white-space:nowrap;color:#24575a;font-size:11px;font-weight:780;text-shadow:0 1px 2px #fff,1px 0 1px #fff,-1px 0 1px #fff}
+.tp-map-canvas .leaflet-control-attribution{font-size:10px;background:#ffffffeb!important;color:#276261}
+.tp-map-canvas .leaflet-control-attribution a{color:#096f6d}
+.tp-map-canvas .leaflet-popup-content strong{font-weight:800;color:#075143}
