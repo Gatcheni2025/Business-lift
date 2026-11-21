@@ -101,6 +101,48 @@ exports.teyzaWhatsAppWebhook=onRequest({region:'us-central1',invoker:'public',co
  maxInstances:3,memory:'256MiB',timeoutSeconds:30,
  secrets:[whatsAppWebhookVerifyToken,whatsAppWebhookAppSecret,whatsAppWebhookReplyToken]},
  (req,res)=>whatsappWebhook.handle(req,res));
+// Separate WhatsApp AUTHENTICATION pilot, deliberately not registered by
+// default. This opt-in flag is independent of the working MENU webhook and
+// independent of seller payment / approval functions.
+if(process.env.TEYZA_WHATSAPP_LOGIN_OTP_ENABLED==='1'){
+  const otpHmacSecret=defineSecret('TEYZA_WHATSAPP_LOGIN_OTP_HMAC_SECRET');
+  const {createWhatsAppLoginPilot}=require('./whatsapp-login-otp-pilot');
+  const {createWhatsAppOtpMetaTransport}=require('./whatsapp-login-meta-transport');
+  const {createWhatsAppOtpHttp}=require('./whatsapp-login-http');
+  const pilotUid=()=>process.env.TEYZA_WHATSAPP_LOGIN_PILOT_SELLER_UID||'';
+  const active=()=>process.env.TEYZA_WHATSAPP_LOGIN_OTP_ENABLED==='1'&&pilotUid().length>5;
+  exports.teyzaWhatsAppLoginOtpPilot=onRequest({
+      region:'us-central1',invoker:'public',cors:false,
+      maxInstances:2,memory:'256MiB',timeoutSeconds:25,
+      secrets:[otpHmacSecret,whatsAppWebhookReplyToken]},
+    async(req,res)=>{
+      try{
+        const sender=createWhatsAppOtpMetaTransport({
+          accessToken:whatsAppWebhookReplyToken.value(),
+          wabaId:process.env.TEYZA_WHATSAPP_WABA_ID||'',
+          phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+          apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
+          templateName:process.env.TEYZA_WHATSAPP_LOGIN_AUTH_TEMPLATE||'teyza_auth_otp',
+          language:process.env.TEYZA_WHATSAPP_LOGIN_AUTH_LANGUAGE||'en'
+        });
+        const engine=createWhatsAppLoginPilot({
+          db,auth:admin.auth(),serverSecret:otpHmacSecret.value(),
+          sendAuthenticationTemplate:sender.sendAuthenticationTemplate,
+          enabled:active,pilotSellerUid:pilotUid
+        });
+        const handler=createWhatsAppOtpHttp({
+          engine,enabled:active,
+          verifyAppCheck:token=>admin.appCheck().verifyToken(token)
+        });
+        await handler.handle(req,res);
+      }catch(_){
+        // No sensitive request content, token, phone or OTP in diagnostic logs.
+        res.set('Cache-Control','no-store');
+        res.status(503).json({error:'WhatsApp verification temporarily unavailable'});
+      }
+    });
+}
+
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
