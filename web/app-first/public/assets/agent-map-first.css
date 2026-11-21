@@ -12,3 +12,13 @@
 .field-map-status{font-size:12px;color:#55736b;margin:11px 4px 2px}
 @media(max-width:1040px){.field-dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.field-map-heading{display:block}.field-map-heading p{margin-top:5px}}
 @media(max-width:590px){.field-dashboard-cards{grid-template-columns:1fr}.field-map-canvas{min-height:340px}.field-map-shell{padding:10px}}
+
+.field-rewards{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px;padding:16px 20px;border-radius:16px;background:#edf8f1;border:1px solid #cde6d5}
+.field-rewards strong{font-size:16px;color:#0b5a40}.field-rewards p{margin:0;max-width:570px;font-size:12px;line-height:1.55}
+.agent-registration-guide{border:1px solid #d5e9dd;border-radius:16px;padding:14px 18px;margin:16px 0;background:#f8fcf8}
+.agent-registration-guide summary{cursor:pointer;font-weight:750;color:#09634c}
+.agent-registration-guide ol{margin:14px 0 0;padding-left:23px;font-size:13px;color:#295344;line-height:1.7}
+.nearby-card{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.nearby-card a,.nearby-card button{margin-top:5px}
+.nearby-controls label{min-width:210px}
+@media(max-width:700px){.field-rewards{flex-direction:column;align-items:flex-start}}
