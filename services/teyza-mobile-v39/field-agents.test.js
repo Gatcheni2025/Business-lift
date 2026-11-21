@@ -190,3 +190,43 @@ test('Approved agents can update only their own contact details without changing
  await f.call('agent_profile_update',update);const p=f.db.records.get('teyzaFieldAgents/agent1');assert.equal(p.address,update.address);assert.equal(p.status,'approved');assert.equal(p.revision,1);
  await rejects(f.call('agent_profile_update',update),409);
 });
+
+test('R90 reward needs newly registered Admin-approved seller, approved agent work and verified attribution',async()=>{
+ const f=setup();
+ await approved(f);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ account.createdAt=new Date(start+1000);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ account.approvalStatus='approved';
+ const credited=await f.call('agent_admin_reward_approve',{visitId:'visit1'},admin);
+ assert.equal(credited.amountCents,9000);
+ assert.equal(credited.status,'approved_pending_payment');
+ const ledger=f.db.records.get('teyzaAgentRewards/seller1');
+ assert.equal(ledger.agentUid,'agent1');
+ assert.equal(ledger.currency,'ZAR');
+ assert.equal(ledger.approvedBy,'admin');
+ assert.equal(ledger.paidAt,undefined);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ const summary=await f.call('agent_rewards');
+ assert.equal(summary.approvedPendingPaymentCents,9000);
+ assert.equal(summary.approvedCount,1);
+ assert.equal(summary.rewards[0].amountCents,9000);
+ const other=await f.call('agent_rewards',{}, {uid:'other',email_verified:true}).catch(e=>e);
+ assert.equal(other.status,403);
+});
+test('R90 reward rejects older registrations, inaccurate locations and forged agent attribution',async()=>{
+ const f=setup();await approved(f);
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ account.approvalStatus='approved';account.createdAt=new Date(start-1000);
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ account.createdAt=new Date(start+1000);
+ f.db.records.get('teyzaShopLocations/seller1').latitude=-28.9;
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ f.db.records.get('teyzaShopLocations/seller1').latitude=-29.85;
+ f.db.records.get('teyzaSellerAgentAttribution/seller1').agentUid='different';
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+ assert.equal(f.db.records.get('teyzaAgentRewards/seller1'),undefined);
+});
