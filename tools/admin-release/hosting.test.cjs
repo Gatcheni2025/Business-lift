@@ -111,3 +111,23 @@ test('All admin aliases have absolute asset paths and only the explicit admin ov
 
 
 
+
+test('Scoped publisher includes restricted map config only when operator supplies it',()=>{
+ const {overlayPaths}=require('./hosting-patch.cjs');
+ assert(overlayPaths.has('/assets/teyza-maps-config.json'));
+ const previous=process.env.TEYZA_MAPS_BROWSER_KEY;
+ try{
+  delete process.env.TEYZA_MAPS_BROWSER_KEY;
+  assert(!overlay(root).has('/assets/teyza-maps-config.json'));
+  process.env.TEYZA_MAPS_BROWSER_KEY='AIza'+'A'.repeat(35);
+  const files=overlay(root);
+  assert(files.has('/assets/teyza-maps-config.json'));
+  const json=JSON.parse(require('node:zlib').gunzipSync(files.get('/assets/teyza-maps-config.json').bytes).toString('utf8'));
+  assert.equal(json.browserKey,process.env.TEYZA_MAPS_BROWSER_KEY);
+  process.env.TEYZA_MAPS_BROWSER_KEY='not-a-valid-key';
+  assert.throws(()=>overlay(root),/Invalid browser-restricted/);
+ }finally{
+  if(previous===undefined)delete process.env.TEYZA_MAPS_BROWSER_KEY;
+  else process.env.TEYZA_MAPS_BROWSER_KEY=previous;
+ }
+});
