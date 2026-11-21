@@ -11,20 +11,20 @@ function assertAdminBackend(health){
  const closed=health?.sellerPaystackNewCheckoutDisabled===true&&
    health.sellerMembershipBillingMode==='checkout_disabled'&&
    health.paystackCheckoutAvailable===false;
- const restrictedPilot=health?.sellerPaystackNewCheckoutDisabled===false&&
+ const verifiedCardSubscription=health?.sellerPaystackNewCheckoutDisabled===false&&
    health.sellerMembershipBillingMode==='paystack_card_subscription'&&
    health.paystackCheckoutAvailable===true&&
-   health.paystackRolloutMode==='pilot'&&
+   ['pilot','full'].includes(health.paystackRolloutMode)&&
    health.membershipProrationEnabled===true&&
    health.subscriptionMonthlyCents===9900&&
    health.subscriptionTermsVersion==='seller-r99-calendar-proration-2026-11';
  if(health?.ok!==true||health.version!=='3.25.0'||health.agentCommissionEnabled!==false||
-    health.adminProductReview!==false||(!closed&&!restrictedPilot)||
+    health.adminProductReview!==false||(!closed&&!verifiedCardSubscription)||
     health.sellerMandates!==false||
     health.sellerMandateRequestV3!==false||
     health.adminNetcashManualSubmission!==false||
     required.some(key=>health[key]!==true)){
-   throw new Error('Backend does not confirm safe seller approval and closed/pilot-only Paystack operation. Hosting was not changed.');
+   throw new Error('Backend does not confirm safe seller approval and disabled or verified pilot/full R99 prorated Paystack operation. Hosting was not changed.');
  }
 }
 async function main(){
