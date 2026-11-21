@@ -1,5 +1,5 @@
 // Teyza-owned national shop coverage. No Google Places data appears here:
-// the basemap is OpenStreetMap, and only independently registered Teyza shops
+// the basemap is a self-hosted vector outline, and independently registered Teyza shops
 // returned by the authenticated ops_map_shops endpoint are plotted.
 const SA={center:[-28.9,24.5],zoom:5};
 const valid=p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&
@@ -34,8 +34,8 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
   c.append(head,value,node('small',subtitle));cards.append(c);return value;
  }
  const teyzaCount=metric('Registered on Teyza','Verified published locations loaded','tp-green');
- const googleCount=metric('Google listings only','Requires a local Google search','tp-amber');
- const agentCount=metric('Agent registrations','Attribution not provided by map inventory','tp-blue');
+ const googleCount=metric('Google listings only','Use Google explorer for live area searches','tp-amber');
+ const agentCount=metric('Agent registrations','Only explicitly attributed registrations count','tp-blue');
  const leaders=node('button',undefined,'tp-card tp-leading');
  leaders.type='button';leaders.append(node('span','♜  Leading agents'),node('strong','View field team →'),node('small','Open verified agent records'));
  leaders.onclick=openAgents;cards.append(leaders);
@@ -54,12 +54,13 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  const mapShell=node('div',undefined,'tp-map-shell');
  const mapCanvas=node('div',undefined,'tp-map-canvas');mapCanvas.setAttribute('aria-label','Map of registered Teyza shops in South Africa');
  const legend=node('div',undefined,'tp-legend');
- legend.append(node('strong','Shop status · map'),node('p','🟢  Verified on Teyza'),node('p','🟡  Agent attribution pending'),node('p','🔵  Google-only: separate local search'),node('small','Only Teyza-owned locations appear on this map.'));
+ legend.append(node('strong','Shop status · map'),node('p','🟢  Verified on Teyza'),node('p','🟡  Attribution pending'),node('p','🔵  Google-only: separate Google map'),node('small','The national layer contains Teyza data only; Google results need a Google map.'));
  mapShell.append(mapCanvas,legend);
  const status=node('p','Preparing national coverage…','tp-status');status.setAttribute('role','status');
  coverage.append(heading,filters,mapShell,status);
  const aside=node('aside',undefined,'tp-side');
- const agents=node('section',undefined,'tp-side-card');agents.append(node('h3','♙  Leading agents'),node('p','Rankings require independently verified registration attribution. This map inventory does not provide it.','tp-muted'));
+ const agents=node('section',undefined,'tp-side-card');agents.append(node('h3','♙  Registered by agents'),node('p','Only named agents supplied by verified shop records are counted. Missing attribution is not guessed.','tp-muted'));
+ const agentList=node('div',undefined,'tp-shop-list');agents.append(agentList);
  const agentsButton=node('button','View agent records →','tp-text-button');agentsButton.type='button';agentsButton.onclick=openAgents;agents.append(agentsButton);
  const recent=node('section',undefined,'tp-side-card');recent.append(node('h3','▣  Registered shops'));
  const recentHint=node('p','Published, approved locations from Teyza. No unverified registrations are counted.','tp-muted');
@@ -70,10 +71,22 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  insightsBody.append(node('div','Verified shop inventory only'),node('div','Google search: local, on demand'),node('div','No invented national totals'));
  insights.append(insightsBody);
  const googlePanel=node('section',undefined,'tp-side-card tp-google-panel');googlePanel.append(node('h3','G  Google business discovery'),node('p','Explore Google-only listings near a chosen map centre in the separate Google Maps explorer. These results are not a national census.','tp-muted'));
- const googleButton=node('button','Open Google explorer →','tp-text-button');googleButton.type='button';googleButton.onclick=openGoogle;googlePanel.append(googleButton);
+ const googleButton=node('button','Search Google listings on Google Maps →','tp-text-button');googleButton.type='button';googleButton.onclick=openGoogle;googlePanel.append(googleButton);
  aside.append(agents,recent,insights,googlePanel);
  main.append(coverage,aside);panel.append(cards,main);
  const showStatus=t=>status.textContent=t;
+ // Never infer consent, verification or registration from a Google listing.
+ const readable=(v)=>v===true?'Yes':v===false?'No':'Not provided';
+ const agentName=p=>typeof p.agentName==='string'&&p.agentName.trim()?p.agentName.trim():null;
+ function shopDetail(p){
+  const detail=node('div');detail.append(node('strong',p.name||'Teyza shop'));
+  const facts=[['Address',[p.address,p.area,p.city,p.province].filter(Boolean).join(', ')||'Coordinates available'],
+   ['Teyza registration','Registered'],['Verified',readable(p.verified)],
+   ['WhatsApp opt-in',readable(p.whatsappOptIn)],
+   ['Registered by agent',agentName(p)||'Not attributed']];
+  for(const [label,value] of facts){const line=node('p');line.append(node('strong',label+': '),document.createTextNode(value));detail.append(line);}
+  return detail;
+ }
  const getProvince=p=>typeof p.province==='string'?p.province:'';
  let filtered=[];
  function filter(){
@@ -87,21 +100,30 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  }
  function render(){
   teyzaCount.textContent=shops.length.toLocaleString('en-ZA')+(partial?'+':'');
-  googleCount.textContent='—';agentCount.textContent='—';
+  googleCount.textContent='Search';
+  const attributed=shops.filter(p=>p.verified===true&&agentName(p));
+  agentCount.textContent=String(attributed.length);
+  agentList.replaceChildren();
+  const counts=new Map();for(const p of attributed)counts.set(agentName(p),(counts.get(agentName(p))||0)+1);
+  for(const [name,count] of [...counts].sort((a,b)=>b[1]-a[1]).slice(0,8)){
+   const line=node('div',undefined,'tp-shop-row');line.append(node('strong',name),node('small',count+' attributed registrations'));agentList.append(line);
+  }
+  if(!counts.size)agentList.append(node('p','No agent attribution supplied by the mapped shop inventory.','tp-muted'));
   recentList.replaceChildren();
   for(const p of filtered.slice(0,6)){
    const r=node('div',undefined,'tp-shop-row');
    const badge=node('span','▣','tp-shop-logo'),txt=node('div');
    txt.append(node('strong',p.name||'Unnamed business'),node('small',[p.area,p.city].filter(Boolean).join(', ')||'Location verified'));
-   r.append(badge,txt);recentList.append(r);
+   r.append(badge,txt);r.tabIndex=0;r.setAttribute('role','button');r.setAttribute('aria-label','View '+(p.name||'shop')+' on map');
+   const focus=()=>{if(!map||!leaflet)return;map.setView([p.latitude,p.longitude],Math.max(map.getZoom(),11));for(const m of markers){if(m.options?.teyzaShopKey===p.id){m.openPopup();break;}}};
+   r.addEventListener('click',focus);r.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();focus();}});recentList.append(r);
   }
   if(!filtered.length)recentList.append(node('p',shops.length?'No shops match these filters.':'No published shops were returned.','tp-muted'));
   if(!map||!leaflet)return;
   for(const m of markers)m.remove();markers=[];
   for(const p of filtered){
    const point=leaflet.circleMarker([p.latitude,p.longitude],{radius:7,color:'#ffffff',weight:1.5,fillColor:'#059551',fillOpacity:.94});
-   const popup=node('div');popup.append(node('strong',p.name||'Teyza shop'),node('p',[p.area,p.city].filter(Boolean).join(', ')),node('small','Verified Teyza location'));
-   point.bindPopup(popup);point.addTo(map);markers.push(point);
+   point.options.teyzaShopKey=p.id;point.bindPopup(shopDetail(p));point.addTo(map);markers.push(point);
   }
   showStatus('Showing '+filtered.length.toLocaleString('en-ZA')+' of '+shops.length.toLocaleString('en-ZA')+
    ' verified locations'+(partial?' · more records are available; this is a partial inventory':'')+'.');
