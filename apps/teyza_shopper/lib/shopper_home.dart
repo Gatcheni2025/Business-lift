@@ -426,7 +426,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final api=widget.sellerMobileApi??TeyzaMobileApi(session);
       final response=await api.call('agent_profile');
       if(!mounted||session.userId!=uid||session.idToken==null)return;
-      if(agentShouldOfferMode(response)){
+      if(agentShouldOfferMode(response,currentUid:uid)){
         setState((){_agentApproved=true;_rolePicker=true;_agentMode=false;});
       }
     }catch(_){
