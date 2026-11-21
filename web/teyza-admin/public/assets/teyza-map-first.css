@@ -123,3 +123,11 @@
 .tp-discovery-result span{font-size:12px;color:#60776f}
 .tp-discovery-result small{font-size:11px;color:#235e91}
 .tp-google-credit{font-size:11px!important;color:#667975!important}
+
+/* Map category layers: blue local shops, orange other businesses, violet wholesalers. */
+.tp-category-layers{display:flex;flex-wrap:wrap;gap:9px 16px;margin:8px 0 12px;font-size:12px;font-weight:600;color:#164d4c}
+.tp-category-layers label{display:flex;align-items:center;gap:5px}
+.tp-category-layers input{accent-color:#0b8166}
+.tp-category-layers label:nth-child(1):before,.tp-category-layers label:nth-child(2):before,.tp-category-layers label:nth-child(3):before{content:'';display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:2px;background:#2b65ca}
+.tp-category-layers label:nth-child(2):before{background:#ed8b27}
+.tp-category-layers label:nth-child(3):before{background:#a563d7}

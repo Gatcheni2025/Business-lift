@@ -14,8 +14,13 @@ export function unmatchedGoogle(places,registered){
  const ids=new Set(registered.map(p=>p.googlePlaceId).filter(Boolean)),seen=new Set();
  return places.filter(p=>{if(!good(p)||!p.placeId||ids.has(p.placeId)||seen.has(p.placeId))return false;seen.add(p.placeId);return true;});
 }
+export function categoryCounts(places){
+ const counts={spaza:0,variety:0,wholesale:0};
+ for(const place of places)if(Object.hasOwn(counts,place.shopCategory))counts[place.shopCategory]++;
+ return counts;
+}
 export function createCombinedCoverage({report,onReady,onDiscovery}={}){
- let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false;
+ let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false;
  const panel=elt('section');panel.className='tp-combined';
  const title=elt('h3','Google Places · shop registration opportunities');
  const note=elt('p','Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
@@ -30,6 +35,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
  const search=elt('button','Find shops needing Teyza registration');search.type='button';search.className='button quiet';search.disabled=true;
  const showT=elt('input');showT.type='checkbox';showT.checked=true;
  const showG=elt('input');showG.type='checkbox';showG.checked=true;
+ const layerFilters=elt('div');layerFilters.className='tp-category-layers';
+ const layers={};
+ for(const [id,label] of [['spaza','Spaza & local shops'],['variety','Other businesses'],['wholesale','Wholesalers']]){
+  const input=elt('input');input.type='checkbox';input.checked=true;layers[id]=input;
+  const item=elt('label');item.append(input,elt('span',' '+label));layerFilters.append(item);
+ }
  const count=elt('div');count.className='tp-discovery-counts';count.setAttribute('aria-live','polite');
  const attribution=elt('p','Business information © Google Maps; search results are shown only on this Google map and are not saved as a business directory.');attribution.className='tp-google-credit';
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
@@ -37,11 +48,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
  const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText='display:none;height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
  controls.append(town,province,category,search,toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- panel.append(title,note,controls,status,count,canvas,attribution,list);
+ panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
   const body=elt('div');body.append(elt('strong',p.name||'Shop'));
+  if(p._googleOnly)body.append(elt('p',p.shopCategory==='wholesale'?'Wholesale supplier':p.shopCategory==='variety'?'Other local business':'Spaza / local shop'));
   const rows=[
    ['Source',p._googleOnly?'Google listing only':p.googlePlaceId?'Google + Teyza':'Teyza registered'],
    ['Address',[p.address,p.area,p.city,p.province].filter(Boolean).join(', ')||'Map location'],
@@ -59,9 +71,11 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
  const boundsFor=(p)=>({lat:p.latitude,lng:p.longitude});
  function render(){
   const groups=matchGoogle(places,registered),listed=groups.potential;
-  onDiscovery?.({state:searchCompleted?'ready':'not-searched',total:places.length,potential:listed.length,matched:groups.linked.length});
+  const breakdown=categoryCounts(listed),visible=listed.filter(p=>layers[p.shopCategory]?.checked!==false);
+  const warnings=searchCompleted?' · Spaza/local '+breakdown.spaza+' · Other businesses '+breakdown.variety+' · Wholesalers '+breakdown.wholesale:'';
+  if(!searchPending)onDiscovery?.({state:searchCompleted?'ready':'not-searched',total:places.length,potential:listed.length,matched:groups.linked.length,byCategory:breakdown});
   count.replaceChildren();
-  count.append(elt('strong',registered.length+' Teyza mapped · '+(searchCompleted?groups.linked.length+' Google listings matched · '+listed.length+' potential onboarding leads':'Google Places search not completed')));
+  count.append(elt('strong',registered.length+' Teyza mapped · '+(searchCompleted?groups.linked.length+' Google listings matched · '+listed.length+' potential leads'+warnings:'Google Places search not completed')));
   list.replaceChildren();
   const hint=elt('p',places.length?'Potential leads are Google-listed businesses without a matching published Teyza Place ID. Verify the shop and owner before contacting or assigning an agent.':'Search a town or the current Google map area to see Google-listed shops and businesses.');
   list.append(hint);
@@ -69,16 +83,16 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
   clearMarkers();placesById.clear();
   const records=[
    ...(showT.checked?registered.filter(good).map(p=>({...p,_googleOnly:false})):[]),
-   ...(showG.checked?listed.map(p=>({...p,_googleOnly:true})):[])
+   ...(showG.checked?visible.map(p=>({...p,_googleOnly:true})):[])
   ];
   for(const p of records){
    const marker=new google.maps.Marker({map,position:boundsFor(p),title:(p.name||'Shop')+(p._googleOnly?' · Potential Teyza registration':' · Registered on Teyza'),
-    icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:p._googleOnly?'#2b65ca':p.verified===true?'#09945a':'#e1a42e',fillOpacity:.95,strokeColor:'#ffffff',strokeWeight:1.8}});
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:p._googleOnly?(p.shopCategory==='wholesale'?'#a563d7':p.shopCategory==='variety'?'#ed8b27':'#2b65ca'):p.verified===true?'#09945a':'#e1a42e',fillOpacity:.95,strokeColor:'#ffffff',strokeWeight:1.8}});
    const popup=new google.maps.InfoWindow({content:info(p)});
    marker.addListener('click',()=>popup.open({map,anchor:marker}));markers.push(marker);
    if(p._googleOnly)placesById.set(p.placeId,{marker,popup});
   }
-  for(const p of listed.slice(0,100)){
+  for(const p of visible.slice(0,100)){
    const row=elt('button');row.type='button';row.className='tp-discovery-result';
    row.append(elt('strong',p.name||'Google-listed business'));
    row.append(elt('span',p.address||p.area||'Location on map'));
@@ -116,7 +130,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
    onReady?.();render();
    // One bounded, non-recurring discovery sample gives operators live evidence
    // rather than an empty map. No national background crawling is performed.
-   town.value='Durban';province.value='KwaZulu-Natal';category.value='spaza';
+   town.value='Durban';province.value='KwaZulu-Natal';category.value='all';
    map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
    void searchArea(true);
   }catch(e){
@@ -136,7 +150,8 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
   const point=matches[0].geometry.location;map.setCenter(point);map.setZoom(q?11:7);
  }
  async function searchArea(skipGeocode=false){
-  if(!map)return;
+  if(!map||searchPending)return;
+  searchPending=true;
   search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
@@ -162,16 +177,17 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
    const unique=new Map();
    for(const item of successful)for(const p of item.value.entries)if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);
-   places=[...unique.values()];searchCompleted=true;render();
+   places=[...unique.values()];searchCompleted=true;searchPending=false;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings: '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.'+
     (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
-  }catch(e){status.textContent='Google discovery failed: '+e.message;
+  }catch(e){searchPending=false;status.textContent='Google discovery failed: '+e.message;
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
   finally{search.disabled=false;}
  }
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
+ for(const input of Object.values(layers))input.onchange=render;
  return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
 }

@@ -120,7 +120,7 @@ test('Google Places onboarding search separates matched Teyza IDs from potential
  assert(source.includes('No matching published Teyza listing'));
  assert(source.includes('Promise.allSettled(kinds.map'));
  assert(source.includes("url.searchParams.set('category',kind)"));
- assert(source.includes('potential onboarding leads'));
+ assert(source.includes('potential leads'));
  assert(!source.includes('localStorage.setItem('));
 });
 
@@ -130,9 +130,29 @@ test('Google listings KPI tracks local live results and failed searches without 
  const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
  assert(combined.includes("onDiscovery?.({state:'loading'"));
  assert(combined.includes("onDiscovery?.({state:'error'"));
- assert(combined.includes('searchCompleted=true;render()'));
+ assert(combined.includes('searchCompleted=true;searchPending=false;render()'));
  assert(combined.includes('void searchArea(true)'));
  assert(combined.includes("map.setCenter({lat:-29.8587,lng:31.0218})"));
  assert(premium.includes("result.state==='ready'?String(result.potential)"));
  assert(!premium.includes("googleCount.textContent='Search'"));
+});
+
+test('Google Places categories show independently counted spaza, business and wholesale markers',async()=>{
+ const {categoryCounts,matchGoogle}=await import('./public/js/teyza-combined-coverage.mjs');
+ const places=[
+  {placeId:'a',latitude:-29.8,longitude:31.0,shopCategory:'spaza'},
+  {placeId:'b',latitude:-29.8,longitude:31.1,shopCategory:'variety'},
+  {placeId:'c',latitude:-29.8,longitude:31.2,shopCategory:'wholesale'},
+  {placeId:'c',latitude:-29.8,longitude:31.2,shopCategory:'wholesale'}
+ ];
+ const matched=matchGoogle(places,[]);
+ assert.deepEqual(categoryCounts(matched.potential),{spaza:1,variety:1,wholesale:1});
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ assert(source.includes("category.value='all'"),'initial area discovery must include all three types');
+ assert(source.includes("['variety','Other businesses']"));
+ assert(source.includes("['wholesale','Wholesalers']"));
+ assert(source.includes("layers[p.shopCategory]?.checked!==false"));
+ assert(source.includes("p.shopCategory==='wholesale'?'#a563d7'"));
+ assert(source.includes("p.shopCategory==='variety'?'#ed8b27'"));
 });
