@@ -8,7 +8,7 @@ const MAP_CONFIG='/assets/teyza-maps-config.json';
 const overlayPaths=new Set([...aliases,...assets,MAP_CONFIG]);
 function overlay(root){
  const files=new Map();
- for(const publicPath of overlayPaths){
+ for(const publicPath of [...aliases,...assets]){
   const source=aliases.includes(publicPath)?'admin.html':publicPath.slice(1);
   const bytes=zlib.gzipSync(fs.readFileSync(path.join(root,source)),{level:9});
   files.set(publicPath,{hash:crypto.createHash('sha256').update(bytes).digest('hex'),bytes});
