@@ -20,6 +20,8 @@ npm ci --prefix .\services\teyza-mobile-v39 --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed.' }
 npm test --prefix .\services\teyza-mobile-v39
 if ($LASTEXITCODE -ne 0) { throw 'Backend tests failed. No deployment occurred.' }
+npm ci --prefix .\tools\app-first-release --ignore-scripts --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Scoped Work publisher dependency installation failed.' }
 npm test --prefix .\tools\app-first-release
 if ($LASTEXITCODE -ne 0) { throw 'Website and scoped publishing tests failed. No deployment occurred.' }
 
