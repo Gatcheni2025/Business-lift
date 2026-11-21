@@ -71,8 +71,10 @@ void main(){
     mobileApi:MockAgentService(session),onShopper:(){},onSeller:(){})));
   await tester.pumpAndSettle();
   expect(find.text('Find shops near you'),findsOneWidget);
-  expect(find.text('Independent Spaza Shop'),findsOneWidget);
   expect(find.text('Shop search and directions are ready'),findsOneWidget);
+  await tester.drag(find.byType(ListView).first,const Offset(0,-550));
+  await tester.pumpAndSettle();
+  expect(find.text('Independent Spaza Shop'),findsOneWidget);
   expect(find.textContaining('R90'),findsWidgets);
  });
 }
