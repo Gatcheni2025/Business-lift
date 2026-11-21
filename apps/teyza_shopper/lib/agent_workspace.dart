@@ -135,11 +135,15 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    });
  }
  Map<String,dynamic>? get selectedVisit=>visit;
+ Future<void> _reloadVisit(String visitId)async{
+   final uid=widget.session.userId;
+   final result=await service.call('agent_visit_get',{'visitId':visitId});
+   if(mounted&&uid==widget.session.userId)setState((){
+     visit=Map<String,dynamic>.from(result['visit'] as Map);page=2;ownerConsent=false;
+   });
+ }
  Future<void> _openVisit(Map<String,dynamic> value)async{
-  await _operate(()async{
-   final result=await service.call('agent_visit_get',{'visitId':value['id']});
-   if(mounted)setState((){visit=Map<String,dynamic>.from(result['visit'] as Map);page=2;ownerConsent=false;});
-  });
+   await _operate(()=>_reloadVisit(value['id'].toString()));
  }
  Future<void> _startVisit(Map<String,dynamic>? listing)async{
   final name=TextEditingController(text:listing?['name']?.toString()??'');
@@ -191,7 +195,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    await service.call('agent_location',{'visitId':v['id'],'revision':v['revision'],
     'latitude':pos.latitude,'longitude':pos.longitude,'accuracy':pos.accuracy,
     'capturedAt':pos.timestamp.millisecondsSinceEpoch});
-   await _openVisit(v);
+   await _reloadVisit(v['id'].toString());
   });
  }
  Future<void> _photo(String kind)async{
@@ -215,7 +219,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     if(allowed!=true)return;
     await service.call('agent_photo_submit',{'visitId':v['id'],
      'captureId':challenge['captureId'],'imageBase64':base64Encode(bytes),'consent':true});
-    await _openVisit(v);
+    await _reloadVisit(v['id'].toString());
    }finally{try{await File(snap.path).delete();}catch(_){}}
   });
  }
@@ -240,7 +244,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
   await _operate(()async{
    final v=visit;if(v==null)return;
    await service.call('agent_visit_submit',{'visitId':v['id'],'revision':v['revision']});
-   await _openVisit(v);await _loadVisits();
+   await _reloadVisit(v['id'].toString());await _loadVisits();
   });
  }
  Future<void> _directions(Map<String,dynamic> row)async{
