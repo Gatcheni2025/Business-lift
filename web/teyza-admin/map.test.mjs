@@ -57,3 +57,15 @@ test('Premium national map uses Teyza-hosted geography, never volunteer OSM tile
  assert(land.features.some(f=>f.properties.name==='South Africa'));
  assert(land.features.every(f=>['Polygon','MultiPolygon'].includes(f.geometry.type)));
 });
+
+test('National coverage details are sourced from real Teyza shop fields, without guessing WhatsApp or agent status',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(source.includes("['WhatsApp opt-in',readable(p.whatsappOptIn)]"));
+ assert(source.includes("['Verified',readable(p.verified)]"));
+ assert(source.includes("['Registered by agent',agentName(p)||'Not attributed']"));
+ assert(source.includes("const readable=(v)=>v===true?'Yes':v===false?'No':'Not provided'"));
+ assert(source.includes("counts.set(agentName(p)"));
+ assert(source.includes("googleCount.textContent='Search'"));
+ assert(source.includes("point.bindPopup(shopDetail(p))"));
+});
