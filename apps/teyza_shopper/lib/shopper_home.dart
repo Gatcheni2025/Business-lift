@@ -212,6 +212,16 @@ const areas = <Area>[
   Area('Pretoria', 'Pretoria', -25.7479, 28.2293),
   Area('Cape Town', 'Cape Town', -33.9249, 18.4241),
 ];
+// Older Teyza versions saved only a manually selected neighbourhood label.
+// Migrate ONLY exact recognized cities, never guess GPS coordinates.
+Area? teyzaLegacySavedArea(String? selected){
+  final label=selected?.trim().toLowerCase()??'';
+  if(label.isEmpty||label=='gps')return null;
+  for(final choice in areas){
+    if(choice.label.toLowerCase()==label)return choice;
+  }
+  return null;
+}
 double km(double latA, double lngA, double latB, double lngB) {
   const radius = 6371.0;
   final a = (latB - latA) * math.pi / 180;
@@ -370,6 +380,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         rememberedLocation=null;area=null;locationName='Choose your area';
         unawaited(deliveryProfileStore.clearDeviceLocation()
           .catchError((Object _){/* Profile clearing is retried by deletion page. */}));
+        // Account deletion must also clear the legacy area-only preference.
+        // Otherwise a later upgrade could restore a location the user deleted.
+        unawaited(() async {
+          try{
+            final prefs=await SharedPreferences.getInstance();
+            await prefs.remove('teyza_selected_area');
+          }catch(_){/* Local prefs cleanup is best effort. */}
+        }());
       }else if(previousUid!=null&&uid==null&&priorProfile!=null){
         // Ordinary logout retains only the delivery destination, not contact.
         rememberedLocation=ShopperDeviceDeliveryLocation.fromProfile(priorProfile);
@@ -573,10 +591,27 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         });
       }
     }else if(_launchReady) {
-      WidgetsBinding.instance.addPostFrameCallback((_){
-        if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
-            !_deliverySheetOpen)unawaited(promptDeliveryProfile());
-      });
+      // Old releases stored a selected location in SharedPreferences rather
+      // than the newer encrypted delivery-profile store. Without this
+      // migration, upgrading could make *all* nearby categories appear empty
+      // even though the backend and signed build are functioning.
+      Area? previouslySelected;
+      try{
+        final prefs=await SharedPreferences.getInstance();
+        previouslySelected=teyzaLegacySavedArea(prefs.getString('teyza_selected_area'));
+      }catch(_){/* Fall through to the standard delivery-address prompt. */}
+      if(!mounted||request!=_deliveryProfileRequest||session.userId!=uid||
+         session.sellerWorkspace)return;
+      if(previouslySelected!=null){
+        await chooseArea(previouslySelected,persist:false);
+        if(mounted&&request==_deliveryProfileRequest)setState(()=>
+          locationWarning='Showing shops around your previously selected area. Add a delivery address to see closer results.');
+      }else{
+        WidgetsBinding.instance.addPostFrameCallback((_){
+          if(mounted&&request==_deliveryProfileRequest&&deliveryProfile==null&&
+              !_deliverySheetOpen)unawaited(promptDeliveryProfile());
+        });
+      }
     }
   }
   Future<void> promptDeliveryProfile()async{
@@ -2046,8 +2081,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           title:const Text('Add your delivery address'),
           subtitle:const Text('Enter your delivery address to see local shops. No registration needed.'),
           onTap:promptDeliveryProfile)),
-      if(catalogueError!=null)Padding(padding:const EdgeInsets.only(bottom:7),
-        child:Text(catalogueError!,style:const TextStyle(color:muted,fontSize:11))),
+      if(catalogueError!=null)Card(key:const ValueKey('teyza-approved-merchant-load-error'),
+        color:const Color(0xFFFFF2DE),
+        child:ListTile(
+          leading:const Icon(Icons.cloud_off_outlined,color:Color(0xFF916027)),
+          title:const Text('Approved Teyza shops could not load'),
+          subtitle:Text(catalogueError!),
+          trailing:TextButton(onPressed:loading?null:()=>load(),
+            child:const Text('Retry')))),
+      if(onlineWarning!=null&&homeSpazaListings.isEmpty)
+        Card(key:const ValueKey('teyza-places-load-error'),
+          color:const Color(0xFFFFF2DE),
+          child:ListTile(
+            leading:const Icon(Icons.wifi_off_rounded,color:Color(0xFF916027)),
+            title:const Text('Nearby public shops could not load'),
+            subtitle:Text(onlineWarning!),
+            trailing:TextButton(onPressed:loadingOnline?null:()=>reloadOnline(),
+              child:const Text('Retry')))),
+      if(otherBusinessesWarning!=null&&nearbyOtherBusinesses.isEmpty)
+        Card(key:const ValueKey('teyza-businesses-load-error'),
+          color:const Color(0xFFFFF2DE),
+          child:ListTile(
+            leading:const Icon(Icons.wifi_off_rounded,color:Color(0xFF916027)),
+            title:const Text('Nearby businesses could not load'),
+            subtitle:Text(otherBusinessesWarning!),
+            trailing:TextButton(onPressed:loadingOtherBusinesses?null:()=>reloadOtherBusinesses(),
+              child:const Text('Retry')))),
       // Keep the existing merchant-type selector and verified seller circles
       // visible for repeat users, then show the two independent merchant grids.
       businessFilters(),
@@ -2122,8 +2181,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         trailing:const Icon(Icons.chevron_right),
         onTap:()=>openOwnerWorkspace())),
       // Nearby shops merges public listings with verified Teyza sellers.
-      if(onlineWarning!=null)Text(onlineWarning!,
-        style:const TextStyle(color:muted,fontSize:12)),
       Padding(padding:const EdgeInsets.only(top:10,bottom:8),
         child:Material(key:const ValueKey('teyza-wholesale-supply-entry'),
           color:const Color(0xFFE7F5EC),

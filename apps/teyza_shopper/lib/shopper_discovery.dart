@@ -120,14 +120,22 @@ bool teyzaMatchesShopCategory(OnlineShop shop, String category) {
        shop.types.contains('shopping_mall'))return false;
     final local=RegExp(r'\b(spaza|tuck\s*shop|mini\s*market|superette|general\s*dealer|corner\s*shop|kiosk|neighbourhood\s*shop)\b').hasMatch(name);
     // A Google "grocery_store" type alone could describe a national chain.
-    return local||shop.types.contains('convenience_store');
+    // OpenStreetMap's "shop" tags use convenience/kiosk, while Google
+    // Places uses convenience_store. Without this normalization, the OSM
+    // fallback can fetch real neighbourhood stores and then discard them.
+    final osmCornerStore=shop.origin=='openstreetmap'&&
+      (shop.types.contains('convenience')||shop.types.contains('kiosk'));
+    return local||osmCornerStore||shop.types.contains('convenience_store');
   }
   if(category=='wholesale')return shop.types.any(
       const {'wholesaler','warehouse_store'}.contains)||
+    (shop.origin=='openstreetmap'&&shop.types.contains('wholesale'))||
     RegExp(r'wholesal|cash\s*(?:&|and|n)\s*carry|bulk\s*(?:food|grocery|suppl)|distribut|trading\s*depot').hasMatch(name);
   if(category=='variety'){
     if(RegExp(r'spaza|tuck\s?shop|wholesal|cash\s?(and|&)\s?carry').hasMatch(name))return false;
     return shop.categorizationVerified||
+      (shop.origin=='openstreetmap'&&
+        (shop.types.contains('variety_store')||shop.types.contains('mall')))||
       shop.types.any(const {'beauty_salon','hair_care','plumber','electrician',
         'furniture_store','hardware_store','barber_shop','clothing_store',
         'home_goods_store','shopping_mall','department_store'}.contains)||
