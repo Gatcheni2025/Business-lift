@@ -49,7 +49,7 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  function select(label,values){const l=node('label');l.append(node('span',label));const s=node('select');for(const v of values){const o=node('option',v);o.value=v;s.append(o);}l.append(s);filters.append(l);return s;}
  const province=select('Province',provinces);
  const category=select('Category',['All shop categories','Spaza shops','Retail businesses','Wholesalers']);
- const termLabel=node('label');termLabel.append(node('span','Find a shop or town'));const term=node('input');term.type='search';term.placeholder='Search loaded shops';term.autocomplete='off';termLabel.append(term);filters.append(termLabel);
+ const termLabel=node('label');termLabel.append(node('span','Find a shop or town'));const term=node('input');term.type='search';term.placeholder='Search loaded shops';term.autocomplete='off';term.name='teyza_shop_location_lookup';term.setAttribute('data-lpignore','true');termLabel.append(term);filters.append(termLabel);
  const reset=node('button','Reset filters','tp-reset');reset.type='button';filters.append(reset);
  const mapShell=node('div',undefined,'tp-map-shell');
  const mapCanvas=node('div',undefined,'tp-map-canvas');mapCanvas.setAttribute('aria-label','Map of registered Teyza shops in South Africa');
@@ -77,7 +77,8 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  const getProvince=p=>typeof p.province==='string'?p.province:'';
  let filtered=[];
  function filter(){
-  const text=term.value.trim().toLocaleLowerCase();
+  const raw=term.value.trim();
+  const text=raw.includes('@')?'':raw.toLocaleLowerCase();
   filtered=shops.filter(p=>valid(p)&&
    (province.value==='All provinces'||getProvince(p)===province.value)&&
    (category.value==='All shop categories'||p.category===({'Spaza shops':'spaza','Retail businesses':'retail','Wholesalers':'wholesale'}[category.value]))&&
@@ -109,15 +110,39 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
   if(ready)return;
   ready=true;const stamp=++generation;
   showStatus('Opening national map and loading verified shops…');
+  if(term.value.includes('@'))term.value=''; // Ignore browser credential autofill.
   // Start loading the basemap immediately; Teyza records load independently.
-  const basemap=loadLeaflet().then(L=>{
+  const basemap=loadLeaflet().then(async L=>{
    if(stamp!==generation)return;
    leaflet=L;
    map=leaflet.map(mapCanvas,{zoomControl:false,scrollWheelZoom:false}).setView(SA.center,SA.zoom);
-   leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-    maxZoom:18
+   // Self-hosted geographic boundaries: never depend on volunteer map tile servers.
+   const response=await fetch('/assets/teyza-southern-africa-land.geojson',{cache:'force-cache'});
+   if(!response.ok)throw Error('Teyza geography request failed (HTTP '+response.status+').');
+   const boundaries=await response.json();
+   if(stamp!==generation)return;
+   if(boundaries?.type!=='FeatureCollection'||!Array.isArray(boundaries.features))throw Error('Invalid national map geography.');
+   leaflet.geoJSON(boundaries,{
+    style:feature=>feature.properties?.name==='South Africa'
+     ?{color:'#0d7776',weight:2.4,fillColor:'#d4ebce',fillOpacity:1}
+     :{color:'#9fc2b8',weight:1,fillColor:'#e8efdc',fillOpacity:.9},
+    onEachFeature:(feature,layer)=>{
+     const name=feature?.properties?.name==='Swaziland'?'Eswatini':feature?.properties?.name;
+     if(name)layer.bindTooltip(name,{sticky:true,direction:'center'});
+    }
    }).addTo(map);
+   for(const [name,lat,lon] of [
+    ['Cape Town',-33.925,18.424],['Durban',-29.858,31.022],
+    ['Johannesburg',-26.204,28.047],['Pretoria',-25.747,28.229],
+    ['Bloemfontein',-29.116,26.216],['Polokwane',-23.904,29.448],
+    ['Gqeberha',-33.961,25.619],['Mbombela',-25.475,30.970]
+   ]){
+    const label=leaflet.divIcon({className:'tp-city-label',html:'<span>'+name+'</span>',iconSize:[110,21],iconAnchor:[55,10]});
+    leaflet.marker([lat,lon],{icon:label,interactive:false}).addTo(map);
+   }
+   map.attributionControl.addAttribution('Geography: Natural Earth (public domain)');
+   map.setMaxBounds([[-37,13],[-20,37]]);
+   map.setMinZoom(4);
    leaflet.control.zoom({position:'bottomright'}).addTo(map);
    filter();queueMicrotask(()=>map?.invalidateSize());
   }).catch(e=>{
