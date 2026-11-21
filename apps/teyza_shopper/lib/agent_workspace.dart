@@ -93,10 +93,10 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      final data=await service.call('agent_profile');
      if(!mounted||ticket!=request||widget.session.userId!=uid)return;
      final p=data['profile'] is Map?Map<String,dynamic>.from(data['profile'] as Map):null;
-     if(!agentApproved(p)){setState(()=>{profile=p,loading=false,error='Your field-agent account is not approved. Contact Teyza Admin.'});return;}
-     setState(()=>{profile=p,loading=false,error=''});
+     if(!agentApproved(p)){setState((){profile=p;loading=false;error='Your field-agent account is not approved. Contact Teyza Admin.';});return;}
+     setState((){profile=p;loading=false;error='';});
      await Future.wait([_search(),_loadVisits()]);
-   }catch(e){if(mounted&&ticket==request)setState(()=>{loading=false,error=mobileError(e)});}
+   }catch(e){if(mounted&&ticket==request)setState((){loading=false;error=mobileError(e);});}
  }
  Future<void> _search()async{
    final uid=widget.session.userId,ticket=++request;
@@ -114,7 +114,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    if(mounted&&widget.session.userId==uid)setState(()=>visits=mobileRows(result['visits']));
  }
  Future<void> _selectTown(AgentTown town)async{
-   setState(()=>{area=town,latitude=town.latitude,longitude=town.longitude});
+   setState((){area=town;latitude=town.latitude;longitude=town.longitude;});
    await _operate(_search);
  }
  Future<void> _currentArea()async{
@@ -128,7 +128,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     final pos=await Geolocator.getCurrentPosition(desiredAccuracy:LocationAccuracy.high)
       .timeout(const Duration(seconds:20));
     if(!mounted)return;
-    setState(()=>{latitude=pos.latitude,longitude=pos.longitude});
+    setState((){latitude=pos.latitude;longitude=pos.longitude;});
     await _search();
    });
  }
@@ -136,7 +136,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
  Future<void> _openVisit(Map<String,dynamic> value)async{
   await _operate(()async{
    final result=await service.call('agent_visit_get',{'visitId':value['id']});
-   if(mounted)setState(()=>{visit=Map<String,dynamic>.from(result['visit'] as Map),page=2,ownerConsent=false});
+   if(mounted)setState((){visit=Map<String,dynamic>.from(result['visit'] as Map);page=2;ownerConsent=false;});
   });
  }
  Future<void> _startVisit(Map<String,dynamic>? listing)async{
@@ -231,7 +231,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     if(!await launchUrl(Uri.parse(link),mode:LaunchMode.externalApplication))
      throw StateError('Could not open WhatsApp. Copy the private link and share with the consenting owner.');
     _phone.clear();
-    if(mounted)setState(()=>{ownerConsent=false,message='WhatsApp opened. The owner must send/receive and personally confirm; nothing is automatically verified.'});
+    if(mounted)setState((){ownerConsent=false;message='WhatsApp opened. The owner must send/receive and personally confirm; nothing is automatically verified.';});
   });
  }
  Future<void> _submit()async{
