@@ -1,3 +1,4 @@
+import {createCombinedCoverage} from './teyza-combined-coverage.mjs';
 // Teyza-owned national shop coverage. No Google Places data appears here:
 // the basemap is a self-hosted vector outline, and independently registered Teyza shops
 // returned by the authenticated ops_map_shops endpoint are plotted.
@@ -51,13 +52,15 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  const category=select('Category',['All shop categories','Spaza shops','Retail businesses','Wholesalers']);
  const termLabel=node('label');termLabel.append(node('span','Find a shop or town'));const term=node('input');term.type='search';term.placeholder='Search loaded shops';term.autocomplete='off';term.name='teyza_shop_location_lookup';term.setAttribute('data-lpignore','true');termLabel.append(term);filters.append(termLabel);
  const reset=node('button','Reset filters','tp-reset');reset.type='button';filters.append(reset);
+ const combined=createCombinedCoverage({report});
  const mapShell=node('div',undefined,'tp-map-shell');
  const mapCanvas=node('div',undefined,'tp-map-canvas');mapCanvas.setAttribute('aria-label','Map of registered Teyza shops in South Africa');
  const legend=node('div',undefined,'tp-legend');
  legend.append(node('strong','Shop status · map'),node('p','🟢  Verified on Teyza'),node('p','🟡  Attribution pending'),node('p','🔵  Google-only: separate Google map'),node('small','The national layer contains Teyza data only; Google results need a Google map.'));
  mapShell.append(mapCanvas,legend);
  const status=node('p','Preparing national coverage…','tp-status');status.setAttribute('role','status');
- coverage.append(heading,filters,mapShell,status);
+ const fallback=node('details');const fallbackHeading=node('summary','Teyza-only national outline (works without Google Maps)');fallback.append(fallbackHeading,mapShell,status);
+ coverage.append(heading,filters,combined.panel,fallback);
  const aside=node('aside',undefined,'tp-side');
  const agents=node('section',undefined,'tp-side-card');agents.append(node('h3','♙  Registered by agents'),node('p','Only named agents supplied by verified shop records are counted. Missing attribution is not guessed.','tp-muted'));
  const agentList=node('div',undefined,'tp-shop-list');agents.append(agentList);
@@ -99,6 +102,7 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
   render();
  }
  function render(){
+  combined.setShops(filtered);
   teyzaCount.textContent=shops.length.toLocaleString('en-ZA')+(partial?'+':'');
   googleCount.textContent='Search';
   const attributed=shops.filter(p=>p.verified===true&&agentName(p));
@@ -196,7 +200,7 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
   }
   await basemap;
  }
- function clear(){generation++;ready=false;if(map){map.remove();map=null;}markers=[];leaflet=null;shops=[];next=null;partial=false;teyzaCount.textContent='—';recentList.replaceChildren();showStatus('Preparing national coverage…');}
+ function clear(){combined.clear();generation++;ready=false;if(map){map.remove();map=null;}markers=[];leaflet=null;shops=[];next=null;partial=false;teyzaCount.textContent='—';recentList.replaceChildren();showStatus('Preparing national coverage…');}
  province.addEventListener('change',filter);category.addEventListener('change',filter);term.addEventListener('input',filter);
  reset.onclick=()=>{province.selectedIndex=0;category.selectedIndex=0;term.value='';filter();};
  return {panel,activate,clear};
