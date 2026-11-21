@@ -31,3 +31,13 @@ test('Website root mirrors remain exactly consistent with Work release files',()
   assert.equal(read('js/'+name),read('web/app-first/public/js/'+name),name);
  assert.equal(read('assets/agent-map-first.css'),read('web/app-first/public/assets/agent-map-first.css'));
 });
+
+test('R90 deployment targets only teyzaMobile in named Firebase codebase',()=>{
+ const deployment=read('DEPLOY-TEYZA-WORK-R90.ps1');
+ const configuration=JSON.parse(read('firebase.teyza-mobile-v39.json'));
+ assert.equal(configuration.functions[0].codebase,'teyza-mobile');
+ assert(deployment.includes("'functions:teyza-mobile:teyzaMobile'"));
+ assert(!deployment.includes('--only functions:teyzaMobile'));
+ assert(deployment.includes('agentRewardReviewEnabled'));
+ assert(deployment.includes('publish-work-only.cjs deploy'));
+});
