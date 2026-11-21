@@ -53,7 +53,10 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  const termLabel=node('label');termLabel.append(node('span','Find a shop or town'));const term=node('input');term.type='search';term.placeholder='Search loaded shops';term.autocomplete='off';term.name='teyza_shop_location_lookup';term.setAttribute('data-lpignore','true');termLabel.append(term);filters.append(termLabel);
  const reset=node('button','Reset filters','tp-reset');reset.type='button';filters.append(reset);
  let fallback;
- const combined=createCombinedCoverage({report,onReady:()=>{if(fallback)fallback.open=false;}});
+ const combined=createCombinedCoverage({report,onReady:()=>{if(fallback)fallback.open=false;},onDiscovery:result=>{
+  googleCount.textContent=result.state==='loading'?'Loading…':result.state==='error'?'Unavailable':result.state==='ready'?String(result.potential):'Not searched';
+  googleCount.title=result.state==='error'?result.message||'Google discovery error':result.state==='ready'?'Potential registrations in the most recently searched area; not a national count':'Local Google Places search';
+ }});
  const mapShell=node('div',undefined,'tp-map-shell');
  const mapCanvas=node('div',undefined,'tp-map-canvas');mapCanvas.setAttribute('aria-label','Map of registered Teyza shops in South Africa');
  const legend=node('div',undefined,'tp-legend');
@@ -105,7 +108,7 @@ export function createPremiumCoverage({api,report,openAgents,openShops,openGoogl
  function render(){
   combined.setShops(filtered);
   teyzaCount.textContent=shops.length.toLocaleString('en-ZA')+(partial?'+':'');
-  googleCount.textContent='Search';
+  // Google count is managed by the most recent Places discovery response.
   const attributed=shops.filter(p=>p.verified===true&&agentName(p));
   agentCount.textContent=String(attributed.length);
   agentList.replaceChildren();

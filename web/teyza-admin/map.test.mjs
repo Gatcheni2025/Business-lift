@@ -66,7 +66,7 @@ test('National coverage details are sourced from real Teyza shop fields, without
  assert(source.includes("['Registered by agent',agentName(p)||'Not attributed']"));
  assert(source.includes("const readable=(v)=>v===true?'Yes':v===false?'No':'Not provided'"));
  assert(source.includes("counts.set(agentName(p)"));
- assert(source.includes("googleCount.textContent='Search'"));
+ assert(source.includes("googleCount.textContent=result.state==='loading'"));
  assert(source.includes("point.bindPopup(shopDetail(p))"));
 });
 
@@ -122,4 +122,17 @@ test('Google Places onboarding search separates matched Teyza IDs from potential
  assert(source.includes("url.searchParams.set('category',kind)"));
  assert(source.includes('potential onboarding leads'));
  assert(!source.includes('localStorage.setItem('));
+});
+
+test('Google listings KPI tracks local live results and failed searches without inventing a national count',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const combined=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(combined.includes("onDiscovery?.({state:'loading'"));
+ assert(combined.includes("onDiscovery?.({state:'error'"));
+ assert(combined.includes('searchCompleted=true;render()'));
+ assert(combined.includes('void searchArea(true)'));
+ assert(combined.includes("map.setCenter({lat:-29.8587,lng:31.0218})"));
+ assert(premium.includes("result.state==='ready'?String(result.potential)"));
+ assert(!premium.includes("googleCount.textContent='Search'"));
 });
