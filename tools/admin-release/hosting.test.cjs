@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patch.cjs');
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
-test('Admin release accepts disabled checkout or a tightly scoped live proration pilot',()=>{
+test('Admin release accepts disabled checkout or strictly verified R99 prorated pilot/full rollout',()=>{
  const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
    agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
@@ -16,8 +16,12 @@ test('Admin release accepts disabled checkout or a tightly scoped live proration
    paystackCheckoutAvailable:true,paystackRolloutMode:'pilot',membershipProrationEnabled:true,
    subscriptionMonthlyCents:9900,subscriptionTermsVersion:'seller-r99-calendar-proration-2026-11'};
  assert.doesNotThrow(()=>assertAdminBackend(pilot));
- for(const unsafe of [{...pilot,paystackRolloutMode:'full'},{...pilot,subscriptionMonthlyCents:1000},
-    {...pilot,subscriptionTermsVersion:'seller-r99-monthly-2026-11'}])assert.throws(()=>assertAdminBackend(unsafe));
+ const full={...pilot,paystackRolloutMode:'full'};
+ assert.doesNotThrow(()=>assertAdminBackend(full));
+ for(const unsafe of [{...pilot,paystackRolloutMode:'unexpected'},{...full,sellerPaystackNewCheckoutDisabled:true},
+    {...full,paystackCheckoutAvailable:false},{...full,membershipProrationEnabled:false},
+    {...full,subscriptionMonthlyCents:1000},
+    {...full,subscriptionTermsVersion:'seller-r99-monthly-2026-11'}])assert.throws(()=>assertAdminBackend(unsafe));
 
  for(const stale of [{...ready,version:'3.20.0'},{...ready,agentCommissionEnabled:true},
    {...ready,adminProductReview:true},{...ready,automaticProductPublication:false},
