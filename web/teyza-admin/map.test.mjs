@@ -69,3 +69,22 @@ test('National coverage details are sourced from real Teyza shop fields, without
  assert(source.includes("googleCount.textContent='Search'"));
  assert(source.includes("point.bindPopup(shopDetail(p))"));
 });
+
+test('Combined Google map filters claimed listings and preserves explicit unknown statuses',async()=>{
+ const {unmatchedGoogle}=await import('./public/js/teyza-combined-coverage.mjs');
+ const items=[{placeId:'linked',name:'Claimed',latitude:-29.8,longitude:31},
+  {placeId:'unclaimed',name:'Unclaimed',latitude:-29.7,longitude:31.1},
+  {placeId:'unclaimed',name:'Duplicate',latitude:-29.7,longitude:31.1},
+  {placeId:'bad',latitude:0,longitude:0}];
+ assert.deepEqual(unmatchedGoogle(items,[{googlePlaceId:'linked'}]).map(p=>p.placeId),['unclaimed']);
+ const {readFileSync}=await import('node:fs');
+ const code=readFileSync(new URL('./public/js/teyza-combined-coverage.mjs',import.meta.url),'utf8');
+ assert(code.includes('Google listing only'));
+ assert(code.includes("['WhatsApp opted in',p._googleOnly?'Unknown':human(p.whatsappOptIn)]"));
+ assert(code.includes("componentRestrictions:{country:'ZA'}"));
+ assert(code.includes("url.searchParams.set('radius','20000')"));
+ assert(!code.includes('localStorage.setItem('));
+ const premium=readFileSync(new URL('./public/js/teyza-premium-coverage.mjs',import.meta.url),'utf8');
+ assert(premium.includes('combined.panel'));
+ assert(premium.includes('combined.setShops(filtered)'));
+});
