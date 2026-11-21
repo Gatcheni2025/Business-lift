@@ -5,6 +5,11 @@ const CONFIG='/assets/teyza-maps-config.json';
 const SA={lat:-28.8,lng:24.6};
 const good=p=>Number.isFinite(p?.latitude)&&Number.isFinite(p?.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
 const elt=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e;};
+export function matchGoogle(places,registered){
+ const ids=new Set(registered.map(p=>p.googlePlaceId).filter(Boolean));
+ const seen=new Set();return places.filter(p=>{if(!good(p)||!p.placeId||seen.has(p.placeId))return false;seen.add(p.placeId);return true;})
+ .reduce((group,p)=>{(ids.has(p.placeId)?group.linked:group.potential).push(p);return group;},{linked:[],potential:[]});
+}
 export function unmatchedGoogle(places,registered){
  const ids=new Set(registered.map(p=>p.googlePlaceId).filter(Boolean)),seen=new Set();
  return places.filter(p=>{if(!good(p)||!p.placeId||ids.has(p.placeId)||seen.has(p.placeId))return false;seen.add(p.placeId);return true;});
@@ -12,25 +17,27 @@ export function unmatchedGoogle(places,registered){
 export function createCombinedCoverage({report,onReady}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false;
  const panel=elt('section');panel.className='tp-combined';
- const title=elt('h3','Combined Google + Teyza map');
- const note=elt('p','Google businesses are discovered within one area at a time. This is not a national Google directory; WhatsApp consent and Teyza verification must come from Teyza records.');
+ const title=elt('h3','Google Places · shop registration opportunities');
+ const note=elt('p','Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
  const controls=elt('div');controls.className='tp-combined-controls';
 
  const town=elt('input');town.type='search';town.placeholder='Town or municipality (e.g. eThekwini)';town.setAttribute('aria-label','Town or municipality');
  const province=elt('select');province.setAttribute('aria-label','Province');
  for(const p of ['All provinces','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){const o=elt('option',p);o.value=p;province.append(o);}
  const category=elt('select');category.setAttribute('aria-label','Google business type');
- for(const [id,t] of [['spaza','Spaza and local shops'],['variety','Other small businesses'],['wholesale','Wholesalers']]){const o=elt('option',t);o.value=id;category.append(o);}
+ for(const [id,t] of [['spaza','Spaza and local shops'],['variety','Other businesses (salons, services, retail)'],['wholesale','Wholesalers'],['all','All three categories (3 searches)']]){const o=elt('option',t);o.value=id;category.append(o);}
  const start=elt('button','Retry Google map');start.type='button';start.className='button primary';
- const search=elt('button','Search this area on Google');search.type='button';search.className='button quiet';search.disabled=true;
+ const search=elt('button','Find shops needing Teyza registration');search.type='button';search.className='button quiet';search.disabled=true;
  const showT=elt('input');showT.type='checkbox';showT.checked=true;
  const showG=elt('input');showG.type='checkbox';showG.checked=true;
+ const count=elt('div');count.className='tp-discovery-counts';count.setAttribute('aria-live','polite');
+ const attribution=elt('p','Business information © Google Maps; search results are shown only on this Google map and are not saved as a business directory.');attribution.className='tp-google-credit';
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
  const status=elt('p','Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
  const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText='display:none;height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
  controls.append(town,province,category,search,toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- panel.append(title,note,controls,status,canvas,list);
+ panel.append(title,note,controls,status,count,canvas,attribution,list);
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -48,18 +55,36 @@ export function createCombinedCoverage({report,onReady}={}){
   return body;
  };
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
+ const placesById=new Map();
+ const boundsFor=(p)=>({lat:p.latitude,lng:p.longitude});
  function render(){
+  const groups=matchGoogle(places,registered),listed=groups.potential;
+  count.replaceChildren();
+  count.append(elt('strong',registered.length+' Teyza mapped · '+groups.linked.length+' Google listings matched · '+listed.length+' potential onboarding leads in searched area'));
+  list.replaceChildren();
+  const hint=elt('p',places.length?'Potential leads are Google-listed businesses without a matching published Teyza Place ID. Verify the shop and owner before contacting or assigning an agent.':'Search a town or the current Google map area to see Google-listed shops and businesses.');
+  list.append(hint);
   if(!map||!google)return;
-  clearMarkers();const listed=unmatchedGoogle(places,registered);
-  const items=[...(showT.checked?registered.filter(good):[]),...(showG.checked?listed.map(p=>({...p,_googleOnly:true})):[])];
-  for(const p of items){
-   const marker=new google.maps.Marker({map,position:{lat:p.latitude,lng:p.longitude},title:p.name||'Shop',
+  clearMarkers();placesById.clear();
+  const records=[
+   ...(showT.checked?registered.filter(good).map(p=>({...p,_googleOnly:false})):[]),
+   ...(showG.checked?listed.map(p=>({...p,_googleOnly:true})):[])
+  ];
+  for(const p of records){
+   const marker=new google.maps.Marker({map,position:boundsFor(p),title:(p.name||'Shop')+(p._googleOnly?' · Potential Teyza registration':' · Registered on Teyza'),
     icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:p._googleOnly?'#2b65ca':p.verified===true?'#09945a':'#e1a42e',fillOpacity:.95,strokeColor:'#ffffff',strokeWeight:1.8}});
    const popup=new google.maps.InfoWindow({content:info(p)});
    marker.addListener('click',()=>popup.open({map,anchor:marker}));markers.push(marker);
+   if(p._googleOnly)placesById.set(p.placeId,{marker,popup});
   }
-  list.replaceChildren();list.append(elt('p',registered.length+' Teyza locations loaded · '+listed.length+' Google-only businesses in the latest local search. Google results are not nationwide.'));
-  for(const p of listed.slice(0,15)){const b=elt('button',p.name||'Google-listed shop');b.type='button';b.className='tp-text-button';b.onclick=()=>{map.panTo({lat:p.latitude,lng:p.longitude});map.setZoom(15);};list.append(b);}
+  for(const p of listed.slice(0,100)){
+   const row=elt('button');row.type='button';row.className='tp-discovery-result';
+   row.append(elt('strong',p.name||'Google-listed business'));
+   row.append(elt('span',p.address||p.area||'Location on map'));
+   row.append(elt('small','Google Places · '+(p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other business')+' · No matching published Teyza listing'));
+   row.onclick=()=>{map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const m=placesById.get(p.placeId);m?.popup.open({map,anchor:m.marker});};
+   list.append(row);
+  }
  }
  function loadMap(apiKey){return new Promise((resolve,reject)=>{
   if(window.google?.maps?.Map){resolve(window.google);return;}
@@ -105,15 +130,35 @@ export function createCombinedCoverage({report,onReady}={}){
   const point=matches[0].geometry.location;map.setCenter(point);map.setZoom(q?11:7);
  }
  search.onclick=async()=>{
-  if(!map)return;search.disabled=true;status.textContent='Looking up Google-listed businesses in this map area…';
+  if(!map)return;
+  search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
   try{
    await locate();const c=map.getCenter(),lat=c.lat(),lon=c.lng();
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
-   const url=new URL(ENDPOINT);url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));url.searchParams.set('radius','20000');url.searchParams.set('category',category.value);
-   const res=await fetch(url,{cache:'no-store'});if(!res.ok)throw Error('Google business discovery is unavailable (HTTP '+res.status+').');
-   const data=await res.json();places=Array.isArray(data.entries)?data.entries.filter(good):[];
-   render();status.textContent='Found '+places.length+' Google listings in this local search; duplicates linked by Google Place ID are excluded.';
-  }catch(e){status.textContent=e.message;report?.(e);}finally{search.disabled=false;}
+   // Each click is an explicit, bounded regional search. The existing Firebase
+   // Places service holds the server key; this browser never accesses it.
+   const kinds=category.value==='all'?['spaza','variety','wholesale']:[category.value];
+   const searches=await Promise.allSettled(kinds.map(async kind=>{
+    const url=new URL(ENDPOINT);
+    url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
+    url.searchParams.set('radius','20000');url.searchParams.set('category',kind);
+    const res=await fetch(url,{cache:'no-store'});
+    if(!res.ok)throw Error(kind+' discovery HTTP '+res.status);
+    const data=await res.json();
+    if(!Array.isArray(data.entries))throw Error(kind+' discovery returned no entries array');
+    return {entries:data.entries.filter(good),warning:data.warning};
+   }));
+   const successful=searches.filter(r=>r.status==='fulfilled');
+   if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
+   const unique=new Map();
+   for(const item of successful)for(const p of item.value.entries)if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);
+   places=[...unique.values()];render();
+   const counts=matchGoogle(places,registered);
+   const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
+   status.textContent='Google Places returned '+places.length+' nearby listings: '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.'+
+    (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
+  }catch(e){status.textContent='Google discovery failed: '+e.message;report?.(e);}
+  finally{search.disabled=false;}
  };
  showT.onchange=render;showG.onchange=render;
  return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
