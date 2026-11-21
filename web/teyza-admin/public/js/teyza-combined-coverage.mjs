@@ -117,7 +117,8 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
    // One bounded, non-recurring discovery sample gives operators live evidence
    // rather than an empty map. No national background crawling is performed.
    town.value='Durban';province.value='KwaZulu-Natal';category.value='spaza';
-   void searchArea();
+   map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
+   void searchArea(true);
   }catch(e){
    active=false;start.disabled=false;
    if(!start.isConnected)controls.prepend(start);
@@ -134,12 +135,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
   const matches=await new Promise((resolve,reject)=>geocoder.geocode({address,componentRestrictions:{country:'ZA'}},(results,code)=>code==='OK'&&results?.length?resolve(results):reject(Error('Could not locate that South African town/municipality.'))));
   const point=matches[0].geometry.location;map.setCenter(point);map.setZoom(q?11:7);
  }
- async function searchArea(){
+ async function searchArea(skipGeocode=false){
   if(!map)return;
   search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
-   await locate();const c=map.getCenter(),lat=c.lat(),lon=c.lng();
+   if(!skipGeocode)await locate();const c=map.getCenter(),lat=c.lat(),lon=c.lng();
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
    if(!town.value.trim()&&province.value==='All provinces'&&Math.abs(lat-SA.lat)<0.02&&Math.abs(lon-SA.lng)<0.02)
     throw Error('Enter a town (such as Durban) or move the map to a populated area before searching.');
@@ -170,7 +171,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery}={}){
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
   finally{search.disabled=false;}
  }
- search.onclick=searchArea;
+ search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
 }
