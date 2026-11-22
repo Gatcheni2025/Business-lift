@@ -71,7 +71,7 @@ void main(){
   expect(find.byType(TextFormField),findsNothing);
   expect(find.text('Continue with Google'),findsOneWidget);
   expect(find.text('Continue with Facebook'),findsOneWidget);
-  expect(find.text('Create shopper account'),findsNothing);
+  expect(find.text('Create shopper account'),owner?findsNothing:findsOneWidget);
   expect(find.text('Create shop owner account'),findsNothing);
   final login=find.text('Already on Teyza? Sign in');
   await t.ensureVisible(login);await t.pumpAndSettle();
