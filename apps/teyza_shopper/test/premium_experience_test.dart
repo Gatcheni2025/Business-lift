@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/premium_navigation.dart';
+import 'package:teyza_shopper/product_catalogue.dart';
 import 'package:teyza_shopper/shopper_account.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/shopper_home.dart';
@@ -41,7 +42,7 @@ void main(){
     final visited=<int>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(
       bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,onSelect:visited.add))));
-    for(final label in ['home','shops','shop','orders','account']){
+    for(final label in ['home','discover','shop','orders','account']){
       await tester.tap(find.byKey(ValueKey('nav-'+label)));
     }
     expect(visited,[0,5,1,3,4]);
@@ -193,12 +194,27 @@ void main(){
     }
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
     expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
-    // The separate Shops tab remains accessible for broader category browsing.
-    await tester.tap(find.byKey(const ValueKey('nav-shops')));
+    // Decode the large JSON asset outside the widget test's fake async clock.
+    await tester.runAsync(()async{
+      await ProductCatalogue.load();
+      final photoContext=tester.element(find.byType(ShopperHome));
+      await Future.wait([
+        for(final atlas in ['fresh-pantry.png','pantry-household.png',
+          'food-drinks-expanded.png','care-household-expanded.png'])
+          precacheImage(AssetImage('assets/catalogue/'+atlas),photoContext)
+      ]);
+    });
+    // Discover opens product categories; shop discovery stays on Home.
+    await tester.tap(find.byKey(const ValueKey('nav-discover')));
     await tester.pumpAndSettle();
-    expect(find.text('Search wider'),findsOneWidget);
+    expect(find.byKey(const PageStorageKey('discover-categories')),findsOneWidget);
+    expect(find.text('Nearby shops'),findsNothing);
     expect(tester.takeException(),isNull);
-    await capture('shops');
+    await capture('discover-categories');
+    await tester.tap(find.byKey(const ValueKey('discover-category-Bakery')));
+    await tester.pumpAndSettle();
+    await capture('discover-bakery');
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));await tester.pumpAndSettle();
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
     expect(find.text('Sign in to Teyza'),findsOneWidget);
     expect(find.text('Continue as Shop Owner'),findsNothing);

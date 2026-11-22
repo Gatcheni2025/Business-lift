@@ -19,7 +19,7 @@ $envPath=Join-Path $root 'services\teyza-mobile-v39\.env.business-lift-3c19c'
 $firebase=Join-Path $root 'tools\admin-release\node_modules\firebase-tools\lib\bin\firebase.js'
 if((git branch --show-current).Trim() -ne $expectedBranch){throw 'Pull the merged release branch before deploying.'}
 if($LASTEXITCODE -ne 0){throw 'Git branch check failed.'}
-if(git status --porcelain --untracked-files=no){throw 'Commit or stash tracked local edits before deploying the release.'}
+if(git status --porcelain --untracked-files=no -- services/teyza-mobile-v39 firebase.teyza-mobile-v39.json tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-General.ps1){throw 'Commit or stash local edits to the WhatsApp deployment source before deploying the release.'}
 if(!(Test-Path $firebase)){throw 'Install the pinned tools/admin-release dependencies first.'}
 if(!(Test-Path $envPath)){throw 'Existing project .env file is required; unrelated configuration will be preserved.'}
 if(!(Test-Path (Join-Path $root 'services\teyza-mobile-v39\whatsapp-rollout.js'))){throw 'General rollout source missing. Pull the merged release.'}
