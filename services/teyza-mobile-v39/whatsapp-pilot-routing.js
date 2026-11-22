@@ -38,7 +38,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
  async function route(payload){
   const pilotUid=getPilotUid();
   const numberId=getPhoneNumberId();
-  if(!['pilot','general'].includes(getRolloutMode())||
+  if(!['pilot','general','all'].includes(getRolloutMode())||
      getRolloutMode()==='pilot'&&!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
   // Reconcile signed Meta receipts with an eligible seller's accepted outbox.
   // Delivery is not inferred from a successful API send; only signed status
@@ -102,7 +102,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
       ownerUid:sellerUid,subject:'WhatsApp consultant request',
       message:'Approved seller selected Talk to consultant in the welcome menu.',
       status:'open',priority:'normal',revision:0,createdBy:sellerUid,
-      createdAt:at,updatedAt:at,source:getRolloutMode()==='general'?'whatsapp_approval':'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
+      createdAt:at,updatedAt:at,source:['general','all'].includes(getRolloutMode())?'whatsapp_approval':'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
      });
     }
     if(event.action==='stop'){

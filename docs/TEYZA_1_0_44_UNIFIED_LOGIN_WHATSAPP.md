@@ -50,7 +50,7 @@ After merging and pulling the release branch on the authenticated deployment
 computer, run:
 
 ```powershell
-.\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-General.ps1
+.\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-General.ps1 -EnableForNewApprovals
 ```
 
 This uses the existing pilot's sender, approved welcome template and image.
@@ -62,11 +62,13 @@ The script preserves unrelated environment settings and enables:
 
 ```dotenv
 TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1
-TEYZA_WHATSAPP_ROLLOUT_MODE=general
-TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=<activation milliseconds>
+TEYZA_WHATSAPP_ROLLOUT_MODE=all
+TEYZA_WHATSAPP_ALL_STARTED_AT=<activation milliseconds>
 ```
 
-It retains the activation timestamp for repeated/partially failed deployments.
+The build 55 `all` mode remains supported; `general` is also accepted. A launcher call without `-EnableForNewApprovals` runs read-only checks.
+
+It recovers a missing local cutoff from the deployed worker and retains the activation timestamp for repeated/partially failed deployments.
 Historical queued approvals are skipped. New welcomes still require a current
 approved seller and matching approved verification submission, explicit current
 consent and an Auth-verified phone matching the seller's saved phone.

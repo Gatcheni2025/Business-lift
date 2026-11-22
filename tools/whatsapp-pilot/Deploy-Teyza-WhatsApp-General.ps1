@@ -4,7 +4,12 @@
    The successful pilot uses the same approved template, image and sender.
 #>
 [CmdletBinding()]
-param()
+param(
+ [switch]$EnableForNewApprovals,
+ # Accepted for compatibility with the build 55 launcher.
+ [switch]$ConfirmMetaTemplateApproved,
+ [switch]$ConfirmConsentPilotSuccessful
+)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $root
@@ -42,14 +47,34 @@ foreach($key in @('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN','TEYZA_WHATSAPP_APP_SECR
  & gcloud secrets describe $key --project $project --format='value(name)' | Out-Null
  if($LASTEXITCODE -ne 0){throw "Required WhatsApp secret is unavailable: $key"}
 }
-$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=([0-9]+)\s*$')
+if(!$EnableForNewApprovals){
+ Write-Host 'Read-only preflight passed. Use -EnableForNewApprovals to deploy general welcome delivery.'
+ return
+}
+$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ALL_STARTED_AT=([0-9]+)\s*$')
+if(!$existing.Success){$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=([0-9]+)\s*$')}
 if(!$existing.Success){$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_GENERAL_STARTED_AT=([0-9]+)\s*$')}
 $startedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 if($existing.Success -and [long]$existing.Groups[1].Value -gt 0){$startedAt=[long]$existing.Groups[1].Value}
+# Build 55 restored the local .env after deployment. Recover its live cutoff
+# when it is not present locally, so an upgrade keeps queued approvals eligible.
+if(!$existing.Success){
+ $liveResult=@(& gcloud functions describe teyzaWhatsAppApprovalCreated --gen2 --region us-central1 --project $project --format='value(serviceConfig.environmentVariables.TEYZA_WHATSAPP_ROLLOUT_MODE)' 2>&1)
+ $liveMode=($liveResult -join "`n").Trim()
+ if($LASTEXITCODE -ne 0){
+  if($liveMode -match 'NOT_FOUND|not found|does not exist'){$liveMode=''}
+  else{throw 'Could not inspect the existing welcome worker. Check gcloud project access before enabling delivery.'}
+ }
+ if(([string]$liveMode).Trim() -in @('all','general')){
+  $liveStart=(& gcloud functions describe teyzaWhatsAppApprovalCreated --gen2 --region us-central1 --project $project --format='value(serviceConfig.environmentVariables.TEYZA_WHATSAPP_ALL_STARTED_AT)' 2>$null)
+  if($LASTEXITCODE -ne 0 -or ([string]$liveStart).Trim() -notmatch '^[0-9]+$' -or [long]$liveStart -le 0){throw 'Existing general delivery has no readable activation timestamp. Inspect its live configuration before redeploying.'}
+  $startedAt=[long]$liveStart
+ }
+}
 $updates=[ordered]@{
  'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'='1'
- 'TEYZA_WHATSAPP_ROLLOUT_MODE'='general'
- 'TEYZA_WHATSAPP_ROLLOUT_STARTED_AT'=[string]$startedAt
+ 'TEYZA_WHATSAPP_ROLLOUT_MODE'='all'
+ 'TEYZA_WHATSAPP_ALL_STARTED_AT'=[string]$startedAt
 }
 $modified=$original
 foreach($key in $updates.Keys){$modified=[regex]::Replace($modified,"(?m)^$key=.*\r?\n?",'')}

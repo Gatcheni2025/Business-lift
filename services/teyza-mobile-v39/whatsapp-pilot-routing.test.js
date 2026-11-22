@@ -231,3 +231,12 @@ test('General replies reject deletion-pending and unapproved businesses',async()
  await f.router.route(payload([message('wamid.notApproved','text',{text:{body:'MENU'}})]));
  assert.equal(calls,0);
 });
+
+
+test('Build 55 all mode continues approved seller menu replies',async()=>{
+ let calls=0;const f=fake({mode:'all',token:'test-sender-token-for-general-sellers',send:async()=>{
+  calls++;return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.compatible'}]})};
+ }});f.setPilotUid('');
+ await f.router.route(payload([message('wamid.allMenu','text',{text:{body:'MENU'}})]));
+ assert.equal(calls,1);
+});

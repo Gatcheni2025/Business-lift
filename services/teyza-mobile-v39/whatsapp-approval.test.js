@@ -138,3 +138,12 @@ test('Pending recovery pages past older configuration failures and wraps its cur
  assert.equal(f.records.get('teyzaWhatsAppDeliveryState/approval_pending').cursor,'');
  assert.equal(f.calls.length,0);
 });
+
+
+test('Build 55 all mode keeps the same forward-only activation semantics',async()=>{
+ const f=fixture();f.setMode('all');f.setPilotUid('');
+ await f.api.deliver('submission1');await f.api.deliver('submission1');
+ assert.equal(f.calls.length,1);
+ const old=fixture();old.setMode('all');old.setGeneralStartedAt(1001);
+ await old.api.deliver('submission1');assert.equal(old.calls.length,0);
+});
