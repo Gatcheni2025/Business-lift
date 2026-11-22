@@ -103,8 +103,10 @@ class TeyzaMerchantGrid extends StatelessWidget {
                   style:const TextStyle(color:muted,fontSize:10)),
                 const Spacer(),
                 const Row(children:[
-                  Text('Explore shop',style:TextStyle(color:forest,fontWeight:FontWeight.w800,fontSize:11)),
-                  SizedBox(width:5),Icon(Icons.arrow_forward_rounded,color:forest,size:15),
+                  Expanded(child:Text('Explore shop',maxLines:1,
+                    overflow:TextOverflow.ellipsis,
+                    style:TextStyle(color:forest,fontWeight:FontWeight.w800,fontSize:11))),
+                  SizedBox(width:4),Icon(Icons.arrow_forward_rounded,color:forest,size:15),
                 ])
               ]))),
           ]))))); 
