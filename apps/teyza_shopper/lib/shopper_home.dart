@@ -457,15 +457,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     // than a permanent splash screen. Do not block widget tests on remote APIs.
     if(mounted)setState(()=>_launchStep='Finding shops in your area…');
     try {
-      final initialCatalogue=load();
-      // Restore the saved address even when background polling is disabled
-      // (e.g. an explicit/offline shopper session). Loading only the
-      // catalogue caused the saved delivery location to disappear on startup.
-      final initialArea=widget.initialArea!=null
+      // Restore the address before loading local shop results. Loading the
+      // catalogue in parallel with address resolution produced an apparently
+      // empty community shelf on a cold launch even when nearby shops existed.
+      await (widget.initialArea!=null
         ?_restoreSavedArea()
-        :restoreDeliveryProfile();
-      await Future.wait<void>([initialCatalogue,initialArea])
-        .timeout(const Duration(seconds:20));
+        :restoreDeliveryProfile()).timeout(const Duration(seconds:9));
+      if(!mounted)return;
+      setState(()=>_launchStep='Loading neighbourhood shops and businesses…');
+      await Future.wait<void>([
+        load(),
+        if(area!=null)reloadOnline(),
+        if(area!=null)reloadOtherBusinesses(),
+      ]).timeout(const Duration(seconds:17));
     } catch (_) {/* Show clear directory / catalogue errors on the home feed. */}
     if(!mounted)return;
     setState(()=>_launchStep='Preparing nearby storefronts…');
@@ -2576,6 +2580,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:const TextStyle(fontSize:14,color:muted)),
       const SizedBox(height:8),
       onlineProviderLabel(shop),
+      if(shop.websiteUrl.startsWith('https://'))Padding(
+        padding:const EdgeInsets.only(top:12),
+        child:OutlinedButton.icon(
+          key:ValueKey('public-shop-website-${shop.id}'),
+          onPressed:()async{
+            final url=Uri.tryParse(shop.websiteUrl);
+            if(url!=null&&url.scheme=='https'){
+              final opened=await (widget.externalLauncher?.call(url)??
+                launchUrl(url,mode:LaunchMode.externalApplication));
+              if(!opened&&mounted)ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content:Text('Website unavailable. Try again later.')));
+            }
+          },icon:const Icon(Icons.language_outlined),
+          label:const Text('View official business website'))),
       if(shop.types.isNotEmpty)Padding(
         padding:const EdgeInsets.only(top:11),
         child:Wrap(spacing:6,runSpacing:6,children:[
@@ -2662,10 +2680,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
        const SizedBox(height:8),
        if(shop.shopCategory=='spaza')onlineServices(shop),
        if(verifiedMerchantFor(shop)!=null&&shop.shopCategory!='wholesale')...[
-         section(shop.shopCategory=='spaza'?'Shop items':'Published Teyza services'),
+         section(shop.shopCategory=='spaza'?'This shop’s live products':'Published Teyza services',
+           subtitle:'Supplied by the matching verified Teyza merchant'),
+         if(shop.shopCategory=='spaza')
+           for(final product in verifiedMerchantFor(shop)!.rangeProducts.take(5))
+             Card(color:Colors.white,child:ListTile(
+               leading:SizedBox(width:55,height:55,child:photo(product.picture,size:55)),
+               title:Text(product.name),
+               subtitle:Text(rand(product.priceCents)),
+               trailing:const Icon(Icons.arrow_forward_rounded,color:green),
+               onTap:()=>openShop(verifiedMerchantFor(shop)!))),
          FilledButton.icon(onPressed:()=>openShop(verifiedMerchantFor(shop)!),
            icon:const Icon(Icons.storefront_outlined),
-           label:Text(shop.shopCategory=='spaza'?'See this shop’s live products':'Explore this business’s Teyza profile')),
+           label:Text(shop.shopCategory=='spaza'?'Open full shop catalogue':'Explore this business’s Teyza profile')),
        ],
        if(shop.shopCategory=='wholesale')
          const Text('Wholesale ordering requires an approved Teyza supplier connection.',
@@ -2758,6 +2785,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             icon:const Icon(Icons.phone_outlined),label:const Text('Call'))
         ])
       ])),
+    if(shop.shopCategory=='spaza'&&shop.rangeProducts.isNotEmpty)...[
+      section('Featured in this shop',
+        subtitle:'Available products published by '+shop.name),
+      SizedBox(key:ValueKey('shop-${shop.id}-featured-rail'),height:157,
+        child:ListView.separated(scrollDirection:Axis.horizontal,
+          physics:const BouncingScrollPhysics(),
+          itemCount:math.min(8,shop.rangeProducts.length),
+          separatorBuilder:(_,__)=>const SizedBox(width:10),
+          itemBuilder:(context,index){
+            final item=shop.rangeProducts[index];
+            return SizedBox(width:142,child:Material(color:Colors.white,
+              borderRadius:BorderRadius.circular(17),
+              child:InkWell(borderRadius:BorderRadius.circular(17),
+                onTap:()=>setState(()=>shopProductSearch=item.name),
+                child:Padding(padding:const EdgeInsets.all(9),child:Column(
+                  crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Expanded(child:Center(child:photo(item.picture,size:95,
+                      icon:Icons.local_grocery_store_outlined))),
+                    Text(item.name,maxLines:1,overflow:TextOverflow.ellipsis,
+                      style:const TextStyle(color:ink,fontWeight:FontWeight.w800,fontSize:12)),
+                    Text(item.priceCents>0?rand(item.priceCents):'Ask for price',
+                      style:const TextStyle(color:Color(0xFFE87531),
+                        fontSize:13,fontWeight:FontWeight.w900)),
+                  ])))));
+          })),
+    ],
     if(shop.shopCategory=='variety')...[
       section('Services',subtitle:'Services published by this verified Teyza business'),
       if(shop.serviceHighlights.isEmpty)

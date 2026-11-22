@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/teyza_merchant_grid.dart';
@@ -26,6 +27,59 @@ Future<void> _start(WidgetTester tester)async{
 }
 
 void main(){
+  testWidgets('Preloader stays visible while the first merchant catalogue is unresolved',
+    (tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final pending=Completer<List<Shop>>();
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(
+      initialArea:areas.first,enableBackgroundServices:false,
+      catalogueLoader:()=>pending.future,
+      directoryLoader:(area,type,radius)async=>[],
+    )));
+    await tester.pump(const Duration(milliseconds:250));
+    expect(find.textContaining('neighbourhood shops'),findsOneWidget);
+    expect(find.byKey(const PageStorageKey<String>('shopper-home')),findsNothing);
+    pending.complete([_shop('preloaded','Loaded Community Shop','spaza')]);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Published stock belongs to one immersive storefront with a swipeable rail',
+    (tester)async{
+    await tester.binding.setSurfaceSize(const Size(390,844));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final shop=Shop.fromJson({
+      'id':'stocked-shop','name':'Stocked Community Spaza','shopCategory':'spaza',
+      'latitude':-29.8587,'longitude':31.0218,
+      'identityVerified':true,'pickupEnabled':true,
+      'products':[for(var i=0;i<7;i++){'id':'prod$i','name':'Local product $i',
+        'category':'Grocery','priceCents':1000+i*100,'stock':15}],
+    });
+    await tester.pumpWidget(MaterialApp(home:ShopperHome(
+      initialArea:areas.first,enableBackgroundServices:false,
+      catalogueLoader:()async=>[shop],
+      directoryLoader:(area,type,radius)async=>[],
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nearby-stocked-shop')));
+    await tester.pumpAndSettle();
+    final featured=find.byKey(const ValueKey('shop-stocked-shop-featured-rail'));
+    final scroller=find.descendant(
+      of:find.byKey(const PageStorageKey<String>('shop-profile-stocked-shop')),
+      matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(featured,160,scrollable:scroller);
+    await tester.pumpAndSettle();
+    expect(featured,findsOneWidget);
+    expect(find.byKey(const ValueKey('nav-account')),findsNothing);
+    expect(find.text('Stocked Community Spaza'),findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const PageStorageKey<String>('shopper-home')),findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Spaza tiles and local business tiles occupy separate category grids',
     (tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
