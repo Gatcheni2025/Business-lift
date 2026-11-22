@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/premium_navigation.dart';
+import 'package:teyza_shopper/product_catalogue.dart';
 import 'package:teyza_shopper/shopper_account.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
 import 'package:teyza_shopper/shopper_home.dart';
@@ -193,6 +194,8 @@ void main(){
     }
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
     expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
+    // Decode the large JSON asset outside the widget test's fake async clock.
+    await tester.runAsync(()=>ProductCatalogue.load());
     // Discover opens product categories; shop discovery stays on Home.
     await tester.tap(find.byKey(const ValueKey('nav-discover')));
     await tester.pumpAndSettle();

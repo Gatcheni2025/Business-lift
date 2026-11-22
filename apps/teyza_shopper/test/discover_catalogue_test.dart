@@ -94,6 +94,8 @@ void main() {
       directoryLoader: (_, type, __) async => type == 'spaza' ? [place] : [],
       externalLauncher: (uri) async { launched = uri; return true; })));
     await t.pumpAndSettle();
+    // Large bundled JSON is decoded through a real isolate by AssetBundle.
+    await t.runAsync(() => ProductCatalogue.load());
     expect(find.byKey(const ValueKey('nav-shops')), findsNothing);
     await t.tap(find.byKey(const ValueKey('nav-discover')));
     await t.pumpAndSettle();
