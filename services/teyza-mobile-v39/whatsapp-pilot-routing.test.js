@@ -29,7 +29,7 @@ function fake(options={}){
  }};
  let uid='seller1';
  return {data,router:createPilotRouter({db,getPilotUid:()=>uid,
-  getPhoneNumberId:()=> '1466599163197469',clock:()=>777,
+  getPhoneNumberId:()=> '1466599163197469',getRolloutMode:()=>options.mode||'pilot',clock:()=>777,
   getAccessToken:()=>options.token||'',send:options.send||fetch}),
   setPilotUid:v=>{uid=v;}};
 }
@@ -188,4 +188,46 @@ test('HI does not bypass approval or consent restrictions',async()=>{
  f.data.get('teyzaSellerAccounts/seller1').approvalStatus='pending';
  await f.router.route(payload([message('wamid.unapproved','text',{text:{body:'Hello'}})]));
  assert.equal(count,0);
+});
+
+
+test('General replies and delivery receipts work for any approved consenting seller',async()=>{
+ const sent=[];
+ const f=fake({mode:'general',token:'test-sender-token-for-general-sellers',send:async(url,request)=>{
+  sent.push(JSON.parse(request.body));return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.generalreply'}]})};
+ }});
+ f.setPilotUid('');
+ f.data.set('teyzaSellerAccounts/seller2',{uid:'seller2',phone:'+27821234567',approvalStatus:'approved'});
+ f.data.set('teyzaWhatsAppPreferences/seller2',{ownerUid:'seller2',phone:'+27821234567',optedIn:true});
+ f.data.set('teyzaWhatsAppApprovalOutbox/sub2',{sellerUid:'seller2',status:'accepted',providerMessageId:'wamid.sent2'});
+ const p=payload([message('wamid.menu2','text',{text:{body:'MENU'}},'27821234567')],
+  [{id:'wamid.sent2',status:'delivered'}]);
+ await f.router.route(p);await f.router.route(p);
+ assert.equal(sent.length,1);assert.equal(sent[0].to,'27821234567');
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub2').deliveryStatus,'delivered');
+ assert.equal([...f.data].filter(([p])=>p.startsWith('teyzaWhatsAppPilotActions/'))[0][1].sellerUid,'seller2');
+ f.data.get('teyzaWhatsAppPreferences/seller2').optedIn=false;
+ await f.router.route(payload([message('wamid.noConsent','text',{text:{body:'MENU'}},'27821234567')]));
+ assert.equal(sent.length,1);
+});
+
+test('General STOP revokes all matching consents while ambiguous menu requests send nothing',async()=>{
+ let calls=0;const f=fake({mode:'general',token:'test-sender-token-for-general-sellers',send:async()=>{calls++;}});
+ f.data.set('teyzaSellerAccounts/seller2',{uid:'seller2',phone:'+27712345678',approvalStatus:'approved'});
+ f.data.set('teyzaWhatsAppPreferences/seller2',{ownerUid:'seller2',phone:'+27712345678',optedIn:true});
+ await f.router.route(payload([message('wamid.ambiguous','text',{text:{body:'MENU'}})]));
+ assert.equal(calls,0);
+ await f.router.route(payload([message('wamid.sharedStop','text',{text:{body:'STOP'}})]));
+ for(const uid of ['seller1','seller2'])assert.equal(f.data.get('teyzaWhatsAppPreferences/'+uid).optedIn,false);
+ assert.equal(calls,0);
+});
+
+test('General replies reject deletion-pending and unapproved businesses',async()=>{
+ let calls=0;const f=fake({mode:'general',token:'test-sender-token-for-general-sellers',send:async()=>{calls++;}});
+ f.data.get('teyzaSellerAccounts/seller1').deletionPending=true;
+ await f.router.route(payload([message('wamid.pendingDelete','text',{text:{body:'MENU'}})]));
+ f.data.get('teyzaSellerAccounts/seller1').deletionPending=false;
+ f.data.get('teyzaSellerAccounts/seller1').approvalStatus='pending';
+ await f.router.route(payload([message('wamid.notApproved','text',{text:{body:'MENU'}})]));
+ assert.equal(calls,0);
 });

@@ -126,19 +126,20 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Account role choice consumes Back before leaving Account',
+  testWidgets('Registration choice consumes Back before leaving Account',
     (tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     await _start(tester);
     await tester.tap(find.byKey(const ValueKey('nav-account')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue as Business Owner'));
+    final signup=find.text('New to Teyza? Get started for free');
+    await tester.ensureVisible(signup);await tester.tap(signup);
     await tester.pumpAndSettle();
-    expect(find.text('Business owner sign in'),findsOneWidget);
+    expect(find.byKey(const ValueKey('registration-seller')),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('teyza-back')));
     await tester.pumpAndSettle();
-    expect(find.text('Continue as Business Owner'),findsOneWidget);
+    expect(find.text('Sign in to Teyza'),findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('teyza-back')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);

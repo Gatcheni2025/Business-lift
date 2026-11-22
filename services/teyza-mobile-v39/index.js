@@ -89,6 +89,7 @@ function sellerCheckoutConfigured(){
 // No WhatsApp message sender or scheduled worker is enabled by this export.
 const pilotRouting=require('./whatsapp-pilot-routing').createPilotRouter({db,
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
+ getRolloutMode:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot',
  getPhoneNumberId:()=>process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
  getApiVersion:()=>process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
  getAccessToken:()=>whatsAppWebhookReplyToken.value()});
@@ -308,7 +309,9 @@ if(process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1'){
 const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db,
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
+ getRolloutMode:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot',
  getPilotStartAt:()=>process.env.TEYZA_WHATSAPP_PILOT_STARTED_AT||'',
+ getRolloutStartedAt:()=>process.env.TEYZA_WHATSAPP_GENERAL_STARTED_AT||'',
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
   language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
@@ -321,16 +324,8 @@ exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',max
 // If the provider was not configured when approval happened, retry only those
 // entries that have never been submitted to WhatsApp.
 exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',
- region:'us-central1',maxInstances:1,secrets:[whatsappToken]},async()=>{
- const pilotUid=process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'';
- if(!/^[A-Za-z0-9_-]{6,128}$/.test(pilotUid))return;
- const rows=await db.collection('teyzaWhatsAppApprovalOutbox')
-  .where('sellerUid','==',pilotUid).limit(100).get();
- for(const row of rows.docs){
-  if(['queued','configuration_required'].includes(row.data()?.status))
-   await whatsappApproval.deliver(row.id);
- }
-});
+ region:'us-central1',maxInstances:1,concurrency:1,timeoutSeconds:540,secrets:[whatsappToken]},
+ ()=>whatsappApproval.retryPending());
 }
 }
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});

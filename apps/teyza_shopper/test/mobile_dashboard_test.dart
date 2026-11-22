@@ -80,12 +80,11 @@ void main(){
   testWidgets('iPhone shopper login offers Google and Apple with email',(tester) async{
     final session=ShopperSession(store:TestStore())..isReady=true;
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
-    await tester.tap(find.text('Continue as Shopper'));await tester.pumpAndSettle();
     expect(find.text('Continue with Google'),findsOneWidget);expect(find.text('Continue with Apple'),findsOneWidget);
     expect(find.byType(TextFormField),findsNothing);
     final legacy=find.text('Already registered with email?');
     await tester.ensureVisible(legacy);await tester.tap(legacy);await tester.pumpAndSettle();
-    expect(find.text('Sign in as shopper'),findsOneWidget);
+    expect(find.text('Sign in'),findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   },variant:TargetPlatformVariant.only(TargetPlatform.iOS));
   testWidgets('Owner dashboard exposes all requested tools on a narrow screen',(tester) async{

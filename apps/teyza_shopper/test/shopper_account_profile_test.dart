@@ -95,8 +95,6 @@ void main(){
    session.idToken=null;session.userId=null;session.email=null;
    await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
    await t.pumpAndSettle();
-   await t.tap(find.text('Continue as Shopper'));
-   await t.pumpAndSettle();
    expect(find.byKey(const ValueKey('teyza-social-login-card')),findsOneWidget);
    expect(find.byKey(const ValueKey('teyza-existing-email-toggle')),findsOneWidget);
    expect(find.byType(TextFormField),findsNothing,
@@ -104,6 +102,7 @@ void main(){
    final signup=find.text('New to Teyza? Get started for free');
    await t.ensureVisible(signup);await t.tap(signup);await t.pumpAndSettle();
    expect(find.text('New to Teyza'),findsOneWidget);
+   await t.tap(find.byKey(const ValueKey('registration-shopper')));await t.pumpAndSettle();
    expect(find.text('Continue with Google'),findsOneWidget);
    expect(find.textContaining('separate email confirmation is not required'),findsOneWidget);
    expect(find.widgetWithText(TextFormField,'Email address'),findsNothing);
@@ -114,7 +113,7 @@ void main(){
    final legacy=find.text('Already registered with email?');
    await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
-   expect(find.text('Sign in as shopper'),findsOneWidget);
+   expect(find.text('Sign in'),findsOneWidget);
    // Flutter verifies debug foundation variables before addTearDown runs.
    // Reset the fake platform inside this widget test, not only on cleanup.
    debugDefaultTargetPlatformOverride=null;
@@ -126,7 +125,7 @@ void main(){
    await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
    await t.pumpAndSettle();
    expect(find.text('My Teyza account'),findsNothing);
-   expect(find.text('Continue as Shopper'),findsOneWidget);
+   expect(find.text('Sign in to Teyza'),findsOneWidget);
    await t.pumpWidget(const SizedBox.shrink());
    session.dispose();
  });

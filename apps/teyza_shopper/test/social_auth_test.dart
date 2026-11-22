@@ -37,14 +37,13 @@ void main(){
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeEmailAfterGoogleErrorSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
-  await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
   await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
   expect(session.googleCalls,1);
   final legacy=find.text('Already registered with email?');
   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
   await t.enterText(find.byType(TextFormField).at(1),'password123');
-  await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
+  await t.tap(find.text('Sign in'));await t.pumpAndSettle();
   expect(session.userId,'email-user');
   // The new social card is taller; after the legacy login button is tapped,
   // the list can remain scrolled down even though the account is authenticated.
@@ -63,12 +62,15 @@ void main(){
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeFacebookSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
-  await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));
-  await t.pumpAndSettle();
   final signup=find.text('New to Teyza? Get started for free');
   await t.ensureVisible(signup);await t.pumpAndSettle();
   await t.tap(signup);await t.pumpAndSettle();
   expect(find.text('New to Teyza'),findsOneWidget);
+  expect(find.byKey(const ValueKey('registration-shopper')),findsOneWidget);
+  expect(find.byKey(const ValueKey('registration-seller')),findsOneWidget);
+  await t.tap(find.byKey(ValueKey(owner?'registration-seller':'registration-shopper')));
+  await t.pumpAndSettle();
+  if(owner){await t.tap(find.byKey(const ValueKey('registration-spaza')));await t.pumpAndSettle();}
   expect(find.byType(TextFormField),findsNothing);
   expect(find.text('Continue with Google'),findsOneWidget);
   expect(find.text('Continue with Facebook'),findsOneWidget);
@@ -80,7 +82,7 @@ void main(){
   final legacy=find.text('Already registered with email?');
   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   expect(find.byType(TextFormField),findsNWidgets(2));
-  expect(find.text(owner?'Sign in as shop owner':'Sign in as shopper'),findsOneWidget);
+  expect(find.text('Sign in'),findsOneWidget);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();
   debugDefaultTargetPlatformOverride=null;
  });
@@ -97,17 +99,43 @@ void main(){
   debugDefaultTargetPlatformOverride=TargetPlatform.iOS;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   expect(authMessage(StateError('DEVELOPER_ERROR')),contains('iOS OAuth client'));
-  expect(authMessage(StateError('INVALID_IDP_RESPONSE')),contains('Google/Apple'));
+  expect(authMessage(StateError('INVALID_IDP_RESPONSE')),contains('Google/Facebook/Apple'));
  });
- for(final owner in [false,true])testWidgets('Facebook returns to the selected ${owner?'owner':'shopper'} workspace',(t) async {
-  var ownerCalls=0,shopperCalls=0;final session=FakeFacebookSession();
-  await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session,onOpenOwner:()=>ownerCalls++,onShopperSignedIn:()=>shopperCalls++))));
-  await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));await t.pumpAndSettle();
-  final button=find.text('Continue with Facebook');await t.ensureVisible(button);await t.pumpAndSettle();await t.tap(button);await t.pumpAndSettle();
-  expect(ownerCalls,owner?1:0);expect(shopperCalls,owner?0:1);expect(session.hasAdminClaim,false);
+ testWidgets('One login calls account resolution after Facebook authentication',(t) async {
+  var resolved=0;final session=FakeFacebookSession();
+  await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(
+    session:session,onAuthenticated:()=>resolved++))));
+  expect(find.text('Sign in to Teyza'),findsOneWidget);
+  expect(find.text('Continue as Shopper'),findsNothing);
+  expect(find.text('Continue as Shop Owner'),findsNothing);
+  expect(find.text('Continue as Business Owner'),findsNothing);
+  expect(find.text('Continue as Wholesaler'),findsNothing);
+  final button=find.text('Continue with Facebook');await t.ensureVisible(button);
+  await t.tap(button);await t.pumpAndSettle();
+  expect(resolved,1);expect(session.userId,'existing-user');
+  expect(session.sellerWorkspace,false);expect(session.hasAdminClaim,false);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();
  });
 
+ test('Facebook redirect errors explain the callback problem',(){
+  expect(authMessage(StateError('Facebook sign-in failed: Sorry something went wrong when redirecting the page')),
+    contains('allowed Facebook login callback'));
+ });
+ test('Google requires confirmation instead of treating an existing-provider account as a network failure',()async{
+  final client=MockClient((_)async=>reply({'needConfirmation':true,'email':'owner@example.test'}));
+  final session=ShopperSession(client:client,store:MemoryStore(),googleRequest:()async=>const AppleIdentity('google-token'));
+  await expectLater(session.signInWithGoogle(),throwsA(isA<StateError>().having(
+    (e)=>e.message,'message','ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')));
+  expect(session.userId,isNull);expect(session.idToken,isNull);
+  session.dispose();client.close();
+ });
+ test('Google SDK cleanup failure cannot prevent local logout',()async{
+  var calls=0;
+  final session=ShopperSession(store:MemoryStore(),googleSignOut:()async{calls++;throw StateError('native unavailable');});
+  session.userId='existing-user';session.idToken='existing-token';
+  await session.signOut();await Future<void>.delayed(Duration.zero);
+  expect(session.userId,isNull);expect(session.idToken,isNull);expect(calls,1);session.dispose();
+ });
  test('Google credentials use the same Firebase session, never local seller/admin permissions',() async {
   final client=MockClient((r) async {if(r.url.path.endsWith('signInWithIdp')){final d=jsonDecode(r.body),body=Uri.splitQueryString(d['postBody']);expect(body,{'id_token':'google-token','providerId':'google.com'});expect(d['returnIdpCredential'],false);return authenticated();}return profile();});
   final s=ShopperSession(client:client,store:MemoryStore(),googleRequest:() async=>const AppleIdentity('google-token'));

@@ -14,6 +14,7 @@ import 'shopper_account.dart';
 import 'seller_workspace.dart';
 import 'agent_workspace.dart';
 import 'teyza_mode_chooser.dart';
+import 'registration_options.dart';
 import 'shopper_discovery.dart';
 import 'firebase_public_directory.dart';
 import 'shopper_chat.dart';
@@ -303,8 +304,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int _sellerEntry=0;
   Future<void>? _workspaceResolution;
   String _launchStep='Signing you in securely…';
-  String? _checkedAgentUid;
   bool _agentApproved=false,_agentMode=false,_rolePicker=false;
+  bool _accountResolving=false,_hasShopperAccount=false,_needsRegistration=false;
+  String? _accountResolutionError;
+  SellerShop? _sellerAccount;
   SellerPush? sellerPush;
   StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
@@ -379,8 +382,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           .catchError((Object _){/* Keep the in-memory location on logout. */}));
       }
       if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
-      _observedUid=uid;_checkedSellerUid=null;_checkedAgentUid=null;
+      _observedUid=uid;_checkedSellerUid=null;
       _agentApproved=false;_agentMode=false;_rolePicker=false;
+      _sellerAccount=null;_hasShopperAccount=false;_needsRegistration=false;
+      _accountResolutionError=null;
+      _accountResolving=uid!=null&&!session.anonymousShopper&&!seller&&
+        (widget.enableBackgroundServices||widget.sellerApiFactory!=null||widget.sellerMobileApi!=null);
       _workspaceResolution=null;
       _sellerInitialTarget=null;if(previousUid!=null)_pendingClaimPlaceId=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
@@ -410,26 +417,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       }
     }
     setState((){});
-    if(uid!=null&&!seller&&session.isReady&&!session.isBusy&&_checkedSellerUid!=uid&&
-      (widget.enableBackgroundServices||widget.sellerApiFactory!=null)){
+    if(uid!=null&&!session.anonymousShopper&&!seller&&session.isReady&&
+      !session.isBusy&&_checkedSellerUid!=uid&&
+      (widget.enableBackgroundServices||widget.sellerApiFactory!=null||widget.sellerMobileApi!=null)){
       _checkedSellerUid=uid;_workspaceResolution=resolveSellerWorkspace(uid);
-    }
-    if(uid!=null&&session.isReady&&!session.isBusy&&_checkedAgentUid!=uid&&
-       (widget.enableBackgroundServices||widget.sellerMobileApi!=null)){
-      _checkedAgentUid=uid;unawaited(_resolveAgentRole(uid));
-    }
-  }
-  Future<void> _resolveAgentRole(String uid) async {
-    try{
-      final api=widget.sellerMobileApi??TeyzaMobileApi(session);
-      final response=await api.call('agent_profile');
-      if(!mounted||session.userId!=uid||session.idToken==null)return;
-      if(agentShouldOfferMode(response,currentUid:uid)){
-        setState((){_agentApproved=true;_rolePicker=true;_agentMode=false;});
-      }
-    }catch(_){
-      // A missing, pending, suspended or unreachable agent profile never grants access.
-      // Normal Shopper/Seller login continues; agents can retry after Admin approval.
     }
   }
   void _chooseRole(String value){
@@ -438,14 +429,62 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     setState((){_rolePicker=false;_agentMode=value=='agent';});
     if(value=='shopper'||value=='agent')session.useShopperWorkspace();
     if(value=='seller')session.useSellerWorkspace();
+    if(value=='shopper'){
+      session.requestedSellerCategory=null;
+      if(widget.enableBackgroundServices)WidgetsBinding.instance.addPostFrameCallback((_){
+        if(mounted)unawaited(restoreDeliveryProfile());
+      });
+    }
   }
   Future<void> resolveSellerWorkspace(String uid) async {
+    setState((){_accountResolving=true;_accountResolutionError=null;});
     try{
       final token=await session.freshIdToken();
       if(!mounted||session.userId!=uid||session.idToken==null)return;
-      final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
-      if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true)session.useSellerWorkspace();
-    }catch(_){/* A selected seller workspace remains available for retry during outages. */}
+      final api=widget.sellerMobileApi??TeyzaMobileApi(session);
+      final checkService=widget.enableBackgroundServices||widget.sellerMobileApi!=null;
+      // All records are read for the authenticated UID. A matching email never
+      // transfers a shop, approval or paid membership from another identity.
+      final results=await Future.wait<Object?>([
+        (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop(),
+        if(checkService)api.call('shopper_profile_read'),
+        if(checkService&&(session.contactVerified))api.call('agent_profile')
+          .catchError((Object _)=><String,dynamic>{}),
+      ]);
+      if(!mounted||session.userId!=uid||session.idToken==null||session.anonymousShopper)return;
+      final account=results[0] as SellerShop?;
+      final profile=checkService?(results[1] as Map)['profile']:null;
+      final agent=results.length>2?results[2] as Map<String,dynamic>:<String,dynamic>{};
+      setState((){
+        _sellerAccount=account?.hasRegisteredCategory==true?account:null;
+        _hasShopperAccount=profile is Map&&profile['ownerUid']==uid;
+        _agentApproved=agentShouldOfferMode(agent,currentUid:uid);
+        _accountResolving=false;
+        final count=(_hasShopperAccount?1:0)+(_sellerAccount!=null?1:0)+(_agentApproved?1:0);
+        _rolePicker=count>1;
+        _needsRegistration=count==0&&session.requestedRegistrationRole==null&&
+          session.requestedSellerCategory==null;
+      });
+      if(_rolePicker||_needsRegistration)return;
+      if(_sellerAccount!=null){_chooseRole('seller');}
+      else if(_agentApproved){_chooseRole('agent');}
+      else if(_hasShopperAccount){_chooseRole('shopper');}
+      else if(session.requestedSellerCategory!=null){_chooseRole('seller');}
+      else{_chooseRole('shopper');}
+    }catch(_){
+      if(mounted&&session.userId==uid&&session.idToken!=null){
+        setState((){
+          _accountResolving=false;
+          _accountResolutionError='We could not load your accounts. Please check your connection and try again.';
+        });
+      }
+    }
+  }
+  void _registerAccount(String role,String? category){
+    session.requestedRegistrationRole=role;
+    session.requestedSellerCategory=category;
+    setState(()=>_needsRegistration=false);
+    _chooseRole(role);
   }
   Future<void> _prepareLaunch([Future<void>? restoring]) async {
     try{await restoring?.timeout(const Duration(seconds:12));}catch(_){/* Authentication retries independently. */}
@@ -534,7 +573,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Future<void> restoreDeliveryProfile()async{
-    if(!mounted||session.sellerWorkspace||widget.initialArea!=null)return;
+    if(!mounted||session.sellerWorkspace||_accountResolving||_rolePicker||_needsRegistration||widget.initialArea!=null)return;
     final uid=session.userId,request=++_deliveryProfileRequest;
     ShopperDeliveryProfile? saved;
     ShopperDeviceDeliveryLocation? deviceLocation=rememberedLocation;
@@ -621,7 +660,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
   Future<void> promptDeliveryProfile()async{
-    if(!mounted||session.sellerWorkspace||_deliverySheetOpen)return;
+    if(!mounted||session.sellerWorkspace||_accountResolving||_rolePicker||_needsRegistration||_deliverySheetOpen)return;
     _deliverySheetOpen=true;
     final uid=session.userId;
     try{
@@ -1042,17 +1081,28 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Widget _serviceRow(IconData icon,String label,bool? available,{String? detail})=>Container(
-    padding:const EdgeInsets.symmetric(horizontal:12,vertical:10),
-    margin:const EdgeInsets.only(bottom:7),
-    decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),
-    child:Row(children:[
-      Icon(icon,color:green,size:22),const SizedBox(width:12),
-      Expanded(child:Text(label,style:const TextStyle(fontWeight:FontWeight.w700))),
-      Flexible(child:Text(available==true?(detail??'Available'):
+    key:ValueKey('shop-service-$label'),
+    padding:const EdgeInsets.symmetric(horizontal:15,vertical:14),
+    margin:const EdgeInsets.only(bottom:8),
+    decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),
+    child:LayoutBuilder(builder:(context,constraints){
+      final status=Text(available==true?(detail??'Available'):
         available==false?'Not offered':'Not confirmed',
-        textAlign:TextAlign.end,style:TextStyle(fontSize:11,
-          color:available==true?green:muted)))
-    ]));
+        style:TextStyle(fontSize:13,color:available==true?green:muted));
+      return Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
+        Icon(icon,color:const Color(0xFF3BB77E),size:25),
+        const SizedBox(width:14),
+        Expanded(child:constraints.maxWidth<290||MediaQuery.textScalerOf(context).scale(1)>1.4
+          ?Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(label,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
+            const SizedBox(height:4),status])
+          :Row(children:[
+            Expanded(flex:5,child:Text(label,
+              style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800))),
+            const SizedBox(width:12),Expanded(flex:4,child:status)
+          ]))
+      ]);
+    }));
 
   Widget onlineServices(OnlineShop shop)=>Column(
     crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -1506,8 +1556,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if(_rolePicker&&_agentApproved&&session.userId!=null)return TeyzaModeChooser(
-      agentApproved:true,onShopper:()=>_chooseRole('shopper'),
+    if(session.userId!=null&&!session.anonymousShopper){
+      if(_accountResolving)return const Scaffold(body:Center(child:Column(
+        mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(),
+          SizedBox(height:16),Text('Loading your accounts…')])));
+      if(_accountResolutionError!=null)return Scaffold(body:SafeArea(child:Center(
+        child:Padding(padding:const EdgeInsets.all(24),child:Column(
+          mainAxisSize:MainAxisSize.min,children:[
+            Text(_accountResolutionError!,textAlign:TextAlign.center),
+            const SizedBox(height:16),
+            FilledButton(onPressed:()=>resolveSellerWorkspace(session.userId!),
+              child:const Text('Try again')),
+            TextButton(onPressed:session.signOut,child:const Text('Sign out'))
+          ])))));
+      if(_needsRegistration)return Scaffold(appBar:AppBar(title:const Text('Finish registration'),
+        actions:[TextButton(onPressed:session.signOut,child:const Text('Sign out'))]),
+        backgroundColor:const Color(0xFFF7F9F7),
+        body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(24),
+          child:TeyzaRegistrationOptions(onSelected:_registerAccount))));
+    }
+    if(_rolePicker&&session.userId!=null)return TeyzaModeChooser(
+      agentApproved:_agentApproved,shopperAvailable:_hasShopperAccount,
+      sellerAvailable:_sellerAccount!=null,
+      sellerLabel:switch(_sellerAccount?.category){
+        'retail'=>'Business owner','wholesale'=>'Wholesaler',_=>'Spaza shop owner'},
+      sellerName:_sellerAccount?.name??'',
+      onShopper:()=>_chooseRole('shopper'),
       onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
     if(_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
       key:ValueKey('agent-${session.userId}'),session:session,mobileApi:widget.sellerMobileApi,
@@ -1558,7 +1632,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             TextButton.icon(onPressed:_navigateBack,
               icon:const Icon(Icons.home_outlined,size:18),label:const Text('Home'))
           else ...[
-          if(_agentApproved&&session.userId!=null)
+          if((_agentApproved||_sellerAccount!=null)&&session.userId!=null)
             IconButton(key:const ValueKey('teyza-mode-switch'),tooltip:'Switch role',
               onPressed:()=>setState(()=>_rolePicker=true),icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
@@ -1572,7 +1646,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         selected!=null?shopPage(selected!):
         directorySelected!=null?directoryPage(directorySelected!):
         tab==4?ShopperAccountPanel(key:_accountPanelKey,session:session,
-          onOpenOwner:openOwnerWorkspace,onShopperSignedIn:()=>navigateToTab(0),
+          onOpenOwner:openOwnerWorkspace,onAuthenticated:(){
+            // workspaceChanged resolves account records after provider completion.
+          },onShopperSignedIn:()=>navigateToTab(0),
           onMessages:openInbox,onOrders:()=>navigateToTab(3),onBrowse:browseNearby,
           savedDeliveryAddress:deliveryProfile?.address,savedProfile:deliveryProfile,
           onChangeDeliveryAddress:promptDeliveryProfile):
@@ -2830,13 +2906,23 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ],
     section('About this shop',
       subtitle:'Details supplied by this participating Teyza merchant'),
-    Container(padding:const EdgeInsets.all(14),
+    Container(key:ValueKey('shop-${shop.id}-about'),padding:const EdgeInsets.all(20),
       decoration:BoxDecoration(color:const Color(0xFFFFFAF3),
         borderRadius:BorderRadius.circular(18),
         border:Border.all(color:const Color(0xFFF1EDE5))),
       child:Column(children:[
-        ListTile(dense:true,leading:const Icon(Icons.place_outlined,color:green),
-          title:const Text('Address'),subtitle:Text(shop.address.isNotEmpty?shop.address:shop.area)),
+        Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Padding(padding:EdgeInsets.only(top:8),
+            child:Icon(Icons.place_outlined,color:Color(0xFF3BB77E),size:29)),
+          const SizedBox(width:20),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('Address',style:TextStyle(fontSize:15,fontWeight:FontWeight.w600)),
+            const SizedBox(height:5),
+            SelectableText(shop.address.trim().isNotEmpty?shop.address:
+              shop.area.trim().isNotEmpty?shop.area:'Address not provided',
+              style:const TextStyle(fontSize:15,height:1.4,color:Color(0xFF4A554F)))
+          ]))
+        ]),
         if(shop.hours.length==7)
           ExpansionTile(tilePadding:const EdgeInsets.symmetric(horizontal:16),
             leading:const Icon(Icons.schedule_outlined,color:green),

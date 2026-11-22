@@ -448,12 +448,15 @@ jobs:
           python3 scripts/prepare_mobile_release.py android --signing test
           flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
           python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+          python3 scripts/apk_fingerprints.py build/app/outputs/flutter-apk/app-debug.apk
       - name: Upload installable Android test APK
         if: env.SIGNING_MODE != 'signed'
         uses: actions/upload-artifact@v4
         with:
           name: teyza-android-apk-debug-testing-only
-          path: apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+          path: |
+            apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+            apps/teyza_shopper/build/app/outputs/flutter-apk/test-signing-fingerprints.json
           if-no-files-found: error
           retention-days: 30
       # Opt-in debug-signed direct-channel APK. Never generated on PR

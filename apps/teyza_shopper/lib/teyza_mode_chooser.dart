@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 /// Navigation choice only. Permissions are never conferred by selecting a card.
 class TeyzaModeChooser extends StatelessWidget{
- final bool agentApproved;
+ final bool agentApproved,shopperAvailable,sellerAvailable;
+ final String sellerLabel,sellerName;
  final VoidCallback onShopper,onAgent,onSeller;
  const TeyzaModeChooser({super.key,required this.agentApproved,required this.onShopper,
-  required this.onAgent,required this.onSeller});
+  required this.onAgent,required this.onSeller,this.shopperAvailable=true,
+  this.sellerAvailable=true,this.sellerLabel='Seller',this.sellerName=''});
  @override Widget build(BuildContext context){
   return Scaffold(backgroundColor:const Color(0xFFF3F7FC),
    body:SafeArea(child:LayoutBuilder(builder:(context,c)=>SingleChildScrollView(
@@ -17,29 +19,29 @@ class TeyzaModeChooser extends StatelessWidget{
       child:const Icon(Icons.store_mall_directory,color:Colors.white)),
       const SizedBox(width:12),const Text('TEYZA',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:Color(0xFF063E42)))]),
      const SizedBox(height:34),
-     const Text('Welcome back',style:TextStyle(fontSize:35,fontWeight:FontWeight.w900,color:Color(0xFF0B2738))),
+     const Text('Select account',style:TextStyle(fontSize:35,fontWeight:FontWeight.w900,color:Color(0xFF0B2738))),
      const SizedBox(height:8),
-     const Text('How would you like to use Teyza today?',style:TextStyle(fontSize:16,color:Color(0xFF536775))),
+     const Text('Choose an account to continue.',style:TextStyle(fontSize:16,color:Color(0xFF536775))),
      const SizedBox(height:20),
-     _mode(Icons.shopping_basket_outlined,'Continue as Shopper',
+     if(shopperAvailable)_mode(Icons.shopping_basket_outlined,'Shopper',
       'Discover local shops, compare essentials and buy nearby.',
       const Color(0xFFE4F4FA),const Color(0xFF18658A),onShopper),
      if(agentApproved)_mode(Icons.explore_outlined,'Continue as Field Agent',
       'Find shops on the map, visit owners, take photos and track verified R90 registrations.',
       const Color(0xFFECE6FF),const Color(0xFF6857B8),onAgent),
-     _mode(Icons.storefront_outlined,'Continue as Seller / Business',
-      'Manage an existing shop or register your own business. Seller verification remains required.',
+     if(sellerAvailable)_mode(Icons.storefront_outlined,sellerLabel,
+      sellerName.isNotEmpty?sellerName:'Manage your registered business.',
       const Color(0xFFE6F5EA),const Color(0xFF08734F),onSeller),
      const SizedBox(height:20),
      const Row(children:[Icon(Icons.verified_user_outlined,color:Color(0xFF558A73),size:19),
-      SizedBox(width:9),Expanded(child:Text('One account. Separate permissions. Admin must approve agent and seller access.',
+      SizedBox(width:9),Expanded(child:Text('Your accounts use the same secure sign-in.',
         style:TextStyle(color:Color(0xFF526C66),fontSize:12)))]),
     ]))))));
  }
  Widget _mode(IconData icon,String title,String subtitle,Color bg,Color accent,VoidCallback callback){
   return Padding(padding:const EdgeInsets.only(bottom:13),child:Material(color:Colors.white,
    borderRadius:BorderRadius.circular(19),child:InkWell(
-    key:ValueKey('mode-'+(title.contains('Field Agent')?'agent':title.contains('Seller')?'seller':'shopper')),
+    key:ValueKey('mode-'+(title.contains('Field Agent')?'agent':title=='Shopper'?'shopper':'seller')),
     onTap:callback,borderRadius:BorderRadius.circular(19),
     child:Container(padding:const EdgeInsets.all(17),decoration:BoxDecoration(
      borderRadius:BorderRadius.circular(19),border:Border.all(color:const Color(0xFFE5ECEB))),

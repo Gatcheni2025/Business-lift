@@ -43,7 +43,7 @@ String authMessage(Object error) {
   if(value.contains('PHONE_NUMBER_EXISTS')||value.contains('PHONE_ALREADY_LINKED'))return 'This number belongs to another account. Sign in to that account or contact Teyza support.';
   if (value.contains('ACCOUNT_LINK_UID_MISMATCH')) return 'Verification could not preserve your existing shopper account. Your shopping details were not transferred; try again or contact Teyza support.';
   if(value.contains('FEDERATED_USER_ID_ALREADY_LINKED'))
-    return 'This Google or Apple identity is already linked to another account. Sign in using that account or contact Teyza support; your shopping history was not replaced.';
+    return 'This sign-in identity is already linked to another account. Sign in using that account or contact Teyza support; your shopping history was not replaced.';
   if(value.contains('EMAIL_EXISTS'))return 'This email is already registered. Sign in to that account or contact Teyza support; your current shopper profile was not replaced.';
   if (value.contains('INVALID_LOGIN_CREDENTIALS') ||
       value.contains('EMAIL_NOT_FOUND') || value.contains('INVALID_PASSWORD')) {
@@ -54,6 +54,8 @@ String authMessage(Object error) {
   if (value.contains('TOO_MANY_ATTEMPTS_TRY_LATER')) return 'Too many attempts. Please try again later.';
   if (value.contains('OPERATION_NOT_ALLOWED')) return 'This sign-in method is not enabled yet. Try email login or contact Teyza support.';
   if(value.contains('Facebook sign-in is not configured'))return 'Facebook login is not enabled for this build yet. Use Google, Apple or email.';
+  if(RegExp(r'redirect|URL Blocked|whitelist|not whitelisted',caseSensitive:false).hasMatch(value))
+    return 'Facebook could not return to Teyza. Please contact support to check the allowed Facebook login callback for this app.';
   if(value.contains('Facebook sign-in failed'))return 'Facebook could not complete sign-in. Please try again or use another method.';
   if (value.contains('Google sign-in is not configured')) return 'Google login setup is not complete for this build. Use email login while Teyza connects it.';
   if (error is SignInWithAppleAuthorizationException) return 'Could not complete Apple sign-in. Please try again or use email login.';
@@ -70,7 +72,7 @@ String authMessage(Object error) {
   }
   if (value.contains('INVALID_IDP_RESPONSE') || value.contains('INVALID_OAUTH_CLIENT_ID') ||
       value.contains('INVALID_CERT_HASH')) {
-    return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google/Apple provider and registered app configuration in Firebase.';
+    return 'The sign-in provider rejected the app credential. Please contact Teyza support to check the Google/Facebook/Apple provider and registered app configuration in Firebase.';
   }
   if (value.contains('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL')) return 'This email uses another sign-in method. Use your original method or reset your password.';
   if (value.contains('USER_DISABLED')) return 'This account is closed or disabled. If you requested deletion, you cannot sign back in. Keep your deletion reference to ask Teyza support about the remaining data-erasure process.';
@@ -86,13 +88,13 @@ String authMessage(Object error) {
 }
 
 class ShopperSession extends ChangeNotifier {
-  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest,this.googleRequest,this.facebookRequest,this.facebookSignOut})
+  ShopperSession({http.Client? client,SessionStore? store,this.appleRequest,this.googleRequest,this.facebookRequest,this.facebookSignOut,this.googleSignOut})
     : _client=client??http.Client(), _ownsClient=client==null,
       _store=store??SecureSessionStore();
   final Future<AppleIdentity?> Function(String hashedNonce)? appleRequest;
   final Future<AppleIdentity?> Function()? googleRequest;
   final Future<FacebookIdentity?> Function(String hashedNonce)? facebookRequest;
-  final Future<void> Function()? facebookSignOut;
+  final Future<void> Function()? facebookSignOut,googleSignOut;
   final http.Client _client;
   final bool _ownsClient;
   final SessionStore _store;
@@ -104,6 +106,7 @@ class ShopperSession extends ChangeNotifier {
   bool anonymousShopper=false;
   // Transient registration preference only: never used to grant seller permissions.
   String? requestedSellerCategory;
+  String? requestedRegistrationRole;
   // Set only after server-confirmed account deletion, never normal logout.
   bool forgetDeviceLocationOnSignOut=false;
   // A UID-bound presentation preference only. Seller permissions still come
@@ -139,8 +142,7 @@ class ShopperSession extends ChangeNotifier {
   bool get googleSignInAvailable => !kIsWeb &&
     [TargetPlatform.android,TargetPlatform.iOS].contains(defaultTargetPlatform);
   bool get appleSignInAvailable => !kIsWeb && defaultTargetPlatform==TargetPlatform.iOS;
-  bool get googleSignInConfigured => _googleWebClientId.trim().isNotEmpty &&
-    (defaultTargetPlatform!=TargetPlatform.iOS||_googleIosClientId.trim().isNotEmpty);
+  bool get googleSignInConfigured => _googleWebClientId.trim().isNotEmpty;
 
   void _changed(){if(!_disposed)notifyListeners();}
   @override void dispose(){
@@ -185,8 +187,8 @@ class ShopperSession extends ChangeNotifier {
     await operation;
   }
   Future<void> _clear() async {
-    _sellerWorkspaceUid=null;requestedSellerCategory=null;
-    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;googleProviderLinked=false;googleProviderLinked=false;anonymousShopper=false;
+    _sellerWorkspaceUid=null;requestedSellerCategory=null;requestedRegistrationRole=null;
+    idToken=null;userId=null;email=null;name=null;_refreshToken=null;emailVerified=false;phoneVerified=false;phoneNumber=null;appleProviderLinked=false;googleProviderLinked=false;anonymousShopper=false;
     final operation=_storageQueue.catchError((Object _){}).then((_) async {
       for(final key in ['teyza_refresh','teyza_email','teyza_name','teyza_seller_workspace_uid','teyza_anonymous_shopper_uid']){
         await _store.delete(key);
@@ -235,6 +237,7 @@ class ShopperSession extends ChangeNotifier {
 
   Future<void> _save(Map<String,dynamic> data,String fallbackEmail,String fallbackName,int version) async {
     if(version!=_version||_disposed)return;
+    if(data['needConfirmation']==true)throw StateError('ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL');
     final token=data['idToken']?.toString()??'';
     final refresh=data['refreshToken']?.toString()??'';
     final uid=data['localId']?.toString()??'';
@@ -405,7 +408,7 @@ class ShopperSession extends ChangeNotifier {
     if(googleRequest!=null){identity=await googleRequest!();}
     else{
       final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId,
-        clientId:defaultTargetPlatform==TargetPlatform.iOS?_googleIosClientId:null);
+        clientId:defaultTargetPlatform==TargetPlatform.iOS&&_googleIosClientId.isNotEmpty?_googleIosClientId:null);
       final account=await google.signIn();
       if(account==null)return;
       final token=await account.authentication;
@@ -453,7 +456,7 @@ class ShopperSession extends ChangeNotifier {
       if(googleRequest!=null){identity=await googleRequest!();}
       else {
         final google=GoogleSignIn(scopes:const ['email'],serverClientId:_googleWebClientId,
-          clientId:defaultTargetPlatform==TargetPlatform.iOS?_googleIosClientId:null);
+          clientId:defaultTargetPlatform==TargetPlatform.iOS&&_googleIosClientId.isNotEmpty?_googleIosClientId:null);
         final account=await google.signIn();if(account==null)return;
         final tokens=await account.authentication;
         identity=AppleIdentity(tokens.idToken??'',email:account.email,name:account.displayName??'');
@@ -561,5 +564,12 @@ class ShopperSession extends ChangeNotifier {
     // Handle both synchronous failures and a late rejected cleanup callback.
     unawaited(Future<void>.sync(facebookSignOut??facebook.clearFacebookSession)
       .catchError((Object _){}));
+    if(googleSignOut!=null||googleSignInAvailable&&googleSignInConfigured){
+      unawaited(Future<void>.sync(googleSignOut??()=>GoogleSignIn(
+        scopes:const ['email'],serverClientId:_googleWebClientId,
+        clientId:defaultTargetPlatform==TargetPlatform.iOS&&_googleIosClientId.isNotEmpty
+          ?_googleIosClientId:null).signOut().then((_){}))
+        .catchError((Object _){}));
+    }
   }
 }

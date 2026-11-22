@@ -2,6 +2,7 @@
 // Signed webhook calls this router only AFTER raw-body HMAC validation.
 // Do not persist inbound text, phone numbers, profile names or full payloads.
 const crypto=require('node:crypto');
+const {createWelcomeRollout}=require('./whatsapp-rollout');
 const choices=new Map([
  ['Start selling on Teyza','start_selling'],
  ['Start selling','start_selling'],
@@ -31,13 +32,15 @@ function extractActions(payload,numberId){
  }
  return result.slice(0,500);
 }
-function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'',getApiVersion=()=> 'v26.0',send=fetch,clock=Date.now}){
+function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'',getApiVersion=()=> 'v26.0',getRolloutMode=()=> 'pilot',send=fetch,clock=Date.now}){
  if(!db||typeof getPilotUid!=='function'||typeof getPhoneNumberId!=='function')throw Error('Pilot router dependencies missing');
+ const rollout=createWelcomeRollout({getMode:getRolloutMode,getPilotUid});
  async function route(payload){
   const pilotUid=getPilotUid();
   const numberId=getPhoneNumberId();
-  if(!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
-  // Reconcile Meta receipts with the one pilot seller's accepted outbox.
+  if(!['pilot','general'].includes(getRolloutMode())||
+     getRolloutMode()==='pilot'&&!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
+  // Reconcile signed Meta receipts with an eligible seller's accepted outbox.
   // Delivery is not inferred from a successful API send; only signed status
   // callbacks may write the deliveryStatus field.
   for(const entry of Array.isArray(payload?.entry)?payload.entry.slice(0,50):[])
@@ -48,7 +51,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
        typeof status.id!=='string'||!/^wamid[.][A-Za-z0-9_.:=+/-]{1,500}$/.test(status.id))continue;
     const results=await db.collection('teyzaWhatsAppApprovalOutbox').where('providerMessageId','==',status.id).limit(3).get();
     for(const doc of results.docs){
-     if(doc.data()?.sellerUid!==pilotUid||doc.data()?.status!=='accepted')continue;
+     if(!rollout.allowsSeller(doc.data()?.sellerUid)||doc.data()?.status!=='accepted')continue;
      // Never turn a delivered/read receipt backwards to sent.
      const previous=doc.data()?.deliveryStatus;
      const rank={sent:1,delivered:2,read:3,failed:4};
@@ -58,30 +61,37 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
    }
   }
   for(const event of extractActions(payload,numberId)){
-   // Scope all pilot interactions to the one authorised seller.
+   // Match consent and the approved account before responding.
    // Read phone only transiently; never persist it in the interaction audit.
-   const results=await db.collection('teyzaWhatsAppPreferences').where('phone','==',event.from).limit(3).get();
-   const matching=results.docs.filter(s=>s.id===pilotUid&&s.data()?.ownerUid===pilotUid);
-   if(matching.length!==1)continue;
-   const account=await db.doc('teyzaSellerAccounts/'+pilotUid).get();
-   if(!account.exists||account.data()?.uid!==pilotUid||
+   const results=await db.collection('teyzaWhatsAppPreferences').where('phone','==',event.from).limit(20).get();
+   const matching=results.docs.filter(s=>rollout.allowsSeller(s.id)&&s.data()?.ownerUid===s.id);
+   // STOP revokes every matching consent, even where two records have the same
+   // number. Other actions require one unambiguous authenticated seller record.
+   if(event.action!=='stop'&&matching.length!==1)continue;
+   for(const match of matching){
+   const sellerUid=match.id;
+   const accountRef=db.doc('teyzaSellerAccounts/'+sellerUid);
+   const account=await accountRef.get();
+   if(!account.exists||account.data()?.uid!==sellerUid||
       account.data()?.phone!==event.from)continue;
-   const pref=matching[0].data();
-   if(event.action!=='stop'&&(pref.optedIn!==true||account.data()?.approvalStatus!=='approved'))continue;
+   const pref=match.data();
+   if(event.action!=='stop'&&(pref.optedIn!==true||account.data()?.approvalStatus!=='approved'||account.data()?.deletionPending===true))continue;
    const id=crypto.createHash('sha256').update(JSON.stringify([numberId,event.id,event.action])).digest('hex');
-   const ref=db.doc('teyzaWhatsAppPilotActions/'+id);
-   const preferenceRef=db.doc('teyzaWhatsAppPreferences/'+pilotUid);
+   const actionId=event.action==='stop'?id+'_'+sellerUid:id;
+   const ref=db.doc('teyzaWhatsAppPilotActions/'+actionId);
+   const preferenceRef=db.doc('teyzaWhatsAppPreferences/'+sellerUid);
    const created=await db.runTransaction(async tx=>{
     const previous=await tx.get(ref);
     if(previous.exists)return false;
-    const fresh=await tx.get(preferenceRef);
-    if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return false;
-    if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return false;
+    const [fresh,currentAccount]=await Promise.all([tx.get(preferenceRef),tx.get(accountRef)]);
+    if(!fresh.exists||fresh.data()?.ownerUid!==sellerUid||fresh.data()?.phone!==event.from)return false;
+    if(!currentAccount.exists||currentAccount.data()?.uid!==sellerUid||currentAccount.data()?.phone!==event.from)return false;
+    if(event.action!=='stop'&&(fresh.data()?.optedIn!==true||currentAccount.data()?.approvalStatus!=='approved'||currentAccount.data()?.deletionPending===true))return false;
     const at=clock();
     const destination=event.action==='start_selling'?'/seller-getting-started.html':
       event.action==='advertise'?'/ads/':
       event.action==='consultant'?'seller_support':'none';
-    tx.create(ref,{sellerUid:pilotUid,action:event.action,destination,
+    tx.create(ref,{sellerUid,action:event.action,destination,
       state:event.action==='stop'?'completed':'pending',
       source:'signed_meta_whatsapp',createdAt:at});
     if(event.action==='consultant'){
@@ -89,14 +99,14 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
      // generated request carries no chat body or phone; staff respond using
      // their normal authenticated support workflow.
      tx.create(db.doc('teyzaSupportTickets/wa_'+id),{
-      ownerUid:pilotUid,subject:'WhatsApp consultant request',
+      ownerUid:sellerUid,subject:'WhatsApp consultant request',
       message:'Approved seller selected Talk to consultant in the welcome menu.',
-      status:'open',priority:'normal',revision:0,createdBy:pilotUid,
-      createdAt:at,updatedAt:at,source:'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
+      status:'open',priority:'normal',revision:0,createdBy:sellerUid,
+      createdAt:at,updatedAt:at,source:getRolloutMode()==='general'?'whatsapp_approval':'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
      });
     }
     if(event.action==='stop'){
-     tx.set(preferenceRef,{...fresh.data(),ownerUid:pilotUid,optedIn:false,phone:'',
+     tx.set(preferenceRef,{...fresh.data(),ownerUid:sellerUid,optedIn:false,phone:'',
        optedOutAt:at,updatedAt:at,consentVersion:'seller-approval-v2'});
     }
     return true;
@@ -141,6 +151,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
    }catch(_){
     // Unknown network outcome: never retry automatically (duplicate risk).
     await ref.update({state:'needs_review',replyStatus:'delivery_uncertain',updatedAt:clock()});
+   }
    }
   }
  }

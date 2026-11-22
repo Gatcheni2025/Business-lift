@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'shopper_auth.dart';
+import 'registration_options.dart';
 import 'account_deletion_page.dart';
 import 'seller_review.dart';
 import 'chat_moderation_page.dart';
@@ -10,25 +11,26 @@ import 'package:url_launcher/url_launcher.dart';
 class ShopperAccountPanel extends StatefulWidget {
   final ShopperSession session;
   final VoidCallback? onOpenOwner;
-  final VoidCallback? onShopperSignedIn;
+  final VoidCallback? onShopperSignedIn,onAuthenticated;
   final VoidCallback? onMessages,onOrders,onBrowse,onChangeDeliveryAddress;
   final String? savedDeliveryAddress;
   final ShopperDeliveryProfile? savedProfile;
   final ShopperDeliveryProfileStore? deliveryStore;
   final ShopperPaymentPreferenceStore? paymentStore;
-  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onMessages,this.onOrders,this.onBrowse,
+  const ShopperAccountPanel({super.key,required this.session,this.onOpenOwner,this.onShopperSignedIn,this.onAuthenticated,this.onMessages,this.onOrders,this.onBrowse,
     this.onChangeDeliveryAddress,this.savedDeliveryAddress,this.savedProfile,this.deliveryStore,this.paymentStore});
   @override
   State<ShopperAccountPanel> createState()=>ShopperAccountPanelState();
 }
 class ShopperAccountPanelState extends State<ShopperAccountPanel> {
-  /// Return to the role chooser before leaving the account tab.
-  /// Used by the Android system back button and the Teyza app bar.
+  /// Back leaves registration or the optional existing-email form.
   bool backToRoleChoice() {
-    if(working||audience==null||
+    if(working||(!registering&&!showLegacyEmail)||
       widget.session.idToken!=null&&!widget.session.anonymousShopper)return false;
     setState((){
       audience=null;registering=false;showLegacyEmail=false;
+      widget.session.requestedSellerCategory=null;
+      widget.session.requestedRegistrationRole=null;
       status=null;failure=false;
     });
     return true;
@@ -37,13 +39,21 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
   final formKey=GlobalKey<FormState>();
   final email=TextEditingController(), password=TextEditingController(), name=TextEditingController();
   bool registering=false, working=false, hidden=true, showLegacyEmail=false;
-  String? audience; // Choose the account purpose before offering sign-in.
-  bool get ownerMode=>audience!=null&&audience!='shopper';
-  String get ownerAudienceLabel=>switch(audience){
-    'business'=>'Business owner',
-    'wholesale'=>'Wholesaler',
-    _=>'Spaza shop owner'
-  };
+  String? audience;
+  bool get ownerMode=>registering&&audience=='seller';
+  void registrationSelected(String role,String? category){
+    setState((){audience=role;status=null;failure=false;});
+    widget.session.requestedRegistrationRole=role;
+    widget.session.requestedSellerCategory=category;
+  }
+  void completedSignIn(){
+    if(!mounted||widget.session.idToken==null||widget.session.anonymousShopper)return;
+    if(widget.onAuthenticated!=null){widget.onAuthenticated!();return;}
+    // The app resolves existing account records before applying registration
+    // preferences. This fallback also supports standalone account panels.
+    if(ownerMode){widget.onOpenOwner?.call();}
+    else{widget.onShopperSignedIn?.call();}
+  }
   String? status;
   bool failure=false;
   ShopperDeliveryProfile? loadedProfile;
@@ -178,18 +188,9 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     try {
       await widget.session.signIn(email.text,password.text);
       password.clear();
-      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(!mounted)return;
       setState((){status='Welcome back to Teyza!';failure=false;});
-      if(ownerMode&&widget.onOpenOwner!=null){
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if(mounted)widget.onOpenOwner!();
-        });
-      }else if(!ownerMode&&widget.onShopperSignedIn!=null){
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if(mounted)widget.onShopperSignedIn!();
-        });
-      }
+      completedSignIn();
     }catch(error){
       if(mounted)setState((){status=authMessage(error);failure=true;});
     }finally{if(mounted)setState(()=>working=false);}
@@ -198,20 +199,12 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     setState(() {working=true;status=null;failure=false;});
     try {
       await widget.session.signInWithGoogle();
-      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(mounted)setState(() {
-        status=widget.session.idToken!=null?'Welcome to Teyza!':'Google sign-in cancelled.';
+        status=widget.session.idToken!=null&&!widget.session.anonymousShopper
+          ?'Welcome to Teyza!':'Google sign-in cancelled.';
         failure=false;
       });
-      if(mounted&&ownerMode&&widget.session.idToken!=null&&widget.onOpenOwner!=null){
-        WidgetsBinding.instance.addPostFrameCallback((_){
-          if(mounted)widget.onOpenOwner!();
-        });
-      }else if(mounted&&!ownerMode&&widget.session.idToken!=null&&widget.onShopperSignedIn!=null){
-        WidgetsBinding.instance.addPostFrameCallback((_){
-          if(mounted)widget.onShopperSignedIn!();
-        });
-      }
+      completedSignIn();
     } catch(e) {
       if(mounted)setState(() {
         status=authMessage(e);failure=true;
@@ -223,10 +216,9 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     setState((){working=true;status=null;failure=false;});
     try{
       await widget.session.signInWithApple();
-      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(!mounted)return;
       if(widget.session.idToken!=null){
-        if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}
+        completedSignIn();
       }else{setState(()=>status='Apple sign-in cancelled.');}
     }catch(error){if(mounted)setState((){status=authMessage(error);failure=true;});}
     finally{if(mounted)setState(()=>working=false);}
@@ -236,9 +228,8 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     setState((){working=true;status=null;failure=false;});
     try {
       await widget.session.signInWithFacebook();
-      if(ownerMode&&widget.session.idToken!=null)widget.session.useSellerWorkspace();
       if(!mounted)return;
-      if(widget.session.idToken!=null){if(ownerMode){widget.onOpenOwner?.call();}else{widget.onShopperSignedIn?.call();}}
+      if(widget.session.idToken!=null&&!widget.session.anonymousShopper){completedSignIn();}
       else{setState(()=>status='Facebook sign-in cancelled.');}
     }catch(error){if(mounted)setState((){status=authMessage(error);failure=true;});}
     finally{if(mounted)setState(()=>working=false);}
@@ -259,39 +250,6 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
       if (mounted) setState(() {status=authMessage(error);failure=true;});
     } finally {if(mounted)setState(()=>working=false);}
   }
-
-  Widget accountRoleTile({required String value,required IconData icon,
-    required String title,required String description}) => Material(
-      color:Colors.white,
-      borderRadius:BorderRadius.circular(22),
-      child:InkWell(
-        borderRadius:BorderRadius.circular(22),
-        onTap:()=>setState(() {
-          audience=value;registering=false;showLegacyEmail=false;status=null;
-          widget.session.requestedSellerCategory=switch(value){
-            'owner'=>'spaza','business'=>'retail','wholesale'=>'wholesale',_=>null
-          };
-        }),
-        child:Padding(padding:const EdgeInsets.all(18),child:Row(children:[
-          Container(width:58,height:58,
-            decoration:BoxDecoration(
-              color:value=='shopper'?const Color(0xFFE1F6EB):
-                value=='wholesale'?const Color(0xFFFFEBD2):
-                value=='business'?const Color(0xFFE8EEFC):const Color(0xFFE8EFF4),
-              borderRadius:BorderRadius.circular(17)),
-            child:Icon(icon,color:value=='shopper'
-              ?const Color(0xFF3BB77E):const Color(0xFF010F1C),size:29)),
-          const SizedBox(width:16),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(title,style:const TextStyle(
-              fontSize:17,fontWeight:FontWeight.w800,color:Color(0xFF010F1C))),
-            const SizedBox(height:5),
-            Text(description,style:const TextStyle(
-              fontSize:12,height:1.35,color:Color(0xFF737C82)))
-          ])),
-          const Icon(Icons.chevron_right_rounded,color:Color(0xFF3BB77E))
-        ]))),
-    );
 
   Future<void> openSupport() async {
     try {
@@ -320,40 +278,23 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
             const SizedBox(height:10),
             if(logged)const Text('My Teyza account',style:TextStyle(
               fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF078E66))),
-            Text(logged?displayName:audience==null?'Welcome to Teyza':registering?'New to Teyza':ownerMode?'$ownerAudienceLabel sign in':'Shopper sign in',
+            Text(registering?'New to Teyza':'Sign in to Teyza',
               style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),
             const SizedBox(height:6),
-            Text(logged?'Your saved shopping profile' :
-              audience==null?'How would you like to continue?':
-              registering?
-                'Create your account securely with Google, Facebook or Apple. No email password or separate email verification required. Shop owners complete SMS and document verification afterward.':
-                ownerMode?'Sign in securely to manage your ${ownerAudienceLabel.toLowerCase()} account.':'Discover nearby shops and shop with your community.',
+            Text(registering
+              ?'Choose shopper or seller to get started.'
+              :'One sign-in for all your Teyza accounts.',
               textAlign:TextAlign.center,
               style:const TextStyle(color:Color(0xFF60746B))),
           ])),
         if(!widget.session.isReady)
           const Center(child:CircularProgressIndicator())
-        else if(!logged && audience==null) ...[
-          const SizedBox(height:16),
-          accountRoleTile(value:'shopper',icon:Icons.shopping_basket_rounded,
-            title:'Continue as Shopper',
-            description:'Find nearby shops, browse products, chat and enquire.'),
-          const SizedBox(height:13),
-          accountRoleTile(value:'owner',icon:Icons.storefront_rounded,
-            title:'Continue as Shop Owner',
-            description:'Spaza shop owners, local products and nearby customers.'),
-          const SizedBox(height:13),
-          accountRoleTile(value:'business',icon:Icons.business_center_rounded,
-            title:'Continue as Business Owner',
-            description:'Manage your local service business and reach nearby customers.'),
-          const SizedBox(height:13),
-          accountRoleTile(value:'wholesale',icon:Icons.inventory_2_rounded,
-            title:'Continue as Wholesaler',
-            description:'Connect with spaza shops and manage wholesale supply.'),
-          const SizedBox(height:18),
-          const Text('You can browse nearby shops without an account.',
-            textAlign:TextAlign.center,style:TextStyle(
-              fontSize:12,color:Color(0xFF737C82))),
+        else if(!logged&&registering&&audience==null) ...[
+          TeyzaRegistrationOptions(onSelected:registrationSelected),
+          TextButton(onPressed:()=>setState((){
+            registering=false;widget.session.requestedRegistrationRole=null;
+            widget.session.requestedSellerCategory=null;
+          }),child:const Text('Already on Teyza? Sign in')),
         ]
         else if(logged) ...[
           Container(key:const ValueKey('teyza-premium-account-dashboard'),
@@ -559,11 +500,12 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
               ]))),
           const SizedBox(height:12),
         ] else ...[
-          Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+          if(registering)Align(alignment:Alignment.centerLeft,child:TextButton.icon(
             onPressed:working?null:()=>setState(() {
-              audience=null;registering=false;status=null;
+              audience=null;widget.session.requestedSellerCategory=null;
+              widget.session.requestedRegistrationRole=null;status=null;
             }),icon:const Icon(Icons.arrow_back_rounded,size:18),
-            label:const Text('Change account type'))),
+            label:const Text('Change registration type'))),
           const SizedBox(height:12),
           Container(key:const ValueKey('teyza-social-login-card'),
             padding:const EdgeInsets.all(20),
@@ -580,7 +522,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                   Icon(ownerMode?Icons.storefront_outlined:Icons.shopping_basket_outlined,
                     color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66)),
                   const SizedBox(width:10),
-                  Expanded(child:Text(ownerMode?'Secure ${ownerAudienceLabel.toLowerCase()} access':'Shopper account',
+                  Expanded(child:Text(registering?(ownerMode?'Seller registration':'Shopper registration'):'Secure Teyza sign-in',
                     style:TextStyle(fontWeight:FontWeight.w800,
                       color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66))))
                 ])),
@@ -605,7 +547,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
             SizedBox(width:double.infinity,child:FilledButton(
               onPressed:working?null:submit,
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
-              child:Text(working?'Please wait…':ownerMode?'Sign in as shop owner':'Sign in as shopper'))),
+              child:Text(working?'Please wait…':'Sign in'))),
             const SizedBox(height:10),
             const Text('Existing registered email accounts only.',
               style:TextStyle(fontSize:12,color:Color(0xFF60746B))),
@@ -653,7 +595,9 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                 border:Border.all(color:const Color(0xFFBAE7D0))),
               child:TextButton.icon(
                 onPressed:working?null:()=>setState((){
-                  registering=!registering;showLegacyEmail=false;status=null;
+                  registering=!registering;audience=null;showLegacyEmail=false;status=null;
+                  widget.session.requestedRegistrationRole=null;
+                  widget.session.requestedSellerCategory=null;
                 }),
                 icon:const Icon(Icons.person_add_alt_1_rounded,color:Color(0xFF078E66)),
                 label:Text(registering?'Already on Teyza? Sign in':

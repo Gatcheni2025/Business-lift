@@ -6,7 +6,7 @@ Future<FacebookIdentity?> requestFacebookIdentity(String hashedNonce) async {
   final result=await FacebookAuth.instance.login(permissions:const ['email','public_profile'],
     loginTracking:LoginTracking.limited,nonce:hashedNonce);
   if(result.status==LoginStatus.cancelled)return null;
-  if(result.status!=LoginStatus.success||result.accessToken==null)throw StateError('Facebook sign-in failed');
+  if(result.status!=LoginStatus.success||result.accessToken==null)throw StateError('Facebook sign-in failed: '+(result.message??'provider rejected login'));
   final token=result.accessToken!;
   return FacebookIdentity(token.tokenString,limited:token.type==AccessTokenType.limited);
 }
