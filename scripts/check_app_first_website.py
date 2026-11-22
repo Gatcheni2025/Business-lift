@@ -98,7 +98,8 @@ for p in PUBLIC.rglob('*'):
    ).decode('utf-8')
    for name,page in [('overlay',overlay),('root',root_work)]:
     assert 'noindex,nofollow' in page,(name,'Work must stay private')
-    assert 'id="loginForm"' in page and 'id="applyForm"' in page,(name,'Work forms missing')
+    assert all(marker in page for marker in ('id="google"', 'id="apple"', 'id="applyForm"')),(name,'Work sign-in or application controls missing')
+    assert all(marker not in page for marker in ('id="loginForm"', 'id="signInPhone"', 'id="resetPassword"')),(name,'Legacy Work sign-in is visible')
     assert '/work-privacy.html' in page,(name,'Work privacy notice missing')
    assert '/assets/agent-map-first.css' in overlay,'Map-first Work overlay missing stylesheet'
    assert '/js/work.js' in overlay,'Map-first Work overlay missing authenticated script'
