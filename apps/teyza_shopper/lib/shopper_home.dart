@@ -25,6 +25,7 @@ import 'teyza_merchant_grid.dart';
 import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
+import 'discover_catalogue.dart';
 import 'seller_push.dart';
 import 'seller_notifications.dart';
 import 'seller_firestore.dart';
@@ -293,6 +294,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int tab = 0;
   int _previousRootTab=0;
   final _accountPanelKey=GlobalKey<ShopperAccountPanelState>();
+  final _discoverPageKey=GlobalKey<DiscoverCataloguePageState>();
   bool _detailOriginSaved=false;
   String _detailOriginDiscoveryType='spaza';
   final cart = <String, int>{};
@@ -1279,6 +1281,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       return;
     }
     if(tab==4&&_accountPanelKey.currentState?.backToRoleChoice()==true)return;
+    if(tab==5&&_discoverPageKey.currentState?.backToCategories()==true)return;
     if(showAllSellers||showAllShops){
       setState((){
         showAllSellers=false;showAllShops=false;
@@ -1498,7 +1501,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         _detailOriginSaved=false;
       }
       if(index==5){
-        tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;search='';
+        tab=5;selected=null;directorySelected=null;showAllShops=false;showAllSellers=false;search='';
         return;
       }
       tab=index;
@@ -1531,7 +1534,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     });
   }
   Widget premiumNavigation()=>PremiumShopperNavigation(
-    selectedIndex:tab==0&&showAllShops?5:tab,onSelect:navigateToTab);
+    selectedIndex:tab,onSelect:navigateToTab);
   Widget floatingCart()=>Padding(padding:const EdgeInsets.fromLTRB(18,0,18,4),
     child:Material(color:deep,elevation:8,shadowColor:const Color(0x33010F1C),
       borderRadius:BorderRadius.circular(22),child:InkWell(
@@ -1654,6 +1657,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           savedDeliveryAddress:deliveryProfile?.address,savedProfile:deliveryProfile,
           onChangeDeliveryAddress:promptDeliveryProfile):
         tab==3?ShopOrdersPanel(session:session,onLogin:()=>navigateToTab(4)):
+        tab==5?DiscoverCataloguePage(key:_discoverPageKey,onEnquire:enquireAboutProduct):
         tab==1?shopProductsPage():
         Column(children:[locationHeader(),Expanded(child:
           showAllSellers?allSellersPage():showAllShops?allShopsPage():homePage())]),
@@ -1666,6 +1670,70 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ));
   }
 
+
+  Future<void> enquireAboutProduct(CatalogueProduct product) async {
+    FocusScope.of(context).unfocus();
+    if(area==null)await areaSheet();
+    if(!mounted||area==null)return;
+    final options=homeSpazaListings;
+    final chosen=await showModalBottomSheet<NearbyListing>(context:context,
+      isScrollControlled:true,showDragHandle:true,
+      builder:(sheet)=>SafeArea(child:SizedBox(height:MediaQuery.sizeOf(sheet).height*.7,
+        child:ListView.builder(padding:const EdgeInsets.fromLTRB(18,6,18,24),
+          itemCount:options.length+1,itemBuilder:(context,index){
+            if(index==0)return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text('Ask about '+product.name,style:const TextStyle(
+                fontSize:22,fontWeight:FontWeight.w900,color:ink)),
+              const SizedBox(height:8),
+              Text('Choose a shop around '+locationName+'. The shop confirms its current stock and price.',
+                style:const TextStyle(color:muted,fontSize:13,height:1.4)),
+              const SizedBox(height:16),
+              if(options.isEmpty)...[
+                const Text('No shops are listed in this area yet. Try a different delivery area.'),
+                TextButton(onPressed:(){Navigator.pop(sheet);unawaited(areaSheet());},
+                  child:const Text('Change area')),
+              ]
+            ]);
+            final entry=options[index-1],merchant=entry.merchant,directory=entry.directory;
+            final source=merchant!=null?'Teyza shop':directory?.origin=='google_places'?'Google Maps':'Public directory';
+            return Card(color:Colors.white,elevation:0,
+              child:ListTile(key:ValueKey('discover-enquiry-${merchant?.id??directory!.id}'),
+                leading:const Icon(Icons.storefront_outlined,color:green),
+                title:Text(merchant?.name??directory!.name,
+                  style:const TextStyle(fontWeight:FontWeight.w800)),
+                subtitle:Text('$source · enquire about availability'),
+                trailing:const Icon(Icons.chevron_right,color:green),
+                onTap:()=>Navigator.pop(sheet,entry)));
+          }))));
+    if(chosen==null||!mounted)return;
+    final merchant=chosen.merchant,directory=chosen.directory;
+    final message='Hello, do you have ${product.name}? Please confirm the brand, pack size and price. I found your shop on Teyza.';
+    if(merchant!=null&&merchant.identityVerified&&merchant.liveChat&&ShopperChatApi.isTeyzaShop(merchant.id)){
+      chatWithShop(merchant,message:message);return;
+    }
+    var phone=merchant?.phone??'';
+    if(phone.isEmpty)phone=directory?.phone??'';
+    try{
+      if(phone.isEmpty&&directory!=null&&directory.origin=='google_places'&&directory.placeId.isNotEmpty)
+        phone=await teyzaBusinessContact(directory.placeId);
+      if(!mounted)return;
+      var digits=phone.replaceAll(RegExp(r'[^0-9]'),'');
+      if(digits.startsWith('0')&&digits.length==10)digits='27'+digits.substring(1);
+      if(digits.length<10||digits.length>15)throw StateError('Public contact unavailable');
+      final uri=Uri.https('wa.me','/$digits',{'text':message});
+      final opened=await (widget.externalLauncher?.call(uri)??
+        launchUrl(uri,mode:LaunchMode.externalApplication));
+      if(!opened)throw StateError('Messaging unavailable');
+    }catch(_){
+      if(!mounted)return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:const Text('Messaging could not be opened. View the shop for contact options.'),
+        action:SnackBarAction(label:'View shop',onPressed:(){
+          if(merchant!=null)openShop(merchant);
+          else if(directory!=null)selectDirectory(directory);
+        })));
+    }
+  }
 
   Widget shopProductsPage(){
     final query=productTabSearch.trim().toLowerCase();

@@ -41,7 +41,7 @@ void main(){
     final visited=<int>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(
       bottomNavigationBar:PremiumShopperNavigation(selectedIndex:0,onSelect:visited.add))));
-    for(final label in ['home','shops','shop','orders','account']){
+    for(final label in ['home','discover','shop','orders','account']){
       await tester.tap(find.byKey(ValueKey('nav-'+label)));
     }
     expect(visited,[0,5,1,3,4]);
@@ -193,12 +193,17 @@ void main(){
     }
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
     expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
-    // The separate Shops tab remains accessible for broader category browsing.
-    await tester.tap(find.byKey(const ValueKey('nav-shops')));
+    // Discover opens product categories; shop discovery stays on Home.
+    await tester.tap(find.byKey(const ValueKey('nav-discover')));
     await tester.pumpAndSettle();
-    expect(find.text('Search wider'),findsOneWidget);
+    expect(find.byKey(const PageStorageKey('discover-categories')),findsOneWidget);
+    expect(find.text('Nearby shops'),findsNothing);
     expect(tester.takeException(),isNull);
-    await capture('shops');
+    await capture('discover-categories');
+    await tester.tap(find.byKey(const ValueKey('discover-category-Bakery')));
+    await tester.pumpAndSettle();
+    await capture('discover-bakery');
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));await tester.pumpAndSettle();
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
     expect(find.text('Sign in to Teyza'),findsOneWidget);
     expect(find.text('Continue as Shop Owner'),findsNothing);

@@ -38,7 +38,7 @@ class PremiumShopperNavigation extends StatelessWidget {
         child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(27),
           child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
             destination(0,'Home',Icons.home_rounded,Icons.home_outlined),
-            destination(5,'Shops',Icons.storefront_rounded,Icons.storefront_outlined),
+            destination(5,'Discover',Icons.explore_rounded,Icons.explore_outlined),
             Expanded(child:Semantics(button:true,selected:selectedIndex==1,label:'Shop',
               child:InkWell(key:const ValueKey('nav-shop'),
                 onTap:()=>onSelect(1),borderRadius:BorderRadius.circular(24),
