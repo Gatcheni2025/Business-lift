@@ -1391,7 +1391,16 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ]));
 
 
-  void openBasket()=>navigateToTab(2);
+  void openBasket(){
+    // Cart has its own view and must not be obscured by an immersive profile.
+    if(selected!=null||directorySelected!=null){
+      setState((){
+        selected=null;directorySelected=null;selectedDirectoryPhone=null;
+        _detailOriginSaved=false;
+      });
+    }
+    navigateToTab(2);
+  }
   Future<void> openBellNotifications() async{
     // The inbox does not require a manually enabled phone-alert setting.
     if(session.idToken==null){
@@ -1435,6 +1444,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void navigateToTab(int index){
     setState(() {
       if(index!=tab)_previousRootTab=tab;
+      if(index==2||index==3||index==4||index==5){
+        selected=null;directorySelected=null;selectedDirectoryPhone=null;
+        _detailOriginSaved=false;
+      }
       if(index==5){
         tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;search='';
         return;
@@ -2569,6 +2582,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         style:const TextStyle(fontSize:14,color:muted)),
       const SizedBox(height:8),
       onlineProviderLabel(shop),
+      if(shop.types.isNotEmpty)Padding(
+        padding:const EdgeInsets.only(top:11),
+        child:Wrap(spacing:6,runSpacing:6,children:[
+          for(final category in shop.types.take(5))
+            Chip(label:Text(category.replaceAll('_',' '),
+              style:const TextStyle(fontSize:11)),
+              visualDensity:VisualDensity.compact),
+        ])),
       const SizedBox(height:12),
       if(shop.origin=='google_places'&&verifiedMerchantFor(shop)==null)
         Container(padding:const EdgeInsets.all(13),
@@ -2760,6 +2781,32 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             icon:const Icon(Icons.chat_bubble_outline),label:const Text('Enquire about this service'))
         ])),
     ],
+    section('About this shop',
+      subtitle:'Details supplied by this participating Teyza merchant'),
+    Container(padding:const EdgeInsets.all(14),
+      decoration:BoxDecoration(color:const Color(0xFFFFFAF3),
+        borderRadius:BorderRadius.circular(18),
+        border:Border.all(color:const Color(0xFFF1EDE5))),
+      child:Column(children:[
+        ListTile(dense:true,leading:const Icon(Icons.place_outlined,color:green),
+          title:const Text('Address'),subtitle:Text(shop.address.isNotEmpty?shop.address:shop.area)),
+        if(shop.hours.length==7)
+          ExpansionTile(tilePadding:const EdgeInsets.symmetric(horizontal:16),
+            leading:const Icon(Icons.schedule_outlined,color:green),
+            title:const Text('Weekly opening hours'),
+            children:[
+              for(var day=0;day<7;day++)
+                Padding(padding:const EdgeInsets.fromLTRB(18,4,18,4),
+                  child:Row(children:[
+                    Expanded(child:Text(const ['Monday','Tuesday','Wednesday','Thursday',
+                      'Friday','Saturday','Sunday'][day],
+                      style:const TextStyle(fontSize:12,color:ink))),
+                    Text(shop.hours[day].closed?'Closed':
+                      '${shop.hours[day].open} – ${shop.hours[day].close}',
+                      style:const TextStyle(fontSize:12,color:muted)),
+                  ]))
+            ]),
+      ])),
     if(shop.shopCategory=='spaza')merchantServices(shop),
     if(shop.shopCategory=='wholesale')
       const Padding(padding:EdgeInsets.symmetric(vertical:16),child:Text(
