@@ -66,27 +66,30 @@ void main(){
     expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     expect(tester.takeException(),isNull);
   });
-  for(final role in ['Shopper','Shop Owner']){
-    testWidgets(role+' login routes to the selected experience',(tester) async {
-      final session=FakeSession();
-      var openedOwner=false,openedShopper=false;
-      await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(
-        session:session,onOpenOwner:()=>openedOwner=true,onShopperSignedIn:()=>openedShopper=true))));
-      await tester.tap(find.text('Continue as '+role));
-      await tester.pumpAndSettle();
-      final legacy=find.text('Already registered with email?');
-      await tester.ensureVisible(legacy);await tester.tap(legacy);await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).at(0),'shop@example.test');
-      await tester.enterText(find.byType(TextFormField).at(1),'password123');
-      final button=find.text(role=='Shop Owner'?'Sign in as shop owner':'Sign in as shopper');
-      await tester.ensureVisible(button);
-      await tester.tap(button);
-      await tester.pumpAndSettle();
-      expect(openedOwner,role=='Shop Owner');expect(openedShopper,role=='Shopper');
-      expect(tester.takeException(),isNull);
-      await tester.pumpWidget(const SizedBox.shrink());session.dispose();
-    });
-  }
+  testWidgets('One login authenticates existing accounts before choosing workspaces',(tester) async {
+    await tester.binding.setSurfaceSize(const Size(390,900));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
+    final session=FakeSession();
+    var openedOwner=false,openedShopper=false;
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(
+      session:session,onOpenOwner:()=>openedOwner=true,onShopperSignedIn:()=>openedShopper=true))));
+    expect(find.text('Sign in to Teyza'),findsOneWidget);
+    expect(find.text('Create an account'),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('teyza-single-login')));
+    await tester.pumpAndSettle();
+    final legacy=find.text('Already registered with email?');
+    await tester.ensureVisible(legacy);
+    await tester.tap(legacy);await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0),'shop@example.test');
+    await tester.enterText(find.byType(TextFormField).at(1),'password123');
+    await tester.ensureVisible(find.byKey(const ValueKey('teyza-email-login')));
+    await tester.tap(find.byKey(const ValueKey('teyza-email-login')));
+    await tester.pumpAndSettle();
+    expect(openedOwner,false);
+    expect(openedShopper,true);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+  });
   testWidgets('Cart survives Home and Shops navigation',(tester) async {
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
@@ -206,8 +209,8 @@ void main(){
     expect(tester.takeException(),isNull);
     await capture('shops');
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
-    expect(find.text('Continue as Shopper'),findsOneWidget);
-    expect(find.text('Continue as Shop Owner'),findsOneWidget);
+    expect(find.text('Sign in to Teyza'),findsOneWidget);
+    expect(find.text('Create an account'),findsOneWidget);
     expect(tester.takeException(),isNull);await capture('login-roles');
     await tester.pumpWidget(const SizedBox.shrink());
   });
