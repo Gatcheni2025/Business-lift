@@ -66,6 +66,11 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('nearby-stocked-shop')));
     await tester.pumpAndSettle();
     final featured=find.byKey(const ValueKey('shop-stocked-shop-featured-rail'));
+    final scroller=find.descendant(
+      of:find.byKey(const PageStorageKey<String>('shop-profile-stocked-shop')),
+      matching:find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(featured,160,scrollable:scroller);
+    await tester.pumpAndSettle();
     expect(featured,findsOneWidget);
     expect(find.byKey(const ValueKey('nav-account')),findsNothing);
     expect(find.text('Stocked Community Spaza'),findsWidgets);
