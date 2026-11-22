@@ -304,7 +304,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Future<void>? _workspaceResolution;
   String _launchStep='Signing you in securely…';
   String? _checkedAgentUid;
-  bool _agentApproved=false,_agentMode=false,_rolePicker=false;
+  bool _agentApproved=false,_agentMode=false,_rolePicker=false,_sellerEligible=false;
   SellerPush? sellerPush;
   StreamSubscription<void>? shopperMessageAlerts;
   List<OnlineShop> online = [];
@@ -380,7 +380,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       }
       if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
       _observedUid=uid;_checkedSellerUid=null;_checkedAgentUid=null;
-      _agentApproved=false;_agentMode=false;_rolePicker=false;
+      _agentApproved=false;_agentMode=false;_rolePicker=false;_sellerEligible=false;
       _workspaceResolution=null;
       _sellerInitialTarget=null;if(previousUid!=null)_pendingClaimPlaceId=null;
       if(previousUid!=null||seller){cart.clear();basketShop=null;}
@@ -410,7 +410,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       }
     }
     setState((){});
-    if(uid!=null&&!seller&&session.isReady&&!session.isBusy&&_checkedSellerUid!=uid&&
+    if(uid!=null&&session.isReady&&!session.isBusy&&_checkedSellerUid!=uid&&
       (widget.enableBackgroundServices||widget.sellerApiFactory!=null)){
       _checkedSellerUid=uid;_workspaceResolution=resolveSellerWorkspace(uid);
     }
@@ -435,6 +435,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void _chooseRole(String value){
     if(!mounted||session.userId==null||session.idToken==null)return;
     if(value=='agent'&&!_agentApproved)return;
+    if(value=='seller'&&!_sellerEligible)return;
     setState((){_rolePicker=false;_agentMode=value=='agent';});
     if(value=='shopper'||value=='agent')session.useShopperWorkspace();
     if(value=='seller')session.useSellerWorkspace();
@@ -444,7 +445,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final token=await session.freshIdToken();
       if(!mounted||session.userId!=uid||session.idToken==null)return;
       final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
-      if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true)session.useSellerWorkspace();
+      if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true){
+        setState((){_sellerEligible=true;_rolePicker=true;});
+      }
     }catch(_){/* A selected seller workspace remains available for retry during outages. */}
   }
   Future<void> _prepareLaunch([Future<void>? restoring]) async {
@@ -1506,8 +1509,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if(_rolePicker&&_agentApproved&&session.userId!=null)return TeyzaModeChooser(
-      agentApproved:true,onShopper:()=>_chooseRole('shopper'),
+    if(_rolePicker&&(_agentApproved||_sellerEligible)&&session.userId!=null)return TeyzaModeChooser(
+      agentApproved:_agentApproved,sellerAvailable:_sellerEligible,
+      onShopper:()=>_chooseRole('shopper'),
       onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
     if(_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
       key:ValueKey('agent-${session.userId}'),session:session,mobileApi:widget.sellerMobileApi,
@@ -1558,7 +1562,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
             TextButton.icon(onPressed:_navigateBack,
               icon:const Icon(Icons.home_outlined,size:18),label:const Text('Home'))
           else ...[
-          if(_agentApproved&&session.userId!=null)
+          if((_agentApproved||_sellerEligible)&&session.userId!=null)
             IconButton(key:const ValueKey('teyza-mode-switch'),tooltip:'Switch role',
               onPressed:()=>setState(()=>_rolePicker=true),icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
