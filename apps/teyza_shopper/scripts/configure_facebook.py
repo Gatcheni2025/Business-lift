@@ -67,6 +67,26 @@ subprojects { subproject ->
         for child in list(application.findall('meta-data')):
             if child.get(key+'name') in values:application.remove(child)
         for name,value in values.items():ET.SubElement(application,'meta-data',{key+'name':name,key+'value':value})
+        # The Meta SDK may use a Custom Tab browser callback even if the
+        # Facebook app is installed. Make the callback activities explicit;
+        # they are required by the Flutter Facebook Auth Android setup.
+        # Remove same-named source declarations first so repeated preparation
+        # never accumulates duplicate activities or callback filters.
+        facebook_activities={'com.facebook.FacebookActivity','com.facebook.CustomTabActivity'}
+        for activity in list(application.findall('activity')):
+            if activity.get(key+'name') in facebook_activities:
+                application.remove(activity)
+        ET.SubElement(application,'activity',{
+            key+'name':'com.facebook.FacebookActivity',
+            key+'configChanges':'keyboard|keyboardHidden|screenLayout|screenSize|orientation'})
+        callback=ET.SubElement(application,'activity',{
+            key+'name':'com.facebook.CustomTabActivity',
+            key+'exported':'true'})
+        callback_filter=ET.SubElement(callback,'intent-filter')
+        ET.SubElement(callback_filter,'action',{key+'name':'android.intent.action.VIEW'})
+        ET.SubElement(callback_filter,'category',{key+'name':'android.intent.category.DEFAULT'})
+        ET.SubElement(callback_filter,'category',{key+'name':'android.intent.category.BROWSABLE'})
+        ET.SubElement(callback_filter,'data',{key+'scheme':'@string/fb_login_protocol_scheme'})
         queries=manifest.find('queries')
         if queries is None:queries=ET.SubElement(manifest,'queries')
         if not any(p.get(key+'authorities')=='com.facebook.katana.provider.PlatformProvider' for p in queries.findall('provider')):
