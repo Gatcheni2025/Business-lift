@@ -311,7 +311,7 @@ const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
  getRolloutMode:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot',
  getPilotStartAt:()=>process.env.TEYZA_WHATSAPP_PILOT_STARTED_AT||'',
- getRolloutStartedAt:()=>process.env.TEYZA_WHATSAPP_GENERAL_STARTED_AT||'',
+ getRolloutStartedAt:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_STARTED_AT||process.env.TEYZA_WHATSAPP_GENERAL_STARTED_AT||'',
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
   language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',

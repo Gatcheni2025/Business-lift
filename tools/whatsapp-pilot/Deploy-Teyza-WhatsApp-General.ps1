@@ -42,13 +42,14 @@ foreach($key in @('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN','TEYZA_WHATSAPP_APP_SECR
  & gcloud secrets describe $key --project $project --format='value(name)' | Out-Null
  if($LASTEXITCODE -ne 0){throw "Required WhatsApp secret is unavailable: $key"}
 }
-$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_GENERAL_STARTED_AT=([0-9]+)\s*$')
+$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=([0-9]+)\s*$')
+if(!$existing.Success){$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_GENERAL_STARTED_AT=([0-9]+)\s*$')}
 $startedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 if($existing.Success -and [long]$existing.Groups[1].Value -gt 0){$startedAt=[long]$existing.Groups[1].Value}
 $updates=[ordered]@{
  'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'='1'
  'TEYZA_WHATSAPP_ROLLOUT_MODE'='general'
- 'TEYZA_WHATSAPP_GENERAL_STARTED_AT'=[string]$startedAt
+ 'TEYZA_WHATSAPP_ROLLOUT_STARTED_AT'=[string]$startedAt
 }
 $modified=$original
 foreach($key in $updates.Keys){$modified=[regex]::Replace($modified,"(?m)^$key=.*\r?\n?",'')}

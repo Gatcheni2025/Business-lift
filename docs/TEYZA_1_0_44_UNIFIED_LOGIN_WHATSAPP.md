@@ -1,4 +1,6 @@
-# Teyza 1.0.44 (55): one sign-in, shop details and general approval welcomes
+# Teyza 1.0.45 (56): one sign-in, shop details and general approval welcomes
+
+This follows the 1.0.44 (55) release in PR #206.
 
 The Account tab opens one Google/Facebook/Apple sign-in screen. Existing email
 users can expand their email/password form. New registration offers **Shopper**
@@ -61,7 +63,7 @@ The script preserves unrelated environment settings and enables:
 ```dotenv
 TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED=1
 TEYZA_WHATSAPP_ROLLOUT_MODE=general
-TEYZA_WHATSAPP_GENERAL_STARTED_AT=<activation milliseconds>
+TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=<activation milliseconds>
 ```
 
 It retains the activation timestamp for repeated/partially failed deployments.
