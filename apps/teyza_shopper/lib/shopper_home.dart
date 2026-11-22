@@ -2808,7 +2808,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                     Text(rand(item.priceCents),
                       style:const TextStyle(color:Color(0xFFE87531),
                         fontSize:15,fontWeight:FontWeight.w900)),
-                  ]))))));
+                  ])))));
           })),
     ],
     if(shop.shopCategory=='variety')...[
