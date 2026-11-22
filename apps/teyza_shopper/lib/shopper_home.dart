@@ -435,7 +435,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void _chooseRole(String value){
     if(!mounted||session.userId==null||session.idToken==null)return;
     if(value=='agent'&&!_agentApproved)return;
-    if(value=='seller'&&!_sellerEligible)return;
+    if(value=='seller'&&!_sellerEligible&&!session.sellerWorkspace)return;
     setState((){_rolePicker=false;_agentMode=value=='agent';});
     if(value=='shopper'||value=='agent')session.useShopperWorkspace();
     if(value=='seller')session.useSellerWorkspace();
@@ -446,7 +446,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if(!mounted||session.userId!=uid||session.idToken==null)return;
       final account=await (widget.sellerApiFactory?.call(uid,token)??SellerFirestore(uid:uid,token:token)).shop();
       if(mounted&&session.userId==uid&&session.idToken!=null&&account?.hasRegisteredCategory==true){
-        setState((){_sellerEligible=true;_rolePicker=true;});
+        setState((){
+          _sellerEligible=true;
+          // A second approved work role requires explicit choice, not a
+          // forced Seller redirect. Existing seller-only users retain their
+          // familiar dashboard on sign-in and after session restoration.
+          if(_agentApproved)_rolePicker=true;
+        });
+        if(!_agentApproved&&!session.sellerWorkspace)session.useSellerWorkspace();
       }
     }catch(_){/* A selected seller workspace remains available for retry during outages. */}
   }
@@ -1510,7 +1517,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if(_rolePicker&&(_agentApproved||_sellerEligible)&&session.userId!=null)return TeyzaModeChooser(
-      agentApproved:_agentApproved,sellerAvailable:_sellerEligible,
+      agentApproved:_agentApproved,
+      sellerAvailable:_sellerEligible||session.sellerWorkspace,
       onShopper:()=>_chooseRole('shopper'),
       onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
     if(_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
