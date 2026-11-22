@@ -35,7 +35,7 @@ class _RegistrationOptionsState extends State<TeyzaRegistrationOptions> {
           'Connect with shops and manage wholesale supply.',
           () => widget.onSelected('seller', 'wholesale')),
         TextButton.icon(onPressed: () => setState(() => seller = false),
-          icon: const Icon(Icons.arrow_back), child: const Text('Shopper or seller')),
+          icon: const Icon(Icons.arrow_back), label: const Text('Shopper or seller')),
       ],
     ]);
 

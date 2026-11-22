@@ -13,7 +13,7 @@ Lookup failures offer a retry; they are never treated as a new account.
 Provider collisions require the original sign-in method. No identity, payment,
 approval or shop is transferred merely because email addresses match.
 
-The shop About card gives the address a larger cream panel and green pin.
+The shop About card includes its published photo, verified status, address, opening hours and Directions/Message actions in one cream and white card.
 Service rows use larger labels, green availability states and responsive layouts
 for narrow screens and larger text. Unknown service states stay unconfirmed.
 
