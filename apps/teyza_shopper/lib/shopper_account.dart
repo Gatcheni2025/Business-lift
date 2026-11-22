@@ -623,6 +623,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
               validator:(v)=>v==null||v.length<6?'Use at least 6 characters':null),
             const SizedBox(height:18),
             SizedBox(width:double.infinity,child:FilledButton(
+              key:const ValueKey('teyza-email-login'),
               onPressed:working?null:submit,
               style:FilledButton.styleFrom(padding:const EdgeInsets.all(16)),
               child:Text(working?'Please wait…':'Sign in to Teyza'))),
