@@ -2842,10 +2842,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     ],
     section('About this shop',
       subtitle:'A closer look at '+shop.name+' · independently managed on Teyza'),
-    Container(key:ValueKey('teyza-premium-about-${shop.id}'),
-      decoration:BoxDecoration(color:Colors.white,
-        borderRadius:BorderRadius.circular(24),
-        border:Border.all(color:const Color(0xFFE7EBE5))),
+    Material(key:ValueKey('teyza-premium-about-${shop.id}'),
+      color:Colors.white,
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24),
+        side:const BorderSide(color:Color(0xFFE7EBE5))),
       clipBehavior:Clip.antiAlias,
       child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Container(
