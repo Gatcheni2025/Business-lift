@@ -61,6 +61,10 @@ void main(){
     await tester.ensureVisible(tile);
     await tester.tap(tile);await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('teyza-back')),findsOneWidget);
+    expect(find.byKey(const ValueKey('seller-profile-spaza-home')),findsOneWidget);
+    expect(find.byKey(const ValueKey('change-shop')),findsNothing);
+    expect(find.byKey(const ValueKey('nav-account')),findsNothing);
+    expect(find.byKey(const PageStorageKey<String>('shopper-home')),findsNothing);
     await tester.tap(find.byKey(const ValueKey('teyza-back')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
