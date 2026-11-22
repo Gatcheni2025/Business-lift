@@ -111,7 +111,7 @@ void main(){
     expect(add.hitTestable(),findsOneWidget);
     await tester.tap(add.hitTestable());
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('floating-cart')));await tester.pumpAndSettle();
     expect(find.text('Items from Corner Grocer'),findsOneWidget);
@@ -177,19 +177,19 @@ void main(){
     expect(find.text('Bread').hitTestable(),findsOneWidget);
     expect(tester.takeException(),isNull);
     await capture('essentials');
-    // After scrolling down to Bread, the lazily-built See all control is
-    // above the viewport. Scroll home to the top before opening nearby shops.
-    for(var attempt=0;attempt<8&&find.text('Spaza Shops').evaluate().isEmpty;attempt++){
+    // Shops remain in the horizontal home shelf, with no View all redirect.
+    for(var attempt=0;attempt<9&&
+        find.byKey(const ValueKey('teyza-spaza-grid')).evaluate().isEmpty;attempt++){
       await tester.drag(find.byType(ListView).first,const Offset(0,600));
       await tester.pumpAndSettle();
     }
-    final spazaHeader=find.ancestor(of:find.text('Spaza Shops'),
-      matching:find.byType(Row)).first;
-    final spazaSeeAll=find.descendant(of:spazaHeader,matching:find.text('See all'));
-    expect(spazaSeeAll,findsOneWidget);
-    await tester.ensureVisible(spazaSeeAll);
-    await tester.tap(spazaSeeAll);await tester.pumpAndSettle();
-    expect(find.text('Search wider'),findsOneWidget);expect(tester.takeException(),isNull);
+    expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
+    // The separate Shops tab remains accessible for broader category browsing.
+    await tester.tap(find.byKey(const ValueKey('nav-shops')));
+    await tester.pumpAndSettle();
+    expect(find.text('Search wider'),findsOneWidget);
+    expect(tester.takeException(),isNull);
     await capture('shops');
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
     expect(find.text('Continue as Shopper'),findsOneWidget);
@@ -220,12 +220,12 @@ void main(){
     // The home body is vertically lazy: scroll the viewport first instead
     // of asking scrollUntilVisible to resolve an as-yet-unbuilt widget.
     final homeScroll=find.byType(ListView).first;
-    for(var n=0;n<15&&find.text('Local Businesses').evaluate().isEmpty;n++){
+    for(var n=0;n<15&&find.text('Businesses nearby').evaluate().isEmpty;n++){
       await tester.drag(homeScroll,const Offset(0,-200));
       await tester.pumpAndSettle();
     }
-    expect(find.text('Local Businesses'),findsOneWidget);
-    await tester.ensureVisible(find.text('Local Businesses'));
+    expect(find.text('Businesses nearby'),findsOneWidget);
+    await tester.ensureVisible(find.text('Businesses nearby'));
     await tester.pumpAndSettle();
     // The nested horizontal cards may not be built until they enter view.
     for(var n=0;n<6&&find.text('Durban Hair Studio').evaluate().isEmpty;n++){
@@ -257,8 +257,8 @@ void main(){
     final card=find.byKey(const ValueKey('nearby-google-public-shop'));
     await revealShopperHome(tester,card);
     await tester.tap(card);await tester.pumpAndSettle();
-    expect(find.text('Browse all shops'),findsOneWidget,
-      reason:'The spaza tile opens shop details without inventing products or checkout');
+    expect(find.byKey(const ValueKey('teyza-back')),findsOneWidget,
+      reason:'The spaza tile opens an isolated shop profile without inventing checkout');
     expect(find.text('Ordering not available'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -299,7 +299,7 @@ void main(){
     await tester.ensureVisible(salonCard);await tester.pumpAndSettle();
     await tester.tap(salonCard);
     await tester.pumpAndSettle();
-    expect(find.text('Browse local businesses'),findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-back')),findsOneWidget);
     expect(find.text('Local Business details'),findsOneWidget);
     expect(find.text('Business category'),findsOneWidget);
     expect(find.text('Main Road, Durban'),findsWidgets);
@@ -321,14 +321,7 @@ void main(){
     await tester.tap(find.widgetWithText(OutlinedButton,'Call'));
     await tester.pumpAndSettle();
     expect(launches.last.scheme,'tel');
-    for(var i=0;i<10&&find.text('Browse local businesses').evaluate().isEmpty;i++){
-      await tester.drag(detailsScroll,const Offset(0,240));
-      await tester.pumpAndSettle();
-    }
-    expect(find.text('Browse local businesses'),findsOneWidget);
-    await tester.ensureVisible(find.text('Browse local businesses'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Browse local businesses'));
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));
     await tester.pumpAndSettle();
     // The new Back action returns to the same home shelf instead of
     // automatically switching into an unrelated merchant category.
@@ -413,9 +406,10 @@ void main(){
     await tester.scrollUntilVisible(card,200,scrollable:homeScroll);
     await tester.ensureVisible(card);await tester.pumpAndSettle();
     await tester.tap(card);await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('change-shop')),findsOneWidget);
+    expect(find.byKey(const ValueKey('seller-profile-corner')),findsOneWidget);
+    expect(find.byKey(const ValueKey('change-shop')),findsNothing);
     expect(find.text('Corner Spaza'),findsWidgets);
-    await tester.tap(find.byKey(const ValueKey('nav-home')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));await tester.pumpAndSettle();
     final add=find.byKey(const ValueKey('add-essential-corner-milk'));
     await tester.scrollUntilVisible(add,200,scrollable:homeScroll);await tester.pumpAndSettle();
     await tester.ensureVisible(add);await tester.pumpAndSettle();
@@ -491,7 +485,7 @@ void main(){
     expect(shopMatchesArea(merchant,areas.first),true);
     expect(mergeNearbyListings([merchant],[],area:areas.first).single.merchant?.id,'approved-shop');
   });
-  testWidgets('Buy selects only that seller products and Change shop switches catalogues',(tester)async{
+  testWidgets('Buy selects only that shop; Back opens home to select another shop',(tester)async{
     await tester.binding.setSurfaceSize(const Size(390,844));
     addTearDown(()=>tester.binding.setSurfaceSize(null));
     final shops=[
@@ -507,15 +501,18 @@ void main(){
     await tester.tap(find.byKey(const ValueKey('nav-shop')));await tester.pumpAndSettle();
     final firstBuy=find.widgetWithText(FilledButton,'Buy').first;
     await tester.tap(firstBuy);await tester.pumpAndSettle();
-    expect(find.text('Change shop'),findsOneWidget);
+    expect(find.byKey(const ValueKey('seller-profile-s1')),findsOneWidget);
+    expect(find.text('Change shop'),findsNothing);
     for(var n=0;n<8&&find.text('Bread Buns').evaluate().isEmpty;n++){
       await tester.drag(find.byType(ListView).first,const Offset(0,-220));
       await tester.pumpAndSettle();
     }
     expect(find.text('Bread Buns'),findsOneWidget);
     expect(find.text('Fresh Eggs'),findsNothing);
-    await tester.tap(find.text('Change shop'));await tester.pumpAndSettle();
-    await tester.tap(find.text('Second Spaza').last);await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('teyza-back')));await tester.pumpAndSettle();
+    final second=find.byKey(const ValueKey('nearby-s2'));
+    await revealShopperHome(tester,second);
+    await tester.tap(second);await tester.pumpAndSettle();
     for(var n=0;n<8&&find.text('Fresh Eggs').evaluate().isEmpty;n++){
       await tester.drag(find.byType(ListView).first,const Offset(0,-220));
       await tester.pumpAndSettle();
