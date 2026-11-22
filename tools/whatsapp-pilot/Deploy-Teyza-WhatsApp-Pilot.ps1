@@ -70,6 +70,7 @@ if($original -match '(?m)^TEYZA_ADMIN_DEPLOY_ONLY=1\s*$'){
 $workerFlag = '0'
 if($EnableWorkers){ $workerFlag = '1' }
 $updates=[ordered]@{
+ 'TEYZA_WHATSAPP_ROLLOUT_MODE'='pilot'
  'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'=$workerFlag
  'TEYZA_WHATSAPP_PILOT_SELLER_UID'=$PilotSellerUid
  'TEYZA_WHATSAPP_PHONE_NUMBER_ID'='1466599163197469'

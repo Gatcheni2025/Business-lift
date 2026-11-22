@@ -36,6 +36,17 @@ class FacebookConfigurationTests(unittest.TestCase):
             metadata={m.get(key+'name'):m.get(key+'value') for m in manifest.findall('application/meta-data')}
             self.assertEqual(metadata['com.facebook.sdk.AdvertiserIDCollectionEnabled'],'false')
             self.assertEqual(metadata['com.facebook.sdk.AutoLogAppEventsEnabled'],'false')
+            activities={a.get(key+'name'):a for a in manifest.findall('application/activity')}
+            self.assertIn('MainActivity',activities)
+            self.assertIn('com.facebook.FacebookActivity',activities)
+            self.assertIn('com.facebook.CustomTabActivity',activities)
+            self.assertEqual([a.get(key+'name') for a in manifest.findall('application/activity')].count('com.facebook.CustomTabActivity'),1)
+            tab=activities['com.facebook.CustomTabActivity']
+            self.assertEqual(tab.get(key+'exported'),'true')
+            self.assertEqual(tab.find('intent-filter/action').get(key+'name'),'android.intent.action.VIEW')
+            self.assertEqual([c.get(key+'name') for c in tab.findall('intent-filter/category')],
+                ['android.intent.category.DEFAULT','android.intent.category.BROWSABLE'])
+            self.assertEqual(tab.find('intent-filter/data').get(key+'scheme'),'@string/fb_login_protocol_scheme')
             self.assertIn('JVM_11',(root/'android/teyza-facebook-jvm.gradle').read_text())
             self.assertNotIn('validation.mode',(root/'android/teyza-facebook-jvm.gradle').read_text())
             self.assertEqual((root/'android/build.gradle.kts').read_text().count('apply(from = \"teyza-facebook-jvm.gradle\")'),1)

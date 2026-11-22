@@ -1,4 +1,6 @@
 """Export public test-certificate fingerprints; never export the keystore."""
+import base64
+import sys
 import glob
 import hashlib
 import json
@@ -8,7 +10,7 @@ from pathlib import Path
 import struct
 import subprocess
 root=Path(__file__).resolve().parents[1]
-apk=root/'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
+apk=Path(sys.argv[1]) if len(sys.argv)>1 else root/'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
 executables=glob.glob(os.environ['ANDROID_HOME']+'/build-tools/*/apksigner')
 if not executables:raise SystemExit('Android signing verifier unavailable')
 subprocess.run([sorted(executables)[-1],'verify',str(apk)],check=True)
@@ -38,7 +40,20 @@ def certificate(data):
         return cert
     raise SystemExit('No verified v2/v3 signing certificate found')
 cert=certificate(apk.read_bytes())
-values={'sha1':hashlib.sha1(cert).hexdigest().upper(),'sha256':hashlib.sha256(cert).hexdigest().upper()}
+values={'sha1':hashlib.sha1(cert).hexdigest().upper(),'sha256':hashlib.sha256(cert).hexdigest().upper(),
+    'metaAndroidKeyHash':base64.b64encode(hashlib.sha1(cert).digest()).decode(),
+    'firebaseProject':'business-lift-3c19c',
+    'facebookFirebaseCallback':'https://business-lift-3c19c.firebaseapp.com/__/auth/handler'}
+from prepare_mobile_release import validate_android_google_oauth
+values['googleOAuthConfiguration']='not_checked'
+if os.environ.get('TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64'):
+    try:
+        validate_android_google_oauth(os.environ['TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64'],
+            os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID'),values['sha1'])
+        values['googleOAuthConfiguration']='matches_apk_certificate'
+    except SystemExit as error:
+        values['googleOAuthConfiguration']='configuration_required'
+        values['googleOAuthSetup']=str(error)
 # Flutter's split APKs add an ABI offset to the base version code. Export the
 # compiled code and its source code separately; Play's AAB uses the base code.
 values.update({'applicationId':identity[1],'versionCode':int(identity[2]),'sourceVersionCode':int(code),'versionName':identity[3],'signing':'android-test-only',
@@ -53,5 +68,7 @@ if summary_path:
         summary.write('App package: `'+identity[1]+'` (test key, not Google Play signing key)\n\n')
         summary.write('SHA-1: `'+values['sha1']+'`\n\n')
         summary.write('SHA-256: `'+values['sha256']+'`\n\n')
+        summary.write('Meta Android key hash: `'+values['metaAndroidKeyHash']+'`\n\n')
+        summary.write('Google OAuth configuration: `'+values['googleOAuthConfiguration']+'`\n\n')
         summary.write('Register this public test certificate in Firebase Project settings → Your apps → Android. Register Play app-signing and upload fingerprints separately.\n')
 

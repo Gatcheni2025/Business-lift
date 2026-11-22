@@ -95,20 +95,16 @@ void main(){
    session.idToken=null;session.userId=null;session.email=null;
    await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
    await t.pumpAndSettle();
-   await t.tap(find.text('Sign in to Teyza'));
-   await t.pumpAndSettle();
    expect(find.byKey(const ValueKey('teyza-social-login-card')),findsOneWidget);
    expect(find.byKey(const ValueKey('teyza-existing-email-toggle')),findsOneWidget);
    expect(find.byType(TextFormField),findsNothing,
      reason:'Legacy email is hidden by default for new shoppers');
-   final signup=find.text('New to Teyza? Create account');
+   final signup=find.text('New to Teyza? Get started for free');
    await t.ensureVisible(signup);await t.tap(signup);await t.pumpAndSettle();
-   expect(find.text('Register as Shopper'),findsOneWidget);
-   expect(find.text('Register as Seller'),findsOneWidget);
-   await t.tap(find.text('Register as Shopper'));await t.pumpAndSettle();
-   expect(find.text('Create your account'),findsOneWidget);
+   expect(find.text('New to Teyza'),findsOneWidget);
+   await t.tap(find.byKey(const ValueKey('registration-shopper')));await t.pumpAndSettle();
    expect(find.text('Continue with Google'),findsOneWidget);
-   expect(find.textContaining('seller registration',findRichText:true),findsNothing);
+   expect(find.textContaining('separate email confirmation is not required'),findsOneWidget);
    expect(find.widgetWithText(TextFormField,'Email address'),findsNothing);
    expect(find.byType(TextFormField),findsNothing);
    final oldLogin=find.text('Already on Teyza? Sign in');
@@ -117,7 +113,7 @@ void main(){
    final legacy=find.text('Already registered with email?');
    await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
-   expect(find.byKey(const ValueKey('teyza-email-login')),findsOneWidget);
+   expect(find.text('Sign in'),findsOneWidget);
    // Flutter verifies debug foundation variables before addTearDown runs.
    // Reset the fake platform inside this widget test, not only on cleanup.
    debugDefaultTargetPlatformOverride=null;

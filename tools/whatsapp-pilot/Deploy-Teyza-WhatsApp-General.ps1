@@ -1,17 +1,12 @@
 #requires -Version 5.1
-<#
- Deploy only the three isolated WhatsApp functions in business-lift-3c19c.
- Default is read-only preflight. An explicit opt-in enables notifications
- for NEW approved, verified-phone and consenting sellers after activation.
- No historical sends, blind retries, Paystack/backend/Hosting publication.
- Never paste API credentials into this script.
-
- .\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-General.ps1
- .\tools\whatsapp-pilot\Deploy-Teyza-WhatsApp-General.ps1 -EnableForNewApprovals -ConfirmMetaTemplateApproved -ConfirmConsentPilotSuccessful
+<# Enable welcomes and menu replies for newly approved, consenting sellers.
+   Deploys only the webhook and the two approval workers to the existing project.
+   The successful pilot uses the same approved template, image and sender.
 #>
 [CmdletBinding()]
 param(
  [switch]$EnableForNewApprovals,
+ # Accepted for compatibility with the build 55 launcher.
  [switch]$ConfirmMetaTemplateApproved,
  [switch]$ConfirmConsentPilotSuccessful
 )
@@ -19,65 +14,80 @@ $ErrorActionPreference='Stop'
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $root
 $project='business-lift-3c19c'
-$branch='release/teyza-ads-web-qa-signed-20261111'
+$expectedBranch='release/teyza-ads-web-qa-signed-20261111'
 $envPath=Join-Path $root 'services\teyza-mobile-v39\.env.business-lift-3c19c'
 $firebase=Join-Path $root 'tools\admin-release\node_modules\firebase-tools\lib\bin\firebase.js'
-if((git branch --show-current).Trim() -ne $branch){throw "Check out the merged reviewed release branch: $branch"}
-if(-not (Test-Path $firebase)){throw 'Pinned firebase-tools missing. Install existing admin-release dependencies first.'}
-if(-not (Test-Path $envPath)){throw 'Project environment file missing; refusing to invent runtime config.'}
-if((Get-Content $envPath -Raw) -match '(?m)^TEYZA_ADMIN_DEPLOY_ONLY=1\s*$'){
- throw 'Admin-only deploy flag must not be enabled.'}
-$source=Get-Content (Join-Path $root 'services\teyza-mobile-v39\whatsapp-approval.js') -Raw
-if(-not $source.Contains('getRolloutMode') -or -not $source.Contains('getRolloutStartAt')){
- throw 'General sender source is missing. Pull the reviewed merged release.'}
-& node --test 'services/teyza-mobile-v39/whatsapp-approval.test.js' 'services/teyza-mobile-v39/whatsapp-pilot-routing.test.js' 'services/teyza-mobile-v39/whatsapp-webhook.test.js' 'services/teyza-mobile-v39/optional-whatsapp-gate.test.js'
-if($LASTEXITCODE -ne 0){throw 'WhatsApp regression tests failed; deployment prohibited.'}
-foreach($key in @('TEYZA_WHATSAPP_ACCESS_TOKEN','TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN','TEYZA_WHATSAPP_APP_SECRET')){
- & gcloud secrets describe $key --project $project --format='value(name)' | Out-Null
- if($LASTEXITCODE -ne 0){throw "Missing expected Secret Manager secret $key"}
-}
+if((git branch --show-current).Trim() -ne $expectedBranch){throw 'Pull the merged release branch before deploying.'}
+if($LASTEXITCODE -ne 0){throw 'Git branch check failed.'}
+if(git status --porcelain --untracked-files=no){throw 'Commit or stash tracked local edits before deploying the release.'}
+if(!(Test-Path $firebase)){throw 'Install the pinned tools/admin-release dependencies first.'}
+if(!(Test-Path $envPath)){throw 'Existing project .env file is required; unrelated configuration will be preserved.'}
+if(!(Test-Path (Join-Path $root 'services\teyza-mobile-v39\whatsapp-rollout.js'))){throw 'General rollout source missing. Pull the merged release.'}
+& node --test services/teyza-mobile-v39/whatsapp-approval.test.js services/teyza-mobile-v39/whatsapp-pilot-routing.test.js services/teyza-mobile-v39/whatsapp-webhook.test.js services/teyza-mobile-v39/optional-whatsapp-gate.test.js
+if($LASTEXITCODE -ne 0){throw 'WhatsApp regression tests failed.'}
 $original=[IO.File]::ReadAllText($envPath)
+if($original -match '(?m)^TEYZA_ADMIN_DEPLOY_ONLY=1\s*$'){throw 'Admin-only discovery override hides the WhatsApp workers.'}
 $required=@{
- 'TEYZA_WHATSAPP_PHONE_NUMBER_ID'='^[0-9]{5,25}$'
- 'TEYZA_WHATSAPP_API_VERSION'='^v[0-9]+\.[0-9]+$'
- 'TEYZA_WHATSAPP_TEMPLATE_NAME'='^[a-z0-9_]+$'
- 'TEYZA_WHATSAPP_TEMPLATE_LANGUAGE'='^[a-z]{2,3}(_[A-Z]{2})?$'
- 'TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL'='^https://(www\.)?teyza\.co\.za/'
+ 'TEYZA_WHATSAPP_PHONE_NUMBER_ID'='1466599163197469'
+ 'TEYZA_WHATSAPP_API_VERSION'='v26.0'
+ 'TEYZA_WHATSAPP_TEMPLATE_NAME'='teyza_seller_welcome_menu'
+ 'TEYZA_WHATSAPP_TEMPLATE_LANGUAGE'='en'
+ 'TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE'='true'
+ 'TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS'='ownerFirstName,shopName'
 }
 foreach($key in $required.Keys){
- $value=([regex]::Match($original,"(?m)^$key=([^\r\n]+)")).Groups[1].Value.Trim()
- if($value -notmatch $required[$key]){throw "Existing $key is absent or invalid."}
+ $value=[regex]::Match($original,"(?m)^$key=([^\r\n]+)").Groups[1].Value.Trim().Trim('"').Trim("'")
+ if($value -ne $required[$key]){throw "Existing pilot setting does not match the tested sender/template: $key"}
 }
-if(-not $EnableForNewApprovals){
- Write-Host 'Preflight PASS. No messages sent, no files modified and no Firebase functions deployed.' -ForegroundColor Green
+$image=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL=([^\r\n]+)').Groups[1].Value.Trim().Trim('"').Trim("'")
+if($image -notmatch '^https://(www\.)?teyza\.co\.za/'){throw 'The tested welcome image must use Teyza HTTPS hosting.'}
+$response=Invoke-WebRequest -Uri $image -Method Head -UseBasicParsing -MaximumRedirection 3
+if([int]$response.StatusCode -ne 200 -or $response.Headers['Content-Type'] -notmatch 'image/jpeg'){throw 'Welcome JPEG image is unavailable.'}
+foreach($key in @('TEYZA_WHATSAPP_WEBHOOK_VERIFY_TOKEN','TEYZA_WHATSAPP_APP_SECRET','TEYZA_WHATSAPP_ACCESS_TOKEN')){
+ & gcloud secrets describe $key --project $project --format='value(name)' | Out-Null
+ if($LASTEXITCODE -ne 0){throw "Required WhatsApp secret is unavailable: $key"}
+}
+if(!$EnableForNewApprovals){
+ Write-Host 'Read-only preflight passed. Use -EnableForNewApprovals to deploy general welcome delivery.'
  return
 }
-if(-not ($ConfirmMetaTemplateApproved -and $ConfirmConsentPilotSuccessful)){
- throw 'Activation requires both -ConfirmMetaTemplateApproved and -ConfirmConsentPilotSuccessful. Verify Meta APPROVED status and the real pilot before activation.'
+$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ALL_STARTED_AT=([0-9]+)\s*$')
+if(!$existing.Success){$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ROLLOUT_STARTED_AT=([0-9]+)\s*$')}
+if(!$existing.Success){$existing=[regex]::Match($original,'(?m)^TEYZA_WHATSAPP_GENERAL_STARTED_AT=([0-9]+)\s*$')}
+$startedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+if($existing.Success -and [long]$existing.Groups[1].Value -gt 0){$startedAt=[long]$existing.Groups[1].Value}
+# Build 55 restored the local .env after deployment. Recover its live cutoff
+# when it is not present locally, so an upgrade keeps queued approvals eligible.
+if(!$existing.Success){
+ $liveResult=@(& gcloud functions describe teyzaWhatsAppApprovalCreated --gen2 --region us-central1 --project $project --format='value(serviceConfig.environmentVariables.TEYZA_WHATSAPP_ROLLOUT_MODE)' 2>&1)
+ $liveMode=($liveResult -join "`n").Trim()
+ if($LASTEXITCODE -ne 0){
+  if($liveMode -match 'NOT_FOUND|not found|does not exist'){$liveMode=''}
+  else{throw 'Could not inspect the existing welcome worker. Check gcloud project access before enabling delivery.'}
+ }
+ if(([string]$liveMode).Trim() -in @('all','general')){
+  $liveStart=(& gcloud functions describe teyzaWhatsAppApprovalCreated --gen2 --region us-central1 --project $project --format='value(serviceConfig.environmentVariables.TEYZA_WHATSAPP_ALL_STARTED_AT)' 2>$null)
+  if($LASTEXITCODE -ne 0 -or ([string]$liveStart).Trim() -notmatch '^[0-9]+$' -or [long]$liveStart -le 0){throw 'Existing general delivery has no readable activation timestamp. Inspect its live configuration before redeploying.'}
+  $startedAt=[long]$liveStart
+ }
 }
-# This activation date is a no-backfill barrier; never reset it on repeated deploys.
-$existing=([regex]::Match($original,'(?m)^TEYZA_WHATSAPP_ALL_STARTED_AT=([^\r\n]+)')).Groups[1].Value
-$start=if($existing -match '^[0-9]{13}$'){$existing}else{[string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()}
 $updates=[ordered]@{
  'TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED'='1'
  'TEYZA_WHATSAPP_ROLLOUT_MODE'='all'
- 'TEYZA_WHATSAPP_ALL_STARTED_AT'=$start
+ 'TEYZA_WHATSAPP_ALL_STARTED_AT'=[string]$startedAt
 }
 $modified=$original
 foreach($key in $updates.Keys){$modified=[regex]::Replace($modified,"(?m)^$key=.*\r?\n?",'')}
 $modified=$modified.TrimEnd()+"`r`n"
 foreach($key in $updates.Keys){$modified+="$key=$($updates[$key])`r`n"}
-$backup="$envPath.before-whatsapp-general-$(Get-Date -Format yyyyMMddHHmmss)"
+$backup="$envPath.whatsapp-general-backup-$(Get-Date -Format yyyyMMddHHmmss)"
 Copy-Item $envPath $backup
-try {
- [IO.File]::WriteAllText($envPath,$modified)
- $env:FUNCTIONS_DISCOVERY_TIMEOUT='60'
- $scope='functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppApprovalCreated,functions:teyza-mobile:teyzaWhatsAppApprovalPending'
- & node $firebase deploy --project $project --config firebase.teyza-mobile-v39.json --only $scope --non-interactive
- if($LASTEXITCODE -ne 0){throw 'Scoped WhatsApp deploy failed. Inspect exact function logs; do not retry blindly.'}
- Write-Host "General WhatsApp enabled for new approved consenting sellers only, start $start." -ForegroundColor Green
- Write-Host "Operational settings retained in .env. Original backup: $backup"
-} catch {
- Write-Warning 'Live deploy status may be partial. Preserve logs and existing .env for reconciliation.'
- throw
-}
+# Keep the same cutoff in the local config, including after a partial failure.
+# Repeating deployment must not silently exclude approvals created meanwhile.
+[IO.File]::WriteAllText($envPath,$modified)
+$env:FUNCTIONS_DISCOVERY_TIMEOUT='60'
+$scope='functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppApprovalCreated,functions:teyza-mobile:teyzaWhatsAppApprovalPending'
+& node $firebase deploy --project $project --config firebase.teyza-mobile-v39.json --only $scope --non-interactive
+if($LASTEXITCODE -ne 0){throw "Deployment failed or partially completed. Keep the current activation timestamp when retrying. Original configuration backup: $backup"}
+Remove-Item $backup -Force
+Write-Host 'General WhatsApp welcome delivery enabled for new approvals. Check the next approval outbox and signed delivery receipt.'

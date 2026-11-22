@@ -11,18 +11,18 @@ function fixture(){
  }));
  let queue=Promise.resolve();
  const db={doc:path=>({path,get:async()=>({exists:records.has(path),data:()=>records.get(path)}),
-  update:async value=>records.set(path,{...records.get(path),...value})}),
+  update:async value=>records.set(path,{...records.get(path),...value}),
+  set:async value=>records.set(path,value)}),
   runTransaction:fn=>{const result=queue.then(async()=>{const writes=[];const tx={get:ref=>ref.get(),update:(ref,value)=>writes.push(()=>ref.update(value))};
    const result=await fn(tx);for(const write of writes)await write();return result;});queue=result.catch(()=>{});return result;}};
  let config={phoneNumberId:'123456',apiVersion:'v24.0',template:'teyza_seller_approved',language:'en'};
  let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false;
- let pilotUid='seller1',pilotStartAt=500,rolloutMode='pilot',rolloutStartAt=500;
+ let pilotUid='seller1',pilotStartAt=500,mode='pilot',generalStartedAt=500;
  const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,
-  getPilotUid:()=>pilotUid,getPilotStartAt:()=>pilotStartAt,
-  getRolloutMode:()=>rolloutMode,getRolloutStartAt:()=>rolloutStartAt,clock:()=>1000,
+  getPilotUid:()=>pilotUid,getPilotStartAt:()=>pilotStartAt,getRolloutMode:()=>mode,
+  getRolloutStartedAt:()=>generalStartedAt,clock:()=>1000,
   send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
- return {api,records,calls,disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},setPilotUid:v=>{pilotUid=v;},setPilotStartAt:v=>{pilotStartAt=v;},setRolloutMode:v=>{rolloutMode=v;},
-  setRolloutStartAt:v=>{rolloutStartAt=v;},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
+ return {api,db,records,calls,setMode:v=>{mode=v;},setGeneralStartedAt:v=>{generalStartedAt=v;},disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},setPilotUid:v=>{pilotUid=v;},setPilotStartAt:v=>{pilotStartAt=v;},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
 }
 test('An opted-in, currently approved seller with a verified phone gets one templated message',async()=>{
  const f=fixture();await Promise.all([f.api.deliver('submission1'),f.api.deliver('submission1')]);
@@ -83,25 +83,67 @@ test('Pilot never sends approvals created before activation time',async()=>{
  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'queued');
 });
 
-test('General WhatsApp mode sends only new approved opted-in sellers even without a pilot UID',async()=>{
- const f=fixture();
- f.setRolloutMode('all');f.setPilotUid('');
+
+test('General rollout welcomes each newly approved seller once, without a pilot UID',async()=>{
+ const f=fixture();f.setMode('general');f.setPilotUid('');
  await Promise.all([f.api.deliver('submission1'),f.api.deliver('submission1')]);
- assert.equal(f.calls.length,1);
- assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'accepted');
- await f.api.deliver('submission1');assert.equal(f.calls.length,1);
+ const uid='seller2',phone='+27821234567';
+ f.records.set('teyzaWhatsAppApprovalOutbox/submission2',{sellerUid:uid,submissionId:'submission2',status:'queued',createdAt:1000});
+ f.records.set('teyzaSellerAccounts/'+uid,{uid,phone,approvalStatus:'approved'});
+ f.records.set('teyzaWhatsAppPreferences/'+uid,{ownerUid:uid,phone,optedIn:true});
+ f.records.set('teyzaMobileVerification/'+uid,{ownerUid:uid,status:'approved',submissionId:'submission2'});
+ f.setAuth({phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]});
+ await Promise.all([f.api.deliver('submission2'),f.api.deliver('submission2')]);
+ assert.deepEqual(f.calls.map(c=>JSON.parse(c.options.body).to),['27712345678','27821234567']);
 });
-test('General rollout refuses an old approval, missing activation timestamp and invalid mode',async()=>{
- for(const [mode,started] of [['all',1001],['all',0],['all','invalid'],['off',500]]){
-  const f=fixture();f.setRolloutMode(mode);f.setRolloutStartAt(started);f.setPilotUid('');
-  await f.api.deliver('submission1');
-  assert.equal(f.calls.length,0);
-  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'queued');
+
+test('General rollout excludes old approvals and fails closed on an absent start time or unknown mode',async()=>{
+ for(const mode of ['general','off','invalid']){
+  const f=fixture();f.setMode(mode);f.setGeneralStartedAt(1001);
+  await f.api.deliver('submission1');assert.equal(f.calls.length,0);
+  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,mode==='general'?'skipped':'queued');
+ }
+ const f=fixture();f.setMode('general');f.setGeneralStartedAt('');
+ await f.api.deliver('submission1');assert.equal(f.calls.length,0);
+});
+
+test('General rollout still rejects revoked consent, disabled Auth users and mismatched verification owners',async()=>{
+ for(const change of [
+  f=>{f.records.get('teyzaWhatsAppPreferences/seller1').optedIn=false;},
+  f=>{f.records.get('teyzaMobileVerification/seller1').ownerUid='otherUid';},
+  f=>{f.setAuth({disabled:true,phoneNumber:'+27712345678',providerData:[{providerId:'phone',phoneNumber:'+27712345678'}]});}
+ ]){
+  const f=fixture();f.setMode('general');change(f);
+  await f.api.deliver('submission1');assert.equal(f.calls.length,0);
  }
 });
-test('General rollout retains consent, verification, approval and no-blind-retry constraints',async()=>{
- const f=fixture();f.setRolloutMode('all');f.setPilotUid('');
- f.records.get('teyzaWhatsAppPreferences/seller1').optedIn=false;
- await f.api.deliver('submission1');assert.equal(f.calls.length,0);
- assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'skipped');
+
+test('Pending recovery pages past older configuration failures and wraps its cursor',async()=>{
+ const f=fixture();f.setMode('general');f.disableConfig();
+ for(let i=0;i<30;i++)f.records.set('teyzaWhatsAppApprovalOutbox/submission'+String(i).padStart(3,'0'),
+  {sellerUid:'seller1',submissionId:'submission1',status:'queued',createdAt:1000});
+ f.db.collection=name=>{
+  let cursor='',limit=25;
+  const query={where:()=>query,orderBy:()=>query,startAfter:v=>{cursor=v;return query;},limit:v=>{limit=v;return query;},
+   get:async()=>({docs:[...f.records].filter(([p,v])=>p.startsWith(name+'/')&&
+    ['queued','configuration_required'].includes(v.status)&&p.split('/').at(-1)>cursor)
+    .sort(([a],[b])=>a.localeCompare(b)).slice(0,limit)
+    .map(([p])=>({id:p.split('/').at(-1),ref:f.db.doc(p)}))})};
+  return query;
+ };
+ await f.api.retryPending();
+ assert.equal([...f.records.values()].filter(v=>v.status==='configuration_required').length,25);
+ await f.api.retryPending();
+ assert.equal([...f.records.values()].filter(v=>v.status==='configuration_required').length,31);
+ assert.equal(f.records.get('teyzaWhatsAppDeliveryState/approval_pending').cursor,'');
+ assert.equal(f.calls.length,0);
+});
+
+
+test('Build 55 all mode keeps the same forward-only activation semantics',async()=>{
+ const f=fixture();f.setMode('all');f.setPilotUid('');
+ await f.api.deliver('submission1');await f.api.deliver('submission1');
+ assert.equal(f.calls.length,1);
+ const old=fixture();old.setMode('all');old.setGeneralStartedAt(1001);
+ await old.api.deliver('submission1');assert.equal(old.calls.length,0);
 });

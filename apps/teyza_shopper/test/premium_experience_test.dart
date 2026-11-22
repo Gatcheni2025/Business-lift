@@ -66,27 +66,18 @@ void main(){
     expect(find.byKey(const ValueKey('nav-shop')),findsOneWidget);
     expect(tester.takeException(),isNull);
   });
-  testWidgets('One login authenticates existing accounts before choosing workspaces',(tester) async {
-    await tester.binding.setSurfaceSize(const Size(390,900));
-    addTearDown(()=>tester.binding.setSurfaceSize(null));
+  testWidgets('Existing email uses the same account resolution as social sign-in',(tester) async {
     final session=FakeSession();
-    var openedOwner=false,openedShopper=false;
+    var resolved=false;
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(
-      session:session,onOpenOwner:()=>openedOwner=true,onShopperSignedIn:()=>openedShopper=true))));
-    expect(find.text('Sign in to Teyza'),findsOneWidget);
-    expect(find.text('Create an account'),findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('teyza-single-login')));
-    await tester.pumpAndSettle();
+      session:session,onAuthenticated:()=>resolved=true))));
     final legacy=find.text('Already registered with email?');
-    await tester.ensureVisible(legacy);
-    await tester.tap(legacy);await tester.pumpAndSettle();
+    await tester.ensureVisible(legacy);await tester.tap(legacy);await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(0),'shop@example.test');
     await tester.enterText(find.byType(TextFormField).at(1),'password123');
-    await tester.ensureVisible(find.byKey(const ValueKey('teyza-email-login')));
-    await tester.tap(find.byKey(const ValueKey('teyza-email-login')));
-    await tester.pumpAndSettle();
-    expect(openedOwner,false);
-    expect(openedShopper,true);
+    final button=find.text('Sign in');await tester.ensureVisible(button);
+    await tester.tap(button);await tester.pumpAndSettle();
+    expect(resolved,true);expect(session.sellerWorkspace,false);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });
@@ -210,8 +201,8 @@ void main(){
     await capture('shops');
     await tester.tap(find.text('Account'));await tester.pumpAndSettle();
     expect(find.text('Sign in to Teyza'),findsOneWidget);
-    expect(find.text('Create an account'),findsOneWidget);
-    expect(tester.takeException(),isNull);await capture('login-roles');
+    expect(find.text('Continue as Shop Owner'),findsNothing);
+    expect(tester.takeException(),isNull);await capture('login-unified');
     await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets('Local Businesses appear on home even when Spaza Shops is selected',(tester)async{

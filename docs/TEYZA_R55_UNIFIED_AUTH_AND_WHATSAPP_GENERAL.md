@@ -53,3 +53,8 @@ This preserves non-WhatsApp environment variables and retains the first activati
 - Repeat the same event, force webhook redelivery, cancel approval, change consent/phone, use a duplicate phone and simulate an uncertain Meta response. No second message or unauthorized action.
 - One seller without a valid template/Meta configuration remains configuration-required; nobody gets an invented message or an unverified 'delivered' status.
 - Google, Facebook, anonymous browsing, legacy sign-in and owner/agent role selection tested on real devices. Never submit a live Play/TestFlight update on the basis of Flutter compilation alone.
+
+
+## Follow-up in 1.0.45 (56)
+
+See [the current account-routing and WhatsApp deployment guide](TEYZA_1_0_44_UNIFIED_LOGIN_WHATSAPP.md). It includes the missing Facebook Android browser callbacks, actual shopper/seller account resolution, saved Google-shop claim return, paginated pending recovery, shared-number STOP handling and the current scoped deployment helper. Use the current guide for activation commands.

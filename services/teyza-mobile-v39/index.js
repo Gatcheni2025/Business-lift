@@ -90,7 +90,6 @@ function sellerCheckoutConfigured(){
 const pilotRouting=require('./whatsapp-pilot-routing').createPilotRouter({db,
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
  getRolloutMode:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot',
- getRolloutStartAt:()=>process.env.TEYZA_WHATSAPP_ALL_STARTED_AT||'',
  getPhoneNumberId:()=>process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
  getApiVersion:()=>process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
  getAccessToken:()=>whatsAppWebhookReplyToken.value()});
@@ -311,8 +310,8 @@ const whatsappApproval=require('./whatsapp-approval').createWhatsAppApproval({db
  getAuthUser:uid=>admin.auth().getUser(uid),getToken:()=>whatsappToken.value(),
  getPilotUid:()=>process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'',
  getRolloutMode:()=>process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot',
- getRolloutStartAt:()=>process.env.TEYZA_WHATSAPP_ALL_STARTED_AT||'',
  getPilotStartAt:()=>process.env.TEYZA_WHATSAPP_PILOT_STARTED_AT||'',
+ getRolloutStartedAt:()=>process.env.TEYZA_WHATSAPP_ALL_STARTED_AT||process.env.TEYZA_WHATSAPP_ROLLOUT_STARTED_AT||process.env.TEYZA_WHATSAPP_GENERAL_STARTED_AT||'',
  getConfig:()=>({phoneNumberId:process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
   apiVersion:process.env.TEYZA_WHATSAPP_API_VERSION||'',template:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
   language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
@@ -325,33 +324,8 @@ exports.teyzaWhatsAppApprovalCreated=onDocumentCreated({region:'us-central1',max
 // If the provider was not configured when approval happened, retry only those
 // entries that have never been submitted to WhatsApp.
 exports.teyzaWhatsAppApprovalPending=onSchedule({schedule:'every 10 minutes',timeZone:'Africa/Johannesburg',
- region:'us-central1',maxInstances:1,secrets:[whatsappToken]},async()=>{
- const mode=process.env.TEYZA_WHATSAPP_ROLLOUT_MODE||'pilot';
- if(mode==='all'){
-  const startedAt=Number(process.env.TEYZA_WHATSAPP_ALL_STARTED_AT||'');
-  if(!Number.isSafeInteger(startedAt)||startedAt<=0)return;
-  // Only new approvals; do not automatically backfill pre-rollout messages.
-  // The collection-created trigger handles every new approval. This scheduler
-  // repairs only configuration-required entries that were never sent.
-  for(const status of ['queued','configuration_required']){
-   const rows=await db.collection('teyzaWhatsAppApprovalOutbox')
-    .where('status','==',status).limit(100).get();
-   for(const row of rows.docs){
-    if(row.data()?.createdAt>=startedAt)await whatsappApproval.deliver(row.id);
-   }
-  }
-  return;
- }
- if(mode!=='pilot')return;
- const pilotUid=process.env.TEYZA_WHATSAPP_PILOT_SELLER_UID||'';
- if(!/^[A-Za-z0-9_-]{6,128}$/.test(pilotUid))return;
- const rows=await db.collection('teyzaWhatsAppApprovalOutbox')
-  .where('sellerUid','==',pilotUid).limit(100).get();
- for(const row of rows.docs){
-  if(['queued','configuration_required'].includes(row.data()?.status))
-   await whatsappApproval.deliver(row.id);
- }
-});
+ region:'us-central1',maxInstances:1,concurrency:1,timeoutSeconds:540,secrets:[whatsappToken]},
+ ()=>whatsappApproval.retryPending());
 }
 }
 const paystackCancellation=require('./paystack-cancellation').createPaystackCancellation({db,getSecret:()=>paystackKey.value()});

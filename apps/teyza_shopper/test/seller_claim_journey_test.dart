@@ -10,7 +10,7 @@ import 'shopper_ui_helpers.dart';
 class _Session extends ShopperSession {
  _Session({bool signedIn=true}){isReady=true;if(signedIn){userId='owner';idToken='token';emailVerified=true;}}
  @override Future<String> freshIdToken() async=>'token';
- void signInAsOwner(){userId='owner';idToken='token';emailVerified=true;useSellerWorkspace();}
+ void signInAsOwner(){userId='owner';idToken='token';emailVerified=true;notifyListeners();}
 }
 class _ShopRepo extends SellerFirestore {
  const _ShopRepo({required super.uid,required super.token});
@@ -22,6 +22,7 @@ class _Api extends TeyzaMobileApi {
  final actions=<String>[];
  @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
   actions.add(action);
+  if(action=='shopper_profile_read')return {'profile':{'ownerUid':session.userId}};
   if(action=='seller_claim_by_id')return {'claim':{'name':'Corner Shop','displayAddress':'12 Main Road, Durban',
    'claimSelection':'signed-claim','addressSelection':{'address':'12 Main Road, Durban','area':'Durban','city':'Durban',
     'addressSelection':'signed-address','placeId':'place-123','latitude':-29.85,'longitude':31.02}}};
