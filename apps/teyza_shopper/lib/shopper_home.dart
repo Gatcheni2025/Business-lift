@@ -2833,30 +2833,98 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         ])),
     ],
     section('About this shop',
-      subtitle:'Details supplied by this participating Teyza merchant'),
-    Container(padding:const EdgeInsets.all(14),
-      decoration:BoxDecoration(color:const Color(0xFFFFFAF3),
-        borderRadius:BorderRadius.circular(18),
-        border:Border.all(color:const Color(0xFFF1EDE5))),
-      child:Column(children:[
-        ListTile(dense:true,leading:const Icon(Icons.place_outlined,color:green),
-          title:const Text('Address'),subtitle:Text(shop.address.isNotEmpty?shop.address:shop.area)),
+      subtitle:'A closer look at '+shop.name+' · independently managed on Teyza'),
+    Container(key:ValueKey('teyza-premium-about-${shop.id}'),
+      decoration:BoxDecoration(color:Colors.white,
+        borderRadius:BorderRadius.circular(24),
+        border:Border.all(color:const Color(0xFFE7EBE5))),
+      clipBehavior:Clip.antiAlias,
+      child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Container(
+          padding:const EdgeInsets.fromLTRB(17,18,17,17),
+          decoration:const BoxDecoration(
+            gradient:LinearGradient(colors:[Color(0xFFFFF1E2),Color(0xFFFAFBF6)])),
+          child:Row(children:[
+            Container(width:62,height:62,
+              decoration:BoxDecoration(color:const Color(0xFFFFFFFF),
+                borderRadius:BorderRadius.circular(17)),
+              clipBehavior:Clip.antiAlias,
+              child:shop.photo.isNotEmpty
+                ?photo(shop.photo,size:90)
+                :const Icon(Icons.storefront_rounded,color:green,size:30)),
+            const SizedBox(width:13),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(shop.name,maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:ink,fontSize:18,fontWeight:FontWeight.w900)),
+              const SizedBox(height:7),
+              Text(shop.shopCategory=='variety'?'Local business':
+                   shop.shopCategory=='wholesale'?'Wholesale supplier':'Community spaza shop',
+                style:const TextStyle(color:muted,fontSize:12)),
+              const SizedBox(height:5),
+              Row(children:[
+                Icon(shop.identityVerified?Icons.verified_rounded:Icons.info_outline_rounded,
+                  size:15,color:shop.identityVerified?green:muted),
+                const SizedBox(width:5),
+                Expanded(child:Text(shop.identityVerified?'Teyza verified business':'Business verification not confirmed',
+                  style:TextStyle(color:shop.identityVerified?green:muted,
+                    fontWeight:FontWeight.w800,fontSize:11)))
+              ])
+            ]))
+          ])),
+        Padding(padding:const EdgeInsets.fromLTRB(15,12,15,2),
+          child:Wrap(spacing:7,runSpacing:7,children:[
+            Chip(avatar:const Icon(Icons.place_outlined,size:17,color:green),
+              label:Text(shop.area.isNotEmpty?shop.area:'Local area',style:const TextStyle(fontSize:11)),
+              visualDensity:VisualDensity.compact),
+            if(shop.pickup)const Chip(avatar:Icon(Icons.shopping_bag_outlined,size:17,color:green),
+              label:Text('Collect in store',style:TextStyle(fontSize:11)),
+              visualDensity:VisualDensity.compact),
+            if(shop.delivery)const Chip(avatar:Icon(Icons.local_shipping_outlined,size:17,color:green),
+              label:Text('Delivery available',style:TextStyle(fontSize:11)),
+              visualDensity:VisualDensity.compact)
+          ])),
+        ListTile(key:ValueKey('shop-about-address-${shop.id}'),
+          leading:const Icon(Icons.location_on_outlined,color:green),
+          title:const Text('Visit us',style:TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:Text(shop.address.isNotEmpty?shop.address:shop.area),
+          trailing:const Icon(Icons.directions_outlined,color:green),
+          onTap:()=>openDirections(name:shop.name,address:shop.address,
+            area:shop.area,latitude:shop.latitude,longitude:shop.longitude)),
+        ListTile(leading:const Icon(Icons.schedule_outlined,color:green),
+          title:const Text('Opening hours',style:TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:Text(shopHoursLabel(shop.hours),style:const TextStyle(color:muted))),
         if(shop.hours.length==7)
           ExpansionTile(tilePadding:const EdgeInsets.symmetric(horizontal:16),
-            leading:const Icon(Icons.schedule_outlined,color:green),
-            title:const Text('Weekly opening hours'),
+            title:const Text('See weekly opening times',
+              style:TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:ink)),
             children:[
               for(var day=0;day<7;day++)
-                Padding(padding:const EdgeInsets.fromLTRB(18,4,18,4),
+                Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
                   child:Row(children:[
-                    Expanded(child:Text(const ['Monday','Tuesday','Wednesday','Thursday',
-                      'Friday','Saturday','Sunday'][day],
+                    Expanded(child:Text(const ['Monday','Tuesday','Wednesday',
+                      'Thursday','Friday','Saturday','Sunday'][day],
                       style:const TextStyle(fontSize:12,color:ink))),
                     Text(shop.hours[day].closed?'Closed':
                       '${shop.hours[day].open} – ${shop.hours[day].close}',
                       style:const TextStyle(fontSize:12,color:muted)),
                   ]))
             ]),
+        Padding(padding:const EdgeInsets.fromLTRB(15,4,15,16),
+          child:Row(children:[
+            Expanded(child:OutlinedButton.icon(
+              onPressed:()=>openDirections(name:shop.name,address:shop.address,
+                area:shop.area,latitude:shop.latitude,longitude:shop.longitude),
+              icon:const Icon(Icons.near_me_outlined,size:18),
+              label:const Text('Directions'))),
+            if(shop.liveChat&&ShopperChatApi.isTeyzaShop(shop.id))...[
+              const SizedBox(width:9),
+              Expanded(child:FilledButton.icon(
+                style:FilledButton.styleFrom(backgroundColor:green),
+                onPressed:()=>chatWithShop(shop),
+                icon:const Icon(Icons.chat_outlined,size:18),
+                label:const Text('Message shop')))
+            ]
+          ]))
       ])),
     if(shop.shopCategory=='spaza')merchantServices(shop),
     if(shop.shopCategory=='wholesale')
