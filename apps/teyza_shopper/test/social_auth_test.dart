@@ -33,6 +33,8 @@ class FakeEmailAfterGoogleErrorSession extends ShopperSession {
 }
 void main(){
  testWidgets('Successful email sign-in removes an earlier Google OAuth mismatch warning',(t)async{
+  await t.binding.setSurfaceSize(const Size(390,900));
+  addTearDown(()=>t.binding.setSurfaceSize(null));
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeEmailAfterGoogleErrorSession();
