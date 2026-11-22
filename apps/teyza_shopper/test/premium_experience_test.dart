@@ -178,9 +178,20 @@ void main(){
     expect(tester.takeException(),isNull);
     await capture('essentials');
     // Shops remain in the horizontal home shelf, with no View all redirect.
-    for(var attempt=0;attempt<9&&
+    // This section is lazy and may sit outside the current viewport after
+    // scrolling far down through essentials. Return to Home using the tab,
+    // which is a stable user action rather than assuming a fixed scroll length.
+    await tester.tap(find.byKey(const ValueKey('nav-home')));
+    await tester.pumpAndSettle();
+    final home=find.byKey(const PageStorageKey<String>('shopper-home'));
+    for(var attempt=0;attempt<25&&
         find.byKey(const ValueKey('teyza-spaza-grid')).evaluate().isEmpty;attempt++){
-      await tester.drag(find.byType(ListView).first,const Offset(0,600));
+      await tester.drag(home,const Offset(0,200));
+      await tester.pumpAndSettle();
+    }
+    for(var attempt=0;attempt<15&&
+        find.byKey(const ValueKey('teyza-spaza-grid')).evaluate().isEmpty;attempt++){
+      await tester.drag(home,const Offset(0,-170));
       await tester.pumpAndSettle();
     }
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
