@@ -141,6 +141,8 @@ void main(){
     final profileScroll=find.descendant(of:profile,matching:find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.text('White bread · 700 g'),180,scrollable:profileScroll);
     expect(find.text('White bread · 700 g'),findsOneWidget);expect(find.text('R0.00'),findsNothing);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds:120));
     expect(tester.takeException(),isNull);await capture('shopper-selected-range');
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();
   });

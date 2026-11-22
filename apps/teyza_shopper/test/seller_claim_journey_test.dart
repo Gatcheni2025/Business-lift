@@ -43,7 +43,11 @@ void main(){
   for(var i=0;i<12&&claim.evaluate().isEmpty;i++){
    await tester.drag(find.byType(ListView).first,const Offset(0,-220));await tester.pumpAndSettle();
   }
-  expect(claim,findsOneWidget);await tester.ensureVisible(claim);await tester.tap(claim);await tester.pumpAndSettle();
+  expect(claim,findsOneWidget);
+  await Scrollable.ensureVisible(tester.element(claim),alignment:0.3);
+  await tester.pumpAndSettle();
+  expect(claim.hitTestable(),findsOneWidget);
+  await tester.tap(claim.hitTestable());await tester.pumpAndSettle();
   expect(api.actions,contains('seller_claim_by_id'));
   expect(find.text('Google Maps: Corner Shop'),findsOneWidget);
   expect(find.text('Shop address from Google Maps'),findsOneWidget);
@@ -62,7 +66,10 @@ void main(){
   final card=find.byKey(const ValueKey('nearby-google-1'));await revealShopperHome(tester,card);await tester.tap(card);await tester.pumpAndSettle();
   final claim=find.text('Own this shop? Claim it on Teyza');
   for(var i=0;i<12&&claim.evaluate().isEmpty;i++){await tester.drag(find.byType(ListView).first,const Offset(0,-220));await tester.pumpAndSettle();}
-  await tester.ensureVisible(claim);await tester.tap(claim);await tester.pumpAndSettle();
+  await Scrollable.ensureVisible(tester.element(claim),alignment:0.3);
+  await tester.pumpAndSettle();
+  expect(claim.hitTestable(),findsOneWidget);
+  await tester.tap(claim.hitTestable());await tester.pumpAndSettle();
   expect(find.text('Continue as Shop Owner'),findsOneWidget);
   session.signInAsOwner();await tester.pumpAndSettle();
   expect(api.actions,contains('seller_claim_by_id'));expect(find.text('Google Maps: Corner Shop'),findsOneWidget);
