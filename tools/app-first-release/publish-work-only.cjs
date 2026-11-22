@@ -8,7 +8,7 @@ const zlib=require('node:zlib');
 const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
-const paths=['/work.html','/js/work.js','/js/work-discovery.mjs','/js/work-map.mjs','/assets/agent-map-first.css'];
+const paths=['/index.html','/agents.html','/work.html','/js/work.js','/js/work-discovery.mjs','/js/work-map.mjs','/assets/agent-map-first.css'];
 const root=path.resolve(__dirname,'../../web/app-first/public');
 const backupPath=path.resolve(__dirname,'../../hosting-backup-teyza-work-r90.json');
 const files=()=>new Map(paths.map(p=>{
@@ -77,11 +77,11 @@ async function deploy(client){
  }
  await client.hosting('PATCH','/'+candidate,{status:'FINALIZED'},{updateMask:'status'});
  if(await current(client)!==source)throw Error('Another release went live; no release was published.');
- const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Scoped Teyza Work map, guided registration and R90 verification'},{versionName:candidate});
+ const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Teyza agent app handoff and homepage pricing copy'},{versionName:candidate});
  if(await current(client)!==candidate)throw Error('Published version not confirmed.');
  Object.assign(backup,{releaseName:release.name,publishedAt:new Date().toISOString()});
  fs.writeFileSync(backupPath,JSON.stringify(backup,null,2));
- console.log('Published only Teyza Work UI and map assets; Admin, pay, ads and all other files preserved.');
+ console.log('Published the Teyza homepage and agent pages; Admin, pay, ads and all other files preserved.');
  console.log('https://teyza.co.za/work.html');
 }
 async function rollback(client){

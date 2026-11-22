@@ -1,8 +1,7 @@
 import {nearbyPanel,newSession} from './work-discovery.mjs';
-import {startPhone,confirmPhone,clearPhone} from './work-phone.mjs';
 import {auth,ready,api,el,label} from './work-auth.mjs';
-import {onAuthStateChanged,GoogleAuthProvider,OAuthProvider,signInWithPopup,signInWithEmailAndPassword,createUserWithEmailAndPassword,sendEmailVerification,sendPasswordResetEmail,signOut} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
-const $=id=>document.getElementById(id),sections=['login','verify','application','pending','workspace'];
+import {onAuthStateChanged,GoogleAuthProvider,OAuthProvider,signInWithPopup,signOut} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
+const $=id=>document.getElementById(id),sections=['login','application','pending','workspace'];
 let epoch=0,busy=false,isAdmin=false,profile=null,visits=[],selected=null,next=null,profiles=[],reviews=[],nextProfiles=null,nextReviews=null,stream=null,capture=null,imageUrl=null,reviewAgent=null;
 const nearbyError=e=>notice(e.message||'Nearby search is temporarily unavailable.',true);
 const agentNearby=nearbyPanel($('agentNearby'),{onError:nearbyError,onStartVisit:record=>newVisit(record)}),adminNearby=nearbyPanel($('adminNearby'),{admin:true,onError:nearbyError});
@@ -12,12 +11,20 @@ async function run(fn){if(busy)return;busy=true;const ticket=epoch,buttons=[...d
 function button(text,fn,cls='outline'){const b=el('button',text,cls);b.type='button';b.addEventListener('click',()=>run(fn));return b;}
 function input(form,name,title,type='text',required=true){const l=el('label',title),i=el('input');i.name=name;i.type=type;i.required=required;l.append(i);form.append(l);return i;}
 function checkbox(form,name,text){const l=el('label',undefined,'check'),i=el('input');i.type='checkbox';i.name=name;i.required=true;l.append(i,el('span',text));form.append(l);return i;}
-function clearPrivate(){agentNearby.clear();adminNearby.clear();reviewAgent=null;$('profileEditor').hidden=true;$('profileEditor').replaceChildren();stopCamera();if(imageUrl)URL.revokeObjectURL(imageUrl);imageUrl=null;$('privateImage').removeAttribute('src');if($('imageDialog').open)$('imageDialog').close();visits=[];selected=null;profiles=[];reviews=[];next=nextProfiles=nextReviews=null;$('visitList').replaceChildren();const empty=el('div',undefined,'empty');empty.append(el('span','↗','empty-icon'),el('h2','Your next shop starts here'),el('p','Select a visit or start a new one. Every task stays connected to your own agent account.'));$('visitDetail').replaceChildren(empty);$('reviewDetail').replaceChildren();$('agentApplications').replaceChildren();$('workReviews').replaceChildren();$('password').value='';}
+function clearPrivate(){agentNearby.clear();adminNearby.clear();reviewAgent=null;$('profileEditor').hidden=true;$('profileEditor').replaceChildren();stopCamera();if(imageUrl)URL.revokeObjectURL(imageUrl);imageUrl=null;$('privateImage').removeAttribute('src');if($('imageDialog').open)$('imageDialog').close();visits=[];selected=null;profiles=[];reviews=[];next=nextProfiles=nextReviews=null;$('visitList').replaceChildren();const empty=el('div',undefined,'empty');empty.append(el('span','↗','empty-icon'),el('h2','Your next shop starts here'),el('p','Select a visit or start a new one. Every task stays connected to your own agent account.'));$('visitDetail').replaceChildren(empty);$('reviewDetail').replaceChildren();$('agentApplications').replaceChildren();$('workReviews').replaceChildren();}
 function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null;capture=null;$('camera').srcObject=null;$('photoConsent').checked=false;if($('cameraDialog').open)$('cameraDialog').close();}
 async function refreshAccount(){const ticket=epoch;const r=await api('agent_profile');if(ticket!==epoch)return;profile=r.profile;$('notice').hidden=true;const choices=$('province');choices.replaceChildren(...r.provinces.map(p=>{const o=el('option',p);o.value=p;return o;}));
- if((!profile||!profile.hasDocuments||profile.status==='rejected')&&profile?.status!=='approved'&&!isAdmin){show('application');return;}if(profile?.status!=='approved'&&!isAdmin){show('pending');$('pendingTitle').textContent=profile.status==='pending'?'Application received — awaiting Admin approval':'Application '+label(profile.status);$('pendingText').textContent=(profile.reviewNote?profile.reviewNote+' ':'')+'Your application is linked to this signed-in Teyza account. Once Admin approves its ID/passport and CV, select Check approval to open your map and field-work tools.';const identity=$('pendingAccount');if(identity)identity.textContent='Account: '+(auth.currentUser?.email||auth.currentUser?.phoneNumber||'Phone sign-in')+' · ID '+auth.currentUser.uid.slice(-8);return;}
- show('workspace');$('greeting').textContent=profile?.name?'Welcome, '+profile.name.split(' ')[0]:'Field team review';$('reviewMode').hidden=!isAdmin;$('agentMode').hidden=profile?.status!=='approved';$('sellerAdmin').hidden=!isAdmin;
- if(profile?.status==='approved'){$('pendingAccount')?.replaceChildren();await loadVisits();$('agentArea').hidden=false;$('reviewArea').hidden=true;}else await openReview();
+ if((!profile||!profile.hasDocuments||profile.status==='rejected')&&profile?.status!=='approved'&&!isAdmin){show('application');return;}if(!isAdmin){
+  show('pending');
+  $('pendingTitle').textContent=profile?.status==='approved'?'You’re approved to work in the Teyza app':profile.status==='pending'?'Application received — awaiting Admin approval':'Application '+label(profile.status);
+  $('pendingText').textContent=(profile.reviewNote?profile.reviewNote+' ':'')+'Download or update Teyza and sign in with the same method and account you used here. Once approved, choose Field Agent if Teyza asks you to select an account.';
+  const identity=$('pendingAccount');
+  if(identity)identity.textContent='Account: '+(auth.currentUser?.email||auth.currentUser?.phoneNumber||'Phone sign-in')+' · ID '+auth.currentUser.uid.slice(-8);
+  return;
+ }
+ show('workspace');$('greeting').textContent='Field team review';
+ $('reviewMode').hidden=false;$('sellerAdmin').hidden=false;
+ await openReview();
 }
 async function loadRewards(){
  const summary=$('rewardSummary'),explanation=$('rewardExplanation');
@@ -79,12 +86,58 @@ function reviewVisit(v){const root=$('reviewDetail');root.hidden=false;root.repl
 }
 $('allReviews').onclick=()=>run(async()=>{reviewAgent=null;await loadReviews();});
 $('editProfile').onclick=()=>{const root=$('profileEditor');if(!root.hidden){root.hidden=true;return;}root.hidden=false;root.replaceChildren(el('span','MY DETAILS','eyebrow'),el('h2','Your contact and working details'),el('p','Keep these details current for Teyza’s field team.','tiny'));const f=el('form');for(const [key,title,type] of [['name','Full name','text'],['phone','Mobile number','tel'],['address','Home or working address','text'],['area','Town or working area','text']]){const i=input(f,key,title,type);i.value=profile?.[key]||'';}const l=el('label','Province'),s=el('select');s.name='province';s.required=true;for(const o of $('province').options){const n=el('option',o.textContent);n.value=o.value;s.append(n);}s.value=profile?.province||'';l.append(s);f.append(l);const b=el('button','Save details','primary');b.type='submit';f.append(b);f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;run(async()=>{await api('agent_profile_update',{...Object.fromEntries(new FormData(f)),revision:profile.revision});root.hidden=true;await refreshAccount();notice('Your details were saved.');});};root.append(f);};
-$('loginForm').onsubmit=e=>{e.preventDefault();run(async()=>{await ready;await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);});};$('google').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new GoogleAuthProvider());});$('apple').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new OAuthProvider('apple.com'));});$('sendPhoneCode').onclick=()=>run(async()=>{await startPhone($('signInPhone').value);$('phoneCodePanel').hidden=false;notice('SMS code sent. Enter it below.');});$('confirmPhoneCode').onclick=()=>run(async()=>{await confirmPhone($('phoneCode').value);});$('createAccount').onclick=()=>run(async()=>{if(!$('loginForm').reportValidity())return;await ready;const r=await createUserWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);await sendEmailVerification(r.user);notice('Verification email sent. Open it, then return to check your account.');});$('resetPassword').onclick=()=>run(async()=>{const email=$('email').value.trim();if(!email)throw Error('Enter your email address first.');await sendPasswordResetEmail(auth,email);notice('If your account uses an email password, check your inbox for reset instructions.');});$('logout').onclick=()=>run(()=>signOut(auth));$('sendVerification').onclick=()=>run(async()=>{await sendEmailVerification(auth.currentUser);notice('Verification email sent.');});$('checkVerification').onclick=()=>run(async()=>{await auth.currentUser.reload();await auth.currentUser.getIdToken(true);if(!auth.currentUser.emailVerified&&!auth.currentUser.phoneNumber)throw Error('Email verification is not complete yet.');await refreshAccount();});$('checkApproval').onclick=()=>run(async()=>{await auth.currentUser?.getIdToken(true);await refreshAccount();});
-$('refresh').onclick=()=>run(async()=>{if(!$('reviewArea').hidden)await openReview();else if(selected)await selectVisit(selected.id);else await refreshAccount();});$('newVisit').onclick=()=>newVisit();$('moreVisits').onclick=()=>run(()=>loadVisits(true));$('moreProfiles').onclick=()=>run(()=>loadProfiles(true));$('moreReviews').onclick=()=>run(()=>loadReviews(true));$('reviewMode').onclick=()=>run(openReview);$('agentMode').onclick=()=>{ $('reviewArea').hidden=true;$('agentArea').hidden=false;};async function encodeApplicationFile(file,label,max){
- if(!(file instanceof File)||!file.size||file.size>max)throw Error('Attach a valid '+label+' file within the stated size limit.');
+$('google').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new GoogleAuthProvider());});
+$('apple').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new OAuthProvider('apple.com'));});
+$('logout').onclick=()=>run(()=>signOut(auth));
+$('checkApproval').onclick=()=>run(async()=>{await auth.currentUser?.getIdToken(true);await refreshAccount();});
+async function encodeApplicationFile(file,label,max){
+ if(!(file instanceof File)||!file.size)throw Error('Attach a valid '+label+' file.');
  const permitted=label==='CV'?['application/pdf']:['application/pdf','image/png','image/jpeg'];
  if(!permitted.includes(file.type))throw Error('Choose a PDF'+(label==='ID/passport'?', JPG or PNG':'')+' for '+label+'.');
+ if(file.size>max&&file.type.startsWith('image/')){
+  const image=await createImageBitmap(file).catch(()=>{throw Error('Could not open the ID image. Try another JPG or PNG.');});
+  const canvas=document.createElement('canvas');
+  try{
+   for(const longEdge of [2400,2000,1600]){
+    const scale=Math.min(1,longEdge/Math.max(image.width,image.height));
+    canvas.width=Math.max(1,Math.round(image.width*scale));
+    canvas.height=Math.max(1,Math.round(image.height*scale));
+    const context=canvas.getContext('2d',{alpha:false});
+    if(!context)break;
+    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+    context.drawImage(image,0,0,canvas.width,canvas.height);
+    const jpeg=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.88));
+    if(jpeg?.size&&jpeg.size<=max&&jpeg.type==='image/jpeg'){
+     file=new File([jpeg],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:jpeg.type});
+     break;
+    }
+   }
+  }finally{image.close();canvas.width=canvas.height=0;}
+ }
+ if(file.size>max)throw Error(label+' exceeds '+max/1000000+' MB. '+(file.type==='application/pdf'?'Export a smaller PDF and try again.':'Choose a smaller, readable image.'));
  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(Error('Could not read the '+label+' file.'));reader.onload=()=>resolve({name:file.name,mime:file.type,base64:String(reader.result).split(',')[1]});reader.readAsDataURL(file);});
 }
-$('applyForm').onsubmit=e=>{e.preventDefault();if(!$('applyForm').reportValidity())return;run(async()=>{const data=Object.fromEntries(new FormData($('applyForm')));data.identityFile=await encodeApplicationFile(data.identityFile,'ID/passport',1200000);data.cvFile=await encodeApplicationFile(data.cvFile,'CV',1800000);await api('agent_apply',{...data,consent:true});await refreshAccount();});};
-onAuthStateChanged(auth,async user=>{epoch++;clearPhone();$('phoneCode').value='';$('signInPhone').value='';$('phoneCodePanel').hidden=true;clearPrivate();isAdmin=false;profile=null;$('logout').hidden=!user;$('refresh').hidden=!user;$('notice').hidden=true;if(!user){show('login');return;}if(!user.emailVerified&&!user.phoneNumber){show('verify');return;}try{const ticket=epoch,token=await user.getIdTokenResult();if(ticket!==epoch)return;isAdmin=token.claims.teyzaAdmin===true;await refreshAccount();}catch(e){notice(e.message,true);show('pending');$('pendingTitle').textContent='Workspace unavailable';$('pendingText').textContent='Refresh to retry. If a review session expired, sign out and sign in again.';}});
+$('applyForm').onsubmit=e=>{
+ e.preventDefault();
+ const form=$('applyForm');
+ if(!form.reportValidity())return;
+ run(async()=>{
+  const ticket=epoch,progress=$('applicationProgress'),status=$('applicationProgressText');
+  progress.hidden=false;status.textContent='Preparing your documents…';
+  try{
+   const data=Object.fromEntries(new FormData(form));
+   data.identityFile=await encodeApplicationFile(data.identityFile,'ID/passport',3000000);
+   data.cvFile=await encodeApplicationFile(data.cvFile,'CV',5000000);
+   if(ticket!==epoch)return;
+   status.textContent='Uploading your application…';
+   await api('agent_apply',{...data,consent:true});
+   if(ticket!==epoch)return;
+   form.reset();
+   show('pending');
+   $('pendingTitle').textContent='Application received';
+   $('pendingText').textContent='Download Teyza and sign in with the same account. Field Agent access appears after approval.';
+   $('pendingAccount')?.replaceChildren();
+  }finally{progress.hidden=true;status.textContent='';}
+ });
+};
+onAuthStateChanged(auth,async user=>{epoch++;clearPrivate();isAdmin=false;profile=null;$('logout').hidden=!user;$('refresh').hidden=!user;$('notice').hidden=true;if(!user){show('login');return;}if(!user.emailVerified&&!user.phoneNumber){show('login');notice('Use a verified Google or Apple account to continue.',true);return;}try{const ticket=epoch,token=await user.getIdTokenResult();if(ticket!==epoch)return;isAdmin=token.claims.teyzaAdmin===true;await refreshAccount();}catch(e){notice(e.message,true);show('pending');$('pendingTitle').textContent='Workspace unavailable';$('pendingText').textContent='Refresh to retry. If a review session expired, sign out and sign in again.';}});
