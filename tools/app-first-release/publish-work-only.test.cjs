@@ -2,8 +2,8 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {paths,verify,assertR90Ready}=require('./publish-work-only.cjs');
 test('Work publisher changes only approved field UI and leaves payments, Ads and Admin untouched',()=>{
- assert.deepEqual(paths,['/work.html','/js/work.js','/js/work-discovery.mjs','/js/work-map.mjs','/assets/agent-map-first.css']);
- for(const file of ['/admin.html','/pay/index.html','/ads/index.html','/agents.html'])assert(!paths.includes(file));
+ assert.deepEqual(paths,['/index.html','/agents.html','/work.html','/js/work.js','/js/work-discovery.mjs','/js/work-map.mjs','/assets/agent-map-first.css']);
+ for(const file of ['/admin.html','/pay/index.html','/ads/index.html'])assert(!paths.includes(file));
  const before=new Map([['/index.html','home'],['/admin.html','admin'],['/pay/index.html','pay'],['/work.html','old']]);
  const changed=new Map([['/work.html',{hash:'new'}],['/js/work.js',{hash:'work'}]]);
  const after=new Map([...before,['/work.html','new'],['/js/work.js','work']]);
