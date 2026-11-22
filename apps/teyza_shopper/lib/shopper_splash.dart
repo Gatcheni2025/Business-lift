@@ -4,7 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 /// Branded first-paint loading experience. The home screen is shown only after
 /// initial discovery and important image caches are ready (or time out).
 class ShopperLaunchScreen extends StatefulWidget {
-  const ShopperLaunchScreen({super.key});
+  final String message;
+  const ShopperLaunchScreen({super.key,this.message='Getting your local shops ready…'});
   @override
   State<ShopperLaunchScreen> createState() => _ShopperLaunchScreenState();
 }
@@ -48,8 +49,10 @@ class _ShopperLaunchScreenState extends State<ShopperLaunchScreen>
           minHeight:4,color:Color(0xFFFFC441),
           backgroundColor:Color(0xFF2B6257))),
         const SizedBox(height:14),
-        const Text('Getting your local shops ready…',
-          style:TextStyle(color:Color(0xFFDBF5EC),fontSize:13))
+        AnimatedSwitcher(duration:const Duration(milliseconds:240),
+          child:Text(widget.message,key:ValueKey<String>(widget.message),
+            textAlign:TextAlign.center,
+            style:const TextStyle(color:Color(0xFFDBF5EC),fontSize:13)))
       ])),
       const Positioned(left:0,right:0,bottom:20,child:Text(
         'SPAZA SHOPS  •  OTHER RETAIL  •  DELIVERY',
