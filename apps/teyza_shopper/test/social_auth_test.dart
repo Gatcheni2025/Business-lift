@@ -44,7 +44,7 @@ void main(){
   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
   await t.enterText(find.byType(TextFormField).at(1),'password123');
-  await t.tap(find.text('Sign in to Teyza'));await t.pumpAndSettle();
+  await t.tap(find.byKey(const ValueKey('teyza-email-login')));await t.pumpAndSettle();
   expect(session.userId,'email-user');
   // The new social card is taller; after the legacy login button is tapped,
   // the list can remain scrolled down even though the account is authenticated.
