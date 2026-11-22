@@ -2805,9 +2805,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                       icon:Icons.local_grocery_store_outlined))),
                     Text(item.name,maxLines:1,overflow:TextOverflow.ellipsis,
                       style:const TextStyle(color:ink,fontWeight:FontWeight.w800,fontSize:12)),
-                    Text(rand(item.priceCents),
+                    Text(item.priceCents>0?rand(item.priceCents):'Ask for price',
                       style:const TextStyle(color:Color(0xFFE87531),
-                        fontSize:15,fontWeight:FontWeight.w900)),
+                        fontSize:13,fontWeight:FontWeight.w900)),
                   ])))));
           })),
     ],
