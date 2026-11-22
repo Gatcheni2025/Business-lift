@@ -458,11 +458,12 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(mounted)setState(()=>_launchStep='Finding shops in your area…');
     try {
       final initialCatalogue=load();
+      // Restore the saved address even when background polling is disabled
+      // (e.g. an explicit/offline shopper session). Loading only the
+      // catalogue caused the saved delivery location to disappear on startup.
       final initialArea=widget.initialArea!=null
         ?_restoreSavedArea()
-        :widget.enableBackgroundServices
-          ?restoreDeliveryProfile()
-          :Future<void>.value();
+        :restoreDeliveryProfile();
       await Future.wait<void>([initialCatalogue,initialArea])
         .timeout(const Duration(seconds:20));
     } catch (_) {/* Show clear directory / catalogue errors on the home feed. */}
