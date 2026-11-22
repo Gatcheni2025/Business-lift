@@ -2834,11 +2834,19 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         final added=basketShop?.id==shop.id?(cart[p.id]??0):0;
         return Material(color:Colors.white,borderRadius:BorderRadius.circular(20),child:Padding(
           padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Expanded(child:Center(child:photo(p.picture,size:116,icon:Icons.shopping_bag_outlined))),
+            Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(15),
+              child:Stack(fit:StackFit.expand,children:[
+                const ColoredBox(color:Color(0xFFFFF5E9)),
+                Center(child:photo(p.picture,size:128,
+                  icon:Icons.shopping_bag_outlined)),
+                if(canOrder)const Positioned(top:5,right:5,
+                  child:Icon(Icons.check_circle,color:Color(0xFF11825E),size:19)),
+              ]))),
             const SizedBox(height:8),Text(p.name,maxLines:2,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(fontWeight:FontWeight.w800,fontSize:13)),
+              style:const TextStyle(fontWeight:FontWeight.w900,fontSize:13)),
             const SizedBox(height:5),Text(p.priceCents>0?rand(p.priceCents):'Ask shop for price',
-              style:TextStyle(fontSize:p.priceCents>0?17:13,color:ink,fontWeight:FontWeight.w800)),
+              style:TextStyle(fontSize:p.priceCents>0?18:13,
+                color:p.priceCents>0?const Color(0xFFE87531):ink,fontWeight:FontWeight.w900)),
             Text(!p.inStock?'Out of stock':p.priceCents>0?'${p.stock} in stock':'Ask about availability',
               style:TextStyle(color:p.inStock?muted:Colors.deepOrange,fontSize:11)),
             const SizedBox(height:6),SizedBox(width:double.infinity,child:FilledButton(
