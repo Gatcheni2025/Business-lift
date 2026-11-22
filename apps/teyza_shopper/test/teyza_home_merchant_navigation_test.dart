@@ -87,11 +87,12 @@ void main(){
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Compact merchant category includes view all and handles narrow screens',
+  testWidgets('Community shop shelf swipes left and right without View all redirect',
     (tester)async{
     var opened=0,all=0;
     final items=List.generate(10,(i)=>TeyzaMerchantGridItem(
       id:'shop$i',name:'Neighbourhood merchant $i',
+      subtitle:'Verified local shop',
       image:const Icon(Icons.storefront_rounded),
       onTap:()=>opened++));
     await tester.binding.setSurfaceSize(const Size(340,740));
@@ -101,11 +102,17 @@ void main(){
         categoryKey:'spaza',merchants:items,
         onViewAll:()=>all++,emptyLabel:'No shops')))));
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
-    expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsOneWidget);
-    expect(find.text('Neighbourhood merchant 8'),findsNothing);
-    await tester.tap(find.byKey(const ValueKey('teyza-spaza-view-all')));
-    expect(all,1);
-    expect(opened,0);
+    expect(find.byKey(const ValueKey('teyza-spaza-horizontal-shelf')),findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
+    final rail=find.byKey(const ValueKey('teyza-spaza-horizontal-shelf'));
+    await tester.drag(rail,const Offset(-700,0));await tester.pumpAndSettle();
+    await tester.drag(rail,const Offset(-700,0));await tester.pumpAndSettle();
+    await tester.drag(rail,const Offset(-700,0));await tester.pumpAndSettle();
+    final last=find.byKey(const ValueKey('nearby-shop9'));
+    expect(last,findsOneWidget);
+    await tester.tap(last);await tester.pumpAndSettle();
+    expect(opened,1);
+    expect(all,0);
     expect(tester.takeException(),isNull);
   });
 }
