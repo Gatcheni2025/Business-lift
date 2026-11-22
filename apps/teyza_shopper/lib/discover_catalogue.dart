@@ -91,7 +91,7 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
             ? ListView.separated(key: const PageStorageKey('discover-categories'),
                 padding: const EdgeInsets.fromLTRB(15, 15, 15, 26),
                 itemCount: categories.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final category = categories[index];
                   final sample = products.firstWhere((p) => p.category == category);

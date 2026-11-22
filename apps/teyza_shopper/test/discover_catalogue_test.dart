@@ -91,7 +91,7 @@ void main() {
       'latitude': areas.first.lat, 'longitude': areas.first.lng});
     await t.pumpWidget(MaterialApp(home: ShopperHome(initialArea: areas.first,
       enableBackgroundServices: false, catalogueLoader: () async => [],
-      directoryLoader: (_, type, _) async => type == 'spaza' ? [place] : [],
+      directoryLoader: (_, type, __) async => type == 'spaza' ? [place] : [],
       externalLauncher: (uri) async { launched = uri; return true; })));
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('nav-shops')), findsNothing);
