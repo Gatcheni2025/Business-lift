@@ -64,7 +64,7 @@ void main(){
       {'id':'apples','name':'Fresh apples','category':'Fruit & Veg','priceCents':1400,'stock':4},
       {'id':'milk','name':'Fresh milk','category':'Dairy','priceCents':2000,'stock':4},
     ])]);
-    expect(find.text('Spaza Shops'),findsOneWidget);
+    expect(find.text('Shop in your community'),findsOneWidget);
     final scroll=find.byType(ListView).first;
     for(var attempt=0;attempt<12&&find.text('Shop by category').evaluate().isEmpty;attempt++){
       await tester.drag(scroll,const Offset(0,-170));
@@ -126,7 +126,7 @@ void main(){
         {'id':'wholesale','name':'Private bulk price','category':'Wholesale','priceCents':9900,'stock':4}]),
     ]);
     final home=find.byKey(const PageStorageKey<String>('shopper-home'));
-    final local=find.text('Local Businesses');
+    final local=find.text('Businesses nearby');
     for(var n=0;n<18&&local.evaluate().isEmpty;n++){
       await tester.drag(home,const Offset(0,-180));await tester.pumpAndSettle();
     }
