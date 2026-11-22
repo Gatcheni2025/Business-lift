@@ -29,6 +29,7 @@ function fake(options={}){
  }};
  let uid='seller1';
  return {data,router:createPilotRouter({db,getPilotUid:()=>uid,
+  getRolloutMode:()=>options.mode||'pilot',getRolloutStartAt:()=>options.startedAt||0,
   getPhoneNumberId:()=> '1466599163197469',clock:()=>777,
   getAccessToken:()=>options.token||'',send:options.send||fetch}),
   setPilotUid:v=>{uid=v;}};
@@ -188,4 +189,31 @@ test('HI does not bypass approval or consent restrictions',async()=>{
  f.data.get('teyzaSellerAccounts/seller1').approvalStatus='pending';
  await f.router.route(payload([message('wamid.unapproved','text',{text:{body:'Hello'}})]));
  assert.equal(count,0);
+});
+
+test('All-seller webhook mode routes an approved second seller without granting access to a pilot UID',async()=>{
+ const f=fake({mode:'all',startedAt:500});
+ f.setPilotUid('');
+ f.data.set('teyzaSellerAccounts/seller2',{uid:'seller2',phone:'+27821234567',approvalStatus:'approved'});
+ f.data.set('teyzaWhatsAppPreferences/seller2',{ownerUid:'seller2',phone:'+27821234567',optedIn:true});
+ const inbound=payload([message('wamid.second1','button',
+   {button:{text:'Start selling on Teyza'}},'27821234567')]);
+ await f.router.route(inbound);await f.router.route(inbound);
+ const actions=[...f.data].filter(([key])=>key.startsWith('teyzaWhatsAppPilotActions/'));
+ assert.equal(actions.length,1);
+ assert.equal(actions[0][1].sellerUid,'seller2');
+ assert.equal(actions[0][1].action,'start_selling');
+ assert(!JSON.stringify(actions[0][1]).includes('27821234567'));
+});
+test('All-seller webhook rejects missing rollout timestamp, duplicate phone ownership and unapproved seller',async()=>{
+ const f=fake({mode:'all',startedAt:0});
+ f.data.set('teyzaSellerAccounts/seller2',{uid:'seller2',phone:'+27821234567',approvalStatus:'approved'});
+ f.data.set('teyzaWhatsAppPreferences/seller2',{ownerUid:'seller2',phone:'+27821234567',optedIn:true});
+ await f.router.route(payload([message('wamid.second2','text',{text:{body:'MENU'}},'27821234567')]));
+ assert.equal([...f.data].filter(([k])=>k.startsWith('teyzaWhatsAppPilotActions/')).length,0);
+ const g=fake({mode:'all',startedAt:500});
+ g.data.set('teyzaSellerAccounts/seller2',{uid:'seller2',phone:'+27712345678',approvalStatus:'approved'});
+ g.data.set('teyzaWhatsAppPreferences/seller2',{ownerUid:'seller2',phone:'+27712345678',optedIn:true});
+ await g.router.route(payload([message('wamid.ambig','text',{text:{body:'MENU'}})]));
+ assert.equal([...g.data].filter(([k])=>k.startsWith('teyzaWhatsAppPilotActions/')).length,0);
 });
