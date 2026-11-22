@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Navigation choice only. Permissions are never conferred by selecting a card.
 class TeyzaModeChooser extends StatelessWidget{
- final bool agentApproved;
+ final bool agentApproved,sellerAvailable;
  final VoidCallback onShopper,onAgent,onSeller;
- const TeyzaModeChooser({super.key,required this.agentApproved,required this.onShopper,
+ const TeyzaModeChooser({super.key,required this.agentApproved,this.sellerAvailable=true,required this.onShopper,
   required this.onAgent,required this.onSeller});
  @override Widget build(BuildContext context){
   return Scaffold(backgroundColor:const Color(0xFFF3F7FC),
@@ -17,9 +17,9 @@ class TeyzaModeChooser extends StatelessWidget{
       child:const Icon(Icons.store_mall_directory,color:Colors.white)),
       const SizedBox(width:12),const Text('TEYZA',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:Color(0xFF063E42)))]),
      const SizedBox(height:34),
-     const Text('Welcome back',style:TextStyle(fontSize:35,fontWeight:FontWeight.w900,color:Color(0xFF0B2738))),
+     const Text('Select your workspace',style:TextStyle(fontSize:29,fontWeight:FontWeight.w900,color:Color(0xFF0B2738))),
      const SizedBox(height:8),
-     const Text('How would you like to use Teyza today?',style:TextStyle(fontSize:16,color:Color(0xFF536775))),
+     const Text('Your one Teyza login gives you the following approved account options.',style:TextStyle(fontSize:15,color:Color(0xFF536775))),
      const SizedBox(height:20),
      _mode(Icons.shopping_basket_outlined,'Continue as Shopper',
       'Discover local shops, compare essentials and buy nearby.',
@@ -27,7 +27,7 @@ class TeyzaModeChooser extends StatelessWidget{
      if(agentApproved)_mode(Icons.explore_outlined,'Continue as Field Agent',
       'Find shops on the map, visit owners, take photos and track verified R90 registrations.',
       const Color(0xFFECE6FF),const Color(0xFF6857B8),onAgent),
-     _mode(Icons.storefront_outlined,'Continue as Seller / Business',
+     if(sellerAvailable)_mode(Icons.storefront_outlined,'Continue as Seller / Business',
       'Manage an existing shop or register your own business. Seller verification remains required.',
       const Color(0xFFE6F5EA),const Color(0xFF08734F),onSeller),
      const SizedBox(height:20),

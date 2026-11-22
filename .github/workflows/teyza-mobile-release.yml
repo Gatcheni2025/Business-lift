@@ -191,6 +191,14 @@ jobs:
           print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
           print('Do not use the QA binaries as production-ready or claim R324 seller approval is live.')
           PY_QA
+      - name: Require authentic Meta Facebook login configuration for signed apps
+        if: env.SIGNING_MODE == 'signed'
+        shell: bash
+        run: |
+          if ! [[ "$TEYZA_FACEBOOK_APP_ID" =~ ^[0-9]{5,30}$ ]] || [ "${#TEYZA_FACEBOOK_CLIENT_TOKEN}" -lt 8 ]; then
+            echo '::error::Set TEYZA_FACEBOOK_APP_ID (Actions variable) and TEYZA_FACEBOOK_CLIENT_TOKEN (Actions secret), and verify the Facebook provider in Firebase/Meta before signed distribution.'
+            exit 1
+          fi
       - name: Require mobile Maps SDK keys for signed Agent map release
         if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
         shell: bash

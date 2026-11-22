@@ -33,18 +33,20 @@ class FakeEmailAfterGoogleErrorSession extends ShopperSession {
 }
 void main(){
  testWidgets('Successful email sign-in removes an earlier Google OAuth mismatch warning',(t)async{
+  await t.binding.setSurfaceSize(const Size(390,900));
+  addTearDown(()=>t.binding.setSurfaceSize(null));
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeEmailAfterGoogleErrorSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
-  await t.tap(find.text('Continue as Shopper'));await t.pumpAndSettle();
+  await t.tap(find.text('Sign in to Teyza'));await t.pumpAndSettle();
   await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
   expect(session.googleCalls,1);
   final legacy=find.text('Already registered with email?');
   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   await t.enterText(find.byType(TextFormField).at(0),'owner@example.test');
   await t.enterText(find.byType(TextFormField).at(1),'password123');
-  await t.tap(find.text('Sign in as shopper'));await t.pumpAndSettle();
+  await t.tap(find.byKey(const ValueKey('teyza-email-login')));await t.pumpAndSettle();
   expect(session.userId,'email-user');
   // The new social card is taller; after the legacy login button is tapped,
   // the list can remain scrolled down even though the account is authenticated.
@@ -63,16 +65,15 @@ void main(){
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeFacebookSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
-  await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));
+  await t.tap(find.text('Create an account'));await t.pumpAndSettle();
+  await t.tap(find.text(owner?'Register as Seller':'Register as Shopper'));
   await t.pumpAndSettle();
-  final signup=find.text('New to Teyza? Get started for free');
-  await t.ensureVisible(signup);await t.pumpAndSettle();
-  await t.tap(signup);await t.pumpAndSettle();
-  expect(find.text('New to Teyza'),findsOneWidget);
+  if(owner){await t.tap(find.text('Spaza Shop Owner'));await t.pumpAndSettle();}
+  expect(find.text('Create your account'),findsOneWidget);
   expect(find.byType(TextFormField),findsNothing);
   expect(find.text('Continue with Google'),findsOneWidget);
   expect(find.text('Continue with Facebook'),findsOneWidget);
-  expect(find.text('Create shopper account'),findsNothing);
+  expect(find.text('Create shopper account'),owner?findsNothing:findsOneWidget);
   expect(find.text('Create shop owner account'),findsNothing);
   final login=find.text('Already on Teyza? Sign in');
   await t.ensureVisible(login);await t.pumpAndSettle();
@@ -80,7 +81,7 @@ void main(){
   final legacy=find.text('Already registered with email?');
   await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
   expect(find.byType(TextFormField),findsNWidgets(2));
-  expect(find.text(owner?'Sign in as shop owner':'Sign in as shopper'),findsOneWidget);
+  expect(find.text('Sign in to Teyza'),findsWidgets);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();
   debugDefaultTargetPlatformOverride=null;
  });
@@ -102,7 +103,11 @@ void main(){
  for(final owner in [false,true])testWidgets('Facebook returns to the selected ${owner?'owner':'shopper'} workspace',(t) async {
   var ownerCalls=0,shopperCalls=0;final session=FakeFacebookSession();
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session,onOpenOwner:()=>ownerCalls++,onShopperSignedIn:()=>shopperCalls++))));
-  await t.tap(find.text(owner?'Continue as Shop Owner':'Continue as Shopper'));await t.pumpAndSettle();
+  if(owner){
+    await t.tap(find.text('Create an account'));await t.pumpAndSettle();
+    await t.tap(find.text('Register as Seller'));await t.pumpAndSettle();
+    await t.tap(find.text('Spaza Shop Owner'));await t.pumpAndSettle();
+  }else{await t.tap(find.text('Sign in to Teyza'));await t.pumpAndSettle();}
   final button=find.text('Continue with Facebook');await t.ensureVisible(button);await t.pumpAndSettle();await t.tap(button);await t.pumpAndSettle();
   expect(ownerCalls,owner?1:0);expect(shopperCalls,owner?0:1);expect(session.hasAdminClaim,false);
   await t.pumpWidget(const SizedBox.shrink());session.dispose();

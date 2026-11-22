@@ -28,19 +28,25 @@ function approvedTemplatePayload(config,account,authUser=null){
  return {name:config.template,language:{code:config.language},...(components.length?{components}:{})};
 }
 
-function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),getPilotUid=()=>'',getPilotStartAt=()=>0,send=fetch,clock=Date.now}){
+function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),getPilotUid=()=>'',getPilotStartAt=()=>0,
+ getRolloutMode=()=> 'pilot',getRolloutStartAt=()=>0,send=fetch,clock=Date.now}){
  const doc=p=>db.doc(p);
  async function deliver(reference){
   const ref=doc('teyzaWhatsAppApprovalOutbox/'+reference),initial=await ref.get();
   if(!initial.exists||!['queued','configuration_required'].includes(initial.data().status))return;
   const entry=initial.data();
-  // Fail closed unless one explicit seller Firebase UID is configured.
-  // Other sellers' queued records must stay untouched during this pilot.
+  // A general rollout is explicit, forward-only and opt-in. Historic queues
+  // remain untouched, and an invalid/missing timestamp disables all sending.
+  // The legacy single-UID pilot behaviour remains the default.
+  const mode=getRolloutMode();
+  const general=mode==='all';
+  if(mode!=='pilot'&&!general)return;
   const pilotUid=getPilotUid();
-  const startedAt=Number(getPilotStartAt());
-  if(typeof pilotUid!=='string'||!/^\w[\w-]{5,127}$/.test(pilotUid)||entry.sellerUid!==pilotUid||
-     !Number.isSafeInteger(startedAt)||startedAt<=0||
+  const startedAt=Number(general?getRolloutStartAt():getPilotStartAt());
+  if(!Number.isSafeInteger(startedAt)||startedAt<=0||
      typeof entry.createdAt!=='number'||entry.createdAt<startedAt)return;
+  if(!general&&(typeof pilotUid!=='string'||!/^[A-Za-z0-9_-]{6,128}$/.test(pilotUid)||
+     entry.sellerUid!==pilotUid))return;
   let authUser;try{authUser=await getAuthUser(entry.sellerUid);}catch(error){
    if(error?.code==='auth/user-not-found')authUser=null;
    else return; // Retry transient Auth errors before any provider request.

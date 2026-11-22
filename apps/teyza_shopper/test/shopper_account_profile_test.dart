@@ -95,17 +95,20 @@ void main(){
    session.idToken=null;session.userId=null;session.email=null;
    await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
    await t.pumpAndSettle();
-   await t.tap(find.text('Continue as Shopper'));
+   await t.tap(find.text('Sign in to Teyza'));
    await t.pumpAndSettle();
    expect(find.byKey(const ValueKey('teyza-social-login-card')),findsOneWidget);
    expect(find.byKey(const ValueKey('teyza-existing-email-toggle')),findsOneWidget);
    expect(find.byType(TextFormField),findsNothing,
      reason:'Legacy email is hidden by default for new shoppers');
-   final signup=find.text('New to Teyza? Get started for free');
+   final signup=find.text('New to Teyza? Create account');
    await t.ensureVisible(signup);await t.tap(signup);await t.pumpAndSettle();
-   expect(find.text('New to Teyza'),findsOneWidget);
+   expect(find.text('Register as Shopper'),findsOneWidget);
+   expect(find.text('Register as Seller'),findsOneWidget);
+   await t.tap(find.text('Register as Shopper'));await t.pumpAndSettle();
+   expect(find.text('Create your account'),findsOneWidget);
    expect(find.text('Continue with Google'),findsOneWidget);
-   expect(find.textContaining('separate email confirmation is not required'),findsOneWidget);
+   expect(find.textContaining('seller registration',findRichText:true),findsNothing);
    expect(find.widgetWithText(TextFormField,'Email address'),findsNothing);
    expect(find.byType(TextFormField),findsNothing);
    final oldLogin=find.text('Already on Teyza? Sign in');
@@ -114,7 +117,7 @@ void main(){
    final legacy=find.text('Already registered with email?');
    await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
-   expect(find.text('Sign in as shopper'),findsOneWidget);
+   expect(find.byKey(const ValueKey('teyza-email-login')),findsOneWidget);
    // Flutter verifies debug foundation variables before addTearDown runs.
    // Reset the fake platform inside this widget test, not only on cleanup.
    debugDefaultTargetPlatformOverride=null;
@@ -126,7 +129,7 @@ void main(){
    await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
    await t.pumpAndSettle();
    expect(find.text('My Teyza account'),findsNothing);
-   expect(find.text('Continue as Shopper'),findsOneWidget);
+   expect(find.text('Sign in to Teyza'),findsOneWidget);
    await t.pumpWidget(const SizedBox.shrink());
    session.dispose();
  });
