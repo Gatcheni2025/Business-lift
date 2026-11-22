@@ -70,7 +70,7 @@ void main(){
   await tester.pumpAndSettle();
   expect(claim.hitTestable(),findsOneWidget);
   await tester.tap(claim.hitTestable());await tester.pumpAndSettle();
-  expect(find.text('Continue as Shop Owner'),findsOneWidget);
+  expect(find.text('Sign in to Teyza'),findsOneWidget);
   session.signInAsOwner();await tester.pumpAndSettle();
   expect(api.actions,contains('seller_claim_by_id'));expect(find.text('Google Maps: Corner Shop'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();
