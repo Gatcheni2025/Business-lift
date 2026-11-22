@@ -117,7 +117,7 @@ void main(){
    final legacy=find.text('Already registered with email?');
    await t.ensureVisible(legacy);await t.tap(legacy);await t.pumpAndSettle();
    expect(find.byType(TextFormField),findsNWidgets(2));
-   expect(find.text('Sign in to Teyza'),findsWidgets);
+   expect(find.byKey(const ValueKey('teyza-email-login')),findsOneWidget);
    // Flutter verifies debug foundation variables before addTearDown runs.
    // Reset the fake platform inside this widget test, not only on cleanup.
    debugDefaultTargetPlatformOverride=null;
