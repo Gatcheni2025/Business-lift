@@ -144,7 +144,10 @@ void main(){
       home:RepaintBoundary(key:boundary,child:ShopperHome(initialArea:areas.first,
         enableBackgroundServices:false,catalogueLoader:() async=>[],
         directoryLoader:(area,type,radius) async=>List.generate(12,(i)=>OnlineShop.fromJson({
-          'id':'preview-'+i.toString(),'name':i==0?'Neighbourhood Market':'Corner Grocer '+(i+1).toString(),
+          'id':'preview-'+i.toString(),
+           'name':type=='spaza'
+             ?'Community Tuck Shop '+(i+1).toString()
+             :i==0?'Neighbourhood Market':'Corner Grocer '+(i+1).toString(),
           'latitude':-29.8587+i*.002,'longitude':31.0218,'origin':'google_places',
           'shopCategory':type,'categorizationVerified':true,'rating':4.7,
           'ratingCount':23,'openNow':true
