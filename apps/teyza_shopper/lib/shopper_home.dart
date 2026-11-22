@@ -292,10 +292,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   int tab = 0;
   int _previousRootTab=0;
   final _accountPanelKey=GlobalKey<ShopperAccountPanelState>();
-  int _detailOriginTab=0;
-  bool _detailOriginAllShops=false,_detailOriginAllSellers=false;
   bool _detailOriginSaved=false;
-  String _detailOriginCategory='All';
   String _detailOriginDiscoveryType='spaza';
   final cart = <String, int>{};
   late final session = widget.session??ShopperSession();
@@ -1203,10 +1200,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   void _rememberDetailOrigin(){
     if(selected!=null||directorySelected!=null)return;
-    _detailOriginTab=tab;
-    _detailOriginAllShops=showAllShops;
-    _detailOriginAllSellers=showAllSellers;
-    _detailOriginCategory=category;
     _detailOriginDiscoveryType=discoveryType;
     _detailOriginSaved=true;
   }
