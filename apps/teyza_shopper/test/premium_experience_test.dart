@@ -195,7 +195,15 @@ void main(){
     expect(find.byKey(const ValueKey('teyza-spaza-grid')),findsOneWidget);
     expect(find.byKey(const ValueKey('teyza-spaza-view-all')),findsNothing);
     // Decode the large JSON asset outside the widget test's fake async clock.
-    await tester.runAsync(()=>ProductCatalogue.load());
+    await tester.runAsync(()async{
+      await ProductCatalogue.load();
+      final photoContext=tester.element(find.byType(ShopperHome));
+      await Future.wait([
+        for(final atlas in ['fresh-pantry.png','pantry-household.png',
+          'food-drinks-expanded.png','care-household-expanded.png'])
+          precacheImage(AssetImage('assets/catalogue/'+atlas),photoContext)
+      ]);
+    });
     // Discover opens product categories; shop discovery stays on Home.
     await tester.tap(find.byKey(const ValueKey('nav-discover')));
     await tester.pumpAndSettle();
