@@ -84,7 +84,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     const previous=await tx.get(ref);
     if(previous.exists)return false;
     const fresh=await tx.get(preferenceRef);
-    if(!fresh.exists||fresh.data()?.ownerUid!==pilotUid||fresh.data()?.phone!==event.from)return false;
+    if(!fresh.exists||fresh.data()?.ownerUid!==sellerUid||fresh.data()?.phone!==event.from)return false;
     if(event.action!=='stop'&&fresh.data()?.optedIn!==true)return false;
     const at=clock();
     const destination=event.action==='start_selling'?'/seller-getting-started.html':
