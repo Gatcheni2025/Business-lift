@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Navigation choice only. Permissions are never conferred by selecting a card.
 class TeyzaModeChooser extends StatelessWidget{
- final bool agentApproved;
+ final bool agentApproved,sellerAvailable;
  final VoidCallback onShopper,onAgent,onSeller;
- const TeyzaModeChooser({super.key,required this.agentApproved,required this.onShopper,
+ const TeyzaModeChooser({super.key,required this.agentApproved,this.sellerAvailable=true,required this.onShopper,
   required this.onAgent,required this.onSeller});
  @override Widget build(BuildContext context){
   return Scaffold(backgroundColor:const Color(0xFFF3F7FC),
@@ -27,7 +27,7 @@ class TeyzaModeChooser extends StatelessWidget{
      if(agentApproved)_mode(Icons.explore_outlined,'Continue as Field Agent',
       'Find shops on the map, visit owners, take photos and track verified R90 registrations.',
       const Color(0xFFECE6FF),const Color(0xFF6857B8),onAgent),
-     _mode(Icons.storefront_outlined,'Continue as Seller / Business',
+     if(sellerAvailable)_mode(Icons.storefront_outlined,'Continue as Seller / Business',
       'Manage an existing shop or register your own business. Seller verification remains required.',
       const Color(0xFFE6F5EA),const Color(0xFF08734F),onSeller),
      const SizedBox(height:20),
