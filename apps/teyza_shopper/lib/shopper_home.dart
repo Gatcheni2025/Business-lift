@@ -462,10 +462,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         _accountResolving=false;
         final count=(_hasShopperAccount?1:0)+(_sellerAccount!=null?1:0)+(_agentApproved?1:0);
         _rolePicker=count>1;
-        _needsRegistration=count==0&&session.requestedRegistrationRole==null&&
+        _needsRegistration=count==0&&_pendingClaimPlaceId==null&&session.requestedRegistrationRole==null&&
           session.requestedSellerCategory==null;
       });
       if(_rolePicker||_needsRegistration)return;
+      if(_pendingClaimPlaceId!=null){_chooseRole('seller');return;}
       if(_sellerAccount!=null){_chooseRole('seller');}
       else if(_agentApproved){_chooseRole('agent');}
       else if(_hasShopperAccount){_chooseRole('shopper');}
@@ -1473,7 +1474,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       ShopperChatPage(session:session)));
   }
   Future<void> openOwnerWorkspace({bool notification=false,String? target}) async {
-    if(session.idToken==null){navigateToTab(4);return;}
+    if(session.idToken==null||session.anonymousShopper){navigateToTab(4);return;}
     _agentMode=false;_rolePicker=false;
     _sellerInitialTarget=notification?(target??'notifications'):null;
     if(notification)_sellerEntry++;
@@ -1481,8 +1482,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   Future<void> claimDirectoryListing(OnlineShop listing) async {
     _pendingClaimPlaceId=listing.origin=='google_places'&&listing.placeId.isNotEmpty?listing.placeId:null;
-    if(session.idToken==null){navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content:Text('Sign in or register as a shop owner to claim your business on Teyza.')));return;}
+    if(session.idToken==null||session.anonymousShopper){navigateToTab(4);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:Text('Sign in or register to claim your business on Teyza.')));return;}
     await openOwnerWorkspace();
   }
   void browseNearby()=>setState((){

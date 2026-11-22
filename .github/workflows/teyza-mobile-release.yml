@@ -292,6 +292,15 @@ jobs:
           python3 scripts/verify_teyza_catalogue.py
           python3 scripts/test_teyza_store_files.py
           python3 apps/teyza_shopper/scripts/test_prepare_mobile_release.py
+      - name: Parse WhatsApp rollout and OAuth diagnostic PowerShell helpers
+        shell: pwsh
+        run: |
+          foreach ($file in @('tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-General.ps1', 'tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-Pilot.ps1', 'tools/facebook-auth/Check-Teyza-Facebook-Auth.ps1')) {
+            $parseTokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+          }
       - name: Test activation helper without live credentials
         shell: pwsh
         run: ./scripts/test_teyza_activation.ps1
