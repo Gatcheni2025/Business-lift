@@ -1,6 +1,6 @@
 import {nearbyPanel,newSession} from './work-discovery.mjs';
 import {auth,ready,api,el,label} from './work-auth.mjs';
-import {onAuthStateChanged,GoogleAuthProvider,OAuthProvider,signInWithPopup,signOut} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
+import {onAuthStateChanged,GoogleAuthProvider,FacebookAuthProvider,OAuthProvider,signInWithPopup,signOut} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 const $=id=>document.getElementById(id),sections=['login','application','pending','workspace'];
 let epoch=0,busy=false,isAdmin=false,profile=null,visits=[],selected=null,next=null,profiles=[],reviews=[],nextProfiles=null,nextReviews=null,stream=null,capture=null,imageUrl=null,reviewAgent=null;
 const nearbyError=e=>notice(e.message||'Nearby search is temporarily unavailable.',true);
@@ -88,6 +88,7 @@ $('allReviews').onclick=()=>run(async()=>{reviewAgent=null;await loadReviews();}
 $('editProfile').onclick=()=>{const root=$('profileEditor');if(!root.hidden){root.hidden=true;return;}root.hidden=false;root.replaceChildren(el('span','MY DETAILS','eyebrow'),el('h2','Your contact and working details'),el('p','Keep these details current for Teyza’s field team.','tiny'));const f=el('form');for(const [key,title,type] of [['name','Full name','text'],['phone','Mobile number','tel'],['address','Home or working address','text'],['area','Town or working area','text']]){const i=input(f,key,title,type);i.value=profile?.[key]||'';}const l=el('label','Province'),s=el('select');s.name='province';s.required=true;for(const o of $('province').options){const n=el('option',o.textContent);n.value=o.value;s.append(n);}s.value=profile?.province||'';l.append(s);f.append(l);const b=el('button','Save details','primary');b.type='submit';f.append(b);f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;run(async()=>{await api('agent_profile_update',{...Object.fromEntries(new FormData(f)),revision:profile.revision});root.hidden=true;await refreshAccount();notice('Your details were saved.');});};root.append(f);};
 $('google').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new GoogleAuthProvider());});
 $('apple').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new OAuthProvider('apple.com'));});
+$('facebook').onclick=()=>run(async()=>{await ready;await signInWithPopup(auth,new FacebookAuthProvider());});
 $('logout').onclick=()=>run(()=>signOut(auth));
 $('checkApproval').onclick=()=>run(async()=>{await auth.currentUser?.getIdToken(true);await refreshAccount();});
 async function encodeApplicationFile(file,label,max){
@@ -140,4 +141,4 @@ $('applyForm').onsubmit=e=>{
   }finally{progress.hidden=true;status.textContent='';}
  });
 };
-onAuthStateChanged(auth,async user=>{epoch++;clearPrivate();isAdmin=false;profile=null;$('logout').hidden=!user;$('refresh').hidden=!user;$('notice').hidden=true;if(!user){show('login');return;}if(!user.emailVerified&&!user.phoneNumber){show('login');notice('Use a verified Google or Apple account to continue.',true);return;}try{const ticket=epoch,token=await user.getIdTokenResult();if(ticket!==epoch)return;isAdmin=token.claims.teyzaAdmin===true;await refreshAccount();}catch(e){notice(e.message,true);show('pending');$('pendingTitle').textContent='Workspace unavailable';$('pendingText').textContent='Refresh to retry. If a review session expired, sign out and sign in again.';}});
+onAuthStateChanged(auth,async user=>{epoch++;clearPrivate();isAdmin=false;profile=null;$('logout').hidden=!user;$('refresh').hidden=!user;$('notice').hidden=true;if(!user){show('login');return;}if(!user.emailVerified&&!user.phoneNumber){show('login');notice('Use a verified Google, Apple or Facebook account to continue.',true);return;}try{const ticket=epoch,token=await user.getIdTokenResult();if(ticket!==epoch)return;isAdmin=token.claims.teyzaAdmin===true;await refreshAccount();}catch(e){notice(e.message,true);show('pending');$('pendingTitle').textContent='Workspace unavailable';$('pendingText').textContent='Refresh to retry. If a review session expired, sign out and sign in again.';}});
