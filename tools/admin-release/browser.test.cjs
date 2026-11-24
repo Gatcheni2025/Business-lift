@@ -160,6 +160,54 @@ async function main(){
     assert(await f.page.getByText('Review queue unavailable').isVisible());
     assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Support is a true two-way WhatsApp chat with separate internal cases on desktop and mobile',async()=>{
+    const current=Date.now();
+    const convo={id:'seller_demoSeller1',ownerUid:'demoSeller1',source:'seller_admin_chat',
+      shopName:'Durban Test Spaza',status:'open',createdAt:current-200000,
+      updatedAt:current-4000,lastMessage:'Hello, I want to start selling on Teyza.',
+      lastMessageAt:current-4000,whatsAppActive:true,whatsAppLastInboundAt:current-4000,
+      adminUnread:1,messageCount:1};
+    const previous={id:'wa_legacy_1',ownerUid:'demoSeller1',source:'whatsapp_pilot',
+      subject:'WhatsApp consultant request',message:'Historical one-way support request',
+      status:'open',revision:0,createdAt:current-300000};
+    const test=await pageFor({startView:'overview',api:async(route,body)=>{
+      if(body.action==='ops_support_list'){
+        await route.fulfill({json:{ok:true,tickets:[convo,previous],next:null}});return true;
+      }
+      if(body.action==='ops_support_thread'){
+        await route.fulfill({json:{ok:true,ticket:convo,messages:[
+         {id:'in1',sender:'seller',source:'meta_whatsapp_support',
+           text:'Hello, I want to start selling on Teyza.',createdAt:current-4000},
+         {id:'out1',sender:'admin',text:'Welcome to Teyza!',
+           whatsAppReplyStatus:'accepted',createdAt:current-2000}
+        ]}});return true;
+      }
+      if(body.action==='ops_support_reply'){
+        await route.fulfill({json:{ok:true,sent:true,messageId:body.data.messageId}});
+        return true;
+      }
+      return false;
+    }});
+    await test.page.getByRole('button',{name:'Support inbox',exact:true}).click();
+    await test.page.locator('.ops-chat-layout').waitFor();
+    assert(await test.page.getByText('Durban Test Spaza').isVisible());
+    assert.equal(await test.page.locator('.ops-support-cases > summary').count(),1);
+    assert.equal(await test.page.getByText('Historical one-way support request').isVisible(),false);
+    await test.page.locator('.ops-chat-item').getByText('Durban Test Spaza').click();
+    await test.page.locator('.ops-chat-bubble').first().waitFor();
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),2);
+    assert(await test.page.getByText('Meta accepted · delivery not confirmed').isVisible());
+    await test.page.locator('.ops-chat-composer textarea').fill('Hello! Registration is free; we can guide you.');
+    const saved=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_support_reply');
+    await test.page.getByRole('button',{name:'Send WhatsApp reply'}).click();
+    await saved;
+    assert(test.calls.some(x=>x.action==='ops_support_reply'&&
+      x.data.ticketId==='seller_demoSeller1'&&x.data.message.includes('Registration is free')));
+    await test.page.setViewportSize({width:393,height:852});
+    assert(await test.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await test.context.close();
+  });
   await check('User management creates a non-admin account, sends setup email and suspends without changing claims',async()=>{
     const f=await pageFor();
     await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
@@ -181,7 +229,10 @@ async function main(){
     await row.getByRole('button',{name:'View user'}).click();
     await f.page.getByRole('button',{name:'Send password setup email'}).click();
     assert(f.calls.some(x=>x.action==='ops_user_invite'&&x.data.userUid==='new-user1'));
+    const suspension=f.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_user_set_disabled');
     await f.page.getByRole('button',{name:'Suspend user'}).click();
+    await suspension;
     assert(f.calls.some(x=>x.action==='ops_user_set_disabled'&&x.data.userUid==='new-user1'&&x.data.disabled===true));
     assert.equal(f.errors.length,0);
     await f.context.close();
