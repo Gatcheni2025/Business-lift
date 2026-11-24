@@ -176,8 +176,11 @@ async function main(){
       }
       if(body.action==='ops_support_thread'){
         await route.fulfill({json:{ok:true,ticket:convo,messages:[
-         {id:'in1',sender:'seller',source:'meta_whatsapp_support',
-           text:'Hello, I want to start selling on Teyza.',createdAt:current-4000},
+         ...Array.from({length:40},(_,i)=>({
+           id:'in'+i,sender:'seller',source:'meta_whatsapp_support',
+           text:'WhatsApp history message '+i+' — I need assistance with my shop.',
+           createdAt:current-90000+i*2000
+         })),
          {id:'out1',sender:'admin',text:'Welcome to Teyza!',
            whatsAppReplyStatus:'accepted',createdAt:current-2000}
         ]}});return true;
@@ -195,8 +198,35 @@ async function main(){
     assert.equal(await test.page.getByText('Historical one-way support request').isVisible(),false);
     await test.page.locator('.ops-chat-item').getByText('Durban Test Spaza').click();
     await test.page.locator('.ops-chat-bubble').first().waitFor();
-    assert.equal(await test.page.locator('.ops-chat-bubble').count(),2);
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),41);
     assert(await test.page.getByText('Meta accepted · delivery not confirmed').isVisible());
+    const layoutTest=async()=>{
+      const m=await test.page.locator('.ops-chat-layout').evaluate(layout=>{
+        const history=layout.querySelector('.ops-chat-messages');
+        const composer=layout.querySelector('.ops-chat-composer');
+        const send=composer.querySelector('button[type="submit"]');
+        const outer=layout.getBoundingClientRect();
+        const footer=composer.getBoundingClientRect();
+        const btn=send.getBoundingClientRect();
+        return {scrollHeight:history.scrollHeight,clientHeight:history.clientHeight,
+          footerBottom:footer.bottom,buttonBottom:btn.bottom,layoutBottom:outer.bottom,
+          footerVisible:getComputedStyle(composer).display!=='none'&&btn.height>=40};
+      });
+      assert(m.scrollHeight>m.clientHeight+100,'Message history must have its own scrollbar');
+      assert(m.footerVisible,'Send WhatsApp reply button must remain visible');
+      assert(m.footerBottom<=m.layoutBottom+3,'Reply composer must stay inside the chat panel');
+      assert(m.buttonBottom<=m.layoutBottom+3,'Send button must not be pushed below the chat panel');
+    };
+    await layoutTest();
+    // A message refresh must preserve the agent's position when reading history.
+    await test.page.locator('.ops-chat-messages').evaluate(el=>{el.scrollTop=0;});
+    const refreshed=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_support_thread');
+    await test.page.getByRole('button',{name:'Reload messages'}).click();
+    await refreshed;
+    await test.page.locator('.ops-chat-bubble').first().waitFor();
+    assert((await test.page.locator('.ops-chat-messages').evaluate(el=>el.scrollTop))<=5,
+      'Refreshing a conversation must not jump an agent away from earlier messages');
     await test.page.locator('.ops-chat-composer textarea').fill('Hello! Registration is free; we can guide you.');
     const saved=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_support_reply');
@@ -205,6 +235,7 @@ async function main(){
     assert(test.calls.some(x=>x.action==='ops_support_reply'&&
       x.data.ticketId==='seller_demoSeller1'&&x.data.message.includes('Registration is free')));
     await test.page.setViewportSize({width:393,height:852});
+    await layoutTest();
     assert(await test.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await test.context.close();
   });
