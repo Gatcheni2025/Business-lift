@@ -1,5 +1,5 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
+const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),types=require('./business-types');
 const actions=new Set(['seller_register','seller_plan_select','admin_access','admin_seller_queue','admin_seller_review',
   'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete','seller_whatsapp_preferences']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
@@ -17,11 +17,13 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
   if(action==='seller_register'){
    await rate(uid,'register',5,3600000);
    if(!['spaza','retail','wholesale'].includes(data.category))D.fail(422,'Choose Spaza Shop, Wholesaler or Other Retail.');
+   const businessType=data.businessType??types.defaults[data.category];
+   if(!types.valid(data.category,businessType))D.fail(422,'Choose a valid business type for your seller category.');
    if(data.consent!==true)D.fail(422,'Confirm that these shop details are yours.');
    const legalType=data.legalType||'individual';
    if(!['individual','company'].includes(legalType))D.fail(422,'Choose Individual or Registered company.');
    if(legalType==='company'&&(!data.companyName?.trim()||!data.registrationNumber?.trim()))D.fail(422,'Enter the registered company name and registration number.');
-   const values={uid,category:data.category,shopName:D.text(data.shopName,'shop name',120),
+   const values={uid,category:data.category,businessType,shopName:D.text(data.shopName,'shop name',120),
     ownerEmail:auth.email||'',phone:require('./onboarding').phone(data.phone),
     companyName:D.text(data.companyName||'','company name',160,false),registrationNumber:D.text(data.registrationNumber||'','registration number',50,false),
     approvalStatus:'pending',listingStatus:'not_listed',listingPlan:'free',
@@ -104,7 +106,7 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
        (!locations[i].exists||locations[i].data().ownerUid!==r.id))
       missingCompliance.push('shop_location');
     return {
-    sellerUid:r.id,evidenceId:identityReady?identity.evidenceId:null,evidenceKind:identityReady?identity.kind:null,missingCompliance,reviewNote:v.reviewNote||'',complianceRequestedAt:v.complianceRequestedAt||null,shopName:a.shopName||'Shop registration',category:a.category||'',address:a.address||'',
+    sellerUid:r.id,evidenceId:identityReady?identity.evidenceId:null,evidenceKind:identityReady?identity.kind:null,missingCompliance,reviewNote:v.reviewNote||'',complianceRequestedAt:v.complianceRequestedAt||null,shopName:a.shopName||'Shop registration',category:a.category||'',businessType:a.businessType||'',address:a.address||'',
     phone:a.phone||'',ownerEmail:a.ownerEmail||'',companyName:a.companyName||'',registrationNumber:a.registrationNumber||'',
     googlePlaceId:claims[i].exists&&claims[i].data().ownerUid===r.id?claims[i].data().placeId:null,
     approvalStatus:a.approvalStatus||'pending',listingStatus:a.listingStatus||'not_listed',
