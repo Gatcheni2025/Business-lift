@@ -345,6 +345,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     session.addListener(workspaceChanged);
+    // Respect an explicitly injected, already-selected seller session in
+    // embedded/testing flows; only the normal app's persisted launch resets
+    // its presentation to the public shopfront.
+    _accountFlowRequested=widget.session!=null&&session.sellerWorkspace;
     Future<void>? restoring;
     if(widget.enableBackgroundServices){
       sellerPush=SellerPush(session)..onOpen=(target){
@@ -1507,7 +1511,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;
   });
   void navigateToTab(int index){
-    if(index==4)_accountFlowRequested=true; // Login only when deliberately requested.
+    if(index==4){
+      _accountFlowRequested=true; // Login only when deliberately requested.
+      if(session.userId!=null&&!session.anonymousShopper&&!_accountResolving&&
+        !_hasShopperAccount&&_sellerAccount==null&&!_agentApproved){
+        _needsRegistration=true;
+      }
+    }
     setState(() {
       if(index!=tab)_previousRootTab=tab;
       if(index==2||index==3||index==4||index==5){
@@ -1597,8 +1607,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if(_accountFlowRequested&&_rolePicker&&session.userId!=null)return TeyzaModeChooser(
       agentApproved:_agentApproved,shopperAvailable:_hasShopperAccount,
       sellerAvailable:_sellerAccount!=null,
-      sellerLabel:switch(_sellerAccount?.category){
-        'retail'=>'Business owner','wholesale'=>'Wholesaler',_=>'Spaza shop owner'},
+      sellerLabel:'Business owner',
       sellerName:_sellerAccount?.name??'',
       onShopper:()=>_chooseRole('shopper'),
       onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
