@@ -36,6 +36,8 @@ void main(){
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   addTearDown(()=>debugDefaultTargetPlatformOverride=null);
   final session=FakeEmailAfterGoogleErrorSession();
+  await t.binding.setSurfaceSize(const Size(390,1000));
+  addTearDown(()=>t.binding.setSurfaceSize(null));
   await t.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
   await t.tap(find.text('Continue with Google'));await t.pumpAndSettle();
   expect(session.googleCalls,1);
@@ -70,7 +72,11 @@ void main(){
   expect(find.byKey(const ValueKey('registration-seller')),findsOneWidget);
   await t.tap(find.byKey(ValueKey(owner?'registration-seller':'registration-shopper')));
   await t.pumpAndSettle();
-  if(owner){await t.tap(find.byKey(const ValueKey('registration-spaza')));await t.pumpAndSettle();}
+  if(owner){
+    await t.ensureVisible(find.byKey(const ValueKey('registration-business-spaza_shop')));
+    await t.tap(find.byKey(const ValueKey('registration-business-spaza_shop')));
+    await t.pumpAndSettle();
+  }
   expect(find.byType(TextFormField),findsNothing);
   expect(find.text('Continue with Google'),findsOneWidget);
   expect(find.text('Continue with Facebook'),findsOneWidget);
