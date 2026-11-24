@@ -83,6 +83,9 @@ function paintComposer(){
   'The 24-hour WhatsApp customer-service window may be closed. Ask the seller to send a new WhatsApp message before replying.';
 }
 async function openThread(t){
+ const previousThread=$('thread'),previousTicketId=state.selected?.id;
+ const scrollBefore=previousThread.scrollTop;
+ const nearBottom=previousThread.scrollHeight-previousThread.clientHeight-scrollBefore<=48;
  state.selected=t;const requestId=++state.generation;
  $('conversation-placeholder').hidden=true;$('thread-panel').hidden=false;paintTickets();paintComposer();
  $('thread').replaceChildren(make('p','Loading conversation…','empty-queue'));
@@ -100,7 +103,7 @@ async function openThread(t){
    if(status)footer.textContent+=' · '+status;
    msg.append(footer);thread.append(msg);
   }
-  thread.scrollTop=thread.scrollHeight;
+  thread.scrollTop=previousTicketId===t.id&&!nearBottom?scrollBefore:thread.scrollHeight;
  }catch(e){handleError(e);}
 }
 function handleError(e){
@@ -151,6 +154,10 @@ onAuthStateChanged(auth,async user=>{
 });
 setInterval(()=>{
  if(!state.ready||document.hidden||state.loading)return;
- reload();
- if(state.selected&&!state.loading)openThread(state.selected);
+ // Refresh conversation list first, then the selected thread. Keep an agent's
+ // place if they have scrolled up to read earlier messages.
+ void (async()=>{
+  await reload();
+  if(state.ready&&state.selected&&!document.hidden)await openThread(state.selected);
+ })();
 },20000);
