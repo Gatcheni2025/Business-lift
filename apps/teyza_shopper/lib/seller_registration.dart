@@ -7,6 +7,7 @@ import 'seller_firestore.dart';
 import 'seller_phone.dart';
 import 'shop_address.dart';
 import 'seller_claim_picker.dart';
+import 'business_categories.dart';
 
 class SellerRegistrationPage extends StatefulWidget {
   final ShopperSession session;
@@ -22,6 +23,7 @@ class _RegistrationState extends State<SellerRegistrationPage>{
   SellerClaimSelection? claim;
   late final String? uid;
   late String category=widget.session.requestedSellerCategory??'spaza';
+  late String businessType=widget.session.requestedBusinessType??teyzaDefaultBusinessType(category);
   String legalType='individual';String? error;
   bool busy=false,consent=false,saved=false,whatsappConsent=false;
   int registrationStep=0;
@@ -32,7 +34,11 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     'retail'=>'I offer other local businesses or services, such as a salon, upholsterer, furniture shop or plumbing service.',
     _=>'I operate a spaza shop: sell to nearby shoppers and source wholesale stock from approved suppliers.',
   };
-  @override void initState(){super.initState();uid=widget.session.userId;widget.session.addListener(changed);
+  @override void initState(){super.initState();
+    if(teyzaTypeFor(businessType)?.accountCategory!=category){
+      businessType=teyzaDefaultBusinessType(category);
+    }
+    uid=widget.session.userId;widget.session.addListener(changed);
     if(widget.initialGooglePlaceId?.isNotEmpty==true)loadInitialClaim();}
   Future<void> loadInitialClaim() async{
     setState((){busy=true;error=null;});
@@ -74,7 +80,8 @@ class _RegistrationState extends State<SellerRegistrationPage>{
     if(!consent){setState(()=>error='Confirm that these shop details are yours.');return;}
     setState((){busy=true;error=null;});
     try{
-      final data={'category':category,'legalType':legalType,'shopName':name.text.trim(),
+      final data={'category':category,'businessType':businessType,
+        'legalType':legalType,'shopName':name.text.trim(),
         'phone':normalizeMobile(phone.text),'addressSelection':selected.receipt,'unit':unit.text.trim(),
         'companyName':legalType=='company'?company.text.trim():'',
         'registrationNumber':legalType=='company'?number.text.trim():'','consent':true,'locationConsent':true,
@@ -141,7 +148,25 @@ class _RegistrationState extends State<SellerRegistrationPage>{
         DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'I am signing up as',filled:true,fillColor:Colors.white,
           border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
           items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop Owner')),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops')),DropdownMenuItem(value:'retail',child:Text('Business Owner — services'))],
-          onChanged:busy?null:(v)=>setState(()=>category=v??'spaza')),
+          onChanged:busy?null:(v)=>setState((){
+            category=v??'spaza';
+            businessType=teyzaDefaultBusinessType(category);
+            consent=false;
+          })),
+        const SizedBox(height:12),
+        DropdownButtonFormField<String>(
+          key:ValueKey('teyza-business-category-$category'),
+          initialValue:businessType,isExpanded:true,
+          decoration:const InputDecoration(labelText:'What kind of business?',
+            border:OutlineInputBorder(),filled:true,fillColor:Colors.white),
+          items:[
+            for(final type in teyzaBusinessTypes.where((type)=>type.accountCategory==category))
+              DropdownMenuItem(value:type.id,child:Text(type.label,overflow:TextOverflow.ellipsis))
+          ],
+          onChanged:busy?null:(value)=>setState((){
+            businessType=value??teyzaDefaultBusinessType(category);
+            consent=false;
+          })),
         const SizedBox(height:8),Text(categoryExplanation,style:const TextStyle(
           color:Color(0xFF547363),fontWeight:FontWeight.w600,height:1.4)),
         const SizedBox(height:16),

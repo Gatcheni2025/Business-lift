@@ -30,6 +30,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     setState((){
       audience=null;registering=false;showLegacyEmail=false;
       widget.session.requestedSellerCategory=null;
+      widget.session.requestedBusinessType=null;
       widget.session.requestedRegistrationRole=null;
       status=null;failure=false;
     });
@@ -40,8 +41,10 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
   final email=TextEditingController(), password=TextEditingController(), name=TextEditingController();
   bool registering=false, working=false, hidden=true, showLegacyEmail=false;
   String? audience;
+  String signInAudience='shopper'; // Presentation only, never an auth permission.
   bool get ownerMode=>registering&&audience=='seller';
   void registrationSelected(String role,String? category){
+    if(role=='shopper')widget.session.requestedBusinessType=null;
     setState((){audience=role;status=null;failure=false;});
     widget.session.requestedRegistrationRole=role;
     widget.session.requestedSellerCategory=category;
@@ -290,7 +293,8 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
         if(!widget.session.isReady)
           const Center(child:CircularProgressIndicator())
         else if(!logged&&registering&&audience==null) ...[
-          TeyzaRegistrationOptions(onSelected:registrationSelected),
+          TeyzaRegistrationOptions(onSelected:registrationSelected,
+            onBusinessTypeSelected:(type)=>widget.session.requestedBusinessType=type),
           TextButton(onPressed:()=>setState((){
             registering=false;widget.session.requestedRegistrationRole=null;
             widget.session.requestedSellerCategory=null;
@@ -522,10 +526,31 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                   Icon(ownerMode?Icons.storefront_outlined:Icons.shopping_basket_outlined,
                     color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66)),
                   const SizedBox(width:10),
-                  Expanded(child:Text(registering?(ownerMode?'Seller registration':'Shopper registration'):'Secure Teyza sign-in',
+                  Expanded(child:Text(registering?(ownerMode?'Business owner registration':'Shopper registration'):
+                    signInAudience=='seller'?'Business owner sign-in':'Shopper sign-in',
                     style:TextStyle(fontWeight:FontWeight.w800,
                       color:ownerMode?const Color(0xFF234DB9):const Color(0xFF078E66))))
                 ])),
+              if(!registering)...[
+                const SizedBox(height:14),
+                const Text('Continue as',style:TextStyle(
+                  fontWeight:FontWeight.w800,color:Color(0xFF254D44))),
+                const SizedBox(height:8),
+                Wrap(spacing:9,runSpacing:9,children:[
+                  ChoiceChip(key:const ValueKey('teyza-login-shopper'),
+                    avatar:const Icon(Icons.shopping_basket_outlined,size:18),
+                    label:const Text('Shopper'),selected:signInAudience=='shopper',
+                    onSelected:working?null:(_)=>setState(()=>signInAudience='shopper')),
+                  ChoiceChip(key:const ValueKey('teyza-login-business-owner'),
+                    avatar:const Icon(Icons.storefront_outlined,size:18),
+                    label:const Text('Business owner'),selected:signInAudience=='seller',
+                    onSelected:working?null:(_)=>setState(()=>signInAudience='seller')),
+                ]),
+                if(signInAudience=='seller')const Padding(
+                  padding:EdgeInsets.only(top:8),
+                  child:Text('Spaza shops, mini markets, salons, small businesses, services and wholesalers. One secure sign-in; your approved accounts determine access.',
+                    style:TextStyle(color:Color(0xFF56746B),fontSize:12,height:1.4))),
+              ],
               const SizedBox(height:12),
               const Text('Choose a secure sign-in method',textAlign:TextAlign.center,
                 style:TextStyle(fontSize:13,fontWeight:FontWeight.w700,color:Color(0xFF60746B))),
@@ -598,6 +623,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                   registering=!registering;audience=null;showLegacyEmail=false;status=null;
                   widget.session.requestedRegistrationRole=null;
                   widget.session.requestedSellerCategory=null;
+                  widget.session.requestedBusinessType=null;
                 }),
                 icon:const Icon(Icons.person_add_alt_1_rounded,color:Color(0xFF078E66)),
                 label:Text(registering?'Already on Teyza? Sign in':

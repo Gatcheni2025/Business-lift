@@ -1193,3 +1193,32 @@ test('Public business cover requires explicit photo consent and never publishes 
  const privatePhoto=f.db.records.get('teyzaMobileVerification/seller1');
  assert.equal(privatePhoto.objectPath,'teyza-private/mobile-verification/seller1/selfie.enc');
 });
+
+test('Business owner registration stores detailed type without changing approval or account category',async()=>{
+ const f=fixture();
+ await register(f.service,buyer,{category:'retail',businessType:'salon',
+   shopName:'Neighbourhood Hair Studio',phone:'0712345678',consent:true});
+ const saved=f.db.records.get('teyzaSellerAccounts/buyer1');
+ assert.equal(saved.category,'retail');
+ assert.equal(saved.businessType,'salon');
+ assert.equal(saved.approvalStatus,'pending');
+ assert.equal(saved.listingPlan,'free');
+ const wrong=fixture();
+ await rejects(register(wrong.service,buyer,{category:'retail',businessType:'wholesale_supplier',
+   shopName:'Fake Supplier',phone:'0712345678',consent:true}),422);
+ assert(!wrong.db.records.has('teyzaSellerAccounts/buyer1'));
+});
+test('An eligible catalogue item is sold as a truthful non-scale portion throughout the shopper listing',async()=>{
+ const f=fixture();
+ const row={templateId:'tomatoes-500-g',priceCents:1300,stockQty:7,saleUnit:'small_bag'};
+ await f.service.execute(owner,'catalogue_add',{products:[row]});
+ const draft=f.db.records.get('teyzaDraftProducts/seller1/items/catalog_tomatoes-500-g');
+ assert.equal(draft.saleUnit,'small_bag');
+ assert.match(draft.description,/not a measured weight/);
+ const published=f.db.records.get('teyzaPublicShops/seller1').products.find(p=>
+   p.id==='catalog_tomatoes-500-g');
+ assert.equal(published.name,'Tomatoes · Small bag (seller portion)');
+ assert.equal(published.unit,'Small bag (seller portion)');
+ assert.equal(published.priceCents,1300);
+ assert.equal(published.stock,7);
+});
