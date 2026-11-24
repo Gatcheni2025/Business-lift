@@ -174,12 +174,18 @@ void main(){
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
-  testWidgets('Existing registered sellers enter the selling dashboard without a saved mode',(tester) async {
+  testWidgets('Existing registered sellers can explicitly switch from home into selling',(tester) async {
     SharedPreferences.setMockInitialValues({});final session=SellerSession(),api=SellerApi(SellerSession());
     await tester.pumpWidget(MaterialApp(home:ShopperHome(session:session,enableBackgroundServices:false,
       initialArea:areas.first,sellerMobileApi:api,sellerApiFactory:(uid,token)=>ShopRepo(uid:uid,token:token),
       catalogueLoader:() async=>[],directoryLoader:(_,__,___) async=>[])));
-    await tester.pumpAndSettle();expect(session.sellerWorkspace,isTrue);expect(find.text('Spaza shop dashboard'),findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(session.sellerWorkspace,isFalse);
+    expect(find.byKey(const ValueKey('nav-home')),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('teyza-mode-switch')));await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mode-seller')));await tester.pumpAndSettle();
+    expect(session.sellerWorkspace,isTrue);
+    expect(find.text('Spaza shop dashboard'),findsOneWidget);
     expect(find.text('Shops'),findsNothing);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
