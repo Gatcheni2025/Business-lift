@@ -24,4 +24,7 @@ test('Version guard never compares multiline git output as a PowerShell array',(
   assert.match(code,/\$VersionLines.Count -ne 1/);
   assert.match(code,/\$VersionLines\[0\]\.Trim\(\) -cne \$ExpectedVersion/);
   assert.doesNotMatch(code,/\$SourceVersion -notmatch/);
+  assert.match(code,/\$Refspec = '\+refs\/heads\/\{0\}:refs\/remotes\/origin\/\{0\}'/);
+  assert.match(code,/git fetch origin \$Refspec/);
+  assert.doesNotMatch(code,/git fetch origin \$ReleaseBranch/);
 });
