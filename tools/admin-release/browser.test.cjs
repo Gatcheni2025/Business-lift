@@ -450,7 +450,10 @@ async function main(){
    const account=f.page.locator('[data-seller-account]');await account.waitFor();await f.page.waitForFunction(()=>{const r=document.querySelector('[data-seller-account]')?.getBoundingClientRect();return r&&r.top>=-1&&r.top<innerHeight;});assert.equal(await f.page.getByRole('button',{name:'Open account',exact:true}).count(),0);
    await f.page.getByRole('button',{name:'← Back to seller directory',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().waitFor();
    assert.equal(await f.page.getByRole('button',{name:'Product approvals',exact:true}).count(),0);
-   await f.page.getByRole('button',{name:'Support',exact:true}).click();await f.page.getByText('Log a received support request',{exact:true}).waitFor();
+   await f.page.getByRole('button',{name:'Support inbox',exact:true}).click();
+   await f.page.locator('.ops-chat-workspace').waitFor();
+   await f.page.locator('.ops-support-cases > summary').click();
+   await f.page.getByText('Log an email or telephone request',{exact:true}).waitFor();
    await f.page.getByRole('button',{name:'Stock finance',exact:true}).click();await f.page.getByText('Stock finance review',{exact:true}).waitFor();
    assert.equal(f.errors.length,0,f.errors.join('\n'));await f.context.close();
   });
