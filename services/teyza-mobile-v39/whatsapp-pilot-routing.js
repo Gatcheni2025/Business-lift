@@ -129,8 +129,8 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
       createdBy:sellerUid,createdAt:at,updatedAt:at,source:'seller_admin_chat',
       shopName:currentAccount.data().shopName||'Business',
       lastMessage:'WhatsApp agent requested',lastMessageAt:at,messageCount:0,
-      sellerUnread:0,adminUnread:1,whatsAppActive:true,whatsAppLastInboundAt:at});
-     else tx.update(supportRef,{whatsAppActive:true,whatsAppLastInboundAt:at,
+      sellerUnread:0,adminUnread:1,whatsAppActive:true,whatsAppHandoffAt:at,whatsAppLastInboundAt:at});
+     else tx.update(supportRef,{whatsAppActive:true,whatsAppHandoffAt:at,whatsAppLastInboundAt:at,
       status:'open',updatedAt:at,adminUnread:(supportSnap.data().adminUnread||0)+1});
     }
     if(event.action==='stop'){
