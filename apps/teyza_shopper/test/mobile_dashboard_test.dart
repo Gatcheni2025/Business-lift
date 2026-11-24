@@ -78,6 +78,8 @@ void main(){
     expect(session.name,'Apple Shopper');session.dispose();client.close();
   });
   testWidgets('iPhone shopper login offers Google and Apple with email',(tester) async{
+    await tester.binding.setSurfaceSize(const Size(390,1000));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
     final session=ShopperSession(store:TestStore())..isReady=true;
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:ShopperAccountPanel(session:session))));
     expect(find.text('Continue with Google'),findsOneWidget);expect(find.text('Continue with Apple'),findsOneWidget);
