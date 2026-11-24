@@ -48,12 +48,18 @@ Future<void> start(WidgetTester t,RoutingSession session,RoutingApi api,
 }
 void main(){
   for(final type in ['spaza','retail','wholesale']){
-    testWidgets('Only the existing $type account opens directly after one sign-in',(t)async{
+    testWidgets('Existing $type account launches to home and opens only after explicit role switch',(t)async{
       final session=RoutingSession(),api=RoutingApi(RoutingSession());
       await start(t,session,api,seller:SellerShop('Existing business',type,'Durban','approved','active'));
-      expect(session.sellerWorkspace,true);
+      expect(session.sellerWorkspace,false);
+      expect(find.byKey(const ValueKey('nav-home')),findsOneWidget);
       expect(find.text('Select account'),findsNothing);
       expect(session.userId,'existingUid');
+      await t.tap(find.byKey(const ValueKey('teyza-mode-switch')));await t.pumpAndSettle();
+      expect(find.text('Select account'),findsOneWidget);
+      expect(find.byKey(const ValueKey('mode-seller')),findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('mode-seller')));await t.pumpAndSettle();
+      expect(session.sellerWorkspace,true);
       expect(find.byKey(const ValueKey('seller-nav-0')),findsOneWidget);
       await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
     });
@@ -62,9 +68,12 @@ void main(){
     testWidgets('Multiple existing accounts show Select account before routing to ${chooseSeller?'seller':'shopper'}',(t)async{
       final session=RoutingSession(),api=RoutingApi(RoutingSession(),shopper:true);
       await start(t,session,api,seller:const SellerShop('My salon','retail','Durban','approved','active'));
+      expect(find.byKey(const ValueKey('nav-home')),findsOneWidget);
+      expect(find.text('Select account'),findsNothing);
+      expect(session.sellerWorkspace,false);
+      await t.tap(find.byKey(const ValueKey('teyza-mode-switch')));await t.pumpAndSettle();
       expect(find.text('Select account'),findsOneWidget);
       expect(find.text('Business owner'),findsOneWidget);
-      expect(session.sellerWorkspace,false);
       await t.tap(find.byKey(ValueKey(chooseSeller?'mode-seller':'mode-shopper')));
       await t.pumpAndSettle();
       expect(session.sellerWorkspace,chooseSeller);
@@ -73,23 +82,33 @@ void main(){
       await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
     });
   }
-  testWidgets('First social login offers Shopper or Seller, then business type',(t)async{
+  testWidgets('First social login opens home and offers Shopper / Business owner on account request',(t)async{
     final session=RoutingSession(),api=RoutingApi(RoutingSession());
     await start(t,session,api);
+    expect(find.byKey(const ValueKey('nav-home')),findsOneWidget);
+    expect(find.text('Finish registration'),findsNothing);
+    await t.tap(find.byKey(const ValueKey('nav-account')));await t.pumpAndSettle();
     expect(find.text('Finish registration'),findsOneWidget);
     expect(find.byKey(const ValueKey('registration-shopper')),findsOneWidget);
     expect(find.byKey(const ValueKey('registration-seller')),findsOneWidget);
-    expect(find.byKey(const ValueKey('registration-wholesale')),findsNothing);
+    expect(find.byKey(const ValueKey('registration-business-wholesale_supplier')),findsNothing);
     await t.tap(find.byKey(const ValueKey('registration-seller')));await t.pumpAndSettle();
-    await t.ensureVisible(find.byKey(const ValueKey('registration-wholesale')));
-    await t.tap(find.byKey(const ValueKey('registration-wholesale')));await t.pumpAndSettle();
-    expect(session.requestedSellerCategory,'wholesale');expect(session.userId,'existingUid');
+    await t.ensureVisible(find.text('Wholesale',skipOffstage:false).first);
+    await t.tap(find.text('Wholesale').first);await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const ValueKey('registration-business-wholesale_supplier')));
+    await t.tap(find.byKey(const ValueKey('registration-business-wholesale_supplier')));await t.pumpAndSettle();
+    expect(session.requestedSellerCategory,'wholesale');
+    expect(session.requestedBusinessType,'wholesale_supplier');
+    expect(session.userId,'existingUid');
     expect(session.sellerWorkspace,true);expect(session.hasAdminClaim,false);
     await t.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
   });
   testWidgets('Account lookup failure offers retry and does not start a new registration',(t)async{
     final session=RoutingSession(),api=RoutingApi(RoutingSession(),shopper:true)..fail=true;
     await start(t,session,api);
+    expect(find.byKey(const ValueKey('nav-home')),findsOneWidget);
+    expect(find.text('Try again'),findsNothing);
+    await t.tap(find.byKey(const ValueKey('nav-account')));await t.pumpAndSettle();
     expect(find.text('Try again'),findsOneWidget);
     expect(find.text('Finish registration'),findsNothing);
     api.fail=false;
