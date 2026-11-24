@@ -4,7 +4,7 @@ import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={map:'National shop coverage',whatsapp:'WhatsApp delivery status',users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'A better support desk.',finance:'Stock finance review',field:'HR & field team'};
+const titles={map:'National shop coverage',whatsapp:'WhatsApp delivery status',users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'Support inbox',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  const navButtons=[...document.querySelectorAll('[data-admin-view]')];
@@ -18,11 +18,12 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  let generation=0,ready=false,view='map',sellers=[],next=null,selected=null,detail=null,accountTab='summary',archiveExpanded=false,sellerSnapshotLoaded=false,
      users=[],usersNext=null,userSelected=null,userDetail=null,
       tickets=[],finance=[],catalogueQueue=[],catalogueLimited=false,wholesaleAdQueue=[],wholesaleAdError=null,shopperAdQueue=[],shopperAdError=null,shopperAdPreview=null,closures=[],closuresNext=null,mandates=[],mandatesLoaded=false,mandatesLimited=false,
-     moreFinance=null,moreTickets=null,busy=false,mandateError=null,whatsappState=null;
+     moreFinance=null,moreTickets=null,busy=false,mandateError=null,whatsappState=null,
+     supportSelectedId=null,supportMessages=[],supportSearch='',supportFilter='all';
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
  const coverageMap=createAdminMap({api:(action,data)=>request(action,data),report:onError});
- function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;supportSelectedId=null;supportMessages=[];supportSearch='';supportFilter='all';busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -718,72 +719,169 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  function printStatement(d){const w=window.open('','_blank');if(!w)throw Error('Allow popups to print the statement.');const doc=w.document;doc.title='Teyza seller statement';const style=doc.createElement('style');style.textContent='body{font:13px system-ui;padding:30px;color:#183c43}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}h1{font-size:28px}@media print{button{display:none}}';doc.head.append(style);const body=doc.body;body.append(el('h1','Teyza · Seller statement'),el('p',d.seller.shopName+' · '+d.seller.sellerUid),el('p',d.seller.ownerEmail),el('p','Generated '+new Date().toLocaleString('en-ZA')+' · Currency ZAR'),table(['Date','Description','Month','Reference','Charge','Payment','Balance'],statementRows(d.entries)),el('p','Closing balance: '+money(d.entries.at(-1)?.balanceCents||0)),el('p','Subscription ledger. Not a bank statement or a VAT tax invoice.'));const b=el('button','Print / save PDF');b.onclick=()=>w.print();body.append(b);w.focus();}
  function support(){
-   const intro=card('Seller and admin support chat','A private conversation with the original seller Firebase account. Customer conversations remain separate. This inbox is for account assistance, not for sending payment links or collecting passwords, OTPs or card details.');
-   root.append(intro);
-   const create=card('Log a received support request','Use this for email or phone requests. Internal notes are not visible to sellers.'),f=el('form',undefined,'ops-form');
-   sellerPicker(f);field(f,'Subject','subject');field(f,'Request details','message','textarea');
-   submit(f,'Create support case',async fd=>{await request('ops_support_create',Object.fromEntries(fd));await refresh();message('Support case created.','success');});
-   create.append(f);root.append(create);
-   for(const t of tickets){
-     const liveChat=t.source==='seller_admin_chat';
-     const c=card(liveChat?(t.shopName||'Seller')+' · Teyza Support':t.subject,
-       t.ownerUid+' · '+new Date(t.createdAt).toLocaleString('en-ZA'));
-     if(!liveChat)c.append(el('p',t.message));
-     else c.append(el('p',t.lastMessage||'Seller has opened a support conversation.'));
-     c.append(tag(t.status));
-     if(liveChat){
-       const thread=el('div',undefined,'ops-support-thread');
-       let current=[];
-       const paint=()=>{
-         thread.replaceChildren();
-         if(!current.length)thread.append(el('p','No messages yet.','footnote'));
-         for(const m of current){
-           const row=el('div',undefined,'ops-support-bubble');
-           row.append(el('strong',m.sender==='admin'?'Teyza Support':'Seller'),
-             el('p',m.text));
-           thread.append(row);
-         }
-       };
-       const load=async()=>{
-         const r=await request('ops_support_thread',{ticketId:t.id});
-         current=r.messages||[];paint();
-       };
-       c.append(button('Open conversation',async()=>{await load();}),thread);
-       const reply=el('form',undefined,'ops-form');
-       field(reply,'Reply to seller (no links or payment instructions)','message','textarea');
-       submit(reply,'Send to seller',async fd=>{
-         const text=String(fd.get('message')||'').trim();
-         if(text.length<2)throw Error('Write a reply.');
-         await request('ops_support_reply',{ticketId:t.id,message:text,
-           messageId:'a'+Date.now().toString()+Math.random().toString(36).slice(2,10)});
-         message('Support reply sent to this seller. No payment was created.','success');
-         await load();
-       });
-       c.append(reply);
-     }else{
-       const notes=el('div');
-       c.append(button('View internal notes',async()=>{
-         const r=await request('ops_support_detail',{ticketId:t.id});
-         notes.replaceChildren(...r.notes.map(n=>el('p',new Date(n.createdAt).toLocaleString('en-ZA')+' · '+n.note)));
-         if(!r.notes.length)notes.append(el('p','No internal notes yet.'));
-       }),notes);
-       const form=el('form',undefined,'ops-form');
-       choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved'].map(v=>[v,v.replaceAll('_',' ')]),t.status);
-       choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);
-       field(form,'Internal note','note','textarea');
-       submit(form,'Save case update',async fd=>{
-         await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});
-         await refresh();message('Internal support note saved. No message sent.','success');
-       });
-       c.append(form);
-     }
-     root.append(c);
+   const conversations=tickets.filter(t=>t.source==='seller_admin_chat')
+     .sort((a,b)=>(b.lastMessageAt||b.updatedAt||0)-(a.lastMessageAt||a.updatedAt||0));
+   const cases=tickets.filter(t=>t.source!=='seller_admin_chat');
+   const workspace=el('section',undefined,'ops-chat-workspace');
+   const bar=el('div',undefined,'ops-chat-bar');
+   const headline=el('div');headline.append(el('h3','Messages & conversations'),
+     el('p','Private Teyza seller and WhatsApp support. Select a business to see the two-way conversation.','footnote'));
+   const portal=el('a','Open dedicated agent inbox ↗','button quiet ops-agent-portal');
+   portal.href='/support-inbox.html';portal.rel='noopener noreferrer';
+   bar.append(headline,portal);workspace.append(bar);
+   const layout=el('div',undefined,'ops-chat-layout');
+   const sidebar=el('section',undefined,'ops-chat-sidebar');
+   const searchLabel=el('label','Find conversations');
+   const search=el('input');search.type='search';search.placeholder='Search business or message';
+   search.value=supportSearch;search.setAttribute('aria-label','Search support conversations');
+   search.addEventListener('input',()=>{supportSearch=search.value;paintList();});
+   searchLabel.append(search);
+   const select=el('select');select.setAttribute('aria-label','Filter support channel');
+   for(const [v,txt] of [['all','All conversations'],['whatsapp','WhatsApp only'],['app','In-app support']]){
+     const option=el('option',txt);option.value=v;select.append(option);
    }
-   if(!tickets.length)root.append(el('p','No support conversations yet.','footnote'));
-   if(moreTickets)root.append(button('Load more cases',async()=>{
-     const r=await request('ops_support_list',{after:moreTickets});
-     tickets.push(...r.tickets);moreTickets=r.next;show();
+   select.value=supportFilter;select.onchange=()=>{supportFilter=select.value;paintList();};
+   const filters=el('div',undefined,'ops-chat-filter');filters.append(searchLabel,select);
+   const list=el('div',undefined,'ops-chat-list');list.setAttribute('aria-label','Seller support conversations');
+   const count=el('p',undefined,'ops-chat-count');
+   sidebar.append(filters,count,list);
+   const threadPanel=el('section',undefined,'ops-chat-thread-panel');
+   layout.append(sidebar,threadPanel);workspace.append(layout);root.append(workspace);
+   async function openConversation(t){
+     supportSelectedId=t.id;supportMessages=[];show();
+     try{
+       const response=await request('ops_support_thread',{ticketId:t.id});
+       if(supportSelectedId!==t.id)return;
+       supportMessages=response.messages||[];
+       show();
+     }catch(e){if(!e.stale)throw e;}
+   }
+   function paintList(){
+     list.replaceChildren();
+     const term=supportSearch.trim().toLocaleLowerCase();
+     const visible=conversations.filter(t=>
+       (supportFilter==='all'||(supportFilter==='whatsapp'?t.whatsAppActive===true:t.whatsAppActive!==true))&&
+       [t.shopName,t.subject,t.lastMessage].some(x=>String(x||'').toLocaleLowerCase().includes(term)));
+     count.textContent=visible.length+' conversation'+(visible.length===1?'':'s')+
+       (cases.length?' · '+cases.length+' internal cases':'');
+     for(const t of visible){
+       const option=el('button',undefined,'ops-chat-item'+(supportSelectedId===t.id?' selected':''));
+       option.type='button';option.setAttribute('aria-current',String(supportSelectedId===t.id));
+       const avatar=el('span',String(t.shopName||'T').charAt(0).toLocaleUpperCase(),'ops-chat-avatar');
+       const info=el('span',undefined,'ops-chat-item-info');
+       const title=el('span',undefined,'ops-chat-item-title');
+       title.append(el('strong',t.shopName||'Seller'));
+       title.append(el('small',t.whatsAppActive===true?'WhatsApp':'Seller app'));
+       const preview=el('span',t.lastMessage||'No messages yet','ops-chat-preview');
+       const meta=el('span',undefined,'ops-chat-item-meta');
+       const updated=t.lastMessageAt||t.updatedAt||t.createdAt;
+       if(updated)meta.append(el('span',new Date(updated).toLocaleString('en-ZA')));
+       if((t.adminUnread||0)>0)meta.append(el('span',String(t.adminUnread)+' new','ops-chat-unread'));
+       info.append(title,preview,meta);option.append(avatar,info);
+       option.onclick=()=>safely(()=>openConversation(t));list.append(option);
+     }
+     if(!visible.length)list.append(el('p',conversations.length?'No matching conversations.':'No seller messages yet.','ops-chat-empty'));
+   }
+   paintList();
+   const current=conversations.find(t=>t.id===supportSelectedId);
+   if(!current){
+     threadPanel.append(el('div',undefined,'ops-chat-placeholder'));
+     const placeholder=threadPanel.firstElementChild;
+     placeholder.append(el('div','💬','ops-chat-empty-icon'),
+       el('h3','Select a conversation'),
+       el('p','Choose a business on the left to view and reply to their messages.'));
+   }else{
+     const header=el('header',undefined,'ops-chat-thread-header');
+     const info=el('div');info.append(el('h3',current.shopName||'Teyza business'));
+     const meta=el('p',current.whatsAppActive===true?
+       'Meta WhatsApp · Approved seller support':'Teyza in-app support','ops-chat-channel');
+     info.append(meta);header.append(info,tag(current.status));
+     const messages=el('div',undefined,'ops-chat-messages');
+     messages.setAttribute('role','log');messages.setAttribute('aria-label','Conversation messages');
+     if(!supportMessages.length)messages.append(el('p','Open conversation to load the message history.','ops-chat-empty'));
+     for(const m of supportMessages){
+       const bubble=el('article',undefined,'ops-chat-bubble '+(m.sender==='admin'?'outgoing':'incoming'));
+       const name=m.sender==='admin'?'Teyza Support':m.source==='meta_whatsapp_support'?'Seller · WhatsApp':'Business owner';
+       bubble.append(el('strong',name),el('p',m.text||''));
+       const foot=el('small',new Date(m.createdAt||0).toLocaleString('en-ZA'));
+       if(m.sender==='admin'&&current.whatsAppActive===true){
+         const statuses={accepted:'Meta accepted · delivery not confirmed',
+           sending:'Sending to Meta…',needs_review:'Delivery needs review',
+           window_expired:'Not sent · reply window expired',
+           configuration_required:'Not sent · WhatsApp unavailable'};
+         foot.textContent+=' · '+(statuses[m.whatsAppReplyStatus]||'Reply saved · WhatsApp processing');
+       }
+       bubble.append(foot);messages.append(bubble);
+     }
+     header.append(button('Reload messages',async()=>{
+       const reply=await request('ops_support_thread',{ticketId:current.id});
+       supportMessages=reply.messages||[];show();
+     }));
+     threadPanel.append(header,messages);
+     const windowOpen=current.whatsAppActive!==true||
+       (Number(current.whatsAppLastInboundAt)>0&&Date.now()-Number(current.whatsAppLastInboundAt)<23*60*60*1000);
+     const form=el('form',undefined,'ops-chat-composer');
+     const input=field(form,'Reply to '+(current.shopName||'business owner'),'message','textarea');
+     input.placeholder='Type your response…';input.maxLength=1000;input.rows=3;
+     const hint=el('p',current.whatsAppActive===true?
+       windowOpen?'Your reply is saved securely and forwarded to Meta. Delivery is not guaranteed until Meta confirms it.':
+       'The WhatsApp customer-service window is closed. Ask the seller to message again first.':
+       'This reply appears in the seller’s Teyza app support conversation.','ops-chat-hint');
+     form.append(hint);
+     submit(form,current.whatsAppActive===true?'Send WhatsApp reply':'Send reply',async fd=>{
+       const text=String(fd.get('message')||'').trim();
+       if(text.length<2)throw Error('Write a reply before sending.');
+       if(current.whatsAppActive===true&&!windowOpen)throw Error('WhatsApp reply window expired.');
+       await request('ops_support_reply',{ticketId:current.id,message:text,
+         messageId:'a'+Date.now().toString()+Math.random().toString(36).slice(2,10)});
+       message('Reply saved. WhatsApp delivery is processed separately.','success');
+       const response=await request('ops_support_thread',{ticketId:current.id});
+       supportMessages=response.messages||[];input.value='';show();
+     });
+     if(!windowOpen){
+       input.disabled=true;form.querySelector('button[type=submit]').disabled=true;
+     }
+     threadPanel.append(form);
+     messages.scrollTop=messages.scrollHeight;
+   }
+   if(moreTickets)root.append(button('Load more conversations',async()=>{
+     const response=await request('ops_support_list',{after:moreTickets});
+     tickets.push(...response.tickets);moreTickets=response.next;show();
    }));
+   const casesPanel=el('details',undefined,'ops-support-cases');
+   const label=el('summary','Internal support cases & historical requests ('+cases.length+')');
+   casesPanel.append(label,el('p',
+     'Advertising reviews belong in Ads & product reviews. Older WhatsApp requests here are historical records, not two-way conversations.','footnote'));
+   const create=card('Log an email or telephone request','Internal notes are not sent to customers.');
+   const f=el('form',undefined,'ops-form');sellerPicker(f);
+   field(f,'Subject','subject');field(f,'Request details','message','textarea');
+   submit(f,'Create internal case',async fd=>{
+     await request('ops_support_create',Object.fromEntries(fd));await refresh();
+     message('Internal case recorded.','success');
+   });
+   create.append(f);casesPanel.append(create);
+   for(const t of cases){
+     const item=card(t.subject||'Internal support request',
+       (t.shopName||'')+' · '+new Date(t.createdAt||0).toLocaleString('en-ZA'));
+     item.append(el('p',t.message||''),tag(t.status));
+     const notes=el('div');item.append(button('View internal notes',async()=>{
+       const response=await request('ops_support_detail',{ticketId:t.id});
+       notes.replaceChildren(...(response.notes||[]).map(n=>
+         el('p',new Date(n.createdAt||0).toLocaleString('en-ZA')+' · '+n.note)));
+       if(!response.notes?.length)notes.append(el('p','No notes yet.'));
+     }),notes);
+     const form=el('form',undefined,'ops-form');
+     choice(form,'Status','status',['open','in_progress','waiting_for_seller','resolved']
+       .map(v=>[v,v.replaceAll('_',' ')]),t.status);
+     choice(form,'Priority','priority',['normal','high','urgent'].map(v=>[v,v]),t.priority);
+     field(form,'Internal note','note','textarea');
+     submit(form,'Save case update',async fd=>{
+       await request('ops_support_update',{ticketId:t.id,revision:t.revision,...Object.fromEntries(fd)});
+       await refresh();message('Internal support case updated.','success');
+     });
+     item.append(form);casesPanel.append(item);
+   }
+   root.append(casesPanel);
  }
  function financeView(){root.append(el('p','Finance decisions require a manual review. Approval in principle does not create a loan agreement or release funds.','notice warning'));for(const a of finance){const c=card('Stock finance · '+money(a.amountCents),a.ownerUid+' · '+new Date(a.createdAt).toLocaleDateString('en-ZA'));c.append(tag(a.status),el('p',a.purpose),el('p','Contact: '+a.phone));if(a.reviewNote)c.append(el('p','Review note: '+a.reviewNote));if(!['approved_in_principle','declined'].includes(a.status)){const f=el('form',undefined,'ops-form');choice(f,'Review outcome','status',[['under_review','Under review'],['more_information','Request more information'],['approved_in_principle','Approve in principle'],['declined','Decline']],a.status==='enquiry_received'?'under_review':a.status);field(f,'Approved amount (R) — only for approval','approved','text',String((a.amountCents||0)/100),false);field(f,'Review note / conditions','note','textarea');check(f,'I completed the manual review and checked the seller’s approval and supporting information.','reviewConfirmed');submit(f,'Save finance review',async fd=>{if(!confirm('Save this stock finance review outcome? No funds will be disbursed.'))return;await request('ops_finance_decide',{path:a.path,expectedStatus:a.status,status:fd.get('status'),approvedAmountCents:fd.get('status')==='approved_in_principle'?cents(fd.get('approved')):0,note:fd.get('note'),reviewConfirmed:true});await refresh();message('Finance review saved. Funds have not been disbursed.','success');});c.append(f);}else c.append(el('p','Reviewed outcome · '+money(a.approvedAmountCents||0)+' · Not disbursed','footnote'));root.append(c);}if(!finance.length)root.append(el('p','No stock finance requests loaded.','footnote'));if(moreFinance)root.append(button('Load more finance requests',async()=>{const r=await request('ops_finance_queue',{after:moreFinance});finance.push(...r.requests);moreFinance=r.next;show();}));}
  async function refreshMandates(){
@@ -855,6 +953,24 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   root.replaceChildren(el('p','Loading administrator workspace…','footnote'));
   await refresh();
 }
+ // Quietly refresh active chat data, without erasing a message being typed.
+ // Requests remain bound to the current authenticated administrator session.
+ setInterval(()=>{
+  if(!ready||view!=='support'||busy||document.hidden)return;
+  if(document.activeElement?.closest?.('.ops-chat-composer'))return;
+  safely(async()=>{
+   const result=await request('ops_support_list');
+   tickets=result.tickets||[];moreTickets=result.next||null;
+   if(supportSelectedId){
+    const chosen=tickets.find(t=>t.id===supportSelectedId);
+    if(chosen){
+     const thread=await request('ops_support_thread',{ticketId:supportSelectedId});
+     supportMessages=thread.messages||[];
+    }else{supportSelectedId=null;supportMessages=[];}
+   }
+   show();
+  });
+ },20000);
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
  document.getElementById('backToBusinessAccounts').onclick=()=>safely(()=>navigate('sellers'));
  return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};

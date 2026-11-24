@@ -1,7 +1,19 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
-const actions=new Set(['ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
+const actions=new Set(['ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_whatsapp_support_inbox','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
+// Support agents are restricted to the WhatsApp support queue and its
+// authenticated seller/admin conversations. They cannot approve sellers,
+// inspect documents, run payments or administer Firebase users.
+const SUPPORT_AGENT_ACTIONS=new Set(['ops_whatsapp_support_inbox','ops_support_thread','ops_support_reply']);
+function recentSupportAgent(auth,clock){
+ if(auth.teyzaSupportAgent!==true||auth.email_verified!==true)
+  D.fail(403,'Verified Teyza support-agent access is required.');
+ if(auth.teyzaPhoneBootstrap===true)D.fail(401,'Sign in again before handling messages.');
+ const age=clock()/1000-auth.auth_time;
+ if(!Number.isFinite(age)||age< -60||age>300)
+  D.fail(401,'Sign in again to renew your five-minute support session.');
+}
 const row=s=>({id:s.id,...s.data()});
 function period(value){if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value||''))D.fail(422,'Choose a billing month in YYYY-MM format.');return value;}
 function amount(value){if(!Number.isSafeInteger(value)||value<=0||value>50000000)D.fail(422,'Enter a valid amount in cents.');return value;}
@@ -15,6 +27,8 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
  async function execute(auth,action,data={}){
   const uid=D.id(auth.uid),self=action.startsWith('seller_');
   if(self){if(!auth.email_verified&&!auth.phone_number)D.fail(403,'Verify your email or phone first.');await owner(uid);}
+  else if(auth.teyzaAdmin===true)recentAdmin(auth,clock);
+  else if(SUPPORT_AGENT_ACTIONS.has(action))recentSupportAgent(auth,clock);
   else recentAdmin(auth,clock);
   await rate(uid,'operations',60,60000);
   // Historical entries remain available in statements. Manual receipts may
@@ -124,6 +138,24 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
         paymentStatus:billing?.status||'not_started'};
     }));
     return {submissions:rows.filter(Boolean),limited:result.docs.length===50};
+  }
+  if(action==='ops_whatsapp_support_inbox'){
+   // Source of truth is private Firestore, not Meta dashboards or browser
+   // storage. Only active, opted-in support handoffs are listed to agents.
+   // This is a bounded query; each page is identified by document ID.
+   const base=db.collection('teyzaSupportTickets').where('whatsAppActive','==',true).orderBy('__name__');
+   const q=(data.after?base.startAfter(D.id(data.after)):base).limit(51);
+   const result=await q.get(),page=result.docs.slice(0,50);
+   const rows=page.filter(x=>x.data().source==='seller_admin_chat').map(x=>{
+     const t=x.data();
+     return {id:x.id,shopName:t.shopName||'Teyza business',
+       status:t.status||'open',lastMessage:t.lastMessage||'Seller requested a consultant',
+       lastMessageAt:t.lastMessageAt||t.updatedAt||t.createdAt||0,
+       whatsAppLastInboundAt:t.whatsAppLastInboundAt||0,updatedAt:t.updatedAt||0,
+       adminUnread:t.adminUnread||0,messageCount:t.messageCount||0};
+   });
+   rows.sort((a,b)=>b.lastMessageAt-a.lastMessageAt);
+   return {tickets:rows,next:result.docs.length>50?page.at(-1).id:null};
   }
   if(action==='ops_whatsapp_status'){
     // Status only: never expose Meta bearer credentials or private phone numbers.
@@ -435,7 +467,8 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   if(['seller_support_thread','ops_support_thread'].includes(action)){
    const ticketId=self?'seller_'+uid:D.id(data.ticketId);
    const ticket=await read('teyzaSupportTickets/'+ticketId);
-   if(!ticket||ticket.source!=='seller_admin_chat'||(self&&ticket.ownerUid!==uid))
+   if(!ticket||ticket.source!=='seller_admin_chat'||(self&&ticket.ownerUid!==uid)||
+       (!self&&auth.teyzaAdmin!==true&&ticket.whatsAppActive!==true))
      D.fail(404,'Support conversation not found.');
    const rows=await db.collection('teyzaSupportTickets/'+ticketId+'/messages')
      .orderBy('sequence','desc').limit(60).get();
@@ -456,7 +489,9 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
    await db.runTransaction(async tx=>{
     const ref=doc('teyzaSupportTickets/'+ticketId),snap=await tx.get(ref);
     if(!snap.exists||snap.data().source!=='seller_admin_chat'||
-       (self&&snap.data().ownerUid!==uid))D.fail(404,'Support conversation not found.');
+       (self&&snap.data().ownerUid!==uid)||
+       (!self&&auth.teyzaAdmin!==true&&snap.data().whatsAppActive!==true))
+       D.fail(404,'Support conversation not found.');
     const entry=ref.collection('messages').doc(messageId),existing=await tx.get(entry);
     if(existing.exists){
      if(existing.data().senderUid!==uid||existing.data().text!==raw)
