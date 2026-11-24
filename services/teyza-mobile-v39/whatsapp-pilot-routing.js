@@ -155,7 +155,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     '🎉 Your Teyza business has been approved! Your business listing is FREE.\n\nReady to sell products or services online? Activate eligible selling tools for R99 per full calendar month. Your first payment may be prorated where enabled.\n\nSee benefits and start here: https://teyza.co.za/seller-getting-started.html\n\nReply MENU for more options.':
     event.action==='advertise'?
     '📣 Want more local exposure? Teyza local ads start at R29 for 7 days, with an additional charge for wider reach.\n\nCreate your advertisement at https://teyza.co.za/ads/ using your approved seller account. Teyza admin reviews it first; after approval, you can pay securely on the same page.\n\nReply MENU anytime for your choices.':
-    '✅ Teyza Support is ready to receive your question. Send your message here in WhatsApp and our team can reply in this same chat when an agent is available.\n\nPlease do not send passwords, OTP codes or bank details. Reply MENU for other options, or STOP to opt out.';
+    '✅ Teyza Support is ready to receive your question. Send your message here in WhatsApp and a Teyza consultant can reply in this same chat when available.\n\nPlease do not send passwords, OTP codes or bank details. Reply MENU for other options, or STOP to opt out.';
    try{
     const outbound=event.action==='main_menu'?
      {messaging_product:'whatsapp',recipient_type:'individual',to:event.from.slice(1),
