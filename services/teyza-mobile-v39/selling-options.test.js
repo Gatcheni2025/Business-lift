@@ -34,7 +34,7 @@ test('Seller-defined portions never claim unmeasured kilograms or gram conversio
  assert.equal(standard.unit,'500 g');
 });
 test('Unauthorized and misleading custom portion data fail closed',()=>{
- assert.throws(()=>catalogue.selection([{templateId:'milk-2-l',
+ assert.throws(()=>catalogue.selection([{templateId:'toilet-paper-4-rolls',
   priceCents:2200,stockQty:3,saleUnit:'small_bag'}]),{status:422});
  assert.throws(()=>catalogue.selection([{templateId:'tomatoes-500-g',
   priceCents:2200,stockQty:3,saleUnit:'500g'}]),{status:422});
