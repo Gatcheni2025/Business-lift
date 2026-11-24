@@ -68,7 +68,10 @@ async function inspect(client){
   if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Teyza custom domain mismatch.');
   const source=await current(client);
   const before=await allFiles(client,source);
-  if(!paths.every(p=>before.has(p)))throw Error('Homepage or stylesheet does not exist in live Hosting.');
+  // Only existing public HTML pages must be present. The new popup CSS/JS
+  // are expected to be absent on the first deployment.
+  const missing=pages.filter(p=>!before.has(p));
+  if(missing.length)throw Error('Live Hosting is missing expected public pages: '+missing.join(', '));
   const managed=managedFiles();
   return {source,before,managed};
 }
