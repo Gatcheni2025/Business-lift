@@ -38,8 +38,45 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   else if(/^(rejected|declined|suspended|failed)\b/i.test(label))pill.classList.add('status-alert');
   return pill;}
  function heading(){root.replaceChildren();const h=el('div',undefined,'workspace-title');const text=el('div');text.append(el('span','TEYZA OPERATIONS','eyebrow'),el('h2',titles[view]));if(view==='overview')text.append(el('p','The people, reviews and requests that keep your marketplace moving.'));h.append(text,button('Refresh',()=>refresh()));root.append(h);}
- function show(){for(const b of document.querySelectorAll('[data-admin-view]')){const active=b.dataset.adminView===view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');}approvals.hidden=view!=='approvals';root.hidden=view==='approvals';if(view==='approvals')return;if(view==='map')root.replaceChildren();else heading();if(!ready)return;
-  if(view==='map'){root.append(coverageMap.panel);coverageMap.activate();}if(view==='whatsapp')whatsappView();if(view==='field')fieldAdmin.render(root);if(view==='users')userManagement();if(view==='overview')overview();if(view==='products')productsView();if(view==='sellers'||view==='billing')registry();if(view==='support')support();if(view==='finance')financeView();}
+ function show(){
+  // A periodic chat refresh must not jump an agent back to the newest
+  // message while they are reading earlier messages in the scrollable thread.
+  const previousMessages=view==='support'?root.querySelector('.ops-chat-messages'):null;
+  const previousList=view==='support'?root.querySelector('.ops-chat-list'):null;
+  const listScrollTop=previousList?.scrollTop||0;
+  const previousScroll=previousMessages?{
+    ticketId:previousMessages.dataset.ticketId,top:previousMessages.scrollTop,
+    nearBottom:previousMessages.scrollHeight-previousMessages.clientHeight-previousMessages.scrollTop<=48
+  }:null;
+  for(const b of document.querySelectorAll('[data-admin-view]')){
+    const active=b.dataset.adminView===view;
+    b.classList.toggle('active',active);
+    b.setAttribute('aria-current',active?'page':'false');
+  }
+  approvals.hidden=view!=='approvals';root.hidden=view==='approvals';
+  if(view==='approvals')return;
+  if(view==='map')root.replaceChildren();else heading();
+  if(!ready)return;
+  if(view==='map'){root.append(coverageMap.panel);coverageMap.activate();}
+  if(view==='whatsapp')whatsappView();
+  if(view==='field')fieldAdmin.render(root);
+  if(view==='users')userManagement();
+  if(view==='overview')overview();
+  if(view==='products')productsView();
+  if(view==='sellers'||view==='billing')registry();
+  if(view==='support'){
+    support();
+    const currentMessages=root.querySelector('.ops-chat-messages');
+    const currentList=root.querySelector('.ops-chat-list');
+    if(currentList)currentList.scrollTop=listScrollTop;
+    if(currentMessages){
+      const continuing=previousScroll?.ticketId===currentMessages.dataset.ticketId;
+      currentMessages.scrollTop=continuing&&!previousScroll.nearBottom?
+        previousScroll.top:currentMessages.scrollHeight;
+    }
+  }
+  if(view==='finance')financeView();
+ }
  function whatsappView(){
   const cardNode=card('Meta WhatsApp approval messages','Only opted-in verified sellers should receive the approved template after account approval. Meta template approval alone does not authenticate the sender.');
   if(!whatsappState){cardNode.append(el('p','Unable to retrieve the WhatsApp readiness snapshot.','footnote'));root.append(cardNode);return;}
@@ -798,6 +835,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      info.append(meta);header.append(info,tag(current.status));
      const messages=el('div',undefined,'ops-chat-messages');
      messages.setAttribute('role','log');messages.setAttribute('aria-label','Conversation messages');
+     messages.setAttribute('tabindex','0');messages.dataset.ticketId=current.id;
      if(!supportMessages.length)messages.append(el('p','Open conversation to load the message history.','ops-chat-empty'));
      for(const m of supportMessages){
        const bubble=el('article',undefined,'ops-chat-bubble '+(m.sender==='admin'?'outgoing':'incoming'));
@@ -842,7 +880,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
        input.disabled=true;form.querySelector('button[type=submit]').disabled=true;
      }
      threadPanel.append(form);
-     messages.scrollTop=messages.scrollHeight;
+     // The scroll position is restored by show() after this panel renders.
    }
    if(moreTickets)root.append(button('Load more conversations',async()=>{
      const response=await request('ops_support_list',{after:moreTickets});
