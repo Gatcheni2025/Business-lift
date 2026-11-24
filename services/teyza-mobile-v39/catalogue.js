@@ -1,5 +1,6 @@
 'use strict';
 const D=require('./domain');
+const units=require('./selling-units');
 const data=require('./catalogue.json');
 const templates=new Map(data.products.map(p=>[p.id,p]));
 const prefix='catalog_';
@@ -12,11 +13,15 @@ function selection(rows){
     const p=templates.get(row?.templateId);
     if(!p||seen.has(p.id))D.fail(422,'Choose valid, different catalogue products.');
     seen.add(p.id);
+    const saleUnit=row.saleUnit??'original_pack';
+    if(!units.valid(p.category,saleUnit))D.fail(422,'Choose a supported pack or clearly described portion size for this item.');
     if(!Number.isInteger(row.priceCents)||row.priceCents<1||row.priceCents>99999900||
        !Number.isInteger(row.stockQty)||row.stockQty<0||row.stockQty>100000)
       D.fail(422,'Enter your shop price and stock quantity for each product.');
-    return {id:prefix+p.id,ownerUid:null,name:p.name,category:p.category,description:'Pack size: '+p.unit,
-      priceCents:row.priceCents,stockQty:row.stockQty,status:'draft'};
+    return {id:prefix+p.id,ownerUid:null,name:p.name,category:p.category,
+      description:saleUnit==='original_pack'?'Pack size: '+p.unit:
+        'Seller-defined portion (not a measured weight): '+units.labels[saleUnit],
+      saleUnit,priceCents:row.priceCents,stockQty:row.stockQty,status:'draft'};
   });
 }
 function canonical(uid,entry){
@@ -24,7 +29,10 @@ function canonical(uid,entry){
   if(!t||p.ownerUid!==uid||p.status!=='draft'||p.name!==t.name||p.category!==t.category||
     !Number.isInteger(p.priceCents)||p.priceCents<1||p.priceCents>99999900||
     !Number.isInteger(p.stockQty)||p.stockQty<0||p.stockQty>100000)return null;
-  return {id:entry.id,templateId:t.id,name:t.name,category:t.category,unit:t.unit,
+  const saleUnit=p.saleUnit??'original_pack';
+  if(!units.valid(t.category,saleUnit))return null;
+  return {id:entry.id,templateId:t.id,name:units.nameFor(t,saleUnit),category:t.category,
+    unit:units.unitFor(t,saleUnit),saleUnit,
     imageUrl:photoUrl(t.photo),priceCents:p.priceCents,stock:p.stockQty};
 }
 // Seller uploads are created by the server. Never publish a URL supplied in a
