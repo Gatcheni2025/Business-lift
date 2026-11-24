@@ -31,3 +31,21 @@ test('Contact widget uses explicit approved-seller WhatsApp number and safe fall
  assert.equal(js,fs.readFileSync(path.join(mirror,'assets/teyza-help-widget.js'),'utf8'));
  assert.equal(css,fs.readFileSync(path.join(mirror,'assets/teyza-help-widget.css'),'utf8'));
 });
+
+test('Scoped publisher manages only public information pages and widget assets',()=>{
+ const publisher=require('./publish-help-widget-only.cjs');
+ assert.equal(publisher.paths.length,10);
+ assert(publisher.paths.includes('/assets/teyza-help-widget.js'));
+ assert(publisher.paths.includes('/assets/teyza-help-widget.css'));
+ for(const bad of ['/pay/index.html','/ads/index.html','/work.html','/admin.html','/assets/app-first.css'])
+  assert(!publisher.paths.includes(bad));
+ const managed=publisher.managedFiles();
+ assert.equal(managed.size,10);
+ const previous=new Map([['/index.html','old'],['/pay/index.html','private-same']]);
+ const after=new Map([['/index.html',managed.get('/index.html').hash],
+  ['/pay/index.html','private-same'],
+  ...[...managed].filter(([p])=>p!=='/index.html').map(([p,v])=>[p,v.hash])]);
+ publisher.verify(previous,after,managed);
+ after.set('/pay/index.html','changed-unsafe');
+ assert.throws(()=>publisher.verify(previous,after,managed),/Unrelated Hosting file changed/);
+});
