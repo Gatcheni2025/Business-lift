@@ -3,10 +3,12 @@ import 'product_catalogue.dart';
 import 'seller_firestore.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'selling_units.dart';
 
 class _ProductEntry {
   final CatalogueProduct product;
   final price=TextEditingController(),stock=TextEditingController();
+  String saleUnit='original_pack';
   _ProductEntry(this.product);
   void dispose(){price.dispose();stock.dispose();}
 }
@@ -47,13 +49,17 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
       if(amount==null||!amount.isFinite||amount<=0||amount>999999||quantity==null||quantity<0||quantity>100000){
         setState(()=>error='Enter a valid price and stock quantity for ${entry.product.name}.');return;
       }
-      rows.add({'templateId':entry.product.id,'priceCents':(amount*100).round(),'stockQty':quantity});
+      rows.add({'templateId':entry.product.id,'priceCents':(amount*100).round(),
+        'stockQty':quantity,'saleUnit':entry.saleUnit});
     }
     setState((){saving=true;error=null;});
     try{
       Map<String,dynamic> result;
       try{result=await (widget.api??TeyzaMobileApi(widget.session)).call('catalogue_add',{'products':rows});}
       on ShopServiceUnavailable {
+        if(rows.any((row)=>row['saleUnit']!='original_pack')){
+          throw StateError('Portion-priced products need Teyza online service so shoppers see the correct portion size. Check your connection and try again.');
+        }
         final owner=uid;if(owner==null||owner!=widget.session.userId)return;
         final token=await widget.session.freshIdToken();if(owner!=widget.session.userId)return;
         final drafts=widget.draftApiFactory?.call(owner,token)??SellerFirestore(uid:owner,token:token);
@@ -92,13 +98,35 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
         IconButton(tooltip:'Remove ${entry.product.name}',onPressed:saving?null:()=>setState((){
           selected.remove(entry.product.id);entry.dispose();if(selected.isEmpty)reviewing=false;
         }),icon:const Icon(Icons.close))]),
-      const SizedBox(height:12),Row(children:[
+      const SizedBox(height:12),
+      if(teyzaAllowsPortion(entry.product))...[
+        DropdownButtonFormField<String>(
+          key:ValueKey('portion-${entry.product.id}'),
+          initialValue:entry.saleUnit,isExpanded:true,
+          decoration:const InputDecoration(labelText:'How do you sell this item?',
+            helperText:'No scale? Choose a consistent portion such as a bag, cup or bunch.',
+            helperMaxLines:2,border:OutlineInputBorder()),
+          items:[for(final u in teyzaSellingUnits)
+            DropdownMenuItem(value:u.id,child:Text(u.label,overflow:TextOverflow.ellipsis))],
+          onChanged:saving?null:(v)=>setState(()=>entry.saleUnit=v??'original_pack')),
+        if(entry.saleUnit!='original_pack')const Padding(
+          padding:EdgeInsets.symmetric(vertical:8),
+          child:Text('Each price and stock count refers to ONE seller-defined portion. Do not claim grams or kilograms unless weighed. Shoppers will see this portion label.',
+            style:TextStyle(color:Color(0xFF876126),fontSize:12,height:1.35))),
+        const SizedBox(height:10),
+      ],
+      Row(children:[
         Expanded(child:TextField(controller:entry.price,enabled:!saving,
           keyboardType:const TextInputType.numberWithOptions(decimal:true),
-          decoration:const InputDecoration(labelText:'Your price (R)',border:OutlineInputBorder()))),
-        const SizedBox(width:12),Expanded(child:TextField(controller:entry.stock,enabled:!saving,
-          keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Stock quantity',border:OutlineInputBorder())))
-      ]),const SizedBox(height:5),const Align(alignment:Alignment.centerLeft,child:Text('Stock 0 shows this item as out of stock.',
+          decoration:InputDecoration(labelText:entry.saleUnit=='original_pack'?'Price per pack (R)':'Price per portion (R)',
+            border:const OutlineInputBorder()))),
+        const SizedBox(width:12),
+        Expanded(child:TextField(controller:entry.stock,enabled:!saving,
+          keyboardType:TextInputType.number,
+          decoration:InputDecoration(labelText:entry.saleUnit=='original_pack'?'Packs in stock':'Portions in stock',
+            border:const OutlineInputBorder())))
+      ]),const SizedBox(height:5),
+      const Align(alignment:Alignment.centerLeft,child:Text('Stock 0 shows this item as out of stock.',
         style:TextStyle(fontSize:11,color:Color(0xFF6C7880))))
     ])));
   @override Widget build(BuildContext context)=>Scaffold(backgroundColor:const Color(0xFFF7F9F7),
@@ -122,7 +150,7 @@ class _SellerProductPickerState extends State<SellerProductPickerPage> {
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text(reviewing?'Make this range yours':'${all.length} everyday products',style:const TextStyle(fontSize:23,fontWeight:FontWeight.w800)),
               const SizedBox(height:5),Text(reviewing?
-                'Enter the price per pack and the number of packs your shop has. Complete registration to publish your selected range.':
+                'Enter your selling unit (original pack or seller-defined portion), price per unit and available stock. Portion sizes are not weight measurements.':
                 'Choose what your shop sells. Reference photos show the product type; brands and packaging may differ.',
                 style:const TextStyle(color:Color(0xFF6C7880),height:1.35)),
               if(error!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text(error!,style:const TextStyle(color:Colors.red))),
