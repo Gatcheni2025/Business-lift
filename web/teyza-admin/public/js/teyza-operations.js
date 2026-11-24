@@ -953,6 +953,24 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   root.replaceChildren(el('p','Loading administrator workspace…','footnote'));
   await refresh();
 }
+ // Quietly refresh active chat data, without erasing a message being typed.
+ // Requests remain bound to the current authenticated administrator session.
+ setInterval(()=>{
+  if(!ready||view!=='support'||busy||document.hidden)return;
+  if(document.activeElement?.closest?.('.ops-chat-composer'))return;
+  safely(async()=>{
+   const result=await request('ops_support_list');
+   tickets=result.tickets||[];moreTickets=result.next||null;
+   if(supportSelectedId){
+    const chosen=tickets.find(t=>t.id===supportSelectedId);
+    if(chosen){
+     const thread=await request('ops_support_thread',{ticketId:supportSelectedId});
+     supportMessages=thread.messages||[];
+    }else{supportSelectedId=null;supportMessages=[];}
+   }
+   show();
+  });
+ },20000);
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
  document.getElementById('backToBusinessAccounts').onclick=()=>safely(()=>navigate('sellers'));
  return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
