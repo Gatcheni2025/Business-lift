@@ -5,9 +5,9 @@ function fixture(overrides={}){
  const at=1000000,uid='seller1',ticketId='seller_'+uid,messageId='reply1';
  const data=new Map([
  ['teyzaSupportTickets/'+ticketId,{ownerUid:uid,source:'seller_admin_chat',
-   whatsAppActive:true,whatsAppLastInboundAt:at-100}],
+   whatsAppActive:true,whatsAppHandoffAt:at-500,whatsAppLastInboundAt:at-100}],
  ['teyzaSupportTickets/'+ticketId+'/messages/'+messageId,
-   {sender:'admin',senderUid:'adminUser',text:'Hello, how can we help?'}],
+   {sender:'admin',senderUid:'adminUser',text:'Hello, how can we help?',createdAt:at-50}],
  ['teyzaSellerAccounts/'+uid,{uid,approvalStatus:'approved',phone:'+27712345678'}],
  ['teyzaWhatsAppPreferences/'+uid,{ownerUid:uid,optedIn:true,phone:'+27712345678'}]
  ]);
@@ -72,4 +72,11 @@ test('Meta rejection is marked for review, not reported as delivered',async()=>{
  const f=fixture();f.setProviderError();await f.worker.process(f.ticketId,f.messageId);
  assert.equal(f.calls.length,1);
  assert.equal(f.data.get('teyzaSupportTickets/'+f.ticketId+'/messages/reply1').whatsAppReplyStatus,'needs_review');
+});
+
+test('Do not forward an old in-app admin reply created before WhatsApp handoff',async()=>{
+ const f=fixture();
+ f.data.get('teyzaSupportTickets/'+f.ticketId+'/messages/reply1').createdAt=f.at-600;
+ await f.worker.process(f.ticketId,f.messageId);
+ assert.equal(f.calls.length,0);
 });
