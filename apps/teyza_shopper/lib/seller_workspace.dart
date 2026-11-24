@@ -519,8 +519,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
                 const SizedBox(height:10),
               ])),
             TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),
-              decoration:InputDecoration(labelText:shop?.category=='wholesale'?'Wholesale price per unit or pack (R)':
-                portion.value=='original_pack'?'Retail selling price (R)':'Price per portion (R)',
+              decoration:InputDecoration(labelText:shop?.category=='wholesale'?
+                'Wholesale price per selected unit (R)':'Retail price per selected unit (R)',
                 border:const OutlineInputBorder()),
               validator:(v){final amount=double.tryParse((v??'').replaceAll(',','.'));
                 return amount==null||!amount.isFinite||amount<=0||amount>1000000?'Enter a valid price':null;}),
