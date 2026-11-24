@@ -15,24 +15,24 @@
 ### Body to submit
 🎉 *Welcome to Teyza, {{1}}!*
 
-Great news! ✅ *{{2}} has been approved.*
+✅ *{{2}} is approved.*
 
-Your business can now be discovered by more people in your area. 🌍
+Your *FREE business profile* helps people in your area discover your shop.
 
-*Here’s how Teyza can help you grow:*
-📍 *Get discovered nearby* — help potential customers find your shop.
-🛒 *Sell online* — activate eligible selling tools for *R99/month*. Business registration is *FREE*.
-📦 *Explore wholesale deals* — connect with participating suppliers and discover possible savings.
-📣 *Promote your business* — optional local advertising from *R29 for 7 days*.
-💼 *Explore finance opportunities* — where available, subject to partner eligibility and approval.
+*Grow with Teyza:*
+📍 Reach more potential local customers.
+🛒 Unlock selling tools for *R99/month* when ready.
+📦 Explore supplier deals and possible delivery savings.
+📣 Advertise locally from *R29 for 7 days*.
+💼 Explore partner finance, subject to eligibility.
 
-*Ready to get started?* Choose an option below. Reply *MENU* any time to see the options again.
+Tap an option below to get started, or reply *MENU* anytime.
 
 ### Footer
 Teyza Business · Reply STOP to opt out
 
 ### Existing quick replies (must retain routing compatibility)
-1. Start selling on Teyza
+1. Start selling
 2. Advertise on Teyza
 3. Talk to consultant
 
