@@ -1,6 +1,7 @@
 'use strict';
 // Signed webhook calls this router only AFTER raw-body HMAC validation.
-// Do not persist inbound text, phone numbers, profile names or full payloads.
+// Only explicit, approved support conversations retain short text in the existing private seller/admin inbox.
+// General diagnostics never persist phone numbers or raw webhook payloads.
 const crypto=require('node:crypto');
 const {createWelcomeRollout}=require('./whatsapp-rollout');
 const choices=new Map([
@@ -26,8 +27,28 @@ function extractActions(payload,numberId){
      (m.interactive.button_reply?.title||m.interactive.button_reply?.id):'';
    const action=typeof text==='string'&&/^\s*STOP\s*$/i.test(text)?'stop':
      typeof text==='string'&&/^\s*(?:MAIN\s*MENU|MENU|HI|HELLO|START)\s*$/i.test(text)?'main_menu':
+     typeof text==='string'&&/^\s*(?:AGENT|HUMAN|SUPPORT|TALK TO (?:A )?CONSULTANT|CHAT WITH (?:AN? )?AGENT)\s*$/i.test(text)?'consultant':
      choices.get(response)||({teyza_start_selling:'start_selling',teyza_advertise:'advertise',teyza_consultant:'consultant'}[response]);
    if(action)result.push({action,from:'+'+from,id:m.id});
+  }
+ }
+ return result.slice(0,500);
+}
+// Only authenticated support conversations can retain freeform text.
+// All webhook payloads must have passed raw-body HMAC validation first.
+function extractSupportTexts(payload,numberId){
+ const result=[];
+ if(payload?.object!=='whatsapp_business_account')return result;
+ for(const entry of Array.isArray(payload.entry)?payload.entry.slice(0,50):[])
+ for(const change of Array.isArray(entry.changes)?entry.changes.slice(0,50):[]){
+  if(change?.field!=='messages'||change.value?.metadata?.phone_number_id!==numberId)continue;
+  for(const m of Array.isArray(change.value.messages)?change.value.messages.slice(0,100):[]){
+   if(m.type!=='text'||typeof m.text?.body!=='string'||m.text.body.trim().length<2 ||
+     m.text.body.length>1000||!/^wamid[.][A-Za-z0-9_.:=+/-]{1,500}$/.test(m.id||'') ||
+     !/^[1-9][0-9]{7,14}$/.test(m.from||''))continue;
+   const body=m.text.body.trim();
+   if(/^(?:STOP|MENU|MAIN MENU|HI|HELLO|START|AGENT|HUMAN|SUPPORT|TALK TO (?:A )?CONSULTANT|CHAT WITH (?:AN? )?AGENT)$/i.test(body))continue;
+   result.push({from:'+'+m.from,id:m.id,text:body});
   }
  }
  return result.slice(0,500);
@@ -88,6 +109,11 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     if(!currentAccount.exists||currentAccount.data()?.uid!==sellerUid||currentAccount.data()?.phone!==event.from)return false;
     if(event.action!=='stop'&&(fresh.data()?.optedIn!==true||currentAccount.data()?.approvalStatus!=='approved'||currentAccount.data()?.deletionPending===true))return false;
     const at=clock();
+    const supportRef=db.doc('teyzaSupportTickets/seller_'+sellerUid);
+    // Read support state BEFORE any writes in this transaction.
+    const supportSnap=['consultant','stop'].includes(event.action)?await tx.get(supportRef):null;
+    if(event.action==='consultant'&&supportSnap?.exists&&
+       (supportSnap.data().ownerUid!==sellerUid||supportSnap.data().source!=='seller_admin_chat'))return false;
     const destination=event.action==='start_selling'?'/seller-getting-started.html':
       event.action==='advertise'?'/ads/':
       event.action==='consultant'?'seller_support':'none';
@@ -95,19 +121,23 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
       state:event.action==='stop'?'completed':'pending',
       source:'signed_meta_whatsapp',createdAt:at});
     if(event.action==='consultant'){
-     // Admin's existing support queue lists all teyzaSupportTickets. The
-     // generated request carries no chat body or phone; staff respond using
-     // their normal authenticated support workflow.
-     tx.create(db.doc('teyzaSupportTickets/wa_'+id),{
-      ownerUid:sellerUid,subject:'WhatsApp consultant request',
-      message:'Approved seller selected Talk to consultant in the welcome menu.',
-      status:'open',priority:'normal',revision:0,createdBy:sellerUid,
-      createdAt:at,updatedAt:at,source:['general','all'].includes(getRolloutMode())?'whatsapp_approval':'whatsapp_pilot',shopName:account.data()?.shopName||'Business'
-     });
+     // Reuse the actual admin/seller threaded inbox. Do not create an
+     // orphan "wa_" ticket that staff cannot reply to on WhatsApp.
+     if(!supportSnap.exists)tx.create(supportRef,{
+      ownerUid:sellerUid,subject:'Seller and business support',
+      message:'',status:'open',priority:'normal',revision:0,
+      createdBy:sellerUid,createdAt:at,updatedAt:at,source:'seller_admin_chat',
+      shopName:currentAccount.data().shopName||'Business',
+      lastMessage:'WhatsApp agent requested',lastMessageAt:at,messageCount:0,
+      sellerUnread:0,adminUnread:1,whatsAppActive:true,whatsAppHandoffAt:at,whatsAppLastInboundAt:at});
+     else tx.update(supportRef,{whatsAppActive:true,whatsAppHandoffAt:at,whatsAppLastInboundAt:at,
+      status:'open',updatedAt:at,adminUnread:(supportSnap.data().adminUnread||0)+1});
     }
     if(event.action==='stop'){
      tx.set(preferenceRef,{...fresh.data(),ownerUid:sellerUid,optedIn:false,phone:'',
        optedOutAt:at,updatedAt:at,consentVersion:'seller-approval-v2'});
+     if(supportSnap?.exists&&supportSnap.data().ownerUid===sellerUid&&supportSnap.data().source==='seller_admin_chat')
+       tx.update(supportRef,{whatsAppActive:false,updatedAt:at});
     }
     return true;
    });
@@ -125,7 +155,7 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
     '🎉 Your Teyza business has been approved! Your business listing is FREE.\n\nReady to sell products or services online? Activate eligible selling tools for R99 per full calendar month. Your first payment may be prorated where enabled.\n\nSee benefits and start here: https://teyza.co.za/seller-getting-started.html\n\nReply MENU for more options.':
     event.action==='advertise'?
     '📣 Want more local exposure? Teyza local ads start at R29 for 7 days, with an additional charge for wider reach.\n\nCreate your advertisement at https://teyza.co.za/ads/ using your approved seller account. Teyza admin reviews it first; after approval, you can pay securely on the same page.\n\nReply MENU anytime for your choices.':
-    '✅ Your request to speak to a Teyza consultant has been recorded. Our support team will follow up through the Teyza support process.\n\nReply MENU anytime for your choices.';
+    '✅ Teyza Support is ready to receive your question. Send your message here in WhatsApp and a Teyza consultant can reply in this same chat when available.\n\nPlease do not send passwords, OTP codes or bank details. Reply MENU for other options, or STOP to opt out.';
    try{
     const outbound=event.action==='main_menu'?
      {messaging_product:'whatsapp',recipient_type:'individual',to:event.from.slice(1),
@@ -154,7 +184,36 @@ function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'
    }
    }
   }
+  // After a seller explicitly requests an agent, bridge their follow-up text
+  // into the authenticated admin/seller support conversation; idempotent on
+  // Meta's message id, and private to that approved, consenting seller.
+  for(const event of extractSupportTexts(payload,numberId)){
+   const matches=await db.collection('teyzaWhatsAppPreferences').where('phone','==',event.from).limit(20).get();
+   const eligible=matches.docs.filter(m=>rollout.allowsSeller(m.id)&&m.data()?.ownerUid===m.id&&m.data()?.optedIn===true);
+   if(eligible.length!==1)continue;
+   const uid=eligible[0].id;
+   const account=await db.doc('teyzaSellerAccounts/'+uid).get();
+   if(!account.exists||account.data().uid!==uid||account.data().approvalStatus!=='approved'||
+      account.data().deletionPending===true||account.data().phone!==event.from)continue;
+   const ticketRef=db.doc('teyzaSupportTickets/seller_'+uid);
+   const messageId='wa_'+crypto.createHash('sha256').update(numberId+'|'+event.id).digest('hex');
+   const messageRef=db.doc('teyzaSupportTickets/seller_'+uid+'/messages/'+messageId);
+   await db.runTransaction(async tx=>{
+    const [ticket,existing,pref]=await Promise.all([
+      tx.get(ticketRef),tx.get(messageRef),tx.get(db.doc('teyzaWhatsAppPreferences/'+uid))
+    ]);
+    if(existing.exists||!ticket.exists||ticket.data().whatsAppActive!==true||
+       ticket.data().source!=='seller_admin_chat'||ticket.data().ownerUid!==uid||
+       !pref.exists||pref.data().optedIn!==true||pref.data().phone!==event.from)return;
+    const at=clock(),count=ticket.data().messageCount||0;
+    tx.create(messageRef,{sender:'seller',senderUid:uid,source:'meta_whatsapp_support',
+      text:event.text,sequence:count+1,createdAt:at});
+    tx.update(ticketRef,{lastMessage:event.text.slice(0,180),lastMessageAt:at,
+      whatsAppLastInboundAt:at,messageCount:count+1,adminUnread:(ticket.data().adminUnread||0)+1,
+      status:'open',revision:(ticket.data().revision||0)+1,updatedAt:at});
+   });
+  }
  }
  return {route};
 }
-module.exports={extractActions,createPilotRouter,choices};
+module.exports={extractActions,extractSupportTexts,createPilotRouter,choices};

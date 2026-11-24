@@ -102,6 +102,18 @@ exports.teyzaWhatsAppWebhook=onRequest({region:'us-central1',invoker:'public',co
  maxInstances:3,memory:'256MiB',timeoutSeconds:30,
  secrets:[whatsAppWebhookVerifyToken,whatsAppWebhookAppSecret,whatsAppWebhookReplyToken]},
  (req,res)=>whatsappWebhook.handle(req,res));
+const humanReply=require('./whatsapp-human-reply').createHumanReply({db,
+ getPhoneNumberId:()=>process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||'',
+ getApiVersion:()=>process.env.TEYZA_WHATSAPP_API_VERSION||'v26.0',
+ getToken:()=>whatsAppWebhookReplyToken.value()});
+// Trigger only for admin-authored messages in the existing seller support inbox.
+// The worker independently rechecks consent, approval, sender and the 24-hour
+// service window; uncertain outcomes are not retried automatically.
+exports.teyzaWhatsAppHumanReply=onDocumentCreated({
+ document:'teyzaSupportTickets/{ticketId}/messages/{messageId}',
+ region:'us-central1',maxInstances:2,memory:'256MiB',timeoutSeconds:60,
+ secrets:[whatsAppWebhookReplyToken]
+}, event=>humanReply.process(event.params.ticketId,event.params.messageId));
 exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[verificationKey,placesKey,paystackKey,paystackSigningKey],cors:true,maxInstances:10,memory:'512MiB',timeoutSeconds:60},async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(req.path==='/paystack-webhook'){
