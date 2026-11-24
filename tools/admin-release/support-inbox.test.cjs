@@ -15,6 +15,9 @@ test('Premium Support screen has a two-way chat interface with separated histori
  assert(script.includes('whatsAppActive'));
  assert(script.includes('Meta accepted · delivery not confirmed'));
  assert(css.includes('@media(max-width:680px)'));
+ assert(css.includes('.ops-chat-composer{flex:0 0 auto;position:sticky;bottom:0'));
+ assert(css.includes('.ops-chat-messages{display:flex;flex:1 1 0;min-height:0'));
+ assert(script.includes('previousMessages.scrollHeight-previousMessages.clientHeight'));
 });
 test('Independent support agent inbox uses Firebase login and secure server actions',()=>{
  const html=fs.readFileSync(path.join(root,'support-inbox.html'),'utf8');
@@ -27,6 +30,11 @@ test('Independent support agent inbox uses Firebase login and secure server acti
   assert(js.includes(a),a);
  assert(!html.includes('teyzaAdmin=true'));
  assert(css.includes('@media(max-width:760px)'));
+ assert(css.includes('overscroll-behavior:contain'));
+ assert(css.includes('scrollbar-gutter:stable'));
+ assert(css.includes('.reply-form{flex:0 0 auto;position:sticky;bottom:0'));
+ assert(css.includes('#thread-panel{display:flex;flex-direction:column;flex:1 1 0;min-height:0;overflow:hidden}'));
+ assert(js.includes('previousTicketId===t.id&&!nearBottom'));
 });
 test('Scoped publisher can add new inbox page and assets while preserving payment files',async()=>{
  assert.deepEqual(paths,[
