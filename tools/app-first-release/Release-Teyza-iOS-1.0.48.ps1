@@ -10,8 +10,11 @@ $GitRoot = (git rev-parse --show-toplevel).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Run inside a Teyza repository checkout.' }
 Push-Location $GitRoot
 try {
-    git fetch origin $ReleaseBranch
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch the Teyza release branch.' }
+    # Explicit refspec: git fetch origin <branch> alone may only update
+    # FETCH_HEAD, leaving origin/<branch> at an older commit.
+    $Refspec = '+refs/heads/{0}:refs/remotes/origin/{0}' -f $ReleaseBranch
+    git fetch origin $Refspec
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to update the Teyza remote-tracking release branch.' }
     $Spec = ('origin/{0}:apps/teyza_shopper/pubspec.yaml' -f $ReleaseBranch)
     # Native PowerShell captures each output line of git show as an array.
     # Join lines first; otherwise -notmatch returns every non-matching line
