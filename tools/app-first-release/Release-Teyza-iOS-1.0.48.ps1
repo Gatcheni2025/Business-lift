@@ -13,8 +13,13 @@ try {
     git fetch origin $ReleaseBranch
     if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch the Teyza release branch.' }
     $Spec = ('origin/{0}:apps/teyza_shopper/pubspec.yaml' -f $ReleaseBranch)
-    $SourceVersion = git show $Spec
-    if ($LASTEXITCODE -ne 0 -or $SourceVersion -notmatch [regex]::Escape($ExpectedVersion)) {
+    # Native PowerShell captures each output line of git show as an array.
+    # Join lines first; otherwise -notmatch returns every non-matching line
+    # as a truthy array and incorrectly rejects a valid version.
+    $SourceLines = @(git show $Spec)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read release version metadata from Git.' }
+    $VersionLines = @($SourceLines | Where-Object { $_ -match '^version:\s*' })
+    if ($VersionLines.Count -ne 1 -or $VersionLines[0].Trim() -cne $ExpectedVersion) {
         throw 'The remote release branch is not yet version 1.0.48+58.'
     }
     $Sha = (git rev-parse ('origin/{0}' -f $ReleaseBranch)).Trim()
