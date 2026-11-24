@@ -1,0 +1,31 @@
+/* Teyza premium, accessible contact popup on the public website. */
+.tw-help{position:fixed;z-index:2000;right:max(20px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));font-family:inherit;color:#103e3a}
+.tw-help [hidden]{display:none!important}
+.tw-help-toggle{display:inline-flex;align-items:center;gap:11px;min-height:55px;padding:13px 21px;border:1px solid #2d8770;border-radius:999px;background:linear-gradient(112deg,#08785e,#064d48);color:#fff;box-shadow:0 14px 30px #064b4660;cursor:pointer;font-weight:800;font-size:15px;letter-spacing:.01em}
+.tw-help-toggle:hover{background:linear-gradient(112deg,#13916e,#075c52);transform:translateY(-1px)}
+.tw-help-toggle-symbol{display:grid;place-items:center;width:29px;height:29px;border-radius:50%;background:#c4f374;color:#135245;font-size:19px}
+.tw-help-panel{position:absolute;right:0;bottom:calc(100% + 13px);width:min(370px,calc(100vw - 28px));max-height:min(600px,calc(100dvh - 110px));overflow-y:auto;border:1px solid #d8e9da;border-radius:24px;background:#fff;box-shadow:0 22px 68px #123f3f42}
+.tw-help-header{display:flex;align-items:center;gap:11px;background:linear-gradient(105deg,#064a46,#0b755e);color:#fff;padding:19px 17px}
+.tw-help-header strong{display:block;font-size:17px;color:inherit}
+.tw-help-header small{display:block;color:#daece4;font-size:11px;margin-top:4px}
+.tw-help-monogram{display:grid;place-items:center;width:39px;height:39px;border-radius:13px;background:#c4f374;color:#104b3e;font-weight:900;font-size:24px}
+.tw-help-close{margin-left:auto;align-self:flex-start;width:30px;height:30px;border:0;border-radius:50%;background:#ffffff23;color:#fff;font-size:23px;cursor:pointer}
+.tw-help-body{padding:18px}
+.tw-help-greeting{font-size:13px;line-height:1.65;color:#4f7066;margin:0 0 18px}
+.tw-help-greeting strong{font-size:17px;color:#174a41}
+.tw-help-link{display:flex;gap:12px;align-items:center;text-decoration:none!important;background:#f6f9f5;border:1px solid #e2eee6;border-radius:15px;padding:13px 11px;margin-bottom:11px;color:#13443f!important}
+.tw-help-link--wa{background:#ebf7ed;border-color:#c5e9ce}
+.tw-help-link:hover{border-color:#399981;box-shadow:0 5px 16px #166a4822}
+.tw-help-link span:nth-child(2){flex:1;min-width:0}
+.tw-help-link strong{display:block;font-size:13px;color:#13483f}
+.tw-help-link small{display:block;margin-top:4px;font-size:11px;line-height:1.5;color:#567569}
+.tw-help-symbol{display:grid;place-items:center;width:35px;height:35px;flex:0 0 35px;border-radius:12px;background:#d4f1cc;color:#0d6b55;font-size:20px}
+.tw-help-more{display:inline-block;font-size:12px;font-weight:800;color:#0b725e;margin:4px 0 11px}
+.tw-help-note{font-size:10px;line-height:1.6;margin:0;color:#667c75}
+.tw-help button:focus-visible,.tw-help a:focus-visible{outline:3px solid #c4f374;outline-offset:3px}
+@media(max-width:500px){
+ .tw-help{right:12px;bottom:max(12px,env(safe-area-inset-bottom))}
+ .tw-help-panel{width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 88px)}
+ .tw-help-toggle{min-height:49px;padding:10px 15px;font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){.tw-help-toggle{transition:none}}
