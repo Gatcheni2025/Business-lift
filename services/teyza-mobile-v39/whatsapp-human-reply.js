@@ -15,6 +15,8 @@ function createHumanReply({db,getToken=()=>'',getPhoneNumberId=()=>'',getApiVers
     if(!ticketSnap.exists||!messageSnap.exists||!accountSnap.exists||!prefSnap.exists)return;
     const ticket=ticketSnap.data(),message=messageSnap.data(),account=accountSnap.data(),pref=prefSnap.data();
     if(ticket.ownerUid!==uid||ticket.source!=='seller_admin_chat'||ticket.whatsAppActive!==true||
+       !Number.isSafeInteger(ticket.whatsAppHandoffAt)||!Number.isSafeInteger(message.createdAt)||
+       message.createdAt<ticket.whatsAppHandoffAt||
        message.sender!=='admin'||typeof message.senderUid!=='string'||
        typeof message.text!=='string'||message.text.trim().length<2||message.text.length>1000 ||
        account.uid!==uid||account.approvalStatus!=='approved'||account.deletionPending===true||
@@ -39,6 +41,7 @@ function createHumanReply({db,getToken=()=>'',getPhoneNumberId=()=>'',getApiVers
          current.data().sender!=='admin'||!latestTicket.exists||!latestPref.exists||
          !latestAccount.exists||latestTicket.data().whatsAppActive!==true||
          latestTicket.data().whatsAppLastInboundAt!==since||
+         latestTicket.data().whatsAppHandoffAt!==ticket.whatsAppHandoffAt||
          latestAccount.data().phone!==account.phone||
          latestAccount.data().approvalStatus!=='approved'||latestPref.data().optedIn!==true||
          latestPref.data().phone!==account.phone)return false;
