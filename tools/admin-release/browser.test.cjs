@@ -258,7 +258,10 @@ async function main(){
     assert(!JSON.stringify(created).includes('password'));
     const row=f.page.getByRole('row').filter({hasText:'new-seller@example.test'});
     await row.getByRole('button',{name:'View user'}).click();
+    const inviteSent=f.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_user_invite');
     await f.page.getByRole('button',{name:'Send password setup email'}).click();
+    await inviteSent;
     assert(f.calls.some(x=>x.action==='ops_user_invite'&&x.data.userUid==='new-user1'));
     const suspension=f.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_user_set_disabled');
