@@ -18,6 +18,7 @@ import 'shop_orders.dart';
 import 'teyza_mobile_api.dart';
 import 'product_catalogue.dart';
 import 'seller_product_picker.dart';
+import 'selling_units.dart';
 import 'seller_registration.dart';
 import 'seller_onboarding.dart';
 import 'seller_notifications.dart';
@@ -459,7 +460,14 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
     if(busy)return;
     if(!hasProductAccess){await openUpgrade(fromProductAction:true);return;}
     final uid=widget.session.userId;
-    final name=TextEditingController(text:existing?.name??'');
+    final previousName=existing?.name??'';
+    final recordedPortion=teyzaSellingUnits.where((u)=>u.id!='original_pack'&&
+      previousName.endsWith(' · ${u.label}')).toList();
+    final selectedUnit=recordedPortion.isEmpty?'original_pack':recordedPortion.first.id;
+    final cleanedName=recordedPortion.isEmpty?previousName:
+      previousName.substring(0,previousName.length-recordedPortion.first.label.length-3);
+    final portion=ValueNotifier<String>(selectedUnit);
+    final name=TextEditingController(text:cleanedName);
     final category=TextEditingController(text:existing?.category??(shop?.category=='wholesale'?'Bulk stock / wholesale':shop?.category=='retail'?'General retail':'Groceries'));
     final description=TextEditingController(text:existing?.description??'');
     final price=TextEditingController(text:existing!=null?(existing.priceCents/100).toStringAsFixed(2):'');
@@ -490,8 +498,30 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             TextFormField(controller:description,maxLength:500,maxLines:2,
               decoration:const InputDecoration(labelText:'Description (optional)',border:OutlineInputBorder())),
             const SizedBox(height:8),
+            if(!fromCatalogue) ValueListenableBuilder<String>(
+              valueListenable:portion,builder:(context,unit,_)=>Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                DropdownButtonFormField<String>(
+                  key:ValueKey('custom-product-portion-$unit'),
+                  initialValue:unit,isExpanded:true,
+                  decoration:const InputDecoration(
+                    labelText:'How do you sell this product?',
+                    border:OutlineInputBorder()),
+                  items:[for(final u in teyzaSellingUnits)
+                    DropdownMenuItem(value:u.id,
+                      child:Text(u.label,overflow:TextOverflow.ellipsis))],
+                  onChanged:(value)=>portion.value=value??'original_pack'),
+                const SizedBox(height:6),
+                Text(unit=='original_pack'?
+                  'Use the labelled pack size or original unit.':
+                  'Price and stock are per seller-defined portion. Shoppers see this label; do not claim grams or kilograms without weighing.',
+                  style:const TextStyle(fontSize:12,color:Color(0xFF60736B))),
+                const SizedBox(height:10),
+              ])),
             TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),
-              decoration:InputDecoration(labelText:shop?.category=='wholesale'?'Wholesale price per unit or pack (R)':'Retail selling price (R)',border:const OutlineInputBorder()),
+              decoration:InputDecoration(labelText:shop?.category=='wholesale'?'Wholesale price per unit or pack (R)':
+                portion.value=='original_pack'?'Retail selling price (R)':'Price per portion (R)',
+                border:const OutlineInputBorder()),
               validator:(v){final amount=double.tryParse((v??'').replaceAll(',','.'));
                 return amount==null||!amount.isFinite||amount<=0||amount>1000000?'Enter a valid price':null;}),
             const SizedBox(height:8),
@@ -503,16 +533,25 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage> with WidgetsBindi
             FilledButton.icon(icon:const Icon(Icons.save_outlined),label:const Text('Save draft'),
               onPressed:(){
                 if(key.currentState!.validate()) {
+                  final fullName=fromCatalogue||portion.value=='original_pack'?
+                    name.text.trim():
+                    '${name.text.trim()} · ${teyzaUnitLabel(portion.value)}';
+                  if(fullName.length>120){
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:
+                      Text('Shorten the product name so its portion size fits.')));
+                    return;
+                  }
                   Navigator.of(ctx).pop(SellerDraft(
                     id:existing?.id??'p'+DateTime.now().microsecondsSinceEpoch.toString()+
                       Random.secure().nextInt(100000).toString(),
-                    name:name.text.trim(),category:category.text.trim(),
+                    name:fullName,category:category.text.trim(),
                     description:description.text.trim(),createdAt:existing?.createdAt,updateTime:existing?.updateTime,
                     priceCents:(double.parse(price.text.replaceAll(',','.'))*100).round(),
                     stock:int.parse(stock.text.trim())));
                 }
               }),
           ])))));
+    portion.dispose();
     name.dispose();category.dispose();description.dispose();price.dispose();stock.dispose();
     if(result!=null&&uid==widget.session.userId)await _save(result);
   }
