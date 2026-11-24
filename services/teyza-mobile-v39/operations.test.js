@@ -398,3 +398,47 @@ test('WhatsApp webhook admin diagnostics return only aggregate signed event cate
  assert(!JSON.stringify(result).includes('SHOULD_NOT_SHOW'));
  await rejects(f.call('ops_whatsapp_status',{}, {uid:'seller1',email_verified:true}),403);
 });
+
+
+test('Support agents see only active WhatsApp handoffs and can answer in the seller thread',async()=>{
+ const f=setup(),agent={uid:'support_1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000};
+ f.db.records.set('teyzaSupportTickets/seller_seller1',{
+  ownerUid:'seller1',shopName:'Test Shop',source:'seller_admin_chat',status:'open',
+  whatsAppActive:true,whatsAppLastInboundAt:now-10000,whatsAppHandoffAt:now-20000,
+  lastMessage:'Please help me',lastMessageAt:now-10000,updatedAt:now-10000,
+  messageCount:1,adminUnread:1,revision:0
+ });
+ f.db.records.set('teyzaSupportTickets/seller_seller2',{
+  ownerUid:'seller2',shopName:'Another Shop',source:'seller_admin_chat',status:'open',
+  whatsAppActive:false,lastMessage:'Private non-WhatsApp ticket',messageCount:0
+ });
+ const data=await f.call('ops_whatsapp_support_inbox',{},agent);
+ assert.equal(data.tickets.length,1);
+ assert.equal(data.tickets[0].shopName,'Test Shop');
+ assert.equal(data.tickets[0].adminUnread,1);
+ assert(!JSON.stringify(data).includes('Private non-WhatsApp ticket'));
+ const thread=await f.call('ops_support_thread',{ticketId:'seller_seller1'},agent);
+ assert.equal(thread.ticket.shopName,'Test Shop');
+ await f.call('ops_support_reply',{ticketId:'seller_seller1',
+  message:'Thanks for contacting Teyza. How can I help?',messageId:'agent_reply_1'},agent);
+ const reply=f.db.records.get('teyzaSupportTickets/seller_seller1/messages/agent_reply_1');
+ assert.equal(reply.sender,'admin');
+ assert.equal(reply.senderUid,'support_1');
+ await rejects(f.call('ops_support_thread',{ticketId:'seller_seller2'},agent),404);
+ await rejects(f.call('ops_support_reply',{ticketId:'seller_seller2',message:'No',messageId:'blocked_1'},agent),404);
+});
+test('Support agent claim never enables seller approvals, payments, finance or user management',async()=>{
+ const f=setup(),agent={uid:'support_1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000};
+ for(const [action,data] of [
+  ['ops_sellers',{}],['ops_users',{}],['ops_finance_queue',{}],
+  ['ops_payment',{sellerUid:'seller1',amountCents:9900}],
+  ['ops_seller_detail',{sellerUid:'seller1'}],['ops_support_list',{}],
+  ['ops_whatsapp_status',{}]
+ ])await rejects(f.call(action,data,agent),403);
+ await rejects(f.call('ops_whatsapp_support_inbox',{},{
+  ...agent,teyzaSupportAgent:false}),403);
+ await rejects(f.call('ops_whatsapp_support_inbox',{},{
+  ...agent,email_verified:false}),403);
+ await rejects(f.call('ops_whatsapp_support_inbox',{},{
+  ...agent,auth_time:now/1000-301}),401);
+});
