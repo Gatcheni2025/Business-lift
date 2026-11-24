@@ -138,11 +138,20 @@ test('MENU and MAIN MENU create reusable WhatsApp button menus for the allowlist
  assert(sent.every(x=>x.type==='interactive'&&x.interactive.type==='button'));
  const titles=sent[0].interactive.action.buttons.map(x=>x.reply.title);
  assert.deepEqual(titles,['Start selling','Advertise on Teyza','Talk to consultant']);
+ const menuText=sent[0].interactive.body.text;
+ assert(menuText.includes('Registration is FREE'));
+ assert(menuText.includes('R99/month'));
+ assert(menuText.includes('wholesalers'));
+ assert(menuText.includes('nearby'));
+
  assert(titles.every(t=>t.length<=20),'Meta interactive buttons permit at most 20 characters');
  await f.router.route(payload([message('wamid.frommenu','interactive',{interactive:{type:'button_reply',
   button_reply:{id:'teyza_start_selling',title:'Start selling'}}})]));
  assert.equal(sent.length,3);
  assert(sent[2].text.body.includes('/seller-getting-started.html'));
+ assert(sent[2].text.body.includes('R99 per full calendar month'));
+ assert(sent[2].text.body.includes('business listing is FREE'));
+
  assert(sent[2].text.body.includes('Reply MENU'));
 });
 test('MENU respects STOP opt-out and never responds to an unapproved owner',async()=>{
