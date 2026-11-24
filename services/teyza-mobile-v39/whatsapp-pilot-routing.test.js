@@ -24,7 +24,8 @@ function fake(options={}){
     id:key.split('/').at(-1),data:()=>v,ref:doc(key)}))})})
  })}),runTransaction:async fn=>{
   const tx={get:ref=>ref.get(),create:(ref,value)=>{if(data.has(ref.path))throw Error('duplicate');data.set(ref.path,structuredClone(value));},
-   set:(ref,value)=>data.set(ref.path,structuredClone(value))};
+   set:(ref,value)=>data.set(ref.path,structuredClone(value)),
+   update:(ref,value)=>{if(!data.has(ref.path))throw Error('not found');data.set(ref.path,{...data.get(ref.path),...structuredClone(value)});}};
   return fn(tx);
  }};
  let uid='seller1';
@@ -112,6 +113,8 @@ test('Quick reply receives one URL or support confirmation and never repeats aft
  const actions=[...f.data].filter(([k])=>k.startsWith('teyzaWhatsAppPilotActions/'));
  assert(actions.every(([,v])=>v.state==='completed'&&v.replyStatus==='accepted'&&v.replyMessageId));
  assert.equal([...f.data].filter(([k])=>k.startsWith('teyzaSupportTickets/')).length,1);
+ assert.equal(f.data.get('teyzaSupportTickets/seller_seller1').whatsAppActive,true);
+ assert.equal(f.data.get('teyzaSupportTickets/seller_seller1').source,'seller_admin_chat');
 });
 test('Unknown provider outcome is recorded without retry or duplicate response',async()=>{
  let count=0;const f=fake({token:'token-test-only-not-real-credential',
@@ -248,4 +251,38 @@ test('Build 55 all mode continues approved seller menu replies',async()=>{
  }});f.setPilotUid('');
  await f.router.route(payload([message('wamid.allMenu','text',{text:{body:'MENU'}})]));
  assert.equal(calls,1);
+});
+
+test('Approved opted-in seller follow-up text enters the authenticated support thread once',async()=>{
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async()=>({ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})})});
+ const open=payload([message('wamid.agent','text',{text:{body:'AGENT'}})]);
+ await f.router.route(open);
+ const inbound=payload([message('wamid.question','text',{text:{body:'I need help listing my shop.'}})]);
+ await f.router.route(inbound);await f.router.route(inbound);
+ const ticket=f.data.get('teyzaSupportTickets/seller_seller1');
+ assert.equal(ticket.whatsAppActive,true);
+ assert.equal(ticket.messageCount,1);
+ const messages=[...f.data].filter(([key])=>key.startsWith('teyzaSupportTickets/seller_seller1/messages/'));
+ assert.equal(messages.length,1);
+ assert.equal(messages[0][1].sender,'seller');
+ assert.equal(messages[0][1].text,'I need help listing my shop.');
+ assert(!JSON.stringify(ticket).includes('27712345678'));
+});
+test('STOP deactivates WhatsApp handoff and prevents later messages',async()=>{
+ const f=fake({token:'test-only-not-a-real-credential-long',
+  send:async()=>({ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})})});
+ await f.router.route(payload([message('wamid.agent','text',{text:{body:'AGENT'}})]));
+ await f.router.route(payload([message('wamid.stop','text',{text:{body:'STOP'}})]));
+ assert.equal(f.data.get('teyzaSupportTickets/seller_seller1').whatsAppActive,false);
+ await f.router.route(payload([message('wamid.afterstop','text',{text:{body:'Please call me now'}})]));
+ assert.equal([...f.data].filter(([key])=>key.includes('/messages/')).length,0);
+});
+test('Anonymous, unapproved and unrequested chat text never enters private seller support',async()=>{
+ const f=fake();
+ await f.router.route(payload([message('wamid.unsolicited','text',{text:{body:'My private question'}})]));
+ assert.equal([...f.data].filter(([key])=>key.startsWith('teyzaSupportTickets/')).length,0);
+ const f2=fake();
+ await f2.router.route(payload([message('wamid.ag','text',{text:{body:'AGENT'}},'27799999999')]));
+ assert.equal([...f2.data].filter(([key])=>key.startsWith('teyzaSupportTickets/')).length,0);
 });
