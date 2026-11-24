@@ -19,7 +19,12 @@ Do **not** publish until backend and website CI are green.
    $fb = ".\tools\admin-release\node_modules\firebase-tools\lib\bin\firebase.js"
    node $fb deploy --project business-lift-3c19c --config firebase.teyza-mobile-v39.json --only "functions:teyza-mobile:teyzaWhatsAppWebhook,functions:teyza-mobile:teyzaWhatsAppHumanReply" --non-interactive
    ```
-4. Publish website HTML and the two new assets on the actual Firebase Hosting site with a **scoped patch** preserving routes, headers, payments, ads, admin, Work, and every other file. The existing `publish-homepage-pricing-only.cjs` intentionally does not include these assets; do not claim that it does. Validate source mirror, preview and publish via an appropriately reviewed scoped Hosting method.
+4. Publish the **10 public HTML/asset files only** with the new scoped publisher, which clones the live version and verifies all unrelated hosting hashes and configuration before finalizing:
+   ```powershell
+   node .\tools\app-first-release\publish-help-widget-only.cjs check
+   node .\tools\app-first-release\publish-help-widget-only.cjs deploy
+   ```
+   It writes a local rollback checkpoint. If this exact scoped version is still live, use `node .\tools\app-first-release\publish-help-widget-only.cjs rollback`. Do not run a broad Firebase Hosting deploy: the homepage pricing publisher intentionally does not include these assets.
 5. Test a real newly approved **consenting** seller's handset: send AGENT -> Meta button reply acknowledgement -> send a private question -> confirm it appears in the authenticated admin support conversation -> admin writes reply -> confirm seller receives it **in the same WhatsApp conversation**, then verify provider accepted and signed delivered/read receipt if available.
 6. Test duplicate webhook event, STOP, wrong phone, unapproved seller, outside-24-hour response, Meta timeout, and an anonymous website visitor (email fallback). Disable the new sender function if delivery or consent checks fail. Never manually replay ambiguous outbound sends.
 
