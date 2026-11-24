@@ -307,6 +307,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Future<void>? _workspaceResolution;
   String _launchStep='Signing you in securely…';
   bool _agentApproved=false,_agentMode=false,_rolePicker=false;
+  // App launches as a browsable shopfront. Owner/agent access is an explicit
+  // account action, never a default route from persisted session credentials.
+  bool _accountFlowRequested=false;
   bool _accountResolving=false,_hasShopperAccount=false,_needsRegistration=false;
   String? _accountResolutionError;
   SellerShop? _sellerAccount;
@@ -384,6 +387,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           .catchError((Object _){/* Keep the in-memory location on logout. */}));
       }
       if(uid!=null||deletedAccount)session.forgetDeviceLocationOnSignOut=false;
+      if(uid==null)_accountFlowRequested=false;
       _observedUid=uid;_checkedSellerUid=null;
       _agentApproved=false;_agentMode=false;_rolePicker=false;
       _sellerAccount=null;_hasShopperAccount=false;_needsRegistration=false;
@@ -427,6 +431,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   void _chooseRole(String value){
     if(!mounted||session.userId==null||session.idToken==null)return;
+    _accountFlowRequested=true;
     if(value=='agent'&&!_agentApproved)return;
     setState((){_rolePicker=false;_agentMode=value=='agent';});
     if(value=='shopper'||value=='agent')session.useShopperWorkspace();
@@ -463,11 +468,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         _agentApproved=agentShouldOfferMode(agent,currentUid:uid);
         _accountResolving=false;
         final count=(_hasShopperAccount?1:0)+(_sellerAccount!=null?1:0)+(_agentApproved?1:0);
-        _rolePicker=count>1;
-        _needsRegistration=count==0&&_pendingClaimPlaceId==null&&session.requestedRegistrationRole==null&&
+        _rolePicker=_accountFlowRequested&&count>1;
+        _needsRegistration=_accountFlowRequested&&count==0&&_pendingClaimPlaceId==null&&session.requestedRegistrationRole==null&&
           session.requestedSellerCategory==null;
       });
-      if(_rolePicker||_needsRegistration)return;
+      // A restored identity may have seller and agent accounts. Those modes
+      // remain available via Switch account but cannot hijack cold launch.
+      if(!_accountFlowRequested||_rolePicker||_needsRegistration)return;
       if(_pendingClaimPlaceId!=null){_chooseRole('seller');return;}
       if(_sellerAccount!=null){_chooseRole('seller');}
       else if(_agentApproved){_chooseRole('agent');}
@@ -484,16 +491,21 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
   void _registerAccount(String role,String? category){
+    _accountFlowRequested=true;
     session.requestedRegistrationRole=role;
     session.requestedSellerCategory=category;
+    if(role=='shopper')session.requestedBusinessType=null;
     setState(()=>_needsRegistration=false);
     _chooseRole(role);
   }
   Future<void> _prepareLaunch([Future<void>? restoring]) async {
     try{await restoring?.timeout(const Duration(seconds:12));}catch(_){/* Authentication retries independently. */}
+    // An existing seller session is authenticated but must still open on the
+    // shopper home screen. Clearing workspace preference never signs out.
+    if(mounted&&!_accountFlowRequested&&session.sellerWorkspace)session.useShopperWorkspace();
     try{await _workspaceResolution?.timeout(const Duration(seconds:8));}catch(_){/* Owner login remains available if the account cannot be checked. */}
     if(!mounted)return;
-    if(session.sellerWorkspace){setState(()=>_launchReady=true);return;}
+    if(session.sellerWorkspace&&_accountFlowRequested){setState(()=>_launchReady=true);return;}
     // Finish first-run catalogue + saved-area discovery before the home feed
     // becomes interactive. Offline users still get a bounded fallback rather
     // than a permanent splash screen. Do not block widget tests on remote APIs.
@@ -1478,6 +1490,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
   Future<void> openOwnerWorkspace({bool notification=false,String? target}) async {
     if(session.idToken==null||session.anonymousShopper){navigateToTab(4);return;}
+    _accountFlowRequested=true;
     _agentMode=false;_rolePicker=false;
     _sellerInitialTarget=notification?(target??'notifications'):null;
     if(notification)_sellerEntry++;
@@ -1494,6 +1507,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     tab=0;selected=null;directorySelected=null;showAllShops=true;showAllSellers=false;
   });
   void navigateToTab(int index){
+    if(index==4)_accountFlowRequested=true; // Login only when deliberately requested.
     setState(() {
       if(index!=tab)_previousRootTab=tab;
       if(index==2||index==3||index==4||index==5){
@@ -1561,10 +1575,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if(session.userId!=null&&!session.anonymousShopper){
-      if(_accountResolving)return const Scaffold(body:Center(child:Column(
+      if(_accountFlowRequested&&_accountResolving)return const Scaffold(body:Center(child:Column(
         mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(),
           SizedBox(height:16),Text('Loading your accounts…')])));
-      if(_accountResolutionError!=null)return Scaffold(body:SafeArea(child:Center(
+      if(_accountFlowRequested&&_accountResolutionError!=null)return Scaffold(body:SafeArea(child:Center(
         child:Padding(padding:const EdgeInsets.all(24),child:Column(
           mainAxisSize:MainAxisSize.min,children:[
             Text(_accountResolutionError!,textAlign:TextAlign.center),
@@ -1573,13 +1587,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
               child:const Text('Try again')),
             TextButton(onPressed:session.signOut,child:const Text('Sign out'))
           ])))));
-      if(_needsRegistration)return Scaffold(appBar:AppBar(title:const Text('Finish registration'),
+      if(_accountFlowRequested&&_needsRegistration)return Scaffold(appBar:AppBar(title:const Text('Finish registration'),
         actions:[TextButton(onPressed:session.signOut,child:const Text('Sign out'))]),
         backgroundColor:const Color(0xFFF7F9F7),
         body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(24),
-          child:TeyzaRegistrationOptions(onSelected:_registerAccount))));
+          child:TeyzaRegistrationOptions(onSelected:_registerAccount,
+            onBusinessTypeSelected:(type)=>session.requestedBusinessType=type))));
     }
-    if(_rolePicker&&session.userId!=null)return TeyzaModeChooser(
+    if(_accountFlowRequested&&_rolePicker&&session.userId!=null)return TeyzaModeChooser(
       agentApproved:_agentApproved,shopperAvailable:_hasShopperAccount,
       sellerAvailable:_sellerAccount!=null,
       sellerLabel:switch(_sellerAccount?.category){
@@ -1587,10 +1602,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       sellerName:_sellerAccount?.name??'',
       onShopper:()=>_chooseRole('shopper'),
       onAgent:()=>_chooseRole('agent'),onSeller:()=>_chooseRole('seller'));
-    if(_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
+    if(_accountFlowRequested&&_agentMode&&_agentApproved&&session.userId!=null)return AgentWorkspacePage(
       key:ValueKey('agent-${session.userId}'),session:session,mobileApi:widget.sellerMobileApi,
       onShopper:()=>_chooseRole('shopper'),onSeller:()=>_chooseRole('seller'));
-    if(session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
+    if(_accountFlowRequested&&session.sellerWorkspace)return SellerWorkspacePage(key:ValueKey('seller-${session.userId}-$_sellerEntry'),
       session:session,sellerMode:true,apiFactory:widget.sellerApiFactory,mobileApi:widget.sellerMobileApi,
       initialTarget:_sellerInitialTarget,initialClaimPlaceId:_pendingClaimPlaceId,
       openLogin:(){if(mounted)setState(()=>tab=0);});
@@ -1638,7 +1653,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           else ...[
           if((_agentApproved||_sellerAccount!=null)&&session.userId!=null)
             IconButton(key:const ValueKey('teyza-mode-switch'),tooltip:'Switch role',
-              onPressed:()=>setState(()=>_rolePicker=true),icon:const Icon(Icons.switch_account_outlined)),
+              onPressed:()=>setState((){_accountFlowRequested=true;_rolePicker=true;}),
+              icon:const Icon(Icons.switch_account_outlined)),
           IconButton(tooltip:'Notifications',onPressed:openBellNotifications,
             icon:Badge(isLabelVisible:unreadChats>0,
               label:Text(unreadChats>99?'99+':unreadChats.toString()),
