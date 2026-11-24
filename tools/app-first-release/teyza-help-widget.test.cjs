@@ -49,3 +49,29 @@ test('Scoped publisher manages only public information pages and widget assets',
  after.set('/pay/index.html','changed-unsafe');
  assert.throws(()=>publisher.verify(previous,after,managed),/Unrelated Hosting file changed/);
 });
+
+
+test('First publish accepts missing new JS/CSS while requiring existing public pages',async()=>{
+ const publisher=require('./publish-help-widget-only.cjs');
+ const version='sites/business-lift-3c19c/versions/live';
+ const pages=publisher.paths.filter(p=>p.endsWith('.html'));
+ const makeClient=missingPage=>({
+  hosting:async(method,uri)=>{
+   if(method!=='GET')throw Error('Check must remain read-only');
+   if(uri.endsWith('/customDomains/teyza.co.za'))
+    return {name:'projects/business-lift-3c19c/sites/business-lift-3c19c/customDomains/teyza.co.za'};
+   if(uri.endsWith('/channels/live'))return {release:{version:{name:version}}};
+   if(uri.endsWith('/versions/live/files'))return {files:[
+    ...pages.filter(p=>p!==missingPage).map(p=>({path:p,hash:'prior-hash',status:'ACTIVE'})),
+    {path:'/pay/index.html',hash:'preserved-payment',status:'ACTIVE'},
+    {path:'/ads/index.html',hash:'preserved-ad',status:'ACTIVE'},
+    {path:'/admin.html',hash:'preserved-admin',status:'ACTIVE'}
+   ]};
+   throw Error('Unexpected Hosting request: '+uri);
+  }
+ });
+ // Popup assets are intentionally absent, because this is the first publish.
+ await assert.doesNotReject(publisher.check(makeClient(null)));
+ await assert.rejects(publisher.check(makeClient('/support.html')),
+  /Live Hosting is missing expected public pages: \/support\.html/);
+});
