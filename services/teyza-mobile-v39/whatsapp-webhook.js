@@ -2,6 +2,7 @@
 // Meta WhatsApp Cloud API webhook. No chat bodies, phone numbers, profile
 // names, message contents or media URLs are persisted in diagnostics.
 const crypto=require('node:crypto');
+const {safeErrorCode}=require('./whatsapp-delivery-receipts');
 const MAX_BODY=512*1024;
 const statuses=new Set(['sent','delivered','read','failed','deleted','played']);
 const eventTypes=new Set(['text','image','video','audio','document','sticker','location','contacts','interactive','button','reaction','order','unknown']);
@@ -41,7 +42,9 @@ function safeEvents(payload){
     // A single provider message may transition through sent/delivered/read.
     // Use status and provider timestamp to dedupe redelivered callbacks.
     const timestamp=typeof status.timestamp==='string'&&/^\d{1,15}$/.test(status.timestamp)?status.timestamp:'';
-    out.push({providerMessageId:id,kind:'status',eventType:state,senderPhoneNumberId:numberId,providerTimestamp:timestamp});
+    const errorCode=state==='failed'?safeErrorCode(status.errors):null;
+    out.push({providerMessageId:id,kind:'status',eventType:state,senderPhoneNumberId:numberId,providerTimestamp:timestamp,
+     ...(errorCode===null?{}:{errorCode})});
    }
    if(out.length>500)return out.slice(0,500);
   }
@@ -71,9 +74,10 @@ function createWebhook({db,getVerifyToken,getAppSecret,onInteraction=async()=>{}
   const events=safeEvents(payload);
   try{
    for(const event of events){
-    const {providerMessageId,kind,eventType,senderPhoneNumberId,providerTimestamp=''}=event;
+    const {providerMessageId,kind,eventType,senderPhoneNumberId,providerTimestamp='',errorCode}=event;
     const dedupeKey=crypto.createHash('sha256').update(JSON.stringify([senderPhoneNumberId,providerMessageId,kind,eventType,providerTimestamp])).digest('hex');
-    const record={kind,eventType,receivedAt:clock(),source:'meta_whatsapp_signed_webhook',schemaVersion:1};
+    const record={kind,eventType,receivedAt:clock(),source:'meta_whatsapp_signed_webhook',schemaVersion:1,
+     ...(errorCode==null?{}:{errorCode})};
     // Firestore create is atomic. An already-exists error signals a
     // redelivery, not an application failure. Do not log the raw payload.
     try{await collection.doc(dedupeKey).create(record);}

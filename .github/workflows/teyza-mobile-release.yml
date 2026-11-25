@@ -23,11 +23,11 @@ on:
         type: string
         default: ''
       signed_release:
-        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.25.0 in production mode'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.26.0 with online-shopping controls'
         type: boolean
         default: true
       qa_signing_only:
-        description: 'QA-only signed APK, AAB and IPA; does not require the latest live backend; leaves Paystack checkout disabled in store builds'
+        description: 'QA-only signed APK, AAB and IPA; latest backend not required; digital-membership purchases disabled; physical-goods payments depend on live server readiness; not a payment sandbox'
         type: boolean
         default: false
       direct_mandate_qa:
@@ -145,7 +145,7 @@ jobs:
               echo '::error::QA signing requires a manual signed_release=true request.'
               exit 1
             fi
-            echo 'Signed QA/TestFlight preview ONLY. This build still uses the existing production Firebase accounts/data; use dedicated test accounts. Paystack checkout stays disabled in store builds. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Signed QA/TestFlight preview ONLY. This build still uses the existing production Firebase accounts/data; use dedicated test accounts. Digital-membership purchases stay disabled. Physical-goods payments depend on live server readiness; this is not a payment sandbox. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
           elif [ "$SIGNING_MODE" = signed ]; then
             echo "This is a SIGNED production candidate. All existing backend health and billing checks still apply." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -188,7 +188,7 @@ jobs:
               raise SystemExit('::error::QA signing still requires a responding Teyza backend. No Firebase resources were modified.')
           print('QA-only signing against the unchanged Firebase project. Backend version:',
                 health.get('version','unknown'))
-          print('No Paystack checkout will be exposed by the store-channel Flutter binaries. Existing production Firebase data is NOT isolated.')
+          print('Digital-membership purchases stay disabled. Physical-goods payments depend on live server readiness; this is not a payment sandbox. Existing production Firebase data is NOT isolated.')
           print('Do not use the QA binaries as production-ready or claim R324 seller approval is live.')
           PY_QA
       - name: Require authentic Meta Facebook login configuration for signed apps
@@ -234,10 +234,11 @@ jobs:
                          'shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity',
                          'twoWayChatNotifications','wholesaleConnections','adminUsers','adminSellerDocuments',
                          'automaticProductPublication','adminComplimentaryAccess',
-                         'paystackCheckoutAvailable','sellerApprovalBeforeCheckout','googlePlaceClaims','whatsappApprovalOptIn')
+                         'paystackCheckoutAvailable','sellerApprovalBeforeCheckout','googlePlaceClaims','whatsappApprovalOptIn',
+                         'physicalGoodsPaystack','sellerPaystackSubaccounts','sellerOnlineShoppingControls','onlineOrderPaymentReadiness')
           required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
           required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
-          required_exact={'version':'3.25.0','billingMode':'paystack_checkout',
+          required_exact={'version':'3.26.0','billingMode':'paystack_checkout',
                           'subscriptionMonthlyCents':9900,'promotionSevenDaysCents':2900}
           failures=[]
           failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
@@ -542,16 +543,26 @@ jobs:
         run: |
           "$RUNNER_TEMP/teyza-icons/bin/python" - <<'PY'
           import json
+          import xml.etree.ElementTree as ET
           from pathlib import Path
           from PIL import Image, ImageChops
           root=Path('ios/Runner/Assets.xcassets/LaunchImage.imageset')
           images=json.loads((root/'Contents.json').read_text())['images']
           assert {item['scale'] for item in images}=={'1x','2x','3x'}
+          storyboard=ET.parse('ios/Runner/Base.lproj/LaunchScreen.storyboard')
+          resource=storyboard.find(".//resources/image[@name='LaunchImage']")
+          assert resource is not None and resource.get('width')=='96' and resource.get('height')=='96'
+          canvas=storyboard.find(".//view[@key='view']/color[@key='backgroundColor']")
+          assert canvas is not None and canvas.get('customColorSpace')=='sRGB'
+          assert all(abs(float(canvas.get(channel))-value/255)<1e-9
+                     for channel,value in (('red',247),('green',248),('blue',245)))
+          assert float(canvas.get('alpha'))==1
           for item in images:
-              pixels=168*int(item['scale'].rstrip('x'))
+              pixels=96*int(item['scale'].rstrip('x'))
               with Image.open(root/item['filename']) as image:
                   assert image.size==(pixels,pixels) and image.mode=='RGB'
-                  assert ImageChops.difference(image,Image.new('RGB',image.size,'white')).getbbox()
+                  assert image.getpixel((0,0))==(247,248,245)
+                  assert ImageChops.difference(image,Image.new('RGB',image.size,'#F7F8F5')).getbbox()
           print('Three branded iOS launch images verified; no template placeholders.')
           PY
       - uses: actions/upload-artifact@v4

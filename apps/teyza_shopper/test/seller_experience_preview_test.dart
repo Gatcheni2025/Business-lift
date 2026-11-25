@@ -41,7 +41,7 @@ void main(){
    'seller-phone-otp':SellerPhonePage(session:session,phone:'+27712345678',pendingStore:PendingSmsStore(store:onboardingFixtures.TestPhoneStore())),
    'seller-in-app-selfie':SellerSelfieCameraPage(session:session,cameraFactory:()=>PreviewSelfieCamera()),
    'seller-notifications':SellerNotificationsPage(session:session,api:api),
-   'seller-registration':SellerRegistrationPage(session:session,api:api),
+   'seller-registration':SellerRegistrationPage(session:session,api:api,draftStore:fixtures.registrationDraftStore()),
    'seller-review-desk':SellerReviewPage(session:session,api:api),
    'seller-camera-verification':SellerToolPage(session:session,tool:SellerTool.verification,api:api,captureSelfie:() async=>null),
   };

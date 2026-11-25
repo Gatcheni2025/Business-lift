@@ -1,120 +1,150 @@
 import 'package:flutter/material.dart';
+import 'shopper_design.dart';
 
-/// Teyza's own premium marketplace design. The four destinations are
-/// deliberately separate: products are not shop records, local businesses
-/// are not spaza shops, and wholesalers do not sell to shoppers.
+/// Compact entry points into distinct public catalogues. Wholesale discovery
+/// remains separate from the shopper's retail basket and permissions.
 class TeyzaMarketplaceHub extends StatelessWidget {
   final ValueChanged<String> onDestination;
-  const TeyzaMarketplaceHub({super.key,required this.onDestination});
+  const TeyzaMarketplaceHub({super.key, required this.onDestination});
 
-  static const navy=Color(0xFF090F21);
-  static const panel=Color(0xFF1D2639);
-  static const mint=Color(0xFF60D5A5);
-
-  Widget destination(String type,String name,String subtitle,IconData icon,
-      {required Color accent}){
-    return Semantics(button:true,label:'Explore $name',child:Material(
-      color:panel,borderRadius:BorderRadius.circular(20),
-      child:InkWell(key:ValueKey('teyza-hub-$type'),
-        borderRadius:BorderRadius.circular(20),
-        onTap:()=>onDestination(type),
-        child:Padding(padding:const EdgeInsets.all(14),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Container(width:44,height:44,
-              decoration:BoxDecoration(color:accent.withValues(alpha:.16),
-                borderRadius:BorderRadius.circular(14)),
-              child:Icon(icon,color:accent,size:25)),
-            const SizedBox(height:12),
-            Text(name,maxLines:1,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:Colors.white,fontSize:15,fontWeight:FontWeight.w800)),
-            const SizedBox(height:4),
-            Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:Color(0xFFC8D2D9),fontSize:11,height:1.25))
-          ])))));
-  }
+  Widget destination(String type, String name, String subtitle, IconData icon,
+          {required Color background}) =>
+      Semantics(
+        button: true,
+        label: 'Explore $name',
+        child: Material(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              key: ValueKey('teyza-hub-$type'),
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => onDestination(type),
+              child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(icon, color: TeyzaDesign.forest, size: 25),
+                          const Spacer(),
+                          const Icon(Icons.north_east_rounded,
+                              color: TeyzaDesign.muted, size: 15),
+                        ]),
+                        const SizedBox(height: 11),
+                        Text(name,
+                            style: const TextStyle(
+                                color: TeyzaDesign.ink,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2)),
+                        const SizedBox(height: 4),
+                        Text(subtitle,
+                            style: const TextStyle(
+                                color: TeyzaDesign.muted,
+                                fontSize: 11,
+                                height: 1.3)),
+                      ])),
+            )),
+      );
 
   @override
-  Widget build(BuildContext context)=>Container(
-    key:const ValueKey('teyza-marketplace-hub'),
-    padding:const EdgeInsets.all(18),
-    decoration:BoxDecoration(
-      gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-        colors:[navy,Color(0xFF16394A)]),
-      borderRadius:BorderRadius.circular(24)),
-    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Row(children:[
-        Icon(Icons.location_city_rounded,color:mint,size:19),
-        SizedBox(width:8),
-        Expanded(child:Text('DISCOVER YOUR COMMUNITY',
-          style:TextStyle(color:mint,fontWeight:FontWeight.w900,fontSize:11,letterSpacing:1.3)))
-      ]),
-      const SizedBox(height:8),
-      const Text('Explore what’s near you',
-        style:TextStyle(fontWeight:FontWeight.w900,fontSize:24,color:Colors.white)),
-      const SizedBox(height:5),
-      const Text('Browse by category. Local products, spaza shops and services each have their own space.',
-        style:TextStyle(fontSize:12,color:Color(0xFFCDDCE4),height:1.45)),
-      const SizedBox(height:16),
-      LayoutBuilder(builder:(context,constraints){
-        final width=(constraints.maxWidth-10)/2;
-        return Wrap(spacing:10,runSpacing:10,children:[
-          SizedBox(width:width,child:destination('products','Products','Groceries and essentials',
-            Icons.shopping_bag_rounded,accent:const Color(0xFFFFCE79))),
-          SizedBox(width:width,child:destination('spaza','Find local shops','Spaza shops in your area',
-            Icons.storefront_rounded,accent:mint)),
-          SizedBox(width:width,child:destination('businesses','Businesses','Services and specialists',
-            Icons.business_center_rounded,accent:const Color(0xFF89B9FF))),
-          SizedBox(width:width,child:destination('wholesale','Wholesalers','Stock and supply connections',
-            Icons.inventory_2_rounded,accent:const Color(0xFFD9A4FF)))
-        ]);
-      })
-    ]));
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final wide = constraints.maxWidth > 600;
+        final columns = wide ? 4 : 2;
+        final width = (constraints.maxWidth - 10 * (columns - 1)) / columns;
+        return Wrap(
+            key: const ValueKey('teyza-marketplace-hub'),
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              SizedBox(
+                  width: width,
+                  child: destination('products', 'Products',
+                      'Groceries & essentials', Icons.shopping_bag_outlined,
+                      background: const Color(0xFFEAF3EC))),
+              SizedBox(
+                  width: width,
+                  child: destination('spaza', 'Find local shops',
+                      'Discover your neighbourhood', Icons.storefront_outlined,
+                      background: const Color(0xFFEEF0E7))),
+              SizedBox(
+                  width: width,
+                  child: destination('businesses', 'Businesses',
+                      'Services & specialists', Icons.business_center_outlined,
+                      background: const Color(0xFFF2EDE4))),
+              SizedBox(
+                  width: width,
+                  child: destination('wholesale', 'Wholesalers',
+                      'Supply for business owners', Icons.inventory_2_outlined,
+                      background: const Color(0xFFE9EFF1))),
+            ]);
+      });
 }
 
-/// Categories shown on the shopper home route. Every tile navigates to
-/// server-published spaza product listings; never to private seller drafts.
+/// Catalogue filters contain no stock claims; product listings come from the
+/// public server catalogue, never a seller's private draft inventory.
 class TeyzaHomeProductCategories extends StatelessWidget {
   final ValueChanged<String> onSelect;
-  const TeyzaHomeProductCategories({super.key,required this.onSelect});
-
-  static const categories=<(String,IconData)>[
-    ('Fruit & Veg',Icons.eco_rounded),
-    ('Dairy & Eggs',Icons.egg_rounded),
-    ('Pantry',Icons.kitchen_rounded),
-    ('Bakery',Icons.bakery_dining_rounded),
-    ('Drinks',Icons.local_drink_rounded),
-    ('Snacks',Icons.cookie_rounded),
-    ('Household',Icons.cleaning_services_rounded),
-    ('Personal Care',Icons.spa_rounded)
+  const TeyzaHomeProductCategories({super.key, required this.onSelect});
+  static const categories = <(String, IconData)>[
+    ('Fruit & Veg', Icons.eco_outlined),
+    ('Dairy & Eggs', Icons.egg_outlined),
+    ('Pantry', Icons.kitchen_outlined),
+    ('Bakery', Icons.bakery_dining_outlined),
+    ('Drinks', Icons.local_drink_outlined),
+    ('Snacks', Icons.cookie_outlined),
+    ('Household', Icons.cleaning_services_outlined),
+    ('Personal Care', Icons.spa_outlined),
   ];
 
   @override
-  Widget build(BuildContext context)=>Container(
-    key:const ValueKey('teyza-product-category-grid'),
-    decoration:BoxDecoration(color:const Color(0xFF161D2F),
-      borderRadius:BorderRadius.circular(22)),
-    padding:const EdgeInsets.fromLTRB(10,18,10,14),
-    child:LayoutBuilder(builder:(context,constraints){
-      final width=(constraints.maxWidth-12)/4;
-      final scale=MediaQuery.textScalerOf(context);
-      return Wrap(spacing:4,runSpacing:12,children:[
-        for(final item in categories)
-          SizedBox(width:width,child:Semantics(button:true,label:'Shop ${item.$1} products',
-            child:InkWell(key:ValueKey('product-category-${item.$1}'),
-              borderRadius:BorderRadius.circular(15),
-              onTap:()=>onSelect(item.$1),
-              child:Padding(padding:const EdgeInsets.symmetric(vertical:5,horizontal:2),
-                child:Column(mainAxisSize:MainAxisSize.min,children:[
-                  Container(width:50,height:50,
-                    decoration:BoxDecoration(color:const Color(0xFF28344B),
-                      borderRadius:BorderRadius.circular(16)),
-                    child:Icon(item.$2,color:const Color(0xFF7AE7BC),size:26)),
-                  const SizedBox(height:7),
-                  SizedBox(height:scale.scale(34),child:Center(
-                    child:Text(item.$1,maxLines:2,textAlign:TextAlign.center,
-                      overflow:TextOverflow.ellipsis,style:const TextStyle(
-                        color:Colors.white,fontWeight:FontWeight.w700,fontSize:11,height:1.2))))
-                ])))))
-      ]);
-    }));
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final columns = MediaQuery.textScalerOf(context).scale(12) > 18 ? 3 : 4;
+        final width = (constraints.maxWidth - 8 * (columns - 1)) / columns;
+        return Wrap(
+            key: const ValueKey('teyza-product-category-grid'),
+            spacing: 8,
+            runSpacing: 16,
+            children: [
+              for (final item in categories)
+                SizedBox(
+                  width: width,
+                  child: Semantics(
+                      button: true,
+                      label: 'Shop ${item.$1} products',
+                      child: InkWell(
+                        key: ValueKey('product-category-${item.$1}'),
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => onSelect(item.$1),
+                        child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                      width: 55,
+                                      height: 55,
+                                      decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(
+                                              color: TeyzaDesign.border),
+                                          borderRadius:
+                                              BorderRadius.circular(18)),
+                                      child: Icon(item.$2,
+                                          color: TeyzaDesign.forest, size: 26)),
+                                  const SizedBox(height: 7),
+                                  Text(item.$1,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                          color: TeyzaDesign.ink,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 11,
+                                          height: 1.25)),
+                                ])),
+                      )),
+                ),
+            ]);
+      });
 }

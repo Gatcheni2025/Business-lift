@@ -77,16 +77,16 @@ if contents.exists():
     print("TEYZA iOS AppIcon: all required sizes, no alpha channel")
 
 # Replace Flutter's one-pixel launch placeholders with the same local brand.
-# The launch storyboard uses this asset's point size on its white background.
+# The launch storyboard uses the same ivory background as the first app frame.
 ios_launch = root / "ios/Runner/Assets.xcassets/LaunchImage.imageset"
 launch_contents = ios_launch / "Contents.json"
 if launch_contents.exists():
     metadata = json.loads(launch_contents.read_text())
     for item in metadata["images"]:
         scale = float(item.get("scale", "1x").rstrip("x"))
-        pixels = round(168 * scale)
+        pixels = round(96 * scale)
         image = vector_image(content, pixels)
-        opaque = Image.new("RGB", (pixels, pixels), "white")
+        opaque = Image.new("RGB", (pixels, pixels), "#F7F8F5")
         opaque.paste(image, mask=image.getchannel("A"))
         filename = item.get("filename") or f"LaunchImage-{scale:g}x.png"
         item["filename"] = filename

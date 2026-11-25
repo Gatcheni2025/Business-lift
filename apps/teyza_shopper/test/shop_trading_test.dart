@@ -76,8 +76,9 @@ void main(){
   await tester.ensureVisible(find.text('Delivery, cards & messages'));await tester.pumpAndSettle();
   await mode.capture(tester,boundary,'seller-shop-service-options');
   await fixtures.visibleTap(tester,find.text('Save shop options'));
-  expect(api.saved,{'deliveryEnabled':true,'deliveryFeeCents':1500,'deliveryRadiusKm':3,'cardPayments':true,
-    'liveChatEnabled':false,'cashDiscountPercent':10,'cardPaymentFeePercent':0});
+  expect(api.saved,{'onlineOrdersEnabled':true,'onlinePaymentsEnabled':false,
+    'pickupEnabled':false,'deliveryEnabled':true,'deliveryFeeCents':1500,'deliveryRadiusKm':3,'deliveryNotes':'',
+    'cardPayments':true,'cashback':false,'liveChatEnabled':false,'cashDiscountPercent':10,'cardPaymentFeePercent':0});
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();api.session.dispose();
  });
  testWidgets('Account switches clear unsaved service values and disable saving',(tester) async {
@@ -135,7 +136,11 @@ void main(){
     catalogueLoader:() async=>[shop],directoryLoader:(_,__,___) async=>[],externalLauncher:(uri) async{opened=uri;return true;}))));
   await tester.pump();await tester.pump(const Duration(seconds:1));await tester.pumpAndSettle();
   final card=find.byKey(const ValueKey('nearby-shop-direction'));
-  await tester.scrollUntilVisible(card,180,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,card);
+  await tester.scrollUntilVisible(card,180,scrollable:find.descendant(
+    of:find.byKey(const PageStorageKey<String>('shopper-home')),matching:find.byType(Scrollable)).first);
+  await fixtures.visibleTap(tester,card);
+  await tester.scrollUntilVisible(find.text('Directions to shop'),160,scrollable:find.descendant(
+    of:find.byKey(const PageStorageKey<String>('shop-profile-shop-direction')),matching:find.byType(Scrollable)).first);
   await fixtures.visibleTap(tester,find.text('Directions to shop'));
   await mode.capture(tester,boundary,'shopper-directions-and-messages');
   expect(opened!.path,'/maps/dir/');expect(opened!.queryParameters['destination'],'-29.8587,31.0218');
@@ -143,12 +148,24 @@ void main(){
  });
  testWidgets('Checkout shows delivery and cash discount separately and card payments have no surcharge',(tester) async {
   final session=fixtures.Session(),api=TradingApi(fixtures.Session());
+  Future<void> showTotal(String label)async{
+    await tester.scrollUntilVisible(find.text(label),200,scrollable:find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+  }
+  Future<void> showChoices()async{
+    tester.state<ScrollableState>(find.byType(Scrollable).first).position.jumpTo(0);
+    await tester.pumpAndSettle();
+  }
   await tester.pumpWidget(MaterialApp(home:ShopperCheckoutPage(session:session,api:api,shopId:'shop1',shopName:'Corner Shop',
     delivery:true,collection:true,acceptsCard:true,items:const [{'id':'bread','name':'Bread','quantity':2,'priceCents':1}])));
-  await tester.pumpAndSettle();expect(find.text('Total: R31.50'),findsOneWidget);
+  await tester.pumpAndSettle();await showTotal('Total: R31.50');expect(find.text('Total: R31.50'),findsOneWidget);
+  await showChoices();
   await fixtures.visibleTap(tester,find.text('Delivery'));await tester.pumpAndSettle();
+  await showTotal('Total: R46.50');
   expect(find.text('Delivery fee: R15.00'),findsOneWidget);expect(find.text('Total: R46.50'),findsOneWidget);
+  await showChoices();
   await fixtures.visibleTap(tester,find.text('Collect'));await fixtures.visibleTap(tester,find.text('Card at the shop'));
+  await showTotal('Total: R35.00');
   expect(find.text('Total: R35.00'),findsOneWidget);expect(find.text('Extra card charge: R0.00'),findsOneWidget);
   expect(find.textContaining('cash discount on items'),findsNothing);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();session.dispose();api.session.dispose();

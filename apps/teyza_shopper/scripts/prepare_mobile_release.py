@@ -18,6 +18,80 @@ FIREBASE_API_KEY = "AIzaSyC0dFsNcfwuYUbdCN6K2xrG3Ycx6tPvl_U"
 NATIVE_CONFIG = ROOT / "assets/config/firebase_native.json"
 
 
+def android_launch_screen():
+    """Keep native startup and the first Flutter frame on the same light canvas."""
+    res = ROOT / "android/app/src/main/res"
+    key = "{http://schemas.android.com/apk/res/android}"
+    ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+    colors = ET.Element("resources")
+    ET.SubElement(colors, "color", {"name": "teyza_launch_background"}).text = "#F7F8F5"
+    ET.SubElement(colors, "color", {"name": "teyza_launch_icon_background"}).text = "#EAF3EC"
+    color_path = res / "values/teyza_launch_colors.xml"
+    color_path.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(colors).write(color_path, encoding="utf-8", xml_declaration=True)
+    for folder in ("drawable", "drawable-v21"):
+        path = res / folder / "launch_background.xml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        background = ET.Element("layer-list")
+        ET.SubElement(background, "item", {key + "drawable": "@color/teyza_launch_background"})
+        # API 26+ resolves this launcher to adaptive-icon XML. Let Drawable
+        # inflate either that XML or the older PNG instead of using BitmapDrawable.
+        ET.SubElement(background, "item", {
+            key + "drawable": "@mipmap/ic_launcher",
+            key + "width": "64dp", key + "height": "64dp",
+            key + "gravity": "center",
+        })
+        ET.ElementTree(background).write(path, encoding="utf-8", xml_declaration=True)
+    for folder in ("values", "values-night", "values-v31", "values-night-v31"):
+        path = res / folder / "styles.xml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        document = ET.parse(path).getroot() if path.exists() else ET.Element("resources")
+        for name in ("LaunchTheme", "NormalTheme"):
+            style = next((item for item in document.findall("style") if item.get("name") == name), None)
+            if style is None:
+                style = ET.SubElement(document, "style", {"name": name, "parent": "@android:style/Theme.Light.NoTitleBar"})
+            values = {
+                "android:windowBackground": "@drawable/launch_background" if name == "LaunchTheme" else "@color/teyza_launch_background",
+                "android:statusBarColor": "@color/teyza_launch_background",
+                "android:navigationBarColor": "@color/teyza_launch_background",
+                "android:windowLightStatusBar": "true",
+                "android:windowLightNavigationBar": "true",
+            }
+            if folder.endswith("v31") and name == "LaunchTheme":
+                values.update({
+                    "android:windowSplashScreenBackground": "@color/teyza_launch_background",
+                    "android:windowSplashScreenAnimatedIcon": "@mipmap/ic_launcher",
+                    "android:windowSplashScreenIconBackgroundColor": "@color/teyza_launch_icon_background",
+                })
+            for item_name, value in values.items():
+                item = next((item for item in style.findall("item") if item.get("name") == item_name), None)
+                if item is None:
+                    item = ET.SubElement(style, "item", {"name": item_name})
+                item.text = value
+        ET.ElementTree(document).write(path, encoding="utf-8", xml_declaration=True)
+
+
+def ios_launch_screen():
+    path = ROOT / "ios/Runner/Base.lproj/LaunchScreen.storyboard"
+    if not path.exists():
+        return
+    document = ET.parse(path)
+    view = document.find(".//view[@key='view']")
+    if view is None:
+        raise SystemExit("Cannot locate the generated iOS launch view.")
+    background = view.find("color[@key='backgroundColor']")
+    if background is None:
+        background = ET.SubElement(view, "color")
+    background.attrib.clear()
+    background.attrib.update({"key": "backgroundColor", "red": str(247 / 255),
+        "green": str(248 / 255), "blue": str(245 / 255), "alpha": "1",
+        "colorSpace": "custom", "customColorSpace": "sRGB"})
+    for asset in document.findall(".//resources/image[@name='LaunchImage']"):
+        asset.set("width", "96")
+        asset.set("height", "96")
+    document.write(path, encoding="utf-8", xml_declaration=True)
+
+
 def native_app_id(platform):
     value = os.environ.get("TEYZA_FIREBASE_" + platform.upper() + "_APP_ID", "").strip()
     config = {}
@@ -153,6 +227,7 @@ def android(signing):
         if count != 1:
             raise SystemExit("Expected one Flutter template signing entry; refusing an ambiguous release.")
     gradle.write_text(source)
+    android_launch_screen()
     print("Android identity:", ANDROID_ID, "| signing:", signing)
 
 
@@ -367,6 +442,7 @@ def ios(signing='unsigned'):
     end'''
         source = source.replace(marker, marker + bypass, 1)
         podfile.write_text(source)
+    ios_launch_screen()
     print("iOS bundle:", IOS_ID, "| Apple capability, Google OAuth configuration and owner camera access")
 
 

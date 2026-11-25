@@ -3,6 +3,7 @@
 // Never retry an uncertain provider request automatically: that could send twice.
 const {checkedPhone}=require('./onboarding');
 const {createWelcomeRollout}=require('./whatsapp-rollout');
+const {createDeliveryReceipts,safeErrorCode}=require('./whatsapp-delivery-receipts');
 
 // Build only parameters declared by the *actual approved* Meta template.
 // Never guess the media header or body placeholders from a template name.
@@ -32,6 +33,7 @@ function approvedTemplatePayload(config,account,authUser=null){
 function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({}),getPilotUid=()=>'',getPilotStartAt=()=>0,getRolloutMode=()=> 'pilot',getRolloutStartedAt=()=>0,send=fetch,clock=Date.now}){
  const doc=p=>db.doc(p);
  const rollout=createWelcomeRollout({getMode:getRolloutMode,getPilotUid,getPilotStartAt,getStartedAt:getRolloutStartedAt});
+ const receipts=createDeliveryReceipts({db,clock});
  async function deliver(reference){
   const ref=doc('teyzaWhatsAppApprovalOutbox/'+reference),initial=await ref.get();
   if(!initial.exists||!['queued','configuration_required'].includes(initial.data().status))return;
@@ -84,13 +86,20 @@ function createWhatsAppApproval({db,getAuthUser,getToken=()=>'',getConfig=()=>({
       template:claimed.template}),signal:AbortSignal.timeout(15000)});
    const body=await response.json().catch(()=>null),messageId=body?.messages?.[0]?.id;
    if(!response.ok||typeof messageId!=='string'||!messageId){
-    await ref.update({status:'needs_review',reason:'provider_response',httpStatus:response.status||0,updatedAt:clock()});return;
+    await ref.update({status:'needs_review',reason:'provider_response',httpStatus:response.status||0,
+     providerErrorCode:safeErrorCode([body?.error]),updatedAt:clock()});return;
    }
    // HTTP success confirms acceptance by Meta, not delivery to the phone.
-   await ref.update({status:'accepted',providerMessageId:messageId,acceptedAt:clock()});
+   await receipts.accept(ref,config.phoneNumberId,messageId);
   }catch(_){
    // Network failure may occur after Meta accepted the message. No blind retry.
-   await ref.update({status:'needs_review',reason:'delivery_uncertain',updatedAt:clock()});
+   // A Firestore response can also be lost after the acceptance transaction
+   // commits. Never overwrite a durable acceptance or signed delivery receipt.
+   await db.runTransaction(async tx=>{
+    const current=await tx.get(ref);
+    if(current.exists&&current.data().status==='sending')
+     tx.update(ref,{status:'needs_review',reason:'delivery_uncertain',updatedAt:clock()});
+   });
   }
  }
  async function retryPending(){

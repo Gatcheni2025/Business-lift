@@ -45,6 +45,23 @@ test('Meta retries are deduped; distinct status transitions are recorded separat
  const next=structuredClone(payload);next.entry[0].changes[0].value.statuses[0].status='read';
  await request('POST',next);assert.equal(docs.size,3);
 });
+
+test('Failed signed delivery diagnostics preserve numeric error codes without private details',async()=>{
+ const {request,docs}=setup(),next=structuredClone(payload);
+ next.entry[0].changes[0].value.messages=[];
+ next.entry[0].changes[0].value.statuses[0]={id:'wamid.failed',status:'failed',timestamp:'1794600001',
+  errors:[{code:131026,title:'Private recipient data',message:'Do not store this',error_data:{details:'27711111111'}}]};
+ assert.equal((await request('POST',next)).statusCode,200);
+ assert.equal(docs.size,1);
+ const saved=[...docs.values()][0];assert.equal(saved.errorCode,131026);
+ assert(!JSON.stringify(saved).includes('Private recipient data'));
+ assert(!JSON.stringify(saved).includes('Do not store this'));
+ assert(!JSON.stringify(saved).includes('27711111111'));
+ for(const code of ['131026','phone:27711111111',27711111111,-1,1.5]){
+  next.entry[0].changes[0].value.statuses[0].errors=[{code}];
+  assert.equal(safeEvents(next)[0].errorCode,undefined);
+ }
+});
 test('Invalid bodies, unrelated objects and unsupported methods are rejected',async()=>{
  const {request,docs}=setup();
  assert.equal((await request('POST',Buffer.from('{oops'))).statusCode,400);

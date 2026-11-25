@@ -98,7 +98,7 @@ void main(){
         onProfile:(){},onTool:selected.add))))));
     expect(tester.takeException(),isNull);
     for(final label in ['Shop setup','Live chat','Customer orders','Delivery & collect','Trading hours','Finance & credit','Order stock','Verify owner']){
-      final target=find.text(label);await tester.ensureVisible(target);await tester.tap(target);await tester.pumpAndSettle();
+      final target=find.text(label);await tester.ensureVisible(target);await tester.pumpAndSettle();await tester.tap(target);await tester.pumpAndSettle();
     }
     expect(products,isTrue);expect(chat,isTrue);expect(orders,isTrue);expect(selected,hasLength(5));
     expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());
@@ -107,8 +107,8 @@ void main(){
     final session=TestSession(),api=FakeMobile(TestSession());
     await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,tool:SellerTool.services,api:api)));
     await tester.pumpAndSettle();
-    final target=find.text('Cash back');await tester.ensureVisible(target);await tester.tap(target);await tester.pumpAndSettle();
-    final save=find.text('Save shop services');await tester.ensureVisible(save);await tester.tap(save);await tester.pumpAndSettle();
+    final target=find.text('Cash back');await tester.ensureVisible(target);await tester.pumpAndSettle();await tester.tap(target);await tester.pumpAndSettle();
+    final save=find.text('Save shop services');await tester.ensureVisible(save);await tester.pumpAndSettle();await tester.tap(save);await tester.pumpAndSettle();
     final request=api.calls.last;expect(request['action'],'save_services');
     expect(request['data']['cashback'],isTrue);expect(request['data']['pickupEnabled'],isTrue);
     expect(request['data']['deliveryEnabled'],isFalse);expect(find.text('Shop services saved.'),findsOneWidget);

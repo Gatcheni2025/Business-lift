@@ -86,6 +86,82 @@ test('Existing approved active shops reconcile old listing flags but suspended s
  assert.equal(db.records.get('teyzaPublicShops/seller1').sellingEnabled,false);
 });
 const services={deliveryEnabled:true,pickupEnabled:true,cashback:true,cardPayments:true,liveChatEnabled:true,deliveryFeeCents:1500,deliveryRadiusKm:5,deliveryNotes:'Local area'};
+test('Seller online choices are explicit, preserved by old clients and reported with real readiness',async()=>{
+ const {service,db}=fixture({'teyzaShopSettings/seller1':services}, {getPaystackSecret:()=> 'sk_live_test_only'});
+ const result=await service.execute(owner,'update_services',{onlineOrdersEnabled:false,onlinePaymentsEnabled:true});
+ assert.equal(result.settings.onlineOrdersEnabled,false);
+ assert.equal(result.commerce.onlinePaymentsReady,false);
+ assert.equal(result.commerce.onlineOrdersReason,'online_orders_disabled');
+ await service.execute(owner,'save_services',services);
+ let settings=db.records.get('teyzaShopSettings/seller1');
+ assert.equal(settings.onlineOrdersEnabled,false);assert.equal(settings.onlinePaymentsEnabled,true);
+ const request={shopId:'seller1',mode:'collection',paymentMethod:'cash',items:[{id:'bread1',quantity:1}]};
+ await rejects(service.execute(buyer,'order_quote',request),409);
+ await rejects(service.execute(buyer,'order_request',{...request,requestId:'disabled',phone:'0712345678'}),409);
+ const enabled=await service.execute(owner,'update_services',{onlineOrdersEnabled:true});
+ assert.equal(enabled.commerce.onlineOrdersReady,true);assert.equal(enabled.commerce.onlinePaymentsReason,'settlement_pending');
+ db.records.set('teyzaSellerPayouts/seller1',{ownerUid:'seller1',enabled:true,verifiedWithPaystack:true,
+  mode:'live',code:'ACCT_test12345',accountName:'Private beneficiary'});
+ const summary=await service.execute(owner,'seller_summary');
+ assert.equal(summary.commerce.onlinePaymentsReady,true);
+ const publicShop=(await service.publicDirectory()).entries[0];
+ assert.equal(publicShop.commerce.onlinePaymentsReady,true);
+ assert(!JSON.stringify(publicShop).includes('ACCT_'));assert(!JSON.stringify(publicShop).includes('Private beneficiary'));
+ const quote=(await service.execute(buyer,'order_quote',{...request,paymentMethod:'card_online'})).quote;
+ assert.equal(quote.commerce.shopperPaymentEligible,true);assert.equal(quote.totalCents,1800);
+ const placed=await service.execute(buyer,'order_request',{...request,paymentMethod:'card_online',requestId:'modern',
+  expectedQuoteId:quote.quoteId,phone:'0712345678',amountCents:1,paymentStatus:'paid'});
+ const order=db.records.get('teyzaMobileOrders/'+placed.id);
+ assert.equal(order.totalCents,1800);assert.equal(order.currency,'ZAR');assert.equal(order.commerceVersion,2);
+ assert.equal(order.paymentStatus,'arrange_with_shop');
+});
+test('Unverified email shoppers see an online-payment requirement before placing an unpaid online order',async()=>{
+ const {service}=fixture({'teyzaShopSettings/seller1':{onlinePaymentsEnabled:true},
+  'teyzaSellerPayouts/seller1':{ownerUid:'seller1',enabled:true,verifiedWithPaystack:true,mode:'live',code:'ACCT_test12345'}},
+  {getPaystackSecret:()=> 'sk_live_test_only'});
+ const phoneBuyer={...buyer,email_verified:false,phone_number:'+27712345678'};
+ const request={shopId:'seller1',mode:'collection',paymentMethod:'cash',items:[{id:'bread1',quantity:1}]};
+ const quote=(await service.execute(phoneBuyer,'order_quote',request)).quote;
+ assert.equal(quote.commerce.onlinePaymentsReady,true);assert.equal(quote.commerce.shopperPaymentEligible,false);
+ assert.equal(quote.commerce.shopperPaymentReason,'shopper_email_required');
+ await rejects(service.execute(phoneBuyer,'order_quote',{...request,paymentMethod:'card_online'}),403);
+ await rejects(service.execute(phoneBuyer,'order_request',{...request,paymentMethod:'card_online',requestId:'email-needed',phone:'0712345678'}),403);
+});
+test('Old service edits never invent a new online-payment consent or reset modern preferences',async()=>{
+ const {service,db}=fixture();
+ await service.execute(owner,'save_services',services);
+ assert.equal(db.records.get('teyzaShopSettings/seller1').onlinePaymentsEnabled,undefined);
+ await service.execute(owner,'update_services',{onlinePaymentsEnabled:false});
+ await service.execute(owner,'save_services',services);
+ assert.equal(db.records.get('teyzaShopSettings/seller1').onlinePaymentsEnabled,false);
+ await rejects(service.execute(owner,'update_services',{onlinePaymentsEnabled:'true'}),422);
+ await rejects(service.execute(buyer,'update_services',{onlinePaymentsEnabled:true}),403);
+});
+test('A service business cannot accept shopper product orders from stale private catalogue data',async()=>{
+ const {service}=fixture({'teyzaSellerAccounts/seller1':{...seller,category:'retail'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail'},
+  'teyzaShopSettings/seller1':{onlineOrdersEnabled:true,cardPayments:true}});
+ for(const paymentMethod of ['cash','card_at_shop','card_online']){
+  const request={shopId:'seller1',mode:'collection',paymentMethod,items:[{id:'bread1',quantity:1}]};
+  await rejects(service.execute(buyer,'order_quote',request),409);
+  await rejects(service.execute(buyer,'order_request',{...request,requestId:'stale-service-'+paymentMethod,phone:'0712345678'}),409);
+ }
+});
+test('An online order cannot be fulfilled unpaid and a paid cancellation flags review without promising a refund',async()=>{
+ const order={ownerUid:'seller1',shopperUid:'buyer1',status:'confirmed',reserved:false,paymentMethod:'card_online',
+  paymentStatus:'checkout_pending',paymentReference:'TZO_test',items:[],totalCents:1800};
+ const {service,db}=fixture({'teyzaMobileOrders/online-order':order,
+  'teyzaOrderPayments/TZO_test':{orderId:'online-order',ownerUid:'seller1',shopperUid:'buyer1',status:'pending'}});
+ await rejects(service.execute(owner,'order_update',{orderId:'online-order',status:'preparing'}),409);
+ db.records.get('teyzaMobileOrders/online-order').paymentStatus='test_paid';
+ await rejects(service.execute(owner,'order_update',{orderId:'online-order',status:'preparing'}),409);
+ db.records.get('teyzaMobileOrders/online-order').paymentStatus='paid';
+ db.records.get('teyzaOrderPayments/TZO_test').status='paid';
+ await service.execute(owner,'order_update',{orderId:'online-order',status:'cancelled'});
+ assert.equal(db.records.get('teyzaMobileOrders/online-order').paymentStatus,'refund_review');
+ assert.equal(db.records.get('teyzaOrderPayments/TZO_test').status,'refund_review');
+ assert.equal(db.records.get('teyzaOrderPayments/TZO_test').refundId,undefined);
+});
 test('Seller chat lists customers only and cannot turn a shopper into an owner',async()=>{
  const {service}=fixture({
   'teyzaMobileChats/customer':{ownerUid:'seller1',shopperUid:'buyer1',shopperName:'Customer',shopName:'Corner Shop',updatedAt:20,ownerUnread:2},
@@ -710,7 +786,8 @@ test('Shop map location is consented, owner bound and cannot grant approval; mov
 test('An unrelated administrator hold cannot be lifted by replacing evidence or a fresh owner review',async()=>{
  const {service,db}=onboardFixture();await ready(service);await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
  db.records.set('teyzaPublicShops/buyer1',{...db.records.get('teyzaPublicShops/buyer1'),status:'suspended',moderationSource:'operator_hold'});
- await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});await approve(service,db);
+ await service.execute(newOwner,'verification_selfie',{consent:true,imageBase64:jpeg});
+ await rejects(approve(service,db),409);
  await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
  assert.equal(db.records.get('teyzaPublicShops/buyer1').status,'suspended');assert(!(await service.publicDirectory()).entries.some(s=>s.id==='buyer1'));
 });
@@ -758,6 +835,99 @@ test('Completion requires real linked phone, document and selfie; forged complet
   const f=onboardFixture(user);await ready(f.service);await rejects(f.service.execute(newOwner,'seller_onboarding_complete',{phoneVerified:true}),409);
   assert(!f.db.records.has('teyzaPublicShops/buyer1'));
  }
+});
+test('Registration progress resumes from saved evidence and requires a valid owner photo and current address pin',async()=>{
+ const {service,db}=onboardFixture();await ready(service);
+ const initial=(await service.execute(newOwner,'seller_onboarding')).registrationProgress;
+ assert.deepEqual(initial.steps.map(step=>step.id),['identity','selfie','phone','photo','location']);
+ assert.equal(initial.completed,5);assert.equal(initial.readyToSubmit,true);
+ assert.equal(initial.submitted,false);assert.equal(initial.status,'in_progress');
+ const frontPath='teyzaShopFrontPhotos/buyer1',front=structuredClone(db.records.get(frontPath));
+ const pinPath='teyzaShopLocations/buyer1',pin=structuredClone(db.records.get(pinPath));
+ const setup=structuredClone(db.records.get('teyzaSellerOnboarding/buyer1'));
+ for(const invalid of [null,{...front,ownerUid:'seller1'},{...front,objectPath:'teyza/shop-fronts/seller1/other.jpg'}]){
+  if(invalid)db.records.set(frontPath,invalid);else db.records.delete(frontPath);
+  const result=await service.execute(newOwner,'seller_onboarding');
+  assert.equal(result.shopFront,null);assert.equal(result.registrationProgress.nextStep,'photo');
+  await rejects(service.execute(newOwner,'seller_onboarding_complete',{photo:true,location:true}),409);
+  assert.deepEqual(db.records.get('teyzaSellerOnboarding/buyer1'),setup);
+  assert(!db.records.has('teyzaPublicShops/buyer1'));
+ }
+ db.records.set(frontPath,front);
+ for(const invalid of [null,{...pin,ownerUid:'seller1'},{...pin,address:'Different address'},
+   {...pin,coordinatesExpireAt:999999},{...pin,consentAt:null}]){
+  if(invalid)db.records.set(pinPath,invalid);else db.records.delete(pinPath);
+  const result=await service.execute(newOwner,'seller_onboarding');
+  assert.equal(result.locationSaved,false);assert.equal(result.registrationProgress.nextStep,'location');
+  await rejects(service.execute(newOwner,'seller_onboarding_complete',{locationSaved:true}),409);
+  assert.deepEqual(db.records.get('teyzaSellerOnboarding/buyer1'),setup);
+ }
+ db.records.set(pinPath,pin);
+ const result=await service.execute(newOwner,'seller_onboarding_complete');
+ assert.equal(result.registrationProgress.submitted,true);
+ assert.equal(result.registrationProgress.readyToSubmit,false);
+ assert.equal(result.registrationProgress.status,'pending_review');
+ assert.equal(db.records.get('teyzaSellerAccounts/buyer1').approvalStatus,'pending');
+});
+test('Repeated completion keeps the original submission and replacement evidence needs a fresh submission',async()=>{
+ let stamp=1000000;
+ const {service,db}=fixture({}, {clock:()=>stamp,getAuthUser:async()=>phoneUser});
+ await ready(service);
+ await service.execute(newOwner,'seller_onboarding_complete');
+ const saved=structuredClone(db.records.get('teyzaSellerOnboarding/buyer1'));
+ const publicShop=structuredClone(db.records.get('teyzaPublicShops/buyer1'));
+ stamp+=1000;
+ const repeated=await service.execute(newOwner,'seller_onboarding_complete');
+ assert.equal(repeated.alreadySubmitted,true);
+ assert.equal(repeated.registrationProgress.submittedAt,saved.completedAt);
+ assert.deepEqual(db.records.get('teyzaSellerOnboarding/buyer1'),saved);
+ assert.deepEqual(db.records.get('teyzaPublicShops/buyer1'),publicShop);
+ await service.execute(newOwner,'seller_identity_submit',personal);
+ const changed=await service.execute(newOwner,'seller_onboarding');
+ assert.equal(changed.registrationProgress.submitted,false);
+ assert.equal(changed.registrationProgress.readyToSubmit,true);
+ await rejects(approve(service,db),409);
+ await service.execute(newOwner,'seller_onboarding_complete');
+ assert.equal(db.records.get('teyzaSellerOnboarding/buyer1').completedAt,stamp);
+ await approve(service,db);
+ const approved=await service.execute(newOwner,'seller_onboarding');
+ assert.equal(approved.registrationProgress.status,'approved');
+ assert.equal(approved.registrationProgress.submitted,true);
+});
+test('Approved registration survives private evidence retention without granting fresh approval to expired pending evidence',async()=>{
+ const {service,db}=onboardFixture();await ready(service);
+ await service.execute(newOwner,'seller_onboarding_complete');await approve(service,db);
+ const setup=structuredClone(db.records.get('teyzaSellerOnboarding/buyer1'));
+ const paths=['teyzaSellerIdentity/buyer1','teyzaMobileVerification/buyer1'];
+ for(const path of paths){
+  const record=db.records.get(path);delete record.objectPath;delete record.expiresAt;delete record.detailsEncrypted;
+  record.photoRemovedAt=1000000;
+ }
+ let progress=(await service.execute(newOwner,'seller_onboarding')).registrationProgress;
+ assert.equal(progress.status,'approved');assert.equal(progress.submitted,true);
+ assert.equal(progress.readyToSubmit,false);assert.equal(progress.completed,5);
+ assert.equal((await service.execute(newOwner,'seller_onboarding_complete')).alreadySubmitted,true);
+ assert.deepEqual(db.records.get('teyzaSellerOnboarding/buyer1'),setup);
+ // A location needing maintenance does not erase an already recorded approval.
+ // The checklist still exposes the missing current pin truthfully.
+ const pin=db.records.get('teyzaShopLocations/buyer1');db.records.delete('teyzaShopLocations/buyer1');
+ progress=(await service.execute(newOwner,'seller_onboarding')).registrationProgress;
+ assert.equal(progress.status,'approved');assert.equal(progress.submitted,true);
+ assert.equal(progress.nextStep,'location');assert.equal(progress.completed,4);
+ assert.equal((await service.execute(newOwner,'seller_onboarding_complete')).alreadySubmitted,true);
+ db.records.set('teyzaShopLocations/buyer1',pin);
+ const selfie=db.records.get(paths[1]);selfie.status='pending_review';
+ progress=(await service.execute(newOwner,'seller_onboarding')).registrationProgress;
+ assert.equal(progress.status,'in_progress');assert.equal(progress.submitted,false);
+ await rejects(service.execute(newOwner,'seller_onboarding_complete'),409);
+ await rejects(approve(service,db),404);
+ await rejects(service.execute({...owner,teyzaAdmin:true,auth_time:1000},'admin_seller_review',{
+  sellerUid:'buyer1',submissionId:selfie.submissionId,evidenceId:db.records.get(paths[0]).evidenceId,status:'approved'}),409);
+ selfie.status='approved';
+ const identity=db.records.get(paths[0]);identity.evidenceId='different-evidence';
+ progress=(await service.execute(newOwner,'seller_onboarding')).registrationProgress;
+ assert.equal(progress.submitted,false);assert.equal(progress.status,'in_progress');
+ assert.deepEqual(db.records.get('teyzaSellerOnboarding/buyer1'),setup);
 });
 test('Paid products publish on seller verification without a second approval',async()=>{
  const {service,db}=onboardFixture();await ready(service);await paidForTest(service,db);

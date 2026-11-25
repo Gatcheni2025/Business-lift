@@ -81,22 +81,57 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   const cardNode=card('Meta WhatsApp approval messages','Only opted-in verified sellers should receive the approved template after account approval. Meta template approval alone does not authenticate the sender.');
   if(!whatsappState){cardNode.append(el('p','Unable to retrieve the WhatsApp readiness snapshot.','footnote'));root.append(cardNode);return;}
   const s=whatsappState;
-  cardNode.append(el('p',s.enabled?'WhatsApp workers: ENABLED in backend configuration':'WhatsApp workers: DISABLED in backend configuration'));
+  cardNode.append(el('p',s.enabled?'API configuration: WhatsApp notifications enabled':'API configuration: WhatsApp notifications disabled or not configured'));
+  cardNode.append(el('p','This reads the API instance configuration. The separate sending worker has not been checked.','notice warning'));
   cardNode.append(el('p','Configured template: '+(s.fields?.templateName||'Not configured')));
   cardNode.append(el('p','Phone ID: '+(s.fields?.phoneNumberId?'Format configured':'Missing or invalid')));
+  cardNode.append(el('p','Meta API version: '+(s.fields?.apiVersion?'Format configured':'Missing or invalid')));
   cardNode.append(el('p','Body fields: '+(s.fields?.bodyFields||'Not configured')));
   cardNode.append(el('p','Image header: '+(s.fields?.headerImage?(s.fields?.headerImageUrlConfigured?'URL configured':'Missing URL'):'Disabled')));
-  cardNode.append(el('p','Sender token, webhook and actual message delivery: not verified by this status check.'));
+  cardNode.append(el('p','Sender credentials and current webhook subscription are not verified by this status check.'));
   const counts=Object.entries(s.counts||{}).sort((a,b)=>a[0].localeCompare(b[0]));
   cardNode.append(table(['Outbox status','Records (sample)'],counts.map(([state,count])=>[state,count])));
-  cardNode.append(el('p','Based on first '+s.sampled+' outbox entries'+(s.sampleLimited?' (more exist)':'')+'. Provider “accepted” means API acceptance, not delivered to recipient.','footnote'));
+  cardNode.append(el('p','Based on '+s.sampled+' outbox entries in document-ID order'+(s.sampleLimited?' (first '+(s.sampleLimit||100)+'; more exist)':'')+'. This is a bounded sample, not a recent-time total. Provider “accepted” means API acceptance, not delivered to recipient.','footnote'));
+  cardNode.append(el('h3','Welcome message delivery receipts'));
+  if(s.deliveryCounts){
+   const labels={delivered:'Delivered',read:'Read by recipient',failed:'Delivery failed',sent:'Sent; delivery not confirmed',
+    awaiting_receipt:'Accepted; awaiting delivery receipt',uncertain:'Delivery uncertain',not_sent:'Not sent / no acceptance recorded'};
+   cardNode.append(table(['Matched receipt status','Records in same sample'],
+    Object.entries(labels).map(([key,label])=>[label,s.deliveryCounts[key]||0])));
+   cardNode.append(el('p','Delivered and Read require a signed Meta receipt matched to the welcome message. The two rows are separate latest states; read messages are not counted again as delivered.','footnote'));
+  }else cardNode.append(el('p','Matched delivery receipts are not provided by this backend.','notice warning'));
   const webhook=s.webhookEvents||{counts:{},sampled:0,sampleLimited:false};
   cardNode.append(el('h3','Signed WhatsApp webhook events'));
   cardNode.append(table(['Event status','Records (sample)'],Object.entries(webhook.counts||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([kind,count])=>[kind,count])));
-  cardNode.append(el('p','Sampled '+webhook.sampled+' signed metadata events'+(webhook.sampleLimited?' (more exist)':'')+'. No message bodies, phone numbers or Meta tokens are shown. Zero events does not prove Meta is subscribed.','footnote'));
+  cardNode.append(el('p','Sampled '+webhook.sampled+' signed metadata events in document-ID order'+(webhook.sampleLimited?' (more exist)':'')+'. These events include other messages and do not establish delivery of a particular welcome message. Zero events does not establish subscription status.','footnote'));
 
   cardNode.append(el('p',s.warning||'Never share Meta API tokens or private WhatsApp phone numbers.','footnote'));
   root.append(cardNode);
+ }
+ function sellerWelcomeCard(value){
+  const node=card('WhatsApp welcome message','Current business verification submission. Approval, message acceptance and delivery are tracked separately.');
+  node.dataset.whatsappWelcome='true';
+  if(!value){node.append(el('p','This backend has not provided a current welcome-message record. Delivery is unverified.','notice warning'));return node;}
+  const consentLabels={opted_in:'Opted in for the registered number',opted_out:'Opted out',phone_changed:'Saved consent uses a different number; new consent is needed',not_recorded:'No current consent recorded'};
+  node.append(el('p','Current WhatsApp consent: '+(consentLabels[value.currentConsent]||'Unavailable')));
+  const queues={not_queued:'No welcome queued for this submission',unavailable:'Message record does not match this seller and submission',
+   queued:'Queued',sending:'Sending attempt in progress',accepted:'Accepted by Meta',skipped:'Skipped',
+   configuration_required:'Template configuration needed',needs_review:'Sending attempt needs review',unknown:'Unknown'};
+  node.append(el('p','Sending status: '+(queues[value.queueStatus]||'Unavailable')));
+  const states={sent:'Sent by Meta; delivery not yet confirmed',delivered:'Delivered to the recipient',read:'Read by the recipient',
+   failed:'Delivery failed',awaiting_receipt:'Awaiting a signed delivery receipt',uncertain:'Delivery is uncertain; review required',not_sent:'No delivery receipt for this submission'};
+  node.append(el('p','Delivery: '+(states[value.deliveryStatus]||'Unverified'),
+   value.deliveryConfirmed?'notice success':value.deliveryStatus==='failed'?'notice warning':'footnote'));
+  const reasons={before_general_rollout:'The message predates the general sending rollout.',approval_or_consent_changed:'Approval, account or consent changed before sending.',
+   phone_not_verified:'The registered phone was not verified.',approved_template_parameters_missing:'Approved template parameters are missing.',
+   provider_response:'Meta rejected or did not confirm the sending request.',delivery_uncertain:'The sending response was uncertain; an automatic resend could duplicate the message.'};
+  if(reasons[value.reason])node.append(el('p',reasons[value.reason]));
+  if(value.providerErrorCode)node.append(el('p','Meta sending error code: '+value.providerErrorCode));
+  if(value.deliveryErrorCode)node.append(el('p','Meta delivery error code: '+value.deliveryErrorCode));
+  if(value.acceptedAt)node.append(el('p','Accepted: '+new Date(value.acceptedAt).toLocaleString('en-ZA')));
+  if(value.receiptAt)node.append(el('p','Receipt observed: '+new Date(value.receiptAt).toLocaleString('en-ZA')));
+  node.append(el('p','Current consent does not change the recorded outcome of a previous sending attempt. API acceptance alone does not confirm delivery.','footnote'));
+  return node;
  }
  function overview(){
   const review=getReviewSummary(),stats=el('div',undefined,'overview-stats');
@@ -329,6 +364,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     summary.append(button('View membership & finance',()=>{accountTab='finance';show();}),
       button('View seller support',()=>{accountTab='chat';show();}));
     root.append(summary);
+    root.append(sellerWelcomeCard(d.whatsappWelcome));
   }
   if(accountTab==='verification'){
     const life=d.businessAccount||{},checks=life.verificationChecks||[];
@@ -343,6 +379,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
     if(d.seller.approvalStatus!=='approved')
       review.append(button('Review final verification decision',()=>navigate('approvals')));
     root.append(review);
+    root.append(sellerWelcomeCard(d.whatsappWelcome));
     sellerDocuments();
   }
   if(accountTab==='shop'){

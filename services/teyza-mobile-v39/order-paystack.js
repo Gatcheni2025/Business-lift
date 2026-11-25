@@ -1,26 +1,34 @@
 'use strict';
-// Shopper purchases of physical goods/services. Completely separate from
+// Shopper purchases of physical goods. Completely separate from
 // Teyza's digital seller membership subscription and promotion billing.
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const {recentAdmin}=require('./seller-experience');
 const offers=require('./shop-services');
-const {validCheckoutUrl}=require('./billing-paystack');
+const {validCheckoutUrl:paystackCheckoutUrl}=require('./billing-paystack');
 const {verifyWebhook}=require('./webhook-signature');
 const actions=new Set(['ops_order_subaccount','order_paystack_checkout','order_paystack_verify']);
 const allowedStatuses=new Set(['confirmed','preparing','ready','out_for_delivery']);
 const refPattern=/^TZO-[a-f0-9]{26}$/;
 const subPattern=/^ACCT_[A-Za-z0-9]{6,48}$/;
-const mode=key=>key.startsWith('sk_live_')?'live':'test';
-function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',send=fetch,rate=async()=>{}}){
+const mode=offers.paymentEnvironment;
+const validShopperEmail=auth=>auth?.email_verified===true&&typeof auth.email==='string'&&
+ /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(auth.email);
+function validCheckoutUrl(value){
+ if(!paystackCheckoutUrl(value))return false;
+ const url=new URL(value);return !url.username&&!url.password&&(!url.port||url.port==='443');
+}
+function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecret=()=>'',send=fetch,rate=async()=>{},
+ getProjectId=()=>process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||''}){
  const doc=p=>db.doc(p);
  const read=async p=>{const snap=await doc(p).get();return snap.exists?snap.data():null;};
- async function paystack(path,method='GET',body){
+ async function paystack(path,method='GET',body,expectedEnvironment=null){
   const key=getSecret();
   if(!/^sk_(test|live)_/.test(key||''))D.fail(503,'Paystack is not configured for shopper payments.');
+  if(expectedEnvironment&&mode(key)!==expectedEnvironment)D.fail(409,'The payment environment changed. Teyza support must review this payment.');
   let response;
   try{response=await send('https://api.paystack.co'+path,{method,headers:{
     Authorization:'Bearer '+key,'Content-Type':'application/json'
-   },...(body?{body:JSON.stringify(body)}:{})});}
+   },signal:AbortSignal.timeout(15000),...(body?{body:JSON.stringify(body)}:{})});}
   catch(_){D.fail(503,'Paystack is temporarily unavailable. Try again.');}
   const payload=await response.json().catch(()=>null);
   if(!response.ok||payload?.status!==true||!payload.data)
@@ -50,9 +58,14 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
    D.fail(409,'This Paystack settlement account is already assigned to another shop.');
   const stamp=clock();
   await db.runTransaction(async tx=>{
-   const accountRef=doc('teyzaSellerAccounts/'+sellerUid),snap=await tx.get(accountRef);
-   if(!snap.exists||snap.data().approvalStatus!=='approved')
+   const accountRef=doc('teyzaSellerAccounts/'+sellerUid);
+   const assignmentRef=doc('teyzaPaystackSubaccounts/'+crypto.createHash('sha256').update((live?'live':'test')+':'+code).digest('hex'));
+   const [snap,assignment]=await Promise.all([tx.get(accountRef),tx.get(assignmentRef)]);
+   if(!snap.exists||snap.data().uid!==sellerUid||snap.data().deletionPending===true||snap.data().approvalStatus!=='approved')
     D.fail(409,'Seller approval changed. Refresh this shop.');
+   if(assignment.exists&&assignment.data().ownerUid!==sellerUid)
+    D.fail(409,'This settlement account is already assigned to another shop.');
+   tx.set(assignmentRef,{ownerUid:sellerUid,code,environment:live?'live':'test',updatedAt:stamp});
    tx.set(doc('teyzaSellerPayouts/'+sellerUid),{
     ownerUid:sellerUid,code,mode:live?'live':'test',enabled:true,
     verifiedWithPaystack:true,verifiedAt:stamp,configuredBy:auth.uid,
@@ -74,70 +87,107 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
   if(!order||order.shopperUid!==auth.uid)D.fail(403,'Order access denied.');
   return order;
  }
+ async function checkoutSeller(order,tx=null){
+  const keys=['teyzaSellerAccounts/','teyzaSellerOnboarding/','teyzaMobileVerification/',
+   'teyzaPublicShops/','teyzaBilling/','teyzaSellerPayouts/','teyzaShopSettings/'];
+  const rows=await Promise.all(keys.map(async key=>{
+   const snap=await (tx?tx.get(doc(key+order.ownerUid)):doc(key+order.ownerUid).get());
+   return snap.exists?snap.data():null;
+  }));
+  const [seller,setup,verified,shop,billing,payout,services]=rows;
+  P.assertLive(order.ownerUid,seller,setup||{},verified,shop,billing,clock());
+  if(seller.deletionPending===true||seller.category!=='spaza'||
+    (shop.shopCategory&&shop.shopCategory!==seller.category))
+   D.fail(409,'This shop is not eligible for shopper online payments.');
+  const settings=offers.effective(services,shop);
+  // Honour an already placed legacy online order until the owner explicitly
+  // chooses a new setting; never infer permission for fresh orders from POS.
+  const explicit=typeof services?.onlinePaymentsEnabled==='boolean';
+  const legacy=order.commerceVersion!==2&&!explicit&&settings.cardPayments;
+  if(!settings.onlinePaymentsEnabled&&!legacy)
+   D.fail(409,'This shop has disabled new online payments. Existing payments can still be checked.');
+  if(!offers.validPayout(order.ownerUid,payout,mode(getSecret())))
+   D.fail(409,'This seller needs verified Paystack settlement before accepting online payments.');
+  return payout;
+ }
+ function assertOrder(order,auth){
+  if(!order||order.shopperUid!==auth.uid)D.fail(403,'Order access denied.');
+  if(order.orderType==='wholesale_stock'||order.paymentMethod!=='card_online')D.fail(409,'Online payment must be selected for a participating shop.');
+  if(!allowedStatuses.has(order.status))D.fail(409,'Wait for the shop to confirm the order before paying online.');
+  if(['paid','test_paid','refund_review'].includes(order.paymentStatus))D.fail(409,'This order already has a payment or needs payment review.');
+  if(!Number.isSafeInteger(order.totalCents)||order.totalCents<100||order.totalCents>5000000||
+    (order.currency!==undefined&&order.currency!=='ZAR'))D.fail(422,'The order amount or currency cannot be collected online.');
+  if((order.cashDiscountCents||0)!==0)
+   D.fail(409,'This order has a cash-only discount. Request a new order without a cash discount to pay online.');
+ }
  async function startCheckout(auth,data){
   const orderId=D.id(data.orderId);
-  if(!auth.email_verified||typeof auth.email!=='string'||!(/^[^@\s]+@[^@\s]+\.[^@\s]+$/).test(auth.email))
+  if(!validShopperEmail(auth))
    D.fail(403,'Verify your account email address before making a Paystack payment.');
   await rate(auth.uid,'shopper-paystack-checkout',6,3600000);
   const order=await loadOrderForShopper(auth,orderId);
-  if(order.orderType==='wholesale_stock'||order.paymentMethod!=='card_online')D.fail(409,'Online card payment must be selected at checkout for a participating seller.');
-  if(!allowedStatuses.has(order.status))D.fail(409,'Wait for the shop to confirm the order before paying online.');
-  if(order.paymentStatus==='paid'||order.paymentStatus==='test_paid')
-   D.fail(409,'This order already has a confirmed Paystack payment.');
-  if(order.paymentReference&&order.paymentStatus==='checkout_pending'){
-   const existing=await read('teyzaOrderPayments/'+order.paymentReference);
-   if(existing?.shopperUid===auth.uid&&existing.orderId===orderId&&
-     existing.status==='pending'&&existing.checkoutUrl&&validCheckoutUrl(existing.checkoutUrl))
-     return {reference:order.paymentReference,checkoutUrl:existing.checkoutUrl,
-      paymentEnvironment:existing.environment,alreadyStarted:true};
-   D.fail(409,'A Paystack payment is already being prepared for this order. Refresh your orders or contact support.');
+  assertOrder(order,auth);
+  const environment=mode(getSecret());
+  if(environment==='unconfigured')D.fail(503,'Online payments are not configured.');
+  if(environment==='test'&&(auth.teyzaAdmin!==true||!getProjectId()||getProjectId()==='business-lift-3c19c'))
+   D.fail(409,'Online payments are still in test mode. No shopper payment can be taken yet.');
+  const payout=await checkoutSeller(order);
+  if(order.paymentReference){
+   return db.runTransaction(async tx=>{
+    const [p,o]=await Promise.all([tx.get(doc('teyzaOrderPayments/'+order.paymentReference)),tx.get(doc('teyzaMobileOrders/'+orderId))]);
+    const existing=p.exists?p.data():null,current=o.exists?o.data():null;
+    assertOrder(current,auth);
+    const currentPayout=await checkoutSeller(current,tx);
+    if(current.paymentReference===order.paymentReference&&existing?.shopperUid===auth.uid&&existing.orderId===orderId&&
+      existing.ownerUid===current.ownerUid&&existing.amountCents===current.totalCents&&
+      existing.environment===environment&&existing.subaccountCode===currentPayout.code&&
+      existing.status==='pending'&&!['reversed','unknown'].includes(existing.providerStatus)&&validCheckoutUrl(existing.checkoutUrl))
+      return {reference:current.paymentReference,checkoutUrl:existing.checkoutUrl,
+       paymentEnvironment:existing.environment,amountCents:existing.amountCents,alreadyStarted:true};
+    D.fail(409,'A payment already exists for this order. Check its status or contact support; do not pay a second time.');
+   });
   }
-  if(!Number.isSafeInteger(order.totalCents)||order.totalCents<100||
-    order.totalCents>5000000)D.fail(422,'The order amount cannot be collected online.');
-  if((order.cashDiscountCents||0)!==0)
-   D.fail(409,'This order has a cash-only discount. Request a new order without a cash discount to pay online.');
-  const [seller,setup,verified,shop,billing,payout,services]=await Promise.all([
-   read('teyzaSellerAccounts/'+order.ownerUid),
-   read('teyzaSellerOnboarding/'+order.ownerUid),
-   read('teyzaMobileVerification/'+order.ownerUid),
-   read('teyzaPublicShops/'+order.ownerUid),
-   read('teyzaBilling/'+order.ownerUid),
-   read('teyzaSellerPayouts/'+order.ownerUid),
-   read('teyzaShopSettings/'+order.ownerUid)
-  ]);
-  P.assertLive(order.ownerUid,seller,setup||{},verified,shop,billing,clock());
-  if(!offers.effective(services,shop).cardPayments)D.fail(409,'This shop has disabled online card payments. Choose another payment method.');
-  if(!payout?.enabled||payout.ownerUid!==order.ownerUid||
-      !subPattern.test(payout.code)||payout.mode!==mode(getSecret())||
-      payout.verifiedWithPaystack!==true)
-    D.fail(409,'This seller has not enabled verified Paystack payments yet.');
+  const currentSubaccount=await paystack('/subaccount/'+encodeURIComponent(payout.code),'GET',undefined,environment);
+  if(currentSubaccount.subaccount_code!==payout.code||currentSubaccount.active!==true||
+    currentSubaccount.currency!=='ZAR'||currentSubaccount.domain!==environment||
+    (environment==='live'&&currentSubaccount.is_verified!==true))
+   D.fail(409,'The seller settlement account needs verification before this payment can start.');
   const reference='TZO-'+crypto.randomBytes(13).toString('hex');
   await db.runTransaction(async tx=>{
    const orderRef=doc('teyzaMobileOrders/'+orderId),snapshot=await tx.get(orderRef);
    const current=snapshot.exists?snapshot.data():null;
-   if(!current||current.shopperUid!==auth.uid||!allowedStatuses.has(current.status)||
-     current.paymentReference||current.totalCents!==order.totalCents)
+   assertOrder(current,auth);
+   if(current.ownerUid!==order.ownerUid||current.paymentReference||current.totalCents!==order.totalCents)
     D.fail(409,'Order payment state changed. Refresh your order before paying.');
+   const currentPayout=await checkoutSeller(current,tx);
+   if(currentPayout.code!==payout.code||mode(getSecret())!==environment)
+    D.fail(409,'Seller settlement changed. Refresh your order before paying.');
    tx.create(doc('teyzaOrderPayments/'+reference),{
     reference,orderId,shopperUid:auth.uid,ownerUid:order.ownerUid,
     subaccountCode:payout.code,amountCents:order.totalCents,
-    customerEmail:auth.email.toLowerCase(),environment:mode(getSecret()),
+    customerEmail:auth.email.toLowerCase(),environment,
     status:'pending',createdAt:clock()
    });
-   tx.update(orderRef,{paymentStatus:'checkout_pending',paymentReference:reference,updatedAt:clock()});
+   tx.update(orderRef,{paymentStatus:'checkout_pending',paymentReference:reference,
+    paymentEnvironment:environment,paymentCheckoutReady:false,updatedAt:clock()});
   });
   let checkout;
   try{
    checkout=await paystack('/transaction/initialize','POST',{
     email:auth.email.toLowerCase(),amount:order.totalCents,currency:'ZAR',
     reference,subaccount:payout.code,channels:['card','eft'],
-    callback_url:'https://teyza.co.za/download.html?payment=order-return',
+    callback_url:'https://teyza.co.za/order-payment-return.html',
     metadata:JSON.stringify({source:'teyza_physical_goods',orderId,sellerUid:order.ownerUid})
-   });
-   if(!validCheckoutUrl(checkout.authorization_url))
+   },environment);
+   if(checkout.reference!==reference||!validCheckoutUrl(checkout.authorization_url))
     D.fail(503,'Paystack returned an unsafe checkout destination.');
    await doc('teyzaOrderPayments/'+reference).set({checkoutUrl:checkout.authorization_url,
     checkoutCreatedAt:clock()},{merge:true});
+   await db.runTransaction(async tx=>{
+    const ref=doc('teyzaMobileOrders/'+orderId),snap=await tx.get(ref);
+    if(snap.exists&&snap.data().paymentReference===reference)
+     tx.update(ref,{paymentCheckoutReady:true});
+   });
   }catch(error){
    // A timeout can occur AFTER Paystack creates a chargeable checkout.
    // Never release this reference automatically: that could start a second
@@ -148,7 +198,7 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
    throw error;
   }
   return {checkoutUrl:checkout.authorization_url,reference,
-    paymentEnvironment:mode(getSecret()),amountCents:order.totalCents};
+    paymentEnvironment:environment,amountCents:order.totalCents};
  }
  async function confirm(reference,expectedUid=null){
   if(!refPattern.test(reference))D.fail(422,'Invalid Teyza order-payment reference.');
@@ -158,11 +208,32 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
   if(['paid','test_paid','refund_review'].includes(stored.status))
    return {verified:stored.status==='paid',status:stored.status,alreadyConfirmed:true};
   if(stored.status!=='pending')D.fail(409,'This Paystack payment is not pending.');
-  const verified=await paystack('/transaction/verify/'+encodeURIComponent(reference));
-  if(verified.reference!==reference||verified.status!=='success'||verified.currency!=='ZAR'||
+  const verified=await paystack('/transaction/verify/'+encodeURIComponent(reference),'GET',undefined,stored.environment);
+  if(verified.reference!==reference||verified.currency!=='ZAR'||
     verified.domain!==stored.environment||verified.amount!==stored.amountCents||
-    verified.customer?.email?.toLowerCase()!==stored.customerEmail.toLowerCase())
+    typeof verified.customer?.email!=='string'||typeof stored.customerEmail!=='string'||
+    verified.customer.email.toLowerCase()!==stored.customerEmail.toLowerCase())
    D.fail(409,'Paystack has not verified the expected order amount, currency and shopper.');
+  if(verified.status!=='success'){
+   const providerStatus=['failed','abandoned','pending','ongoing','processing','queued','reversed'].includes(verified.status)?verified.status:'unknown';
+   const failed=['failed','abandoned'].includes(providerStatus);
+   return db.runTransaction(async tx=>{
+    const payRef=doc('teyzaOrderPayments/'+reference),orderRef=doc('teyzaMobileOrders/'+stored.orderId);
+    const [p,o]=await Promise.all([tx.get(payRef),tx.get(orderRef)]);
+    const row=p.exists?p.data():null,order=o.exists?o.data():null;
+    if(!row||row.shopperUid!==stored.shopperUid||row.amountCents!==stored.amountCents||
+      !order||order.shopperUid!==stored.shopperUid||order.ownerUid!==stored.ownerUid||order.paymentReference!==reference)
+     D.fail(409,'Order payment ownership changed. Contact Teyza support.');
+    if(['paid','test_paid','refund_review'].includes(row.status))
+     return {verified:row.status==='paid',status:row.status,alreadyConfirmed:true};
+    const status=providerStatus==='reversed'?'refund_review':failed?'payment_failed':'checkout_pending';
+    const canResume=!['reversed','unknown'].includes(providerStatus)&&validCheckoutUrl(row.checkoutUrl||'');
+    tx.update(payRef,{providerStatus,lastCheckedAt:clock(),...(providerStatus==='reversed'?{status:'refund_review'}:{})});
+    tx.update(orderRef,{paymentStatus:status,paymentProviderStatus:providerStatus,paymentLastCheckedAt:clock(),paymentCheckoutReady:canResume});
+    return {verified:false,status,providerStatus,canResume,
+      environment:row.environment};
+   });
+  }
   const receivedSubaccount=typeof verified.subaccount==='string'?verified.subaccount:
     verified.subaccount?.subaccount_code||verified.subaccount?.code||'';
   if(receivedSubaccount!==stored.subaccountCode)
@@ -173,17 +244,19 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
    const [p,o]=await Promise.all([tx.get(payRef),tx.get(orderRef)]);
    const row=p.exists?p.data():null,order=o.exists?o.data():null;
    if(!row||row.ownerUid!==stored.ownerUid||row.shopperUid!==stored.shopperUid||
+     row.amountCents!==stored.amountCents||row.environment!==stored.environment||row.subaccountCode!==stored.subaccountCode||
+     row.customerEmail!==stored.customerEmail||row.orderId!==stored.orderId||
      !order||order.shopperUid!==row.shopperUid||order.ownerUid!==row.ownerUid||
      order.paymentReference!==reference||order.totalCents!==row.amountCents)
     D.fail(409,'Order or payment ownership changed. Teyza support must reconcile this charge.');
-   if(row.status==='paid'||row.status==='test_paid')
+   if(['paid','test_paid','refund_review'].includes(row.status))
     return {verified:row.status==='paid',status:row.status,alreadyConfirmed:true};
    if(row.status!=='pending')D.fail(409,'This payment was already processed.');
    const status=order.status==='cancelled'?'refund_review':row.environment==='test'?'test_paid':'paid';
-   tx.update(payRef,{status,paystackTransactionId:verified.id||null,verifiedAt:stamp});
+   tx.update(payRef,{status,providerStatus:'success',paystackTransactionId:verified.id||null,verifiedAt:stamp});
    tx.update(orderRef,{paymentStatus:status,paymentReference:reference,
      paymentMethod:status==='refund_review'?order.paymentMethod:'paystack',paymentVerifiedAt:stamp,
-     updatedAt:stamp});
+     paymentProviderStatus:'success',updatedAt:stamp});
    return {verified:status==='paid',status,environment:row.environment,
      refundReviewRequired:status==='refund_review'};
   });
@@ -211,4 +284,4 @@ function createOrderPaystack({db,clock=Date.now,getSecret=()=>'',getSigningSecre
  }
  return {execute,webhook};
 }
-module.exports={actions,createOrderPaystack,refPattern,subPattern};
+module.exports={actions,createOrderPaystack,refPattern,subPattern,validShopperEmail};

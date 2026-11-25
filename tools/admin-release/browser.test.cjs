@@ -104,8 +104,56 @@ async function main(){
   }
   return {context,page,calls,errors};
  }
- async function check(name,fn){await fn();count++;console.log('PASS '+name);}
+ async function check(name,fn){
+  if(process.env.TEYZA_ADMIN_TEST_FILTER&&!name.includes(process.env.TEYZA_ADMIN_TEST_FILTER))return;
+  await fn();count++;console.log('PASS '+name);
+ }
  try{
+  await check('WhatsApp diagnostics distinguish sampled delivery receipts from worker configuration',async()=>{
+   const f=await pageFor({startView:'map',api:async(route,body)=>{
+    if(body.action!=='ops_whatsapp_status')return false;
+    await route.fulfill({json:{ok:true,enabled:true,configurationScope:'api_instance',workerRunningVerified:false,
+     fields:{templateName:'synthetic_welcome',phoneNumberId:true,apiVersion:true,bodyFields:'name',headerImage:false},
+     counts:{accepted:80,queued:20},sampled:100,sampleLimit:100,sampleLimited:true,
+     deliveryCounts:{delivered:10,read:5,failed:2,sent:3,awaiting_receipt:60,uncertain:0,not_sent:20},
+     webhookEvents:{counts:{delivered:70,sent:30},sampled:100,sampleLimited:true},
+     warning:'Only a matched signed receipt confirms an individual welcome.'}});return true;
+   }});
+   await f.page.locator('[data-admin-view="whatsapp"]').click();
+   await f.page.getByRole('heading',{name:'Welcome message delivery receipts'}).waitFor();
+   await f.page.getByText('The separate sending worker has not been checked.',{exact:false}).waitFor();
+   const receiptTable=f.page.getByRole('table').filter({hasText:'Matched receipt status'});
+   assert.equal(await receiptTable.getByRole('row').filter({hasText:'Delivered'}).getByRole('cell').last().innerText(),'10');
+   assert.equal(await receiptTable.getByRole('row').filter({hasText:'Read by recipient'}).getByRole('cell').last().innerText(),'5');
+   await f.page.getByText('first 100; more exist',{exact:false}).waitFor();
+   await f.page.getByText('bounded sample, not a recent-time total',{exact:false}).waitFor();
+   assert.equal(await f.page.getByText('WhatsApp workers: ENABLED',{exact:false}).count(),0);
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('WhatsApp seller welcome shows acceptance, delivery and changed consent separately',async()=>{
+   let welcome={currentConsent:'opted_in',queueStatus:'accepted',deliveryStatus:'awaiting_receipt',deliveryConfirmed:false,acceptedAt:1792910000000};
+   const f=await pageFor({startView:'map',api:async(route,body)=>{
+    if(body.action!=='ops_seller_detail')return false;
+    await route.fulfill({json:{ok:true,seller:{...rows[0],approvalStatus:'approved'},
+     businessAccount:{type:'Spaza shop',isPublic:true,verificationChecks:[],missingRequirements:[]},
+     billing:{status:'not_started'},membershipPaid:false,payments:[],entries:[],catalogue:{products:[]},
+     documents:{identity:null,selfie:null},whatsappWelcome:welcome}});return true;
+   }});
+   await f.page.getByRole('button',{name:'Business accounts',exact:true}).click();
+   await f.page.getByRole('button',{name:'Open account'}).first().click();
+   const card=f.page.locator('[data-whatsapp-welcome]');
+   await card.getByText('Sending status: Accepted by Meta',{exact:true}).waitFor();
+   await card.getByText('Delivery: Awaiting a signed delivery receipt',{exact:true}).waitFor();
+   assert.equal(await card.locator('.notice.success').count(),0);
+   welcome={...welcome,currentConsent:'opted_out',deliveryStatus:'delivered',deliveryConfirmed:true,receiptAt:1792910001000};
+   await f.page.locator('#operationsPanel').getByRole('button',{name:'Refresh',exact:true}).click();
+   await card.getByText('Delivery: Delivered to the recipient',{exact:true}).waitFor();
+   await card.getByText('Current WhatsApp consent: Opted out',{exact:true}).waitFor();
+   await f.page.locator('.ops-account-tabs').getByRole('button',{name:'Verification',exact:true}).click();
+   await card.getByText('Delivery: Delivered to the recipient',{exact:true}).waitFor();
+   assert(!f.calls.some(x=>/send|resend/.test(x.action)));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('National map automatically displays authenticated registered-shop count without Google browser key',async()=>{
    const f=await pageFor({startView:'map'});
    await f.page.locator('.tp-shop-row').getByText('Synthetic Verified Spaza').waitFor();

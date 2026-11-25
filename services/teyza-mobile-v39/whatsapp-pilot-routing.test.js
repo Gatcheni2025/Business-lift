@@ -18,15 +18,19 @@ function fake(options={}){
   create:async value=>{if(data.has(path))throw Error('already exists');data.set(path,structuredClone(value));},
   set:async value=>data.set(path,structuredClone(value)),
   update:async value=>data.set(path,{...data.get(path),...structuredClone(value)})});
+ let transactionQueue=Promise.resolve();
  const db={doc,collection:name=>({where:(field,op,val)=>({
   limit:()=>({get:async()=>({docs:[...data].filter(([key,v])=>
    key.startsWith(name+'/')&&v?.[field]===val).map(([key,v])=>({
     id:key.split('/').at(-1),data:()=>v,ref:doc(key)}))})})
- })}),runTransaction:async fn=>{
+ })}),runTransaction:fn=>{
+  const operation=transactionQueue.then(async()=>{
   const tx={get:ref=>ref.get(),create:(ref,value)=>{if(data.has(ref.path))throw Error('duplicate');data.set(ref.path,structuredClone(value));},
    set:(ref,value)=>data.set(ref.path,structuredClone(value)),
    update:(ref,value)=>{if(!data.has(ref.path))throw Error('not found');data.set(ref.path,{...data.get(ref.path),...structuredClone(value)});}};
   return fn(tx);
+  });
+  transactionQueue=operation.catch(()=>{});return operation;
  }};
  let uid='seller1';
  return {data,router:createPilotRouter({db,getPilotUid:()=>uid,
@@ -85,6 +89,72 @@ test('Only signed status data for the pilot outbox updates delivery receipt',asy
  assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'delivered');
  await f.router.route(payload([],[{id:'wamid.sent1',status:'sent'}]));
  assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'delivered');
+});
+
+test('A fresh equal signed receipt confirms legacy delivery provenance without backfill or downgrade',async()=>{
+ for(const status of ['delivered','read']){
+  const f=fake(),path='teyzaWhatsAppApprovalOutbox/sub1';
+  Object.assign(f.data.get(path),{deliveryStatus:status,deliveryStatusAt:123});
+  assert.equal(f.data.get(path).deliveryStatusSource,undefined);
+  const lower=status==='read'?'delivered':'sent';
+  await f.router.route(payload([], [{id:'wamid.sent1',status:lower}]));
+  assert.equal(f.data.get(path).deliveryStatus,status);
+  assert.equal(f.data.get(path).deliveryStatusSource,undefined);
+  await f.router.route(payload([], [{id:'wamid.sent1',status}]));
+  assert.equal(f.data.get(path).deliveryStatus,status);
+  assert.equal(f.data.get(path).deliveryStatusSource,'meta_whatsapp_signed_webhook');
+  assert.equal(f.data.get(path).deliveryStatusAt,123);
+  await f.router.route(payload([], [{id:'wamid.sent1',status:'failed',errors:[{code:131026}]}]));
+  assert.equal(f.data.get(path).deliveryStatus,status);
+  assert.equal(f.data.get(path).deliveryStatusAt,123);
+  assert.equal(f.data.get(path).deliveryStatusSource,'meta_whatsapp_signed_webhook');
+  assert.equal(f.data.get(path).deliveryErrorCode,undefined);
+ }
+});
+
+test('Concurrent and late callbacks cannot overwrite a confirmed delivery or read',async()=>{
+ const f=fake();
+ await Promise.all(['read','delivered','failed','sent'].map(status=>f.router.route(payload([], [{id:'wamid.sent1',status}]))));
+ const row=f.data.get('teyzaWhatsAppApprovalOutbox/sub1');
+ assert.equal(row.deliveryStatus,'read');
+ assert.equal(row.deliveryStatusSource,'meta_whatsapp_signed_webhook');
+ const at=row.deliveryStatusAt;
+ await f.router.route(payload([], [{id:'wamid.sent1',status:'failed',errors:[{code:131026}]}]));
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'read');
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatusAt,at);
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryErrorCode,null);
+});
+
+test('Failure receipts retain only a safe numeric reason and yield to later delivery evidence',async()=>{
+ const f=fake();
+ const failure={id:'wamid.sent1',status:'failed',timestamp:'1794600000',recipient_id:'27712345678',
+  errors:[{code:131026,title:'Private recipient details',error_data:{details:'Do not retain me'}}]};
+ await f.router.route(payload([], [failure]));
+ let row=f.data.get('teyzaWhatsAppApprovalOutbox/sub1');
+ assert.equal(row.deliveryStatus,'failed');
+ assert.equal(row.deliveryErrorCode,131026);
+ assert.equal(row.deliveryProviderTimestamp,1794600000000);
+ const cache=[...f.data].filter(([key])=>key.startsWith('teyzaWhatsAppDeliveryState/receipt_'));
+ assert.equal(cache.length,1);
+ assert(!JSON.stringify(cache).includes('wamid.sent1'));
+ assert(!JSON.stringify(cache).includes('27712345678'));
+ assert(!JSON.stringify(cache).includes('Private recipient details'));
+ assert(!JSON.stringify(cache).includes('Do not retain me'));
+ await f.router.route(payload([], [{id:'wamid.sent1',status:'sent'}]));
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,'failed');
+ await f.router.route(payload([], [{id:'wamid.sent1',status:'delivered'}]));
+ row=f.data.get('teyzaWhatsAppApprovalOutbox/sub1');
+ assert.equal(row.deliveryStatus,'delivered');
+ assert.equal(row.deliveryErrorCode,null);
+});
+
+test('Receipt reconciliation rechecks the live outbox instead of trusting the query snapshot',async()=>{
+ const f=fake();
+ f.data.get('teyzaWhatsAppApprovalOutbox/sub1').status='needs_review';
+ await f.router.route(payload([], [{id:'wamid.sent1',status:'read'}]));
+ assert.equal(f.data.get('teyzaWhatsAppApprovalOutbox/sub1').deliveryStatus,undefined);
+ const cache=[...f.data].filter(([key])=>key.startsWith('teyzaWhatsAppDeliveryState/receipt_'));
+ assert.equal(cache[0][1].deliveryStatus,'read');
 });
 
 test('Quick reply receives one URL or support confirmation and never repeats after Meta webhook redelivery',async()=>{

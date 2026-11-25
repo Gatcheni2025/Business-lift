@@ -3,7 +3,8 @@ import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
 
 // These constants preserve the existing distribution configuration.
-// Payment checkout is never initiated within this app, including direct APKs.
+// Digital business-membership checkout is not initiated in this app.
+// Shopper payments for physical orders use a separate checkout flow.
 const teyzaPaymentChannel=String.fromEnvironment('TEYZA_PAYMENT_CHANNEL',defaultValue:'store');
 bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>false;
 
@@ -37,7 +38,7 @@ class SellerPlanPage extends StatelessWidget {
           Text(businessType=='wholesale'?'Advertise to spaza shops':'Sell on Teyza',
             style:const TextStyle(color:Colors.white,fontSize:27,height:1.12,fontWeight:FontWeight.w800)),
           const SizedBox(height:12),
-          const Text('Free business registration · check your verified subscription and product access below.',
+          const Text('Free business registration · your verified selling eligibility controls the tools available in your workspace.',
             style:TextStyle(color:Color(0xFFD5E6DA),height:1.4))
         ])),
       const SizedBox(height:18),
@@ -55,7 +56,7 @@ class SellerPlanPage extends StatelessWidget {
           const Text('Benefits depend on availability and eligibility.',style:TextStyle(fontSize:12,color:Color(0xFF657B6E))),
         ]))),
       const SizedBox(height:18),
-      const Text('Your available business tools reflect your verified account eligibility. No payments or subscriptions can be initiated in this app.',
+      const Text('Business membership payments and subscriptions cannot be initiated here. Shopper payments for physical orders are separate. Your available business tools reflect your verified account eligibility.',
         style:TextStyle(fontSize:12,color:Color(0xFF60736B))),
     ])),
   );

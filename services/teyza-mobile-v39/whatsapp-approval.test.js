@@ -13,16 +13,16 @@ function fixture(){
  const db={doc:path=>({path,get:async()=>({exists:records.has(path),data:()=>records.get(path)}),
   update:async value=>records.set(path,{...records.get(path),...value}),
   set:async value=>records.set(path,value)}),
-  runTransaction:fn=>{const result=queue.then(async()=>{const writes=[];const tx={get:ref=>ref.get(),update:(ref,value)=>writes.push(()=>ref.update(value))};
+  runTransaction:fn=>{const result=queue.then(async()=>{const writes=[];const tx={get:ref=>ref.get(),update:(ref,value)=>writes.push(()=>ref.update(value)),set:(ref,value)=>writes.push(()=>ref.set(value))};
    const result=await fn(tx);for(const write of writes)await write();return result;});queue=result.catch(()=>{});return result;}};
  let config={phoneNumberId:'123456',apiVersion:'v24.0',template:'teyza_seller_approved',language:'en'};
- let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false;
+ let token='TEST_ACCESS_TOKEN_12345',calls=[],auth={phoneNumber:phone,providerData:[{providerId:'phone',phoneNumber:phone}]},networkError=false,beforeResponse=async()=>{},providerResponse=null;
  let pilotUid='seller1',pilotStartAt=500,mode='pilot',generalStartedAt=500;
  const api=createWhatsAppApproval({db,getAuthUser:async()=>auth,getToken:()=>token,getConfig:()=>config,
   getPilotUid:()=>pilotUid,getPilotStartAt:()=>pilotStartAt,getRolloutMode:()=>mode,
   getRolloutStartedAt:()=>generalStartedAt,clock:()=>1000,
-  send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');return {ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
- return {api,db,records,calls,setMode:v=>{mode=v;},setGeneralStartedAt:v=>{generalStartedAt=v;},disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},setPilotUid:v=>{pilotUid=v;},setPilotStartAt:v=>{pilotStartAt=v;},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;}};
+  send:async(url,options)=>{calls.push({url,options});if(networkError)throw Error('connection lost');await beforeResponse();return providerResponse||{ok:true,status:200,json:async()=>({messages:[{id:'wamid.test'}]})};}});
+ return {api,db,records,calls,setMode:v=>{mode=v;},setGeneralStartedAt:v=>{generalStartedAt=v;},disableConfig:()=>{token='';},enableConfig:()=>{token='TEST_ACCESS_TOKEN_12345';},setPilotUid:v=>{pilotUid=v;},setPilotStartAt:v=>{pilotStartAt=v;},breakNetwork:()=>{networkError=true;},setAuth:value=>{auth=value;},beforeResponse:fn=>{beforeResponse=fn;},providerResponse:value=>{providerResponse=value;}};
 }
 test('An opted-in, currently approved seller with a verified phone gets one templated message',async()=>{
  const f=fixture();await Promise.all([f.api.deliver('submission1'),f.api.deliver('submission1')]);
@@ -49,6 +49,60 @@ test('Missing provider configuration waits; an uncertain provider request is nev
  f.enableConfig();f.breakNetwork();await f.api.deliver('submission1');
  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'needs_review');
  await f.api.deliver('submission1');assert.equal(f.calls.length,1);
+});
+
+test('A signed receipt arriving before provider acceptance is retained without a second send',async()=>{
+ const f=fixture();
+ const receipts=require('./whatsapp-delivery-receipts').createDeliveryReceipts({db:f.db,clock:()=>900});
+ f.beforeResponse(async()=>{
+  assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'sending');
+  await receipts.record('123456',{id:'wamid.test',status:'read',timestamp:'1794600000'});
+ });
+ await f.api.deliver('submission1');
+ const row=f.records.get('teyzaWhatsAppApprovalOutbox/submission1');
+ assert.equal(row.status,'accepted');
+ assert.equal(row.deliveryStatus,'read');
+ assert.equal(row.deliveryStatusAt,900);
+ assert.equal(row.acceptedAt,1000);
+ assert.equal(row.deliveryStatusSource,'meta_whatsapp_signed_webhook');
+ await f.api.deliver('submission1');assert.equal(f.calls.length,1);
+});
+
+test('API acceptance alone and a receipt for another sender never prove handset delivery',async()=>{
+ const f=fixture();
+ const receipts=require('./whatsapp-delivery-receipts').createDeliveryReceipts({db:f.db,clock:()=>900});
+ await receipts.record('999999',{id:'wamid.test',status:'delivered'});
+ await f.api.deliver('submission1');
+ const row=f.records.get('teyzaWhatsAppApprovalOutbox/submission1');
+ assert.equal(row.status,'accepted');assert.equal(row.deliveryStatus,undefined);
+});
+
+test('A lost database acknowledgement cannot downgrade a committed provider acceptance',async()=>{
+ const f=fixture(),runTransaction=f.db.runTransaction;
+ let acknowledgementLost=false;
+ f.db.runTransaction=async fn=>{
+  const result=await runTransaction(fn);
+  if(!acknowledgementLost&&f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status==='accepted'){
+   acknowledgementLost=true;throw Error('Database acknowledgement lost after commit');
+  }
+  return result;
+ };
+ await f.api.deliver('submission1');await f.api.deliver('submission1');
+ assert.equal(acknowledgementLost,true);
+ assert.equal(f.records.get('teyzaWhatsAppApprovalOutbox/submission1').status,'accepted');
+ assert.equal(f.calls.length,1);
+});
+
+test('Immediate Meta rejection records only the numeric code and is never blindly retried',async()=>{
+ const f=fixture();
+ f.providerResponse({ok:false,status:400,json:async()=>({error:{code:132000,message:'Private diagnostic data',error_data:{details:'Never retain this'}}})});
+ await f.api.deliver('submission1');await f.api.deliver('submission1');
+ const row=f.records.get('teyzaWhatsAppApprovalOutbox/submission1');
+ assert.equal(row.status,'needs_review');assert.equal(row.reason,'provider_response');
+ assert.equal(row.providerErrorCode,132000);assert.equal(row.httpStatus,400);
+ assert(!JSON.stringify(row).includes('Private diagnostic data'));
+ assert(!JSON.stringify(row).includes('Never retain this'));
+ assert.equal(f.calls.length,1);
 });
 
 test('Approved marketing template supports image header and named personalisation safely',async()=>{

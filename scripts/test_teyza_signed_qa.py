@@ -16,10 +16,17 @@ class SignedQaWorkflowTests(unittest.TestCase):
         self.assertIn("default: false", self.workflow)
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true", self.workflow)
         self.assertIn("if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true", self.workflow)
-        self.assertIn("required_exact={'version':'3.25.0'", self.workflow)
+        self.assertIn("required_exact={'version':'3.26.0'", self.workflow)
+        for capability in ('physicalGoodsPaystack', 'sellerPaystackSubaccounts',
+                           'sellerOnlineShoppingControls', 'onlineOrderPaymentReadiness'):
+            self.assertIn("'" + capability + "'", self.workflow)
         self.assertIn("automaticProductPublication", self.workflow)
         self.assertIn("adminComplimentaryAccess", self.workflow)
         self.assertIn("'agentCommissionEnabled'", self.workflow)
+        self.assertIn("Digital-membership purchases stay disabled.", self.workflow)
+        self.assertIn("Physical-goods payments depend on live server readiness; this is not a payment sandbox.", self.workflow)
+        self.assertNotIn("Paystack checkout stays disabled in store builds.", self.workflow)
+        self.assertNotIn("No Paystack checkout will be exposed", self.workflow)
 
     def test_store_artifacts_keep_store_channel_and_direct_apk_is_only_separate_manual_qa(self):
         store_builds, direct_builds = [], []
@@ -53,7 +60,8 @@ class SignedQaWorkflowTests(unittest.TestCase):
         # payment. The historical test expected Android direct checkout and
         # must now actively reject that unsafe behaviour.
         self.assertIn("bool teyzaCanOpenMembershipPage({required bool isAndroid,required String channel})=>false;", self.plan)
-        self.assertIn("No payments or subscriptions can be initiated in this app.", self.plan)
+        self.assertIn("Business membership payments and subscriptions cannot be initiated here.", self.plan)
+        self.assertIn("Shopper payments for physical orders are separate.", self.plan)
         self.assertNotIn("teyzaCanOpenMembershipPage(isAndroid:Platform.isAndroid,channel:teyzaPaymentChannel)", self.plan)
         self.assertNotIn("isAndroid&&channel=='direct'", self.plan)
         self.assertNotIn("billing_checkout", self.plan)

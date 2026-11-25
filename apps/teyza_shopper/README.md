@@ -1,19 +1,31 @@
-# Teyza Shopper & Shop Owner 1.0.10 (19)
+# Teyza Shopper & Business — 1.0.49+59 candidate
 
-Premium local-shop discovery, photographic Everyday Essentials and separate seller/shopper dashboards. Shopper navigation remains Home, Shops, Cart, Orders and Account.
+The Flutter application for local shopping, business registration and seller operations. This source candidate includes the home, checkout and dashboard update described in [the release review](../../docs/TEYZA_HOME_CHECKOUT_DASHBOARDS_20261125.md).
 
-Seller read failures now distinguish profile access from private product access. A product-list error leaves the authenticated owner's dashboard available without claiming there are zero products. See [seller access repair](../../tools/seller-access/README-START-HERE.md) to merge scoped rules into the current published rules; the app update alone does not deploy Firestore rules.
+## App journeys
 
-Owners choose from **184 catalogue products across 13 categories**, illustrated by 48 product-reference photographs. They enter their own price and stock; approved active shops publish these selected items to their own public range. Custom products and uploaded replacement photos still use catalogue review. See [product catalogue setup](../../docs/TEYZA_R311_PRODUCT_CATALOGUE.md).
+The app opens to the public home. Authentication and directory loading run independently, so a slow connection or a restored business account cannot hold the user at a login/loading screen. Guests can browse shops, search published products and build a basket. Checkout and personal account features request sign-in when needed, and checkout sign-in returns to the retained basket.
 
-Owners manage their profile and private product/photo drafts, submit a catalogue for review, chat with shoppers, manage order requests, set delivery/collection/cash-back services and trading hours, save a stock shopping list, open supermarket ordering websites, request a finance follow-up and submit a private camera selfie for owner review.
+Shopper navigation groups Home, Discover, Shop, Orders and Account. The account overview provides orders, messages, saved delivery information, payment preferences and contact verification. A business owner can explicitly open the business workspace from the same identity. Approval and category permissions remain server-controlled.
 
-Shoppers browse actual published merchant stock, chat with registered shops and request delivery or collection. Server-priced requests are confirmed and fulfilled by owners. Payment is arranged with the shop. Map-directory listings do not imply merchant registration, verified stock or ordering capability.
+Business registration is native: business details, an authoritative selected address and fresh consent lead into identity, owner selfie, mobile verification, shop photo and location checks. Device drafts expire after seven days and are scoped to the signed-in owner; they do not contain identity evidence, signed address receipts or consent. Business subtypes are stored separately from the canonical seller permissions.
 
-Google login is implemented for Android and iPhone, and Apple login for iPhone. Provider and signing configuration must be supplied in the existing Firebase project and CI variables. Email/password remains available. New merchant registration stays on the Teyza website, and selecting Shop Owner never grants approval.
+## Shopping and payments
 
-The isolated R3.9 mobile backend must be deployed for the new shared services. See [dashboard and provider setup](../../docs/TEYZA_R39_DASHBOARDS.md) and [service deployment](../../services/teyza-mobile-v39/DEPLOY.md). Real credit approval/disbursement, supplier APIs, booked couriers, online payments and automated face/liveness matching are not implemented. Credit is an enquiry, supplier ordering happens on their sites, and selfies await manual review.
+Only actual published merchant stock is offered for product checkout. Map-directory entries do not imply registration, verified stock or ordering capability. Sellers provide their own prices and quantities, including supported piece/bag/cup and other portion units. Wholesale and service-business tools retain separate access rules.
 
-**Teyza Shopper APK** builds test installs. **Teyza Android and iOS Release** builds an unsigned AAB and iOS archive, or signed store files when explicitly run with the existing signing credentials. The app is not submitted to either store automatically.
+Seller settings distinguish online order requests, online payments, card acceptance at the shop, collection and delivery. A preference does not establish that the shop is approved or its payout connection is ready. The dashboard displays the current server readiness and the next useful action.
 
-R3.12: native seller shop registration and consent-based camera verification, an owner-scoped notification inbox/optional FCM phone alerts, a recent-login admin review desk and a premium business workspace. See ../../docs/TEYZA_R312_SELLER_EXPERIENCE.md for deployment, reviewer claims and native push configuration.
+Online payment is available for eligible physical-goods orders after the seller confirms stock. The backend initializes Paystack with the authoritative order amount and verified settlement connection; the shopper supplies card/bank details on Paystack. Teyza verifies provider results and signed webhooks before showing a payment as paid. Returning from checkout is not proof of payment. Digital seller membership and promotion billing are separate from shopper purchases.
+
+Google and Apple verification can be linked to the same shopper account where supported. Existing email/password users retain sign-in and email verification; new-account choices use the configured provider flows. Native authentication still requires the existing Firebase/OAuth configuration and matching signing identity.
+
+## Validation and release
+
+Resolve packages with `flutter pub get`, analyze with `flutter analyze --no-fatal-infos`, and run `flutter test`. The committed lock file pins this candidate's dependency resolution. Set `TEYZA_CAPTURE_UI=1` when running the preview tests to capture actual Flutter screens under `build/ui-preview/`; those tests use fictional merchant and shopper fixtures.
+
+The existing release workflow generates Android/iOS wrappers and applies `scripts/prepare_mobile_release.py`, including the native launch styling. Android retains package `com.asiyedriver.asiye`; iOS retains bundle `za.co.teyza.shopper` and minimum iOS 15.0. Signed production builds require backend 3.26.0 and its new commerce-readiness flags. Public capability flags do not establish a particular seller's live payout readiness.
+
+PR workflow outputs are unsigned previews. Manual distribution builds use the existing signing credentials; TestFlight upload is a separate explicit workflow option. Google Play submission and public store approval are separate release steps. Source validation does not mean this candidate has been installed on a device or published to either store.
+
+The release review lists the exact backend targets, Hosting return page and remaining device/payment checks. The earlier registration/WhatsApp v3 update kit does not contain this candidate.

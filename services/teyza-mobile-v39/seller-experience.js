@@ -100,7 +100,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
         missingCompliance.push('shop_front');
       if(!P.locationFor(r.id,a,locations[i].exists?locations[i].data():null,null,clock()))
         missingCompliance.push('shop_location');
-      if(!onboardings[i].data().completedAt)missingCompliance.push('onboarding');
+      if(!require('./onboarding').submittedCurrent(onboardings[i].data(),identity,v,
+        phoneVerified?ownerUsers[i].phoneNumber:''))missingCompliance.push('onboarding');
     }
     if(claims[i].exists&&claims[i].data().ownerUid===r.id&&
        (!locations[i].exists||locations[i].data().ownerUid!==r.id))
@@ -139,7 +140,8 @@ function createSellerExperience({db,clock=Date.now,rate,getAuthUser=async()=>nul
       if((identity&&data.evidenceId!==identity.evidenceId)||(!identity&&data.status==='approved'))D.fail(409,'View the current identity document and refresh this review.');
       if(data.status==='approved'){
         if(authUser?.emailVerified!==true)D.fail(409,'The seller must verify their email before final business approval.');
-        if(!setup.completedAt)D.fail(409,'Finish registration and verified phone setup before business approval.');
+        if(!require('./onboarding').submittedCurrent(setup,identity,v.exists?v.data():null,authUser?.phoneNumber))
+          D.fail(409,'Submit the current registration and verified phone setup before business approval.');
         if(!require('./shop-front').valid(f.exists?f.data():null,sellerUid))
           D.fail(409,'Upload a current shop-front photo before final business approval.');
         if(!P.locationFor(sellerUid,a.exists?a.data():null,l.exists?l.data():null,null,clock()))

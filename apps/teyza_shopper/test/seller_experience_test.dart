@@ -7,6 +7,7 @@ import 'package:teyza_shopper/seller_notifications.dart';
 import 'package:teyza_shopper/seller_premium.dart';
 import 'package:teyza_shopper/seller_firestore.dart';
 import 'package:teyza_shopper/seller_registration.dart';
+import 'package:teyza_shopper/seller_registration_draft.dart';
 import 'package:teyza_shopper/seller_review.dart';
 import 'package:teyza_shopper/seller_tools.dart';
 import 'package:teyza_shopper/shopper_auth.dart';
@@ -26,6 +27,13 @@ class Session extends ShopperSession{
  @override Future<String> freshIdToken() async=>'token';
  void switchAccount(){userId='another';notifyListeners();}
 }
+class RegistrationMemoryStore implements SessionStore {
+ final values=<String,String>{};
+ @override Future<String?> read(String key) async=>values[key];
+ @override Future<void> write(String key,String value) async{values[key]=value;}
+ @override Future<void> delete(String key) async{values.remove(key);}
+}
+SellerRegistrationDraftStore registrationDraftStore()=>SellerRegistrationDraftStore(store:RegistrationMemoryStore());
 class ExperienceApi extends TeyzaMobileApi{
  ExperienceApi(super.session);
  final calls=<({String action,Map<String,dynamic> data})>[];
@@ -91,10 +99,13 @@ void main(){
  });
  testWidgets('Seller registration is native and cannot continue without required shop details',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
-  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
   final next=find.byKey(const ValueKey('teyza-registration-next'));
   await tester.scrollUntilVisible(next,200,scrollable:find.byType(Scrollable).first);
-  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
+  await visibleTap(tester,next);
+  expect(find.text('Enter shop name'),findsOneWidget);
+  expect(find.textContaining('Enter a valid mobile number'),findsOneWidget);
   expect(api.calls,isEmpty);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
@@ -114,7 +125,7 @@ void main(){
  });
  testWidgets('A native registration opens the resumable document, selfie and OTP checklist',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
-  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
   await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
   await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
@@ -133,6 +144,7 @@ void main(){
   expect(find.textContaining('7-day'),findsNothing);
   expect(api.calls.any((r)=>r.action=='seller_plan_select'),false,
     reason:'Registration must never activate a trial or subscription');
+  await tester.scrollUntilVisible(find.text('ID or passport'),180,scrollable:find.byType(Scrollable).first);
   expect(find.text('ID or passport'),findsWidgets);
   expect(find.text('Step 1 of 5'),findsNothing);
   expect(find.byKey(const ValueKey('teyza-onboarding-step-title')),findsOneWidget);
@@ -141,7 +153,7 @@ void main(){
  testWidgets('A Google business claim pre-fills the shop and address but still requires seller verification',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
   await tester.enterText(find.widgetWithText(TextFormField,'Shop name'),'Neighbourhood Market');
   await tester.enterText(find.widgetWithText(TextFormField,'Contact number'),'0712345678');
   await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
@@ -165,12 +177,13 @@ void main(){
   expect(request.data['addressSelection'],'address-receipt');expect(request.data['whatsappConsent'],true);
   expect(request.data['googleClaimAnswers']['authorized'],true);
   expect(request.data['googleClaimAnswers']['canProvideEvidence'],true);
+  await tester.scrollUntilVisible(find.text('ID or passport'),180,scrollable:find.byType(Scrollable).first);
   expect(find.text('ID or passport'),findsOneWidget);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });
  testWidgets('Registration opened from a Google listing resolves it server-side before prefilling',(tester) async{
   final session=Session(),api=ExperienceApi(Session());
-  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,initialGooglePlaceId:'place-123')));
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore(),initialGooglePlaceId:'place-123')));
   await tester.pumpAndSettle();
   expect(api.calls.first.action,'seller_claim_by_id');expect(api.calls.first.data['placeId'],'place-123');
   expect(find.text('Google Maps: Neighbourhood Market'),findsOneWidget);

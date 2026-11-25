@@ -22,20 +22,22 @@ void main(){
  testWidgets('Typing a street does not register a seller, and editing a selected address invalidates it',(tester) async {
   final session=fixtures.Session(),api=fixtures.ExperienceApi(fixtures.Session());
   await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:fixtures.registrationDraftStore())));await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField).at(0),'Local Market');await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
   await fixtures.visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
   await tester.pumpAndSettle();
   final field=find.byKey(const ValueKey('shop-address-search'));await tester.ensureVisible(field);await tester.enterText(field,'Main Road');
   tester.testTextInput.hide();await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
   final next=find.byKey(const ValueKey('teyza-registration-next'));
-  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  await fixtures.visibleTap(tester,next);
+  expect(find.text('Select your complete shop address from Google suggestions.'),findsOneWidget);
   expect(api.calls.where((c)=>c.action=='seller_register'),isEmpty);
   await fixtures.selectAddress(tester);expect(find.text('Full address selected'),findsOneWidget);
   await tester.ensureVisible(field);await tester.enterText(field,'Different street');tester.testTextInput.hide();
   await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
   expect(find.text('Full address selected'),findsNothing);
-  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  await fixtures.visibleTap(tester,next);
+  expect(find.text('Select your complete shop address from Google suggestions.'),findsOneWidget);
   expect(api.calls.where((c)=>c.action=='seller_register'),isEmpty);
   expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
  });

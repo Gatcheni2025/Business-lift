@@ -4,6 +4,7 @@
 // General diagnostics never persist phone numbers or raw webhook payloads.
 const crypto=require('node:crypto');
 const {createWelcomeRollout}=require('./whatsapp-rollout');
+const {createDeliveryReceipts}=require('./whatsapp-delivery-receipts');
 const choices=new Map([
  ['Start selling on Teyza','start_selling'],
  ['Start selling','start_selling'],
@@ -56,28 +57,22 @@ function extractSupportTexts(payload,numberId){
 function createPilotRouter({db,getPilotUid,getPhoneNumberId,getAccessToken=()=>'',getApiVersion=()=> 'v26.0',getRolloutMode=()=> 'pilot',send=fetch,clock=Date.now}){
  if(!db||typeof getPilotUid!=='function'||typeof getPhoneNumberId!=='function')throw Error('Pilot router dependencies missing');
  const rollout=createWelcomeRollout({getMode:getRolloutMode,getPilotUid});
+ const receipts=createDeliveryReceipts({db,clock});
  async function route(payload){
   const pilotUid=getPilotUid();
   const numberId=getPhoneNumberId();
   if(!['pilot','general','all'].includes(getRolloutMode())||
      getRolloutMode()==='pilot'&&!uidValid(pilotUid)||!/^\d{5,25}$/.test(numberId||''))return;
-  // Reconcile signed Meta receipts with an eligible seller's accepted outbox.
-  // Delivery is not inferred from a successful API send; only signed status
-  // callbacks may write the deliveryStatus field.
+  // Retain a minimal hashed receipt before searching for its accepted outbox:
+  // Meta's callback can arrive before the sender stores provider acceptance.
   for(const entry of Array.isArray(payload?.entry)?payload.entry.slice(0,50):[])
   for(const change of Array.isArray(entry.changes)?entry.changes.slice(0,50):[]){
    if(change?.field!=='messages'||change.value?.metadata?.phone_number_id!==numberId)continue;
    for(const status of Array.isArray(change.value.statuses)?change.value.statuses.slice(0,100):[]){
-    if(!['sent','delivered','read','failed'].includes(status?.status)||
-       typeof status.id!=='string'||!/^wamid[.][A-Za-z0-9_.:=+/-]{1,500}$/.test(status.id))continue;
+    if(!await receipts.record(numberId,status))continue;
     const results=await db.collection('teyzaWhatsAppApprovalOutbox').where('providerMessageId','==',status.id).limit(3).get();
     for(const doc of results.docs){
-     if(!rollout.allowsSeller(doc.data()?.sellerUid)||doc.data()?.status!=='accepted')continue;
-     // Never turn a delivered/read receipt backwards to sent.
-     const previous=doc.data()?.deliveryStatus;
-     const rank={sent:1,delivered:2,read:3,failed:4};
-     if(previous&&rank[previous]>=rank[status.status])continue;
-     await doc.ref.update({deliveryStatus:status.status,deliveryStatusAt:clock()});
+     await receipts.reconcile(doc.ref,numberId,status.id,rollout.allowsSeller);
     }
    }
   }

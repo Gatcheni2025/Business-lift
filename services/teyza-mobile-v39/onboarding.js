@@ -27,6 +27,40 @@ function identity(data){
 }
 function current(record,uid,clock){return record?.ownerUid===uid&&record.expiresAt>clock()&&
  typeof record.objectPath==='string'&&record.objectPath.startsWith('teyza-private/mobile-verification/'+uid+'/');}
+function submittedCurrent(setup={},identity,selfie,verifiedPhone){
+ return Boolean(setup.completedAt)&&['pending_approval','active'].includes(setup.sellingStatus)&&
+  typeof identity?.evidenceId==='string'&&setup.identityEvidenceId===identity.evidenceId&&
+  typeof selfie?.submissionId==='string'&&setup.selfieSubmissionId===selfie.submissionId&&
+  Boolean(verifiedPhone)&&setup.verifiedPhone===verifiedPhone;
+}
+// One source for the owner-visible checklist and the final submission gate.
+// A saved upload is evidence for review, never an approval or payment grant.
+function registrationProgress(uid,{account,setup={},identity,selfie,user,front,location,shop},clock){
+ let verifiedPhone='';try{verifiedPhone=checkedPhone(user,account?.phone);}catch(_){}
+ const blocked=setup.moderationBlocked===true||account?.approvalStatus==='rejected'||
+  ['rejected','needs_new_photo'].includes(selfie?.status)||P.held(shop);
+ const matchesSubmission=submittedCurrent(setup,identity,selfie,verifiedPhone);
+ // Retention removes private files after review, not the approval decision.
+ // Preserve that decision only while the owning evidence, submission and phone
+ // still match. Expired pending evidence cannot use this historical exception.
+ const approvedHistory=!blocked&&matchesSubmission&&account?.uid===uid&&account.approvalStatus==='approved'&&
+  identity?.ownerUid===uid&&identity.legalType===setup.legalType&&['id','passport','company'].includes(identity.kind)&&
+  selfie?.ownerUid===uid&&selfie.status==='approved';
+ const steps=[
+  {id:'identity',complete:approvedHistory||(current(identity,uid,clock)&&['id','passport','company'].includes(identity.kind)&&identity.legalType===setup.legalType)},
+  {id:'selfie',complete:approvedHistory||(current(selfie,uid,clock)&&!['rejected','needs_new_photo'].includes(selfie.status))},
+  {id:'phone',complete:Boolean(verifiedPhone)},
+  {id:'photo',complete:require('./shop-front').valid(front,uid)},
+  {id:'location',complete:Boolean(P.locationFor(uid,account,location,null,clock()))}
+ ];
+ const complete=steps.every(step=>step.complete);
+ const submitted=(complete||approvedHistory)&&!blocked&&matchesSubmission;
+ const approved=submitted&&approvedHistory;
+ return {steps,completed:steps.filter(step=>step.complete).length,total:steps.length,
+  nextStep:steps.find(step=>!step.complete)?.id||null,readyToSubmit:complete&&!blocked&&!submitted,
+  submitted,submittedAt:submitted?setup.completedAt:null,
+  status:blocked?'needs_correction':approved?'approved':submitted?'pending_review':'in_progress'};
+}
 function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getAuthUser,createPhoneToken,clock,rate}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  async function execute(auth,action,data={}){
@@ -56,11 +90,13 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
    const [saved,id,selfie,shop,user,front,location,billing,whatsapp]=await Promise.all([read('teyzaSellerOnboarding/'+uid),read('teyzaSellerIdentity/'+uid),
     read('teyzaMobileVerification/'+uid),read('teyzaPublicShops/'+uid),getAuthUser(uid),read('teyzaShopFrontPhotos/'+uid),read('teyzaShopLocations/'+uid),read('teyzaBilling/'+uid),read('teyzaWhatsAppPreferences/'+uid)]);
    let verified=false;try{checkedPhone(user,account.phone);verified=true;}catch(_){}
+   const progress=registrationProgress(uid,{account,setup:saved||{},identity:id,selfie,user,front,location,shop},clock);
    return {legalType:saved?.legalType||(account.companyName&&account.registrationNumber?'company':'individual'),
-    shopFront:front?.ownerUid===uid?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,whatsappOptedIn:whatsapp?.ownerUid===uid&&whatsapp.optedIn===true&&whatsapp.phone===account.phone,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
+    registrationProgress:progress,
+    shopFront:require('./shop-front').valid(front,uid)?{photoId:front.photoId}:null,phone:account.phone||'',phoneVerified:verified,whatsappOptedIn:whatsapp?.ownerUid===uid&&whatsapp.optedIn===true&&whatsapp.phone===account.phone,identity:current(id,uid,clock)?{kind:id.kind,evidenceId:id.evidenceId}:null,
     selfie:current(selfie,uid,clock)?{status:selfie.status,submissionId:selfie.submissionId,reviewNote:selfie.reviewNote||'',complianceRequestedAt:selfie.complianceRequestedAt||null}:null,
     sellingStatus:saved?.sellingStatus||'not_started',moderationBlocked:saved?.moderationBlocked===true,
-    locationSaved:Boolean(P.locationFor(uid,account,location,shop,clock())),
+    locationSaved:Boolean(P.locationFor(uid,account,location,null,clock())),
     publicationStatus:P.state(uid,account,saved||{},selfie,shop,billing,clock()).status};
   }
   if(action==='seller_identity_submit'){
@@ -99,26 +135,37 @@ function createOnboarding({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,g
     const owner=D.seller(a.exists?a.data():null,uid),id=i.exists?i.data():null,selfie=v.exists?v.data():null,setup=o.exists?o.data():{},shop=s.exists?s.data():null,settings=c.exists?c.data():{};
     const verifiedPhone=checkedPhone(user,owner.phone);
     if(setup.moderationBlocked||owner.approvalStatus==='rejected'||['rejected','needs_new_photo'].includes(selfie?.status))D.fail(409,'Your registration needs an administrator’s review before selling can resume.');
+    if(shop&&(shop.sellerUid!==uid||(shop.status==='suspended'&&!['onboarding','owner_review','approval'].includes(shop.moderationSource))))D.fail(409,'Contact Teyza support to restore this shop listing.');
+    const pin=await tx.get(doc('teyzaShopLocations/'+uid));
+    const front=f.exists?f.data():null,location=pin.exists?pin.data():null;
+    const progress=registrationProgress(uid,{account:owner,setup,identity:id,selfie,user,front,location,shop},clock);
+    if(progress.submitted){
+     const publication=P.state(uid,owner,setup,selfie,shop,b.exists?b.data():null,clock());
+     return {alreadySubmitted:true,sellingStatus:publication.live?'active':'pending_approval',
+      publicationStatus:publication.status,verificationStatus:publication.approved?'approved':'pending_review',
+      registrationProgress:progress};
+    }
     if(!current(id,uid,clock)||!['id','passport','company'].includes(id.kind)||id.legalType!==setup.legalType)D.fail(409,'Submit your current ID, passport or company registration document first.');
     if(!current(selfie,uid,clock))D.fail(409,'Take and submit your owner selfie first.');
     if(drafts.docs.length>200)D.fail(409,'Remove unused drafts so your shop has no more than 200 products.');
-    if(shop&&(shop.sellerUid!==uid||(shop.status==='suspended'&&!['onboarding','owner_review','approval'].includes(shop.moderationSource))))D.fail(409,'Contact Teyza support to restore this shop listing.');
+    if(!require('./shop-front').valid(front,uid))D.fail(409,'Add your shop-front photo before submitting your registration.');
+    if(!P.locationFor(uid,owner,location,null,clock()))D.fail(409,'Save a current shop location matching your registered address before submitting.');
     const nextSetup={...setup,requiredVersion:2,legalType:id.legalType,sellingStatus:'pending_approval',
       identityEvidenceId:id.evidenceId,selfieSubmissionId:selfie.submissionId,verifiedPhone,
       phoneVerifiedAt:clock(),completedAt:clock(),updatedAt:clock()};
-    const pin=await tx.get(doc('teyzaShopLocations/'+uid));
     const next=P.project(uid,{account:owner,setup:nextSetup,verification:selfie,shop,settings,
-      front:f.exists?f.data():null,location:pin.exists?pin.data():null,billing:b.exists?b.data():null,
+      front,location,billing:b.exists?b.data():null,
       drafts:drafts.docs.map(r=>({id:r.id,data:r.data()})),photos:photos.docs.map(r=>({id:r.id,data:r.data()})),now:clock()});
     nextSetup.sellingStatus=next.status==='active'?'active':'pending_approval';
     tx.set(refs[4],{...next,updatedAt:clock()});
     tx.update(refs[0],{listingStatus:next.status==='active'?'active':'not_listed',updatedAt:new Date(clock())});
     tx.set(refs[3],nextSetup);
-    return {sellingStatus:nextSetup.sellingStatus,publicationStatus:next.status,verificationStatus:next.verificationStatus};
+    return {sellingStatus:nextSetup.sellingStatus,publicationStatus:next.status,verificationStatus:next.verificationStatus,
+     registrationProgress:registrationProgress(uid,{account:owner,setup:nextSetup,identity:id,selfie,user,front,location,shop:next},clock)};
    });
   }
   D.fail(404,'This registration service is not available.');
  }
  return {execute};
 }
-module.exports={createOnboarding,actions,phone,identity,current,checkedPhone};
+module.exports={createOnboarding,actions,phone,identity,current,checkedPhone,submittedCurrent,registrationProgress};

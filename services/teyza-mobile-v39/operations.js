@@ -2,6 +2,44 @@
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
 const actions=new Set(['ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_whatsapp_support_inbox','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
+const WHATSAPP_SAMPLE_LIMIT=100;
+const WHATSAPP_RECEIPT_SOURCE='meta_whatsapp_signed_webhook';
+const whatsappQueueStates=new Set(['queued','sending','accepted','skipped','configuration_required','needs_review']);
+const whatsappReceiptStates=new Set(['sent','delivered','read','failed']);
+const whatsappReasons=new Set(['before_general_rollout','approval_or_consent_changed','phone_not_verified',
+ 'approved_template_parameters_missing','provider_response','delivery_uncertain']);
+const safeTime=value=>Number.isSafeInteger(value)&&value>0?value:null;
+const safeProviderCode=value=>Number.isSafeInteger(value)&&value>0&&value<=2147483647?value:null;
+function whatsappDelivery(entry){
+ if(entry?.status==='accepted'&&entry.deliveryStatusSource===WHATSAPP_RECEIPT_SOURCE&&
+    whatsappReceiptStates.has(entry.deliveryStatus))return entry.deliveryStatus;
+ if(entry?.status==='accepted')return 'awaiting_receipt';
+ if(entry?.status==='sending'||entry?.reason==='delivery_uncertain')return 'uncertain';
+ return 'not_sent';
+}
+function whatsappWelcomeView(uid,account,verification,preferences,outbox){
+ const ownedPreferences=preferences?.ownerUid===uid?preferences:null;
+ const currentConsent=ownedPreferences?.optedIn===true?
+  ownedPreferences.phone===account.phone?'opted_in':'phone_changed':
+  ownedPreferences?'opted_out':'not_recorded';
+ const currentSubmission=verification?.ownerUid===uid&&
+  typeof verification.submissionId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(verification.submissionId);
+ const ownedEntry=currentSubmission&&outbox?.sellerUid===uid&&
+  outbox.submissionId===verification.submissionId?outbox:null;
+ const queueStatus=ownedEntry?(whatsappQueueStates.has(ownedEntry.status)?ownedEntry.status:'unknown'):
+  outbox?'unavailable':'not_queued';
+ const deliveryStatus=ownedEntry?whatsappDelivery(ownedEntry):'not_sent';
+ const matchedReceipt=whatsappReceiptStates.has(deliveryStatus);
+ return {scope:'current_verification_submission',currentConsent,queueStatus,deliveryStatus,
+  deliveryConfirmed:['delivered','read'].includes(deliveryStatus),
+  receiptSource:matchedReceipt?WHATSAPP_RECEIPT_SOURCE:null,
+  queuedAt:safeTime(ownedEntry?.createdAt),acceptedAt:safeTime(ownedEntry?.acceptedAt),
+  receiptAt:matchedReceipt?safeTime(ownedEntry.deliveryStatusAt):null,
+  providerTimestamp:matchedReceipt?safeTime(ownedEntry.deliveryProviderTimestamp):null,
+  reason:whatsappReasons.has(ownedEntry?.reason)?ownedEntry.reason:null,
+  providerErrorCode:safeProviderCode(ownedEntry?.providerErrorCode),
+  deliveryErrorCode:deliveryStatus==='failed'?safeProviderCode(ownedEntry?.deliveryErrorCode):null};
+}
 // Support agents are restricted to the WhatsApp support queue and its
 // authenticated seller/admin conversations. They cannot approve sellers,
 // inspect documents, run payments or administer Firebase users.
@@ -160,30 +198,35 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   if(action==='ops_whatsapp_status'){
     // Status only: never expose Meta bearer credentials or private phone numbers.
     const enabled=process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED==='1';
-    const fields={phoneNumberId:/^\\d+$/.test(process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||''),
-      apiVersion:/^v\\d+\\.\\d+$/.test(process.env.TEYZA_WHATSAPP_API_VERSION||''),
+    const fields={phoneNumberId:/^\d+$/.test(process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID||''),
+      apiVersion:/^v\d+\.\d+$/.test(process.env.TEYZA_WHATSAPP_API_VERSION||''),
       templateName:process.env.TEYZA_WHATSAPP_TEMPLATE_NAME||'',
       language:process.env.TEYZA_WHATSAPP_TEMPLATE_LANGUAGE||'',
       headerImage:process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE==='true',
       headerImageUrlConfigured:Boolean(process.env.TEYZA_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL),
       bodyFields:process.env.TEYZA_WHATSAPP_TEMPLATE_BODY_FIELDS||''};
-    const rows=await db.collection('teyzaWhatsAppApprovalOutbox').limit(101).get();
-    const counts={};for(const row of rows.docs){const status=row.data().status||'unknown';counts[status]=(counts[status]||0)+1;}
+    const rows=await db.collection('teyzaWhatsAppApprovalOutbox').orderBy('__name__').limit(WHATSAPP_SAMPLE_LIMIT+1).get();
+    const page=rows.docs.slice(0,WHATSAPP_SAMPLE_LIMIT),counts={};
+    const deliveryCounts={sent:0,delivered:0,read:0,failed:0,awaiting_receipt:0,uncertain:0,not_sent:0};
+    for(const row of page){const entry=row.data(),status=whatsappQueueStates.has(entry.status)?entry.status:'unknown';
+      counts[status]=(counts[status]||0)+1;deliveryCounts[whatsappDelivery(entry)]++;}
     // Counts from a bounded, signed-webhook-only metadata collection.
     // Never expose provider IDs, recipient contacts, payloads or event documents.
-    const webhookSample=await db.collection('teyzaWhatsAppWebhookEvents').limit(101).get();
+    const webhookSample=await db.collection('teyzaWhatsAppWebhookEvents').orderBy('__name__').limit(WHATSAPP_SAMPLE_LIMIT+1).get();
+    const webhookPage=webhookSample.docs.slice(0,WHATSAPP_SAMPLE_LIMIT);
     const webhookKinds={};
-    for(const row of webhookSample.docs){
+    for(const row of webhookPage){
       const event=row.data();
       if(!['status','inbound'].includes(event.kind))continue;
       const state=event.kind==='status'&&['sent','delivered','read','failed','deleted','played'].includes(event.eventType)
         ?event.eventType:event.kind;
       webhookKinds[state]=(webhookKinds[state]||0)+1;
     }
-    return {enabled,fields,counts,sampled:rows.docs.length,sampleLimited:rows.docs.length>100,
-      webhookEvents:{counts:webhookKinds,sampled:webhookSample.docs.length,sampleLimited:webhookSample.docs.length>100},
+    return {enabled,configurationScope:'api_instance',workerRunningVerified:false,fields,counts,deliveryCounts,
+      sampleLimit:WHATSAPP_SAMPLE_LIMIT,sampleOrder:'document_id',sampled:page.length,sampleLimited:rows.docs.length>WHATSAPP_SAMPLE_LIMIT,
+      webhookEvents:{counts:webhookKinds,sampled:webhookPage.length,sampleLimited:webhookSample.docs.length>WHATSAPP_SAMPLE_LIMIT},
       tokenVerified:false,phoneSenderVerified:false,webhookVerified:false,
-      warning:'Webhook event counts show valid signed requests stored by Teyza. No test callback has yet established that Meta is subscribed; API acceptance also does not prove message delivery.'};
+      warning:'Configuration is from this API instance; it does not verify the separate message worker. Signed webhook counts show stored events, not a current subscription check. Only matched signed delivery receipts confirm an individual welcome message; API acceptance alone does not.'};
   }
   if(action==='ops_map_shops'){
     // Read-only, bounded national inventory of published Teyza shops. This is
@@ -260,14 +303,19 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   }
   if(action==='ops_seller_detail'||action==='seller_billing_statement'){
    const target=self?uid:D.id(data.sellerUid),account=await owner(target);
-   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location,front,authUser]=await Promise.all([
+   const [billing,books,setup,verification,identity,submission,shop,payments,payout,draftPage,location,front,authUser,whatsappPreferences]=await Promise.all([
      read('teyzaBilling/'+target),ledger(target),read('teyzaSellerOnboarding/'+target),
      read('teyzaMobileVerification/'+target),read('teyzaSellerIdentity/'+target),
      read('teyzaCatalogueSubmissions/'+target),read('teyzaPublicShops/'+target),
      self?Promise.resolve(null):db.collection('teyzaPaystackPayments')
        .where('ownerUid','==',target).limit(50).get(),read('teyzaSellerPayouts/'+target),
      self?Promise.resolve(null):db.collection('teyzaDraftProducts/'+target+'/items').limit(201).get(),read('teyzaShopLocations/'+target),
-     read('teyzaShopFrontPhotos/'+target),getAuthUser(target).catch(()=>null)]);
+     read('teyzaShopFrontPhotos/'+target),getAuthUser(target).catch(()=>null),
+     self?Promise.resolve(null):read('teyzaWhatsAppPreferences/'+target)]);
+   const welcomeReference=!self&&verification?.ownerUid===target&&
+     typeof verification.submissionId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(verification.submissionId)?verification.submissionId:null;
+   const welcomeOutbox=welcomeReference?await read('teyzaWhatsAppApprovalOutbox/'+welcomeReference):null;
+   const whatsappWelcome=!self?whatsappWelcomeView(target,account,verification,whatsappPreferences,welcomeOutbox):null;
    const membershipPaid=P.entitled(target,account,billing,clock());
    const publication=P.state(target,account,setup||{},verification,shop,billing,clock());
    // A stored product count is distinct from a shopper-visible public listing.
@@ -288,6 +336,8 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
      typeof verification.objectPath==='string'&&verification.expiresAt>clock();
    const validFront=require('./shop-front').valid(front,target);
    const validPin=Boolean(P.locationFor(target,account,location,null,clock()));
+   const registration=setup?.requiredVersion===2?require('./onboarding').registrationProgress(target,
+     {account,setup,identity,selfie:verification,user:authUser,front,location,shop},clock):null;
    const approvalChecks=[
      {id:'email',label:'Email verified',complete:verifiedEmail},
      {id:'phone',label:'Phone OTP verified',complete:verifiedPhone},
@@ -295,7 +345,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
      {id:'selfie',label:'Current selfie submitted',complete:validSelfie},
      {id:'shop_front',label:'Shop-front photo submitted',complete:validFront},
      {id:'location',label:'Shop pin saved',complete:validPin},
-     {id:'onboarding',label:'Registration completed',complete:Boolean(setup?.completedAt)}
+     {id:'onboarding',label:'Registration completed',complete:registration?registration.submitted:Boolean(setup?.completedAt)}
    ];
    const paymentRows=(payments?.docs||[]).map(row=>({reference:row.id,
      kind:row.data().kind||'',status:row.data().status||'pending',
@@ -310,6 +360,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
      phone:account.phone||'',address:account.address||'',
      approvalStatus:account.approvalStatus,listingPlan:account.listingPlan||'free'},
      billing:billingView,paystackMode:getPaystackMode()==='live'?'live':'test',
+     ...(!self?{whatsappWelcome}:{}),
      payout:payout?.ownerUid===target?{
        connected:!!payout.enabled,mode:payout.mode||'test',subaccountCode:payout.code||'',
        businessName:payout.businessName||'',percentageCharge:payout.percentageCharge||0
@@ -317,6 +368,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
      businessAccount:{
        approvalStatus:account.approvalStatus||'pending',
        reviewStatus:verification?.status||'not_submitted',
+       ...(registration?{registrationProgress:registration}:{}),
        verificationChecks:approvalChecks,
        missingRequirements:approvalChecks.filter(item=>!item.complete).map(item=>item.id),
        isPublic:directoryEligible&&Boolean(pin),

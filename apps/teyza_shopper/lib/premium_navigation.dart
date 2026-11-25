@@ -1,59 +1,86 @@
 import 'package:flutter/material.dart';
+import 'shopper_design.dart';
 
-/// Shopper destinations. Merchant access lives in the account role selector.
+/// Five equally reachable shopper destinations; business access is in Account.
 class PremiumShopperNavigation extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
-  const PremiumShopperNavigation({super.key,required this.selectedIndex,
-    required this.onSelect});
-  static const green=Color(0xFF60D5A5),ink=Color(0xFF090F21),muted=Color(0xFFB1C0CB);
+  const PremiumShopperNavigation(
+      {super.key, required this.selectedIndex, required this.onSelect});
 
-  Widget destination(int index,String label,IconData active,IconData idle){
-    final selected=selectedIndex==index;
-    return Expanded(child:Semantics(button:true,selected:selected,label:label,
-      child:InkWell(key:ValueKey('nav-${label.toLowerCase()}'),
-        onTap:()=>onSelect(index),borderRadius:BorderRadius.circular(20),
-        child:ConstrainedBox(constraints:const BoxConstraints(minHeight:56),
-          child:Padding(padding:const EdgeInsets.symmetric(vertical:7),
-            child:Column(mainAxisSize:MainAxisSize.min,children:[
-              AnimatedContainer(duration:const Duration(milliseconds:180),
-                padding:const EdgeInsets.symmetric(horizontal:14,vertical:4),
-                decoration:BoxDecoration(color:selected?const Color(0xFF284B49):Colors.transparent,
-                  borderRadius:BorderRadius.circular(13)),
-                child:Icon(selected?active:idle,color:selected?green:muted,size:23)),
-              const SizedBox(height:2),
-              Text(label,maxLines:1,style:TextStyle(fontSize:10,
-                fontWeight:selected?FontWeight.w700:FontWeight.w400,
-                color:selected?green:muted))
-            ]))))));
+  Widget destination(BuildContext context, int index, String label,
+      IconData active, IconData idle) {
+    final selected = selectedIndex == index;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    return Expanded(
+        child: Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Tooltip(
+          message: label,
+          child: InkWell(
+            key: ValueKey('nav-${label.toLowerCase()}'),
+            onTap: () => onSelect(index),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  AnimatedContainer(
+                      duration: reducedMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 5),
+                      decoration: BoxDecoration(
+                          color: selected
+                              ? TeyzaDesign.softMint
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(13)),
+                      child: Icon(selected ? active : idle,
+                          size: 23,
+                          color: selected
+                              ? TeyzaDesign.forest
+                              : TeyzaDesign.muted)),
+                  const SizedBox(height: 3),
+                  Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11,
+                          height: 1.2,
+                          color:
+                              selected ? TeyzaDesign.forest : TeyzaDesign.muted,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w400)),
+                ])),
+          )),
+    ));
   }
 
   @override
-  Widget build(BuildContext context)=>SafeArea(top:false,
-    child:Padding(padding:const EdgeInsets.fromLTRB(12,4,12,10),
-      child:Container(decoration:BoxDecoration(color:const Color(0xFF141C2D),
-        borderRadius:BorderRadius.circular(27),
-        border:Border.all(color:const Color(0xFF33425A)),
-        boxShadow:const [BoxShadow(color:Color(0x30010F1C),blurRadius:24,offset:Offset(0,5))]),
-        child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(27),
-          child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
-            destination(0,'Home',Icons.home_rounded,Icons.home_outlined),
-            destination(5,'Discover',Icons.explore_rounded,Icons.explore_outlined),
-            Expanded(child:Semantics(button:true,selected:selectedIndex==1,label:'Shop',
-              child:InkWell(key:const ValueKey('nav-shop'),
-                onTap:()=>onSelect(1),borderRadius:BorderRadius.circular(24),
-                child:Padding(padding:const EdgeInsets.symmetric(vertical:7),
-                  child:Column(mainAxisSize:MainAxisSize.min,children:[
-                    Container(width:48,height:48,
-                      decoration:const BoxDecoration(color:green,shape:BoxShape.circle,
-                        boxShadow:[BoxShadow(color:Color(0x303BB77E),blurRadius:12,offset:Offset(0,4))]),
-                      child:const Center(child:Icon(Icons.shopping_bag_outlined,
-                        color:Colors.white,size:24))),
-                    const SizedBox(height:2),
-                    Text('Shop',style:TextStyle(fontSize:10,
-                      fontWeight:FontWeight.w700,color:selectedIndex==1?green:muted))
-                  ]))))),
-            destination(3,'Orders',Icons.receipt_long_rounded,Icons.receipt_long_outlined),
-            destination(4,'Account',Icons.person_rounded,Icons.person_outline_rounded)
-          ])))));
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: TeyzaDesign.border))),
+        child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                destination(context, 0, 'Home', Icons.home_rounded,
+                    Icons.home_outlined),
+                destination(context, 5, 'Discover', Icons.explore_rounded,
+                    Icons.explore_outlined),
+                destination(context, 1, 'Shop', Icons.shopping_bag_rounded,
+                    Icons.shopping_bag_outlined),
+                destination(context, 3, 'Orders', Icons.receipt_long_rounded,
+                    Icons.receipt_long_outlined),
+                destination(context, 4, 'Account', Icons.person_rounded,
+                    Icons.person_outline_rounded),
+              ]),
+            )),
+      );
 }

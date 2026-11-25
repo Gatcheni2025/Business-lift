@@ -29,7 +29,12 @@ manifest = {'platform': platform, 'version': version, 'signing': mode,
             'googleLogin': bool(os.environ.get('TEYZA_GOOGLE_WEB_CLIENT_ID')) and
                (platform == 'android' or bool(os.environ.get('TEYZA_GOOGLE_IOS_CLIENT_ID'))),
             'appleLoginImplemented': platform == 'ios',
-            'mobileBackendVersionRequired': '3.23.0', 'shopFrontPhotoImplemented': True,
+            'mobileBackendVersionRequired': '3.26.0', 'shopFrontPhotoImplemented': True,
+            'launchDestination': 'home', 'guestBrowsing': True, 'checkoutSignInRequired': True,
+            'sellerOnlineShoppingControlsImplemented': True,
+            'physicalGoodsOnlinePaymentsImplemented': True,
+            'physicalGoodsPaymentsRequireLiveServerReadiness': True,
+            'devicePaymentVerified': False,
             'sellerNotificationsImplemented': True, 'adminSellerReviewImplemented': True,
             'nativeSellerRegistration': True, 'sellerIdentityDocuments': True, 'sellerPhoneOtpImplemented': True,
             'deviceOtpVerified': False, 'sellingAfterCompletedSetup': True,
@@ -85,8 +90,9 @@ if os.environ.get('QA_SIGNING_ONLY') == 'true':
     (out/'README-QA-ONLY.txt').write_text(
         'Teyza signed QA preview, not production release.\n'
         'Uses existing production Firebase accounts/data. Use dedicated test accounts.\n'
-        'The store-channel app does not offer Paystack checkout or implemented StoreKit/Play Billing.\n'
-        'Backend 3.23 may not be live, so seller approvals and publication are not certified.\n'
+        'Digital business-membership purchases are not offered in the store-channel app.\n'
+        'Physical-goods checkout depends on the live server and seller readiness; this QA build is not a payment sandbox.\n'
+        'Backend 3.26 may not be live, so the new commerce controls and seller publication are not certified.\n'
         'An uploaded IPA requires Apple processing and separate tester assignment.\n'
         'Do not submit this AAB to a public Play track.\n')
 print(platform+' '+version+' '+mode+' release artifact prepared.')

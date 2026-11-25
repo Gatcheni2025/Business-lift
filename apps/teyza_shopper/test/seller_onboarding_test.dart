@@ -52,11 +52,8 @@ void main(){
   await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:TextButton(
     onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:session,shop:shop,api:api))),child:const Text('Open setup'))))));
   await tester.tap(find.text('Open setup'));await tester.pumpAndSettle();
-  for(var step=0;step<4;step++){
-    final next=find.byKey(const ValueKey('teyza-onboarding-next'));
-    await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,next);
-    await tester.pumpAndSettle();
-  }
+  await tester.scrollUntilVisible(find.byKey(const ValueKey('teyza-onboarding-step-title')),180,scrollable:find.byType(Scrollable).first);
+  expect(tester.widget<Text>(find.byKey(const ValueKey('teyza-onboarding-step-title'))).data,'Shop location');
   final finish=find.widgetWithText(FilledButton,'Submit for review');
   await tester.scrollUntilVisible(finish,230,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,finish);
   expect(find.text('Open setup'),findsOneWidget);expect(find.text('Setup submitted. Your shop will be visible after Teyza approves it.'),findsOneWidget);
@@ -105,12 +102,6 @@ void main(){
   await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);
   await tester.pumpAndSettle();
   expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
-  for(var i=0;i<4;i++){
-    await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);
-    await tester.pumpAndSettle();
-    await tester.tap(next);
-    await tester.pumpAndSettle();
-  }
   final finish=find.widgetWithText(FilledButton,'Submit for review');
   expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
   await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();

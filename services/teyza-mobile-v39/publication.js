@@ -122,7 +122,7 @@ function publicRow(uid,shop){
   photoUrl:shop.photoUrl||'',latitude:coordinates(shop.latitude,shop.longitude)?shop.latitude:null,
   longitude:coordinates(shop.latitude,shop.longitude)?shop.longitude:null,
   pickupEnabled:shop.pickupEnabled===true,deliveryEnabled:shop.deliveryEnabled===true,
-  services:shop.services||{},products:shop.shopCategory==='spaza'?shop.products||[]:[],
+  services:shop.services||{},...(shop.commerce?{commerce:shop.commerce}:{}),products:shop.shopCategory==='spaza'?shop.products||[]:[],
   productHighlights:shop.shopCategory==='spaza'?shop.productHighlights||[]:[],
   serviceHighlights:shop.shopCategory==='retail'?shop.serviceHighlights||[]:[],hours:shop.hours||[],
   deliveryFeeCents:shop.deliveryFeeCents||0,

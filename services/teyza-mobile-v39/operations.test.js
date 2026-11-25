@@ -399,6 +399,118 @@ test('WhatsApp webhook admin diagnostics return only aggregate signed event cate
  await rejects(f.call('ops_whatsapp_status',{}, {uid:'seller1',email_verified:true}),403);
 });
 
+test('WhatsApp diagnostics validate real phone ID and API version formats without claiming a running worker',async(t)=>{
+ const names=['TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED','TEYZA_WHATSAPP_PHONE_NUMBER_ID','TEYZA_WHATSAPP_API_VERSION'];
+ const saved=names.map(name=>[name,process.env[name]]);
+ t.after(()=>{for(const [name,value] of saved){if(value===undefined)delete process.env[name];else process.env[name]=value;}});
+ process.env.TEYZA_WHATSAPP_NOTIFICATIONS_ENABLED='1';
+ process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID='123456789012345';
+ process.env.TEYZA_WHATSAPP_API_VERSION='v23.0';
+ const f=setup(),result=await f.call('ops_whatsapp_status');
+ assert.equal(result.fields.phoneNumberId,true);assert.equal(result.fields.apiVersion,true);
+ assert.equal(result.enabled,true);assert.equal(result.configurationScope,'api_instance');
+ assert.equal(result.workerRunningVerified,false);assert.equal(result.tokenVerified,false);
+ assert(!JSON.stringify(result).includes('123456789012345'));
+ for(const [phone,version] of [['abc','23.0'],['\\ddd','v\\ddd\\x\\ddd'],['1234x','v23x0']]){
+  process.env.TEYZA_WHATSAPP_PHONE_NUMBER_ID=phone;process.env.TEYZA_WHATSAPP_API_VERSION=version;
+  const invalid=await f.call('ops_whatsapp_status');
+  assert.equal(invalid.fields.phoneNumberId,false);assert.equal(invalid.fields.apiVersion,false);
+ }
+});
+
+test('WhatsApp sample separates signed welcome receipts from API acceptance and does not count sentinel rows',async()=>{
+ const f=setup(),source='meta_whatsapp_signed_webhook';
+ const entries=[
+  {status:'accepted',deliveryStatus:'delivered',deliveryStatusSource:source},
+  {status:'accepted',deliveryStatus:'read',deliveryStatusSource:source},
+  {status:'accepted',deliveryStatus:'failed',deliveryStatusSource:source},
+  {status:'accepted',deliveryStatus:'sent',deliveryStatusSource:source},
+  {status:'accepted'},
+  {status:'accepted',deliveryStatus:'delivered',deliveryStatusSource:'unverified'},
+  {status:'needs_review',reason:'delivery_uncertain'},
+  {status:'queued'}
+ ];
+ for(let n=0;n<100;n++)f.db.records.set('teyzaWhatsAppApprovalOutbox/m'+String(n).padStart(3,'0'),entries[n%entries.length]);
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/zz_sentinel',{status:'configuration_required'});
+ for(let n=0;n<100;n++)f.db.records.set('teyzaWhatsAppWebhookEvents/m'+String(n).padStart(3,'0'),{kind:'status',eventType:'sent'});
+ f.db.records.set('teyzaWhatsAppWebhookEvents/zz_sentinel',{kind:'status',eventType:'delivered'});
+ const before=structuredClone([...f.db.records]),result=await f.call('ops_whatsapp_status');
+ assert.equal(result.sampled,100);assert.equal(result.sampleLimit,100);assert.equal(result.sampleLimited,true);
+ assert.equal(result.sampleOrder,'document_id');assert.equal(result.counts.configuration_required,undefined);
+ assert.deepEqual(result.deliveryCounts,{sent:13,delivered:13,read:13,failed:13,awaiting_receipt:24,uncertain:12,not_sent:12});
+ assert.equal(result.webhookEvents.sampled,100);assert.equal(result.webhookEvents.sampleLimited,true);
+ assert.deepEqual(result.webhookEvents.counts,{sent:100});
+ assert.deepEqual([...f.db.records],before,'Diagnostics must not resend messages or mutate records');
+});
+
+test('Current seller welcome reports acceptance separately from matched delivery and current consent',async()=>{
+ const f=setup(),phone='+27712345678',source='meta_whatsapp_signed_webhook';
+ f.db.records.get('teyzaSellerAccounts/seller1').phone=phone;
+ f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',submissionId:'current1',status:'approved'});
+ f.db.records.set('teyzaWhatsAppPreferences/seller1',{ownerUid:'seller1',phone,optedIn:true});
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/current1',{sellerUid:'seller1',submissionId:'current1',status:'accepted',
+  providerMessageId:'wamid.PRIVATE',acceptedAt:now-1000,createdAt:now-2000});
+ let result=await f.call('ops_seller_detail',{sellerUid:'seller1'}),welcome=result.whatsappWelcome;
+ assert.equal(welcome.currentConsent,'opted_in');assert.equal(welcome.queueStatus,'accepted');
+ assert.equal(welcome.deliveryStatus,'awaiting_receipt');assert.equal(welcome.deliveryConfirmed,false);
+ assert(!JSON.stringify(welcome).includes(phone));assert(!JSON.stringify(result).includes('wamid.PRIVATE'));
+ f.db.records.get('teyzaWhatsAppApprovalOutbox/current1').deliveryStatus='delivered';
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.deliveryConfirmed,false,'An unsigned label is not delivery evidence');
+ Object.assign(f.db.records.get('teyzaWhatsAppApprovalOutbox/current1'),{
+  deliveryStatus:'sent',deliveryStatusSource:source,deliveryStatusAt:now-500});
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.deliveryStatus,'sent');assert.equal(welcome.deliveryConfirmed,false);
+ Object.assign(f.db.records.get('teyzaWhatsAppApprovalOutbox/current1'),{deliveryStatus:'read',deliveryStatusAt:now});
+ f.db.records.get('teyzaWhatsAppPreferences/seller1').optedIn=false;
+ const before=structuredClone([...f.db.records]);
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.currentConsent,'opted_out');assert.equal(welcome.deliveryStatus,'read');
+ assert.equal(welcome.deliveryConfirmed,true);assert.equal(welcome.receiptAt,now);
+ assert.deepEqual([...f.db.records],before);
+ const own=await f.call('seller_billing_statement',{sellerUid:'seller2'},{uid:'seller1',email_verified:true});
+ assert.equal(own.whatsappWelcome,undefined,'Admin diagnostics are not added to the seller billing endpoint');
+});
+
+test('Welcome diagnostics reject wrong seller/submission records and expose only safe failure codes',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaMobileVerification/seller1',{ownerUid:'seller1',submissionId:'current1',status:'approved'});
+ f.db.records.set('teyzaWhatsAppPreferences/seller1',{ownerUid:'seller2',optedIn:true,phone:'PRIVATE'});
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/current1',{sellerUid:'seller2',submissionId:'current1',status:'accepted',
+  deliveryStatus:'read',deliveryStatusSource:'meta_whatsapp_signed_webhook',providerMessageId:'PRIVATE'});
+ let welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.currentConsent,'not_recorded');assert.equal(welcome.queueStatus,'unavailable');assert.equal(welcome.deliveryConfirmed,false);
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/current1',{sellerUid:'seller1',submissionId:'old_submission',status:'accepted',
+  deliveryStatus:'read',deliveryStatusSource:'meta_whatsapp_signed_webhook'});
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.queueStatus,'unavailable');
+ f.db.records.set('teyzaWhatsAppApprovalOutbox/current1',{sellerUid:'seller1',submissionId:'current1',status:'accepted',
+  deliveryStatus:'failed',deliveryStatusSource:'meta_whatsapp_signed_webhook',deliveryErrorCode:131026,providerErrorCode:'PRIVATE',
+  reason:'PRIVATE',providerMessageId:'PRIVATE',deliveryStatusAt:now});
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.deliveryStatus,'failed');assert.equal(welcome.deliveryConfirmed,false);
+ assert.equal(welcome.deliveryErrorCode,131026);assert.equal(welcome.providerErrorCode,null);assert.equal(welcome.reason,null);
+ assert(!JSON.stringify(welcome).includes('PRIVATE'));
+ f.db.records.get('teyzaMobileVerification/seller1').submissionId='../current1';
+ welcome=(await f.call('ops_seller_detail',{sellerUid:'seller1'})).whatsappWelcome;
+ assert.equal(welcome.queueStatus,'not_queued');
+ for(const actor of [{uid:'seller1',email_verified:true},{...admin,auth_time:now/1000-301},
+  {uid:'agent1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000}]){
+  await rejects(f.call('ops_seller_detail',{sellerUid:'seller1'},actor),actor.teyzaAdmin?401:403);
+ }
+});
+
+test('Modern registration checklist does not reuse a stale completion timestamp',async()=>{
+ const f=setup(),phone='+27712345678';
+ f.db.records.get('teyzaSellerAccounts/seller1').phone=phone;
+ f.db.records.set('teyzaSellerOnboarding/seller1',{requiredVersion:2,legalType:'individual',
+  completedAt:now-2000,identityEvidenceId:'old_id',selfieSubmissionId:'old_selfie',verifiedPhone:phone,sellingStatus:'not_started'});
+ const detail=await f.call('ops_seller_detail',{sellerUid:'seller1'});
+ assert.equal(detail.businessAccount.verificationChecks.find(x=>x.id==='onboarding').complete,false);
+ assert.equal(detail.businessAccount.registrationProgress.submitted,false);
+ assert(detail.businessAccount.missingRequirements.includes('onboarding'));
+});
+
 
 test('Support agents see only active WhatsApp handoffs and can answer in the seller thread',async()=>{
  const f=setup(),agent={uid:'support_1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000};

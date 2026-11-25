@@ -34,6 +34,12 @@ function settings(input) {
     if (typeof input[key] !== 'boolean') fail(422, 'Choose your shop services.');
     out[key] = input[key];
   }
+  // Optional for legacy clients; service handlers merge the saved preference
+  // first so an older application cannot reset a seller's online choices.
+  for(const [key,fallback] of [['onlineOrdersEnabled',true],['onlinePaymentsEnabled',false]]){
+    if(input[key]!==undefined&&typeof input[key]!=='boolean')fail(422,'Choose your online shopping settings.');
+    out[key]=input[key]??fallback;
+  }
   for (const [key,max] of [['deliveryFeeCents',100000],['deliveryRadiusKm',100]]) {
     if (!Number.isInteger(input[key]) || input[key] < 0 || input[key] > max) fail(422, 'Enter valid delivery details.');
     out[key] = input[key];

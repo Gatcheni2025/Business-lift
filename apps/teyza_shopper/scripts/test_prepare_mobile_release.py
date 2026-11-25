@@ -168,5 +168,60 @@ class NativePermissionTests(unittest.TestCase):
 
 
 
+class NativeLaunchTests(unittest.TestCase):
+    def test_android_launch_covers_dark_mode_and_android_12_without_deleting_theme_items(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(prepare, 'ROOT', Path(folder)):
+            res = prepare.ROOT / 'android/app/src/main/res'
+            path = res / 'values/styles.xml'
+            path.parent.mkdir(parents=True)
+            path.write_text('<resources><style name="LaunchTheme" parent="OriginalParent">'
+                            '<item name="existingSetting">keep</item></style>'
+                            '<style name="UnrelatedTheme"><item name="other">keep</item></style></resources>')
+            prepare.android_launch_screen()
+            first = {str(p.relative_to(res)): p.read_bytes() for p in res.rglob('*.xml')}
+            prepare.android_launch_screen()
+            self.assertEqual(first, {str(p.relative_to(res)): p.read_bytes() for p in res.rglob('*.xml')})
+            key = '{http://schemas.android.com/apk/res/android}'
+            for qualifier in ('drawable', 'drawable-v21'):
+                background = ET.parse(res / qualifier / 'launch_background.xml')
+                self.assertIsNone(background.find('.//bitmap'))
+                icon = background.findall('item')[1]
+                self.assertEqual(icon.get(key + 'drawable'), '@mipmap/ic_launcher')
+                self.assertEqual(icon.get(key + 'width'), '64dp')
+                self.assertEqual(icon.get(key + 'height'), '64dp')
+                self.assertEqual(icon.get(key + 'gravity'), 'center')
+            for qualifier in ('values', 'values-night', 'values-v31', 'values-night-v31'):
+                document = ET.parse(res / qualifier / 'styles.xml')
+                launch = document.find("style[@name='LaunchTheme']")
+                normal = document.find("style[@name='NormalTheme']")
+                self.assertEqual(launch.find("item[@name='android:windowBackground']").text, '@drawable/launch_background')
+                self.assertEqual(normal.find("item[@name='android:windowBackground']").text, '@color/teyza_launch_background')
+                if qualifier.endswith('v31'):
+                    self.assertEqual(launch.find("item[@name='android:windowSplashScreenAnimatedIcon']").text, '@mipmap/ic_launcher')
+            original = ET.parse(path)
+            self.assertEqual(original.find("style[@name='LaunchTheme']").get('parent'), 'OriginalParent')
+            self.assertEqual(original.find("style[@name='LaunchTheme']/item[@name='existingSetting']").text, 'keep')
+            self.assertIsNotNone(original.find("style[@name='UnrelatedTheme']"))
+
+    def test_ios_launch_keeps_constraints_and_matches_the_app_canvas(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(prepare, 'ROOT', Path(folder)):
+            path = prepare.ROOT / 'ios/Runner/Base.lproj/LaunchScreen.storyboard'
+            path.parent.mkdir(parents=True)
+            path.write_text('<document><view key="view"><color key="backgroundColor" red="1" green="1" blue="1"/>'
+                            '<constraints><constraint id="keep-centred"/></constraints></view>'
+                            '<resources><image name="LaunchImage" width="168" height="185"/></resources></document>')
+            prepare.ios_launch_screen()
+            first = path.read_bytes()
+            prepare.ios_launch_screen()
+            self.assertEqual(first, path.read_bytes())
+            document = ET.parse(path)
+            color = document.find(".//view/color[@key='backgroundColor']")
+            self.assertAlmostEqual(float(color.get('red')), 247 / 255)
+            self.assertAlmostEqual(float(color.get('green')), 248 / 255)
+            self.assertAlmostEqual(float(color.get('blue')), 245 / 255)
+            self.assertIsNotNone(document.find(".//constraint[@id='keep-centred']"))
+            self.assertEqual(document.find(".//image[@name='LaunchImage']").get('width'), '96')
+
+
 if __name__=='__main__':unittest.main()
 
