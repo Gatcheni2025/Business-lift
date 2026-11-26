@@ -322,12 +322,15 @@ void main() {
           precacheImage(AssetImage('assets/catalogue/' + atlas), photoContext)
       ]);
     });
-    // Discover opens product categories; shop discovery stays on Home.
+    // Discover now defaults to businesses, but keeps the product guide.
     await tester.tap(find.byKey(const ValueKey('nav-discover')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('discover-business-categories')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('discover-products-tab')));
     await tester.pumpAndSettle();
     expect(find.byKey(const PageStorageKey('discover-categories')),
         findsOneWidget);
-    expect(find.text('Nearby shops'), findsNothing);
     expect(tester.takeException(), isNull);
     await capture('discover-categories');
     await tester.tap(find.byKey(const ValueKey('discover-category-Bakery')));
