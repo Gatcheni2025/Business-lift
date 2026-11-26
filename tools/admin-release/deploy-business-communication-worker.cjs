@@ -8,18 +8,29 @@ const options={
  email:{entry:'index.business-mail-only.js',codebase:'teyza-business-mail',fn:'teyzaBusinessEmail',secret:'TEYZA_BUSINESS_MAIL_ZOHO'},
  whatsapp:{entry:'index.business-whatsapp-only.js',codebase:'teyza-business-whatsapp',fn:'teyzaBusinessWhatsApp',secret:'TEYZA_WHATSAPP_ACCESS_TOKEN'}
 };
-if(!Object.hasOwn(options,channel)||args.length!==2||args[1]!=='--confirm-isolated-worker')throw Error('Use email or whatsapp and --confirm-isolated-worker. No production writes.');
+const dryRun=args[1]==='--check-package';
+if(!Object.hasOwn(options,channel)||args.length!==2||(!dryRun&&args[1]!=='--confirm-isolated-worker'))throw Error('Use email or whatsapp and --check-package (read only) or --confirm-isolated-worker. No production writes.');
 const spec=options[channel],project='business-lift-3c19c';
 const cli=path.join(__dirname,'node_modules/firebase-tools/lib/bin/firebase.js');
-if(!fs.existsSync(cli))throw Error('Install pinned admin-release dependencies first.');
+if(!dryRun&&!fs.existsSync(cli))throw Error('Install pinned admin-release dependencies first.');
 const files=new Set();
 function collect(name){
- if(!/^[A-Za-z0-9_.-]+\.js$/.test(name)||name.includes('..')||name.endsWith('.test.js'))throw Error('Unexpected local dependency.');
+ if(!/^[A-Za-z0-9_.-]+\.(?:js|json)$/.test(name)||name.includes('..')||name.endsWith('.test.js')||name.startsWith('.')||['package.json','package-lock.json'].includes(name))throw Error('Unexpected local dependency.');
  if(files.has(name))return;files.add(name);
  const data=fs.readFileSync(path.join(source,name),'utf8');
- for(const m of data.matchAll(/require\(['"]\.\/([A-Za-z0-9_.-]+)['"]\)/g))collect(m[1].endsWith('.js')?m[1]:m[1]+'.js');
+ // Explicit JSON imports keep their original extension and are data, not JS.
+ if(name.endsWith('.json')){JSON.parse(data);return;}
+ for(const m of data.matchAll(/require\(\s*['"]\.\/([^'"]+)['"]\s*\)/g)){
+  const dependency=m[1];
+  if(!/^[A-Za-z0-9_.-]+$/.test(dependency)||dependency.includes('..'))throw Error('Unexpected local dependency.');
+  collect(/\.(?:js|json)$/.test(dependency)?dependency:dependency+'.js');
+ }
 }
 collect(spec.entry);
+if(dryRun){
+ console.log(JSON.stringify({channel,entry:spec.entry,files:[...files].sort(),productionWrites:false},null,2));
+ process.exit(0);
+}
 function run(bin,argv,cwd=root){
  const result=spawnSync(bin,argv,{cwd,stdio:'inherit',windowsHide:false});
  if(result.error||result.status!==0)throw Error('Isolated worker command failed; inspect local output.');
