@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 const REWARD_CENTS=9000;
 const timestampMs=value=>value?.toMillis?.()??(value instanceof Date?value.getTime():typeof value==='number'?value:NaN);
@@ -44,6 +44,40 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   return {sellerApproval:a?.approvalStatus||'pending',collectionActive:false,
    registeredShop:{name:a?.shopName||'',address:a?.address||''},distanceFromShopMeters:distance(v.location,location)};
  }
+ // Both the read-only eligibility screen and the ledger transaction use the
+ // same server-owned conditions. The write rechecks them atomically.
+ async function rewardReview(tx,visitId,uid){
+  const visitSnap=await tx.get(doc('teyzaAgentVisits/'+visitId)),visit=visitSnap.exists?visitSnap.data():null;
+  const denied=reason=>({state:'ineligible',reason});
+  if(!visit||visit.status!=='approved'||!visit.sellerUid||!visit.agentUid||visit.agentUid===uid||visit.sellerUid===uid)
+   return denied('Approve the verified visit and owner confirmation before reviewing the reward.');
+  const sellerUid=D.id(visit.sellerUid),rewardRef=doc('teyzaAgentRewards/'+sellerUid);
+  const [prior,seller,location,attribution,agentProfile]=await Promise.all([
+    tx.get(rewardRef),tx.get(doc('teyzaSellerAccounts/'+sellerUid)),
+    tx.get(doc('teyzaShopLocations/'+sellerUid)),
+    tx.get(doc('teyzaSellerAgentAttribution/'+sellerUid)),
+    tx.get(doc('teyzaFieldAgents/'+visit.agentUid))
+  ]);
+  if(prior.exists){
+   const record=prior.data();
+   if(record.sellerUid===sellerUid&&record.visitId===visitId&&record.agentUid===visit.agentUid&&
+      record.status==='approved_pending_payment'&&record.amountCents===REWARD_CENTS)
+    return {state:'approved_pending_payment',reason:'Reward approved; awaiting payment. No automatic transfer.'};
+   return {state:'already_rewarded',reason:'A registration reward already exists for this seller.'};
+  }
+  const account=seller.exists?seller.data():null,loc=location.exists?location.data():null,at=attribution.exists?attribution.data():null;
+  const created=timestampMs(account?.createdAt),visited=timestampMs(visit.createdAt);
+  if(!account||account.uid!==sellerUid||account.approvalStatus!=='approved'||!['spaza','retail','business','service','wholesale','wholesaler'].includes(account.category))
+   return denied('Seller registration must be approved and verified before rewarding.');
+  if(!Number.isFinite(created)||!Number.isFinite(visited)||created<visited)
+   return denied('Existing or undated seller registrations are not eligible for a new registration reward.');
+  const metres=distance(visit.location,loc);
+  if(metres===null||metres>250)return denied('Verified shop location must match the agent visit.');
+  if(!at||at.sellerUid!==sellerUid||at.agentUid!==visit.agentUid||at.visitId!==visitId||
+     agentProfile.data()?.status!=='approved')
+   return denied('Agent registration attribution or approved agent status is missing.');
+  return {state:'eligible',reason:'New verified registration and unique agent attribution confirmed.',sellerUid,rewardRef,visit};
+ }
  async function execute(auth,action,data={}){
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);
   await rate(uid,'field-agent',80,60000);
@@ -58,31 +92,14 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
     .map(r=>({visitId:r.visitId,amountCents:r.amountCents,status:r.status,approvedAt:r.approvedAt}));
    return {rewardCents:REWARD_CENTS,approvedPendingPaymentCents:rows.reduce((sum,r)=>sum+r.amountCents,0),approvedCount:rows.length,partial:rewards.docs.length>100,next:rewards.docs.length>100?rewards.docs[99].id:null,rewards:rows};
   }
-  if(action==='agent_admin_reward_approve'){
-   const visitId=D.id(data.visitId),ref=doc('teyzaAgentVisits/'+visitId);
+  if(action==='agent_admin_reward_status'||action==='agent_admin_reward_approve'){
+   const visitId=D.id(data.visitId);
    return db.runTransaction(async tx=>{
-    const visitSnap=await tx.get(ref),visit=visitSnap.exists?visitSnap.data():null;
-    if(!visit||visit.status!=='approved'||!visit.sellerUid||!visit.agentUid||visit.agentUid===uid||visit.sellerUid===uid)
-     D.fail(409,'Approve the verified visit and owner confirmation before reviewing the reward.');
-    const sellerUid=D.id(visit.sellerUid),rewardRef=doc('teyzaAgentRewards/'+sellerUid);
-    const [prior,seller,location,attribution,agentProfile]=await Promise.all([
-      tx.get(rewardRef),tx.get(doc('teyzaSellerAccounts/'+sellerUid)),
-      tx.get(doc('teyzaShopLocations/'+sellerUid)),
-      tx.get(doc('teyzaSellerAgentAttribution/'+sellerUid)),
-      tx.get(doc('teyzaFieldAgents/'+visit.agentUid))
-    ]);
-    if(prior.exists)D.fail(409,'A registration reward already exists for this seller.');
-    const account=seller.exists?seller.data():null,loc=location.exists?location.data():null,at=attribution.exists?attribution.data():null;
-    const created=timestampMs(account?.createdAt),visited=timestampMs(visit.createdAt);
-    if(!account||account.uid!==sellerUid||account.approvalStatus!=='approved'||!['spaza','retail','business','service','wholesale','wholesaler'].includes(account.category))
-     D.fail(409,'Seller registration must be approved and verified before rewarding.');
-    if(!Number.isFinite(created)||!Number.isFinite(visited)||created<visited)
-     D.fail(409,'Existing or undated seller registrations are not eligible for a new registration reward.');
-    if(!loc||!Number.isFinite(loc.latitude)||!Number.isFinite(loc.longitude)||distance(visit.location,loc)===null||distance(visit.location,loc)>250)
-     D.fail(409,'Verified shop location must match the agent visit.');
-    if(!at||at.sellerUid!==sellerUid||at.agentUid!==visit.agentUid||at.visitId!==visitId||
-      agentProfile.data()?.status!=='approved')
-     D.fail(409,'Agent registration attribution or approved agent status is missing.');
+    const review=await rewardReview(tx,visitId,uid);
+    if(action==='agent_admin_reward_status')
+     return {state:review.state,reason:review.reason,amountCents:REWARD_CENTS,currency:'ZAR'};
+    if(review.state!=='eligible')D.fail(409,review.state==='approved_pending_payment'?'A registration reward already exists for this seller.':review.reason);
+    const {sellerUid,rewardRef,visit}=review;
     const record={sellerUid,agentUid:visit.agentUid,visitId,amountCents:REWARD_CENTS,currency:'ZAR',
       status:'approved_pending_payment',approvedBy:uid,approvedAt:clock(),source:'verified_new_seller_registration'};
     if(typeof tx.create==='function')tx.create(rewardRef,record);else tx.set(rewardRef,record);

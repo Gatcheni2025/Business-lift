@@ -283,3 +283,26 @@ test('An eligible new verified manufacturer qualifies for the same R90 reward',a
  assert.equal((await f.call('agent_admin_reward_approve',{visitId:'visit1'},admin)).amountCents,9000);
  await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
 });
+
+test('Admin reward eligibility is read-only, fresh-admin restricted and shares the final approval guard',async()=>{
+ const f=setup();
+ await approved(f);
+ const request={visitId:'visit1'};
+ await rejects(f.call('agent_admin_reward_status',request,agent),403);
+ await rejects(f.call('agent_admin_reward_status',request,{...admin,auth_time:start/1000-301}),401);
+ assert.equal((await f.call('agent_admin_reward_status',request,admin)).state,'ineligible');
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ account.approvalStatus='approved';account.createdAt=new Date(start+1000);
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ const review=await f.call('agent_admin_reward_status',request,admin);
+ assert.equal(review.state,'eligible');assert.equal(review.amountCents,9000);assert.equal(review.currency,'ZAR');
+ assert.equal(f.db.records.has('teyzaAgentRewards/seller1'),false);
+ account.approvalStatus='pending';
+ await rejects(f.call('agent_admin_reward_approve',request,admin),409);
+ account.approvalStatus='approved';
+ await f.call('agent_admin_reward_approve',request,admin);
+ const recorded=await f.call('agent_admin_reward_status',request,admin);
+ assert.equal(recorded.state,'approved_pending_payment');
+ assert.equal(f.db.records.get('teyzaAgentRewards/seller1').paidAt,undefined);
+ await rejects(f.call('agent_admin_reward_approve',request,admin),409);
+});

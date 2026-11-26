@@ -6,17 +6,17 @@ function btn(text,click,cls='quiet'){const b=el('button',text,'button '+cls);b.t
 function card(title,description){const section=el('section',undefined,'panel ops-card');section.append(el('h3',title));if(description)section.append(el('p',description,'footnote'));return section;}
 function pdfOrImage(doc){if(!doc||!['application/pdf','image/png','image/jpeg'].includes(doc.mime)||typeof doc.base64!=='string')throw Error('Document format is unavailable.');const binary=atob(doc.base64);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return new Blob([bytes],{type:doc.mime});}
 export function createFieldAdmin({api,onError,message}){
- let active=false,tab='applications',profiles=[],visits=[],nextProfiles=null,nextVisits=null,filter='',province='all',selectedProfile=null,selectedVisit=null,privateData=null,opened=new Set(),seenPhotos=new Set(),busy=false,urls=[];
+ let active=false,tab='applications',profiles=[],visits=[],nextProfiles=null,nextVisits=null,filter='',province='all',selectedProfile=null,selectedVisit=null,rewardVisit=null,privateData=null,opened=new Set(),seenPhotos=new Set(),busy=false,urls=[];
  const safe=fn=>async()=>{if(busy||!active)return;busy=true;try{await fn();}catch(e){onError(e);}finally{busy=false;}};
  function forget(){for(const url of urls)URL.revokeObjectURL(url);urls=[];privateData=null;opened.clear();seenPhotos.clear();const dialog=document.getElementById('fieldEvidenceDialog');if(dialog?.open)dialog.close();}
- function clear(){active=false;forget();profiles=[];visits=[];nextProfiles=null;nextVisits=null;selectedProfile=null;selectedVisit=null;filter='';}
+ function clear(){active=false;forget();profiles=[];visits=[];nextProfiles=null;nextVisits=null;selectedProfile=null;selectedVisit=null;rewardVisit=null;filter='';}
  function attach(documentObject,title){const d=document.getElementById('fieldEvidenceDialog'),frame=document.getElementById('fieldEvidenceBody');const blob=pdfOrImage(documentObject),url=URL.createObjectURL(blob);urls.push(url);frame.replaceChildren(el('h3',title));const download=el('a','Download for private HR review','button quiet');download.href=url;download.download=String(documentObject.name||'document.pdf').replace(/[^a-zA-Z0-9._-]/g,'_');frame.append(download);if(blob.type==='application/pdf'){const view=el('iframe');view.src=url;view.title=title;view.className='field-document-viewer';frame.append(view);}else{const img=el('img');img.src=url;img.alt=title;img.className='field-image-viewer';frame.append(img);}d.showModal();}
- async function refresh(){active=true;forget();const [p,v]=await Promise.all([api('agent_admin_profiles'),api('agent_admin_visits')]);if(!active)return;profiles=p.profiles||[];nextProfiles=p.next||null;visits=v.visits||[];nextVisits=v.next||null;selectedProfile=null;selectedVisit=null;}
+ async function refresh(){active=true;forget();const [p,v]=await Promise.all([api('agent_admin_profiles'),api('agent_admin_visits')]);if(!active)return;profiles=p.profiles||[];nextProfiles=p.next||null;visits=v.visits||[];nextVisits=v.next||null;selectedProfile=null;selectedVisit=null;rewardVisit=null;}
  async function more(kind){const isProfile=kind==='profiles',next=isProfile?nextProfiles:nextVisits;if(!next)return;const r=await api(isProfile?'agent_admin_profiles':'agent_admin_visits',{after:next});if(isProfile){profiles.push(...r.profiles);nextProfiles=r.next||null;}else{visits.push(...r.visits);nextVisits=r.next||null;}}
  function filteredProfiles(){const t=filter.toLocaleLowerCase();return profiles.filter(p=>(province==='all'||p.province===province)&&[p.name,p.phone,p.email,p.area,p.province].join(' ').toLocaleLowerCase().includes(t));}
  function top(root){const heading=el('div',undefined,'field-admin-intro');heading.append(el('div',undefined,'eyebrow'));heading.firstChild.textContent='HR & FIELD OPERATIONS';heading.append(el('h3','People, applications and neighbourhood coverage'),el('p','Review applicants, manage field areas, track shop signups and approve completed visits. Agent recruitment is separate from seller verification.'));const login=el('a','Open agent sign-in ↗','button quiet');login.href='/work.html';login.target='_blank';login.rel='noopener noreferrer';heading.append(login);root.append(heading);
  const metrics=el('div',undefined,'field-admin-metrics');for(const [name,n] of [['Applications loaded',profiles.length],['Awaiting approval',profiles.filter(p=>p.status==='pending').length],['Approved agents',profiles.filter(p=>p.status==='approved').length],['Visits loaded',visits.length],['Owner-linked visits',visits.filter(v=>v.ownerConfirmed).length]]){const tile=el('div',undefined,'field-stat');tile.append(el('small',name),el('strong',n));metrics.append(tile);}root.append(metrics);
- const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews']]){const b=btn(title,()=>{forget();tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
+ const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews'],['rewards','R90 rewards']]){const b=btn(title,()=>{forget();rewardVisit=null;tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
  }
  function queryBar(root){const bar=el('div',undefined,'field-query');const search=el('input');search.type='search';search.placeholder='Search person, phone, town or province';search.setAttribute('aria-label','Filter field-team records');search.value=filter;search.oninput=()=>{filter=search.value;render(root);const field=root.querySelector('.field-query input');field?.focus();field?.setSelectionRange(filter.length,filter.length);};const selection=el('select');selection.setAttribute('aria-label','Filter by province');for(const [value,name] of [['all','All provinces'],...provinces.map(p=>[p,p])]){const option=el('option',name);option.value=value;selection.append(option);}selection.value=province;selection.onchange=()=>{province=selection.value;render(root);};bar.append(search,selection);root.append(bar);}
  async function uploadFile(file,kind){
@@ -115,7 +115,59 @@ export function createFieldAdmin({api,onError,message}){
  root.append(detail);}
  if(nextVisits)root.append(btn('Load more visits',safe(async()=>{await more('visits');render(root);})));
  }
- function render(root){active=true;forgetIfChanged();root.replaceChildren();top(root);if(tab==='applications'||tab==='agents')applications(root);else if(tab==='areas')areas(root);else if(tab==='signups')signups(root);else visitsView(root);ensureDialog();}
+ function rewardView(root){
+  const list=card('R90 registration rewards','Review each owner-linked registration. Eligibility is checked against the current server records, not the loaded visit count. Approved rewards are awaiting payment, not paid.');
+  const rows=visits.filter(v=>v.ownerConfirmed);
+  for(const v of rows){
+   const row=el('div',undefined,'field-visit');
+   row.append(el('strong',v.shopName+' · '+v.area),el('span','Agent '+v.agentUid+' · Work '+label(v.status)+' · Seller '+label(v.progress?.sellerApproval)),
+    btn('Review R90 reward',()=>{forget();rewardVisit=v;render(root);}));
+   list.append(row);
+  }
+  if(!rows.length)list.append(el('p','No owner-linked registrations on the loaded page.'));
+  root.append(list);
+  if(nextVisits)root.append(btn('Load more reward candidates',safe(async()=>{await more('visits');render(root);})));
+  if(!rewardVisit)return;
+  const v=rewardVisit,panel=card('Reward review: '+v.shopName,'R90 per qualifying new verified business · Agent '+v.agentUid);
+  panel.classList.add('field-reward-panel');
+  const result=el('div',undefined,'field-reward-result');result.setAttribute('aria-live','polite');
+  result.append(el('p','Check current eligibility before recording a reward.','footnote'));
+  const check=btn('Check reward eligibility',safe(async()=>{
+   check.disabled=true;result.replaceChildren(el('p','Checking current records…','footnote'));
+   try{
+    const r=await api('agent_admin_reward_status',{visitId:v.id});
+    if(!active||!panel.isConnected)return;
+    if(r.amountCents!==9000||r.currency!=='ZAR'||!['eligible','ineligible','already_rewarded','approved_pending_payment'].includes(r.state))
+     throw Error('Reward status is unavailable. The matching backend update is required.');
+    result.replaceChildren(el('strong',r.state==='eligible'?'Eligible — R90.00':r.state==='approved_pending_payment'?'R90.00 approved — awaiting payment':r.state==='already_rewarded'?'Reward already recorded':'Not eligible yet'),el('p',r.reason||'','footnote'));
+    if(r.state!=='eligible')return;
+    const consent=el('label',undefined,'confirm-check'),box=el('input');box.type='checkbox';
+    consent.append(box,el('span','I confirm this qualifying registration may be credited once. This records a reward only; it does not transfer money.'));
+    const approve=btn('Approve R90 reward',safe(async()=>{
+     if(!box.checked||!active||!panel.isConnected)return;
+     approve.disabled=true;check.disabled=true;box.disabled=true;
+     try{
+      const saved=await api('agent_admin_reward_approve',{visitId:v.id});
+      if(!active||!panel.isConnected)return;
+      if(saved.approved!==true||saved.amountCents!==9000||saved.status!=='approved_pending_payment')
+       throw Error('Reward approval could not be verified. Check the latest status before retrying.');
+      result.replaceChildren(el('strong','R90.00 approved — awaiting payment'),el('p','Recorded in the reward ledger. No payment has been sent.','footnote'));
+      message('Registration reward approved. No payment has been sent.','success');
+     }catch(error){
+      if(panel.isConnected)result.replaceChildren(el('p','Approval not verified. Check the latest eligibility before retrying.','footnote'));
+      throw error;
+     }finally{if(panel.isConnected)check.disabled=false;}
+    }),'primary');
+    approve.disabled=true;box.onchange=()=>{approve.disabled=!box.checked;};
+    result.append(consent,approve);
+   }catch(error){
+    if(panel.isConnected)result.replaceChildren(el('p','Could not verify eligibility. Check again when the service is available.','footnote'));
+    throw error;
+   }finally{if(panel.isConnected)check.disabled=false;}
+  }));
+  panel.append(check,result);root.append(panel);
+ }
+ function render(root){active=true;forgetIfChanged();root.replaceChildren();top(root);if(tab==='applications'||tab==='agents')applications(root);else if(tab==='areas')areas(root);else if(tab==='signups')signups(root);else if(tab==='rewards')rewardView(root);else visitsView(root);ensureDialog();}
  function forgetIfChanged(){/* Private evidence persists only while this HR view is active. */}
  function ensureDialog(){if(document.getElementById('fieldEvidenceDialog'))return;const d=el('dialog');d.id='fieldEvidenceDialog';d.className='field-evidence-dialog';const close=btn('Close',()=>d.close());close.className='button quiet';const body=el('div');body.id='fieldEvidenceBody';d.append(close,body);d.addEventListener('close',()=>{body.replaceChildren();for(const url of urls)URL.revokeObjectURL(url);urls=[];});document.body.append(d);}
  return {refresh,render,clear,hideSensitive:forget};
