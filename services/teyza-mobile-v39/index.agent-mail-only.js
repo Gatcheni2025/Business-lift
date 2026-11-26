@@ -11,5 +11,5 @@ if(!admin.apps.length)admin.initializeApp();
 let sender;
 const worker=createWorker({db:admin.firestore(),getAuthUser:uid=>admin.auth().getUser(uid),
  getSender:()=>sender??(sender=createZohoSender(zoho.value(),{pdf:fs.readFileSync(path.join(__dirname,MANUAL))}))});
-exports.teyzaAgentWelcomeMail=onSchedule({region:'us-central1',schedule:'every 1 minutes',timeZone:'Africa/Johannesburg',
+exports.teyzaAgentWelcomeMail=onSchedule({region:'us-central1',schedule:'* * * * *',timeZone:'Africa/Johannesburg',
  maxInstances:1,concurrency:1,memory:'256MiB',timeoutSeconds:240,retryCount:0,secrets:[zoho]},async()=>{await worker.run();});

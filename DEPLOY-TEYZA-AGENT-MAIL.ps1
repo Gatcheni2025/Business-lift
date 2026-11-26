@@ -24,7 +24,10 @@ try {
  '{"functions":[{"source":"functions","codebase":"teyza-agent-mail","runtime":"nodejs22","ignore":["node_modules",".git","firebase-debug.log","firebase-debug.*.log"]}]}' | Set-Content -LiteralPath $cfg -Encoding ascii
  npm ci --prefix $dest --omit=dev --ignore-scripts --no-audit --no-fund
  if ($LASTEXITCODE -ne 0) { throw 'Isolated worker dependency installation failed.' }
- & node $cli deploy --config $cfg --only functions:teyza-agent-mail --project business-lift-3c19c
- if ($LASTEXITCODE -ne 0) { throw 'Isolated welcome worker deployment failed. Keep the control OFF.' }
+ Push-Location $stage
+ try {
+  & node $cli deploy --config $cfg --only functions:teyza-agent-mail --project business-lift-3c19c
+  if ($LASTEXITCODE -ne 0) { throw 'Isolated welcome worker deployment failed. Keep the control OFF.' }
+ } finally { Pop-Location }
  Write-Host 'Worker deployed. Automatic sending is OFF until the private control document is explicitly enabled. Follow the verification and rollout checklist in docs/TEYZA_AGENT_WELCOME_MAIL_20261126.md.'
 } finally { if(Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }
