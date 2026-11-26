@@ -163,6 +163,7 @@ async function main(){
    assert.equal(await f.page.locator('.tp-combined input[type=password]').count(),0);
    assert(f.calls.some(c=>c.action==='ops_map_shops'));
    assert.equal(await f.page.locator('.tp-premium-google-key').count(),0);
+   await f.page.screenshot({path:path.join(output,'admin-national-map-desktop.png'),fullPage:true});
    assert.deepEqual(f.errors,[]);
    await f.context.close();
   });
@@ -266,6 +267,7 @@ async function main(){
       assert(m.buttonBottom<=m.layoutBottom+3,'Send button must not be pushed below the chat panel');
     };
     await layoutTest();
+    await test.page.screenshot({path:path.join(output,'admin-support-desktop.png'),fullPage:true});
     // A message refresh must preserve the agent's position when reading history.
     await test.page.locator('.ops-chat-messages').evaluate(el=>{el.scrollTop=0;});
     const refreshed=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
@@ -285,6 +287,7 @@ async function main(){
     await test.page.setViewportSize({width:393,height:852});
     await layoutTest();
     assert(await test.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await test.page.screenshot({path:path.join(output,'admin-support-phone.png'),fullPage:true});
     await test.context.close();
   });
   await check('User management creates a non-admin account, sends setup email and suspends without changing claims',async()=>{
@@ -450,6 +453,11 @@ async function main(){
   await check('HR navigation stays in admin with document review, area management and signups',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();
+   await f.page.screenshot({path:path.join(output,'admin-field-team-desktop.png'),fullPage:true});
+   await f.page.setViewportSize({width:393,height:852});
+   assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await f.page.screenshot({path:path.join(output,'admin-field-team-phone.png'),fullPage:true});
+   await f.page.setViewportSize({width:1440,height:1100});
    assert(!f.page.url().includes('work.html'));
    await f.page.getByRole('button',{name:'Open ID/passport and CV'}).first().click();
    for(const type of ['ID / passport','CV']){await f.page.getByRole('button',{name:'View '+type}).click();await f.page.locator('#fieldEvidenceDialog').getByRole('button',{name:'Close'}).click();}
@@ -529,6 +537,7 @@ async function main(){
    assert.equal(await f.page.getByText('Record payment',{exact:true}).count(),0,'Manual receipts are removed');
    assert.equal(await f.page.getByRole('button',{name:'Approve submitted product catalogue'}).count(),0);
    assert(await f.page.getByRole('button',{name:'Print historical statement',exact:true}).isVisible());
+   await f.page.screenshot({path:path.join(output,'admin-finance-desktop.png'),fullPage:true});
    const account=f.page.locator('[data-seller-account]');await account.waitFor();await f.page.waitForFunction(()=>{const r=document.querySelector('[data-seller-account]')?.getBoundingClientRect();return r&&r.top>=-1&&r.top<innerHeight;});assert.equal(await f.page.getByRole('button',{name:'Open account',exact:true}).count(),0);
    await f.page.getByRole('button',{name:'← Back to seller directory',exact:true}).click();await f.page.getByRole('button',{name:'Open account'}).first().waitFor();
    assert.equal(await f.page.getByRole('button',{name:'Product approvals',exact:true}).count(),0);
@@ -687,6 +696,9 @@ async function main(){
   });
   await check('Signed-out desktop and phone layouts, email login and absolute /admin route',async()=>{
    const f=await pageFor({identity:null});await f.page.locator('#loginPanel').waitFor({state:'visible'});
+   await f.page.locator('.admin-wordmark').waitFor();
+   await f.page.waitForFunction(()=>document.querySelector('.admin-wordmark')?.naturalWidth>0);
+   assert.equal(await f.page.locator('.admin-wordmark').getAttribute('src'),'/assets/teyza-sprout-wordmark.svg');
    await f.page.screenshot({path:path.join(output,'admin-login-desktop.png'),fullPage:true});
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await f.page.screenshot({path:path.join(output,'admin-login-phone.png'),fullPage:true});

@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en-ZA"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#010F1C">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#00545B">
 <meta name="teyza-admin-release" content="R335-local-vector-map">
-<title>National Shop Coverage | Teyza Admin</title>
-<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=R329-visible-checklist">
-<link rel="stylesheet" href="/assets/teyza-map-first.css?v=20261121-vector"></head><body>
+<title>Teyza Admin | Marketplace operations</title>
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=20261126-brand">
+<link rel="stylesheet" href="/assets/teyza-map-first.css?v=20261126-brand"></head><body>
 <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
  <symbol id="icon-overview" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5v9a1 1 0 0 1-1 1h-5.2v-6.2H9.7v6.2H4.5a1 1 0 0 1-1-1z"/></symbol>
  <symbol id="icon-review" viewBox="0 0 24 24"><path d="M7 4.5h10l2 2v13H5v-15zM8.2 10l2.2 2.2 4.8-4.8M8 16h8"/></symbol>
@@ -17,23 +17,23 @@
  <symbol id="icon-field" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3"/><path d="M5.5 20v-1.5c0-3 2.4-5.3 5.5-5.3h2c3.1 0 5.5 2.3 5.5 5.3V20z"/></symbol>
  <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></symbol>
 </svg>
-<header class="topbar"><a href="/" class="brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="128" height="48"><span>National coverage workspace</span></a>
+<header class="topbar"><a href="/" class="brand"><img class="admin-wordmark" src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="148" height="48"><span><b>Admin</b><small>Marketplace operations</small></span></a>
 <div class="account"><div class="account-identity"><small>TEYZA OPERATIONS</small><span id="accountEmail">Secure seller review</span></div><div class="session" id="activeSession" hidden><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet small">Renew session</button></div><button id="signOut" class="button quiet small" hidden>Sign out</button></div></header>
 <main class="shell">
  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
  <section id="loginPanel" class="login-panel">
-  <div class="login-intro"><span class="eyebrow">TEYZA NATIONAL OPERATIONS</span><h2>Every local shop.<br>One national view.</h2><p>Sign in to explore verified Teyza locations, identify Google-listed shop opportunities and coordinate field agents across South Africa.</p><div class="intro-foot">Spaza shops &nbsp;·&nbsp; Retail &nbsp;·&nbsp; Wholesale</div></div>
+  <div class="login-intro"><span class="login-brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="196" height="57"></span><span class="eyebrow">NATIONAL MARKETPLACE OPERATIONS</span><h2>Local businesses.<br>One powerful view.</h2><p>Manage verified shops and businesses, coordinate field teams and review marketplace activity across South Africa.</p><div class="login-scope" aria-label="Admin workspaces"><span><svg aria-hidden="true"><use href="#icon-sellers"></use></svg>Business accounts</span><span><svg aria-hidden="true"><use href="#icon-field"></use></svg>Agents &amp; field team</span><span><svg aria-hidden="true"><use href="#icon-billing"></use></svg>Finance &amp; payments</span><span><svg aria-hidden="true"><use href="#icon-support"></use></svg>Support &amp; reviews</span></div><div class="intro-foot">Shops · Manufacturers · Product sellers · Services</div></div>
   <div class="login-form"><h2 id="loginTitle">Welcome back</h2><p id="loginHint">Use your authorised administrator account.</p>
    <button id="googleLogin" class="button google" type="button"><span aria-hidden="true">G</span> Continue with Google</button><div class="divider">or continue with email</div>
    <form id="emailLogin"><label>Email address<input id="email" type="email" autocomplete="username" required placeholder="you@teyza.co.za"></label>
     <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-    <button id="loginButton" class="button primary full" type="submit">Sign in to review sellers <span aria-hidden="true">→</span></button></form>
+    <button id="loginButton" class="button primary full" type="submit">Sign in to Admin <span aria-hidden="true">→</span></button></form>
    <p class="footnote">Administrator access is assigned by the Teyza project owner. Seller accounts cannot approve shops.</p>
   </div>
  </section>
  <section id="workspace" hidden><div class="dashboard-layout">
  <aside class="dashboard-sidebar" aria-label="Workspace navigation">
-  <div class="sidebar-intro"><span class="sidebar-kicker">TEYZA OPERATIONS</span><strong>National control room</strong><span>Coverage, merchants and teams</span></div>
+  <div class="sidebar-intro"><span class="sidebar-kicker">WORKSPACE</span><strong>Marketplace control room</strong><span>Shops, businesses &amp; field teams</span></div>
   <label class="nav-search" for="sectionSearch"><svg aria-hidden="true"><use href="#icon-search"></use></svg><span class="sr-only">Find an admin section</span><input id="sectionSearch" type="search" placeholder="Find a section" autocomplete="off"></label>
   <p class="nav-hint">WORKSPACE</p>
   <nav id="adminNavigation" class="admin-nav" aria-label="Admin workspaces">
@@ -49,7 +49,7 @@
    <button type="button" data-admin-view="finance" data-keywords="loan stock applications" disabled><svg aria-hidden="true"><use href="#icon-finance"></use></svg><span>Stock finance</span></button>
    <button type="button" data-admin-view="field" data-keywords="agents employees hr applications areas" disabled><svg aria-hidden="true"><use href="#icon-field"></use></svg><span>Agents &amp; field team</span></button>
   </nav><p id="sectionResults" class="nav-empty" role="status" hidden>No sections match. Try another term.</p>
-  <div class="sidebar-note"><span class="sidebar-note-mark" aria-hidden="true">✳</span><div><strong>One nationwide view</strong><p>See registered shops, discover leads and manage agent coverage.</p></div></div>
+  <div class="sidebar-note"><span class="sidebar-note-mark" aria-hidden="true">✳</span><div><strong>Growing together</strong><p>See registered businesses, discover leads and coordinate field teams.</p></div></div>
  </aside>
  <div class="dashboard-main">
 <div id="operationsPanel"></div><div id="approvalView" hidden>
@@ -82,5 +82,5 @@
    </section>
   </div>
  </div></div></div></section>
- <footer>TEYZA <span>Local shops. Everyday essentials.</span><small>Admin · National shop coverage</small></footer>
+ <footer><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="86" height="27"><span>Local shops. Local businesses.</span><small>Admin · Secure operations</small></footer>
 </main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=R335-map-vector"></script></body></html>

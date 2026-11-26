@@ -40,3 +40,23 @@ input:focus,textarea:focus{border-color:#0b8d6e;box-shadow:0 0 0 3px #95d9b854}
 :focus-visible{outline:3px solid #75cbaa;outline-offset:3px}
 @media(max-width:760px){.topbar{align-items:flex-start}.private{display:none}.layout{display:flex;flex-direction:column;height:clamp(510px,calc(100dvh - 195px),790px);min-height:0}.queue{flex:0 0 auto;border-right:0;border-bottom:1px solid var(--line);max-height:min(200px,27dvh);min-height:0}.tickets{min-height:0;max-height:none}.ticket{padding:13px 18px}#thread-panel{flex:1 1 0;min-height:0}.messages{flex:1 1 0;min-height:0;max-height:none;padding:15px}.reply-form{padding:12px 16px}.reply-form textarea{min-height:60px;max-height:100px}.reply-actions{align-items:flex-end}.reply-actions span{max-width:60%}}
 @media(max-width:450px){.right{justify-content:flex-end}.thread-header{padding:12px 16px}.login-card{margin:2vh auto;padding:20px}.reply-actions{flex-direction:column;align-items:stretch}.reply-actions span{max-width:none}#send{width:100%}}
+
+
+/* Shared Teyza identity for the separately authorised staff inbox.
+   No changes to message delivery or access checks. */
+:root{--green:#00545b;--dark:#10333a;--mint:#eaf7e8;--line:#dde8e5;--muted:#536d70;--bg:#f7f8f5}
+.topbar{background:linear-gradient(120deg,#087780,#003a46);color:white;border:0;box-shadow:0 5px 24px #003a4618}
+.support-wordmark{display:block;width:146px;height:44px;object-fit:contain;background:#fff;border-radius:11px;padding:5px 9px;flex:none}
+.brand strong{font-size:17px;letter-spacing:0;color:white}.brand small{color:#b6f0b6;margin-top:4px}
+.private{background:#ffffff1f;color:#eaf7e8;border:1px solid #ffffff25}#identity{color:#fff;overflow-wrap:anywhere}
+.right button{color:white;background:#ffffff15;border-color:#ffffff50}.right button:hover{background:#ffffff2c}
+.login-card{border-top:5px solid #79d91b;border-radius:24px;box-shadow:0 18px 52px #003a4615}
+.login-card h1,.page-intro h1{color:#003a46}
+.login-card form button,#send{background:#00545b;color:white;min-height:44px}
+.login-card form button:hover:not(:disabled),#send:hover:not(:disabled){background:#003a46}
+.eyebrow{color:#18751e}.layout{border-color:#dde8e5;box-shadow:0 9px 28px #003a460e}
+.ticket.selected{background:#eaf7e8;box-shadow:inset 4px 0 #18751e}
+.unread-pill{background:#00545b;color:white}.bubble.agent{background:#eaf7e8;border-color:#c5e8b7}
+.queue-head,.thread-header{background:#fff}
+:focus-visible{outline-color:#e58b13}
+@media(max-width:650px){.topbar{flex-wrap:wrap;align-items:center;padding:12px 16px}.support-wordmark{width:120px;height:41px}.brand{gap:9px}.brand strong{font-size:15px}.right{gap:8px;justify-content:flex-end}.right #identity{max-width:150px;font-size:11px}}
