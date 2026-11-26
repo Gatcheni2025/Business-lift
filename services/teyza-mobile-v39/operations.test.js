@@ -554,3 +554,35 @@ test('Support agent claim never enables seller approvals, payments, finance or u
  await rejects(f.call('ops_whatsapp_support_inbox',{},{
   ...agent,auth_time:now/1000-301}),401);
 });
+
+test('Business acquisition is recent verified Admin only, idempotent by business location, consent first, and never writes seller approvals',async()=>{
+ const f=setup(),newBusiness={name:'Test Shop',city:'Durban',area:'Umlazi',address:'Synthetic 1',category:'spaza',phone:'0712345678',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Synthetic callback form',authorisedSource:true};
+ const create=()=>f.call('ops_acquisition_create',newBusiness);
+ for(const actor of [{uid:'seller1',email_verified:true},{uid:'support1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000},{...admin,auth_time:now/1000-301}])
+  await rejects(f.call('ops_acquisition_list',{},actor),actor.teyzaAdmin?401:403);
+ await rejects(f.call('ops_acquisition_create',{...newBusiness,authorisedSource:false}),422);
+ const {prospect:p}=await create();assert.equal(p.stage,'identified');assert.equal(p.phone,'+27712345678');assert.equal(p.assignedTo,admin.uid);
+ await rejects(create(),409);
+ const event=(p,data)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic event',...data});
+ await rejects(event(p,{type:'contact',channel:'whatsapp'}),409);
+ await rejects(event(p,{type:'permission',channel:'whatsapp',ownerOptIn:false}),422);
+ const a=(await event(p,{type:'permission',channel:'whatsapp',ownerOptIn:true})).prospect;
+ await rejects(event(p,{type:'progress',stage:'interested'}),409);
+ await rejects(event(a,{type:'contact',channel:'email'}),409);
+ const b=(await event(a,{type:'contact',channel:'whatsapp'})).prospect;
+ const c=(await event(b,{type:'progress',stage:'registration_started',nextFollowUpAt:now+86400000})).prospect;
+ const original=structuredClone(f.db.records.get('teyzaSellerAccounts/seller1'));
+ await rejects(f.call('ops_acquisition_link',{id:c.id,revision:c.revision,sellerUid:'seller2',ownerConfirmed:true}),409);
+ const linked=(await f.call('ops_acquisition_link',{id:c.id,revision:c.revision,sellerUid:'seller1',ownerConfirmed:true})).prospect;
+ assert.equal(linked.seller.status,'approved');assert.equal(linked.seller.listed,false);
+ assert.deepEqual(f.db.records.get('teyzaSellerAccounts/seller1'),original);
+ const dup=(await f.call('ops_acquisition_create',{...newBusiness,address:'Synthetic 2'})).prospect;
+ await rejects(f.call('ops_acquisition_link',{id:dup.id,revision:dup.revision,sellerUid:'seller1',ownerConfirmed:true}),409);
+ const blocked=(await event(linked,{type:'opt_out'})).prospect;
+ assert.equal(blocked.optedOut,true);assert.equal(blocked.nextFollowUpAt,null);
+ await rejects(event(blocked,{type:'permission',channel:'whatsapp',ownerOptIn:true}),409);
+ await rejects(event(dup,{type:'permission',channel:'whatsapp',ownerOptIn:true}),409);
+ const listing=await f.call('ops_acquisition_list');assert.equal(listing.prospects.length,2);assert(listing.prospects.every(r=>r.optedOut));
+ const detail=await f.call('ops_acquisition_detail',{id:p.id});assert(detail.events.some(x=>x.type==='opt_out'));assert(detail.events.some(x=>x.type==='seller_linked'));
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});

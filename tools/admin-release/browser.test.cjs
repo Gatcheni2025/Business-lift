@@ -508,6 +508,30 @@ async function main(){
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Business acquisition saves a consent-aware prospect and displays actual seller status',async()=>{
+   let prospect=null;
+   const f=await pageFor({api:async(route,body)=>{
+    if(!body.action.startsWith('ops_acquisition_'))return false;
+    if(body.action==='ops_acquisition_create'){prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
+    else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null}});
+    return true;
+   }});
+   await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Business Acquisition Command Centre'}).waitFor();
+   const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
+   await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
+   await form.getByLabel('Township / area').fill('Umlazi');
+   await form.getByLabel('Business address or landmark').fill('Synthetic Road');
+   await form.getByLabel('Business phone (optional)').fill('0712345678');
+   await form.getByLabel('Source reference / authority to retain details').fill('Synthetic owner request');
+   await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
+   await form.getByRole('button',{name:'Save business prospect'}).click();
+   await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{
    let credited=false;
    const f=await pageFor({api:async(route,body)=>{
