@@ -80,7 +80,9 @@ test('Rollback refuses to overwrite a later website deployment or another projec
  assert.throws(()=>versionName('sites/other/versions/123'));assert.throws(()=>versionName(base+'../123'));
 });
 test('All admin aliases have absolute asset paths and only the explicit admin overlay is packaged',()=>{
- const files=overlay(root);assert.equal(files.size,22);
+ const files=overlay(root);assert.equal(files.size,23);
+ assert(files.has('/js/teyza-business-acquisition.js'));
+ assert(fs.readFileSync(path.join(root,'admin.html'),'utf8').includes('data-admin-view="acquisition"'));
  assert(files.has('/assets/teyza-map-first.css'));
  assert(files.has('/assets/teyza-southern-africa-land.geojson'));
  const geography=JSON.parse(require('node:zlib').gunzipSync(files.get('/assets/teyza-southern-africa-land.geojson').bytes).toString('utf8'));

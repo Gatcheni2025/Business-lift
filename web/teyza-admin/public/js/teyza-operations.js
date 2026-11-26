@@ -1,10 +1,11 @@
 import {createAdminMap} from '/js/teyza-admin-map.mjs';
+import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261126-assets';
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261126-rewards';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const titles={map:'National shop coverage',whatsapp:'WhatsApp delivery status',users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'Support inbox',finance:'Stock finance review',field:'HR & field team'};
+const titles={acquisition:'Business Acquisition Command Centre',map:'National shop coverage',whatsapp:'WhatsApp delivery status',users:'Users & access',overview:'Your operations, at a glance.',sellers:'Business accounts',products:'Product activity',billing:'Finance & payments',support:'Support inbox',finance:'Stock finance review',field:'HR & field team'};
 export function createOperations({api,onError,getReviewSummary=()=>({loaded:false,count:0,hasMore:false})}){
  const root=document.getElementById('operationsPanel'),approvals=document.getElementById('approvalView');
  const navButtons=[...document.querySelectorAll('[data-admin-view]')];
@@ -22,8 +23,9 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
      supportSelectedId=null,supportMessages=[],supportSearch='',supportFilter='all';
  const message=(t,k='')=>{const box=document.getElementById('notice');box.textContent=t;box.className='notice '+k;box.hidden=false;};
  const fieldAdmin=createFieldAdmin({api:(action,data)=>request(action,data),onError,message});
+ const acquisitionAdmin=createAcquisitionAdmin({api:(action,data)=>request(action,data),onError,message,openSupport:name=>safely(async()=>{supportSearch=name;supportFilter='all';supportSelectedId=null;supportMessages=[];await navigate('support');})});
  const coverageMap=createAdminMap({api:(action,data)=>request(action,data),report:onError});
- function clear(){coverageMap.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;supportSelectedId=null;supportMessages=[];supportSearch='';supportFilter='all';busy=false;enableNavigation(false);root.replaceChildren();}
+ function clear(){coverageMap.clear();acquisitionAdmin.clear();fieldAdmin.clear();clearMandatePhoto();clearMandateDialogs();generation++;ready=false;view='map';sellers=[];next=null;selected=null;detail=null;archiveExpanded=false;sellerSnapshotLoaded=false;users=[];usersNext=null;userSelected=null;userDetail=null;tickets=[];finance=[];catalogueQueue=[];catalogueLimited=false;wholesaleAdQueue=[];wholesaleAdError=null;shopperAdQueue=[];shopperAdError=null;shopperAdPreview=null;closures=[];closuresNext=null;mandates=[];mandatesLoaded=false;mandatesLimited=false;mandateError=null;whatsappState=null;moreFinance=null;moreTickets=null;supportSelectedId=null;supportMessages=[];supportSearch='';supportFilter='all';busy=false;enableNavigation(false);root.replaceChildren();}
  async function request(action,data={}){const stamp=generation;const reply=await api(action,data);if(!ready||stamp!==generation)throw Object.assign(Error('Session changed.'),{stale:true});return reply;}
  async function safely(fn){if(!ready||busy)return;busy=true;try{await fn();}catch(e){if(!e.stale)onError(e);}finally{busy=false;}}
  function button(text,fn,kind='quiet'){const b=el('button',text,'button '+kind);b.type='button';b.onclick=()=>safely(fn);return b;}
@@ -60,6 +62,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
   if(view==='map'){root.append(coverageMap.panel);coverageMap.activate();}
   if(view==='whatsapp')whatsappView();
   if(view==='field')fieldAdmin.render(root);
+  if(view==='acquisition')acquisitionAdmin.render(root);
   if(view==='users')userManagement();
   if(view==='overview')overview();
   if(view==='products')productsView();
@@ -974,6 +977,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
    if(view==='map'){show();return;}
    if(view==='whatsapp'){whatsappState=await request('ops_whatsapp_status');show();return;}
    if(view==='field'){await fieldAdmin.refresh();show();return;}
+   if(view==='acquisition'){await acquisitionAdmin.refresh();show();return;}
    if(view==='users'){
      const page=await request('ops_users');users=page.users;usersNext=page.next;
      if(userSelected)userDetail=await request('ops_user_detail',{userUid:userSelected});
@@ -1016,7 +1020,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  async function navigate(v){
   if(!ready)return;
-  coverageMap.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();
+  coverageMap.clear();acquisitionAdmin.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();
   document.dispatchEvent(new Event('teyza-admin-view-change'));
   if(v!==view){selected=null;detail=null;accountTab='summary';userSelected=null;userDetail=null;}
   generation++;view=v;
@@ -1048,5 +1052,5 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  },20000);
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
  document.getElementById('backToBusinessAccounts').onclick=()=>safely(()=>navigate('sellers'));
- return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
+ return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();acquisitionAdmin.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
 }

@@ -508,6 +508,57 @@ async function main(){
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Business acquisition saves a consent-aware prospect and displays actual seller status',async()=>{
+   let prospect=null;
+   const f=await pageFor({api:async(route,body)=>{
+    if(!body.action.startsWith('ops_acquisition_'))return false;
+    if(body.action==='ops_acquisition_create'){prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_event'){assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:1};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
+    else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null}});
+    return true;
+   }});
+   await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Business Acquisition Command Centre'}).waitFor();
+   await f.page.getByRole('button',{name:'Open marketing & onboarding assets'}).click();
+   await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
+   await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
+   await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
+   const checks=f.page.getByRole('button',{name:'Check published video',exact:true});
+   await checks.first().click();await f.page.getByRole('link',{name:'Watch video',exact:true}).waitFor();
+   await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
+   await f.page.locator('#acquisition-assets > details > summary').click();
+   const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
+   await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
+   await form.getByLabel('Township / area').fill('Umlazi');
+   await form.getByLabel('Business address or landmark').fill('Synthetic Road');
+   await form.getByLabel('Business phone (optional)').fill('0712345678');
+   await form.getByLabel('Business email (optional)').fill('synthetic@example.test');
+   await form.getByLabel('Source reference / authority to retain details').fill('Synthetic owner request');
+   await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
+   await form.getByRole('button',{name:'Save business prospect'}).click();
+   await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await f.page.getByRole('heading',{name:'Business email desk'}).waitFor();
+   await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
+   assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
+   const activity=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save activity',exact:true})});
+   await activity.getByLabel('Record activity').selectOption('permission');await activity.getByLabel('Channel',{exact:true}).selectOption('email');
+   await activity.getByLabel('Owner explicitly opted in to this channel.').check();
+   await activity.getByLabel('Activity note / consent evidence (no sensitive documents or credentials)').fill('Synthetic owner opt-in');
+   await activity.getByLabel('I confirm this records an actual event. No message will be sent.').check();
+   await activity.getByRole('button',{name:'Save activity'}).click();
+   const draft=f.page.getByLabel('invitation email draft');await draft.waitFor();const copy=await draft.inputValue();
+   assert(copy.includes('Synthetic Spaza – Grow your business with Teyza'));assert(copy.includes('Umlazi, Durban'));assert(copy.includes('source stock for your spaza shop'));
+   assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
+   await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
+   await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
+   assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{
    let credited=false;
    const f=await pageFor({api:async(route,body)=>{

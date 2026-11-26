@@ -554,3 +554,75 @@ test('Support agent claim never enables seller approvals, payments, finance or u
  await rejects(f.call('ops_whatsapp_support_inbox',{},{
   ...agent,auth_time:now/1000-301}),401);
 });
+
+test('Business acquisition is recent verified Admin only, idempotent by business location, consent first, and never writes seller approvals',async()=>{
+ const f=setup(),newBusiness={name:'Test Shop',city:'Durban',area:'Umlazi',address:'Synthetic 1',category:'spaza',phone:'0712345678',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Synthetic callback form',authorisedSource:true};
+ const create=()=>f.call('ops_acquisition_create',newBusiness);
+ for(const actor of [{uid:'seller1',email_verified:true},{uid:'support1',teyzaSupportAgent:true,email_verified:true,auth_time:now/1000},{...admin,auth_time:now/1000-301}])
+  await rejects(f.call('ops_acquisition_list',{},actor),actor.teyzaAdmin?401:403);
+ await rejects(f.call('ops_acquisition_create',{...newBusiness,authorisedSource:false}),422);
+ const {prospect:p}=await create();assert.equal(p.stage,'identified');assert.equal(p.phone,'+27712345678');assert.equal(p.assignedTo,admin.uid);
+ await rejects(create(),409);
+ const event=(p,data)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic event',...data});
+ await rejects(event(p,{type:'contact',channel:'whatsapp'}),409);
+ await rejects(event(p,{type:'permission',channel:'whatsapp',ownerOptIn:false}),422);
+ const a=(await event(p,{type:'permission',channel:'whatsapp',ownerOptIn:true})).prospect;
+ await rejects(event(p,{type:'progress',stage:'interested'}),409);
+ await rejects(event(a,{type:'contact',channel:'email'}),409);
+ const b=(await event(a,{type:'contact',channel:'whatsapp'})).prospect;
+ const c=(await event(b,{type:'progress',stage:'registration_started',nextFollowUpAt:now+86400000})).prospect;
+ const original=structuredClone(f.db.records.get('teyzaSellerAccounts/seller1'));
+ await rejects(f.call('ops_acquisition_link',{id:c.id,revision:c.revision,sellerUid:'seller2',ownerConfirmed:true}),409);
+ const linked=(await f.call('ops_acquisition_link',{id:c.id,revision:c.revision,sellerUid:'seller1',ownerConfirmed:true})).prospect;
+ assert.equal(linked.seller.status,'approved');assert.equal(linked.seller.listed,false);
+ assert.deepEqual(f.db.records.get('teyzaSellerAccounts/seller1'),original);
+ const dup=(await f.call('ops_acquisition_create',{...newBusiness,address:'Synthetic 2'})).prospect;
+ await rejects(f.call('ops_acquisition_link',{id:dup.id,revision:dup.revision,sellerUid:'seller1',ownerConfirmed:true}),409);
+ const blocked=(await event(linked,{type:'opt_out'})).prospect;
+ assert.equal(blocked.optedOut,true);assert.equal(blocked.nextFollowUpAt,null);
+ await rejects(event(blocked,{type:'permission',channel:'whatsapp',ownerOptIn:true}),409);
+ await rejects(event(dup,{type:'permission',channel:'whatsapp',ownerOptIn:true}),409);
+ const listing=await f.call('ops_acquisition_list');assert.equal(listing.prospects.length,2);assert(listing.prospects.every(r=>r.optedOut));
+ const detail=await f.call('ops_acquisition_detail',{id:p.id});assert(detail.events.some(x=>x.type==='opt_out'));assert(detail.events.some(x=>x.type==='seller_linked'));
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});
+
+test('Invitation and registration welcome logs distinguish staff-confirmed sent records, consent, and owner support',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaSellerAccounts/seller1',{uid:'seller1',shopName:'Test Shop',category:'spaza',approvalStatus:'pending',ownerEmail:'shop@example.test'});
+ const input={name:'Test Shop',city:'Durban',area:'Umlazi',address:'Synthetic Road',category:'spaza',phone:'0712345678',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Owner contacted us',authorisedSource:true};
+ let p=(await f.call('ops_acquisition_create',input)).prospect;
+ const evt=(v,extra)=>f.call('ops_acquisition_event',{id:v.id,revision:v.revision,note:'Synthetic evidence',confirmed:true,...extra});
+ const mail={type:'email_sent',sentConfirmed:true,sentAt:now-1000,reference:'Synthetic Zoho Sent message'};
+ await rejects(evt(p,{...mail,kind:'invitation'}),409);
+ await rejects(evt(p,{...mail,kind:'welcome'}),409);
+ p=(await evt(p,{type:'permission',channel:'email',ownerOptIn:true})).prospect;
+ await rejects(evt(p,{...mail,kind:'invitation',sentConfirmed:false}),422);
+ await rejects(evt(p,{...mail,kind:'invitation',sentAt:now+1}),422);
+ p=(await evt(p,{...mail,kind:'invitation'})).prospect;
+ assert.equal(p.emailHistory.invitation.status,'staff_confirmed_in_zoho_sent');
+ assert.equal(p.emailHistory.invitation.sentAt,now-1000);
+ await rejects(evt(p,{...mail,kind:'invitation'}),409);
+ p=(await f.call('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:'seller1',ownerConfirmed:true})).prospect;
+ assert.equal(p.seller.welcomeEmailEligible,true);
+ const seller=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,ownerEmail:'changed@example.test'});
+ assert.equal((await f.call('ops_acquisition_detail',{id:p.id})).prospect.seller.welcomeEmailEligible,false);
+ await rejects(evt(p,{...mail,kind:'welcome'}),409);
+ f.db.records.set('teyzaSellerAccounts/seller1',seller);
+ p=(await evt(p,{type:'opt_out'})).prospect;
+ p=(await evt(p,{...mail,kind:'welcome'})).prospect;
+ assert(p.emailHistory.welcome);
+ p=(await evt(p,{type:'help_requested',channel:'email'})).prospect;
+ assert.equal(p.help.state,'open');
+ p=(await evt(p,{type:'help_replied'})).prospect;
+ assert.equal(p.help.state,'waiting_for_owner');
+ p=(await evt(p,{type:'help_resolved'})).prospect;
+ assert.equal(p.help.state,'resolved');
+ f.db.records.set('teyzaSupportTickets/t1',{ownerUid:'seller1',subject:'Synthetic owner question',status:'open',source:'seller_admin_chat'});
+ f.db.records.set('teyzaSupportTickets/t2',{ownerUid:'seller2',subject:'Another business',status:'open'});
+ const detail=await f.call('ops_acquisition_detail',{id:p.id});
+ assert.equal(detail.support.length,1);assert.equal(detail.support[0].id,'t1');
+ assert(detail.events.some(e=>e.type==='email_sent'&&e.kind==='welcome'));
+ assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');
+});
