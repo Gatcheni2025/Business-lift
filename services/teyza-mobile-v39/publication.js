@@ -83,7 +83,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
  if(!result.registered||(!shop&&!setup.completedAt))return null;
  const next={...(shop||{}),sellerUid:uid,name:account.shopName,address:account.address||'',
   area:shop?.address&&sameAddress(shop.address,account.address)?shop.area||account.address:account.address||'',
-  shopCategory:account.category,status:result.status,approvalStatus:result.approved?'approved':'pending',
+  shopCategory:account.category,businessType:account.businessType||'',status:result.status,approvalStatus:result.approved?'approved':'pending',
   sponsored:false, // Only independently purchased R29 promotions are sponsored.
   sellingEnabled:result.canSell&&(setup.requiredVersion===2||shop?.sellingEnabled===true),
   identityVerified:result.approved,verificationStatus:result.approved?'approved':'pending_review',
@@ -118,7 +118,7 @@ function project(uid,{account,setup={},verification,shop,settings={},front,locat
 }
 function publicRow(uid,shop){
  return {id:uid,sellerUid:uid,name:shop.name,area:shop.area||'',city:shop.city||'',address:shop.address||'',
-  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,sponsored:shop.sponsored===true,googlePlaceId:shop.googlePlaceId||'',
+  status:'active',approvalStatus:'approved',identityVerified:true,shopCategory:shop.shopCategory,businessType:shop.businessType||'',sponsored:shop.sponsored===true,googlePlaceId:shop.googlePlaceId||'',
   photoUrl:shop.photoUrl||'',latitude:coordinates(shop.latitude,shop.longitude)?shop.latitude:null,
   longitude:coordinates(shop.latitude,shop.longitude)?shop.longitude:null,
   pickupEnabled:shop.pickupEnabled===true,deliveryEnabled:shop.deliveryEnabled===true,
