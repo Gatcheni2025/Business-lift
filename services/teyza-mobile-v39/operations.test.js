@@ -626,3 +626,54 @@ test('Invitation and registration welcome logs distinguish staff-confirmed sent 
  assert(detail.events.some(e=>e.type==='email_sent'&&e.kind==='welcome'));
  assert.equal(f.db.records.get('teyzaSellerAccounts/seller1').approvalStatus,'pending');
 });
+
+test('Business direct email is gated, queued once, rechecked, and accepted only from provider response',async()=>{
+ const f=setup(),{CONTROL,collections,createWorker}=require('./business-communications');
+ const create={name:'Test Shop',city:'Durban',area:'Umlazi',address:'Synthetic direct send',category:'spaza',email:'shop@example.test',phone:'0712345678',source:'owner_inquiry',sourceReference:'Synthetic owner permission',authorisedSource:true};
+ let p=(await f.call('ops_acquisition_create',create)).prospect;
+ const send=(v,extra={})=>f.call('ops_acquisition_send',{id:v.id,revision:v.revision,channel:'email',kind:'invitation',confirmed:true,...extra});
+ await rejects(send(p),409);
+ f.db.records.set(CONTROL,{emailEnabled:true});
+ await rejects(send(p),409);
+ p=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'permission',channel:'email',confirmed:true,ownerOptIn:true,note:'Synthetic opt-in'})).prospect;
+ await rejects(send(p,{confirmed:false}),422);
+ assert.equal((await send(p)).message.status,'queued');
+ p=(await f.call('ops_acquisition_detail',{id:p.id})).prospect;
+ assert.equal(p.outbound.email_invitation.status,'queued');
+ await rejects(send(p),409);
+ const job=[...f.db.records.keys()].find(k=>k.startsWith(collections.email+'/')).split('/').at(-1);
+ let sends=0;
+ const worker=createWorker({db:f.db,channel:'email',clock:()=>now,send:async d=>{sends++;assert.equal(d.recipient,'shop@example.test');assert(d.body.includes('personally invite Test Shop'));return '123456789';}});
+ await worker.process(job);await worker.process(job);assert.equal(sends,1);
+ p=(await f.call('ops_acquisition_detail',{id:p.id})).prospect;
+ assert.equal(p.outbound.email_invitation.status,'accepted');assert.equal(p.outbound.email_invitation.providerId,'123456789');
+ await rejects(f.call('ops_acquisition_send',{id:p.id,revision:p.revision,channel:'email',kind:'invitation',confirmed:true},{uid:'seller1',email_verified:true}),403);
+});
+test('Queued direct sends cancel after opt-out; uncertain provider response is never retried',async()=>{
+ const {CONTROL,collections,createWorker}=require('./business-communications');
+ for(const optOut of [true,false]){
+  const f=setup();f.db.records.set(CONTROL,{emailEnabled:true});
+  let p=(await f.call('ops_acquisition_create',{name:'Synthetic Shop',city:'Durban',area:'Umlazi',address:'Synthetic test',category:'spaza',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true})).prospect;
+  const evt=(p,extra)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic record',...extra});
+  p=(await evt(p,{type:'permission',channel:'email',ownerOptIn:true})).prospect;
+  await f.call('ops_acquisition_send',{id:p.id,revision:p.revision,channel:'email',kind:'invitation',confirmed:true});
+  p=(await f.call('ops_acquisition_detail',{id:p.id})).prospect;
+  if(optOut)p=(await evt(p,{type:'opt_out'})).prospect;
+  const id=[...f.db.records.keys()].find(k=>k.startsWith(collections.email+'/')).split('/').at(-1);
+  let count=0;const w=createWorker({db:f.db,channel:'email',clock:()=>now,send:async()=>{count++;throw Error('Synthetic timeout');}});
+  await w.process(id);await w.process(id);assert.equal(count,optOut?0:1);
+  assert.equal((await f.call('ops_acquisition_detail',{id:p.id})).prospect.outbound.email_invitation.status,optOut?'cancelled':'review_required');
+ }
+});
+test('WhatsApp direct sends require exact approved template configuration and channel consent',async()=>{
+ const f=setup(),{CONTROL,collections,createWorker}=require('./business-communications'),{whatsappBodies}=require('./business-message-templates');
+ let p=(await f.call('ops_acquisition_create',{name:'Synthetic Shop',city:'Johannesburg',area:'Soweto',address:'Synthetic test',category:'spaza',phone:'0712345678',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true})).prospect;
+ p=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'permission',channel:'whatsapp',confirmed:true,ownerOptIn:true,note:'Synthetic consent'})).prospect;
+ const send=()=>f.call('ops_acquisition_send',{id:p.id,revision:p.revision,channel:'whatsapp',kind:'invitation',confirmed:true});
+ const cfg={whatsappEnabled:true,whatsappPhoneNumberId:'123456789',whatsappApiVersion:'v26.0',whatsappTemplates:{invitation:{approved:true,name:'synthetic_invitation',language:'en',body:'wrong'}}};
+ f.db.records.set(CONTROL,cfg);await rejects(send(),409);
+ cfg.whatsappTemplates.invitation.body=whatsappBodies.invitation;f.db.records.set(CONTROL,cfg);await send();
+ const id=[...f.db.records.keys()].find(k=>k.startsWith(collections.whatsapp+'/')).split('/').at(-1);
+ let count=0;await createWorker({db:f.db,channel:'whatsapp',clock:()=>now,send:async d=>{count++;assert.equal(d.recipient,'+27712345678');assert.equal(d.businessName,'Synthetic Shop');return 'wamid.synthetic';}}).process(id);
+ assert.equal(count,1);assert.equal((await f.call('ops_acquisition_detail',{id:p.id})).prospect.outbound.whatsapp_invitation.status,'accepted');
+});
