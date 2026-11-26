@@ -534,6 +534,7 @@ async function main(){
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
+   assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'all');
    await f.page.getByLabel('Town, township or business name').fill('Durban');
    // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
    await f.page.evaluate(()=>{
@@ -546,22 +547,36 @@ async function main(){
     window.google={maps:{Map:MapMock,Marker:MarkerMock,InfoWindow:InfoWindowMock,Geocoder:GeocoderMock,SymbolPath:{CIRCLE:0}}};
    });
    await f.page.route('**/assets/teyza-maps-config.json',route=>route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}}));
-   let placesRequests=0;
+   let placesRequests=0,contactRequests=0;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
-    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('category'),'spaza');assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
-    return route.fulfill({json:{ok:true,entries:[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}]}});
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
+    const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
+    const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'}]:[];
+    return route.fulfill({json:{ok:true,entries}});
+   });
+   await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
+    contactRequests++;const id=new URL(route.request().url()).searchParams.get('placeId');
+    return route.fulfill({json:id==='SyntheticPlace1234'?{ok:true,phone:'031 555 0100',websiteUrl:'https://example.test/'}:{ok:true,phone:'',websiteUrl:''}});
    });
    await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
    const live=f.page.getByRole('dialog');
-   const searchArea=live.getByRole('button',{name:'Search this area'});
-   await searchArea.waitFor();await f.page.waitForFunction(()=>!document.querySelector('.acq-google-compact .tp-combined-controls button:last-of-type')?.disabled);
-   assert.equal(placesRequests,0);
+   await live.getByText('Synthetic Google Shop',{exact:true}).waitFor();
+   await live.getByText('Synthetic No Contact',{exact:true}).waitFor();
+   assert.equal(placesRequests,3);assert.equal(contactRequests,0);
    assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
-   await searchArea.click();
-   await live.getByText('Synthetic Google Shop',{exact:true}).waitFor();assert.equal(placesRequests,1);
    assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Durban, South Africa');
-   await live.getByRole('button',{name:/Synthetic Google Shop/}).click();
-   assert(await live.getByText(/Email not supplied by Google/).isVisible());
+   assert.equal(await live.locator('.acq-optional-map').evaluate(e=>e.open),false);
+   assert.equal(await live.locator('.tp-combined-map').isVisible(),false);
+   const shop=live.locator('.acq-business-card').filter({hasText:'Synthetic Google Shop'});
+   const noContact=live.locator('.acq-business-card').filter({hasText:'Synthetic No Contact'});
+   await shop.getByRole('button',{name:'View contact details'}).click();
+   await shop.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
+   assert.equal(await shop.getByRole('link',{name:'Open business website'}).getAttribute('href'),'https://example.test/');
+   await noContact.getByRole('button',{name:'View contact details'}).click();
+   await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
+   assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
+   assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
+   assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
    await live.getByRole('button',{name:'Back to saved contacts'}).click();
    assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);

@@ -2,6 +2,8 @@
 // Results remain ephemeral, scoped to one searched area, and are never exported.
 const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover';
 const CONFIG='/assets/teyza-maps-config.json';
+const CONTACT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php';
+const pageLength=30;
 const SA={lat:-28.8,lng:24.6};
 const good=p=>Number.isFinite(p?.latitude)&&Number.isFinite(p?.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
 const elt=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e;};
@@ -21,9 +23,11 @@ export function categoryCounts(places){
 }
 export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban'}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
+ let resultEpoch=0,pageSize=pageLength,searchError='',center=null;
+ const contactCache=new Map();
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
  const title=elt('h3',compact?'Google Places · live listings':'Google Places · shop registration opportunities');
- const note=elt('p','Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
+ const note=elt('p',compact?'Search for local businesses by town and category. All current listings remain visible, even when contact information is missing. Select a business to look up its publicly listed phone and website.':'Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
  const controls=elt('div');controls.className='tp-combined-controls';
 
  const town=elt('input');town.type='search';town.placeholder='Town or municipality (e.g. eThekwini)';town.setAttribute('aria-label','Town or municipality');
@@ -42,13 +46,16 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   const item=elt('label');item.append(input,elt('span',' '+label));layerFilters.append(item);
  }
  const count=elt('div');count.className='tp-discovery-counts';count.setAttribute('aria-live','polite');
- const attribution=elt('p','Business information © Google Maps; search results are shown only on this Google map and are not saved as a business directory.');attribution.className='tp-google-credit';
+ const attribution=elt('p',compact?'Business information: Google Maps. Live results are not saved or exported.':'Business information © Google Maps; search results are shown only on this Google map and are not saved as a business directory.');attribution.className='tp-google-credit';
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
  const status=elt('p','Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
  const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText=compact?'display:none;height:260px;min-height:230px;border-radius:12px;overflow:hidden;margin-top:12px':'display:none;height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
+ const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
+ const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
+ if(compact){town.value=String(initialTown||'Durban').slice(0,100);province.value='All provinces';category.value='all';mapPanel.append(mapNotice,canvas);}
  controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
+ if(compact){panel.append(title,note,controls,status,count,layerFilters,attribution,list,mapPanel);}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -69,16 +76,97 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const clearMarkers=()=>{for(const m of markers)m.setMap(null);markers=[];};
  const placesById=new Map();
  const boundsFor=(p)=>({lat:p.latitude,lng:p.longitude});
- function render(){
+
+ function publicWebsite(value){
+  try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}
+ }
+ function mapsLink(p){const a=elt('a','View on Google Maps');a.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name||'Business')+'&query_place_id='+encodeURIComponent(p.placeId);a.target='_blank';a.rel='noopener noreferrer';return a;}
+ function paintContact(host,p,entry){
+  host.replaceChildren();
+  host.append(elt('p','Email: not supplied by Google Maps'),elt('p','WhatsApp: not verified'));
+  if(entry?.state==='loading'){host.append(elt('p','Checking public phone and website…'));return;}
+  if(entry?.state==='error'){host.append(elt('p','Contact lookup unavailable. Open the original listing or visit the address.'));return;}
+  const phone=typeof entry?.phone==='string'?entry.phone.trim().slice(0,32):'';
+  const website=publicWebsite(entry?.websiteUrl);
+  host.append(elt('p',phone?'Public phone: '+phone:'Phone: not listed'),elt('p',website?'Business website: available':'Website: not listed'));
+  if(website){const a=elt('a','Open business website');a.href=website;a.target='_blank';a.rel='noopener noreferrer';host.append(a);}
+  host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
+ }
+ async function lookupContact(p,host,button){
+  const stamp=resultEpoch,activation=epoch;
+  const cached=contactCache.get(p.placeId);
+  if(cached){paintContact(host,p,cached);return;}
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(p.placeId)){paintContact(host,p,{state:'error'});return;}
+  contactCache.set(p.placeId,{state:'loading'});
+  paintContact(host,p,{state:'loading'});button.disabled=true;
+  try{
+   // Only a deliberate click requests additional (potentially billable) fields.
+   const url=new URL(CONTACT);url.searchParams.set('placeId',p.placeId);
+   const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000)});
+   if(!r.ok)throw Error('Contact lookup unavailable');
+   const d=await r.json();if(d.ok!==true)throw Error('Contact lookup unavailable');
+   if(stamp!==resultEpoch||activation!==epoch||!active)return;
+   const entry={state:'ready',phone:typeof d.phone==='string'?d.phone:'',websiteUrl:publicWebsite(d.websiteUrl)||''};
+   contactCache.set(p.placeId,entry);paintContact(host,p,entry);
+  }catch(e){
+   if(stamp!==resultEpoch||activation!==epoch||!active)return;
+   const entry={state:'error'};contactCache.set(p.placeId,entry);paintContact(host,p,entry);
+  }finally{if(stamp===resultEpoch&&activation===epoch)button.disabled=false;}
+ }
+ function renderCompactList(visible){
+  list.replaceChildren();
+  if(searchPending){list.append(elt('p','Searching for businesses. Results will appear here.'));return;}
+  if(searchError){list.append(elt('p','Search failed: '+searchError+' Check the town and try again.'));return;}
+  if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
+  if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
+  list.append(elt('p','Showing '+Math.min(pageSize,visible.length)+' of '+visible.length+' businesses. Contact information is optional; no business is excluded for missing contact details.'));
+  for(const p of visible.slice(0,pageSize)){
+   const item=elt('article');item.className='acq-live-result acq-business-card';
+   const identity=elt('div');identity.className='acq-live-identity';
+   identity.append(elt('strong',p.name||'Google-listed business'),elt('span',p.address||p.area||'Location on Google Maps'),elt('small',p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other local business'));
+   const state=elt('span','Manual enquiry available');state.className='acq-manual-chip';
+   const actions=elt('div');actions.className='acq-contact-actions';
+   const details=elt('div');details.className='acq-live-details';
+   const contact=elt('button','View contact details');contact.type='button';contact.className='button quiet';
+   const cached=contactCache.get(p.placeId);
+   if(cached)paintContact(details,p,cached);
+   else if(p.phone||p.websiteUrl)paintContact(details,p,{phone:p.phone,websiteUrl:p.websiteUrl});
+   else details.append(elt('p','Phone / website: not yet checked. Email not supplied by Google; WhatsApp not verified.'));
+   contact.onclick=()=>lookupContact(p,details,contact);
+   actions.append(contact,mapsLink(p));
+   const mapButton=elt('button','Show on map');mapButton.type='button';mapButton.className='button quiet';
+   mapButton.onclick=()=>{mapPanel.open=true;ensureCompactMap();if(map){map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const marker=placesById.get(p.placeId);marker?.popup.open({map,anchor:marker.marker});mapPanel.scrollIntoView({block:'nearest'});}};
+   actions.append(mapButton);item.append(identity,state,details,actions);list.append(item);
+  }
+  if(pageSize<visible.length){
+   const more=elt('button','Show more businesses');more.type='button';more.className='button quiet';
+   more.onclick=()=>{pageSize+=pageLength;renderCompactList(visible);};list.append(more);
+  }
+ }
+ function ensureCompactMap(){
+  if(!compact||!active||!google||!mapPanel.open)return;
+  try{
+   if(!map){
+    canvas.style.display='block';
+    map=new google.maps.Map(canvas,{center:center||{lat:-29.8587,lng:31.0218},zoom:11,mapTypeControl:false});
+    render(true);
+   }
+   mapNotice.textContent='';
+  }catch(e){map=null;canvas.style.display='none';mapNotice.textContent='Map could not load. Business information remains available above.';}
+ }
+ if(compact)mapPanel.addEventListener('toggle',()=>{if(mapPanel.open)ensureCompactMap();});
+
+ function render(markersOnly=false){
   const groups=matchGoogle(places,registered),listed=groups.potential;
   const breakdown=categoryCounts(listed),visible=listed.filter(p=>layers[p.shopCategory]?.checked!==false);
   const warnings=searchCompleted?' · Spaza/local '+breakdown.spaza+' · Other businesses '+breakdown.variety+' · Wholesalers '+breakdown.wholesale:'';
   if(!searchPending)onDiscovery?.({state:searchCompleted?'ready':'not-searched',total:places.length,potential:listed.length,matched:groups.linked.length,byCategory:breakdown});
   count.replaceChildren();
   count.append(elt('strong',compact?(searchCompleted?places.length+' Google listings in current local search':'Google Places search not completed'):registered.length+' Teyza mapped · '+(searchCompleted?groups.linked.length+' Google listings matched · '+listed.length+' potential leads'+warnings:'Google Places search not completed')));
+  if(compact){if(!markersOnly)renderCompactList(visible);}else{
   list.replaceChildren();
   const hint=elt('p',compact?(places.length?'Current Google listings. Email addresses are not available from Google; this list is not a saved contact directory. Registration status is not checked.':'Enter your town or township and search the area.'):(places.length?'Potential leads are Google-listed businesses without a matching published Teyza Place ID. Verify the shop and owner before contacting or assigning an agent.':'Search a town or the current Google map area to see Google-listed shops and businesses.'));
-  list.append(hint);
+  list.append(hint);}
   if(!map||!google)return;
   clearMarkers();placesById.clear();
   const records=[
@@ -92,16 +180,14 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    marker.addListener('click',()=>popup.open({map,anchor:marker}));markers.push(marker);
    if(p._googleOnly)placesById.set(p.placeId,{marker,popup});
   }
+  if(compact)return;
   for(const p of visible.slice(0,100)){
    const row=elt('button');row.type='button';row.className='tp-discovery-result';
    row.append(elt('strong',p.name||'Google-listed business'));
    row.append(elt('span',p.address||p.area||'Location on map'));
    row.append(elt('small','Google Places · '+(p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other business')+(compact?' · Email not supplied by Google':' · No matching published Teyza listing')));
    row.onclick=()=>{map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const m=placesById.get(p.placeId);m?.popup.open({map,anchor:m.marker});};
-   if(compact){
-    const item=elt('article');item.className='acq-live-result';const link=elt('a','View on Google Maps');link.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name||'Business')+'&query_place_id='+encodeURIComponent(p.placeId);link.target='_blank';link.rel='noopener noreferrer';
-    item.append(row,link);list.append(item);
-   }else list.append(row);
+   list.append(row);
   }
  }
  function loadMap(apiKey){return new Promise((resolve,reject)=>{
@@ -126,17 +212,20 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(typeof value!=='string'||!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value))
     throw Error('Google Maps browser configuration is invalid. The national Teyza map remains available.');
    const loadedGoogle=await loadMap(value);if(stamp!==epoch||!active)return;google=loadedGoogle;
-   canvas.style.display='block';
-   map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});
+   if(!compact){canvas.style.display='block';map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});}
    shown=true;search.disabled=false;
    status.textContent='Google map ready. Select a province or town and search locally for additional Google-listed businesses.';
    onReady?.();render();
    // One bounded, non-recurring discovery sample gives operators live evidence
    // rather than an empty map. No national background crawling is performed.
-   if(compact){town.value=String(initialTown||'Durban').slice(0,100);province.value='All provinces';category.value='spaza';}
-   else{town.value='Durban';province.value='KwaZulu-Natal';category.value='all';}
-   map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
-   if(autoSearch)void searchArea(true);else status.textContent='Enter a town or township, choose a category, and select Search this area.';
+   if(compact){
+    status.textContent='Enter a town or township, choose a category, and select Search this area.';
+    if(autoSearch)void searchArea();
+   }else{
+    town.value='Durban';province.value='KwaZulu-Natal';category.value='all';
+    map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
+    if(autoSearch)void searchArea(true);
+   }
   }catch(e){
    if(stamp!==epoch)return;active=false;start.disabled=false;
    if(!start.isConnected)controls.prepend(start);
@@ -147,19 +236,24 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  start.onclick=startMap;
  async function locate(){
   const q=town.value.trim(),p=province.value;
-  if(!q&&p==='All provinces')return;
+  if(!q&&p==='All provinces'){if(compact)throw Error('Enter a town or township.');return;}
   const address=[q,p==='All provinces'?'':p,'South Africa'].filter(Boolean).join(', ');
   const geocoder=new google.maps.Geocoder();
   const matches=await new Promise((resolve,reject)=>geocoder.geocode({address,componentRestrictions:{country:'ZA'}},(results,code)=>code==='OK'&&results?.length?resolve(results):reject(Error('Could not locate that South African town/municipality.'))));
-  if(!active||!map)return;const point=matches[0].geometry.location;map.setCenter(point);map.setZoom(q?11:7);
+  if(!active)return;const point=matches[0].geometry.location;
+  if(compact)return {lat:point.lat(),lng:point.lng()};
+  if(!map)return;map.setCenter(point);map.setZoom(q?11:7);
  }
  async function searchArea(skipGeocode=false){
-  if(!map||searchPending)return;
-  const stamp=epoch;searchPending=true;if(compact){places=[];searchCompleted=false;render();}
+  if((compact?!google:!map)||searchPending)return;
+  const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
   search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
-   if(!skipGeocode)await locate();if(stamp!==epoch||!active||!map)return;const c=map.getCenter(),lat=c.lat(),lon=c.lng();
+   const located=skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
+   const c=compact?located:map.getCenter(),lat=compact?c?.lat:c.lat(),lon=compact?c?.lng:c.lng();
+   if(!Number.isFinite(lat)||!Number.isFinite(lon))throw Error('Could not locate the selected town.');
+   if(compact){center={lat,lng:lon};if(map)map.setCenter(center);}
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
    if(!town.value.trim()&&province.value==='All provinces'&&Math.abs(lat-SA.lat)<0.02&&Math.abs(lon-SA.lng)<0.02)
     throw Error('Enter a town (such as Durban) or move the map to a populated area before searching.');
@@ -170,7 +264,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
     const url=new URL(ENDPOINT);
     url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
     url.searchParams.set('radius','20000');url.searchParams.set('category',kind);
-    const res=await fetch(url,{cache:'no-store'});
+    const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(55000)});
     if(!res.ok){let detail='';try{const body=await res.json();detail=String(body.error||'').slice(0,120);}catch(_){}
      throw Error(kind+' discovery HTTP '+res.status+(detail?' ('+detail+')':''));}
     const data=await res.json();
@@ -186,12 +280,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
     (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
-  }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;
+  }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;if(compact){searchError=e.message;render();}
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
   finally{if(stamp===epoch)search.disabled=false;}
  }
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  for(const input of Object.values(layers))input.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){epoch++;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
 }

@@ -1,4 +1,4 @@
-import {createOperations} from '/js/teyza-operations.js?v=20261126-area-search';
+import {createOperations} from '/js/teyza-operations.js?v=20261126-list-first';
 import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
 import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R331-network';
 import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,

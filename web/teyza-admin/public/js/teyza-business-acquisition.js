@@ -71,13 +71,14 @@ const hasRequested=(p,k)=>['email','whatsapp'].some(c=>!!p.outbound?.[c+'_'+k])|
 const communicationLabel=(p,k)=>wasAccepted(p,k)?'Accepted / recorded':hasRequested(p,k)?'Check send status':'Not recorded';
 // Search first-party, independently sourced prospect records only. Google data is
 // displayed in a separate, ephemeral map/list; it is not imported into these records.
-export function matchesAcquisitionContact(p,search='',channel='email',readyOnly=false){
- const contact=channel==='email'?p.email:p.phone;
- if(!contact||typeof contact!=='string'||!contact.trim())return false;
+export function matchesAcquisitionContact(p,search='',channel='all',readyOnly=false){
+ const hasEmail=typeof p.email==='string'&&!!p.email.trim(),hasPhone=typeof p.phone==='string'&&!!p.phone.trim();
+ if(channel==='email'&&!hasEmail||channel==='whatsapp'&&!hasPhone||channel==='manual'&&(hasEmail||hasPhone))return false;
  const terms=oneLine(search).toLowerCase().split(/\s+/).filter(Boolean);
  const hay=[p.name,p.city,p.area,p.address,title(p.category)].map(oneLine).join(' ').toLowerCase();
  if(!terms.every(t=>hay.includes(t)))return false;
- return !readyOnly||(!p.optedOut&&p.permissions?.[channel]?.granted===true);
+ const readyEmail=hasEmail&&p.permissions?.email?.granted===true,readyPhone=hasPhone&&p.permissions?.whatsapp?.granted===true;
+ return !readyOnly||(!p.optedOut&&(channel==='email'?readyEmail:channel==='whatsapp'?readyPhone:channel==='manual'?false:readyEmail||readyPhone));
 }
 export function communicationPermitted(p,channel,kind){
  const destination=channel==='email'?p.email:p.phone;
@@ -164,9 +165,9 @@ function renderAssets(message){
 }
 
 export function createAcquisitionAdmin({api,onError,message,openSupport}){
- let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='email',lookupReady=false,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
+ let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='all',lookupReady=false,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  function stopDiscovery(){discoveryEpoch++;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
- function clear(){stopDiscovery();serial++;active=false;records=[];next=null;selected=null;detail=null;query='';city='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='email';lookupReady=false;focusMessage=null;newArea='';}
+ function clear(){stopDiscovery();serial++;active=false;records=[];next=null;selected=null;detail=null;query='';city='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='all';lookupReady=false;focusMessage=null;newArea='';}
  async function refresh(){stopDiscovery();focusMessage=null;active=true;const stamp=++serial;const r=await api('ops_acquisition_list');if(!active||stamp!==serial)return;if(r.schema!==1||!Array.isArray(r.prospects))throw Error('Deploy the matching Business Acquisition backend first.');records=r.prospects;next=r.next||null;communications=r.communications||{};selected=null;detail=null;modal=null;}
  async function perform(root,b,fn){if(!active||busy||!root.isConnected)return;const stamp=serial;busy=true;if(b)b.disabled=true;
   try{await fn(stamp);if(active&&serial===stamp&&root.isConnected)render(root);}
@@ -229,11 +230,11 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    }
    return actions;
   }
-  const lookup=card('Find businesses in an area','Search our saved, independently sourced contacts. Email mode excludes records without an email address. Use Google discovery separately to view current local business listings.');
+  const lookup=card('Find businesses in an area','Search saved businesses by area, including businesses with no contact details. Choose Search Google Places for live local results, or add an independently confirmed business.');
   const lookupForm=el('div',undefined,'acq-lookup-filters');
   const areaInput=input(lookupForm,'Town, township or business name','lookupQuery','search',false,120);areaInput.value=lookupQuery;areaInput.placeholder='e.g. Durban, Umlazi, Soweto';
   const channelSelect=el('select');channelSelect.setAttribute('aria-label','Contact channel filter');
-  for(const [v,label] of [['email','Email address available'],['whatsapp','WhatsApp / phone recorded']]){const o=el('option',label);o.value=v;channelSelect.append(o);}
+  for(const [v,label] of [['all','All businesses (including missing contacts)'],['email','Email address available'],['whatsapp','Phone recorded (WhatsApp not necessarily verified)'],['manual','No email or phone recorded']]){const o=el('option',label);o.value=v;channelSelect.append(o);}
   channelSelect.value=lookupChannel;const channelLabel=el('label','Contact channel');channelLabel.append(channelSelect);lookupForm.append(channelLabel);
   const onlyReady=check(lookupForm,'Only show recorded channel permission','onlyReady');onlyReady.required=false;onlyReady.checked=lookupReady;
   const lookupResults=el('div',undefined,'acq-lookup-results'),lookupCount=el('p','', 'footnote');lookupCount.setAttribute('aria-live','polite');
@@ -242,32 +243,36 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    lookupResults.replaceChildren();lookupCount.textContent=matches.length+' matching contact'+(matches.length===1?'':'s')+' from '+records.length+' loaded records'+(next?' · more records available':'')+'.';
    for(const p of matches){
     const row=el('article',undefined,'acq-contact-row'),identity=el('div',undefined,'acq-contact-identity');
-    identity.append(el('strong',p.name),el('span',[p.area,p.city,title(p.category)].filter(Boolean).join(' · ')),el('span',lookupChannel==='email'?p.email:p.phone));
-    const permission=el('span',p.optedOut?'Do not contact':p.permissions?.[lookupChannel]?.granted?'Permission recorded':'Permission required','acq-status');permission.dataset.state=p.optedOut?'blocked':p.permissions?.[lookupChannel]?.granted?'interested':'identified';
+    identity.append(el('strong',p.name),el('span',[p.area,p.city,title(p.category)].filter(Boolean).join(' · ')),el('span','Email: '+(p.email||'Not recorded')),el('span','Phone: '+(p.phone||'Not recorded')));
+    const allowed=matchesAcquisitionContact(p,'',lookupChannel,true);
+    const permission=el('span',p.optedOut?'Do not contact':allowed?'Permission recorded':!p.email&&!p.phone?'Manual enquiry needed':'Permission required','acq-status');permission.dataset.state=p.optedOut?'blocked':allowed?'interested':'identified';
     identity.append(permission);row.append(identity,contactActions(p));lookupResults.append(row);
    }
-   if(!matches.length)lookupResults.append(el('p','No matching saved contacts. Google Places does not supply email addresses. Find businesses on the map or add an independently confirmed contact.','acq-empty'));
+   if(!matches.length)lookupResults.append(el('p','No matching saved businesses. Search Google Places to see live business listings, including those without contact details.','acq-empty'));
   }
   areaInput.oninput=()=>{lookupQuery=areaInput.value;showContacts();};
   channelSelect.onchange=()=>{lookupChannel=channelSelect.value;showContacts();};
   onlyReady.onchange=()=>{lookupReady=onlyReady.checked;showContacts();};
   const lookupActions=el('div',undefined,'acq-contact-actions');
   const googleButton=button('Search Google Places',()=>openDiscovery());
+  googleButton.title='Search the entered town across all three business categories';
+  areaInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void openDiscovery();}});
   googleButton.classList.add('acq-send-email');
   const manualAdd=button('Add confirmed business',()=>{newArea=oneLine(lookupQuery);if(newArea.length>100)newArea='';setManualArea();open('add');});manualAdd.classList.add('acq-send-wa');
   lookupActions.append(googleButton,manualAdd);
   if(next)lookupActions.append(button('Load more saved contacts',()=>perform(root,null,async stamp=>{const r=await api('ops_acquisition_list',{after:next});if(stamp!==serial)return;records=[...new Map([...records,...r.prospects].map(p=>[p.id,p])).values()];next=r.next||null;communications=r.communications||communications;})));
   lookup.append(lookupForm,lookupActions,lookupCount,lookupResults);panels.lookup=lookup;showContacts();
-  const discoverPanel=card('Discover businesses with Google Places','Live, local business discovery. Google does not return email addresses. Select a result to inspect it on Google Maps; its data is not copied into our CRM. Verify registration separately and obtain details and permission from the owner or another permitted source.');
+  const discoverPanel=card('Discover businesses with Google Places','Live business list first; the map is optional. View a business’s available public phone and website on request. Google does not supply emails or verify WhatsApp permission. All listings stay visible, even without contact details. Record independently confirmed information only.');
   const discoveryHost=el('div'),back=button('Back to saved contacts',()=>open('lookup'));
-  discoverPanel.append(back,discoveryHost);panels.discover=discoverPanel;
+  const confirmedAdd=button('Add confirmed business',()=>{const entered=discoveryHost.querySelector('[aria-label="Town or municipality"]')?.value;newArea=oneLine(entered||lookupQuery).slice(0,100);setManualArea();open('add');});
+  const discoveryActions=el('div',undefined,'acq-contact-actions');discoveryActions.append(back,confirmedAdd);discoverPanel.append(discoveryActions,discoveryHost);panels.discover=discoverPanel;
   async function openDiscovery(){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261126-area-search');
+    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261126-list-first');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
-    liveDiscovery=createCombinedCoverage({autoSearch:false,compact:true,initialTown:typed||'Durban',report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
+    liveDiscovery=createCombinedCoverage({autoSearch:true,compact:true,initialTown:typed||'Durban',report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
     await liveDiscovery.activate();
    }catch(e){if(stamp===discoveryEpoch&&modal==='discover')discoveryHost.replaceChildren(el('p','Google Places could not load. Use the national coverage map or search saved contacts.','footnote'));}
