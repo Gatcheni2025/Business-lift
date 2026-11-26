@@ -79,3 +79,12 @@ test('Admin and server use the same approved message text',async()=>{
  const css=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/assets/teyza-app-admin.css'),'utf8');
  assert(css.includes('.acq-dialog::backdrop'));assert(css.includes('.acq-email'));assert(css.includes('.login-scope svg'));
 });
+
+test('Isolated provider worker helper does not use mobile dotenv or broad deploy',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const s=fs.readFileSync(path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs'),'utf8');
+ assert(s.includes('teyza-business-mail'));assert(s.includes('teyza-business-whatsapp'));
+ assert(s.includes("functions:'+spec.codebase+':'+spec.fn"));
+ assert(s.includes('enabled===true'));assert(s.includes('TEYZA_BUSINESS_MAIL_ZOHO'));
+ assert(s.includes('collect(spec.entry)'));assert(!s.includes("firebase deploy --only functions"));
+});
