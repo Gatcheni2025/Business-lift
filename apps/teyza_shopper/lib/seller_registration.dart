@@ -41,8 +41,8 @@ class _RegistrationState extends State<SellerRegistrationPage> with WidgetsBindi
   bool? listedOnGoogle;bool ownerAuthority=false,ownershipEvidence=false,contactEvidence=false;
   String get categoryExplanation=>switch(category){
     'wholesale'=>'I supply spaza shops: publish bulk stock, pack prices and delivery or collection terms after approval.',
-    'retail'=>'I offer other local businesses or services, such as a salon, upholsterer, furniture shop or plumbing service.',
-    _=>'I operate a spaza shop: sell to nearby shoppers and source wholesale stock from approved suppliers.',
+    'retail'=>'I manufacture products or provide business and service enquiries through my public profile.',
+    _=>'I sell physical products as a shop, food outlet or product seller. Existing selling and approval rules apply.',
   };
   @override void initState(){super.initState();
     if(teyzaTypeFor(businessType)?.accountCategory!=category){
@@ -268,7 +268,7 @@ class _RegistrationState extends State<SellerRegistrationPage> with WidgetsBindi
         const Text('Choose your Teyza account type',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800)),const SizedBox(height:16),
         DropdownButtonFormField<String>(initialValue:category,isExpanded:true,decoration:InputDecoration(labelText:'I am signing up as',filled:true,fillColor:Colors.white,
           border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:const BorderSide(color:Color(0xFFE0E7DD)))),
-          items:const [DropdownMenuItem(value:'spaza',child:Text('Spaza Shop Owner',maxLines:1,overflow:TextOverflow.ellipsis)),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops',maxLines:1,overflow:TextOverflow.ellipsis)),DropdownMenuItem(value:'retail',child:Text('Business Owner — services',maxLines:1,overflow:TextOverflow.ellipsis))],
+          items:const [DropdownMenuItem(value:'spaza',child:Text('Shop / product seller',maxLines:1,overflow:TextOverflow.ellipsis)),DropdownMenuItem(value:'wholesale',child:Text('Wholesaler — supplying Spaza Shops',maxLines:1,overflow:TextOverflow.ellipsis)),DropdownMenuItem(value:'retail',child:Text('Manufacturer / service business',maxLines:1,overflow:TextOverflow.ellipsis))],
           onChanged:busy?null:(v){setState((){
             category=v??'spaza';
             businessType=teyzaDefaultBusinessType(category);
@@ -282,7 +282,7 @@ class _RegistrationState extends State<SellerRegistrationPage> with WidgetsBindi
             border:OutlineInputBorder(),filled:true,fillColor:Colors.white),
           items:[
             for(final type in teyzaBusinessTypes.where((type)=>type.accountCategory==category))
-              DropdownMenuItem(value:type.id,child:Text(type.label,overflow:TextOverflow.ellipsis))
+              DropdownMenuItem(value:type.id,child:Text(teyzaDiscoveryCategoryLabel(type.discoveryGroup)+' · '+type.label,overflow:TextOverflow.ellipsis))
           ],
           onChanged:busy?null:(value){setState((){
             businessType=value??teyzaDefaultBusinessType(category);

@@ -22,10 +22,14 @@ class DiscoverCataloguePage extends StatefulWidget {
   final VoidCallback? onChooseArea;
   final Future<void> Function()? onRefreshBusinesses;
   final bool loadingBusinesses;
+  final String initialSection, initialGroup, initialSubcategory;
+  final void Function(String, String, String)? onDiscoveryChanged;
   const DiscoverCataloguePage({
     super.key, this.loader, required this.onEnquire,
     this.businesses, this.areaLabel, this.onChooseArea,
     this.onRefreshBusinesses, this.loadingBusinesses = false,
+    this.initialSection = 'shops', this.initialGroup = 'all',
+    this.initialSubcategory = 'all', this.onDiscoveryChanged,
   });
   @override
   State<DiscoverCataloguePage> createState() => DiscoverCataloguePageState();
@@ -37,24 +41,45 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
   List<CatalogueProduct> products = [];
   String? selectedCategory, error;
   bool loading = true;
-  late bool browsingBusinesses;
-  String businessCategory = 'all';
+  late String section, businessCategory, businessSubcategory;
+  bool get browsingDirectory => section != 'products';
+  bool get browsingShops => section == 'shops';
 
   @override
   void initState() {
     super.initState();
-    browsingBusinesses = widget.businesses != null;
+    section = widget.businesses == null ? 'products' : widget.initialSection;
+    businessCategory = section == 'shops' ? 'spaza' : widget.initialGroup;
+    businessSubcategory = widget.initialSubcategory;
     load();
   }
 
-  void switchView(bool businesses) {
-    if (browsingBusinesses == businesses) return;
+  void reportDiscovery() =>
+    widget.onDiscoveryChanged?.call(section, businessCategory, businessSubcategory);
+
+  void switchView(String next) {
+    if (section == next) return;
     setState(() {
-      browsingBusinesses = businesses;
+      section = next;
       selectedCategory = null;
-      businessCategory = 'all';
+      businessCategory = next == 'shops' ? 'spaza' : 'all';
+      businessSubcategory = 'all';
       search.clear();
     });
+    reportDiscovery();
+  }
+
+  void selectBusinessGroup(String value) {
+    setState(() {
+      businessCategory = value;
+      businessSubcategory = 'all';
+    });
+    reportDiscovery();
+  }
+
+  void selectBusinessSubcategory(String value) {
+    setState(() => businessSubcategory = value);
+    reportDiscovery();
   }
   @override
   void dispose() { search.dispose(); super.dispose(); }
@@ -72,9 +97,20 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
   }
 
   bool backToCategories() {
-    if (browsingBusinesses) {
-      if (businessCategory == 'all' && search.text.isEmpty) return false;
-      setState(() { businessCategory = 'all'; search.clear(); });
+    if (browsingDirectory) {
+      if (businessSubcategory == 'all' &&
+          (browsingShops || businessCategory == 'all') &&
+          search.text.isEmpty) return false;
+      setState(() {
+        if (search.text.isNotEmpty) {
+          search.clear();
+        } else if (businessSubcategory != 'all') {
+          businessSubcategory = 'all';
+        } else if (!browsingShops) {
+          businessCategory = 'all';
+        }
+      });
+      reportDiscovery();
     } else {
       if (selectedCategory == null && search.text.isEmpty) return false;
       setState(() { selectedCategory = null; search.clear(); });
@@ -104,24 +140,39 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
             const SizedBox(height: 13),
             Wrap(spacing: 9, runSpacing: 7, children: [
               ChoiceChip(
-                key: const ValueKey('discover-businesses-tab'),
-                label: const Text('Businesses & services'),
-                selected: browsingBusinesses,
-                onSelected: (_) => switchView(true)),
+                key: const ValueKey('discover-shops-tab'),
+                label: const Text('Shops'),
+                selected: section != 'businesses',
+                onSelected: (_) => switchView('shops')),
               ChoiceChip(
-                key: const ValueKey('discover-products-tab'),
-                label: const Text('Products'),
-                selected: !browsingBusinesses,
-                onSelected: (_) => switchView(false)),
+                key: const ValueKey('discover-businesses-tab'),
+                label: const Text('Businesses'),
+                selected: section == 'businesses',
+                onSelected: (_) => switchView('businesses')),
             ]),
           ],
-          const SizedBox(height: 17),
+          if (widget.businesses != null && section != 'businesses') ...[
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, children: [
+              TextButton(onPressed: () => switchView('shops'),
+                key: const ValueKey('discover-nearby-shops-tab'),
+                child: Text('Nearby shops', style: TextStyle(
+                  color: browsingShops ? Colors.white : const Color(0xFFCED9E0),
+                  fontWeight: browsingShops ? FontWeight.w800 : FontWeight.w400))),
+              TextButton(onPressed: () => switchView('products'),
+                key: const ValueKey('discover-products-tab'),
+                child: Text('Products', style: TextStyle(
+                  color: section == 'products' ? Colors.white : const Color(0xFFCED9E0),
+                  fontWeight: section == 'products' ? FontWeight.w800 : FontWeight.w400))),
+            ]),
+          ],
+          const SizedBox(height: 14),
           TextField(key: const ValueKey('discover-search'), controller: search,
             onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: browsingBusinesses
-                ? 'Search businesses and services'
+              hintText: browsingDirectory
+                ? (browsingShops ? 'Search nearby shops' : 'Search businesses, products and services')
                 : 'Search products and brands',
               prefixIcon: const Icon(Icons.search, color: ink),
               suffixIcon: query.isEmpty ? null : IconButton(tooltip: 'Clear search',
@@ -130,17 +181,19 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(17),
                 borderSide: BorderSide.none))),
         ])),
-      Expanded(child: browsingBusinesses
+      Expanded(child: browsingDirectory
         ? TeyzaDiscoverBusinesses(
             businesses: widget.businesses ?? const <DiscoverBusiness>[],
             areaLabel: widget.areaLabel,
             query: query,
             category: businessCategory,
+            subcategory: businessSubcategory,
+            shopsOnly: browsingShops,
             loading: widget.loadingBusinesses,
             onChooseArea: widget.onChooseArea,
             onRefresh: widget.onRefreshBusinesses,
-            onCategorySelected: (value) =>
-                setState(() => businessCategory = value))
+            onCategorySelected: selectBusinessGroup,
+            onSubcategorySelected: selectBusinessSubcategory)
         : loading
         ? const Center(child: CircularProgressIndicator())
         : error != null
