@@ -9,7 +9,7 @@ const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=["/admin.html","/admin-review.html","/admin-sellers.html","/admin-login.html","/admin-dashboard.html","/admin/index.html","/admin-payments.html","/admin-support.html","/admin-users.html"];
-const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/for-shop-owners.html'];
+const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/for-shop-owners.html'];
 const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
 const workRoot=path.resolve(__dirname,'../../web/app-first/public');
 const backupPath=path.resolve(__dirname,'../../hosting-backup-business-acquisition.json');
@@ -41,7 +41,7 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertR90Ready(health){
- if(health?.ok!==true||health.adminBusinessAcquisition!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+ if(health?.ok!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
   throw Error('Matching business acquisition and R90 backend is not active. Hosting unchanged.');
  }
 }

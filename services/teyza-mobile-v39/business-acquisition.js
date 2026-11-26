@@ -1,7 +1,7 @@
 'use strict';
-const crypto=require('node:crypto'),D=require('./domain');
+const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
 const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link']);
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send']);
 const cities=['Durban','Johannesburg'];
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
 const sources=['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted'];
@@ -33,6 +33,7 @@ const nextDate=(v,now)=>{
 };
 function createAcquisition({db,clock=Date.now}){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
+ const communications=createCommunication({db,clock});
  const eventsPath=id=>collection+'/'+id+'/events';
  function event(tx,id,uid,type,details){
   tx.set(doc(eventsPath(id)+'/'+crypto.randomUUID()),{actorUid:uid,type,...details,createdAt:clock()});
@@ -48,17 +49,19 @@ function createAcquisition({db,clock=Date.now}){
   if(p.sellerUid){
    const a=await read('teyzaSellerAccounts/'+p.sellerUid);
    if(a?.uid===p.sellerUid&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)){
-    const s=await read('teyzaPublicShops/'+p.sellerUid);
+    const [s,billing]=await Promise.all([read('teyzaPublicShops/'+p.sellerUid),read('teyzaBilling/'+p.sellerUid)]);
     seller={uid:p.sellerUid,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
      listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true,
-     welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email)};
+     welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
+     welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
+     membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock())};
    }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
   return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
    lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
-   emailHistory:p.emailHistory||{},help:p.help||null};
+   emailHistory:p.emailHistory||{},outbound:p.outbound||{},help:p.help||null};
  }
  async function execute(auth,action,data){
   const uid=D.id(auth.uid);
@@ -66,7 +69,7 @@ function createAcquisition({db,clock=Date.now}){
    let q=db.collection(collection).orderBy('__name__').limit(31);
    if(data.after)q=q.startAfter(D.id(data.after));
    const result=await q.get(),rows=result.docs.slice(0,30);
-   return {schema:1,prospects:await Promise.all(rows.map(s=>view(s.id,s.data()))),next:result.docs.length>30?rows[29].id:null};
+   return {schema:1,prospects:await Promise.all(rows.map(s=>view(s.id,s.data()))),next:result.docs.length>30?rows[29].id:null,communications:await communications.caps()};
   }
   if(action==='ops_acquisition_create'){
    if(data.authorisedSource!==true)D.fail(422,'Confirm that Teyza may retain these business contact details.');
@@ -74,17 +77,24 @@ function createAcquisition({db,clock=Date.now}){
    const category=choose(data.category,categories,'business category'),source=choose(data.source,sources,'source');
    const sourceReference=clean(data.sourceReference,'source and permission to retain details',240);
    const contact={phone:phone(data.phone),email:email(data.email)};
+   const initialChannels=data.initialConsentChannels??[];
+   if(!Array.isArray(initialChannels)||initialChannels.length>2||new Set(initialChannels).size!==initialChannels.length||initialChannels.some(c=>!['email','whatsapp'].includes(c)||!contactValue(contact,c)))D.fail(422,'Select only channels with recorded contact details.');
+   const initialNote=initialChannels.length?clean(data.initialConsentNote,'actual owner opt-in evidence',500):'';
+   if(initialChannels.length&&data.initialConsentConfirmed!==true)D.fail(422,'Confirm actual owner opt-in for each selected channel.');
    const id=hash([city,area,address,name].map(norm).join('|')),ref=doc(collection+'/'+id);
    const saved=await db.runTransaction(async tx=>{
     const old=await tx.get(ref);
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
-    const p={name,city,area,address,category,source,sourceReference,...contact,stage:'identified',permissions:{},optedOut:false,nextFollowUpAt:null,
+    if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
+    const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
+    const p={name,city,area,address,category,source,sourceReference,...contact,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
-    tx.set(ref,p);event(tx,id,uid,'created',{});return p;
+    tx.set(ref,p);event(tx,id,uid,'created',{});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }
   const id=D.id(data.id),ref=doc(collection+'/'+id);
+  if(action==='ops_acquisition_send')return communications.enqueue(uid,id,data);
   if(action==='ops_acquisition_detail'){
    const p=await read(collection+'/'+id);if(!p)D.fail(404,'Business prospect not found.');
    const result=await db.collection(eventsPath(id)).orderBy('createdAt','desc').limit(26).get();
@@ -127,7 +137,7 @@ function createAcquisition({db,clock=Date.now}){
      const sentAt=data.sentAt;
      if(!Number.isSafeInteger(sentAt)||sentAt>stamp||sentAt<stamp-366*86400000)D.fail(422,'Enter the actual sent date and time, not a future date.');
      const reference=clean(data.reference,'Zoho Sent reference',180);
-     if(p.emailHistory?.[kind])D.fail(409,'This email type is already recorded. Check the existing history instead of sending again.');
+     if(p.outbound?.['email_'+kind]||p.emailHistory?.[kind])D.fail(409,'This email type is already recorded. Check the existing history instead of sending again.');
      if(kind==='invitation'){
       if(blocked||p.permissions?.email?.granted!==true)D.fail(409,'Invitation requires recorded email marketing consent and no opt-out.');
      }else{

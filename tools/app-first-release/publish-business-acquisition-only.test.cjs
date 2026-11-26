@@ -2,12 +2,12 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {paths,files,verify,assertR90Ready}=require('./publish-business-acquisition-only.cjs');
 test('Business Acquisition scoped publisher preserves all unrelated site assets and requires backend',()=>{
- assert.equal(paths.length,13);assert(paths.includes('/js/teyza-business-acquisition.js'));assert(paths.includes('/for-shop-owners.html'));assert(!paths.includes('/seller-subscriptions.html'));
+ assert.equal(paths.length,15);assert(paths.includes('/assets/teyza-app-admin.css'));assert(paths.includes('/assets/teyza-map-first.css'));assert(paths.includes('/js/teyza-business-acquisition.js'));assert(paths.includes('/for-shop-owners.html'));assert(!paths.includes('/seller-subscriptions.html'));
  assert(!paths.includes('/agents.html'));assert(!paths.includes('/work.html'));assert(!paths.includes('/pay/index.html'));
  const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
  assert.doesNotThrow(()=>verify(before,after,items));assert.throws(()=>verify(before,new Map([...after,['/agents.html','changed']]),items));
- const health={ok:true,adminBusinessAcquisition:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));
 });
 test('Business invitation destination shows the actual app and direct store links before optional detail',()=>{const fs=require('node:fs'),path=require('node:path');const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');const main=html.slice(html.indexOf('<main id="main">'),html.indexOf('</main>'));const hero=main.slice(0,main.indexOf('data-teyza-demo'));for(const text of ['Put your business','/assets/app/home.webp','/assets/app/nearby-shops.webp','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733','Get help getting started'])assert(hero.includes(text),text);assert(main.includes('example shop, items and request are illustrative'));assert(main.includes('tel:+27315661165'));assert(main.includes('Registration and verification are free'));assert(main.includes('/seller-subscriptions.html'));assert(html.includes('/assets/app-demo.js'));});
@@ -65,4 +65,26 @@ test('Approved asset registry uses existing website artwork, official store dest
  assert(isPublishedVideo(response('video/mp4','100')));
  assert(!isPublishedVideo(response('text/html','100')));assert(!isPublishedVideo(response('video/mp4','0')));
  assert(!isPublishedVideo(response('video/mp4','100',false)));assert(!isPublishedVideo(response('video/mp4','100',true,true)));
+});
+
+test('Admin and server use the same approved message text',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const ui=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const server=require('../../services/teyza-mobile-v39/business-message-templates');
+ for(const category of ['spaza','retail','wholesale','food','salon','service','manufacturer','other']){
+  const p={name:'Example Shop',city:'Durban',area:'Umlazi',category};
+  for(const kind of ['invitation','welcome','membership'])assert.deepEqual(ui.emailText(kind,p),server.emailText(kind,p));
+ }
+ const css=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/assets/teyza-app-admin.css'),'utf8');
+ assert(css.includes('.acq-dialog::backdrop'));assert(css.includes('.acq-email'));assert(css.includes('.login-scope svg'));
+});
+
+test('Isolated provider worker helper does not use mobile dotenv or broad deploy',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const s=fs.readFileSync(path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs'),'utf8');
+ assert(s.includes('teyza-business-mail'));assert(s.includes('teyza-business-whatsapp'));
+ assert(s.includes("functions:'+spec.codebase+':'+spec.fn"));
+ assert(s.includes('enabled===true'));assert(s.includes('TEYZA_BUSINESS_MAIL_ZOHO'));
+ assert(s.includes('collect(spec.entry)'));assert(!s.includes("firebase deploy --only functions"));
 });
