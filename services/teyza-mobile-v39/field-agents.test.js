@@ -306,3 +306,33 @@ test('Admin reward eligibility is read-only, fresh-admin restricted and shares t
  assert.equal(f.db.records.get('teyzaAgentRewards/seller1').paidAt,undefined);
  await rejects(f.call('agent_admin_reward_approve',request,admin),409);
 });
+
+test('Communications is private to recent verified admins; reports actual ledger and safely rechecks blocked emails only',async()=>{
+ const f=setup(),agentPath='teyzaFieldAgents/',jobPath='teyzaAgentWelcomeMail/';
+ f.db.records.set('teyzaAgentMailSettings/control',{enabled:true,startAt:start-1000,maxPerRun:1});
+ for(const [uid,status] of [['new','pending'],['sent','approved'],['blocked','pending'],['uncertain','pending'],['old','pending']]){
+  f.db.records.set(agentPath+uid,{uid,name:'Synthetic '+uid,area:'Durban',province:'KwaZulu-Natal',status,createdAt:uid==='old'?start-2000:start,evidenceId:'private-evidence',email:'secret@example.test',objectPath:'private-documents'});
+ }
+ f.db.records.set(jobPath+'sent',{uid:'sent',status:'sent',reason:'provider_accepted',attempts:1,updatedAt:start,sentAt:start,providerMessageId:'private-provider-id'});
+ f.db.records.set(jobPath+'blocked',{uid:'blocked',status:'blocked_email',reason:'verified_email_required',updatedAt:start,nextAttemptAt:start+43200000});
+ f.db.records.set(jobPath+'uncertain',{uid:'uncertain',status:'review_required',reason:'TEYZA_MAIL_SEND_UNCERTAIN',updatedAt:start,nextAttemptAt:253402300799999});
+ await rejects(f.call('agent_admin_communications',{},agent),403);
+ await rejects(f.call('agent_admin_communications',{}, {...admin,auth_time:start/1000-301}),401);
+ const result=await f.call('agent_admin_communications',{},admin);
+ assert.equal(result.settings.state,'enabled');assert.equal(result.counts.sent,1);assert.equal(result.counts.before_cutoff,1);
+ assert.equal(result.rows.find(r=>r.uid==='new').state,'not_queued');
+ assert.equal(result.rows.find(r=>r.uid==='blocked').canRecheck,true);
+ assert(!/private-evidence|private-documents|secret@example.test|private-provider-id/.test(JSON.stringify(result)));
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start,confirmed:true},agent),403);
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'sent',updatedAt:start,confirmed:true},admin),409);
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'uncertain',updatedAt:start,confirmed:true},admin),409);
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start,confirmed:false},admin),422);
+ f.tick(10);
+ const r=await f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start,confirmed:true},admin);
+ assert.equal(r.scheduled,true);assert.equal(f.db.records.get(jobPath+'blocked').status,'blocked_email');
+ assert.equal(f.db.records.get(jobPath+'blocked').nextAttemptAt,start+10);
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start,confirmed:true},admin),409);
+ f.db.records.set('teyzaAgentMailSettings/control',{['\tenabled']:true,startAt:start-1000,maxPerRun:1});
+ assert.equal((await f.call('agent_admin_communications',{},admin)).settings.state,'configuration_required');
+ await rejects(f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start+10,confirmed:true},admin),409);
+});

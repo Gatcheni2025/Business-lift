@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_communications','agent_admin_communications_recheck','agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 const REWARD_CENTS=9000;
 const timestampMs=value=>value?.toMillis?.()??(value instanceof Date?value.getTime():typeof value==='number'?value:NaN);
@@ -37,6 +37,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  async function agent(uid){const p=await read('teyzaFieldAgents/'+uid);if(!p||p.uid!==uid||p.status!=='approved')D.fail(403,'An approved Teyza agent account is required.');return p;}
  function own(v,uid){if(!v||v.agentUid!==uid)D.fail(404,'Visit not found.');return v;}
  function audit(tx,uid,action,target,details={}){tx.set(doc('teyzaAgentAudit/'+crypto.randomUUID()),{actorUid:uid,action,target,details,createdAt:clock()});}
+ const communications=require('./agent-communications').createAgentCommunications({db,clock,audit});
  async function status(id,v){
   if(!v.sellerUid)return {sellerApproval:'awaiting_owner',collectionActive:false};
   const uid=v.sellerUid;
@@ -81,6 +82,8 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  async function execute(auth,action,data={}){
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);
   await rate(uid,'field-agent',80,60000);
+  if(action==='agent_admin_communications')return communications.list(data);
+  if(action==='agent_admin_communications_recheck')return communications.recheck(uid,data);
   // Retire the old write route for cached clients; retain historical records.
   if(action==='agent_admin_commission_paid')D.fail(410,'Agent commission tracking has been retired.');
   if(action==='agent_rewards'){

@@ -124,3 +124,5 @@ test('mailbox transport failures are categorized without exposing exception text
  };
  await assert.rejects(configureZoho({region:'us',clientId:'id',clientSecret:'secret',code:'grant',pdf:PDF,fetchImpl:mock}),e=>e.code==='TEYZA_MAIL_ACCOUNTS_FAILED_DNS'&&!e.message.includes('private'));
 });
+
+test('welcome email explains owner value before the R90 incentive',()=>{const h=welcomeHtml(p);for(const s of ['Registration and verification are free','Spaza shops:','Retailers and food outlets:','Salons and service providers:','Manufacturers and wholesalers:','current membership terms','Never promise sales','https://teyza.co.za/for-shop-owners.html'])assert(h.includes(s),s);assert(h.indexOf('What you are introducing to businesses')<h.indexOf('Explore your potential rewards'));});
