@@ -16,7 +16,7 @@ export function createFieldAdmin({api,onError,message}){
  function filteredProfiles(){const t=filter.toLocaleLowerCase();return profiles.filter(p=>(province==='all'||p.province===province)&&[p.name,p.phone,p.email,p.area,p.province].join(' ').toLocaleLowerCase().includes(t));}
  function top(root){const heading=el('div',undefined,'field-admin-intro');heading.append(el('div',undefined,'eyebrow'));heading.firstChild.textContent='HR & FIELD OPERATIONS';heading.append(el('h3','People, applications and neighbourhood coverage'),el('p','Review applicants, manage field areas, track shop signups and approve completed visits. Agent recruitment is separate from seller verification.'));const login=el('a','Open agent sign-in ↗','button quiet');login.href='/work.html';login.target='_blank';login.rel='noopener noreferrer';heading.append(login);root.append(heading);
  const metrics=el('div',undefined,'field-admin-metrics');for(const [name,n] of [['Applications loaded',profiles.length],['Awaiting approval',profiles.filter(p=>p.status==='pending').length],['Approved agents',profiles.filter(p=>p.status==='approved').length],['Visits loaded',visits.length],['Owner-linked visits',visits.filter(v=>v.ownerConfirmed).length]]){const tile=el('div',undefined,'field-stat');tile.append(el('small',name),el('strong',n));metrics.append(tile);}root.append(metrics);
- const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews'],['rewards','R90 rewards']]){const b=btn(title,()=>{forget();rewardVisit=null;tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
+ const tabs=el('nav',undefined,'field-admin-tabs');tabs.setAttribute('aria-label','HR and field management');for(const [key,title] of [['applications','Applications'],['agents','Team directory'],['areas','Area management'],['signups','Shop signups'],['visits','Work reviews'],['rewards','R90 rewards'],['communications','Communications'],['recruitment','Recruitment coverage']]){const b=btn(title,()=>{forget();rewardVisit=null;tab=key;render(root);});b.classList.toggle('active',tab===key);b.setAttribute('aria-current',tab===key?'page':'false');tabs.append(b);}root.append(tabs);
  }
  function queryBar(root){const bar=el('div',undefined,'field-query');const search=el('input');search.type='search';search.placeholder='Search person, phone, town or province';search.setAttribute('aria-label','Filter field-team records');search.value=filter;search.oninput=()=>{filter=search.value;render(root);const field=root.querySelector('.field-query input');field?.focus();field?.setSelectionRange(filter.length,filter.length);};const selection=el('select');selection.setAttribute('aria-label','Filter by province');for(const [value,name] of [['all','All provinces'],...provinces.map(p=>[p,p])]){const option=el('option',name);option.value=value;selection.append(option);}selection.value=province;selection.onchange=()=>{province=selection.value;render(root);};bar.append(search,selection);root.append(bar);}
  async function uploadFile(file,kind){
@@ -167,7 +167,128 @@ export function createFieldAdmin({api,onError,message}){
   }));
   panel.append(check,result);root.append(panel);
  }
- function render(root){active=true;forgetIfChanged();root.replaceChildren();top(root);if(tab==='applications'||tab==='agents')applications(root);else if(tab==='areas')areas(root);else if(tab==='signups')signups(root);else if(tab==='rewards')rewardView(root);else visitsView(root);ensureDialog();}
+
+ function communicationsView(root){
+  const panel=card('Agent communications','Welcome email delivery from the real Zoho outbox. Sent means Zoho accepted the message; it does not prove inbox delivery. Counts cover the loaded page, not the whole country.');
+  const controls=el('div',undefined,'field-query'),filter=el('select'),summary=el('p','Loading email records…','footnote'),rows=el('div'),footer=el('div');
+  const stateNames={sent:'Sent to Zoho',queued:'Queued',preparing:'Preparing',sending:'Sending',retry:'Retry scheduled',blocked_email:'Verified email required',review_required:'Manual review required',cancelled:'Cancelled',before_cutoff:'Before rollout cutoff',not_eligible:'Not eligible',not_queued:'Awaiting scan',automation_paused:'Automation paused',configuration_required:'Configuration required'};
+  const stateText=s=>stateNames[s]||'Status unavailable';
+  const opt=el('option','All email statuses');opt.value='all';filter.append(opt);
+  for(const [key,name] of Object.entries(stateNames)){const o=el('option',name);o.value=key;filter.append(o);}
+  filter.setAttribute('aria-label','Filter welcome email status');
+  let result=null,cursor=null,requesting=false;
+  const stamp=v=>Number.isSafeInteger(v)?new Date(v).toLocaleString('en-ZA',{timeZone:'Africa/Johannesburg'}):'Not recorded';
+  function showRows(){
+   if(!panel.isConnected||!result)return;
+   summary.textContent='Automation: '+(result.settings.state==='enabled'?'enabled':result.settings.state==='paused'?'paused':'configuration required')+' · Rollout from '+stamp(result.settings.startAt)+' SAST · '+result.rows.length+' applicants on this page';
+   const metrics=el('div',undefined,'field-admin-metrics');
+   for(const [key,name] of [['sent','Zoho accepted'],['blocked_email','Email verification needed'],['review_required','Manual review'],['before_cutoff','Before cutoff']]){
+    const m=el('div',undefined,'field-stat');m.append(el('small',name),el('strong',result.counts[key]||0));metrics.append(m);
+   }
+   rows.replaceChildren(metrics);
+   const selected=result.rows.filter(r=>filter.value==='all'||r.state===filter.value);
+   if(!selected.length)rows.append(el('p','No matching email records on this page.','footnote'));
+   for(const r of selected){
+    const row=el('div',undefined,'field-visit');row.append(el('strong',r.name||'Applicant'),el('span',[r.area,r.province,label(r.applicationStatus)].filter(Boolean).join(' · ')),el('strong',stateText(r.state)));
+    if(r.sentAt)row.append(el('span','Accepted '+stamp(r.sentAt)+' SAST'));
+    if(r.updatedAt&&!r.sentAt)row.append(el('span','Updated '+stamp(r.updatedAt)+' SAST'));
+    if(r.reason)row.append(el('span',r.reason,'footnote'));
+    if(r.state==='review_required')row.append(el('p','Check Zoho Sent before any manual resend. Uncertain sends are not retried automatically.','footnote'));
+    if(r.state==='before_cutoff')row.append(el('p','Outside the approved rollout. Reconcile prior welcome emails before widening the cutoff.','footnote'));
+    if(r.canRecheck){
+     const check=el('input');check.type='checkbox';const consent=el('label',undefined,'confirm-check');consent.append(check,el('span','Applicant has been asked to verify their email.'));
+     const b=btn('Recheck verified email',async()=>{
+      if(!check.checked||requesting||!panel.isConnected)return;
+      requesting=true;b.disabled=true;
+      try{await api('agent_admin_communications_recheck',{agentUid:r.uid,updatedAt:r.updatedAt,confirmed:true});if(panel.isConnected){message('Email recheck scheduled. Nothing sent yet.','success');}}
+      catch(e){if(panel.isConnected)onError(e);}
+      finally{requesting=false;if(panel.isConnected)await load(cursor);}
+     });
+     b.disabled=true;check.onchange=()=>{b.disabled=!check.checked;};row.append(consent,b);
+    }
+    rows.append(row);
+   }
+   footer.replaceChildren();
+   if(cursor)footer.append(btn('First page',()=>load(null)));
+   if(result.next)footer.append(btn('Next page',()=>load(result.next)));
+  }
+  async function load(after=null){
+   if(requesting||!panel.isConnected)return;requesting=true;
+   summary.textContent='Loading email records…';rows.replaceChildren();footer.replaceChildren();result=null;
+   try{
+    const data=await api('agent_admin_communications',after?{after}:{});
+    if(!active||!panel.isConnected)return;
+    if(data.schema!==1||!Array.isArray(data.rows)||!data.settings||!data.counts)throw Error('The Agent Communications backend is not available. Deploy its matching update first.');
+    result=data;cursor=after;showRows();
+   }catch(e){if(panel.isConnected){summary.textContent='Email records could not be loaded. Refresh or sign in again.';onError(e);}}
+   finally{requesting=false;}
+  }
+  filter.onchange=showRows;controls.append(filter,btn('Refresh communications',()=>load(cursor)));
+  const zoho=el('a','Open Zoho Workplace ↗','button quiet');zoho.href='https://workplace.zoho.com/';zoho.target='_blank';zoho.rel='noopener noreferrer';controls.append(zoho);
+  panel.append(controls,summary,rows,footer);
+  const reply=card('Business benefits reply','Copy this approved product explanation into an individual applicant reply in Zoho. Confirm the recipient in Zoho. This does not send mail.');
+  const draft=el('textarea');draft.value="Thank you for your question. Teyza helps local businesses become easier to discover and connect with customers and participating suppliers. Business registration and verification are free. Eligible approved profiles can appear in local discovery. Depending on membership and available services, sellers can manage catalogues, prices, stock, customer messages, eligible orders, collection or delivery options; eligible wholesalers can connect with approved trade buyers. Paid selling features are optional; check current terms at https://teyza.co.za/seller-subscriptions.html. There are no guaranteed sales, discounts, funding or orders. Learn more: https://teyza.co.za/for-shop-owners.html. Your role is to demonstrate these benefits and help owners register using their own accounts. R90 applies only to qualifying verified new businesses. Kind regards, Teyza Field Agent Support Team.";draft.readOnly=true;draft.rows=8;draft.setAttribute('aria-label','Business benefits reply text');reply.append(draft);
+  const copy=btn('Copy reply',async()=>{draft.focus();draft.select();try{await navigator.clipboard.writeText(draft.value);message('Reply copied. Send it from Zoho after checking the recipient.','success');}catch{message('Reply selected. Use Ctrl+C to copy.','info');}});
+  const learn=el('a','Business owner information ↗','button quiet');learn.href='/for-shop-owners.html';learn.target='_blank';learn.rel='noopener noreferrer';reply.append(copy,learn);
+  root.append(panel,reply);void load();
+ }
+
+
+ function recruitmentView(root){
+  const intro=card('Recruitment and neighbourhood coverage','Compare self-reported operating areas, actual visit areas and optional campaign labels. All applicants remain eligible for review regardless of campaign source or area. This is operational coverage, not an employment targeting filter.');
+  intro.append(el('p','Counts use loaded application and visit pages only. Load more to expand coverage. A recorded visit is not proof of current activity; an approved agent is not necessarily working. Campaign tags are unverified, not proof that an advert caused an application.','footnote'));
+  const refreshButton=btn('Refresh coverage',safe(async()=>{await refresh();render(root);}));
+  intro.append(refreshButton);
+  if(nextProfiles)intro.append(btn('Load more applicants',safe(async()=>{await more('profiles');render(root);})));
+  if(nextVisits)intro.append(btn('Load more coverage visits',safe(async()=>{await more('visits');render(root);})));
+  root.append(intro);
+  const sourceNames={meta_johannesburg:'Meta — Johannesburg',meta_durban:'Meta — Durban',meta_cape_town:'Meta — Cape Town'};
+  const sourceFor=p=>Object.hasOwn(sourceNames,p?.recruitmentSource)?p.recruitmentSource:'unattributed';
+  const agents=new Map(profiles.map(p=>[p.uid,p]));
+  const withVisit=new Set(visits.map(v=>v.agentUid));
+  const sourceCounts=new Map([...Object.keys(sourceNames),'unattributed'].map(k=>[k,{total:0,pending:0,approved:0,working:0,rewards:0}]));
+  const areas=new Map(),areaKey=(province,area)=>[String(province||'Unknown province').trim(),String(area||'Unassigned').trim().replace(/\s+/g,' ')].join(' · ');
+  const areaRow=(province,area)=>{
+   const title=areaKey(province,area),key=title.toLocaleLowerCase();
+   if(!areas.has(key))areas.set(key,{title,total:0,pending:0,approved:0,working:0,visits:0,linked:0,rewards:0});
+   return areas.get(key);
+  };
+  for(const p of agents.values()){
+   const group=sourceCounts.get(sourceFor(p)),area=areaRow(p.province,p.area);
+   for(const row of [group,area]){
+    row.total++;if(p.status==='pending')row.pending++;
+    if(p.status==='approved'){row.approved++;if(withVisit.has(p.uid))row.working++;}
+   }
+  }
+  let unmatched=0;
+  for(const v of new Map(visits.map(v=>[v.id,v])).values()){
+   const area=areaRow(v.province,v.area);area.visits++;
+   if(v.ownerConfirmed)area.linked++;
+   if(v.registrationRewardApproved===true){
+    area.rewards++;
+    const p=agents.get(v.agentUid);
+    if(p)sourceCounts.get(sourceFor(p)).rewards++;else unmatched++;
+   }
+  }
+  const sourcePanel=card('Applications by recruitment source','Unattributed includes direct, legacy, app or untagged applications. A shared tagged link can retain its label. No cost-per-application calculation until spend and application dates are reconciled.');
+  for(const [key,row] of sourceCounts){
+   const line=el('div',undefined,'field-area-row');
+   line.append(el('strong',sourceNames[key]||'Unattributed'),el('span',row.total+' applications · '+row.approved+' approved · '+row.working+' approved with a recorded visit · '+row.rewards+' R90 approvals awaiting payment'));
+   sourcePanel.append(line);
+  }
+  if(unmatched)sourcePanel.append(el('p',unmatched+' approved reward visits are not attributed because the associated agent profiles are not loaded.','footnote'));
+  root.append(sourcePanel);
+  const areaPanel=card('Township and neighbourhood work areas','Applicants are grouped by their current chosen or assigned area; visits and reward approvals by the recorded visit area. Different spellings or aliases may appear separately. Owner-linked visits are not necessarily verified new businesses.');
+  for(const row of [...areas.values()].sort((a,b)=>a.title.localeCompare(b.title))){
+   const line=el('div',undefined,'field-area-row');
+   line.append(el('strong',row.title),el('span',row.total+' applicants · '+row.approved+' approved · '+row.working+' approved with a recorded visit · '+row.visits+' visits · '+row.linked+' owner-linked visits · '+row.rewards+' R90 approvals awaiting payment'));
+   areaPanel.append(line);
+  }
+  if(!areas.size)areaPanel.append(el('p','No loaded area records.','footnote'));
+  root.append(areaPanel);
+ }
+
+ function render(root){active=true;forgetIfChanged();root.replaceChildren();top(root);if(tab==='applications'||tab==='agents')applications(root);else if(tab==='areas')areas(root);else if(tab==='signups')signups(root);else if(tab==='rewards')rewardView(root);else if(tab==='communications')communicationsView(root);else if(tab==='recruitment')recruitmentView(root);else visitsView(root);ensureDialog();}
  function forgetIfChanged(){/* Private evidence persists only while this HR view is active. */}
  function ensureDialog(){if(document.getElementById('fieldEvidenceDialog'))return;const d=el('dialog');d.id='fieldEvidenceDialog';d.className='field-evidence-dialog';const close=btn('Close',()=>d.close());close.className='button quiet';const body=el('div');body.id='fieldEvidenceBody';d.append(close,body);d.addEventListener('close',()=>{body.replaceChildren();for(const url of urls)URL.revokeObjectURL(url);urls=[];});document.body.append(d);}
  return {refresh,render,clear,hideSensitive:forget};

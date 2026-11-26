@@ -273,3 +273,77 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .field-reward-result>strong{font-size:19px;color:var(--teyza-deep)}
 .field-reward-result .confirm-check{margin:16px 0;align-items:flex-start}
 .field-reward-result .confirm-check input{width:18px;height:18px;flex:none;margin:2px 0}
+
+/* Business Acquisition R336: visually distinct actions and accessible modal workflow. */
+.brand>span{display:flex;flex-direction:column;gap:2px;line-height:1.15}.brand>span small{font-size:11px;font-weight:500;white-space:normal}
+.login-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-width:460px}
+.login-scope>span{display:flex;align-items:center;gap:9px;min-width:0;line-height:1.4}
+.login-scope svg{width:20px!important;height:20px!important;min-width:20px;max-width:20px;flex:0 0 20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+[data-acquisition]{--acq-teal:#00545b;--acq-blue:#245eab;--acq-green:#168454;--acq-amber:#a66a10;--acq-red:#a33642;min-width:0}
+[data-acquisition] .acq-hero{background:linear-gradient(118deg,#003f46,#075b60);color:#fff;border:0;padding:24px 28px}
+[data-acquisition] .acq-hero h3{font-size:clamp(21px,2.4vw,29px);color:white}
+[data-acquisition] .acq-hero .footnote{color:#dfefea}
+.acq-action-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+.acq-action-bar .button{min-height:44px;background:#ffffff18;color:#fff;border:1px solid #ffffff45}
+.acq-action-bar .acq-add{background:#c2ee45;color:#173e37;border-color:#c2ee45;font-weight:800}
+.acq-action-bar .acq-map{background:#dceeff;color:#174b86;border-color:#dceeff}
+.acq-action-bar .acq-assets{background:#ede3ff;color:#513778;border-color:#ede3ff}
+[data-acquisition] .field-admin-metrics{grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin:20px 0 8px}
+[data-acquisition] .field-stat{background:#eff8f5;border:1px solid #d0e8df;border-top:4px solid #008273;padding:15px;min-width:0}
+[data-acquisition] .field-stat[data-metric="invitation-logged"],[data-acquisition] .field-stat[data-metric="welcome-logged"]{background:#edf4ff;border-color:#d3e3fa;border-top-color:#3879c5}
+[data-acquisition] .field-stat[data-metric="follow-up-due"],[data-acquisition] .field-stat[data-metric="help-requests-open"]{background:#fff6e2;border-color:#f5e0ad;border-top-color:#d49025}
+[data-acquisition] .field-stat[data-metric="do-not-contact"]{background:#fff0f1;border-color:#f1d2d7;border-top-color:#c84b58}
+[data-acquisition] .field-stat[data-metric="registration-started"]{background:#f4edff;border-color:#e2d6fa;border-top-color:#825ac5}
+[data-acquisition] .field-stat strong{font-variant-numeric:tabular-nums;font-size:30px}
+[data-acquisition] .field-query{margin-bottom:16px}
+.acq-empty{padding:30px 20px;text-align:center;background:#f3f8f6;border:1px dashed #c9ded5;border-radius:12px}
+.acq-status{display:inline-block;width:fit-content;border-radius:999px;padding:5px 10px;background:#e9f2ff;color:#22528f;font-weight:700;font-size:12px}
+.acq-status[data-state="blocked"],.acq-status[data-state="not_interested"]{background:#fce3e7;color:#9b2b3c}
+.acq-status[data-state="registration_started"],.acq-status[data-state="interested"]{background:#e0f5e9;color:#126b43}
+.acq-dialog{width:min(850px,calc(100vw - 32px));max-width:100%;max-height:90dvh;border:0;border-radius:18px;padding:0;background:#f5f8f7;color:#17343a;box-shadow:0 24px 100px #00262a55;overflow:auto}
+.acq-dialog::backdrop{background:#00282ec2;backdrop-filter:blur(3px)}
+.acq-dialog-bar{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 22px;background:#00484d;color:white;box-shadow:0 2px 10px #003d4117}
+.acq-dialog-bar strong{font-size:18px}
+.acq-dialog-bar .button{color:#fff;background:#ffffff18;border-color:#ffffff45}
+.acq-dialog-content{padding:18px;min-width:0}
+.acq-dialog-content>.ops-card{margin:0;padding:22px;min-width:0}
+.acq-dialog-content .ops-card{min-width:0}
+.acq-dialog textarea{width:100%;min-width:0;resize:vertical;padding:12px;border-radius:10px;border:1px solid #cddcd3;background:white;color:#16353c;font:inherit;line-height:1.55}
+.acq-error{margin:10px 18px;padding:12px 16px;background:#fde8eb;color:#982e3d;border-radius:10px;overflow-wrap:anywhere}
+.acq-channel{padding:18px;border-radius:13px;margin:12px 0;min-width:0;border:1px solid}
+.acq-email{background:#edf4ff;border-color:#ccddfa}
+.acq-whatsapp{background:#e9f7ed;border-color:#cce8d4}
+.acq-channel h4{margin:0 0 8px;font-size:17px}
+.acq-email h4{color:#245eab}.acq-whatsapp h4{color:#116f48}
+.acq-channel .button.primary{background:#245eab;color:#fff;border-color:#245eab}
+.acq-whatsapp .button.primary{background:#168454;border-color:#168454}
+.acq-message{background:white;padding:12px;margin:9px 0;border-radius:10px;overflow-wrap:anywhere}
+.acq-message summary{cursor:pointer;font-weight:700;margin-bottom:8px}
+.acq-message form{margin-top:12px}.acq-dialog input[type=checkbox]{width:18px;height:18px;min-height:0}
+.acq-dialog .confirm-check{display:flex;align-items:flex-start;gap:10px}
+@media(max-width:700px){.acq-action-bar .button{flex:1 1 140px;white-space:normal}.acq-dialog{width:calc(100vw - 16px);max-height:94dvh;border-radius:13px}.acq-dialog-content{padding:9px}.acq-dialog-content>.ops-card{padding:14px}.acq-dialog-bar{padding:10px 14px}.login-scope{grid-template-columns:1fr 1fr}[data-acquisition] .field-admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.acq-consent{border:1px solid #ccded6;background:#f0f8f4;border-radius:12px;padding:14px;display:grid;gap:12px;min-width:0}.acq-consent legend{font-weight:800;color:#00545b}.acq-secondary{border:1px solid #dbe5df;border-radius:12px;padding:14px;margin:12px 0;background:#fff}.acq-secondary>summary{cursor:pointer;color:#00545b;font-weight:700}.acq-secondary[open]>summary{margin-bottom:14px}
+
+/* Search-first business acquisition: compact contact results and direct channel actions. */
+.acq-action-bar .acq-find{background:#e9f7ed;color:#116f48;border-color:#e9f7ed}
+.acq-lookup-filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;align-items:end;margin:16px 0}
+.acq-lookup-filters label{display:grid;gap:6px;font-weight:650;min-width:0}
+.acq-lookup-filters .confirm-check{grid-column:1/-1;display:flex;align-items:center;gap:9px;font-weight:500}
+.acq-contact-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}
+.acq-contact-actions .button{min-height:40px;font-size:13px;white-space:normal}
+.acq-contact-actions .acq-send-email{background:#245eab;color:#fff;border-color:#245eab}
+.acq-contact-actions .acq-send-wa{background:#168454;color:#fff;border-color:#168454}
+.acq-contact-actions .button:disabled{opacity:.48;cursor:not-allowed}
+.acq-contact-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid #dce8e2;background:#fff;border-radius:12px;padding:14px;margin:8px 0}
+.acq-contact-identity{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.acq-contact-identity>span:not(.acq-status){font-size:13px;color:#41676b}
+.acq-contact-row .acq-contact-actions{justify-content:flex-end;max-width:310px}
+.acq-compact-form.ops-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;margin-top:14px}
+.acq-compact-form label{margin:0;min-width:0}
+.acq-compact-form .acq-full,.acq-compact-form>button{grid-column:1/-1}
+.acq-google-compact .tp-combined-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.acq-google-compact .tp-combined-results{max-height:440px;overflow:auto}
+.acq-live-result{padding:8px 0;border-bottom:1px solid #e2eae5}
+.acq-live-result>a{display:inline-block;margin:4px 8px;color:#245eab;font-size:13px;font-weight:650}
+@media(max-width:700px){.acq-lookup-filters,.acq-compact-form.ops-form,.acq-contact-row,.acq-google-compact .tp-combined-controls{grid-template-columns:1fr}.acq-contact-row .acq-contact-actions{justify-content:flex-start;max-width:none}}

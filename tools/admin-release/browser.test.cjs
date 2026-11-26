@@ -77,7 +77,9 @@ async function main(){
    }
    if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
    if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
-   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
+   if(body.action==='agent_admin_communications')result={ok:true,schema:1,settings:{state:'enabled',startAt:1795644000000,maxPerRun:1},rows:[{uid:'applicant1',name:'Synthetic Applicant',area:'Durban',province:'KwaZulu-Natal',applicationStatus:'pending',state:'sent',reason:'provider_accepted',sentAt:1795700000000,updatedAt:1795700000000,canRecheck:false},{uid:'agent2',name:'Synthetic Agent',area:'Umlazi',province:'KwaZulu-Natal',applicationStatus:'approved',state:'blocked_email',reason:'verified_email_required',updatedAt:1795700000000,canRecheck:true}],counts:{sent:1,blocked_email:1},next:null};
+   if(body.action==='agent_admin_communications_recheck')result={ok:true,scheduled:true};
+   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true,recruitmentSource:'meta_durban'},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
    if(body.action==='agent_admin_visits')result={ok:true,visits:[{id:'visit-test',shopName:'Demo Spaza',address:'12 Sample Road, Durban',area:'Durban',province:'KwaZulu-Natal',status:'submitted',revision:5,agentUid:'agent2',ownerConfirmed:true,progress:{sellerApproval:'approved',mandate:'signed_pending_activation',payment:'first_invoice_paid',commission:'not_eligible'},location:{latitude:-29.85,longitude:31.02,accuracy:12}}],next:null};
    if(body.action==='agent_admin_application_upload'){legacyUploaded=true;result={ok:true,saved:true};}
    if(body.action==='agent_admin_application_evidence')result={ok:true,identityType:'sa_id',identityNumber:'SYNTHETIC000',identityFile:{name:'test.jpg',mime:'image/jpeg',base64:jpeg},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:Buffer.from('%PDF-1.4 synthetic').toString('base64')}};
@@ -478,6 +480,141 @@ async function main(){
    await f.page.getByText('Field visit review saved.').waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
    await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Agent communications displays real fixture states and only safely rechecks blocked emails',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Communications',exact:true}).click();
+   await f.page.getByText('Synthetic Applicant',{exact:true}).waitFor();
+   await f.page.getByText('Sent to Zoho',{exact:true}).last().waitFor();
+   assert((await f.page.getByRole('textbox',{name:'Business benefits reply text'}).inputValue()).includes('Registration and verification are free')||(await f.page.getByRole('textbox',{name:'Business benefits reply text'}).inputValue()).includes('registration and verification are free'));
+   await f.page.getByLabel('Filter welcome email status').selectOption('blocked_email');
+   assert.equal(await f.page.getByText('Synthetic Applicant',{exact:true}).count(),0);
+   const recheck=f.page.getByRole('button',{name:'Recheck verified email'});assert(await recheck.isDisabled());
+   await f.page.getByText('Applicant has been asked to verify their email.',{exact:true}).click();
+   await recheck.click();await f.page.getByText('Email recheck scheduled. Nothing sent yet.',{exact:false}).waitFor();
+   assert(f.calls.some(c=>c.action==='agent_admin_communications_recheck'&&c.data.agentUid==='agent2'&&c.data.confirmed===true));
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Recruitment coverage separates campaign attribution, approved agents and actual visit areas',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Recruitment coverage',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Applications by recruitment source'}).waitFor();
+   const source=f.page.locator('.field-area-row').filter({hasText:'Meta — Durban'});
+   await source.getByText('1 applications · 1 approved · 1 approved with a recorded visit · 0 R90 approvals awaiting payment').waitFor();
+   await f.page.getByText('KwaZulu-Natal · Umlazi',{exact:true}).waitFor();
+   await f.page.getByText('KwaZulu-Natal · Durban',{exact:true}).waitFor();
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Business acquisition saves a consent-aware prospect and displays actual seller status',async()=>{
+   let prospect=null;
+   const f=await pageFor({api:async(route,body)=>{
+    if(!body.action.startsWith('ops_acquisition_'))return false;
+    if(body.action==='ops_acquisition_create'){prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_event'){assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:1};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_send'){assert.equal(body.data.channel,'email');assert.equal(body.data.kind,'invitation');assert.equal(body.data.confirmed,true);prospect={...prospect,outbound:{email_invitation:{status:'queued',updatedAt:Date.now()}},revision:2};await route.fulfill({json:{ok:true,message:{status:'queued'}}});}
+    else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
+    else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{email:{invitation:true},whatsapp:{invitation:false}}}});
+    return true;
+   }});
+   await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Business Acquisition Command Centre'}).waitFor();
+   await f.page.getByRole('button',{name:'Open marketing & onboarding assets'}).click();
+   await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
+   await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
+   await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
+   const checks=f.page.getByRole('button',{name:'Check published video',exact:true});
+   await checks.first().click();await f.page.getByRole('link',{name:'Watch video',exact:true}).waitFor();
+   await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
+   await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
+   await f.page.getByLabel('Town, township or business name').fill('Durban');
+   // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
+   await f.page.evaluate(()=>{
+    class MapMock{constructor(_node,opts){this.center=opts.center;this.zoom=opts.zoom;}
+     setCenter(p){this.center={lat:typeof p.lat==='function'?p.lat():p.lat,lng:typeof p.lng==='function'?p.lng():p.lng};}getCenter(){return {lat:()=>this.center.lat,lng:()=>this.center.lng};}
+     setZoom(z){this.zoom=z;}getZoom(){return this.zoom;}panTo(p){this.setCenter(p);}}
+    class MarkerMock{setMap(){}addListener(){}}
+    class InfoWindowMock{open(){}}
+    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([{geometry:{location:{lat:()=>-29.86,lng:()=>31.02}}}],'OK');}}
+    window.google={maps:{Map:MapMock,Marker:MarkerMock,InfoWindow:InfoWindowMock,Geocoder:GeocoderMock,SymbolPath:{CIRCLE:0}}};
+   });
+   await f.page.route('**/assets/teyza-maps-config.json',route=>route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}}));
+   let placesRequests=0;
+   await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('category'),'spaza');assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
+    return route.fulfill({json:{ok:true,entries:[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}]}});
+   });
+   await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
+   const live=f.page.getByRole('dialog');
+   const searchArea=live.getByRole('button',{name:'Search this area'});
+   await searchArea.waitFor();await f.page.waitForFunction(()=>!document.querySelector('.acq-google-compact .tp-combined-controls button:last-of-type')?.disabled);
+   assert.equal(placesRequests,0);
+   assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
+   await searchArea.click();
+   await live.getByText('Synthetic Google Shop',{exact:true}).waitFor();assert.equal(placesRequests,1);
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Durban, South Africa');
+   await live.getByRole('button',{name:/Synthetic Google Shop/}).click();
+   assert(await live.getByText(/Email not supplied by Google/).isVisible());
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
+   await live.getByRole('button',{name:'Back to saved contacts'}).click();
+   assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);
+   await f.page.getByRole('button',{name:'Add confirmed business'}).click();
+   const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
+   await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
+   await form.getByLabel('Township / area').fill('Umlazi');
+   await form.getByLabel('Business address or landmark').fill('Synthetic Road');
+   await form.getByLabel('Business phone (optional)').fill('0712345678');
+   await form.getByLabel('Business email (optional)').fill('synthetic@example.test');
+   await form.getByLabel('Source reference / authority to retain details').fill('Synthetic owner request');
+   await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
+   await form.getByRole('button',{name:'Save business prospect'}).click();
+   await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await f.page.getByRole('heading',{name:'Send a message'}).waitFor();
+   await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
+   assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
+   await f.page.getByText('Record contact permission, follow-up or support activity',{exact:true}).click();
+   const activity=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save activity',exact:true})});
+   await activity.getByLabel('Record activity').selectOption('permission');await activity.getByLabel('Channel',{exact:true}).selectOption('email');
+   await activity.getByLabel('Owner explicitly opted in to this channel.').check();
+   await activity.getByLabel('Activity note / consent evidence (no sensitive documents or credentials)').fill('Synthetic owner opt-in');
+   await activity.getByLabel('I confirm this records an actual event. No message will be sent.').check();
+   await activity.getByRole('button',{name:'Save activity'}).click();
+   const draft=f.page.getByLabel('email invitation send preview');await draft.waitFor();const copy=await draft.inputValue();
+   assert(copy.includes('Synthetic Spaza – Grow your business with Teyza'));assert(copy.includes('Umlazi, Durban'));assert(copy.includes('source stock for your spaza shop'));
+   assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   const contactDialog=f.page.getByRole('dialog');await contactDialog.getByLabel('Town, township or business name').fill('Durban');
+   await contactDialog.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   assert(await contactDialog.getByRole('button',{name:'Send email',exact:true}).isEnabled());
+   assert(await contactDialog.getByRole('button',{name:'Send WhatsApp',exact:true}).isDisabled());
+   await contactDialog.getByRole('button',{name:'Send email',exact:true}).click();
+   await f.page.getByLabel('email invitation send preview').waitFor();
+   const emailPanel=f.page.locator('.acq-email');
+   await emailPanel.getByLabel('I reviewed the recipient and message. Send this one message.').check();
+   await emailPanel.getByRole('button',{name:'Send email',exact:true}).click();
+   await emailPanel.getByText('Invite to Teyza · queued',{exact:true}).waitFor();
+   assert(f.calls.some(c=>c.action==='ops_acquisition_send'));
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   const lookup=f.page.getByRole('dialog');await lookup.getByLabel('Town, township or business name').fill('Durban');
+   await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
+   await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
+   await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   await lookup.getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
+   await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
+   await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
+   assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{

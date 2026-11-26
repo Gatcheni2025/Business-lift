@@ -1,6 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),P=require('./publication'),BillingOverview=require('./billing-overview'),Directory=require('./business-directory');
-const actions=new Set(['ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_whatsapp_support_inbox','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
+const Acquisition=require('./business-acquisition');
+const actions=new Set([...Acquisition.actions,'ops_sellers','ops_map_shops','ops_whatsapp_status','ops_seller_profile','ops_seller_detail','ops_catalogue_queue','ops_catalogue_publish','ops_complimentary_access','ops_complimentary_revoke','ops_invoice','ops_payment','ops_payment_reverse','ops_finance_queue','ops_finance_decide','ops_whatsapp_support_inbox','ops_support_list','ops_support_create','ops_support_update','ops_support_detail','seller_billing_statement','seller_billing_overview','seller_support_create','seller_support_list','seller_support_open','seller_support_thread','seller_support_message','ops_support_reply','ops_support_thread']);
 const PRICE=9900;
 const WHATSAPP_SAMPLE_LIMIT=100;
 const WHATSAPP_RECEIPT_SOURCE='meta_whatsapp_signed_webhook';
@@ -62,6 +63,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
  const owner=async uid=>D.seller(await read('teyzaSellerAccounts/'+uid),uid);
  function audit(tx,auth,action,target,details){tx.set(doc('teyzaOperationsAudit/'+crypto.randomUUID()),{actorUid:auth.uid,action,target,details,createdAt:clock()});}
  async function ledger(uid){const rows=await db.collection('teyzaBilling/'+uid+'/entries').orderBy('createdAt','desc').limit(501).get();if(rows.docs.length>500)D.fail(422,'This account needs an archived statement export before it can be displayed in full.');return {entries:statement(rows.docs.map(row)),truncated:false};}
+ const acquisition=Acquisition.createAcquisition({db,clock});
  async function execute(auth,action,data={}){
   const uid=D.id(auth.uid),self=action.startsWith('seller_');
   if(self){if(!auth.email_verified&&!auth.phone_number)D.fail(403,'Verify your email or phone first.');await owner(uid);}
@@ -69,6 +71,7 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   else if(SUPPORT_AGENT_ACTIONS.has(action))recentSupportAgent(auth,clock);
   else recentAdmin(auth,clock);
   await rate(uid,'operations',60,60000);
+  if(Acquisition.actions.has(action))return acquisition.execute(auth,action,data);
   // Historical entries remain available in statements. Manual receipts may
   // never activate membership now that Paystack verifies all new charges.
   if(['ops_invoice','ops_payment','ops_payment_reverse'].includes(action))
