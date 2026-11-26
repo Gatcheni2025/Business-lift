@@ -39,13 +39,13 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertR90Ready(health){
- if(health?.ok!==true||health.agentCommissionEnabled!==true||health.agentCommissionCents!==9000){
-  throw Error('R90 registration commissions are not confirmed active in the backend. Public Agents publication stopped; Admin can deploy separately.');
+ if(health?.ok!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+  throw Error('R90 verified registration reward review is not confirmed active in the backend. Public Agents publication stopped; Admin can deploy separately.');
  }
 }
 async function checkR90Ready(){
  const response=await fetch('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000)});
- if(!response.ok)throw Error('Field commission health request failed.');
+ if(!response.ok)throw Error('Field reward health request failed.');
  assertR90Ready(await response.json());
 }
 async function deploy(client){
