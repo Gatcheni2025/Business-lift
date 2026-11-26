@@ -129,3 +129,23 @@ test('Service-area plumber can be discovered without inventing location or dista
  assert.equal(result.entries[0].latitude,null);
  assert.equal(result.entries[0].distanceKm,null);
 });
+
+
+test('Fast food, takeaway restaurants and service providers are discoverable as local businesses, not spaza', async()=>{
+  const food=place('food',{displayName:{text:'Community Chicken Takeaway'},
+    primaryType:'fast_food_restaurant',types:['fast_food_restaurant']});
+  const tyre=place('tyres',{displayName:{text:'Tyre Repair Centre'},
+    primaryType:'car_repair',types:['car_repair']});
+  const laundry=place('laundry',{displayName:{text:'Neighbourhood Laundry'},
+    primaryType:'laundry',types:['laundry']});
+  for(const p of [food,tyre,laundry]){
+    assert.equal(kindMatch(p,'variety'),true);
+    assert.equal(kindMatch(p,'spaza'),false);
+  }
+  const result=await discover({key:'test',lat,lon,radius:20000,kind:'variety',
+    fetchImpl:async()=>json({places:[food,tyre,laundry]})});
+  assert.deepEqual(result.entries.map(e=>e.name).sort(),
+    ['Community Chicken Takeaway','Neighbourhood Laundry','Tyre Repair Centre'].sort());
+  assert(result.entries.every(e=>e.shopCategory==='variety'));
+  assert(result.entries.every(e=>e.isTeyzaMerchant===false));
+});
