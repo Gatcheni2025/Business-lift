@@ -50,8 +50,7 @@ class TeyzaMarketplaceHub extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
-        final wide = constraints.maxWidth > 600;
-        final columns = wide ? 4 : 2;
+        final columns = MediaQuery.textScalerOf(context).scale(14) > 22 ? 1 : 2;
         final width = (constraints.maxWidth - 10 * (columns - 1)) / columns;
         return Wrap(
             key: const ValueKey('teyza-marketplace-hub'),
@@ -60,24 +59,14 @@ class TeyzaMarketplaceHub extends StatelessWidget {
             children: [
               SizedBox(
                   width: width,
-                  child: destination('products', 'Products',
-                      'Groceries & essentials', Icons.shopping_bag_outlined,
-                      background: const Color(0xFFEAF3EC))),
-              SizedBox(
-                  width: width,
-                  child: destination('spaza', 'Find local shops',
-                      'Discover your neighbourhood', Icons.storefront_outlined,
+                  child: destination('spaza', 'Shops',
+                      'Spaza shops, groceries & essentials', Icons.storefront_outlined,
                       background: const Color(0xFFEEF0E7))),
               SizedBox(
                   width: width,
                   child: destination('businesses', 'Businesses',
-                      'Services & specialists', Icons.business_center_outlined,
+                      'Manufacturers, sellers, food & services', Icons.business_center_outlined,
                       background: const Color(0xFFF2EDE4))),
-              SizedBox(
-                  width: width,
-                  child: destination('wholesale', 'Wholesalers',
-                      'Supply for business owners', Icons.inventory_2_outlined,
-                      background: const Color(0xFFE9EFF1))),
             ]);
       });
 }

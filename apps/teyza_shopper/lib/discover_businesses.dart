@@ -229,7 +229,7 @@ class TeyzaDiscoverBusinesses extends StatelessWidget {
                 Text(business.verified ? 'Teyza Verified' :
                   business.origin == 'google_places' ? 'Google Maps · Public map listing' :
                   business.origin == 'openstreetmap' ? 'OpenStreetMap · Public map listing' :
-                  'Public map listing',
+                  'Public directory listing',
                   style: TextStyle(color: business.verified ? green :
                     const Color(0xFF63747A), fontSize: 11, fontWeight: FontWeight.w700)),
               ]),

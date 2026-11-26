@@ -28,6 +28,7 @@ import 'shop_orders.dart';
 import 'product_catalogue.dart';
 import 'discover_catalogue.dart';
 import 'discover_businesses.dart';
+import 'business_categories.dart';
 import 'seller_push.dart';
 import 'seller_notifications.dart';
 import 'seller_firestore.dart';
@@ -448,6 +449,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   final _discoverPageKey = GlobalKey<DiscoverCataloguePageState>();
   bool _detailOriginSaved = false;
   String _detailOriginDiscoveryType = 'spaza';
+  int _detailOriginTab = 0;
+  String _discoverSection = 'shops', _discoverGroup = 'all',
+      _discoverSubcategory = 'all';
   final cart = <String, int>{};
   late final session = widget.session ?? ShopperSession();
   String? _observedUid, _checkedSellerUid;
@@ -475,9 +479,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<OnlineShop> online = [];
   // Independent home preview: not limited to the currently selected shop tab.
   List<OnlineShop> otherBusinesses = [];
-  List<OnlineShop> _discoverSpazaDirectory = [];
   List<OnlineShop> _discoverWholesaleDirectory = [];
-  String? _discoverAreaKey;
+  String? _discoverAreaKey, _onlineAreaKey, _otherBusinessesAreaKey;
   bool _loadingDiscoverDirectories = false;
   int _discoverDirectorySerial = 0;
   List<OnlineShop> _homeSpazaDirectory = [];
@@ -1165,91 +1168,106 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> reloadDiscoverDirectories() async {
+
+  // Do not request all business/wholesale map searches at app startup.
+  // Reuse Home's existing area results, and fetch wholesale only on demand.
+  Future<void> reloadDiscoverDirectories({bool refresh = false}) async {
     if (!mounted || session.sellerWorkspace) return;
     final chosen = area;
-    final serial = ++_discoverDirectorySerial;
-    if (chosen == null) {
-      setState(() {
-        _discoverSpazaDirectory = [];
-        _discoverWholesaleDirectory = [];
-        _discoverAreaKey = null;
-        _loadingDiscoverDirectories = false;
-      });
-      return;
-    }
+    if (chosen == null) return;
     final areaKey = '${chosen.lat},${chosen.lng}';
-    setState(() => _loadingDiscoverDirectories = true);
+    if (!refresh && (_loadingDiscoverDirectories || _discoverAreaKey == areaKey)) return;
+    final serial = ++_discoverDirectorySerial;
+    setState(() {
+      if (_discoverAreaKey != areaKey) _discoverWholesaleDirectory = [];
+      _loadingDiscoverDirectories = true;
+    });
     try {
-      final results = await Future.wait<List<OnlineShop>>([
-        widget.directoryLoader != null
-          ? widget.directoryLoader!(chosen, 'spaza', 22)
-          : findOnlineShops(
-              area: chosen.label, latitude: chosen.lat,
-              longitude: chosen.lng, category: 'spaza', radiusKm: 22),
-        widget.directoryLoader != null
+      final results = await (widget.directoryLoader != null
           ? widget.directoryLoader!(chosen, 'wholesale', 40)
-          : findOnlineShops(
-              area: chosen.label, latitude: chosen.lat,
-              longitude: chosen.lng, category: 'wholesale', radiusKm: 40),
-      ]).timeout(const Duration(seconds: 30));
+          : findOnlineShops(area: chosen.label, latitude: chosen.lat,
+              longitude: chosen.lng, category: 'wholesale', radiusKm: 40))
+          .timeout(const Duration(seconds: 30));
       if (!mounted || serial != _discoverDirectorySerial) return;
       setState(() {
-        _discoverSpazaDirectory = results[0]
-          .where((e) => teyzaMatchesShopCategory(e, 'spaza')).toList();
-        _discoverWholesaleDirectory = results[1]
-          .where((e) => teyzaMatchesShopCategory(e, 'wholesale')).toList();
-        _discoverAreaKey = areaKey;
+        if (area?.lat == chosen.lat && area?.lng == chosen.lng) {
+          _discoverWholesaleDirectory = results
+              .where((e) => teyzaMatchesShopCategory(e, 'wholesale')).toList();
+          _discoverAreaKey = areaKey;
+        }
         _loadingDiscoverDirectories = false;
       });
     } catch (_) {
       if (!mounted || serial != _discoverDirectorySerial) return;
-      setState(() {
-        _discoverAreaKey = areaKey;
-        _loadingDiscoverDirectories = false;
-      });
+      setState(() => _loadingDiscoverDirectories = false);
     }
   }
 
-  List<DiscoverBusiness> get discoverBusinesses {
-    if (area == null) return const <DiscoverBusiness>[];
+  String _merchantGroup(Shop shop) => teyzaDiscoveryGroup(
+    shopCategory: shop.shopCategory, businessType: shop.businessType,
+    name: shop.name);
+
+  String _listingGroup(NearbyListing item) => teyzaDiscoveryGroup(
+    shopCategory: item.merchant?.shopCategory ??
+        item.directory?.shopCategory ?? 'variety',
+    businessType: item.merchant?.businessType ?? '',
+    name: item.name, placeTypes: item.directory?.types ?? const []);
+
+  List<NearbyListing> get _marketplaceListings {
+    if (area == null) return const <NearbyListing>[];
     final key = '${area!.lat},${area!.lng}';
     final places = [
-      ...(_discoverAreaKey == key ? _discoverSpazaDirectory : <OnlineShop>[]),
-      ...otherBusinesses.where((e) => e.shopCategory == 'variety'),
+      ...(_homeSpazaAreaKey == key ? _homeSpazaDirectory : <OnlineShop>[]),
+      ...(_otherBusinessesAreaKey == key ? otherBusinesses : <OnlineShop>[]),
       ...(_discoverAreaKey == key ? _discoverWholesaleDirectory : <OnlineShop>[]),
-      ...online,
+      ...(_onlineAreaKey == key ? online : <OnlineShop>[]),
     ];
     final unique = <String, OnlineShop>{};
     for (final place in places) {
+      if (!teyzaMatchesShopCategory(place, place.shopCategory) &&
+          !(place.shopCategory == 'spaza' && place.origin == 'openstreetmap' &&
+            place.categorizationVerified && !teyzaIsLargeRetailer(place.name))) continue;
       final id = place.origin == 'google_places' && place.placeId.isNotEmpty
           ? 'google:' + place.placeId : place.origin + ':' + place.id;
       unique[id] = place;
     }
-    final merged = mergeNearbyListings(nearbyReal, unique.values.toList(),
-      area: area);
-    return [
-      for (final item in merged)
-        DiscoverBusiness(
-          id: item.merchant != null
-            ? 'teyza-' + item.merchant!.id : item.directory!.id,
-          name: item.name,
-          area: item.merchant?.area ?? item.directory?.area ?? '',
-          shopCategory: item.merchant?.shopCategory ??
-              item.directory?.shopCategory ?? 'variety',
-          businessType: item.merchant?.businessType ?? '',
-          placeTypes: item.directory?.types ?? const [],
-          details: item.merchant?.address ?? item.directory?.address ?? '',
-          verified: item.merchant?.identityVerified == true,
-          onOpen: () => item.merchant != null
-            ? openShop(item.merchant!) : selectDirectory(item.directory!),
-        ),
-    ];
+    final merchants = live.where((shop) => shopMatchesArea(shop, area,
+      radiusKm: _merchantGroup(shop) == 'spaza' ? 22.0 : 40.0)).toList();
+    return mergeNearbyListings(merchants, unique.values.toList(), area: area);
   }
+
+  List<DiscoverBusiness> get discoverBusinesses => [
+    for (final item in _marketplaceListings)
+      DiscoverBusiness(
+        id: item.merchant != null
+          ? 'teyza-' + item.merchant!.id : item.directory!.id,
+        name: item.name,
+        area: item.merchant?.area ?? item.directory?.area ?? '',
+        shopCategory: item.merchant?.shopCategory ??
+            item.directory?.shopCategory ?? 'variety',
+        businessType: item.merchant?.businessType ?? '',
+        placeTypes: item.directory?.types ?? const [],
+        details: [
+          item.merchant?.address ?? item.directory?.address ?? '',
+          if (item.merchant != null && item.merchant!.shopCategory != 'wholesale') ...[
+            for (final product in item.merchant!.rangeProducts)
+              '${product.name} ${product.category}',
+            for (final service in item.merchant!.serviceHighlights)
+              '${service['name'] ?? ''} ${service['type'] ?? ''}',
+          ],
+        ].join(' '),
+        origin: item.merchant != null ? 'teyza' : item.directory?.origin ?? '',
+        verified: item.merchant?.identityVerified == true,
+        onOpen: () => item.merchant != null
+          ? openShop(item.merchant!) : selectDirectory(item.directory!),
+      ),
+  ];
 
   Future<void> refreshDiscoverBusinesses() async {
     await Future.wait<void>([
-      load(silent: true), reloadOtherBusinesses(), reloadDiscoverDirectories(),
+      load(silent: true), reloadOnline(), reloadOtherBusinesses(),
+      if (_discoverSection == 'businesses' && _discoverGroup == 'wholesale')
+        reloadDiscoverDirectories(refresh: true),
     ]);
   }
 
@@ -1260,6 +1278,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     if (currentArea == null) {
       setState(() {
         otherBusinesses = [];
+        _otherBusinessesAreaKey = null;
         loadingOtherBusinesses = false;
         otherBusinessesWarning = null;
       });
@@ -1286,6 +1305,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         otherBusinesses = businesses
             .where((place) => teyzaMatchesShopCategory(place, 'variety'))
             .toList();
+        _otherBusinessesAreaKey = '${currentArea.lat},${currentArea.lng}';
         loadingOtherBusinesses = false;
       });
     } catch (_) {
@@ -1312,6 +1332,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           setState(() {
             loadingOnline = false;
             online = [];
+            _onlineAreaKey = null;
             _homeSpazaDirectory = [];
             _homeSpazaAreaKey = null;
           });
@@ -1333,6 +1354,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         online = places;
+        _onlineAreaKey = areaKey;
         loadingOnline = false;
         if (chosenType == 'spaza') {
           _homeSpazaDirectory = places
@@ -1486,7 +1508,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       await prefs.setString('teyza_selected_area', 'gps');
       await Future.wait<void>([
         reloadOnline(), reloadOtherBusinesses(),
-        reloadDiscoverDirectories(), reloadSponsoredAds(),
+        reloadSponsoredAds(),
       ]);
     } catch (e) {
       if (!mounted) return;
@@ -1616,7 +1638,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
     final discovery = Future.wait<void>([
       reloadOnline(), reloadOtherBusinesses(),
-      reloadDiscoverDirectories(), reloadSponsoredAds(),
+      reloadSponsoredAds(),
     ]);
     if (resetNavigation) {
       await discovery;
@@ -2071,6 +2093,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   void _rememberDetailOrigin() {
     if (selected != null || directorySelected != null) return;
     _detailOriginDiscoveryType = discoveryType;
+    _detailOriginTab = tab;
     _detailOriginSaved = true;
   }
 
@@ -2082,8 +2105,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       tab != 0;
   void _navigateBack() {
     if (selected != null || directorySelected != null) {
-      // A shop is its own immersive page. Back always returns to the home
-      // feed, not to a category detour or another shop's product view.
+      // Discover remembers its category. Home-origin details return Home.
       final priorType = _detailOriginDiscoveryType;
       final restoreType = _detailOriginSaved && discoveryType != priorType;
       setState(() {
@@ -2091,7 +2113,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         directorySelected = null;
         selectedDirectoryPhone = null;
         ++_directoryContactRequest;
-        tab = 0;
+        tab = _detailOriginSaved && _detailOriginTab == 5 ? 5 : 0;
         showAllShops = false;
         showAllSellers = false;
         search = '';
@@ -2498,29 +2520,24 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     });
   }
 
-  // Separate destinations: the home page never mixes spaza shops and
-  // service businesses, and wholesalers remain B2B-only.
+  // Home opens the same category hierarchy as Discover.
+  void _rememberDiscoverSelection(String section, String group, String speciality) {
+    _discoverSection = section;
+    _discoverGroup = group;
+    _discoverSubcategory = speciality;
+    if (section == 'businesses' && group == 'wholesale')
+      unawaited(reloadDiscoverDirectories());
+  }
+
   void openMarketplaceDestination(String type) {
     if (type == 'products') {
       navigateToTab(1);
       return;
     }
-    final next = type == 'businesses'
-        ? 'variety'
-        : type == 'wholesale'
-            ? 'wholesale'
-            : 'spaza';
-    unawaited(() async {
-      await setDiscoveryType(next);
-      if (mounted)
-        setState(() {
-          tab = 0;
-          selected = null;
-          directorySelected = null;
-          showAllShops = true;
-          showAllSellers = false;
-        });
-    }());
+    final shops = type == 'spaza' || type == 'shops';
+    _rememberDiscoverSelection(shops ? 'shops' : 'businesses',
+      shops ? 'spaza' : (type == 'wholesale' ? 'wholesale' : 'all'), 'all');
+    navigateToTab(5);
   }
 
   void browseProductCategory(String selectedCategory) {
@@ -2832,6 +2849,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                       key: _discoverPageKey,
                                       onEnquire: enquireAboutProduct,
                                       businesses: discoverBusinesses,
+                                      initialSection: _discoverSection,
+                                      initialGroup: _discoverGroup,
+                                      initialSubcategory: _discoverSubcategory,
+                                      onDiscoveryChanged: _rememberDiscoverSelection,
                                       areaLabel: area?.label,
                                       loadingBusinesses:
                                           loading || loadingOnline ||
@@ -3376,43 +3397,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       mergeNearbyListings(displayShops, displayedOnline, area: area);
   // Independent home shelves. A currently selected Local Businesses tab
   // cannot silently feed businesses into the Spaza Shops home shelf.
-  List<NearbyListing> get homeSpazaListings {
-    final sellers = nearbyReal.where((s) => s.shopCategory == 'spaza').toList();
-    final key = area == null ? null : '${area!.lat},${area!.lng}';
-    final places = key != null && key == _homeSpazaAreaKey
-        ? _homeSpazaDirectory
-        : discoveryType == 'spaza'
-            ? displayedOnline
-                .where((s) =>
-                    s.shopCategory == 'spaza' &&
-                    (teyzaMatchesShopCategory(s, 'spaza') ||
-                        (s.origin == 'openstreetmap' &&
-                            s.categorizationVerified &&
-                            !teyzaIsLargeRetailer(s.name))))
-                .toList()
-            : <OnlineShop>[];
-    return mergeNearbyListings(sellers, places, area: area);
-  }
+  List<NearbyListing> get homeSpazaListings => _marketplaceListings
+      .where((entry) => _listingGroup(entry) == 'spaza').toList();
 
-  List<ShopProduct> get homeGroceryProducts => discoverShopProducts(nearbyReal,
+  List<ShopProduct> get homeGroceryProducts => discoverShopProducts(
+      nearbyReal.where((shop) => _merchantGroup(shop) == 'spaza'),
       type: 'spaza', category: 'All', limit: 18);
 
   // Product cards come only from the server-published merchant catalogue,
   // never from private seller drafts or protected wholesale offers.
-  List<NearbyListing> get nearbyOtherBusinesses {
-    if (area == null) return [];
-    final verified = live
-        .where((shop) =>
-            shop.shopCategory == 'variety' &&
-            shopMatchesArea(shop, area, radiusKm: 40.0))
-        .toList();
-    final publicResults = (discoveryType == 'variety' && online.isNotEmpty
-            ? online
-            : otherBusinesses)
-        .where((s) => teyzaMatchesShopCategory(s, 'variety'))
-        .toList();
-    return mergeNearbyListings(verified, publicResults, area: area);
-  }
+  List<NearbyListing> get nearbyOtherBusinesses => _marketplaceListings
+      .where((entry) {
+        final group = _listingGroup(entry);
+        return group != 'spaza' && group != 'wholesale';
+      }).toList();
 
   Shop? verifiedMerchantFor(OnlineShop publicPlace) {
     String normalized(String value) =>
@@ -3910,7 +3908,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                   color: ink,
                   letterSpacing: -.5)),
           SizedBox(height: 8),
-          Text('Your local shops. Your everyday favourites.',
+          Text('Your local shops. Your local businesses.',
               style: TextStyle(color: muted, fontSize: 13, height: 1.4)),
         ])),
         const SizedBox(width: 12),
@@ -3981,7 +3979,8 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                 Icon(Icons.arrow_forward_rounded,
                                     color: Colors.white, size: 21),
                               ]))))),
-            businessFilters(openDirectory: true),
+            TeyzaMarketplaceHub(onDestination: openMarketplaceDestination),
+            const SizedBox(height: 8),
             if (catalogueError != null)
               _homeNotice(catalogueError!, onRetry: () => load()),
             section('Everyday essentials',
@@ -4013,7 +4012,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                   padding: const EdgeInsets.only(top: 12),
                   child: _homeNotice(onlineWarning!, onRetry: reloadOnline)),
             section('Businesses nearby',
-                subtitle: 'Local services and people who know their craft',
+                subtitle: 'Manufacturers, product sellers, food and services',
                 action: TextButton(
                     onPressed: () => openMarketplaceDestination('businesses'),
                     child: const Text('See all'))),
@@ -4040,9 +4039,6 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                   _sponsoredIndex % _eligibleHomeAds.length,
                   _eligibleHomeAds.length),
             ],
-            section('Explore more',
-                subtitle: 'Find the right place for what you need'),
-            TeyzaMarketplaceHub(onDestination: openMarketplaceDestination),
             const SizedBox(height: 22),
             Material(
                 key: const ValueKey('teyza-wholesale-supply-entry'),
