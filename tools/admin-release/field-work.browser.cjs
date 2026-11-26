@@ -17,7 +17,18 @@ async function prepare(context,role){await context.addInitScript(({role})=>{
  for(const width of [1280,390,320]){
   const publicContext=await browser.newContext({viewport:{width,height:900}});
   const marketing=await publicContext.newPage();await marketing.goto(origin+'/agents.html');
-  await marketing.getByRole('heading',{name:'Connect businesses. Grow your community.'}).waitFor();
+  await marketing.getByRole('heading',{name:'Connect local businesses. Earn R90 per verified signup.'}).waitFor();
+  const calc=marketing.locator('.agent-earnings-calc');
+  await calc.scrollIntoViewIfNeeded();
+  assert.equal(await calc.locator('.agent-earnings-result:visible').count(),1);
+  assert.equal(await calc.locator('.agent-earnings-result:visible strong').innerText(),'R1,800');
+  for(const [count,amount] of [[0,'R0'],[1,'R90'],[5,'R450'],[10,'R900'],[50,'R4,500'],[100,'R9,000'],[20,'R1,800']]){
+   await calc.locator('label[for="earnings-'+count+'"]').click();
+   assert.equal(await calc.locator('#earnings-'+count).isChecked(),true);
+   assert.equal(await calc.locator('.agent-earnings-result:visible').count(),1);
+   assert.equal(await calc.locator('.agent-earnings-result:visible strong').innerText(),amount);
+  }
+  assert(await marketing.locator('#earnings-disclaimer').isVisible());
   for(const store of ['https://apps.apple.com/za/app/id6827037733','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'])assert(await marketing.locator('a[href="'+store+'"]').count());
   assert.equal(await marketing.locator('a[href*="download.html"]').count(),0);
   assert.equal(await marketing.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
