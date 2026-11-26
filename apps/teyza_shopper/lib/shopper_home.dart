@@ -27,6 +27,7 @@ import 'teyza_mobile_api.dart';
 import 'shop_orders.dart';
 import 'product_catalogue.dart';
 import 'discover_catalogue.dart';
+import 'discover_businesses.dart';
 import 'seller_push.dart';
 import 'seller_notifications.dart';
 import 'seller_firestore.dart';
@@ -99,6 +100,7 @@ class Shop {
   final List<Product> highlights;
   final List<Map<String, dynamic>> serviceHighlights;
   final String shopCategory;
+  final String businessType;
   final bool? acceptsCard, cashback;
   final bool sponsored, identityVerified;
   final bool liveChat;
@@ -116,6 +118,7 @@ class Shop {
       {this.latitude,
       this.longitude,
       this.shopCategory = 'spaza',
+      this.businessType = '',
       this.address = '',
       this.city = '',
       this.googlePlaceId = '',
@@ -166,6 +169,7 @@ class Shop {
           : ['variety', 'retail'].contains(x['shopCategory'])
               ? 'variety'
               : 'spaza',
+      businessType: (x['businessType'] ?? '').toString(),
       onlineOrdersEnabled: x['services'] is! Map ||
           (x['services'] as Map)['onlineOrdersEnabled'] != false,
       onlineOrdersReady: x['commerce'] is! Map ||
@@ -471,6 +475,11 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   List<OnlineShop> online = [];
   // Independent home preview: not limited to the currently selected shop tab.
   List<OnlineShop> otherBusinesses = [];
+  List<OnlineShop> _discoverSpazaDirectory = [];
+  List<OnlineShop> _discoverWholesaleDirectory = [];
+  String? _discoverAreaKey;
+  bool _loadingDiscoverDirectories = false;
+  int _discoverDirectorySerial = 0;
   List<OnlineShop> _homeSpazaDirectory = [];
   String? _homeSpazaAreaKey;
   List<Map<String, dynamic>> sponsoredAds = [];
@@ -1156,6 +1165,94 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> reloadDiscoverDirectories() async {
+    if (!mounted || session.sellerWorkspace) return;
+    final chosen = area;
+    final serial = ++_discoverDirectorySerial;
+    if (chosen == null) {
+      setState(() {
+        _discoverSpazaDirectory = [];
+        _discoverWholesaleDirectory = [];
+        _discoverAreaKey = null;
+        _loadingDiscoverDirectories = false;
+      });
+      return;
+    }
+    final areaKey = '${chosen.lat},${chosen.lng}';
+    setState(() => _loadingDiscoverDirectories = true);
+    try {
+      final results = await Future.wait<List<OnlineShop>>([
+        widget.directoryLoader != null
+          ? widget.directoryLoader!(chosen, 'spaza', 22)
+          : findOnlineShops(
+              area: chosen.label, latitude: chosen.lat,
+              longitude: chosen.lng, category: 'spaza', radiusKm: 22),
+        widget.directoryLoader != null
+          ? widget.directoryLoader!(chosen, 'wholesale', 40)
+          : findOnlineShops(
+              area: chosen.label, latitude: chosen.lat,
+              longitude: chosen.lng, category: 'wholesale', radiusKm: 40),
+      ]).timeout(const Duration(seconds: 30));
+      if (!mounted || serial != _discoverDirectorySerial) return;
+      setState(() {
+        _discoverSpazaDirectory = results[0]
+          .where((e) => teyzaMatchesShopCategory(e, 'spaza')).toList();
+        _discoverWholesaleDirectory = results[1]
+          .where((e) => teyzaMatchesShopCategory(e, 'wholesale')).toList();
+        _discoverAreaKey = areaKey;
+        _loadingDiscoverDirectories = false;
+      });
+    } catch (_) {
+      if (!mounted || serial != _discoverDirectorySerial) return;
+      setState(() {
+        _discoverAreaKey = areaKey;
+        _loadingDiscoverDirectories = false;
+      });
+    }
+  }
+
+  List<DiscoverBusiness> get discoverBusinesses {
+    if (area == null) return const <DiscoverBusiness>[];
+    final key = '${area!.lat},${area!.lng}';
+    final places = [
+      ...(_discoverAreaKey == key ? _discoverSpazaDirectory : <OnlineShop>[]),
+      ...otherBusinesses.where((e) => e.shopCategory == 'variety'),
+      ...(_discoverAreaKey == key ? _discoverWholesaleDirectory : <OnlineShop>[]),
+      ...online,
+    ];
+    final unique = <String, OnlineShop>{};
+    for (final place in places) {
+      final id = place.origin == 'google_places' && place.placeId.isNotEmpty
+          ? 'google:' + place.placeId : place.origin + ':' + place.id;
+      unique[id] = place;
+    }
+    final merged = mergeNearbyListings(nearbyReal, unique.values.toList(),
+      area: area);
+    return [
+      for (final item in merged)
+        DiscoverBusiness(
+          id: item.merchant != null
+            ? 'teyza-' + item.merchant!.id : item.directory!.id,
+          name: item.name,
+          area: item.merchant?.area ?? item.directory?.area ?? '',
+          shopCategory: item.merchant?.shopCategory ??
+              item.directory?.shopCategory ?? 'variety',
+          businessType: item.merchant?.businessType ?? '',
+          placeTypes: item.directory?.types ?? const [],
+          details: item.merchant?.address ?? item.directory?.address ?? '',
+          verified: item.merchant?.identityVerified == true,
+          onOpen: () => item.merchant != null
+            ? openShop(item.merchant!) : selectDirectory(item.directory!),
+        ),
+    ];
+  }
+
+  Future<void> refreshDiscoverBusinesses() async {
+    await Future.wait<void>([
+      load(silent: true), reloadOtherBusinesses(), reloadDiscoverDirectories(),
+    ]);
+  }
+
   Future<void> reloadOtherBusinesses() async {
     if (!mounted || session.sellerWorkspace) return;
     final currentArea = area;
@@ -1387,8 +1484,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       });
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area', 'gps');
-      await Future.wait<void>(
-          [reloadOnline(), reloadOtherBusinesses(), reloadSponsoredAds()]);
+      await Future.wait<void>([
+        reloadOnline(), reloadOtherBusinesses(),
+        reloadDiscoverDirectories(), reloadSponsoredAds(),
+      ]);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1515,8 +1614,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('teyza_selected_area', choice.label);
     }
-    final discovery = Future.wait<void>(
-        [reloadOnline(), reloadOtherBusinesses(), reloadSponsoredAds()]);
+    final discovery = Future.wait<void>([
+      reloadOnline(), reloadOtherBusinesses(),
+      reloadDiscoverDirectories(), reloadSponsoredAds(),
+    ]);
     if (resetNavigation) {
       await discovery;
     } else {
@@ -2729,7 +2830,15 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                               : tab == 5
                                   ? DiscoverCataloguePage(
                                       key: _discoverPageKey,
-                                      onEnquire: enquireAboutProduct)
+                                      onEnquire: enquireAboutProduct,
+                                      businesses: discoverBusinesses,
+                                      areaLabel: area?.label,
+                                      loadingBusinesses:
+                                          loading || loadingOnline ||
+                                          loadingOtherBusinesses ||
+                                          _loadingDiscoverDirectories,
+                                      onChooseArea: areaSheet,
+                                      onRefreshBusinesses: refreshDiscoverBusinesses)
                                   : tab == 1
                                       ? shopProductsPage()
                                       : Column(children: [
