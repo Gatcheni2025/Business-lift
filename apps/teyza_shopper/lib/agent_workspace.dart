@@ -9,8 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'shopper_design.dart';
 
-const _forest=Color(0xFF064B43),_mint=Color(0xFFD8F5E7),_violet=Color(0xFF7866D6);
+const _forest=TeyzaDesign.forest,_mint=TeyzaDesign.softMint,_violet=Color(0xFF7866D6);
 const bool _nativeMapsReady=bool.fromEnvironment('TEYZA_NATIVE_MAPS_READY',defaultValue:false);
 
 class AgentTown {
@@ -51,8 +52,8 @@ String? ownerWhatsAppLink(String raw,String privateUrl,String shopName){
  if(RegExp(r'^0[0-9]{9}$').hasMatch(digits))digits='27'+digits.substring(1);
  if(!RegExp(r'^27[0-9]{9}$').hasMatch(digits))return null;
  final message='Hello. As agreed during our visit to '+shopName+
- ', please download the Teyza app: https://teyza.co.za/download.html. '+
- 'Register or sign in as the shop owner using your own account, then personally confirm our visit: '+
+ ', please download Teyza from Google Play: https://play.google.com/store/apps/details?id=com.asiyedriver.asiye or the App Store: https://apps.apple.com/za/app/id6827037733. '+
+ 'Register or sign in as the business owner using your own account, then personally confirm our visit: '+
  privateUrl+'. Registration is free. Admin reviews verification before selling. Do not share OTPs or passwords.';
  return Uri.https('wa.me','/'+digits,{'text':message}).toString();
 }
@@ -71,7 +72,11 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
  final _phone=TextEditingController();
  Map<String,dynamic>? profile,visit;
  List<Map<String,dynamic>> registered=[],google=[],leads=[],visits=[];
- int page=0,request=0;
+ int page=4,request=0;
+ String? nextVisit,nextReward;
+ int rewardCount=0,rewardCents=0;
+ bool rewardsReady=false,rewardsPartial=false;
+ String rewardError='';
  String category='all',error='',message='',reference='';
  AgentTown area=agentTowns.first;
  double latitude=-29.8587,longitude=31.0218;
@@ -97,7 +102,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      final p=data['profile'] is Map?Map<String,dynamic>.from(data['profile'] as Map):null;
      if(!agentShouldOfferMode({'profile':p},currentUid:uid)){setState((){profile=p;loading=false;error='Your field-agent account is not approved. Contact Teyza Admin.';});return;}
      setState((){profile=p;loading=false;error='';});
-     try{await Future.wait([_search(),_loadVisits()]);}
+     try{await _refreshDashboard();}
      catch(e){if(mounted&&widget.session.userId==uid)setState(()=>error=mobileError(e));}
    }catch(e){if(mounted&&ticket==request)setState((){loading=false;error=mobileError(e);});}
  }
@@ -111,10 +116,40 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     leads=mobileRows(result['leads']);message=result['warning']?.toString()??'';
    });
  }
- Future<void> _loadVisits()async{
-   final uid=widget.session.userId;
-   final result=await service.call('agent_visits');
-   if(mounted&&widget.session.userId==uid)setState(()=>visits=mobileRows(result['visits']));
+ Future<void> _loadVisits({bool more=false})async{
+   final uid=widget.session.userId,cursor=more?nextVisit:null;
+   if(more&&cursor==null)return;
+   final result=await service.call('agent_visits',{if(cursor!=null)'after':cursor});
+   if(mounted&&widget.session.userId==uid)setState((){
+     final rows=mobileRows(result['visits']);
+     visits=more?[...visits,...rows.where((v)=>!visits.any((old)=>old['id']==v['id']))]:rows;
+     nextVisit=result['next'] is String?result['next'] as String:null;
+   });
+ }
+ Future<void> _loadRewards({bool more=false})async{
+   final uid=widget.session.userId,cursor=more?nextReward:null;
+   if(more&&cursor==null)return;
+   try{
+     final result=await service.call('agent_rewards',{if(cursor!=null)'after':cursor});
+     if(!mounted||widget.session.userId!=uid)return;
+     if(result['approvedPendingPaymentCents'] is! num||result['approvedCount'] is! num)
+       throw StateError('Reward summary unavailable');
+     setState((){
+       rewardCents=(more?rewardCents:0)+(result['approvedPendingPaymentCents'] as num).toInt();
+       rewardCount=(more?rewardCount:0)+(result['approvedCount'] as num).toInt();
+       nextReward=result['next'] is String?result['next'] as String:null;
+       rewardsPartial=result['partial']==true||nextReward!=null;
+       rewardsReady=true;rewardError='';
+     });
+   }catch(_){
+     if(mounted&&widget.session.userId==uid)setState((){
+       if(!more)rewardsReady=false;
+       rewardError='Could not verify rewards. Refresh to try again.';
+     });
+   }
+ }
+ Future<void> _refreshDashboard()async{
+   await Future.wait([_loadVisits(),_loadRewards()]);
  }
  Future<void> _selectTown(AgentTown town)async{
    setState((){area=town;latitude=town.latitude;longitude=town.longitude;});
@@ -157,9 +192,9 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     builder:(ctx)=>StatefulBuilder(builder:(ctx,setSheet)=>Padding(
      padding:EdgeInsets.fromLTRB(20,12,20,MediaQuery.viewInsetsOf(ctx).bottom+22),
      child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('Register a shop visit',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800,color:_forest)),
+      const Text('Invite a business owner',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800,color:_forest)),
       const SizedBox(height:8),
-      const Text('Confirm the shop details with the owner. This does not create their seller account.'),
+      const Text('Invite a spaza shop or any eligible local business. Record the visit with permission; the owner registers on their own account.'),
       const SizedBox(height:14),TextField(controller:name,decoration:const InputDecoration(labelText:'Shop / business name',border:OutlineInputBorder())),
       const SizedBox(height:12),TextField(controller:address,decoration:const InputDecoration(labelText:'Full street address',border:OutlineInputBorder())),
       const SizedBox(height:12),TextField(controller:suburb,decoration:const InputDecoration(labelText:'Town or suburb',border:OutlineInputBorder())),
@@ -177,7 +212,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
         await _openVisit(Map<String,dynamic>.from(result['visit'] as Map));
         await _loadVisits();
        }catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(mobileError(e))));}
-      }:null,icon:const Icon(Icons.camera_alt_outlined),label:const Text('Save visit & capture photos')),
+      }:null,icon:const Icon(Icons.camera_alt_outlined),label:const Text('Start owner registration visit')),
      ]))),
     ));
   }finally{name.dispose();address.dispose();suburb.dispose();}
@@ -226,11 +261,11 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
  }
  Future<void> _sendInvite()async{
   final v=visit;if(v==null)return;
-  if(!ownerConsent)throw StateError('The owner must first agree to the WhatsApp invitation.');
-  final digits=_phone.text;
-  if(ownerWhatsAppLink(digits,'https://teyza.co.za/owner-confirm.html#placeholder',v['shopName']?.toString()??'shop')==null)
-   throw StateError('Enter a South African WhatsApp number, e.g. 082 123 4567.');
   await _operate(()async{
+    if(!ownerConsent)throw StateError('The owner must first agree to the WhatsApp invitation.');
+    final digits=_phone.text;
+    if(ownerWhatsAppLink(digits,'https://teyza.co.za/owner-confirm.html#placeholder',v['shopName']?.toString()??'business')==null)
+      throw StateError('Enter a South African WhatsApp number, e.g. 082 123 4567.');
     final result=await service.call('agent_owner_link',{'visitId':v['id']});
     final url=result['url']?.toString()??'';
     if(!url.startsWith('https://teyza.co.za/owner-confirm.html#'))throw StateError('Invalid owner confirmation link.');
@@ -309,24 +344,78 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    ])));
  }
  Widget _header(){
-  return Container(padding:const EdgeInsets.fromLTRB(20,18,20,14),
-   decoration:const BoxDecoration(gradient:LinearGradient(colors:[Color(0xFF083D40),Color(0xFF147D70)],begin:Alignment.topLeft,end:Alignment.bottomRight)),
+  return TeyzaBrandPanel(radius:0,padding:const EdgeInsets.fromLTRB(20,18,20,14),
    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Row(children:[const Icon(Icons.store_mall_directory_outlined,color:Color(0xFFC4F5D2)),
-     const SizedBox(width:8),const Expanded(child:Text('TEYZA · FIELD TEAM',style:TextStyle(color:Colors.white,fontSize:14,fontWeight:FontWeight.w800))),
+    Row(children:[const TeyzaWordmark(width:114,darkSurface:true),
+     const SizedBox(width:12),const Expanded(child:Text('FIELD TEAM',style:TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.w800))),
      PopupMenuButton<String>(icon:const Icon(Icons.switch_account_outlined,color:Colors.white),
       onSelected:(mode){if(mode=='shopper')widget.onShopper();else if(mode=='seller')widget.onSeller();},
       itemBuilder:(_)=>[const PopupMenuItem(value:'shopper',child:Text('Shopper mode')),const PopupMenuItem(value:'seller',child:Text('Seller mode'))])]),
     const SizedBox(height:18),
     Text('Hello, '+(profile?['name']?.toString().split(' ').first??'Agent'),
        style:const TextStyle(color:Colors.white,fontSize:27,fontWeight:FontWeight.w800)),
-    const Text('Find shops. Meet owners. Grow Teyza.',style:TextStyle(color:Color(0xFFD7F7E8),fontSize:13)),
+    const Text('Connect businesses. Grow your community.',style:TextStyle(color:Color(0xFFD7F7E8),fontSize:13)),
     const SizedBox(height:14),
     Container(padding:const EdgeInsets.all(11),decoration:BoxDecoration(color:Colors.white.withOpacity(.13),borderRadius:BorderRadius.circular(14)),
      child:const Row(children:[Icon(Icons.shield_outlined,color:Colors.white),SizedBox(width:10),
-      Expanded(child:Text('R90 per newly registered, verified and Admin-attributed shop · no automatic payment',style:TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.w700)))])),
+      Expanded(child:Text('R90 per qualifying new verified business · no automatic payout',style:TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.w700)))])),
    ]));
  }
+ Widget _dashboard(){
+   final submitted=visits.where((v)=>v['status']=='submitted').length;
+   final confirmed=visits.where((v)=>v['ownerConfirmed']==true).length;
+   return RefreshIndicator(onRefresh:()=>_operate(_refreshDashboard),child:ListView(
+    key:const ValueKey('agent-dashboard'),padding:const EdgeInsets.fromLTRB(16,16,16,30),children:[
+     Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(
+       gradient:TeyzaDesign.brandGradient,borderRadius:BorderRadius.circular(24)),
+       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('APPROVED REWARDS',style:TextStyle(color:Color(0xFFC4F5D2),fontSize:11,fontWeight:FontWeight.w800,letterSpacing:1.5)),
+        const SizedBox(height:8),
+        Text(rewardsReady?'R'+(rewardCents/100).toStringAsFixed(2):'Unavailable',
+          key:const ValueKey('agent-approved-rewards'),
+          style:const TextStyle(color:Colors.white,fontSize:32,fontWeight:FontWeight.w900)),
+        const SizedBox(height:5),
+        Text(rewardsReady?'$rewardCount verified registrations · awaiting payment':'Refresh to check your approved rewards',
+          style:const TextStyle(color:Colors.white,fontSize:12)),
+        if(rewardsPartial)const Padding(padding:EdgeInsets.only(top:6),
+          child:Text('Loaded rewards only. More records are available.',style:TextStyle(color:Colors.white,fontSize:11))),
+        if(rewardError.isNotEmpty)Text(rewardError,style:const TextStyle(color:Colors.white,fontSize:12)),
+        if(nextReward!=null)TextButton(onPressed:busy?null:()=>_operate(()=>_loadRewards(more:true)),
+          child:const Text('Load more rewards',style:TextStyle(color:Colors.white))),
+       ])),
+     const SizedBox(height:12),
+     Row(children:[
+       Expanded(child:_metric('Visits loaded',visits.length)),
+       const SizedBox(width:8),Expanded(child:_metric('Owner confirmed',confirmed)),
+       const SizedBox(width:8),Expanded(child:_metric('Awaiting review',submitted)),
+     ]),
+     if(nextVisit!=null)const Text('More visits available in My visits.',style:TextStyle(fontSize:11)),
+     const SizedBox(height:18),
+     FilledButton.icon(key:const ValueKey('agent-invite-business'),
+       onPressed:busy?null:()=>_startVisit(null),icon:const Icon(Icons.person_add_alt_1_outlined),
+       label:const Text('Invite a business owner'),style:FilledButton.styleFrom(backgroundColor:TeyzaDesign.leaf,foregroundColor:Colors.white,minimumSize:const Size.fromHeight(54))),
+     const SizedBox(height:8),
+     OutlinedButton.icon(key:const ValueKey('agent-find-opportunities'),onPressed:busy?null:()async{
+       setState(()=>page=0);await _operate(_search);},
+       icon:const Icon(Icons.map_outlined),label:const Text('Find shops & businesses on the map')),
+     const SizedBox(height:16),
+     const Text('How you earn R90',style:TextStyle(color:_forest,fontSize:18,fontWeight:FontWeight.w800)),
+     const SizedBox(height:8),
+     const Text('1. Visit a new shop or business with permission.\n2. Invite the owner to register using their own account.\n3. Complete owner confirmation and private visit evidence.\n4. Teyza reviews the registration and your work. Each qualifying verified seller earns one R90 reward. No overall referral cap.',
+       style:TextStyle(fontSize:13,height:1.5)),
+     const SizedBox(height:14),
+     const Text('Rewards awaiting payment are not bank transfers. Never collect owner passwords, OTPs or banking details.',
+       style:TextStyle(fontSize:12,color:Color(0xFF657D7A),height:1.5)),
+   ]));
+ }
+ Widget _metric(String label,int value)=>Container(
+   constraints:const BoxConstraints(minHeight:95),
+   padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.white,
+     borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE2ECE9))),
+   child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     Text(value.toString(),style:const TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:_forest)),
+     const SizedBox(height:5),Text(label,style:const TextStyle(fontSize:10,height:1.2)),
+   ]));
  Widget _explore(){
   final rows=registeredOnly?registered:opportunities;
   return RefreshIndicator(onRefresh:()=>_search(),child:ListView(padding:const EdgeInsets.all(16),children:[
@@ -357,9 +446,9 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
   ]));
  }
  Widget _visits(){
-  return RefreshIndicator(onRefresh:_loadVisits,child:ListView(padding:const EdgeInsets.all(16),children:[
-    Row(children:[const Expanded(child:Text('Your shop visits',style:TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:_forest))),
-      TextButton.icon(onPressed:()=>_startVisit(null),icon:const Icon(Icons.add),label:const Text('New visit'))]),
+  return RefreshIndicator(onRefresh:()=>_operate(_refreshDashboard),child:ListView(padding:const EdgeInsets.all(16),children:[
+    Row(children:[const Expanded(child:Text('Your business visits',style:TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:_forest))),
+      TextButton.icon(onPressed:()=>_startVisit(null),icon:const Icon(Icons.add),label:const Text('Invite owner'))]),
     const Text('Only Admin-approved registrations qualify for a R90 reward. A visit alone is not a payment.'),
     const SizedBox(height:14),
     if(visits.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Text('No visits yet. Choose a shop on the Explore map, or create a visit with the owner.'))),
@@ -368,6 +457,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
       title:Text(v['shopName']?.toString()??'Shop'),
       subtitle:Text((v['area']?.toString()??'')+' · '+agentVisitStatus(v['status']?.toString()??'')),
       trailing:const Icon(Icons.chevron_right),onTap:()=>_openVisit(v))),
+    if(nextVisit!=null) OutlinedButton(onPressed:busy?null:()=>_operate(()=>_loadVisits(more:true)),child:const Text('Load more visits')),
     const SizedBox(height:90),
   ]));
  }
@@ -419,22 +509,28 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     FilledButton(onPressed:_load,child:const Text('Check approval again')),
     TextButton(onPressed:widget.onShopper,child:const Text('Continue as Shopper'))
    ]))));
-  return Scaffold(backgroundColor:const Color(0xFFF7F9FC),
+  return Scaffold(backgroundColor:TeyzaDesign.ivory,
    body:SafeArea(child:Column(children:[
      _header(),
      if(error.isNotEmpty)Container(width:double.infinity,color:const Color(0xFFFFF0E7),padding:const EdgeInsets.all(9),child:Text(error,style:const TextStyle(color:Colors.deepOrange))),
      if(busy)const LinearProgressIndicator(minHeight:3,color:_violet),
-     Expanded(child:page==0?_explore():page==1?_visits():_visitDetails()),
+     Expanded(child:page==4?_dashboard():page==0?_explore():page==1?_visits():_visitDetails()),
    ])),
    bottomNavigationBar:SafeArea(top:false,child:Container(padding:const EdgeInsets.fromLTRB(24,9,24,12),color:Colors.white,child:Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-    _nav(Icons.map_outlined,'Explore',0),_nav(Icons.assignment_outlined,'My visits',1),
+    _nav(Icons.space_dashboard_outlined,'Dashboard',4),_nav(Icons.map_outlined,'Explore',0),_nav(Icons.assignment_outlined,'My visits',1),
     _nav(Icons.person_outline,'Shopper',3),
    ]))));
  }
  Widget _nav(IconData icon,String label,int target){
   final active=target==page||(target==1&&page==2);
   return Expanded(child:InkWell(borderRadius:BorderRadius.circular(12),
-   onTap:()=>target==3?widget.onShopper():setState(()=>page=target),
+   key:ValueKey('agent-nav-$target'),
+   onTap:()async{
+     if(target==3){widget.onShopper();return;}
+     setState(()=>page=target);
+     if(target==0)await _operate(_search);
+     if(target==4)await _operate(_refreshDashboard);
+   },
    child:Container(padding:const EdgeInsets.symmetric(vertical:5),decoration:BoxDecoration(
     color:active?_mint:Colors.transparent,borderRadius:BorderRadius.circular(12)),
     child:Column(mainAxisSize:MainAxisSize.min,children:[

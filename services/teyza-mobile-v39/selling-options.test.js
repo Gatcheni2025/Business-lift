@@ -1,10 +1,13 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const catalogue=require('./catalogue'),types=require('./business-types'),units=require('./selling-units');
-test('All 31 business subtypes belong to exactly one existing authorised seller account class',()=>{
+test('All 61 business subtypes belong to exactly one existing authorised seller account class',()=>{
  const values=Object.values(types.categories).flat();
- assert.equal(values.length,31);
- assert.equal(new Set(values).size,31);
+ assert.equal(values.length,61);
+ assert.equal(new Set(values).size,61);
+ assert.equal(types.selected('retail','manufacturing_clothing'),'manufacturing_clothing');
+ assert.equal(types.selected('spaza','electronics_shop'),'electronics_shop');
+ assert.throws(()=>types.selected('spaza','manufacturing_clothing'),{status:422});
  for(const [category,ids] of Object.entries(types.categories)){
   for(const type of ids){
    assert(types.valid(category,type));

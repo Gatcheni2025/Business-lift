@@ -1392,3 +1392,31 @@ test('An eligible catalogue item is sold as a truthful non-scale portion through
  assert.equal(published.priceCents,1300);
  assert.equal(published.stock,7);
 });
+
+
+test('Manufacturer product offerings publish validated category, enquiry price and fulfilment terms without checkout',async()=>{
+ const f=fixture({
+  'teyzaSellerAccounts/seller1':{...seller,category:'retail',businessType:'manufacturing_clothing'},
+  'teyzaPublicShops/seller1':{...shop,shopCategory:'retail',products:[],productHighlights:[]}
+ });
+ const added=await f.service.execute(owner,'business_service_save',{
+  kind:'product',type:'Fashion & accessories',name:'Custom uniforms',
+  description:'Made to order',priceCents:45000,
+  paymentMethods:['eft','cash'],fulfilmentTypes:['collection','courier']});
+ assert.equal(added.saved,true);
+ const row=(await f.service.publicDirectory()).entries.find(x=>x.id==='seller1');
+ assert.deepEqual(row.products,[]);
+ const offering=row.serviceHighlights.find(x=>x.id===added.serviceId);
+ assert.equal(offering.kind,'product');
+ assert.equal(offering.type,'Fashion & accessories');
+ assert.equal(offering.priceCents,45000);
+ assert.deepEqual(offering.paymentMethods,['eft','cash']);
+ assert.deepEqual(offering.fulfilmentTypes,['collection','courier']);
+ assert.equal(offering.checkoutAvailable,false);
+ await rejects(f.service.execute(owner,'business_service_save',{
+  kind:'product',type:'Fashion & accessories',name:'Uniforms',paymentMethods:['card_online']}),422);
+ await rejects(f.service.execute(owner,'business_service_save',{
+  kind:'product',type:'Plumbing',name:'Uniforms'}),422);
+ await rejects(f.service.execute(owner,'business_service_save',{
+  kind:'product',type:'Fashion & accessories',name:'Uniforms',fulfilmentTypes:['remote']}),422);
+});

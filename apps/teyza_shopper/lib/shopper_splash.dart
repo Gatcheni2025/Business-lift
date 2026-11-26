@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'shopper_design.dart';
 
 /// A quiet first frame, never a gate on authentication, photos or location.
@@ -11,8 +10,9 @@ class ShopperLaunchScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: TeyzaDesign.ivory,
-        body: SafeArea(
+        backgroundColor: TeyzaDesign.deepTeal,
+        body: TeyzaBrandPanel(radius: 0, padding: EdgeInsets.zero,
+          child: SafeArea(
             child: Center(
                 child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
@@ -20,44 +20,39 @@ class ShopperLaunchScreen extends StatelessWidget {
               liveRegion: true,
               label: 'Teyza. $message',
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                    width: 104,
-                    height: 104,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                        color: TeyzaDesign.softMint,
-                        borderRadius: BorderRadius.circular(32)),
-                    child:
-                        SvgPicture.asset('assets/brand/teyza-sprout-icon.svg')),
-                const SizedBox(height: 25),
-                SvgPicture.asset('assets/brand/teyza-sprout-wordmark.svg',
-                    width: 176, height: 56, fit: BoxFit.contain),
-                const SizedBox(height: 12),
+                const TeyzaWordmark(width: 240, darkSurface: true),
+                const SizedBox(height: 22),
                 const Text('Good things, close to home.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: TeyzaDesign.forest, fontSize: 17)),
+                    style: TextStyle(color: Colors.white, fontSize: 21,
+                      fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                const Text('Shop · Discover · Order · Grow',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: TeyzaDesign.mint, fontSize: 14,
+                      fontWeight: FontWeight.w700)),
                 const SizedBox(height: 44),
                 // Static progress respects reduced motion; no endless animation.
                 Container(
                     width: 96,
                     height: 4,
                     decoration: BoxDecoration(
-                        color: TeyzaDesign.border,
+                        color: const Color(0x3379D91B),
                         borderRadius: BorderRadius.circular(4)),
                     alignment: Alignment.centerLeft,
                     child: Container(
                         width: 38,
                         height: 4,
                         decoration: BoxDecoration(
-                            color: TeyzaDesign.forest,
+                            color: TeyzaDesign.lime,
                             borderRadius: BorderRadius.circular(4)))),
                 const SizedBox(height: 16),
                 Text(message,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: TeyzaDesign.muted, fontSize: 13)),
+                        color: Colors.white, fontSize: 13)),
               ])),
-        ))),
+        )))),
       );
 }
 

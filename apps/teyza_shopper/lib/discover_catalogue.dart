@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'shopper_design.dart';
 import 'product_catalogue.dart';
+import 'discover_businesses.dart';
 
 String discoverCategoryLabel(String category) => switch (category) {
   'Baby Care' => 'Baby',
@@ -16,20 +18,70 @@ String discoverCategoryLabel(String category) => switch (category) {
 class DiscoverCataloguePage extends StatefulWidget {
   final Future<List<CatalogueProduct>> Function()? loader;
   final ValueChanged<CatalogueProduct> onEnquire;
-  const DiscoverCataloguePage({super.key, this.loader, required this.onEnquire});
+  final List<DiscoverBusiness>? businesses;
+  final String? areaLabel;
+  final VoidCallback? onChooseArea;
+  final Future<void> Function()? onRefreshBusinesses;
+  final bool loadingBusinesses;
+  final String initialSection, initialGroup, initialSubcategory;
+  final void Function(String, String, String)? onDiscoveryChanged;
+  const DiscoverCataloguePage({
+    super.key, this.loader, required this.onEnquire,
+    this.businesses, this.areaLabel, this.onChooseArea,
+    this.onRefreshBusinesses, this.loadingBusinesses = false,
+    this.initialSection = 'shops', this.initialGroup = 'all',
+    this.initialSubcategory = 'all', this.onDiscoveryChanged,
+  });
   @override
   State<DiscoverCataloguePage> createState() => DiscoverCataloguePageState();
 }
 
 class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
-  static const ink = Color(0xFF202B35), green = Color(0xFF078E66);
+  static const ink = TeyzaDesign.ink, green = TeyzaDesign.leaf;
   final search = TextEditingController();
   List<CatalogueProduct> products = [];
   String? selectedCategory, error;
   bool loading = true;
+  late String section, businessCategory, businessSubcategory;
+  bool get browsingDirectory => section != 'products';
+  bool get browsingShops => section == 'shops';
 
   @override
-  void initState() { super.initState(); load(); }
+  void initState() {
+    super.initState();
+    section = widget.businesses == null ? 'products' : widget.initialSection;
+    businessCategory = section == 'shops' ? 'spaza' : widget.initialGroup;
+    businessSubcategory = widget.initialSubcategory;
+    load();
+  }
+
+  void reportDiscovery() =>
+    widget.onDiscoveryChanged?.call(section, businessCategory, businessSubcategory);
+
+  void switchView(String next) {
+    if (section == next) return;
+    setState(() {
+      section = next;
+      selectedCategory = null;
+      businessCategory = next == 'shops' ? 'spaza' : 'all';
+      businessSubcategory = 'all';
+      search.clear();
+    });
+    reportDiscovery();
+  }
+
+  void selectBusinessGroup(String value) {
+    setState(() {
+      businessCategory = value;
+      businessSubcategory = 'all';
+    });
+    reportDiscovery();
+  }
+
+  void selectBusinessSubcategory(String value) {
+    setState(() => businessSubcategory = value);
+    reportDiscovery();
+  }
   @override
   void dispose() { search.dispose(); super.dispose(); }
 
@@ -46,8 +98,24 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
   }
 
   bool backToCategories() {
-    if (selectedCategory == null && search.text.isEmpty) return false;
-    setState(() { selectedCategory = null; search.clear(); });
+    if (browsingDirectory) {
+      if (businessSubcategory == 'all' &&
+          (browsingShops || businessCategory == 'all') &&
+          search.text.isEmpty) return false;
+      setState(() {
+        if (search.text.isNotEmpty) {
+          search.clear();
+        } else if (businessSubcategory != 'all') {
+          businessSubcategory = 'all';
+        } else if (!browsingShops) {
+          businessCategory = 'all';
+        }
+      });
+      reportDiscovery();
+    } else {
+      if (selectedCategory == null && search.text.isEmpty) return false;
+      setState(() { selectedCategory = null; search.clear(); });
+    }
     FocusScope.of(context).unfocus();
     return true;
   }
@@ -59,19 +127,62 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
       ..sort((a, b) => discoverCategoryLabel(a).compareTo(discoverCategoryLabel(b)));
     final items = products.where((p) => p.matches(query, selectedCategory ?? 'All')).toList();
     final showCategories = selectedCategory == null && query.isEmpty;
-    return ColoredBox(color: const Color(0xFFEEF1F5), child: Column(children: [
-      Container(color: ink, padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
+    return ColoredBox(color: TeyzaDesign.ivory, child: Column(children: [
+      TeyzaBrandPanel(radius: 0, padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Discover', style: TextStyle(fontSize: 29,
             fontWeight: FontWeight.w900, color: Colors.white)),
           const SizedBox(height: 5),
-          const Text('Explore everyday essentials',
-            style: TextStyle(color: Color(0xFFCED9E0), fontSize: 13)),
-          const SizedBox(height: 17),
+          Text(widget.businesses != null
+              ? 'Find local businesses, fast food, services and products'
+              : 'Explore everyday essentials',
+            style: const TextStyle(color: Color(0xFFCED9E0), fontSize: 13)),
+          if (widget.businesses != null) ...[
+            const SizedBox(height: 13),
+            Wrap(spacing: 9, runSpacing: 7, children: [
+              ChoiceChip(
+                key: const ValueKey('discover-shops-tab'),
+                label: const Text('Shops'),
+                backgroundColor: const Color(0xFF28666A),
+                selectedColor: TeyzaDesign.leaf,
+                showCheckmark: false, side: BorderSide.none,
+                labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                selected: section != 'businesses',
+                onSelected: (_) => switchView('shops')),
+              ChoiceChip(
+                key: const ValueKey('discover-businesses-tab'),
+                label: const Text('Businesses'),
+                backgroundColor: const Color(0xFF28666A),
+                selectedColor: TeyzaDesign.orange,
+                showCheckmark: false, side: BorderSide.none,
+                labelStyle: TextStyle(color: section == 'businesses' ? TeyzaDesign.deepTeal : Colors.white, fontWeight: FontWeight.w800),
+                selected: section == 'businesses',
+                onSelected: (_) => switchView('businesses')),
+            ]),
+          ],
+          if (widget.businesses != null && section != 'businesses') ...[
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, children: [
+              TextButton(onPressed: () => switchView('shops'),
+                key: const ValueKey('discover-nearby-shops-tab'),
+                child: Text('Nearby shops', style: TextStyle(
+                  color: browsingShops ? Colors.white : const Color(0xFFCED9E0),
+                  fontWeight: browsingShops ? FontWeight.w800 : FontWeight.w400))),
+              TextButton(onPressed: () => switchView('products'),
+                key: const ValueKey('discover-products-tab'),
+                child: Text('Products', style: TextStyle(
+                  color: section == 'products' ? Colors.white : const Color(0xFFCED9E0),
+                  fontWeight: section == 'products' ? FontWeight.w800 : FontWeight.w400))),
+            ]),
+          ],
+          const SizedBox(height: 14),
           TextField(key: const ValueKey('discover-search'), controller: search,
             onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.search,
-            decoration: InputDecoration(hintText: 'Search products and brands',
+            decoration: InputDecoration(
+              hintText: browsingDirectory
+                ? (browsingShops ? 'Search nearby shops' : 'Search businesses, products and services')
+                : 'Search products and brands',
               prefixIcon: const Icon(Icons.search, color: ink),
               suffixIcon: query.isEmpty ? null : IconButton(tooltip: 'Clear search',
                 onPressed: () => setState(search.clear), icon: const Icon(Icons.close)),
@@ -79,7 +190,20 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(17),
                 borderSide: BorderSide.none))),
         ])),
-      Expanded(child: loading
+      Expanded(child: browsingDirectory
+        ? TeyzaDiscoverBusinesses(
+            businesses: widget.businesses ?? const <DiscoverBusiness>[],
+            areaLabel: widget.areaLabel,
+            query: query,
+            category: businessCategory,
+            subcategory: businessSubcategory,
+            shopsOnly: browsingShops,
+            loading: widget.loadingBusinesses,
+            onChooseArea: widget.onChooseArea,
+            onRefresh: widget.onRefreshBusinesses,
+            onCategorySelected: selectBusinessGroup,
+            onSubcategorySelected: selectBusinessSubcategory)
+        : loading
         ? const Center(child: CircularProgressIndicator())
         : error != null
           ? Center(child: Padding(padding: const EdgeInsets.all(24),

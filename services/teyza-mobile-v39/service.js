@@ -923,7 +923,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
         if((wholesaleOnly&&a?.category!=='wholesale') ||
            (shop.shopCategory && shop.shopCategory!==a.category) ||
            !P.state(uid,a,o||{},v,shop,b,clock()).live)return null;
-        const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,
+        const pin=P.locationFor(uid,a,l,shop,clock()),current=P.locationMatches(uid,a,l),projected={...shop,name:a.shopName,address:a.address||'',shopCategory:a.category,businessType:a.businessType||'',
            sponsored:P.entitled(uid,a,b,clock())&&promo?.ownerUid===uid&&promo.status==='active'&&promo.endsAt>clock(),
           area:pin?.area||(current?l.area:null)||(shop.address&&shop.address!==a.address?a.address:shop.area)||a.address||'',
           city:pin?.city||(current?l.city:'')||(!l&&(!shop.address||shop.address===a.address)?shop.city||'':'')};

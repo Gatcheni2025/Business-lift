@@ -111,32 +111,54 @@ void main() {
     expect(find.byKey(const ValueKey('nav-shop')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets(
-      'Existing email uses the same account resolution as social sign-in',
-      (tester) async {
-    final session = FakeSession();
-    var resolved = false;
-    await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-            body: ShopperAccountPanel(
-                session: session, onAuthenticated: () => resolved = true))));
-    final legacy = find.text('Already registered with email?');
-    await tester.ensureVisible(legacy);
-    await tester.tap(legacy);
-    await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byType(TextFormField).at(0), 'shop@example.test');
-    await tester.enterText(find.byType(TextFormField).at(1), 'password123');
-    final button = find.text('Sign in');
-    await tester.ensureVisible(button);
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-    expect(resolved, true);
-    expect(session.sellerWorkspace, false);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    session.dispose();
-  });
+  for (final size in [const Size(800, 600), const Size(320, 640)]) {
+    testWidgets(
+        'Existing email uses the same account resolution as social sign-in at ${size.width.toInt()} px',
+        (tester) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final session = FakeSession();
+      var resolved = false;
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: ShopperAccountPanel(
+                  session: session, onAuthenticated: () => resolved = true))));
+      await tester.pumpAndSettle();
+      expect(find.byType(TeyzaWordmark), findsOneWidget);
+
+      // Exercise the actual scrollable form. Wait for layout to settle before
+      // tapping, and require each control to be reachable by a user.
+      Future<void> reveal(Finder target) async {
+        await tester.scrollUntilVisible(target, 100,
+            scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(target);
+        await tester.pumpAndSettle();
+        expect(target.hitTestable(), findsOneWidget);
+      }
+
+      final legacy = find.byKey(const ValueKey('teyza-existing-email-toggle'));
+      await reveal(legacy);
+      await tester.tap(legacy);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextFormField), findsNWidgets(2));
+      final email = find.byType(TextFormField).at(0);
+      final password = find.byType(TextFormField).at(1);
+      await reveal(email);
+      await tester.enterText(email, 'shop@example.test');
+      await reveal(password);
+      await tester.enterText(password, 'password123');
+      final button = find.widgetWithText(FilledButton, 'Sign in');
+      await reveal(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(resolved, true);
+      expect(session.sellerWorkspace, false);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      session.dispose();
+    });
+  }
   testWidgets('Cart survives Home and Shops navigation', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -322,12 +344,27 @@ void main() {
           precacheImage(AssetImage('assets/catalogue/' + atlas), photoContext)
       ]);
     });
-    // Discover opens product categories; shop discovery stays on Home.
+    // Capture both marketplace destinations and the existing product guide.
     await tester.tap(find.byKey(const ValueKey('nav-discover')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('discover-business-categories')),
+        findsOneWidget);
+    await capture('discover-shops');
+    await tester.tap(find.byKey(const ValueKey('discover-businesses-tab')));
+    await tester.pumpAndSettle();
+    await capture('discover-businesses');
+    final foodCategory=find.byKey(const ValueKey('discover-business-category-food'));
+    await tester.ensureVisible(foodCategory);
+    await tester.pumpAndSettle();
+    await tester.tap(foodCategory);
+    await tester.pumpAndSettle();
+    await capture('discover-food-subcategories');
+    await tester.tap(find.byKey(const ValueKey('discover-shops-tab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('discover-products-tab')));
     await tester.pumpAndSettle();
     expect(find.byKey(const PageStorageKey('discover-categories')),
         findsOneWidget);
-    expect(find.text('Nearby shops'), findsNothing);
     expect(tester.takeException(), isNull);
     await capture('discover-categories');
     await tester.tap(find.byKey(const ValueKey('discover-category-Bakery')));

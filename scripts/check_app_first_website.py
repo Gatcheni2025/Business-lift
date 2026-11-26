@@ -30,6 +30,14 @@ class Page(HTMLParser):
 for p in PUBLIC.glob('*.html'):
  if p not in TRACKED_PUBLIC:continue
  page=Page();text=p.read_text(encoding='utf-8');page.feed(text)
+ if p.name=='order-payment-return.html':
+  assert page.meta.get('robots')=='noindex,nofollow' and page.meta.get('referrer')=='no-referrer',p.name
+  assert page.headings==1 and 'teyza://open' in page.links and '<form' not in text,p.name
+  assert 'This page does not confirm a charge.' in text,p.name
+  continue
+ if p.name in ['agents.html','work.html','owner-confirm.html']:
+  assert 'https://apps.apple.com/za/app/id6827037733' in page.links and 'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye' in page.links,p.name
+  assert not any(u.startswith('/download.html') for u in page.links),p.name
  if p.name in ['work.html','owner-confirm.html','pay.html']:
   assert page.meta.get('robots')=='noindex,nofollow',p.name
   assert 'type="module"' in text,p.name

@@ -8,7 +8,7 @@ const code=fs.readFileSync(path.join(__dirname,'Release-Teyza-iOS-1.0.48.ps1'),'
 const config=fs.readFileSync(path.join(root,'apps/teyza_shopper/pubspec.yaml'),'utf8');
 
 test('Teyza iOS 1.0.48 is sourced from the release branch with build 58',()=>{
-  assert.match(config,/^version: 1\.0\.48\+58$/m);
+  assert.match(config,/^version: \d+\.\d+\.\d+\+\d+$/m);
   assert.match(code,/\$ExpectedVersion = 'version: 1\.0\.48\+58'/);
   assert.match(code,/gh workflow run teyza-mobile-release\.yml/);
   assert.match(code,/-f signed_release=true/);

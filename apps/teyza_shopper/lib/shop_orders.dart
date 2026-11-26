@@ -963,7 +963,7 @@ class _CheckoutState extends State<ShopperCheckoutPage> {
                   height: 30,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                      color: TeyzaDesign.softMint,
+                      color: TeyzaDesign.softOrange,
                       borderRadius: BorderRadius.circular(10)),
                   child: Text(number,
                       style: const TextStyle(
@@ -988,6 +988,9 @@ class _CheckoutState extends State<ShopperCheckoutPage> {
     return Scaffold(
         backgroundColor: TeyzaDesign.ivory,
         appBar: AppBar(
+            backgroundColor: TeyzaDesign.deepTeal,
+            foregroundColor: Colors.white,
+            flexibleSpace: const DecoratedBox(decoration: BoxDecoration(gradient: TeyzaDesign.brandGradient)),
             title: Text(widget.wholesale
                 ? 'Wholesale stock request'
                 : 'Your checkout')),
@@ -1221,6 +1224,7 @@ class _CheckoutState extends State<ShopperCheckoutPage> {
                       icon: const Icon(Icons.refresh),
                       label: const Text('Refresh order total')),
                   FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: TeyzaDesign.leaf, foregroundColor: Colors.white),
                       onPressed: !editable ||
                               checking ||
                               quote == null ||

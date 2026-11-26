@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:teyza_shopper/shopper_splash.dart';
+import 'package:teyza_shopper/shopper_design.dart';
 
 void main() {
   testWidgets('Branded launch remains static when reduced motion is requested',
@@ -11,7 +12,14 @@ void main() {
             data: MediaQueryData(disableAnimations: true),
             child: ShopperLaunchScreen())));
     await tester.pumpAndSettle();
-    expect(find.byType(SvgPicture), findsNWidgets(2));
+    // The approved launch design has one complete wordmark, not separate
+    // icon and text graphics. Retain the reduced-motion checks below.
+    expect(find.byType(TeyzaWordmark), findsOneWidget);
+    expect(tester.widget<TeyzaWordmark>(find.byType(TeyzaWordmark)).darkSurface,
+        isTrue);
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(tester.widget<SvgPicture>(find.byType(SvgPicture)).semanticsLabel,
+        'Teyza');
     expect(find.text('Opening your neighbourhood…'), findsOneWidget);
     expect(find.text('Good things, close to home.'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);

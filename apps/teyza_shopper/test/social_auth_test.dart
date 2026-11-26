@@ -73,7 +73,11 @@ void main(){
   await t.tap(find.byKey(ValueKey(owner?'registration-seller':'registration-shopper')));
   await t.pumpAndSettle();
   if(owner){
+    final shops=find.widgetWithText(ChoiceChip,'Shops');
+    await t.ensureVisible(shops);await t.pumpAndSettle();
+    await t.tap(shops);await t.pumpAndSettle();
     await t.ensureVisible(find.byKey(const ValueKey('registration-business-spaza_shop')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const ValueKey('registration-business-spaza_shop')));
     await t.pumpAndSettle();
   }

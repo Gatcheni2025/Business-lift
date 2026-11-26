@@ -3,22 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/teyza_marketplace_hub.dart';
 
 void main() {
-  testWidgets('Teyza marketplace separates spaza shops, businesses and wholesalers',
+  testWidgets('Teyza marketplace presents Shops and Businesses as the two main destinations',
       (tester) async {
     final selected=<String>[];
     await tester.pumpWidget(MaterialApp(home:Scaffold(
       body:SingleChildScrollView(child:TeyzaMarketplaceHub(
         onDestination:selected.add)))));
-    expect(find.text('Find local shops'),findsOneWidget);
+    expect(find.text('Shops'),findsOneWidget);
     expect(find.text('Businesses'),findsOneWidget);
-    expect(find.text('Wholesalers'),findsOneWidget);
-    expect(find.text('Products'),findsOneWidget);
+    expect(find.byKey(const ValueKey('teyza-hub-wholesale')),findsNothing);
+    expect(find.byKey(const ValueKey('teyza-hub-products')),findsNothing);
     await tester.tap(find.byKey(const ValueKey('teyza-hub-spaza')));
     expect(selected.single,'spaza');
     await tester.tap(find.byKey(const ValueKey('teyza-hub-businesses')));
     expect(selected.last,'businesses');
-    await tester.tap(find.byKey(const ValueKey('teyza-hub-wholesale')));
-    expect(selected.last,'wholesale');
+
   });
 
   testWidgets('Every product category opens its named catalogue filter',

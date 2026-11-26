@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'seller_firestore.dart';
+import 'shopper_design.dart';
 
-const sellerCanvas=Color(0xFFF6F7F2);
+const sellerCanvas=TeyzaDesign.ivory;
 class SellerShopHero extends StatelessWidget{
   final SellerShop shop;final int? productCount;
   final String? publicationStatus;
@@ -12,13 +13,12 @@ class SellerShopHero extends StatelessWidget{
   bool get live=>shopLive&&approved;
   const SellerShopHero({super.key,required this.shop,required this.productCount,this.publicationStatus,this.sellingEnabled=false,this.identityVerified,this.shopLive=false,this.premiumAccount=false,this.hasProductAccess=false});
   @override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(23),
-    decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-      colors:[Color(0xFF010F1C),Color(0xFF123E31)]),borderRadius:BorderRadius.circular(28),
+    decoration:BoxDecoration(gradient:TeyzaDesign.brandGradient,borderRadius:BorderRadius.circular(28),
       boxShadow:const [BoxShadow(color:Color(0x16010F1C),blurRadius:20,offset:Offset(0,8))]),
     child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Align(alignment:Alignment.centerLeft,child:Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:7),
-        decoration:BoxDecoration(color:const Color(0xFF244C3E),borderRadius:BorderRadius.circular(30)),
-        child:const Text('TEYZA  /  FOR BUSINESS',style:TextStyle(color:Color(0xFFB7EACD),fontSize:10,fontWeight:FontWeight.w700,letterSpacing:1)))),
+      const TeyzaWordmark(width:140,darkSurface:true),
+      const SizedBox(height:8),
+      const Text('FOR BUSINESS',style:TextStyle(color:TeyzaDesign.mint,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1.3)),
       const SizedBox(height:17),Text(shop.name.isEmpty?'Your neighbourhood shop':shop.name,
         style:const TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w800,height:1.12)),
       const SizedBox(height:9),Text(shop.categoryLabel,key:const ValueKey('saved-shop-category'),
@@ -41,7 +41,7 @@ class SellerShopHero extends StatelessWidget{
         style:const TextStyle(color:Color(0xFFBACFC3),height:1.45,fontSize:12))
     ]));
   Widget _pill(String label,IconData icon)=>Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:9),
-    decoration:BoxDecoration(color:const Color(0xFF244536),borderRadius:BorderRadius.circular(12)),
+    decoration:BoxDecoration(color:const Color(0xFF245E63),borderRadius:BorderRadius.circular(12)),
     child:Row(mainAxisSize:MainAxisSize.min,children:[Icon(icon,size:15,color:const Color(0xFF9CE7BB)),const SizedBox(width:7),
       Flexible(child:Text(label,style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.w700)))]));
 }
