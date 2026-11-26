@@ -533,6 +533,39 @@ async function main(){
    assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
+   await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
+   await f.page.getByLabel('Town, township or business name').fill('Durban');
+   // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
+   await f.page.evaluate(()=>{
+    class MapMock{constructor(_node,opts){this.center=opts.center;this.zoom=opts.zoom;}
+     setCenter(p){this.center={lat:typeof p.lat==='function'?p.lat():p.lat,lng:typeof p.lng==='function'?p.lng():p.lng};}getCenter(){return {lat:()=>this.center.lat,lng:()=>this.center.lng};}
+     setZoom(z){this.zoom=z;}getZoom(){return this.zoom;}panTo(p){this.setCenter(p);}}
+    class MarkerMock{setMap(){}addListener(){}}
+    class InfoWindowMock{open(){}}
+    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([{geometry:{location:{lat:()=>-29.86,lng:()=>31.02}}}],'OK');}}
+    window.google={maps:{Map:MapMock,Marker:MarkerMock,InfoWindow:InfoWindowMock,Geocoder:GeocoderMock,SymbolPath:{CIRCLE:0}}};
+   });
+   await f.page.route('**/assets/teyza-maps-config.json',route=>route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}}));
+   let placesRequests=0;
+   await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('category'),'spaza');assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
+    return route.fulfill({json:{ok:true,entries:[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}]}});
+   });
+   await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
+   const live=f.page.getByRole('dialog');
+   const searchArea=live.getByRole('button',{name:'Search this area'});
+   await searchArea.waitFor();await f.page.waitForFunction(()=>!document.querySelector('.acq-google-compact .tp-combined-controls button:last-of-type')?.disabled);
+   assert.equal(placesRequests,0);
+   assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
+   await searchArea.click();
+   await live.getByText('Synthetic Google Shop',{exact:true}).waitFor();assert.equal(placesRequests,1);
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Durban, South Africa');
+   await live.getByRole('button',{name:/Synthetic Google Shop/}).click();
+   assert(await live.getByText(/Email not supplied by Google/).isVisible());
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
+   await live.getByRole('button',{name:'Back to saved contacts'}).click();
+   assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);
+   await f.page.getByRole('button',{name:'Add confirmed business'}).click();
    const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
    await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
    await form.getByLabel('Township / area').fill('Umlazi');
@@ -556,11 +589,26 @@ async function main(){
    const draft=f.page.getByLabel('email invitation send preview');await draft.waitFor();const copy=await draft.inputValue();
    assert(copy.includes('Synthetic Spaza – Grow your business with Teyza'));assert(copy.includes('Umlazi, Durban'));assert(copy.includes('source stock for your spaza shop'));
    assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   const contactDialog=f.page.getByRole('dialog');await contactDialog.getByLabel('Town, township or business name').fill('Durban');
+   await contactDialog.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   assert(await contactDialog.getByRole('button',{name:'Send email',exact:true}).isEnabled());
+   assert(await contactDialog.getByRole('button',{name:'Send WhatsApp',exact:true}).isDisabled());
+   await contactDialog.getByRole('button',{name:'Send email',exact:true}).click();
+   await f.page.getByLabel('email invitation send preview').waitFor();
    const emailPanel=f.page.locator('.acq-email');
    await emailPanel.getByLabel('I reviewed the recipient and message. Send this one message.').check();
    await emailPanel.getByRole('button',{name:'Send email',exact:true}).click();
    await emailPanel.getByText('Invite to Teyza · queued',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_send'));
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   const lookup=f.page.getByRole('dialog');await lookup.getByLabel('Town, township or business name').fill('Durban');
+   await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
+   await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
+   await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   await lookup.getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
