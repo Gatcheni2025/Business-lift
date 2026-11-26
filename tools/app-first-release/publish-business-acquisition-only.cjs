@@ -1,5 +1,5 @@
 'use strict';
-// Publish only the Business Acquisition Admin assets.
+// Publish only the Business Acquisition Admin and app-first owner page.
 // Preserve every other Firebase Hosting file, route and security header.
 const fs=require('node:fs');
 const path=require('node:path');
@@ -9,12 +9,12 @@ const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=["/admin.html","/admin-review.html","/admin-sellers.html","/admin-login.html","/admin-dashboard.html","/admin/index.html","/admin-payments.html","/admin-support.html","/admin-users.html"];
-const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js'];
+const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/for-shop-owners.html'];
 const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
 const workRoot=path.resolve(__dirname,'../../web/app-first/public');
 const backupPath=path.resolve(__dirname,'../../hosting-backup-business-acquisition.json');
 const files=()=>new Map(paths.map(p=>{
- const bytes=zlib.gzipSync(fs.readFileSync(path.join(adminRoot,aliases.includes(p)?'admin.html':p.slice(1))),{level:9});
+ const bytes=zlib.gzipSync(fs.readFileSync(path.join(p==='/for-shop-owners.html'?workRoot:adminRoot,aliases.includes(p)?'admin.html':p.slice(1))),{level:9});
  return [p,{bytes,hash:crypto.createHash('sha256').update(bytes).digest('hex')}];
 }));
 async function current(client){
@@ -56,7 +56,7 @@ async function deploy(client){
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');
  const source=await current(client);
  const before=await allFiles(client,source);
- if([...paths.slice(0,-1),'/admin.html','/index.html'].some(p=>!before.has(p)))throw Error('Existing live Admin dependency missing.');
+ if([...paths.filter(p=>p!=='/js/teyza-business-acquisition.js'),'/index.html','/assets/app-first.css','/assets/app-demo.js','/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/demo-milk.webp','/assets/app/demo-bread.webp'].some(p=>!before.has(p)))throw Error('Existing live Admin dependency missing.');
  const original=await client.hosting('GET','/'+source);
  const managed=files();
  const candidate=await clone(client,source);
@@ -83,7 +83,7 @@ async function deploy(client){
  if(await current(client)!==candidate)throw Error('Published version not confirmed.');
  Object.assign(backup,{releaseName:release.name,publishedAt:new Date().toISOString()});
  fs.writeFileSync(backupPath,JSON.stringify(backup,null,2));
- console.log('Published scoped Business Acquisition Admin assets; all unrelated assets and config preserved.');
+ console.log('Published scoped Business Acquisition Admin and app-first owner page; all unrelated assets and config preserved.');
  console.log('https://teyza.co.za/admin');
 }
 async function rollback(client){

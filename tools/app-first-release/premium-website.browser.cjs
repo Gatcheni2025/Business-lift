@@ -22,7 +22,7 @@ async function main(){
   for(const [pagePath,file,width,height] of [
    ['/','home-desktop.png',1365,900],['/','home-mobile.png',390,844],
    ['/download.html','download-mobile.png',390,844],
-   ['/for-shop-owners.html','business-desktop.png',1365,900],
+   ['/for-shop-owners.html','business-desktop.png',1365,900],['/for-shop-owners.html','business-mobile.png',390,844],
    ['/seller-subscriptions.html','seller-plans-mobile.png',390,844]
   ]){
    const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
@@ -39,6 +39,14 @@ async function main(){
    }
    if(pagePath==='/' && await page.locator('[data-teyza-demo][data-enhanced="true"]').count()!==1)
      throw Error('Homepage interactive app preview did not load');
+   if(pagePath==='/for-shop-owners.html'){
+    if(await page.locator('[data-teyza-demo][data-enhanced="true"]').count()!==1)throw Error('Business preview did not load');
+    if(await page.locator('main section#download a[href*="play.google.com/store/apps/details"]').count()!==1||await page.locator('main section#download a[href*="apps.apple.com/za/app/"]').count()!==1)throw Error('Business hero store links missing');
+    await page.getByRole('tab',{name:/Find a shop/}).click();
+    if(!await page.locator('#demo-panel-1').isVisible())throw Error('Business app preview did not switch to nearby shops');
+    await page.getByRole('tab',{name:/Discover/}).click();
+    await page.evaluate(()=>window.scrollTo(0,0));
+   }
    if(width<500){
     await page.locator('.p-mobile-nav summary').click();
     if(!await page.getByRole('navigation',{name:'Mobile navigation'}).isVisible())
