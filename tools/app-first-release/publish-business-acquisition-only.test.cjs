@@ -112,3 +112,10 @@ test('Worker dependency collection checks both isolated packages, including actu
   assert.equal(new Set(result.files).size,result.files.length);
  }
 });
+
+test('Isolated worker uses real SDK discovery and conventional external stage before precise deployment',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const s=fs.readFileSync(path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs'),'utf8');
+ assert(s.includes('FUNCTIONS_MANIFEST_OUTPUT_PATH'));assert(s.includes("os.tmpdir()"));assert(s.includes("f===spec.entry?'index.js':f"));assert(s.includes('keys.length!==1'));assert(s.includes('discover(stage,path.join(stage.dest'));
+ assert(s.includes("'functions:'+spec.codebase+':'+spec.fn"));
+});

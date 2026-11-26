@@ -14,3 +14,14 @@ test('WhatsApp sends exactly one approved template to the recorded number',async
  assert.equal(await send({phoneNumberId:'123456789',apiVersion:'v26.0',recipient:'+27712345678',name:'approved_test',language:'en',businessName:'Synthetic Shop'}),'wamid.synthetic');
  assert.equal(request.body.type,'template');assert.equal(request.body.to,'27712345678');assert.equal(request.body.template.components[0].parameters[0].text,'Synthetic Shop');
 });
+
+test('Real pinned Firebase SDK discovers precisely one isolated worker for each channel',()=>{
+ const {spawnSync}=require('node:child_process'),path=require('node:path');
+ const script=path.resolve(__dirname,'../../tools/admin-release/deploy-business-communication-worker.cjs');
+ for(const [channel,fn,collection] of [['email','teyzaBusinessEmail','teyzaBusinessOutboundEmail'],['whatsapp','teyzaBusinessWhatsApp','teyzaBusinessOutboundWhatsApp']]){
+  const r=spawnSync(process.execPath,[script,channel,'--check-discovery'],{encoding:'utf8',timeout:30000});
+  assert.equal(r.status,0,r.stderr||r.stdout||String(r.error||''));
+  assert(r.stdout.includes('SDK discovery verified: '+fn+' | '+collection+'/{id} | exactly one Gen 2 endpoint.'));
+  assert(r.stdout.includes('No production writes.'));
+ }
+});
