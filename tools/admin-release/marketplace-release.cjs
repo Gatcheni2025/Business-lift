@@ -53,6 +53,7 @@ async function functionClient(){
  };
 }
 async function preflight(){
+ if(process.env.TEYZA_MAPS_BROWSER_KEY)throw Error('Unset the optional Maps browser-key override; this release preserves the existing map configuration.');
  const before=await json(healthUrl);assertAdminBackend(before);
  const envPath=path.join(mobileDir,'.env.'+PROJECT);
  if(!fs.existsSync(envPath))throw Error('Restore the exact existing '+path.basename(envPath)+' from the successful release. Never recreate payment settings.');
@@ -69,7 +70,8 @@ async function preflight(){
  const targets=[...core];
  for(const name of core.slice(1))await get(name);
  for(const name of optional)if(await get(name,true))targets.push(name);
- await get('teyzaPlaces');
+ const placesFunction=await get('teyzaPlaces');
+ assertEnv({},placesFunction.serviceConfig?.environmentVariables);
  const client=await connect(),domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+PROJECT+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect live Hosting domain.');
  const current=versionName((await client.hosting('GET','/sites/'+PROJECT+'/channels/live')).release?.version?.name);
@@ -94,7 +96,17 @@ async function main(){
  run('firebase.teyza-places-v34.json','functions:teyza-places:teyzaPlaces');
  const places=await json(placesUrl);if(places.ok!==true||places.marketplaceRelease!=='20261126-v61'||places.expandedBusinessDiscovery!==true)throw Error('Places capability check failed. Hosting was not published.');
  await patch({client,root:adminRoot,workRoot,backupPath});
- console.log('Marketplace backend, Places and scoped Hosting activated. Verify signed-in Admin, agents and device journeys before store upload.');
+ for(const [route,marker,priv] of [
+  ['/admin','Marketplace control room',true],['/agents.html','Connect businesses.',false],
+  ['/work.html','20261126-v61',true],['/owner-confirm.html','20261126-v61',true],
+  ['/support-inbox.html','Support Centre',true]
+ ]){
+  const r=await fetch('https://teyza.co.za'+route,{cache:'no-store',signal:AbortSignal.timeout(30000)});
+  const body=await r.text();
+  if(!r.ok||!body.includes(marker)||(priv&&!/noindex/i.test(r.headers.get('x-robots-tag')||'')))
+   throw Error('Hosting was published but public smoke verification failed for '+route+'. Inspect the live release and rollback record before retrying.');
+ }
+ console.log('Marketplace backend, Places and scoped Hosting activated and public smoke checks passed. Verify signed-in Admin, agents and device journeys before store upload.');
 }
 if(require.main===module)main().catch(e=>{console.error('Marketplace release stopped: '+e.message);process.exitCode=1;});
 module.exports={parseEnv,assertEnv,compareHealth};

@@ -160,3 +160,16 @@ test('Marketplace overlay is explicit, includes all branded Work and support ass
  const before=new Map([['/assets/teyza-maps-config.json','existing'],['/index.html','existing']]);
  assert.throws(()=>preserved(before,new Map([['/assets/teyza-maps-config.json','changed'],['/index.html','existing']]),new Map()),/not preserved/);
 });
+
+test('Marketplace publication clones once and verifies all unchanged files before publishing and rolling back',async()=>{
+ const f=setup();
+ for(const p of ['/assets/teyza-sprout-wordmark.svg','/assets/app/wordmark.svg','/assets/app/wordmark-light.svg','/assets/app/spaza-owner.webp','/assets/app/icon.svg','/assets/app-first.css','/assets/agent-map-first.css','/js/work-auth.mjs','/js/work-phone.mjs','/js/work-discovery.mjs','/pay/index.html','/ads/index.html','/order-payment-return.html','/assets/teyza-maps-config.json'])f.existing.set(p,'preserve-'+p);
+ const workRoot=path.resolve(__dirname,'../../web/app-first/public');
+ await patch({...f,workRoot});
+ assert.equal(f.live(),f.next);
+ assert.equal(f.calls.filter(c=>c.uri.endsWith('/channels/live/releases')).length,1);
+ const files=f.versions.get(f.next).files;
+ for(const p of ['/pay/index.html','/ads/index.html','/order-payment-return.html','/assets/teyza-maps-config.json','/index.html'])assert.equal(files.get(p),f.existing.get(p));
+ for(const p of ['/agents.html','/work.html','/owner-confirm.html','/support-inbox.html','/assets/work.css','/assets/teyza-agents-map-first.css','/js/owner-confirm.js'])assert(files.has(p),p);
+ await rollback(f);assert.equal(f.live(),f.source);
+});

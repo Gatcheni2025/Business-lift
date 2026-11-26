@@ -21,7 +21,13 @@ if($Mode -eq 'RollbackHosting'){
  return
 }
 Run 'npm' @('ci','--prefix','services/teyza-mobile-v39','--no-audit','--no-fund')
-Run 'npm' @('ci','--prefix','services/teyza-places-v34','--no-audit','--no-fund')
+# The existing Places codebase has no tracked npm lockfile. Use its established
+# installation method, then test the installed service before any live action.
+if(Test-Path 'services/teyza-places-v34/package-lock.json'){
+ Run 'npm' @('ci','--prefix','services/teyza-places-v34','--no-audit','--no-fund')
+}else{
+ Run 'npm' @('install','--prefix','services/teyza-places-v34','--no-audit','--no-fund')
+}
 Run 'npm' @('test','--prefix','services/teyza-mobile-v39')
 Run 'npm' @('test','--prefix','services/teyza-places-v34')
 Run 'npm' @('test','--prefix','tools/admin-release')

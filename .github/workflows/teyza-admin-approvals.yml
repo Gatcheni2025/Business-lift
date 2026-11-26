@@ -51,6 +51,8 @@ jobs:
           npm test
           node --test marketplace-release.test.cjs
           node --check marketplace-release.cjs
+          node --test ../../services/teyza-places-v34/places.test.js
+          node --check ../../services/teyza-places-v34/index.js
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-app-admin.js
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-operations.js
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-field-admin.js
