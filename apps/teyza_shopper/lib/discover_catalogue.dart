@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shopper_design.dart';
 import 'product_catalogue.dart';
 import 'discover_businesses.dart';
 
@@ -36,7 +37,7 @@ class DiscoverCataloguePage extends StatefulWidget {
 }
 
 class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
-  static const ink = Color(0xFF202B35), green = Color(0xFF078E66);
+  static const ink = TeyzaDesign.ink, green = TeyzaDesign.leaf;
   final search = TextEditingController();
   List<CatalogueProduct> products = [];
   String? selectedCategory, error;
@@ -126,8 +127,8 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
       ..sort((a, b) => discoverCategoryLabel(a).compareTo(discoverCategoryLabel(b)));
     final items = products.where((p) => p.matches(query, selectedCategory ?? 'All')).toList();
     final showCategories = selectedCategory == null && query.isEmpty;
-    return ColoredBox(color: const Color(0xFFEEF1F5), child: Column(children: [
-      Container(color: ink, padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
+    return ColoredBox(color: TeyzaDesign.ivory, child: Column(children: [
+      TeyzaBrandPanel(radius: 0, padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Discover', style: TextStyle(fontSize: 29,
             fontWeight: FontWeight.w900, color: Colors.white)),
@@ -142,11 +143,19 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
               ChoiceChip(
                 key: const ValueKey('discover-shops-tab'),
                 label: const Text('Shops'),
+                backgroundColor: const Color(0xFF28666A),
+                selectedColor: TeyzaDesign.leaf,
+                showCheckmark: false, side: BorderSide.none,
+                labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
                 selected: section != 'businesses',
                 onSelected: (_) => switchView('shops')),
               ChoiceChip(
                 key: const ValueKey('discover-businesses-tab'),
                 label: const Text('Businesses'),
+                backgroundColor: const Color(0xFF28666A),
+                selectedColor: TeyzaDesign.orange,
+                showCheckmark: false, side: BorderSide.none,
+                labelStyle: TextStyle(color: section == 'businesses' ? TeyzaDesign.deepTeal : Colors.white, fontWeight: FontWeight.w800),
                 selected: section == 'businesses',
                 onSelected: (_) => switchView('businesses')),
             ]),

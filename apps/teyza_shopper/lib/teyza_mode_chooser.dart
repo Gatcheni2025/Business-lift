@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shopper_design.dart';
 
 /// Navigation choice only. Permissions are never conferred by selecting a card.
 class TeyzaModeChooser extends StatelessWidget{
@@ -9,15 +10,12 @@ class TeyzaModeChooser extends StatelessWidget{
   required this.onAgent,required this.onSeller,this.shopperAvailable=true,
   this.sellerAvailable=true,this.sellerLabel='Seller',this.sellerName=''});
  @override Widget build(BuildContext context){
-  return Scaffold(backgroundColor:const Color(0xFFF3F7FC),
+  return Scaffold(backgroundColor:TeyzaDesign.ivory,
    body:SafeArea(child:LayoutBuilder(builder:(context,c)=>SingleChildScrollView(
     padding:const EdgeInsets.symmetric(horizontal:22,vertical:26),
     child:ConstrainedBox(constraints:BoxConstraints(minHeight:c.maxHeight-52),
     child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-     Row(children:[Container(padding:const EdgeInsets.all(10),
-      decoration:BoxDecoration(color:const Color(0xFF0E705B),borderRadius:BorderRadius.circular(15)),
-      child:const Icon(Icons.store_mall_directory,color:Colors.white)),
-      const SizedBox(width:12),const Text('TEYZA',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:Color(0xFF063E42)))]),
+     const TeyzaWordmark(width:180),
      const SizedBox(height:34),
      const Text('Select account',style:TextStyle(fontSize:35,fontWeight:FontWeight.w900,color:Color(0xFF0B2738))),
      const SizedBox(height:8),
@@ -25,13 +23,13 @@ class TeyzaModeChooser extends StatelessWidget{
      const SizedBox(height:20),
      if(shopperAvailable)_mode(Icons.shopping_basket_outlined,'Shopper',
       'Discover local shops, compare essentials and buy nearby.',
-      const Color(0xFFE4F4FA),const Color(0xFF18658A),onShopper),
+      TeyzaDesign.softMint,TeyzaDesign.leaf,onShopper),
      if(agentApproved)_mode(Icons.explore_outlined,'Continue as Field Agent',
       'Find shops on the map, visit owners, take photos and track verified R90 registrations.',
-      const Color(0xFFECE6FF),const Color(0xFF6857B8),onAgent),
+      TeyzaDesign.softOrange,const Color(0xFFB44D00),onAgent),
      if(sellerAvailable)_mode(Icons.storefront_outlined,sellerLabel,
       sellerName.isNotEmpty?sellerName:'Manage your registered business.',
-      const Color(0xFFE6F5EA),const Color(0xFF08734F),onSeller),
+      const Color(0xFFE5F3F2),TeyzaDesign.forest,onSeller),
      const SizedBox(height:20),
      const Row(children:[Icon(Icons.verified_user_outlined,color:Color(0xFF558A73),size:19),
       SizedBox(width:9),Expanded(child:Text('Your accounts use the same secure sign-in.',

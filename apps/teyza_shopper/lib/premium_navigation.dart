@@ -41,7 +41,7 @@ class PremiumShopperNavigation extends StatelessWidget {
                       child: Icon(selected ? active : idle,
                           size: 23,
                           color: selected
-                              ? TeyzaDesign.forest
+                              ? TeyzaDesign.leaf
                               : TeyzaDesign.muted)),
                   const SizedBox(height: 3),
                   Text(label,
@@ -51,7 +51,7 @@ class PremiumShopperNavigation extends StatelessWidget {
                           fontSize: 11,
                           height: 1.2,
                           color:
-                              selected ? TeyzaDesign.forest : TeyzaDesign.muted,
+                              selected ? TeyzaDesign.leaf : TeyzaDesign.muted,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w400)),
                 ])),

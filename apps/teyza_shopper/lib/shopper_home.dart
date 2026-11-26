@@ -38,8 +38,8 @@ import 'sponsored_ad_rotation.dart';
 
 const ink = TeyzaDesign.ink;
 const deep = TeyzaDesign.forest;
-const green = Color(0xFF3BB77E);
-const aqua = Color(0xFFB8EDD3);
+const green = TeyzaDesign.leaf;
+const aqua = TeyzaDesign.mint;
 const pale = TeyzaDesign.ivory;
 const muted = TeyzaDesign.muted;
 const catalogUrl = 'https://teyza.co.za/api/shopper-catalog.php';
@@ -2354,7 +2354,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   }
 
   Widget locationHeader() => Container(
-      color: pale,
+      color: TeyzaDesign.deepTeal,
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
       child: Column(children: [
         if (selected == null && directorySelected == null) ...[
@@ -2717,8 +2717,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         },
         child: Scaffold(
           appBar: AppBar(
-              backgroundColor: pale,
-              foregroundColor: ink,
+              backgroundColor: TeyzaDesign.deepTeal,
+              foregroundColor: Colors.white,
+              flexibleSpace: const DecoratedBox(
+                decoration: BoxDecoration(gradient: TeyzaDesign.brandGradient)),
               surfaceTintColor: Colors.transparent,
               automaticallyImplyLeading: false,
               leading: _canNavigateBack
@@ -2736,15 +2738,10 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w900, color: ink))
+                          fontWeight: FontWeight.w900, color: Colors.white))
                   : Row(children: [
-                      Semantics(
-                          label: 'Teyza',
-                          child: SvgPicture.asset(
-                              'assets/brand/teyza-sprout-wordmark.svg',
-                              width: 82,
-                              height: 32,
-                              fit: BoxFit.contain)),
+                      TeyzaWordmark(darkSurface: true,
+                        width: MediaQuery.sizeOf(context).width < 360 ? 76 : 100),
                       const SizedBox(width: 10),
                       Expanded(
                           child: InkWell(
@@ -2755,7 +2752,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                       const EdgeInsets.symmetric(vertical: 9),
                                   child: Row(children: [
                                     const Icon(Icons.location_on_outlined,
-                                        color: ink, size: 19),
+                                        color: TeyzaDesign.mint, size: 19),
                                     const SizedBox(width: 5),
                                     Expanded(
                                         child: Column(
@@ -2764,7 +2761,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                             children: [
                                           const Text('Shopping near',
                                               style: TextStyle(
-                                                  color: muted, fontSize: 10)),
+                                                  color: TeyzaDesign.mint, fontSize: 10)),
                                           Text(
                                               _usingGps
                                                   ? _currentLocationDetail
@@ -2772,7 +2769,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
-                                                  color: ink,
+                                                  color: Colors.white,
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w700))
                                         ])),
@@ -2786,12 +2783,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                                       const Icon(
                                           Icons.keyboard_arrow_down_rounded,
                                           size: 16,
-                                          color: muted)
+                                          color: Colors.white)
                                   ]))))
                     ]),
               actions: [
                 if (selected != null || directorySelected != null)
                   TextButton.icon(
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
                       onPressed: _navigateBack,
                       icon: const Icon(Icons.home_outlined, size: 18),
                       label: const Text('Home'))
@@ -3895,33 +3893,20 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
           TextButton(onPressed: onRetry, child: const Text('Retry')),
       ]));
 
-  Widget _homeWelcome() => Padding(
-      padding: const EdgeInsets.fromLTRB(2, 11, 2, 18),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        const Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Good things, close to home.',
-              style: TextStyle(
-                  fontSize: 25,
-                  height: 1.12,
-                  fontWeight: FontWeight.w700,
-                  color: ink,
-                  letterSpacing: -.5)),
-          SizedBox(height: 8),
-          Text('Your local shops. Your local businesses.',
-              style: TextStyle(color: muted, fontSize: 13, height: 1.4)),
-        ])),
-        const SizedBox(width: 12),
-        Container(
-            width: 52,
-            height: 52,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: TeyzaDesign.softMint,
-                borderRadius: BorderRadius.circular(18)),
-            child: SvgPicture.asset('assets/brand/teyza-sprout-icon.svg')),
-      ]));
+  Widget _homeWelcome() => const Padding(
+      padding: EdgeInsets.fromLTRB(0, 10, 0, 14),
+      child: TeyzaBrandPanel(
+        padding: EdgeInsets.fromLTRB(18, 17, 26, 17),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Good things, close to home.',
+              style: TextStyle(color: Colors.white, fontSize: 25, height: 1.12,
+                fontWeight: FontWeight.w800, letterSpacing: -.5)),
+            SizedBox(height: 8),
+            Text('Your local shops. Your local businesses.',
+              style: TextStyle(color: TeyzaDesign.mint, fontSize: 13, height: 1.4)),
+          ]),
+      ));
 
   Widget homePage() => RefreshIndicator(
       onRefresh: () async {
@@ -5869,9 +5854,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   Widget infoPage() => ListView(padding: const EdgeInsets.all(22), children: [
         const Icon(Icons.storefront_rounded, size: 66, color: green),
         const SizedBox(height: 12),
-        const Text('TEYZA Shopper',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 28),
-            textAlign: TextAlign.center),
+        const Center(child: TeyzaWordmark(width: 180)),
         const SizedBox(height: 10),
         const Text(
             'Discover spaza shops in your area and shop their listed groceries.',

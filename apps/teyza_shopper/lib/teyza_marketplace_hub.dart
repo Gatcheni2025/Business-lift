@@ -8,42 +8,45 @@ class TeyzaMarketplaceHub extends StatelessWidget {
   const TeyzaMarketplaceHub({super.key, required this.onDestination});
 
   Widget destination(String type, String name, String subtitle, IconData icon,
-          {required Color background}) =>
+          {required Gradient gradient, required Color foreground}) =>
       Semantics(
         button: true,
         label: 'Explore $name',
         child: Material(
-            color: background,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               key: ValueKey('teyza-hub-$type'),
               borderRadius: BorderRadius.circular(18),
               onTap: () => onDestination(type),
-              child: Padding(
+              child: Ink(
+                decoration: BoxDecoration(gradient: gradient,
+                  borderRadius: BorderRadius.circular(18)),
+                child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
-                          Icon(icon, color: TeyzaDesign.forest, size: 25),
+                          Icon(icon, color: foreground, size: 27),
                           const Spacer(),
-                          const Icon(Icons.north_east_rounded,
-                              color: TeyzaDesign.muted, size: 15),
+                          Icon(Icons.north_east_rounded,
+                              color: foreground, size: 17),
                         ]),
                         const SizedBox(height: 11),
                         Text(name,
-                            style: const TextStyle(
-                                color: TeyzaDesign.ink,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                            style: TextStyle(
+                                color: foreground,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
                                 height: 1.2)),
                         const SizedBox(height: 4),
                         Text(subtitle,
-                            style: const TextStyle(
-                                color: TeyzaDesign.muted,
+                            style: TextStyle(
+                                color: foreground,
                                 fontSize: 11,
                                 height: 1.3)),
-                      ])),
+                      ]))),
             )),
       );
 
@@ -61,12 +64,12 @@ class TeyzaMarketplaceHub extends StatelessWidget {
                   width: width,
                   child: destination('spaza', 'Shops',
                       'Spaza shops, groceries & essentials', Icons.storefront_outlined,
-                      background: const Color(0xFFEEF0E7))),
+                      gradient: TeyzaDesign.shopsGradient, foreground: Colors.white)),
               SizedBox(
                   width: width,
                   child: destination('businesses', 'Businesses',
                       'Manufacturers, sellers, food & services', Icons.business_center_outlined,
-                      background: const Color(0xFFF2EDE4))),
+                      gradient: TeyzaDesign.businessesGradient, foreground: TeyzaDesign.deepTeal)),
             ]);
       });
 }
@@ -116,13 +119,13 @@ class TeyzaHomeProductCategories extends StatelessWidget {
                                       width: 55,
                                       height: 55,
                                       decoration: BoxDecoration(
-                                          color: Colors.white,
+                                          color: TeyzaDesign.categoryAccent(item.$1).withAlpha(24),
                                           border: Border.all(
-                                              color: TeyzaDesign.border),
+                                              color: TeyzaDesign.categoryAccent(item.$1).withAlpha(38)),
                                           borderRadius:
                                               BorderRadius.circular(18)),
                                       child: Icon(item.$2,
-                                          color: TeyzaDesign.forest, size: 26)),
+                                          color: TeyzaDesign.categoryAccent(item.$1), size: 26)),
                                   const SizedBox(height: 7),
                                   Text(item.$1,
                                       textAlign: TextAlign.center,

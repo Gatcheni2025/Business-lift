@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'business_categories.dart';
+import 'shopper_design.dart';
 
 /// A public listing is either an approved Teyza seller or a third-party map
 /// result. Discovery never grants selling or wholesale account permissions.
@@ -81,7 +82,7 @@ class TeyzaDiscoverBusinesses extends StatelessWidget {
     this.areaLabel, this.loading = false, this.onChooseArea, this.onRefresh,
   });
 
-  static const ink = Color(0xFF202B35), green = Color(0xFF078E66);
+  static const ink = TeyzaDesign.ink, green = TeyzaDesign.leaf;
 
   Widget _chip(String id, String label, bool selected, VoidCallback select) =>
       ChoiceChip(
@@ -141,7 +142,13 @@ class TeyzaDiscoverBusinesses extends StatelessWidget {
                           child: Padding(padding: const EdgeInsets.all(11),
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(teyzaDiscoveryIcon(option.id), color: green, size: 25),
+                                Container(
+                                  width: 42, height: 42,
+                                  decoration: BoxDecoration(
+                                    color: TeyzaDesign.categoryAccent(option.id).withAlpha(26),
+                                    borderRadius: BorderRadius.circular(12)),
+                                  child: Icon(teyzaDiscoveryIcon(option.id),
+                                    color: TeyzaDesign.categoryAccent(option.id), size: 26)),
                                 const SizedBox(height: 8),
                                 Text(option.label, style: const TextStyle(
                                   fontSize: 13, fontWeight: FontWeight.w800, color: ink)),
@@ -216,8 +223,8 @@ class TeyzaDiscoverBusinesses extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               leading: CircleAvatar(
-                backgroundColor: const Color(0xFFE7F3EC),
-                child: Icon(teyzaDiscoveryIcon(business.group), color: green)),
+                backgroundColor: TeyzaDesign.categoryAccent(business.group).withAlpha(26),
+                child: Icon(teyzaDiscoveryIcon(business.group), color: TeyzaDesign.categoryAccent(business.group))),
               title: Text(business.name, maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w800, color: ink)),
               subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

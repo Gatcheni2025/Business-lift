@@ -1,7 +1,7 @@
 name: teyza_shopper
 description: Teyza - discover local shops, categorized businesses and verified local stock.
 publish_to: none
-version: 1.0.50+60
+version: 1.0.51+61
 
 environment:
   sdk: ">=3.6.0 <4.0.0"

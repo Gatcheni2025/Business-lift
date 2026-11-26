@@ -1693,14 +1693,15 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
         appBar: widget.sellerMode && sellerTab == 3 && shop != null
             ? null
             : AppBar(
-                backgroundColor: TeyzaDesign.ivory,
-                foregroundColor: TeyzaDesign.ink,
+                backgroundColor: TeyzaDesign.deepTeal,
+                foregroundColor: Colors.white,
+                flexibleSpace: const DecoratedBox(decoration: BoxDecoration(gradient: TeyzaDesign.brandGradient)),
                 automaticallyImplyLeading: !widget.sellerMode,
                 titleTextStyle: const TextStyle(
                     fontFamily: 'PT Sans',
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: TeyzaDesign.ink),
+                    color: Colors.white),
                 title: Text(widget.sellerMode
                     ? (shop?.category == 'wholesale'
                         ? [

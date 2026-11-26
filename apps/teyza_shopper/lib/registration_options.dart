@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'business_categories.dart';
+import 'shopper_design.dart';
 
 /// Registration preferences only. Existing account records decide access.
 class TeyzaRegistrationOptions extends StatefulWidget {
@@ -79,9 +80,10 @@ class _RegistrationOptionsState extends State<TeyzaRegistrationOptions> {
         child: ListTile(key: ValueKey('registration-$id'),
           contentPadding: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          leading: CircleAvatar(backgroundColor: id == 'wholesale'
-            ? const Color(0xFFFFEBD2) : const Color(0xFFE1F6EB),
-            child: Icon(icon, color: const Color(0xFF078E66))),
+          leading: CircleAvatar(backgroundColor: id == 'wholesale' || id == 'seller'
+            ? TeyzaDesign.softOrange : TeyzaDesign.softMint,
+            child: Icon(icon, color: id == 'wholesale' || id == 'seller'
+              ? const Color(0xFFB44D00) : TeyzaDesign.leaf)),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(description),
           trailing: const Icon(Icons.chevron_right, color: Color(0xFF3BB77E)),

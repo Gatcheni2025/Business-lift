@@ -9,8 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'shopper_auth.dart';
 import 'teyza_mobile_api.dart';
+import 'shopper_design.dart';
 
-const _forest=Color(0xFF064B43),_mint=Color(0xFFD8F5E7),_violet=Color(0xFF7866D6);
+const _forest=TeyzaDesign.forest,_mint=TeyzaDesign.softMint,_violet=Color(0xFF7866D6);
 const bool _nativeMapsReady=bool.fromEnvironment('TEYZA_NATIVE_MAPS_READY',defaultValue:false);
 
 class AgentTown {
@@ -343,11 +344,10 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    ])));
  }
  Widget _header(){
-  return Container(padding:const EdgeInsets.fromLTRB(20,18,20,14),
-   decoration:const BoxDecoration(gradient:LinearGradient(colors:[Color(0xFF083D40),Color(0xFF147D70)],begin:Alignment.topLeft,end:Alignment.bottomRight)),
+  return TeyzaBrandPanel(radius:0,padding:const EdgeInsets.fromLTRB(20,18,20,14),
    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Row(children:[const Icon(Icons.store_mall_directory_outlined,color:Color(0xFFC4F5D2)),
-     const SizedBox(width:8),const Expanded(child:Text('TEYZA · FIELD TEAM',style:TextStyle(color:Colors.white,fontSize:14,fontWeight:FontWeight.w800))),
+    Row(children:[const TeyzaWordmark(width:114,darkSurface:true),
+     const SizedBox(width:12),const Expanded(child:Text('FIELD TEAM',style:TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.w800))),
      PopupMenuButton<String>(icon:const Icon(Icons.switch_account_outlined,color:Colors.white),
       onSelected:(mode){if(mode=='shopper')widget.onShopper();else if(mode=='seller')widget.onSeller();},
       itemBuilder:(_)=>[const PopupMenuItem(value:'shopper',child:Text('Shopper mode')),const PopupMenuItem(value:'seller',child:Text('Seller mode'))])]),
@@ -367,7 +367,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
    return RefreshIndicator(onRefresh:()=>_operate(_refreshDashboard),child:ListView(
     key:const ValueKey('agent-dashboard'),padding:const EdgeInsets.fromLTRB(16,16,16,30),children:[
      Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(
-       color:_forest,borderRadius:BorderRadius.circular(24)),
+       gradient:TeyzaDesign.brandGradient,borderRadius:BorderRadius.circular(24)),
        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('APPROVED REWARDS',style:TextStyle(color:Color(0xFFC4F5D2),fontSize:11,fontWeight:FontWeight.w800,letterSpacing:1.5)),
         const SizedBox(height:8),
@@ -393,7 +393,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
      const SizedBox(height:18),
      FilledButton.icon(key:const ValueKey('agent-invite-business'),
        onPressed:busy?null:()=>_startVisit(null),icon:const Icon(Icons.person_add_alt_1_outlined),
-       label:const Text('Invite a business owner'),style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(54))),
+       label:const Text('Invite a business owner'),style:FilledButton.styleFrom(backgroundColor:TeyzaDesign.leaf,foregroundColor:Colors.white,minimumSize:const Size.fromHeight(54))),
      const SizedBox(height:8),
      OutlinedButton.icon(key:const ValueKey('agent-find-opportunities'),onPressed:busy?null:()async{
        setState(()=>page=0);await _operate(_search);},
@@ -509,7 +509,7 @@ class _AgentWorkspaceState extends State<AgentWorkspacePage>{
     FilledButton(onPressed:_load,child:const Text('Check approval again')),
     TextButton(onPressed:widget.onShopper,child:const Text('Continue as Shopper'))
    ]))));
-  return Scaffold(backgroundColor:const Color(0xFFF7F9FC),
+  return Scaffold(backgroundColor:TeyzaDesign.ivory,
    body:SafeArea(child:Column(children:[
      _header(),
      if(error.isNotEmpty)Container(width:double.infinity,color:const Color(0xFFFFF0E7),padding:const EdgeInsets.all(9),child:Text(error,style:const TextStyle(color:Colors.deepOrange))),

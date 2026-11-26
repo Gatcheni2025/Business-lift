@@ -533,7 +533,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
             key: const ValueKey('teyza-premium-account-dashboard'),
             padding: const EdgeInsets.all(21),
             decoration: BoxDecoration(
-                color: TeyzaDesign.forest,
+                gradient: TeyzaDesign.brandGradient,
                 borderRadius: BorderRadius.circular(24)),
             child:
                 Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -833,6 +833,8 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: Color(0xFF078E66))),
+                          const TeyzaWordmark(width: 148),
+                          const SizedBox(height: 8),
                           Text(
                               registering
                                   ? 'New to Teyza'
