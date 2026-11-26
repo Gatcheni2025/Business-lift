@@ -513,6 +513,7 @@ async function main(){
    const f=await pageFor({api:async(route,body)=>{
     if(!body.action.startsWith('ops_acquisition_'))return false;
     if(body.action==='ops_acquisition_create'){prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_event'){assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:1};await route.fulfill({json:{ok:true,prospect}});}
     else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
     else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null}});
     return true;
@@ -524,6 +525,7 @@ async function main(){
    await form.getByLabel('Township / area').fill('Umlazi');
    await form.getByLabel('Business address or landmark').fill('Synthetic Road');
    await form.getByLabel('Business phone (optional)').fill('0712345678');
+   await form.getByLabel('Business email (optional)').fill('synthetic@example.test');
    await form.getByLabel('Source reference / authority to retain details').fill('Synthetic owner request');
    await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
    await form.getByRole('button',{name:'Save business prospect'}).click();
@@ -531,6 +533,15 @@ async function main(){
    await f.page.getByRole('heading',{name:'Business email desk'}).waitFor();
    await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
    assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
+   const activity=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save activity',exact:true})});
+   await activity.getByLabel('Record activity').selectOption('permission');await activity.getByLabel('Channel',{exact:true}).selectOption('email');
+   await activity.getByLabel('Owner explicitly opted in to this channel.').check();
+   await activity.getByLabel('Activity note / consent evidence (no sensitive documents or credentials)').fill('Synthetic owner opt-in');
+   await activity.getByLabel('I confirm this records an actual event. No message will be sent.').check();
+   await activity.getByRole('button',{name:'Save activity'}).click();
+   const draft=f.page.getByLabel('invitation email draft');await draft.waitFor();const copy=await draft.inputValue();
+   assert(copy.includes('Synthetic Spaza – Grow your business with Teyza'));assert(copy.includes('Umlazi, Durban'));assert(copy.includes('source stock for your spaza shop'));
+   assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
    await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));

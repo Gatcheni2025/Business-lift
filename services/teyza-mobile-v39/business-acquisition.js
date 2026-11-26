@@ -50,8 +50,9 @@ function createAcquisition({db,clock=Date.now}){
    if(a?.uid===p.sellerUid&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)){
     const s=await read('teyzaPublicShops/'+p.sellerUid);
     seller={uid:p.sellerUid,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
-     listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true};
-   }else seller={uid:p.sellerUid,status:'review_required',listed:false};
+     listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true,
+     welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email)};
+   }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
   return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,

@@ -4,10 +4,48 @@ const {paths,files,verify,assertR90Ready}=require('./publish-business-acquisitio
 test('Business Acquisition scoped publisher preserves all unrelated site assets and requires backend',()=>{
  assert.equal(paths.length,13);assert(paths.includes('/js/teyza-business-acquisition.js'));assert(paths.includes('/for-shop-owners.html'));assert(!paths.includes('/seller-subscriptions.html'));
  assert(!paths.includes('/agents.html'));assert(!paths.includes('/work.html'));assert(!paths.includes('/pay/index.html'));
- const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.slice(0,-1).map(p=>[p,'old'])]),after=new Map(before);
+ const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
  assert.doesNotThrow(()=>verify(before,after,items));assert.throws(()=>verify(before,new Map([...after,['/agents.html','changed']]),items));
  const health={ok:true,adminBusinessAcquisition:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));
 });
 test('Business invitation destination shows the actual app and direct store links before optional detail',()=>{const fs=require('node:fs'),path=require('node:path');const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');const main=html.slice(html.indexOf('<main id="main">'),html.indexOf('</main>'));const hero=main.slice(0,main.indexOf('data-teyza-demo'));for(const text of ['Put your business','/assets/app/home.webp','/assets/app/nearby-shops.webp','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733','Get help getting started'])assert(hero.includes(text),text);assert(main.includes('example shop, items and request are illustrative'));assert(main.includes('tel:+27315661165'));assert(main.includes('Registration and verification are free'));assert(main.includes('/seller-subscriptions.html'));assert(html.includes('/assets/app-demo.js'));});
+
+test('Approved invitation automatically personalises name, area and category; welcome remains service-only',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const source=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {emailText,emailDraftAllowed}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const p={name:'Example Spaza',area:'Umlazi',city:'Durban',category:'spaza',email:'synthetic@example.test',permissions:{email:{granted:true}},optedOut:false};
+ const draft=emailText('invitation',p);
+ assert.equal(draft.subject,'Example Spaza – Grow your business with Teyza');
+ assert(draft.body.includes('personally invite Example Spaza'));
+ assert(draft.body.includes('Umlazi, Durban'));
+ assert(draft.body.includes('trade prices and source stock for your spaza shop'));
+ assert(draft.body.includes('discounted delivery opportunities where available'));
+ assert(draft.body.includes('There is no charge to register and verify'));
+ assert(draft.body.includes('optional and subject to eligibility'));
+ assert(draft.body.includes('https://teyza.co.za/for-shop-owners.html'));
+ assert(draft.body.includes('Reply STOP'));
+ for(const category of ['retail','wholesale','food','salon','service','manufacturer','other','__proto__']){
+  const d=emailText('invitation',{...p,category});
+  assert(d.body.includes(p.name));assert(!d.body.includes('undefined'));assert.notEqual(d.body,draft.body);
+ }
+ const salon=emailText('invitation',{...p,name:'Example Salon',category:'salon',area:'Soweto',city:'Johannesburg'});
+ assert(salon.body.includes('Showcase your services'));assert(salon.body.includes('Soweto, Johannesburg'));assert(!salon.body.includes('source stock for your spaza shop'));
+ const welcome=emailText('welcome',p);
+ assert(welcome.subject.includes(p.name));assert(welcome.body.includes('Once approved and eligible'));assert(!welcome.body.includes('discounted delivery'));assert(!welcome.body.includes('Reply STOP'));
+ assert(!emailText('invitation',{...p,name:'Example\r\nBCC: hidden'}).subject.includes('\n'));
+ assert(emailDraftAllowed('invitation',p));
+ assert(!emailDraftAllowed('invitation',{...p,optedOut:true}));
+ assert(!emailDraftAllowed('invitation',{...p,permissions:{}}));
+ assert(!emailDraftAllowed('invitation',{...p,emailHistory:{invitation:{sentAt:1}}}));
+ assert(!emailDraftAllowed('welcome',{...p,seller:{status:'pending'}}));
+ assert(emailDraftAllowed('welcome',{...p,optedOut:true,seller:{status:'pending',welcomeEmailEligible:true}}));
+ assert(!emailDraftAllowed('welcome',{...p,seller:{status:'approved',welcomeEmailEligible:false}}));
+});
+test('Business page includes the same five benefit pillars without guaranteed claims',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');
+ for(const word of ['Get discovered.','Sell directly.','Source smarter.','Explore savings.','Grow with support.','Savings and sales are not guaranteed.'])assert(html.includes(word));
+});

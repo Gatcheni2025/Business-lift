@@ -604,6 +604,12 @@ test('Invitation and registration welcome logs distinguish staff-confirmed sent 
  assert.equal(p.emailHistory.invitation.sentAt,now-1000);
  await rejects(evt(p,{...mail,kind:'invitation'}),409);
  p=(await f.call('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:'seller1',ownerConfirmed:true})).prospect;
+ assert.equal(p.seller.welcomeEmailEligible,true);
+ const seller=f.db.records.get('teyzaSellerAccounts/seller1');
+ f.db.records.set('teyzaSellerAccounts/seller1',{...seller,ownerEmail:'changed@example.test'});
+ assert.equal((await f.call('ops_acquisition_detail',{id:p.id})).prospect.seller.welcomeEmailEligible,false);
+ await rejects(evt(p,{...mail,kind:'welcome'}),409);
+ f.db.records.set('teyzaSellerAccounts/seller1',seller);
  p=(await evt(p,{type:'opt_out'})).prospect;
  p=(await evt(p,{...mail,kind:'welcome'})).prospect;
  assert(p.emailHistory.welcome);
