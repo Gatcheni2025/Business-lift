@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'product_catalogue.dart';
+import 'discover_businesses.dart';
 
 String discoverCategoryLabel(String category) => switch (category) {
   'Baby Care' => 'Baby',
@@ -16,7 +17,16 @@ String discoverCategoryLabel(String category) => switch (category) {
 class DiscoverCataloguePage extends StatefulWidget {
   final Future<List<CatalogueProduct>> Function()? loader;
   final ValueChanged<CatalogueProduct> onEnquire;
-  const DiscoverCataloguePage({super.key, this.loader, required this.onEnquire});
+  final List<DiscoverBusiness>? businesses;
+  final String? areaLabel;
+  final VoidCallback? onChooseArea;
+  final Future<void> Function()? onRefreshBusinesses;
+  final bool loadingBusinesses;
+  const DiscoverCataloguePage({
+    super.key, this.loader, required this.onEnquire,
+    this.businesses, this.areaLabel, this.onChooseArea,
+    this.onRefreshBusinesses, this.loadingBusinesses = false,
+  });
   @override
   State<DiscoverCataloguePage> createState() => DiscoverCataloguePageState();
 }
@@ -27,9 +37,25 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
   List<CatalogueProduct> products = [];
   String? selectedCategory, error;
   bool loading = true;
+  late bool browsingBusinesses;
+  String businessCategory = 'all';
 
   @override
-  void initState() { super.initState(); load(); }
+  void initState() {
+    super.initState();
+    browsingBusinesses = widget.businesses != null;
+    load();
+  }
+
+  void switchView(bool businesses) {
+    if (browsingBusinesses == businesses) return;
+    setState(() {
+      browsingBusinesses = businesses;
+      selectedCategory = null;
+      businessCategory = 'all';
+      search.clear();
+    });
+  }
   @override
   void dispose() { search.dispose(); super.dispose(); }
 
@@ -46,8 +72,13 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
   }
 
   bool backToCategories() {
-    if (selectedCategory == null && search.text.isEmpty) return false;
-    setState(() { selectedCategory = null; search.clear(); });
+    if (browsingBusinesses) {
+      if (businessCategory == 'all' && search.text.isEmpty) return false;
+      setState(() { businessCategory = 'all'; search.clear(); });
+    } else {
+      if (selectedCategory == null && search.text.isEmpty) return false;
+      setState(() { selectedCategory = null; search.clear(); });
+    }
     FocusScope.of(context).unfocus();
     return true;
   }
@@ -65,13 +96,33 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
           const Text('Discover', style: TextStyle(fontSize: 29,
             fontWeight: FontWeight.w900, color: Colors.white)),
           const SizedBox(height: 5),
-          const Text('Explore everyday essentials',
-            style: TextStyle(color: Color(0xFFCED9E0), fontSize: 13)),
+          Text(widget.businesses != null
+              ? 'Find local businesses, fast food, services and products'
+              : 'Explore everyday essentials',
+            style: const TextStyle(color: Color(0xFFCED9E0), fontSize: 13)),
+          if (widget.businesses != null) ...[
+            const SizedBox(height: 13),
+            Wrap(spacing: 9, runSpacing: 7, children: [
+              ChoiceChip(
+                key: const ValueKey('discover-businesses-tab'),
+                label: const Text('Businesses & services'),
+                selected: browsingBusinesses,
+                onSelected: (_) => switchView(true)),
+              ChoiceChip(
+                key: const ValueKey('discover-products-tab'),
+                label: const Text('Products'),
+                selected: !browsingBusinesses,
+                onSelected: (_) => switchView(false)),
+            ]),
+          ],
           const SizedBox(height: 17),
           TextField(key: const ValueKey('discover-search'), controller: search,
             onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.search,
-            decoration: InputDecoration(hintText: 'Search products and brands',
+            decoration: InputDecoration(
+              hintText: browsingBusinesses
+                ? 'Search businesses and services'
+                : 'Search products and brands',
               prefixIcon: const Icon(Icons.search, color: ink),
               suffixIcon: query.isEmpty ? null : IconButton(tooltip: 'Clear search',
                 onPressed: () => setState(search.clear), icon: const Icon(Icons.close)),
@@ -79,7 +130,18 @@ class DiscoverCataloguePageState extends State<DiscoverCataloguePage> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(17),
                 borderSide: BorderSide.none))),
         ])),
-      Expanded(child: loading
+      Expanded(child: browsingBusinesses
+        ? TeyzaDiscoverBusinesses(
+            businesses: widget.businesses ?? const <DiscoverBusiness>[],
+            areaLabel: widget.areaLabel,
+            query: query,
+            category: businessCategory,
+            loading: widget.loadingBusinesses,
+            onChooseArea: widget.onChooseArea,
+            onRefresh: widget.onRefreshBusinesses,
+            onCategorySelected: (value) =>
+                setState(() => businessCategory = value))
+        : loading
         ? const Center(child: CircularProgressIndicator())
         : error != null
           ? Center(child: Padding(padding: const EdgeInsets.all(24),
