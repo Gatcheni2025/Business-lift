@@ -133,7 +133,8 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    onReady?.();render();
    // One bounded, non-recurring discovery sample gives operators live evidence
    // rather than an empty map. No national background crawling is performed.
-   town.value=compact?String(initialTown||'Durban').slice(0,100):'Durban';province.value=compact?'All provinces':'KwaZulu-Natal';category.value=compact?'spaza':'all';
+   if(compact){town.value=String(initialTown||'Durban').slice(0,100);province.value='All provinces';category.value='spaza';}
+   else{town.value='Durban';province.value='KwaZulu-Natal';category.value='all';}
    map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
    if(autoSearch)void searchArea(true);else status.textContent='Enter a town or township, choose a category, and select Search this area.';
   }catch(e){
