@@ -9,7 +9,11 @@ const QUERIES = {
     'convenience store', 'grocery supermarket'],
   variety: ['hair salon', 'beauty salon', 'furniture shop', 'upholstery shop',
     'plumber services', 'barber shop', 'electrical services', 'hardware store',
-    'China Mall', 'other local businesses'],
+    'China Mall', 'other local businesses',
+    'fast food takeaway', 'restaurants and food stalls', 'local cafes',
+    'car wash', 'car mechanic', 'tyre repair', 'laundry and dry cleaning',
+    'cleaning services', 'phone repair', 'printing services',
+    'photographers', 'courier services'],
   wholesale: ['wholesale cash and carry', 'cash and carry groceries',
     'food wholesaler', 'grocery wholesaler', 'grocery distributor',
     'bulk food supplier', 'wholesale warehouse', 'wholesale supermarket', 'wholesale suppliers']
@@ -41,9 +45,12 @@ function kindMatch(place, kind) {
   if (kind === 'spaza') return /spaza|tuck.?shop|mini.?market|convenience|grocer|general dealer|corner shop|supermarket|superette|food store/.test(name) ||
     ['convenience_store', 'grocery_store', 'supermarket', 'food_store'].some(t => types.has(t));
   if (/spaza|tuck.?shop|wholesal|cash.?(&|and).?carry/.test(name) || types.has('wholesaler')) return false;
-  return /salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china.?mall|mall|shopping|retail|variety|bazaar|clothing|fashion|homeware|department|repair|tailor|motor spares|printing/.test(name) ||
+  return /salon|barber|hairdress|beauty|nail|upholster|furniture|plumb|electrician|handyman|carpent|hardware|china.?mall|mall|shopping|retail|variety|bazaar|clothing|fashion|homeware|department|repair|tailor|motor spares|printing|fast.?food|take.?away|restaurant|shisanyama|pizza|burger|chicken|grill|bakery|butchery|cafe|coffee|car.?wash|mechanic|tyre|tire|laundry|dry.?clean|cleaning|photograph|courier|delivery|event|internet.?cafe/.test(name) ||
     ['shopping_mall','department_store','clothing_store','home_goods_store','beauty_salon',
-      'hair_care','plumber','electrician','furniture_store','hardware_store','barber_shop'].some(t=>types.has(t));
+      'hair_care','plumber','electrician','furniture_store','hardware_store','barber_shop',
+      'fast_food_restaurant','restaurant','meal_takeaway','meal_delivery','bakery','cafe',
+      'coffee_shop','car_wash','car_repair','tire_shop','laundry','dry_cleaner',
+      'cleaning_service','electronics_repair','photographer','courier_service'].some(t=>types.has(t));
 }
 function mapResult(place, kind, lat, lon) {
   const la = num(place.location?.latitude, -90, 90), lo = num(place.location?.longitude, -180, 180);
