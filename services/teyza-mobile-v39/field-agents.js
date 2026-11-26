@@ -1,9 +1,11 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_communications','agent_admin_communications_recheck','agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 const REWARD_CENTS=9000;
+const recruitmentSources=new Set(['meta_johannesburg','meta_durban','meta_cape_town']);
+const recruitmentSource=value=>recruitmentSources.has(value)?value:null;
 const timestampMs=value=>value?.toMillis?.()??(value instanceof Date?value.getTime():typeof value==='number'?value:NaN);
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
 function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
@@ -37,6 +39,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  async function agent(uid){const p=await read('teyzaFieldAgents/'+uid);if(!p||p.uid!==uid||p.status!=='approved')D.fail(403,'An approved Teyza agent account is required.');return p;}
  function own(v,uid){if(!v||v.agentUid!==uid)D.fail(404,'Visit not found.');return v;}
  function audit(tx,uid,action,target,details={}){tx.set(doc('teyzaAgentAudit/'+crypto.randomUUID()),{actorUid:uid,action,target,details,createdAt:clock()});}
+ const communications=require('./agent-communications').createAgentCommunications({db,clock,audit});
  async function status(id,v){
   if(!v.sellerUid)return {sellerApproval:'awaiting_owner',collectionActive:false};
   const uid=v.sellerUid;
@@ -81,6 +84,8 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
  async function execute(auth,action,data={}){
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);
   await rate(uid,'field-agent',80,60000);
+  if(action==='agent_admin_communications')return communications.list(data);
+  if(action==='agent_admin_communications_recheck')return communications.recheck(uid,data);
   // Retire the old write route for cached clients; retain historical records.
   if(action==='agent_admin_commission_paid')D.fail(410,'Agent commission tracking has been retired.');
   if(action==='agent_rewards'){
@@ -125,7 +130,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
      if(old.exists&&old.data().evidenceId&&old.data().documentsExpireAt>clock()&&old.data().status!=='rejected')return {profile:profileView(old.data()),alreadyApplied:true};
      const prior=old.exists?old.data():null;
      if(prior?.status==='approved')D.fail(409,'Approved profiles cannot replace identity evidence through signup.');
-     const p={...prior,uid,...values,status:'pending',reviewNote:'',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
+     const p={...prior,uid,...values,recruitmentSource:recruitmentSource(prior?prior.recruitmentSource:data.recruitmentSource),status:'pending',reviewNote:'',revision:(prior?.revision??-1)+1,identityType:privateDocs.identityType,evidenceId,objectPath,documentsExpireAt:expiresAt,privacyVersion:'agent-recruitment-v2',consentedAt:clock(),createdAt:prior?.createdAt||clock()};
      tx.set(ref,p);audit(tx,uid,action,uid);return {profile:profileView(p)};
     });
    }catch(error){await bucket.file(objectPath).delete({ignoreNotFound:true}).catch(()=>{});await doc('teyzaAgentEvidence/'+evidenceId).delete().catch(()=>{});throw error;}
@@ -195,7 +200,7 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
    return {identityType:evidence.identityType,identityNumber:evidence.identityNumber,identityFile:evidence.identityFile,cvFile:evidence.cvFile};
   }
   if(action==='agent_admin_profiles'){
-   let q=db.collection('teyzaFieldAgents').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));const r=await q.get();return {profiles:r.docs.slice(0,30).map(s=>profileView(s.data())),next:r.docs.length>30?r.docs[29].id:null};
+   let q=db.collection('teyzaFieldAgents').orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));const r=await q.get();return {profiles:r.docs.slice(0,30).map(s=>({...profileView(s.data()),recruitmentSource:recruitmentSource(s.data().recruitmentSource)})),next:r.docs.length>30?r.docs[29].id:null};
   }
   if(action==='agent_admin_profile_decide'){
    const target=D.id(data.agentUid),note=D.text(data.note||'','review note',500,false);if(target===uid)D.fail(403,'Another administrator must review your application.');if(!['approved','suspended','rejected'].includes(data.status))D.fail(422,'Choose an agent review outcome.');
@@ -225,7 +230,12 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   if(!admin)await agent(uid);
   if(action==='agent_visits'||action==='agent_admin_visits'){
    let q=db.collection('teyzaAgentVisits');if(!admin)q=q.where('agentUid','==',uid);else if(data.agentUid)q=q.where('agentUid','==',D.id(data.agentUid));q=q.orderBy('__name__').limit(31);if(data.after)q=q.startAfter(D.id(data.after));
-   const r=await q.get(),rows=await Promise.all(r.docs.slice(0,30).map(async s=>({...visitView(s.id,s.data()),...(admin?{agentUid:s.data().agentUid}:{}),progress:await status(s.id,s.data())})));return {visits:rows,next:r.docs.length>30?r.docs[29].id:null};
+   const r=await q.get(),rows=await Promise.all(r.docs.slice(0,30).map(async s=>{
+    const v=s.data(),progress=await status(s.id,v);
+    const reward=admin&&v.sellerUid?await read('teyzaAgentRewards/'+v.sellerUid):null;
+    const registrationRewardApproved=!!reward&&reward.sellerUid===v.sellerUid&&reward.visitId===s.id&&reward.agentUid===v.agentUid&&reward.amountCents===REWARD_CENTS&&reward.status==='approved_pending_payment';
+    return {...visitView(s.id,v),...(admin?{agentUid:v.agentUid,registrationRewardApproved}:{}),progress};
+   }));return {visits:rows,next:r.docs.length>30?r.docs[29].id:null};
   }
   if(action==='agent_visit_start'){
    if(data.ownerPermission!==true)D.fail(422,'Get the shop owner’s permission before recording this visit.');

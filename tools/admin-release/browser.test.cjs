@@ -77,7 +77,9 @@ async function main(){
    }
    if(body.action==='ops_support_list')result={ok:true,tickets:[],next:null};
    if(body.action==='ops_finance_queue')result={ok:true,requests:[],next:null};
-   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
+   if(body.action==='agent_admin_communications')result={ok:true,schema:1,settings:{state:'enabled',startAt:1795644000000,maxPerRun:1},rows:[{uid:'applicant1',name:'Synthetic Applicant',area:'Durban',province:'KwaZulu-Natal',applicationStatus:'pending',state:'sent',reason:'provider_accepted',sentAt:1795700000000,updatedAt:1795700000000,canRecheck:false},{uid:'agent2',name:'Synthetic Agent',area:'Umlazi',province:'KwaZulu-Natal',applicationStatus:'approved',state:'blocked_email',reason:'verified_email_required',updatedAt:1795700000000,canRecheck:true}],counts:{sent:1,blocked_email:1},next:null};
+   if(body.action==='agent_admin_communications_recheck')result={ok:true,scheduled:true};
+   if(body.action==='agent_admin_profiles')result={ok:true,profiles:[{uid:'applicant1',name:'Synthetic Applicant',email:'example@test.invalid',phone:'0710000000',province:'KwaZulu-Natal',area:'Durban',status:'pending',revision:0,hasDocuments:true},{uid:'agent2',name:'Synthetic Agent',province:'KwaZulu-Natal',area:'Umlazi',status:'approved',revision:1,hasDocuments:true,recruitmentSource:'meta_durban'},{uid:'legacy3',name:'Legacy Missing',province:'KwaZulu-Natal',area:'Pinetown',status:'pending',revision:legacyUploaded?3:2,hasDocuments:legacyUploaded}],next:null};
    if(body.action==='agent_admin_visits')result={ok:true,visits:[{id:'visit-test',shopName:'Demo Spaza',address:'12 Sample Road, Durban',area:'Durban',province:'KwaZulu-Natal',status:'submitted',revision:5,agentUid:'agent2',ownerConfirmed:true,progress:{sellerApproval:'approved',mandate:'signed_pending_activation',payment:'first_invoice_paid',commission:'not_eligible'},location:{latitude:-29.85,longitude:31.02,accuracy:12}}],next:null};
    if(body.action==='agent_admin_application_upload'){legacyUploaded=true;result={ok:true,saved:true};}
    if(body.action==='agent_admin_application_evidence')result={ok:true,identityType:'sa_id',identityNumber:'SYNTHETIC000',identityFile:{name:'test.jpg',mime:'image/jpeg',base64:jpeg},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:Buffer.from('%PDF-1.4 synthetic').toString('base64')}};
@@ -478,6 +480,32 @@ async function main(){
    await f.page.getByText('Field visit review saved.').waitFor();
    assert(f.calls.some(c=>c.action==='agent_admin_visit_decide'&&c.data.reviewConfirmed));
    await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Agent communications displays real fixture states and only safely rechecks blocked emails',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Communications',exact:true}).click();
+   await f.page.getByText('Synthetic Applicant',{exact:true}).waitFor();
+   await f.page.getByText('Sent to Zoho',{exact:true}).last().waitFor();
+   assert((await f.page.getByRole('textbox',{name:'Business benefits reply text'}).inputValue()).includes('Registration and verification are free')||(await f.page.getByRole('textbox',{name:'Business benefits reply text'}).inputValue()).includes('registration and verification are free'));
+   await f.page.getByLabel('Filter welcome email status').selectOption('blocked_email');
+   assert.equal(await f.page.getByText('Synthetic Applicant',{exact:true}).count(),0);
+   const recheck=f.page.getByRole('button',{name:'Recheck verified email'});assert(await recheck.isDisabled());
+   await f.page.getByText('Applicant has been asked to verify their email.',{exact:true}).click();
+   await recheck.click();await f.page.getByText('Email recheck scheduled. Nothing sent yet.',{exact:false}).waitFor();
+   assert(f.calls.some(c=>c.action==='agent_admin_communications_recheck'&&c.data.agentUid==='agent2'&&c.data.confirmed===true));
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Recruitment coverage separates campaign attribution, approved agents and actual visit areas',async()=>{
+   const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'Recruitment coverage',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Applications by recruitment source'}).waitFor();
+   const source=f.page.locator('.field-area-row').filter({hasText:'Meta — Durban'});
+   await source.getByText('1 applications · 1 approved · 1 approved with a recorded visit · 0 R90 approvals awaiting payment').waitFor();
+   await f.page.getByText('KwaZulu-Natal · Umlazi',{exact:true}).waitFor();
+   await f.page.getByText('KwaZulu-Natal · Durban',{exact:true}).waitFor();
+   await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{
