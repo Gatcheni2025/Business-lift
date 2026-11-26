@@ -26,6 +26,7 @@ import 'seller_premium.dart';
 import 'seller_selling.dart';
 import 'seller_support_chat.dart';
 import 'business_services_page.dart';
+import 'business_categories.dart';
 import 'teyza_ads_page.dart';
 import 'seller_areas.dart';
 import 'seller_review.dart';
@@ -974,13 +975,18 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
             0, previousName.length - recordedPortion.first.label.length - 3);
     final portion = ValueNotifier<String>(selectedUnit);
     final name = TextEditingController(text: cleanedName);
+    final registeredType = teyzaTypeFor(shop?.businessType);
+    final suggestedCategories = <String>[
+      if (registeredType?.discoveryGroup == 'food')
+        ...['Fast food', 'Prepared meals', 'Drinks', 'Bakery', 'Meat', 'Other food']
+      else if (registeredType?.discoveryGroup == 'retail') ...businessOfferProductTypes
+      else ...['Groceries', 'Fruit & Veg', 'Dairy & Eggs', 'Pantry', 'Bakery',
+        'Drinks', 'Snacks', 'Household', 'Personal Care', 'Other products'],
+    ];
     final category = TextEditingController(
-        text: existing?.category ??
-            (shop?.category == 'wholesale'
-                ? 'Bulk stock / wholesale'
-                : shop?.category == 'retail'
-                    ? 'General retail'
-                    : 'Groceries'));
+        text: existing?.category ?? (registeredType?.discoveryGroup == 'retail'
+          ? teyzaDiscoveryCategoryLabel(registeredType!.discoverySubcategory)
+          : suggestedCategories.first));
     final description =
         TextEditingController(text: existing?.description ?? '');
     final price = TextEditingController(
@@ -1040,6 +1046,16 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? 'Enter a category'
                                   : null),
+                          if (!fromCatalogue) ...[
+                            const SizedBox(height: 6),
+                            const Text('Choose a suggested category or enter your own.',
+                              style: TextStyle(fontSize: 12)),
+                            Wrap(spacing: 6, runSpacing: 5, children: [
+                              for (final suggestion in suggestedCategories)
+                                ActionChip(label: Text(suggestion),
+                                  onPressed: () => category.text = suggestion),
+                            ]),
+                          ],
                           const SizedBox(height: 8),
                           TextFormField(
                               controller: description,
@@ -1121,6 +1137,9 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
                                     : null;
                               }),
                           const SizedBox(height: 14),
+                          const Text('Payment and delivery follow your saved business settings. Manage them from Products → Payment & delivery options. Secure online checkout still requires verified payment readiness.',
+                            style: TextStyle(fontSize: 12, height: 1.4)),
+                          const SizedBox(height: 12),
                           FilledButton.icon(
                               icon: const Icon(Icons.save_outlined),
                               label: const Text('Save draft'),
@@ -1313,8 +1332,8 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
                 : 'View or change the photo on your dashboard and listing',
             openShopPhoto),
         if (shop?.category == 'retail')
-          businessTile(Icons.design_services_outlined, 'My services',
-              'Add service types and images', openBusinessServices),
+          businessTile(Icons.design_services_outlined, 'My products & services',
+              'Add categorized offerings, prices and fulfilment terms', openBusinessServices),
         if (shop?.category == 'wholesale')
           businessTile(
               Icons.handshake_outlined,
@@ -1587,6 +1606,11 @@ class _SellerWorkspaceState extends State<SellerWorkspacePage>
                       ]))),
           const SizedBox(height: 12),
         ],
+        OutlinedButton.icon(
+          key: const ValueKey('seller-product-payment-delivery'),
+          onPressed: busy ? null : () => openTool(SellerTool.services),
+          icon: const Icon(Icons.local_shipping_outlined),
+          label: const Text('Payment & delivery options')),
         if (hasProductAccess)
           FilledButton.icon(
               onPressed: busy ? null : chooseProducts,

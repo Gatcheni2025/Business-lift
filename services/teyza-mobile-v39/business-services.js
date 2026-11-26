@@ -3,10 +3,41 @@ const crypto=require('node:crypto'),D=require('./domain'),P=require('./publicati
 const {saveUpload}=require('./upload-storage');
 const actions=new Set(['business_services_list','business_service_save','business_service_photo',
   'business_cover_read','business_cover_upload']);
-const TYPES=new Set(['Beauty & hair','Plumbing','Electrical','Furniture & upholstery','Repairs','Cleaning','Printing','Tutoring','Transport','Other service']);
+const TYPES=new Set(["Beauty & hair","Plumbing","Electrical","Furniture & upholstery","Repairs","Cleaning","Printing","Tutoring","Transport","Other service","Manufacturing & fabrication","Catering & food preparation","Professional & consulting","Accounting & financial services","IT & digital services","Photography & events","Health & wellness","Education & training","Accommodation & tourism","Agriculture"]);
+const PRODUCT_TYPES=new Set(["Fashion & accessories","Electronics & appliances","Furniture, home & living","Beauty & personal care products","Hardware & building supplies","Sports & outdoor","Books & stationery","Agricultural supplies","Motor parts & accessories","Speciality food & beverages","Other products"]);
+const PAYMENT_METHODS=Object.freeze({"arrange":"Arrange with business","cash":"Cash","card_in_person":"Card in person","eft":"EFT / bank transfer"});
+const FULFILMENT_TYPES=Object.freeze({"collection":"Collection","seller_delivery":"Business delivery","courier":"Courier","on_site":"On-site service","remote":"Remote service"});
+function choices(value,allowed,label){
+ if(!Array.isArray(value)||value.length>Object.keys(allowed).length||
+   value.some(v=>typeof v!=='string'||!Object.hasOwn(allowed,v)))
+  D.fail(422,'Choose valid '+label+'.');
+ return [...new Set(value)];
+}
+function offerDetails(data,previous={}){
+ const kind=data.kind??previous.kind??'service';
+ if(!['service','product'].includes(kind))D.fail(422,'Choose product or service.');
+ if(previous.kind==='product'&&data.kind===undefined)
+  D.fail(409,'Update Teyza to edit this product listing.');
+ const type=D.text(data.type,'offering category',80);
+ if(!(kind==='product'?PRODUCT_TYPES:TYPES).has(type))
+  D.fail(422,'Choose a valid offering category.');
+ const priceCents=data.priceCents===undefined?(previous.priceCents??null):data.priceCents;
+ if(priceCents!==null&&(!Number.isInteger(priceCents)||priceCents<0||priceCents>100000000))
+  D.fail(422,'Enter a valid indicative price or request a quote.');
+ const paymentMethods=choices(data.paymentMethods??previous.paymentMethods??['arrange'],PAYMENT_METHODS,'payment preferences');
+ const fulfilmentTypes=choices(data.fulfilmentTypes??previous.fulfilmentTypes??[],FULFILMENT_TYPES,'fulfilment types');
+ if(kind==='product'&&fulfilmentTypes.some(v=>v==='on_site'||v==='remote'))
+  D.fail(422,'Choose collection, business delivery or courier for physical products.');
+ return {kind,type,priceCents,paymentMethods,fulfilmentTypes};
+}
 function serviceRow(uid,id,data){
  if(data.ownerUid!==uid||data.status!=='active')return null;
- return {id,type:data.type,name:data.name,description:data.description||'',imageUrl:data.imageUrl||''};
+ return {id,type:data.type,name:data.name,description:data.description||'',imageUrl:data.imageUrl||'',
+  kind:data.kind==='product'?'product':'service',
+  priceCents:Number.isInteger(data.priceCents)&&data.priceCents>=0&&data.priceCents<=100000000?data.priceCents:null,
+  paymentMethods:Array.isArray(data.paymentMethods)?data.paymentMethods.filter(v=>Object.hasOwn(PAYMENT_METHODS,v)):['arrange'],
+  fulfilmentTypes:Array.isArray(data.fulfilmentTypes)?data.fulfilmentTypes.filter(v=>Object.hasOwn(FULFILMENT_TYPES,v)):[],
+  checkoutAvailable:false};
 }
 function createBusinessServices({db,bucket,sanitizeImage,clock=Date.now,rate,synchronize}){
  const doc=p=>db.doc(p);
@@ -48,15 +79,16 @@ function createBusinessServices({db,bucket,sanitizeImage,clock=Date.now,rate,syn
    D.fail(403,'Active Premium or a valid temporary grant is required to publish services.');
   if(action==='business_service_save'){
    await rate(uid,'service-save',20,3600000);
-   const type=D.text(data.type,'service type',80),name=D.text(data.name,'service name',100);
-   if(!TYPES.has(type)||name.length<3)D.fail(422,'Select a service type and enter its name.');
+   const name=D.text(data.name,'offering name',100);
+   if(name.length<3)D.fail(422,'Enter the product or service name.');
    const description=D.text(data.description||'','service description',500,false);
    const id=data.serviceId?D.id(data.serviceId):crypto.randomUUID();
    const ref=doc('teyzaBusinessServices/'+uid+'/items/'+id);
    const old=await ref.get();
-   if(old.exists&&old.data().ownerUid!==uid)D.fail(403,'This service belongs to another account.');
+   if(old.exists&&old.data().ownerUid!==uid)D.fail(403,'This offering belongs to another account.');
+   const details=offerDetails(data,old.exists?old.data():{});
    const stamp=clock();
-   await ref.set({ownerUid:uid,type,name,description,status:'active',
+   await ref.set({ownerUid:uid,...details,name,description,status:'active',
      createdAt:old.exists?old.data().createdAt:stamp,updatedAt:stamp},{merge:true});
    await synchronize(uid,{publishIntent:true});
    return {saved:true,serviceId:id};
@@ -82,4 +114,4 @@ function createBusinessServices({db,bucket,sanitizeImage,clock=Date.now,rate,syn
  }
  return {execute};
 }
-module.exports={actions,createBusinessServices,serviceRow,TYPES};
+module.exports={actions,createBusinessServices,serviceRow,TYPES,PRODUCT_TYPES,PAYMENT_METHODS,FULFILMENT_TYPES,offerDetails};

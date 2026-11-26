@@ -17,12 +17,12 @@ class SellerAccessException implements Exception {
 }
 
 class SellerShop {
-  final String name,category,address,approvalStatus,listingStatus,phone,companyName,registrationNumber;
-  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone='',this.companyName='',this.registrationNumber=''});
+  final String name,category,address,approvalStatus,listingStatus,phone,companyName,registrationNumber,businessType;
+  const SellerShop(this.name,this.category,this.address,this.approvalStatus,this.listingStatus,{this.phone='',this.companyName='',this.registrationNumber='',this.businessType=''});
   factory SellerShop.fromFields(Map<String,dynamic> d)=>SellerShop(
     (d['shopName']??'').toString(),(d['category']??'').toString(),
     (d['address']??'').toString(),(d['approvalStatus']??'pending').toString(),
-    (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString(),companyName:(d['companyName']??'').toString(),registrationNumber:(d['registrationNumber']??'').toString());
+    (d['listingStatus']??'not_listed').toString(),phone:(d['phone']??'').toString(),companyName:(d['companyName']??'').toString(),registrationNumber:(d['registrationNumber']??'').toString(),businessType:(d['businessType']??'').toString());
   bool get isLive=>approvalStatus=='approved'&&listingStatus=='active';
   bool get hasRegisteredCategory=>category=='spaza'||category=='retail'||category=='wholesale';
   String get categoryLabel=>category=='spaza'?'Spaza Shop':

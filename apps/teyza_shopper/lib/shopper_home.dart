@@ -29,6 +29,7 @@ import 'product_catalogue.dart';
 import 'discover_catalogue.dart';
 import 'discover_businesses.dart';
 import 'business_categories.dart';
+import 'business_services_page.dart' show businessOfferTerms;
 import 'seller_push.dart';
 import 'seller_notifications.dart';
 import 'seller_firestore.dart';
@@ -5212,14 +5213,14 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                       })),
             ],
             if (shop.shopCategory == 'variety') ...[
-              section('Services',
+              section('Products & services',
                   subtitle:
-                      'Services published by this verified Teyza business'),
+                      'Offerings published by this verified Teyza business'),
               if (shop.serviceHighlights.isEmpty)
                 const Padding(
                     padding: EdgeInsets.all(14),
                     child: Text(
-                        'No services published yet. Contact the business for details.')),
+                        'No offerings published yet. Contact the business for details.')),
               for (final service in shop.serviceHighlights)
                 Card(
                     child: Column(
@@ -5238,16 +5239,17 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                           leading: const Icon(Icons.design_services_outlined,
                               color: green),
                           title:
-                              Text((service['name'] ?? 'Service').toString()),
-                          subtitle: Text((service['type'] ?? '').toString() +
-                              '\n' +
-                              (service['description'] ?? '').toString()),
+                              Text((service['name'] ?? 'Offering').toString()),
+                          subtitle: Text((service['kind'] == 'product' ? 'Product · ' : 'Service · ') +
+                              (service['type'] ?? '').toString() + '\n' +
+                              (service['description'] ?? '').toString() + '\n' +
+                              businessOfferTerms(service)),
                           isThreeLine: true),
                       if (shop.liveChat)
                         TextButton.icon(
                             onPressed: () => chatWithShop(shop),
                             icon: const Icon(Icons.chat_bubble_outline),
-                            label: const Text('Enquire about this service'))
+                            label: Text(service['kind'] == 'product' ? 'Enquire about this product' : 'Enquire about this service'))
                     ])),
             ],
             section('About this shop',
