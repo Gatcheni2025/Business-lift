@@ -516,7 +516,7 @@ async function main(){
     else if(body.action==='ops_acquisition_event'){assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:1};await route.fulfill({json:{ok:true,prospect}});}
     else if(body.action==='ops_acquisition_send'){assert.equal(body.data.channel,'email');assert.equal(body.data.kind,'invitation');assert.equal(body.data.confirmed,true);prospect={...prospect,outbound:{email_invitation:{status:'queued',updatedAt:Date.now()}},revision:2};await route.fulfill({json:{ok:true,message:{status:'queued'}}});}
     else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
-    else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{email:{invitation:true},whatsapp:{invitation:false}}}});
+    else await route.fulfill({json:{ok:true,schema:1,prospects:[{id:'manual-prospect',name:'Synthetic Saved Manual Shop',city:'Durban',area:'Umlazi',address:'Synthetic Manual Road',category:'spaza',stage:'identified',phone:'',email:'',permissions:{},optedOut:false,revision:0}],next:null,communications:{email:{invitation:true},whatsapp:{invitation:false}}}});
     return true;
    }});
    await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
@@ -535,10 +535,14 @@ async function main(){
    await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
    assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'all');
+   await f.page.getByText('Synthetic Saved Manual Shop',{exact:true}).last().waitFor();
+   const findDialog=f.page.getByRole('dialog');assert(await findDialog.getByText('Manual enquiry needed',{exact:true}).isVisible());
+   await findDialog.getByLabel('Contact channel filter').selectOption('email');assert.equal(await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).count(),0);
+   await findDialog.getByLabel('Contact channel filter').selectOption('all');
    await f.page.getByLabel('Town, township or business name').fill('Durban');
    // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
    await f.page.evaluate(()=>{
-    class MapMock{constructor(_node,opts){this.center=opts.center;this.zoom=opts.zoom;}
+    class MapMock{constructor(_node,opts){if(window.__acqFailMap)throw Error('Synthetic map error');this.center=opts.center;this.zoom=opts.zoom;}
      setCenter(p){this.center={lat:typeof p.lat==='function'?p.lat():p.lat,lng:typeof p.lng==='function'?p.lng():p.lng};}getCenter(){return {lat:()=>this.center.lat,lng:()=>this.center.lng};}
      setZoom(z){this.zoom=z;}getZoom(){return this.zoom;}panTo(p){this.setCenter(p);}}
     class MarkerMock{setMap(){}addListener(){}}
@@ -577,6 +581,11 @@ async function main(){
    assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
    assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
    assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
+   await f.page.evaluate(()=>window.__acqFailMap=true);
+   await shop.getByRole('button',{name:'Show on map',exact:true}).click();
+   await live.getByText('Map could not load. Business information remains available above.',{exact:true}).waitFor();
+   assert.equal(await live.locator('.acq-business-card').count(),2);
+   assert(await noContact.getByText('Phone: not listed',{exact:true}).isVisible());
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
    await live.getByRole('button',{name:'Back to saved contacts'}).click();
    assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);
@@ -623,7 +632,7 @@ async function main(){
    await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
    await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
    await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
-   await lookup.getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await lookup.locator('.acq-contact-row').filter({hasText:'Synthetic Spaza'}).getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
