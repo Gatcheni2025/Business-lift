@@ -528,6 +528,11 @@ async function main(){
    await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
    await form.getByRole('button',{name:'Save business prospect'}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await f.page.getByRole('heading',{name:'Business email desk'}).waitFor();
+   await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
+   assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
+   await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
+   await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();

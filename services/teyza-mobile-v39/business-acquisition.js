@@ -5,6 +5,7 @@ const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acqu
 const cities=['Durban','Johannesburg'];
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
 const sources=['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted'];
+const emailKinds=['invitation','welcome'];
 const stages=['identified','interested','registration_started','not_interested','closed'];
 const channels=['phone','email','whatsapp'];
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
@@ -49,13 +50,14 @@ function createAcquisition({db,clock=Date.now}){
    if(a?.uid===p.sellerUid&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)){
     const s=await read('teyzaPublicShops/'+p.sellerUid);
     seller={uid:p.sellerUid,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
-     listed:s?.sellerUid===p.sellerUid&&s.status==='active'};
+     listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true};
    }else seller={uid:p.sellerUid,status:'review_required',listed:false};
   }
   return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
-   lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller};
+   lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
+   emailHistory:p.emailHistory||{},help:p.help||null};
  }
  async function execute(auth,action,data){
   const uid=D.id(auth.uid);
@@ -85,10 +87,19 @@ function createAcquisition({db,clock=Date.now}){
   if(action==='ops_acquisition_detail'){
    const p=await read(collection+'/'+id);if(!p)D.fail(404,'Business prospect not found.');
    const result=await db.collection(eventsPath(id)).orderBy('createdAt','desc').limit(26).get();
-   return {prospect:await view(id,p),events:result.docs.slice(0,25).map(s=>({id:s.id,...s.data()})),moreEvents:result.docs.length>25};
+   const prospect=await view(id,p);
+   // Read only cases belonging to this genuinely linked seller. Do not copy message contents.
+   let support=[],moreSupport=false;
+   if(prospect.seller&&prospect.seller.status!=='review_required'){
+    const cases=await db.collection('teyzaSupportTickets').where('ownerUid','==',p.sellerUid).limit(26).get();
+    support=cases.docs.slice(0,25).filter(s=>s.data().ownerUid===p.sellerUid).map(s=>{
+     const v=s.data();return {id:s.id,subject:String(v.subject||'Support request').slice(0,140),status:String(v.status||'open').slice(0,40),source:v.source==='seller_admin_chat'?'conversation':'case',updatedAt:v.updatedAt||null};
+    });moreSupport=cases.docs.length>25;
+   }
+   return {prospect,events:result.docs.slice(0,25).map(s=>({id:s.id,...s.data()})),moreEvents:result.docs.length>25,support,moreSupport};
   }
   if(action==='ops_acquisition_event'){
-   const type=choose(data.type,['permission','contact','progress','opt_out'],'activity');
+   const type=choose(data.type,['permission','contact','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
    const note=clean(data.note,'activity note or consent evidence',500);
    if(data.confirmed!==true)D.fail(422,'Confirm this is an accurate record of an actual event.');
    const saved=await db.runTransaction(async tx=>{
@@ -107,6 +118,39 @@ function createAcquisition({db,clock=Date.now}){
       update.permissions={...p.permissions,[channel]:{granted:true,recordedAt:stamp,recordedBy:uid}};
      }else if(p.permissions?.[channel]?.granted!==true)D.fail(409,'Record actual owner permission for this channel first.');
      details={...details,channel};
+    }
+    if(type==='email_sent'){
+     const kind=choose(data.kind,emailKinds,'email type');
+     if(!p.email)D.fail(422,'This business has no email address.');
+     if(data.sentConfirmed!==true)D.fail(422,'Confirm the matching email is visible in Zoho Sent.');
+     const sentAt=data.sentAt;
+     if(!Number.isSafeInteger(sentAt)||sentAt>stamp||sentAt<stamp-366*86400000)D.fail(422,'Enter the actual sent date and time, not a future date.');
+     const reference=clean(data.reference,'Zoho Sent reference',180);
+     if(p.emailHistory?.[kind])D.fail(409,'This email type is already recorded. Check the existing history instead of sending again.');
+     if(kind==='invitation'){
+      if(blocked||p.permissions?.email?.granted!==true)D.fail(409,'Invitation requires recorded email marketing consent and no opt-out.');
+     }else{
+      // Operational welcome only: the registered account must be genuine and the recipient must be its owner.
+      const a=p.sellerUid?await tx.get(doc('teyzaSellerAccounts/'+p.sellerUid)):null;
+      const seller=a?.exists?a.data():null;
+      if(!seller||seller.uid!==p.sellerUid||seller.deletionPending===true||norm(seller.shopName)!==norm(p.name)||norm(seller.ownerEmail)!==norm(p.email))
+       D.fail(409,'Welcome requires an existing linked seller with the same owner email.');
+     }
+     const entry={kind,sentAt,recordedAt:stamp,recordedBy:uid,reference,status:'staff_confirmed_in_zoho_sent'};
+     update.emailHistory={...p.emailHistory,[kind]:entry};
+     details={...details,...entry,channel:'email'};
+    }
+    if(type==='help_requested'){
+     const channel=choose(data.channel,channels,'support channel');
+     if(!contactValue(p,channel))D.fail(422,'This business has no contact detail for that channel.');
+     if(p.help&&p.help.state!=='resolved')D.fail(409,'An open help request already exists. Record a reply or resolution instead.');
+     update.help={state:'open',channel,requestedAt:stamp,updatedAt:stamp};
+     details={...details,channel};
+    }
+    if(type==='help_replied'||type==='help_resolved'){
+     if(!p.help||p.help.state==='resolved')D.fail(409,'Record the owner help request first.');
+     update.help={...p.help,state:type==='help_replied'?'waiting_for_owner':'resolved',updatedAt:stamp};
+     details={...details,channel:p.help.channel};
     }
     if(type==='progress'){
      update.stage=choose(data.stage,stages,'onboarding stage');
