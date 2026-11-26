@@ -257,3 +257,29 @@ test('Field discovery separates local shops, other businesses and wholesalers fo
  assert.equal(result.google.length,3);
  assert(result.google.every(p=>p.placeId&&p.mapsUrl&&p.distanceMeters===0));
 });
+
+test('Reward history paginates beyond 100 rewards without including another agent',async()=>{
+ const f=setup();
+ for(let i=0;i<105;i++){
+   const sellerUid='rewardSeller'+String(i).padStart(3,'0');
+   f.db.records.set('teyzaAgentRewards/'+sellerUid,{sellerUid,agentUid:'agent1',visitId:'visit'+i,
+     amountCents:9000,status:'approved_pending_payment',approvedAt:start});
+ }
+ f.db.records.set('teyzaAgentRewards/otherSeller',{sellerUid:'otherSeller',agentUid:'anotherAgent',amountCents:9000,status:'approved_pending_payment'});
+ const first=await f.call('agent_rewards');
+ assert.equal(first.approvedCount,100);
+ assert.equal(first.approvedPendingPaymentCents,900000);
+ assert.equal(first.partial,true);
+ const second=await f.call('agent_rewards',{after:first.next});
+ assert.equal(second.approvedCount,5);
+ assert.equal(second.approvedPendingPaymentCents,45000);
+ assert.equal(second.next,null);
+});
+test('An eligible new verified manufacturer qualifies for the same R90 reward',async()=>{
+ const f=setup();await approved(f);
+ Object.assign(f.db.records.get('teyzaSellerAccounts/seller1'),{
+  category:'retail',businessType:'manufacturing_clothing',approvalStatus:'approved',createdAt:new Date(start+1000)});
+ f.db.records.set('teyzaShopLocations/seller1',{latitude:-29.85,longitude:31.02});
+ assert.equal((await f.call('agent_admin_reward_approve',{visitId:'visit1'},admin)).amountCents,9000);
+ await rejects(f.call('agent_admin_reward_approve',{visitId:'visit1'},admin),409);
+});

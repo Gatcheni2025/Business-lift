@@ -51,10 +51,12 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   if(action==='agent_admin_commission_paid')D.fail(410,'Agent commission tracking has been retired.');
   if(action==='agent_rewards'){
    await agent(uid);
-   const rewards=await db.collection('teyzaAgentRewards').where('agentUid','==',uid).orderBy('__name__').limit(101).get();
+   let query=db.collection('teyzaAgentRewards').where('agentUid','==',uid).orderBy('__name__').limit(101);
+   if(data.after)query=query.startAfter(D.id(data.after));
+   const rewards=await query.get();
    const rows=rewards.docs.slice(0,100).map(s=>s.data()).filter(r=>r.agentUid===uid&&r.amountCents===REWARD_CENTS&&r.status==='approved_pending_payment')
     .map(r=>({visitId:r.visitId,amountCents:r.amountCents,status:r.status,approvedAt:r.approvedAt}));
-   return {rewardCents:REWARD_CENTS,approvedPendingPaymentCents:rows.reduce((sum,r)=>sum+r.amountCents,0),approvedCount:rows.length,partial:rewards.docs.length>100,rewards:rows};
+   return {rewardCents:REWARD_CENTS,approvedPendingPaymentCents:rows.reduce((sum,r)=>sum+r.amountCents,0),approvedCount:rows.length,partial:rewards.docs.length>100,next:rewards.docs.length>100?rewards.docs[99].id:null,rewards:rows};
   }
   if(action==='agent_admin_reward_approve'){
    const visitId=D.id(data.visitId),ref=doc('teyzaAgentVisits/'+visitId);

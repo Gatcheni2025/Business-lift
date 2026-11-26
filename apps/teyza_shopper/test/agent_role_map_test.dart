@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teyza_shopper/agent_workspace.dart';
 import 'package:teyza_shopper/teyza_mode_chooser.dart';
@@ -20,7 +23,8 @@ class MockAgentService extends TeyzaMobileApi{
       'google':[{'name':'Independent Spaza Shop','address':'10 Market Road, Durban',
        'latitude':-29.858,'longitude':31.021,'shopCategory':'spaza','distanceMeters':1200}],
       'leads':[]},
-   'agent_visits'=>{'visits':[]},
+   'agent_visits'=>{'visits':[], 'next':null},
+   'agent_rewards'=>{'approvedPendingPaymentCents':18000,'approvedCount':2,'partial':false,'next':null},
    _=>{'ok':true}
   };
  }
@@ -67,8 +71,27 @@ void main(){
   await tester.binding.setSurfaceSize(const Size(390,844));
   addTearDown(()=>tester.binding.setSurfaceSize(null));
   final session=MockSession();
-  await tester.pumpWidget(MaterialApp(home:AgentWorkspacePage(session:session,
-    mobileApi:MockAgentService(session),onShopper:(){},onSeller:(){})));
+  final boundary=GlobalKey();
+  await tester.pumpWidget(MaterialApp(home:RepaintBoundary(key:boundary,child:AgentWorkspacePage(session:session,
+    mobileApi:MockAgentService(session),onShopper:(){},onSeller:(){}))));
+  await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('agent-dashboard')),findsOneWidget);
+  expect(find.text('R180.00'),findsOneWidget);
+  if(Platform.environment['TEYZA_CAPTURE_UI']=='1'){
+    await tester.runAsync(()async{
+      final image=await (boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary).toImage(pixelRatio:2);
+      final bytes=await image.toByteData(format:ui.ImageByteFormat.png);
+      final output=File('build/ui-preview/agent-dashboard.png');
+      await output.parent.create(recursive:true);
+      await output.writeAsBytes(bytes!.buffer.asUint8List());image.dispose();
+    });
+  }
+  await tester.tap(find.byKey(const ValueKey('agent-invite-business')));
+  await tester.pumpAndSettle();
+  expect(find.text('Start owner registration visit'),findsOneWidget);
+  Navigator.of(tester.element(find.text('Start owner registration visit'))).pop();
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('agent-nav-0')));
   await tester.pumpAndSettle();
   expect(find.text('Find shops near you'),findsOneWidget);
   expect(find.text('Shop search and directions are ready'),findsOneWidget);
