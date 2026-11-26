@@ -4,7 +4,7 @@ const {patch,rollback,servingConfig,overlay,versionName}=require('./hosting-patc
 const {assertAdminBackend}=require('./run.cjs');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),base='sites/business-lift-3c19c/versions/';
 test('Admin release accepts disabled checkout or strictly verified R99 prorated pilot/full rollout',()=>{
- const ready={ok:true,version:'3.25.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
+ const ready={ok:true,version:'3.26.0',googlePlaceClaims:true,sellerApprovalBeforeCheckout:true,
    agentCommissionEnabled:false,adminOperations:true,adminReview:true,adminProductReview:false,
    automaticProductPublication:true,adminPaystackVerify:true,adminComplimentaryAccess:true,
    manualReceiptsRetired:true,historicSellerMandatesReadOnly:true,sellerMandates:false,sellerMandateRequestV3:false,
@@ -12,6 +12,8 @@ test('Admin release accepts disabled checkout or strictly verified R99 prorated 
    sellerPaystackNewCheckoutDisabled:true,sellerMembershipBillingMode:'checkout_disabled',
    adminUsers:true,adminSellerDocuments:true,physicalGoodsPaystack:true};
  assert.doesNotThrow(()=>assertAdminBackend(ready));
+ assert.throws(()=>assertAdminBackend(ready,{marketplace:true}));
+ assert.doesNotThrow(()=>assertAdminBackend({...ready,marketplaceRelease:'20261126-v61',adminAgentRewardReview:true,businessOfferTerms:true,agentRewardsPagination:true,agentRewardReviewEnabled:true,agentRewardCents:9000},{marketplace:true}));
  const pilot={...ready,sellerPaystackNewCheckoutDisabled:false,sellerMembershipBillingMode:'paystack_card_subscription',
    paystackCheckoutAvailable:true,paystackRolloutMode:'pilot',membershipProrationEnabled:true,
    subscriptionMonthlyCents:9900,subscriptionTermsVersion:'seller-r99-calendar-proration-2026-11'};
@@ -144,4 +146,17 @@ test('Admin Google Maps authorization retains only origin referrer while removin
  assert(config.headers.some(x=>x.glob==='/**'&&x.headers['X-Frame-Options']==='DENY'));
  for(const h of config.headers.filter(x=>x.glob===managed||x.glob.includes('teyza-')||x.glob.startsWith('/assets/')))
   assert.equal(h.headers['Referrer-Policy'],'strict-origin-when-cross-origin');
+});
+
+test('Marketplace overlay is explicit, includes all branded Work and support assets, and excludes checkout and home',()=>{
+ const {workPaths,supportPaths,preserved}=require('./hosting-patch.cjs');
+ const workRoot=path.resolve(__dirname,'../../web/app-first/public');
+ const files=overlay(root,{workRoot});
+ for(const p of [...workPaths,...supportPaths])assert(files.has(p),p);
+ for(const p of ['/index.html','/pay/index.html','/ads/index.html','/order-payment-return.html','/js/seller-web-billing.mjs','/assets/teyza-maps-config.json'])if(p!=='/assets/teyza-maps-config.json'||!process.env.TEYZA_MAPS_BROWSER_KEY)assert(!files.has(p),p);
+ const config=servingConfig({headers:[{glob:'/pay/**',headers:{'Cache-Control':'no-store'}}]},{marketplace:true});
+ assert(config.headers.some(x=>x.glob==='/pay/**'));
+ for(const p of ['/work.html','/owner-confirm.html','/support-inbox.html'])assert(config.headers.some(x=>x.glob===p&&x.headers['X-Robots-Tag']==='noindex, nofollow'));
+ const before=new Map([['/assets/teyza-maps-config.json','existing'],['/index.html','existing']]);
+ assert.throws(()=>preserved(before,new Map([['/assets/teyza-maps-config.json','changed'],['/index.html','existing']]),new Map()),/not preserved/);
 });

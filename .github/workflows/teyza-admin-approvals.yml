@@ -49,6 +49,8 @@ jobs:
         working-directory: tools/admin-release
         run: |
           npm test
+          node --test marketplace-release.test.cjs
+          node --check marketplace-release.cjs
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-app-admin.js
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-operations.js
           node --input-type=module --check < ../../web/teyza-admin/public/js/teyza-field-admin.js
@@ -72,6 +74,12 @@ jobs:
         run: |
           npm test --prefix tools/app-first-release
           node --input-type=module --check < web/app-first/public/js/seller-web-billing.mjs
+      - name: Parse scoped marketplace deployment helper
+        shell: pwsh
+        run: |
+          $t=$null; $e=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/DEPLOY-TEYZA-MARKETPLACE-V61.ps1",[ref]$t,[ref]$e) | Out-Null
+          if ($e.Count -gt 0) { throw ($e | Out-String) }
       - name: Parse PowerShell activation helpers
         shell: pwsh
         run: |

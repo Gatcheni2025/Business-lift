@@ -1,7 +1,8 @@
 'use strict';
 const path=require('node:path'),fs=require('node:fs');
 const {connect}=require('./firebase-client.cjs'),{patch,rollback}=require('./hosting-patch.cjs'),{reviewer}=require('./reviewer.cjs');
-function assertAdminBackend(health){
+function assertAdminBackend(health,{marketplace=false}={}){
+ if(marketplace&&(health?.marketplaceRelease!=='20261126-v61'||health.adminAgentRewardReview!==true||health.businessOfferTerms!==true||health.agentRewardsPagination!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000))throw Error('Matching marketplace and R90 reward backend is not active. Hosting was not changed.');
  const required=[
   'googlePlaceClaims','sellerApprovalBeforeCheckout','adminOperations','adminReview',
   'automaticProductPublication','adminPaystackVerify','adminComplimentaryAccess',
@@ -18,7 +19,7 @@ function assertAdminBackend(health){
    health.membershipProrationEnabled===true&&
    health.subscriptionMonthlyCents===9900&&
    health.subscriptionTermsVersion==='seller-r99-calendar-proration-2026-11';
- if(health?.ok!==true||health.version!=='3.25.0'||health.agentCommissionEnabled!==false||
+ if(health?.ok!==true||health.version!=='3.26.0'||health.agentCommissionEnabled!==false||
     health.adminProductReview!==false||(!closed&&!verifiedCardSubscription)||
     health.sellerMandates!==false||
     health.sellerMandateRequestV3!==false||
