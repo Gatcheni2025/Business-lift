@@ -1,3 +1,4 @@
+import {recruitmentSource} from './agent-recruitment-source.mjs?v=20261126-source';
 import {nearbyPanel,newSession} from './work-discovery.mjs';
 import {auth,ready,api,el,label} from './work-auth.mjs';
 import {onAuthStateChanged,GoogleAuthProvider,FacebookAuthProvider,OAuthProvider,signInWithPopup,signOut} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
@@ -131,7 +132,7 @@ $('applyForm').onsubmit=e=>{
    data.cvFile=await encodeApplicationFile(data.cvFile,'CV',5000000);
    if(ticket!==epoch)return;
    status.textContent='Uploading your application…';
-   await api('agent_apply',{...data,consent:true});
+   await api('agent_apply',{...data,consent:true,recruitmentSource:recruitmentSource(location.search)});
    if(ticket!==epoch)return;
    form.reset();
    show('pending');

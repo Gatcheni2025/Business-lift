@@ -336,3 +336,37 @@ test('Communications is private to recent verified admins; reports actual ledger
  assert.equal((await f.call('agent_admin_communications',{},admin)).settings.state,'configuration_required');
  await rejects(f.call('agent_admin_communications_recheck',{agentUid:'blocked',updatedAt:start+10,confirmed:true},admin),409);
 });
+
+test('Optional recruitment source is allowlisted, first-application only, and visible only in Admin profiles',async()=>{
+ const f=setup(),pdf=Buffer.concat([Buffer.from('%PDF-1.4\\n'),Buffer.alloc(150,32)]).toString('base64');
+ const photo=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(150,32)]).toString('base64');
+ const input={name:'Synthetic Agent',phone:'0712345678',province:'Gauteng',area:'Soweto',consent:true,identityType:'sa_id',identityNumber:'9001011234088',identityFile:{name:'id.jpg',mime:'image/jpeg',base64:photo},cvFile:{name:'cv.pdf',mime:'application/pdf',base64:pdf}};
+ const caller={uid:'source1',email_verified:true};
+ const p=await f.call('agent_apply',{...input,recruitmentSource:'meta_johannesburg'},caller);
+ assert.equal(p.profile.status,'pending');
+ assert.equal(p.profile.recruitmentSource,undefined);
+ assert.equal(f.db.records.get('teyzaFieldAgents/source1').recruitmentSource,'meta_johannesburg');
+ assert.equal(f.db.records.get('teyzaFieldAgents/source1').area,'Soweto');
+ const again=await f.call('agent_apply',{...input,recruitmentSource:'meta_durban'},caller);
+ assert.equal(again.alreadyApplied,true);
+ assert.equal(f.db.records.get('teyzaFieldAgents/source1').recruitmentSource,'meta_johannesburg');
+ await f.call('agent_apply',{...input,recruitmentSource:'tracking-id@example.test'},{uid:'source2',email_verified:true});
+ assert.equal(f.db.records.get('teyzaFieldAgents/source2').recruitmentSource,null);
+ await rejects(f.call('agent_admin_profiles',{},caller),403);
+ const rows=(await f.call('agent_admin_profiles',{},admin)).profiles;
+ assert.equal(rows.find(x=>x.uid==='source1').recruitmentSource,'meta_johannesburg');
+ assert.equal(rows.find(x=>x.uid==='agent1').recruitmentSource,null);
+ assert(!JSON.stringify(rows).includes('tracking-id@example.test'));
+});
+test('Admin visit coverage counts only a matching approved R90 ledger, never a mere owner confirmation',async()=>{
+ const f=setup();
+ const v={agentUid:'agent1',sellerUid:'seller1',status:'approved',shopName:'Corner Shop',area:'Umlazi',province:'KwaZulu-Natal'};
+ f.db.records.set('teyzaAgentVisits/visit1',v);
+ const ledger='teyzaAgentRewards/seller1';
+ assert.equal((await f.call('agent_admin_visits',{},admin)).visits[0].registrationRewardApproved,false);
+ f.db.records.set(ledger,{sellerUid:'seller1',agentUid:'agent1',visitId:'other',status:'approved_pending_payment',amountCents:9000});
+ assert.equal((await f.call('agent_admin_visits',{},admin)).visits[0].registrationRewardApproved,false);
+ f.db.records.set(ledger,{sellerUid:'seller1',agentUid:'agent1',visitId:'visit1',status:'approved_pending_payment',amountCents:9000});
+ assert.equal((await f.call('agent_admin_visits',{},admin)).visits[0].registrationRewardApproved,true);
+ assert.equal((await f.call('agent_visits',{},agent)).visits[0].registrationRewardApproved,undefined);
+});

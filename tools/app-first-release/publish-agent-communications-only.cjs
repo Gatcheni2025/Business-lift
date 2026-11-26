@@ -1,5 +1,5 @@
 'use strict';
-// Publish only the Agent Communications Admin module.
+// Publish only the Agent Communications and recruitment attribution assets.
 // Preserve every other Firebase Hosting file, route and security header.
 const fs=require('node:fs');
 const path=require('node:path');
@@ -8,11 +8,12 @@ const zlib=require('node:zlib');
 const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
-const paths=['/js/teyza-field-admin.js'];
-const root=path.resolve(__dirname,'../../web/teyza-admin/public');
+const paths=['/js/teyza-field-admin.js','/agents.html','/work.html','/work-privacy.html','/js/work.js','/js/agent-recruitment-source.mjs'];
+const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
+const workRoot=path.resolve(__dirname,'../../web/app-first/public');
 const backupPath=path.resolve(__dirname,'../../hosting-backup-agent-communications.json');
 const files=()=>new Map(paths.map(p=>{
- const bytes=zlib.gzipSync(fs.readFileSync(path.join(root,p.slice(1))),{level:9});
+ const bytes=zlib.gzipSync(fs.readFileSync(path.join(p===paths[0]?adminRoot:workRoot,p.slice(1))),{level:9});
  return [p,{bytes,hash:crypto.createHash('sha256').update(bytes).digest('hex')}];
 }));
 async function current(client){
@@ -39,7 +40,7 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertR90Ready(health){
- if(health?.ok!==true||health.adminAgentCommunications!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+ if(health?.ok!==true||health.adminAgentCommunications!==true||health.agentRecruitmentSource!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
   throw Error('Matching communications and R90 backend is not active. Hosting unchanged.');
  }
 }
@@ -54,7 +55,7 @@ async function deploy(client){
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');
  const source=await current(client);
  const before=await allFiles(client,source);
- if(!before.has('/js/teyza-field-admin.js')||!before.has('/admin.html')||!before.has('/index.html'))throw Error('Existing live Admin or index page missing.');
+ if([...paths.slice(0,-1),'/admin.html','/index.html'].some(p=>!before.has(p)))throw Error('Existing live Admin or Work dependency missing.');
  const original=await client.hosting('GET','/'+source);
  const managed=files();
  const candidate=await clone(client,source);
@@ -81,7 +82,7 @@ async function deploy(client){
  if(await current(client)!==candidate)throw Error('Published version not confirmed.');
  Object.assign(backup,{releaseName:release.name,publishedAt:new Date().toISOString()});
  fs.writeFileSync(backupPath,JSON.stringify(backup,null,2));
- console.log('Published only the Agent Communications module; all other assets and config preserved.');
+ console.log('Published scoped Admin Communications and recruitment attribution assets; all unrelated assets and config preserved.');
  console.log('https://teyza.co.za/admin');
 }
 async function rollback(client){

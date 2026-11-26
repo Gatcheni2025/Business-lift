@@ -22,7 +22,7 @@ jobs:
       - name: Verify scoped Agents publisher preserves React Work and billing
         run: |
           node --check tools/app-first-release/publish-agents-only.cjs
-          node --test tools/app-first-release/publish-agents-only.test.cjs
+          node --test tools/app-first-release/publish-agents-only.test.cjs tools/app-first-release/publish-agent-communications-only.test.cjs
       - name: Verify operator-approved exact Ads website fingerprints and no app checkout redirect
         run: python3 scripts/audit_teyza_ads_operator_source.py
       - name: Regression checks for independently hosted Ads Paystack website
