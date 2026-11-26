@@ -819,20 +819,10 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                   if (!logged)
                     Container(
                         alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(vertical: 17),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Column(children: [
-                          const CircleAvatar(
-                              radius: 32,
-                              backgroundColor: Color(0xFFE0F3EA),
-                              child: Icon(Icons.person_rounded,
-                                  size: 38, color: Color(0xFF078E66))),
-                          const SizedBox(height: 10),
-                          if (logged)
-                            const Text('My Teyza account',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF078E66))),
+                          // The official wordmark replaces the generic account
+                          // avatar rather than adding another tall header row.
                           const TeyzaWordmark(width: 148),
                           const SizedBox(height: 8),
                           Text(
