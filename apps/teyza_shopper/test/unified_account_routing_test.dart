@@ -93,8 +93,10 @@ void main(){
     expect(find.byKey(const ValueKey('registration-seller')),findsOneWidget);
     expect(find.byKey(const ValueKey('registration-business-wholesale_supplier')),findsNothing);
     await t.tap(find.byKey(const ValueKey('registration-seller')));await t.pumpAndSettle();
-    await t.ensureVisible(find.text('Wholesale',skipOffstage:false).first);
-    await t.tap(find.text('Wholesale').first);await t.pumpAndSettle();
+    final category=find.text('Wholesalers & distributors').first;
+    await t.ensureVisible(category);
+    await t.pumpAndSettle();
+    await t.tap(category);await t.pumpAndSettle();
     await t.ensureVisible(find.byKey(const ValueKey('registration-business-wholesale_supplier')));
     await t.tap(find.byKey(const ValueKey('registration-business-wholesale_supplier')));await t.pumpAndSettle();
     expect(session.requestedSellerCategory,'wholesale');

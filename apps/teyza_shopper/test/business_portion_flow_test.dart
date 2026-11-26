@@ -8,8 +8,8 @@ import 'package:teyza_shopper/product_catalogue.dart';
 
 void main(){
  test('All business types remain mapped to the three canonical permissions',(){
-   expect(teyzaBusinessTypes.length,31);
-   expect(teyzaBusinessTypes.map((e)=>e.id).toSet().length,31);
+   expect(teyzaBusinessTypes.length,61);
+   expect(teyzaBusinessTypes.map((e)=>e.id).toSet().length,61);
    expect(teyzaTypeFor('plumber')?.accountCategory,'retail');
    expect(teyzaTypeFor('bakery')?.accountCategory,'spaza');
    expect(teyzaTypeFor('wholesale_supplier')?.accountCategory,'wholesale');

@@ -85,28 +85,29 @@ void main() {
     ]);
     expect(find.byKey(const ValueKey('seller-story-spaza1')), findsNothing,
         reason: 'Home no longer duplicates merchant cards in a story carousel');
-    await tester.tap(find.byKey(const ValueKey('business-filter-all')));
+    final shopsEntry=find.byKey(const ValueKey('teyza-hub-spaza'));
+    await tester.ensureVisible(shopsEntry);
     await tester.pumpAndSettle();
-    expect(find.text('All nearby sellers'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('business-filter-spaza')));
+    await tester.tap(shopsEntry);
     await tester.pumpAndSettle();
-    final spaza = find.byKey(const ValueKey('seller-list-spaza1'));
-    final unverified = find.byKey(const ValueKey('seller-list-unverified'));
-    expect(spaza, findsOneWidget);
-    expect(unverified, findsOneWidget);
-    expect(find.descendant(of: spaza, matching: find.text('✓ Teyza Verified')),
-        findsOneWidget);
-    expect(
-        find.descendant(
-            of: unverified, matching: find.text('✓ Teyza Verified')),
-        findsNothing);
-    expect(find.byKey(const ValueKey('seller-list-retail1')), findsNothing);
-    await tester
-        .ensureVisible(find.byKey(const ValueKey('business-filter-wholesale')));
-    await tester.tap(find.byKey(const ValueKey('business-filter-wholesale')));
+    expect(find.byKey(const PageStorageKey<String>('discover-shops')),findsOneWidget);
+    final spaza=find.byKey(const ValueKey('discover-business-teyza-spaza1'));
+    await tester.scrollUntilVisible(spaza,120,scrollable:find.byType(Scrollable).last);
+    await tester.ensureVisible(spaza);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('seller-list-bulk1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('seller-list-spaza1')), findsNothing);
+    expect(find.descendant(of:spaza,matching:find.text('Teyza Verified')),findsOneWidget);
+    expect(find.byKey(const ValueKey('discover-business-teyza-retail1')),findsNothing);
+    await tester.tap(find.byKey(const ValueKey('discover-businesses-tab')));
+    await tester.pumpAndSettle();
+    final beauty=find.byKey(const ValueKey('discover-business-category-beauty'));
+    await tester.scrollUntilVisible(beauty,120,scrollable:find.byType(Scrollable).last);
+    await tester.ensureVisible(beauty);await tester.pumpAndSettle();
+    await tester.tap(beauty);await tester.pumpAndSettle();
+    final salon=find.byKey(const ValueKey('discover-business-teyza-retail1'));
+    await tester.scrollUntilVisible(salon,120,scrollable:find.byType(Scrollable).last);
+    expect(salon,findsOneWidget);
+    expect(spaza,findsNothing);
+    expect(find.byKey(const ValueKey('discover-business-teyza-bulk1')),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

@@ -322,11 +322,23 @@ void main() {
           precacheImage(AssetImage('assets/catalogue/' + atlas), photoContext)
       ]);
     });
-    // Discover now defaults to businesses, but keeps the product guide.
+    // Capture both marketplace destinations and the existing product guide.
     await tester.tap(find.byKey(const ValueKey('nav-discover')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('discover-business-categories')),
         findsOneWidget);
+    await capture('discover-shops');
+    await tester.tap(find.byKey(const ValueKey('discover-businesses-tab')));
+    await tester.pumpAndSettle();
+    await capture('discover-businesses');
+    final foodCategory=find.byKey(const ValueKey('discover-business-category-food'));
+    await tester.ensureVisible(foodCategory);
+    await tester.pumpAndSettle();
+    await tester.tap(foodCategory);
+    await tester.pumpAndSettle();
+    await capture('discover-food-subcategories');
+    await tester.tap(find.byKey(const ValueKey('discover-shops-tab')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('discover-products-tab')));
     await tester.pumpAndSettle();
     expect(find.byKey(const PageStorageKey('discover-categories')),
