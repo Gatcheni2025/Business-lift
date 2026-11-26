@@ -480,6 +480,41 @@ async function main(){
    await f.page.getByRole('button',{name:'Operations overview',exact:true}).click();await f.page.getByText('Your operations, at a glance.').waitFor();
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{
+   let credited=false;
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='agent_admin_reward_status'){
+     assert.equal(body.data.visitId,'visit-test');
+     await route.fulfill({json:{ok:true,state:credited?'approved_pending_payment':'eligible',amountCents:9000,currency:'ZAR',
+       reason:credited?'Awaiting payment.':'New verified registration confirmed.'}});return true;
+    }
+    if(body.action==='agent_admin_reward_approve'){
+     assert.equal(body.data.visitId,'visit-test');assert.equal(credited,false);
+     credited=true;await route.fulfill({json:{ok:true,approved:true,amountCents:9000,status:'approved_pending_payment'}});return true;
+    }
+    return false;
+   }});
+   await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
+   await f.page.getByRole('button',{name:'R90 rewards',exact:true}).click();
+   await f.page.getByRole('button',{name:'Review R90 reward',exact:true}).click();
+   assert.equal(await f.page.getByRole('button',{name:'Approve R90 reward',exact:true}).count(),0);
+   await f.page.getByRole('button',{name:'Check reward eligibility',exact:true}).click();
+   const approve=f.page.getByRole('button',{name:'Approve R90 reward',exact:true});
+   await approve.waitFor();assert(await approve.isDisabled());
+   await f.page.screenshot({path:path.join(output,'admin-r90-rewards-desktop.png'),fullPage:true});
+   await f.page.locator('.field-reward-result input[type=checkbox]').check();
+   await approve.click();
+   await f.page.getByText('R90.00 approved — awaiting payment',{exact:true}).waitFor();
+   assert.equal(await approve.count(),0);
+   await f.page.getByRole('button',{name:'Check reward eligibility',exact:true}).click();
+   await f.page.getByText('R90.00 approved — awaiting payment',{exact:true}).waitFor();
+   assert.equal(f.calls.filter(c=>c.action==='agent_admin_reward_approve').length,1);
+   assert(!f.calls.some(c=>c.action==='agent_admin_commission_paid'));
+   await f.page.setViewportSize({width:393,height:852});
+   assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await f.page.screenshot({path:path.join(output,'admin-r90-rewards-phone.png'),fullPage:true});
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('HR can upload an ID/passport and CV for an existing account',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('button',{name:'Upload ID / passport & CV'}).click();

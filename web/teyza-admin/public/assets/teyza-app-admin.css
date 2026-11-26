@@ -267,3 +267,9 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 @media(max-width:640px){.topbar{gap:9px;padding:11px 14px;flex-wrap:wrap}.brand img.admin-wordmark{width:120px;height:41px;padding:4px 7px}.account{flex:1;gap:7px}.account-identity span{max-width:126px}.login-panel{border-radius:22px}.login-intro h2{font-size:34px}.login-brand img{width:164px}.login-scope>span{font-size:11px;padding:9px;gap:6px}.login-intro p{font-size:14px}.login-form h2{font-size:29px}#operationsPanel>.workspace-title,#approvalView>.workspace-title{padding:17px;gap:10px}#operationsPanel>.workspace-title>.button{padding:8px 10px}.overview-stat{padding:15px;min-height:128px}.overview-stat strong{font-size:27px}.overview-stat.tone-sand strong{font-size:22px}.overview-stat small{line-height:1.35}.overview-action-copy{min-width:0}footer span{font-size:11px}}
 @media(max-width:360px){.login-scope{grid-template-columns:1fr}.overview-stat{padding:12px}.brand img.admin-wordmark{width:106px}.account-identity span{max-width:101px}}
 @media(prefers-reduced-motion:reduce){.overview-stat,.admin-nav button{transition:none}.overview-stat:hover{transform:none}}
+
+.field-reward-panel{border-top:4px solid var(--teyza-orange)}
+.field-reward-result{margin-top:14px;border:1px solid #dbe8e5;border-radius:14px;background:#f7fbf7;padding:16px}
+.field-reward-result>strong{font-size:19px;color:var(--teyza-deep)}
+.field-reward-result .confirm-check{margin:16px 0;align-items:flex-start}
+.field-reward-result .confirm-check input{width:18px;height:18px;flex:none;margin:2px 0}

@@ -1,5 +1,5 @@
 import {createAdminMap} from '/js/teyza-admin-map.mjs';
-import {createFieldAdmin} from '/js/teyza-field-admin.js?v=R323';
+import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261126-rewards';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=R323';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
