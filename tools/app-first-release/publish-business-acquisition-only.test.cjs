@@ -88,3 +88,34 @@ test('Isolated provider worker helper does not use mobile dotenv or broad deploy
  assert(s.includes('enabled===true'));assert(s.includes('TEYZA_BUSINESS_MAIL_ZOHO'));
  assert(s.includes('collect(spec.entry)'));assert(!s.includes("firebase deploy --only functions"));
 });
+
+test('Worker dependency collection checks both isolated packages, including actual catalogue JSON',()=>{
+ const path=require('node:path'),fs=require('node:fs'),{spawnSync}=require('node:child_process');
+ const script=path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs');
+ const source=path.resolve(__dirname,'../../services/teyza-mobile-v39');
+ for(const channel of ['email','whatsapp']){
+  const r=spawnSync(process.execPath,[script,channel,'--check-package'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stderr);
+  const result=JSON.parse(r.stdout);
+  assert.equal(result.channel,channel);
+  assert.equal(result.productionWrites,false);
+  assert.equal(result.entry,channel==='email'?'index.business-mail-only.js':'index.business-whatsapp-only.js');
+  for(const name of ['catalogue.json','catalogue.js','domain.js','business-communications.js','business-communication-providers.js','business-message-templates.js',result.entry])assert(result.files.includes(name),name);
+  assert(!result.files.includes('catalogue.json.js'));
+  for(const name of result.files){
+   assert(/^[A-Za-z0-9_.-]+\.(js|json)$/.test(name));
+   assert(!name.startsWith('.')&&!name.includes('..')&&!name.endsWith('.test.js'));
+   assert(fs.existsSync(path.join(source,name)),name);
+   assert(!['index.js','index.admin-only.js','index.agent-mail-only.js','package.json','package-lock.json'].includes(name));
+   assert(!name.endsWith('.pdf'));
+  }
+  assert.equal(new Set(result.files).size,result.files.length);
+ }
+});
+
+test('Isolated worker uses real SDK discovery and conventional external stage before precise deployment',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const s=fs.readFileSync(path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs'),'utf8');
+ assert(s.includes('FUNCTIONS_MANIFEST_OUTPUT_PATH'));assert(s.includes("os.tmpdir()"));assert(s.includes("f===spec.entry?'index.js':f"));assert(s.includes('keys.length!==1'));assert(s.includes('discover(stage,path.join(stage.dest'));
+ assert(s.includes("'functions:'+spec.codebase+':'+spec.fn"));
+});
