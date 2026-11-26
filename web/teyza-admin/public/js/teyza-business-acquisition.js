@@ -64,6 +64,71 @@ function input(f,label,name,type='text',required=true,max=240){const l=el('label
 function choice(f,label,name,values){const l=el('label',label),s=el('select');s.name=name;s.setAttribute('aria-label',label);for(const v of values){const o=el('option',title(v));o.value=v;s.append(o);}l.append(s);f.append(l);return s;}
 function check(f,label,name){const l=el('label',undefined,'confirm-check'),i=el('input');i.type='checkbox';i.name=name;i.required=true;l.append(i,el('span',label));f.append(l);return i;}
 function submit(f,label,action){const b=el('button',label,'button primary');b.type='submit';f.append(b);f.onsubmit=e=>{e.preventDefault();if(f.reportValidity())void action(Object.fromEntries(new FormData(f)),b);};}
+// Only approved same-origin public media and official destinations. No remote uploads or tracking.
+export const acquisitionAssets=Object.freeze([
+ {name:'App-first business introduction',description:'Share this link with an opted-in owner to show actual app screens, benefits and official downloads.',href:'/for-shop-owners.html',kind:'page'},
+ {name:'Customer discovery preview',description:'Interactive example; the first two app screens are actual Android screenshots.',href:'/for-shop-owners.html#app',kind:'page'},
+ {name:'Android download',description:'Official Google Play listing. Availability depends on device and region.',href:'https://play.google.com/store/apps/details?id=com.asiyedriver.asiye',kind:'store'},
+ {name:'iPhone download',description:'Official Apple App Store listing. Availability depends on device and region.',href:'https://apps.apple.com/za/app/id6827037733',kind:'store'},
+ {name:'Actual Teyza home screen',description:'Existing actual Android app capture.',href:'/assets/app/home.webp',kind:'image'},
+ {name:'Actual nearby businesses screen',description:'Existing actual Android app capture; do not represent example shops as newly registered.',href:'/assets/app/nearby-shops.webp',kind:'image'},
+ {name:'Spaza owner website artwork',description:'Existing promotional artwork, not proof of a registered business.',href:'/assets/app/spaza-owner.webp',kind:'image'},
+ {name:'Teyza brand wordmark',description:'Official website artwork.',href:'/assets/app/wordmark.svg',kind:'image'},
+ {name:'Teyza app icon',description:'Official website app icon.',href:'/assets/app/icon.svg',kind:'image'},
+ {name:'Seller membership and terms',description:'Optional selling features and applicable conditions.',href:'/seller-subscriptions.html',kind:'page'},
+ {name:'Business help and support',description:'Official assistance channel.',href:'/support.html',kind:'page'}
+]);
+export const acquisitionVideoSlots=Object.freeze([
+ {name:'Full narrated business explainer',description:'Original 5:34 narration. Publish only after transcript, synchronization and content review.',href:'/assets/app/teyza-business-explainer.mp4'},
+ {name:'Short business introduction',description:'45–60 second outreach version; separate approved edit.',href:'/assets/app/teyza-business-intro.mp4'}
+]);
+export function isPublishedVideo(response){
+ return response.ok&&!response.redirected&&/^video\/mp4(?:\s*;|$)/i.test(response.headers.get('content-type')||'')&&Number(response.headers.get('content-length'))>0;
+}
+function assetLink(label,href,download=false){
+ const a=el('a',label,'button quiet');a.href=href;a.target='_blank';a.rel='noopener noreferrer';if(download)a.download='';return a;
+}
+function copyAsset(value,notice){return async()=>{try{await navigator.clipboard.writeText(value);notice('Copied approved material. No message sent.','success');}catch{notice('Clipboard unavailable. Open the asset or select and copy the draft manually.','info');}};}
+function renderAssets(message){
+ const section=card('Marketing & onboarding asset library','Use approved assets consistently. Share only with owners who have agreed to the relevant contact. Original media and unpublished video files are not sent automatically.');
+ section.id='acquisition-assets';
+ const details=el('details');details.append(el('summary','Open approved marketing & onboarding assets'));
+ const assets=el('div');
+ for(const a of acquisitionAssets){
+  const item=el('div',undefined,'field-area-row');item.append(el('strong',a.name),el('p',a.description,'footnote'));
+  item.append(assetLink(a.kind==='image'?'View original artwork':'Open asset',a.href,a.kind==='image'));
+  if(a.kind!=='image')item.append(button('Copy link',copyAsset(new URL(a.href,location.origin).href,message)));
+  assets.append(item);
+ }
+ details.append(assets);
+ const communications=card('Approved communication templates','Examples only. Personalised invitation and welcome drafts in a business record remain subject to the consent and matching owner-email checks.');
+ for(const kind of ['invitation','welcome']){
+  const draft=emailText(kind,{name:'[Business Name]',area:'[Township]',city:'[City]',category:'spaza'}),preview=el('details');
+  preview.append(el('summary',kind==='invitation'?'Master business invitation – spaza example':'Registration welcome template'));
+  const text=el('textarea');text.readOnly=true;text.rows=12;text.value='Subject: '+draft.subject+'\n\n'+draft.body;text.setAttribute('aria-label',kind+' master template');preview.append(text);
+  communications.append(preview);
+ }
+ details.append(communications);
+ const help=card('Business-owner quick answers','Registration and verification are free. Approved eligible profiles may appear in local discovery. Product-selling tools require eligibility and an active paid membership. Wholesale offers, delivery savings, orders and discounts depend on available partners and terms; never promise them. Owners retain control of their own account and verification.');
+ const pitch=el('textarea');pitch.readOnly=true;pitch.rows=5;pitch.value='Teyza helps local businesses become easier to discover. Registration and verification are free. Eligible selling tools can help you showcase products and receive supported orders. Participating suppliers and partner offers may help with sourcing or delivery. Our team can help you get started in your own app account. Visit https://teyza.co.za/for-shop-owners.html.';pitch.setAttribute('aria-label','Approved business introduction');help.append(pitch,button('Copy business introduction',copyAsset(pitch.value,message)));details.append(help);
+ const media=card('Explainer video assets','A video is available here only when the reviewed MP4 has actually been published at its designated official Teyza URL. The original WAV, transcript and editing source remain production files, not public marketing assets.');
+ for(const slot of acquisitionVideoSlots){
+  const row=el('div',undefined,'field-area-row'),state=el('p','Not published / not verified','footnote'),actions=el('div');
+  row.append(el('strong',slot.name),el('p',slot.description,'footnote'),state,actions);
+  const verify=button('Check published video',async()=>{
+   verify.disabled=true;actions.replaceChildren();state.textContent='Checking official media…';
+   try{
+    const r=await fetch(slot.href,{method:'HEAD',cache:'no-store',credentials:'same-origin',redirect:'error'});
+    if(!isPublishedVideo(r)){state.textContent='Not published / not verified';return;}
+    state.textContent='MP4 available on Teyza';
+    actions.append(assetLink('Watch video',slot.href),assetLink('Download video',slot.href,true),button('Copy video link',copyAsset(new URL(slot.href,location.origin).href,message)));
+   }catch{state.textContent='Not published / not verified';}
+   finally{verify.disabled=false;}
+  });row.append(verify);media.append(row);
+ }
+ details.append(media);section.append(details);return section;
+}
+
 export function createAcquisitionAdmin({api,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false;
  function clear(){serial++;active=false;records=[];next=null;selected=null;detail=null;query='';city='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;}
@@ -81,12 +146,14 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   for(const c of cities)intro.append(el('p',c+' — '+areas[c],'footnote'));
   const discovery=button('Open national coverage map',()=>document.querySelector('[data-admin-view="map"]')?.click());intro.append(discovery);
   const source=el('a','Business owner information','button quiet');source.href='/for-shop-owners.html';source.target='_blank';source.rel='noopener noreferrer';intro.append(source);
+  intro.append(button('Open marketing & onboarding assets',()=>{const a=workspace.querySelector('#acquisition-assets');if(a){a.querySelector('details').open=true;a.scrollIntoView({block:'start'});}}));
   workspace.append(intro);
   const summary=el('div',undefined,'field-admin-metrics');
   for(const [name,value] of [['Prospects loaded',records.length],['Permission recorded',records.filter(p=>!p.optedOut&&Object.values(p.permissions||{}).some(x=>x.granted)).length],['Registration started',records.filter(p=>p.stage==='registration_started').length],['Linked approved businesses',records.filter(p=>p.seller?.status==='approved').length],['Follow-up due',records.filter(p=>!p.optedOut&&p.nextFollowUpAt&&p.nextFollowUpAt<=Date.now()).length],['Do not contact',records.filter(p=>p.optedOut).length],['Invitation logged',records.filter(p=>p.emailHistory?.invitation).length],['Welcome logged',records.filter(p=>p.emailHistory?.welcome).length],['Help requests open',records.filter(p=>p.help&&p.help.state!=='resolved').length]]){
    const tile=el('div',undefined,'field-stat');tile.append(el('small',name),el('strong',value));summary.append(tile);
   }
   workspace.append(summary,el('p','Counts cover loaded records only; linked approvals reflect existing seller accounts, not necessarily newly acquired businesses.','footnote'));
+  workspace.append(renderAssets(message));
   const areaDirectory=card('Businesses already on Teyza','View approved, verified mapped Teyza businesses in the selected neighbourhood. Google-only businesses remain in the coverage map’s current local search; no bulk extraction or contact list is retained.');
   const areaSearch=el('input');areaSearch.type='search';areaSearch.placeholder='City, township or business name';areaSearch.setAttribute('aria-label','Search mapped Teyza businesses');
   const areaRows=el('div'),loaded=el('p',registeredLoaded?'Loaded mapped businesses: '+registered.length+(registeredNext?' (more pages available)':''):'Load the existing Teyza map records to check coverage.','footnote');

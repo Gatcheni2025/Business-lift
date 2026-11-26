@@ -56,7 +56,7 @@ async function deploy(client){
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');
  const source=await current(client);
  const before=await allFiles(client,source);
- if([...paths.filter(p=>p!=='/js/teyza-business-acquisition.js'),'/index.html','/assets/app-first.css','/assets/app-demo.js','/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/demo-milk.webp','/assets/app/demo-bread.webp'].some(p=>!before.has(p)))throw Error('Existing live Admin dependency missing.');
+ if([...paths.filter(p=>p!=='/js/teyza-business-acquisition.js'),'/index.html','/assets/app-first.css','/assets/app-demo.js','/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/demo-milk.webp','/assets/app/demo-bread.webp','/assets/app/wordmark.svg','/assets/app/icon.svg','/seller-subscriptions.html','/support.html'].some(p=>!before.has(p)))throw Error('Existing live Admin dependency missing.');
  const original=await client.hosting('GET','/'+source);
  const managed=files();
  const candidate=await clone(client,source);

@@ -520,6 +520,17 @@ async function main(){
    }});
    await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business Acquisition Command Centre'}).waitFor();
+   await f.page.getByRole('button',{name:'Open marketing & onboarding assets'}).click();
+   await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
+   await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
+   await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
+   const checks=f.page.getByRole('button',{name:'Check published video',exact:true});
+   await checks.first().click();await f.page.getByRole('link',{name:'Watch video',exact:true}).waitFor();
+   await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
+   await f.page.locator('#acquisition-assets > details > summary').click();
    const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
    await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
    await form.getByLabel('Township / area').fill('Umlazi');

@@ -49,3 +49,20 @@ test('Business page includes the same five benefit pillars without guaranteed cl
  const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');
  for(const word of ['Get discovered.','Sell directly.','Source smarter.','Explore savings.','Grow with support.','Savings and sales are not guaranteed.'])assert(html.includes(word));
 });
+
+test('Approved asset registry uses existing website artwork, official store destinations and fail-closed video readiness',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const root=path.resolve(__dirname,'../../web/app-first/public');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {acquisitionAssets,acquisitionVideoSlots,isPublishedVideo}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ for(const a of acquisitionAssets){
+  if(a.href.startsWith('/'))assert(fs.existsSync(path.join(root,a.href.split('#')[0])),a.href);
+  else assert(['https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733'].includes(a.href));
+ }
+ assert.equal(acquisitionAssets.filter(a=>a.kind==='image').length,5);
+ assert.deepEqual(acquisitionVideoSlots.map(a=>a.href),['/assets/app/teyza-business-explainer.mp4','/assets/app/teyza-business-intro.mp4']);
+ const response=(type,length,ok=true,redirected=false)=>({ok,redirected,headers:new Headers({'content-type':type,'content-length':length})});
+ assert(isPublishedVideo(response('video/mp4','100')));
+ assert(!isPublishedVideo(response('text/html','100')));assert(!isPublishedVideo(response('video/mp4','0')));
+ assert(!isPublishedVideo(response('video/mp4','100',false)));assert(!isPublishedVideo(response('video/mp4','100',true,true)));
+});
