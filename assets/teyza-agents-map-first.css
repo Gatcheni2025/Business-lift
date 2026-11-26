@@ -23,3 +23,24 @@
 .agent-preview>a.btn{justify-self:start}.agent-how{background:#f2f8f3}.agent-how .cards{margin-top:24px}.agent-how .card{border-radius:20px;box-shadow:0 6px 17px #0a4f3210}
 @media(max-width:920px){.agent-hero .split{grid-template-columns:1fr}.agent-preview{width:100%;max-width:720px}}
 @media(max-width:540px){.agent-hero{padding-block:40px}.agent-preview{padding:14px;border-radius:16px}.agent-preview-map{height:220px}.agent-hero h1{font-size:38px}.agent-preview-stats{grid-template-columns:1fr}}
+
+/* Marketplace recruitment: premium editorial photography and clear reward terms. */
+.agent-hero .split{grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);align-items:center}
+.agent-hero h1{font-size:clamp(38px,5.5vw,76px);line-height:1.03;letter-spacing:-.06em}
+.agent-hero .lead{font-size:clamp(16px,1.4vw,19px);line-height:1.65}
+.agent-rate{display:flex;gap:16px;align-items:center;border-radius:20px;padding:20px 22px;margin:25px 0 12px;background:#064b43;color:#fff}
+.agent-rate>strong{font-size:clamp(32px,5vw,51px);letter-spacing:-.05em;line-height:1;flex-shrink:0}
+.agent-rate b{display:block;font-size:15px}.agent-rate span{display:block;color:#d0efe1;font-size:12px;line-height:1.5;margin-top:5px}
+.agent-meta{font-size:12px;color:#52796e}
+.agent-preview{padding:15px;gap:12px;border-radius:26px}
+.agent-hero-photo{width:100%;height:clamp(150px,18vw,240px);object-fit:cover;object-position:center;border-radius:18px}
+.agent-preview-map{height:165px}.agent-preview-stats>div{padding:10px}.agent-reward{padding:12px 16px}.agent-reward>strong{font-size:28px}
+.agent-preview .agent-preview-caption{font-size:10px}.agent-preview>a.btn{width:100%;justify-content:center;text-align:center}
+.agent-scope-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:24px}
+.agent-scope-grid article{padding:24px 18px;background:#fff;border:1px solid #d8e7df;border-radius:20px}
+.agent-scope-grid b{display:block;font-size:19px;color:#084940;margin-bottom:8px}
+.agent-scope-grid span{color:#537165;font-size:14px;line-height:1.55}
+.agent-business-scope{background:#f7faf5}
+.agent-how .card{border-radius:22px;padding:26px;min-width:0}
+@media(max-width:900px){.agent-hero .split{grid-template-columns:1fr}.agent-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.agent-rate{padding:16px;align-items:flex-start;gap:12px}.agent-rate>strong{font-size:36px}.agent-hero .actions>a{width:100%;justify-content:center;text-align:center}.agent-preview{padding:12px}.agent-scope-grid{grid-template-columns:1fr}.agent-scope-grid article{padding:18px}.agent-hero h1{font-size:40px}}
