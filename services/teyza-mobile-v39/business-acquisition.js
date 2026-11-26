@@ -54,7 +54,7 @@ function createAcquisition({db,clock=Date.now}){
      listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true,
      welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
      welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
-     membershipEligible:a.approvalStatus==='approved'&&!P.entitled(p.sellerUid,a,billing,clock())&&!P.complimentary(p.sellerUid,a,billing,clock())};
+     membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock())};
    }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
   return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,
@@ -77,13 +77,19 @@ function createAcquisition({db,clock=Date.now}){
    const category=choose(data.category,categories,'business category'),source=choose(data.source,sources,'source');
    const sourceReference=clean(data.sourceReference,'source and permission to retain details',240);
    const contact={phone:phone(data.phone),email:email(data.email)};
+   const initialChannels=data.initialConsentChannels??[];
+   if(!Array.isArray(initialChannels)||initialChannels.length>2||new Set(initialChannels).size!==initialChannels.length||initialChannels.some(c=>!['email','whatsapp'].includes(c)||!contactValue(contact,c)))D.fail(422,'Select only channels with recorded contact details.');
+   const initialNote=initialChannels.length?clean(data.initialConsentNote,'actual owner opt-in evidence',500):'';
+   if(initialChannels.length&&data.initialConsentConfirmed!==true)D.fail(422,'Confirm actual owner opt-in for each selected channel.');
    const id=hash([city,area,address,name].map(norm).join('|')),ref=doc(collection+'/'+id);
    const saved=await db.runTransaction(async tx=>{
     const old=await tx.get(ref);
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
-    const p={name,city,area,address,category,source,sourceReference,...contact,stage:'identified',permissions:{},optedOut:false,nextFollowUpAt:null,
+    if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
+    const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
+    const p={name,city,area,address,category,source,sourceReference,...contact,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
-    tx.set(ref,p);event(tx,id,uid,'created',{});return p;
+    tx.set(ref,p);event(tx,id,uid,'created',{});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }

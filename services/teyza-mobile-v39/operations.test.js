@@ -677,3 +677,12 @@ test('WhatsApp direct sends require exact approved template configuration and ch
  let count=0;await createWorker({db:f.db,channel:'whatsapp',clock:()=>now,send:async d=>{count++;assert.equal(d.recipient,'+27712345678');assert.equal(d.businessName,'Synthetic Shop');return 'wamid.synthetic';}}).process(id);
  assert.equal(count,1);assert.equal((await f.call('ops_acquisition_detail',{id:p.id})).prospect.outbound.whatsapp_invitation.status,'accepted');
 });
+
+test('Create prospect may record actual initial owner permissions, never infers consent from an address',async()=>{
+ const f=setup(),data={name:'Initial Consent Shop',city:'Durban',area:'Umlazi',address:'Synthetic',category:'spaza',email:'shop@example.test',phone:'0712345678',source:'owner_inquiry',sourceReference:'Owner inquiry',authorisedSource:true};
+ await rejects(f.call('ops_acquisition_create',{...data,initialConsentChannels:['email'],initialConsentNote:'Owner explicit consent'}),422);
+ await rejects(f.call('ops_acquisition_create',{...data,initialConsentChannels:['phone'],initialConsentConfirmed:true,initialConsentNote:'Owner explicit consent'}),422);
+ const p=(await f.call('ops_acquisition_create',{...data,initialConsentChannels:['email','whatsapp'],initialConsentConfirmed:true,initialConsentNote:'Owner requested both marketing channels'})).prospect;
+ assert.equal(p.permissions.email.granted,true);assert.equal(p.permissions.whatsapp.granted,true);
+ const d=await f.call('ops_acquisition_detail',{id:p.id});assert.equal(d.events.filter(e=>e.type==='permission').length,2);
+});

@@ -30,7 +30,7 @@ function lock(message,kind='error'){
   operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
   $('activeSession').hidden=true;
   $('sectionSearch').value='';filterSections();
-  $('workspace').hidden=true;$('loginPanel').hidden=false;
+  $('workspace').hidden=true;$('loginPanel').hidden=false;window.scrollTo(0,0);
   renewing=Boolean(activeUser);$('email').value=activeUser?.email||'';$('email').readOnly=renewing;
   set('loginTitle',renewing?'Renew your review session':'Welcome back');
   set('loginHint',renewing?'Sign in again to open a fresh five-minute review session.':'Use your authorised administrator account.');

@@ -167,7 +167,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   actionBar.append(button('Registered businesses',()=>open('directory')),assetsButton);intro.append(actionBar);
   workspace.append(intro);
   const summary=el('div',undefined,'field-admin-metrics');
-  for(const [name,value] of [['Prospects loaded',records.length],['Permission recorded',records.filter(p=>!p.optedOut&&Object.values(p.permissions||{}).some(x=>x.granted)).length],['Registration started',records.filter(p=>p.stage==='registration_started').length],['Linked approved businesses',records.filter(p=>p.seller?.status==='approved').length],['Follow-up due',records.filter(p=>!p.optedOut&&p.nextFollowUpAt&&p.nextFollowUpAt<=Date.now()).length],['Do not contact',records.filter(p=>p.optedOut).length],['Invitation logged',records.filter(p=>p.emailHistory?.invitation).length],['Welcome logged',records.filter(p=>p.emailHistory?.welcome).length],['Help requests open',records.filter(p=>p.help&&p.help.state!=='resolved').length]]){
+  for(const [name,value] of [['Prospects loaded',records.length],['Permission recorded',records.filter(p=>!p.optedOut&&Object.values(p.permissions||{}).some(x=>x.granted)).length],['Registration started',records.filter(p=>p.stage==='registration_started').length],['Linked approved businesses',records.filter(p=>p.seller?.status==='approved').length],['Follow-up due',records.filter(p=>!p.optedOut&&p.nextFollowUpAt&&p.nextFollowUpAt<=Date.now()).length],['Do not contact',records.filter(p=>p.optedOut).length],['Invitation logged',records.filter(p=>p.emailHistory?.invitation||p.outbound?.email_invitation?.status==='accepted'||p.outbound?.whatsapp_invitation?.status==='accepted').length],['Welcome logged',records.filter(p=>p.emailHistory?.welcome||p.outbound?.email_welcome?.status==='accepted'||p.outbound?.whatsapp_welcome?.status==='accepted').length],['Help requests open',records.filter(p=>p.help&&p.help.state!=='resolved').length]]){
    const tile=el('div',undefined,'field-stat');tile.dataset.metric=name.toLowerCase().replaceAll(' ','-');tile.append(el('small',name),el('strong',value));summary.append(tile);
   }
   workspace.append(summary,el('p','Counts cover loaded records only; linked approvals reflect existing seller accounts, not necessarily newly acquired businesses.','footnote'));
@@ -191,7 +191,13 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   choice(f,'Source','source',['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted']);
   input(f,'Source reference / authority to retain details','sourceReference','textarea',true,240);
   check(f,'I confirm Teyza may retain this information for onboarding.','authorisedSource');
-  submit(f,'Save business prospect',(d,b)=>perform(root,b,async stamp=>{const r=await api('ops_acquisition_create',{...d,authorisedSource:d.authorisedSource==='on'});if(serial!==stamp)return;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business prospect saved. No message sent.','success');}));
+  const consentBox=el('fieldset',undefined,'acq-consent');consentBox.append(el('legend','Owner contact permissions (optional)'),el('p','Select only channels the owner has explicitly agreed to. Leave unchecked if permission has not been obtained.','footnote'));
+  const emailOpt=check(consentBox,'Owner opted in to email marketing','initialEmail'),waOpt=check(consentBox,'Owner opted in to WhatsApp marketing','initialWhatsApp');emailOpt.required=false;waOpt.required=false;
+  const consentNote=input(consentBox,'Evidence of owner permission','initialConsentNote','textarea',false,500);
+  const confirmConsent=check(consentBox,'I confirm the owner explicitly opted in to each selected channel.','initialConsentConfirmed');
+  function syncConsent(){const on=emailOpt.checked||waOpt.checked;for(const field of [consentNote,confirmConsent]){field.parentElement.hidden=!on;field.disabled=!on;field.required=on;}}
+  emailOpt.onchange=waOpt.onchange=syncConsent;syncConsent();f.append(consentBox);
+  submit(f,'Save business prospect',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business prospect saved. No message sent.','success');}));
   create.append(f);panels.add=create;
   const list=card('Business prospect register','Search loaded records or filter by pilot city. Follow-up dates and latest activity are saved on the server.');
   const filter=el('div',undefined,'field-query'),search=el('input'),select=el('select');
@@ -235,12 +241,13 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
     if(d.type==='progress'){request.stage=d.stage;request.nextFollowUpAt=d.followup?Date.parse(d.followup+'T09:00:00+02:00'):null;}
     await api('ops_acquisition_event',request);await readDetail(p.id,stamp);if(serial===stamp)message('Activity saved. No message sent.','success');
    }));
-   c.append(update);
+   const activityPanel=el('details',undefined,'acq-secondary');activityPanel.append(el('summary','Record contact permission, follow-up or support activity'),update);
+   const linkPanel=el('details',undefined,'acq-secondary');linkPanel.append(el('summary','Link existing registered business'));
    if(!p.seller){
     const link=el('form',undefined,'ops-form');link.append(el('h4','Link an existing seller account'),el('p','Find the exact seller UID in Business accounts. Confirm the business owner identifies this account; registration and verification stay with the owner.','footnote'));
     input(link,'Existing seller UID','sellerUid','text',true,128);
     check(link,'Owner confirmed this exact business account.','ownerConfirmed');
-    submit(link,'Link seller account',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:d.sellerUid,ownerConfirmed:d.ownerConfirmed==='on'});await readDetail(p.id,stamp);if(serial===stamp)message('Seller account linked. No approval changed.','success');}));c.append(link);
+    submit(link,'Link seller account',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:d.sellerUid,ownerConfirmed:d.ownerConfirmed==='on'});await readDetail(p.id,stamp);if(serial===stamp)message('Seller account linked. No approval changed.','success');}));linkPanel.append(link);
    }
    const direct=card('Send a message','Select the channel and message. Review the exact recipient and approved personalised content. A single click queues a message only when the provider is enabled. Provider acceptance is not delivery.');direct.classList.add('acq-communications');
    const refreshStatus=button('Refresh send history',()=>perform(root,null,stamp=>readDetail(p.id,stamp)));direct.append(refreshStatus);
@@ -262,11 +269,11 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
      const form=el('form',undefined,'ops-form');const confirmed=check(form,'I reviewed the recipient and message. Send this one message.','confirmed');
      submit(form,channel==='email'?'Send email':'Send WhatsApp',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_send',{id:p.id,revision:p.revision,channel,kind,confirmed:d.confirmed==='on'});await readDetail(p.id,stamp);if(serial===stamp)message('Message queued. Refresh send history for provider status.','success');}));
      if(!enabled){confirmed.disabled=true;form.querySelector('button').disabled=true;}
-     wrap.append(form);block.append(wrap);
+     wrap.append(form);block.append(wrap);if(kind==='invitation'&&!p.seller&&permitted)wrap.open=true;
     }
     direct.append(block);
    }
-   c.append(direct);
+   c.append(direct,activityPanel);if(!p.seller)c.append(linkPanel);
    const mailPanel=card('Business email desk','Manual fallback only. Use Zoho Sent to record emails sent outside Admin. Do not send another message if a direct send is already recorded.');
    const zoho=el('a','Open Zoho Workplace','button quiet');zoho.href='https://workplace.zoho.com/';zoho.target='_blank';zoho.rel='noopener noreferrer';mailPanel.append(zoho);
    for(const kind of ['invitation','welcome']){
@@ -283,17 +290,17 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
     submit(log,'Record '+kind+' sent',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'email_sent',kind,sentAt:Date.parse(d.sentAt+'+02:00'),reference:d.reference,note:d.note,sentConfirmed:d.sentConfirmed==='on',confirmed:true});await readDetail(p.id,stamp);if(serial===stamp)message('Email history saved. Delivery not verified.','success');}));
     box.append(log);mailPanel.append(box);
    }
-   c.append(mailPanel);
+   const manual=el('details',undefined,'acq-secondary');manual.append(el('summary','Manual Zoho mail and Sent records'),mailPanel);c.append(manual);
    const help=card('Business help and support','Record owner-initiated requests, actual responses and resolutions using the activity form. Marketing opt-out does not prevent responding to a genuine support request.');
    help.append(el('p',p.help?'Current request: '+title(p.help.state)+' · '+title(p.help.channel)+' · Updated '+time(p.help.updatedAt):'No onboarding help request logged.'));
    for(const ticket of detail.support||[]){const line=el('div',undefined,'field-area-row');line.append(el('strong',ticket.subject),el('span',title(ticket.status)+' · '+time(ticket.updatedAt)));help.append(line);}
    if(detail.moreSupport)help.append(el('p','Additional linked support cases exist. Open the support inbox.','footnote'));
    help.append(button('Open seller support inbox',()=>openSupport?.(p.name)));
    c.append(help);
-   c.append(el('h4','Recent activity history'));
-   for(const e of detail.events||[]){const row=el('div',undefined,'field-area-row');row.append(el('strong',title(e.type)),el('span',time(e.createdAt)+' · '+e.actorUid),el('p',[e.channel?title(e.channel):'',e.note||''].filter(Boolean).join(' · ')));c.append(row);}
-   if(detail.moreEvents)c.append(el('p','Showing the latest 25 events; older records remain stored.','footnote'));
-   panels.business=c;
+   const history=el('details',undefined,'acq-secondary');history.append(el('summary','Recent activity history'));
+   for(const e of detail.events||[]){const row=el('div',undefined,'field-area-row');row.append(el('strong',title(e.type)),el('span',time(e.createdAt)+' · '+e.actorUid),el('p',[e.channel?title(e.channel):'',e.note||''].filter(Boolean).join(' · ')));history.append(row);}
+   if(detail.moreEvents)history.append(el('p','Showing the latest 25 events; older records remain stored.','footnote'));
+   c.append(history);panels.business=c;
   }
   workspace.append(dialog);root.append(workspace);mount();
  }

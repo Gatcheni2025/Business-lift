@@ -322,3 +322,5 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-message form{margin-top:12px}.acq-dialog input[type=checkbox]{width:18px;height:18px;min-height:0}
 .acq-dialog .confirm-check{display:flex;align-items:flex-start;gap:10px}
 @media(max-width:700px){.acq-action-bar .button{flex:1 1 140px;white-space:normal}.acq-dialog{width:calc(100vw - 16px);max-height:94dvh;border-radius:13px}.acq-dialog-content{padding:9px}.acq-dialog-content>.ops-card{padding:14px}.acq-dialog-bar{padding:10px 14px}.login-scope{grid-template-columns:1fr 1fr}[data-acquisition] .field-admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.acq-consent{border:1px solid #ccded6;background:#f0f8f4;border-radius:12px;padding:14px;display:grid;gap:12px;min-width:0}.acq-consent legend{font-weight:800;color:#00545b}.acq-secondary{border:1px solid #dbe5df;border-radius:12px;padding:14px;margin:12px 0;background:#fff}.acq-secondary>summary{cursor:pointer;color:#00545b;font-weight:700}.acq-secondary[open]>summary{margin-bottom:14px}

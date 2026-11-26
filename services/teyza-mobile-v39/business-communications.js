@@ -35,7 +35,7 @@ async function eligibility(db,tx,p,c,k,now){
  if(k==='welcome')return true;
  if(a.approvalStatus!=='approved')return false;
  const b=await tx.get(db.doc('teyzaBilling/'+p.sellerUid)),billing=b.exists?b.data():null;
- return !P.entitled(p.sellerUid,a,billing,now)&&!P.complimentary(p.sellerUid,a,billing,now);
+ return !P.eligible(p.sellerUid,a,billing,now);
 }
 function key(c,k){return c+'_'+k;}
 function entry(p,c,k){return p.outbound?.[key(c,k)];}
