@@ -99,3 +99,28 @@ test('operator configuration verifies official sender and sends a self-addressed
  assert.equal(c.accountId,'123456789');const payload=JSON.parse(calls.at(-1).o.body);
  assert.equal(payload.toAddress,SENDER);assert(payload.subject.startsWith('[TEST]'));
 });
+
+test('account lookup errors expose safe fixed diagnostic categories only',async()=>{
+ for(const [status,body,expected] of [
+  [401,{data:{moreInfo:'INVALID_OAUTHSCOPE confidential@example.com'}},'TEYZA_MAIL_ACCOUNTS_FAILED_HTTP_401_SCOPE'],
+  [403,{status:{description:'API access disabled private token 1234'}},'TEYZA_MAIL_ACCOUNTS_FAILED_HTTP_403_ACCESS'],
+  [302,null,'TEYZA_MAIL_ACCOUNTS_FAILED_REDIRECT_HTTP_302'],
+  [429,{data:{moreInfo:'Too many requests'}},'TEYZA_MAIL_ACCOUNTS_FAILED_HTTP_429_RATE_LIMIT'],
+  [200,{status:{code:403,description:'Forbidden'}},'TEYZA_MAIL_ACCOUNTS_FAILED_HTTP_403_ACCESS']
+ ]){
+  const mock=async(url,o)=>{
+   if(url.includes('/oauth/'))return response({access_token:'sensitive-token',refresh_token:'sensitive-refresh',expires_in:3600});
+   assert(url.endsWith('/api/accounts'));assert.equal(o.method,'GET');assert.equal(o.redirect,'manual');
+   assert.equal(o.headers['Content-Type'],'application/json');
+   return {status,ok:status===200,json:async()=>body};
+  };
+  await assert.rejects(configureZoho({region:'us',clientId:'id',clientSecret:'secret',code:'grant',pdf:PDF,fetchImpl:mock}),e=>e.code===expected&&!e.message.includes('sensitive')&&!e.message.includes('@'));
+ }
+});
+test('mailbox transport failures are categorized without exposing exception text',async()=>{
+ const mock=async(url)=>{
+  if(url.includes('/oauth/'))return response({access_token:'secret-access',refresh_token:'secret-refresh'});
+  const e=new Error('private URL or credential');e.cause={code:'ENOTFOUND'};throw e;
+ };
+ await assert.rejects(configureZoho({region:'us',clientId:'id',clientSecret:'secret',code:'grant',pdf:PDF,fetchImpl:mock}),e=>e.code==='TEYZA_MAIL_ACCOUNTS_FAILED_DNS'&&!e.message.includes('private'));
+});

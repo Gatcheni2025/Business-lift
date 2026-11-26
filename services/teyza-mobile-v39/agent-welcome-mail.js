@@ -52,11 +52,41 @@ function settings(c){
     typeof c.refreshToken!=='string'||!c.refreshToken||typeof c.accountId!=='string'||!/^\d{5,30}$/.test(c.accountId))throw problem('TEYZA_MAIL_BAD_CONFIG');
  return c;
 }
+// Only emit fixed diagnostic categories; never echo response bodies, tokens,
+// addresses, request URLs, or arbitrary provider error strings.
+function diagnostic(code,response,body){
+ const status=Number.isInteger(response?.status)&&response.status>=100&&response.status<=599?response.status:0;
+ const fields=[body?.error,body?.errorCode,body?.error?.errorCode,body?.data?.errorCode,body?.data?.moreInfo,body?.status?.description];
+ const hints=fields.filter(v=>typeof v==='string').join(' ').slice(0,2000);
+ let hint='';
+ if(/invalid[_ ]oauthscope|scope[_ ]mismatch|insufficient[_ ]scope|invalid[_ ]scope/i.test(hints))hint='_SCOPE';
+ else if(/invalid[_ ]oauthtoken|invalid[_ ]token|expired[_ ]token/i.test(hints))hint='_TOKEN';
+ else if(/api access|api.*(disabled|blocked|not allowed)|permission|forbidden|access denied|not authorized/i.test(hints))hint='_ACCESS';
+ else if(/rate limit|too many requests/i.test(hints))hint='_RATE_LIMIT';
+ else if(/mailbox|mail account/i.test(hints))hint='_MAILBOX';
+ if(status>=300&&status<400)return problem(code+'_REDIRECT_HTTP_'+status);
+ if(status&&(!response.ok||hint))return problem(code+'_HTTP_'+status+hint);
+ return problem(code+hint);
+}
 async function jsonRequest(fetchImpl,url,options,code){
  let response,body;
- try{response=await fetchImpl(url,{...options,redirect:'error',signal:AbortSignal.timeout(15000)});body=await response.json();}
- catch{throw problem(code);}
- if(!response.ok||!body||typeof body!=='object')throw problem(code);
+ // Manual redirects are inspected by status only. No bearer token is
+ // forwarded to a different origin, including during setup.
+ try{response=await fetchImpl(url,{...options,redirect:'manual',signal:AbortSignal.timeout(15000)});}
+ catch(e){
+  const cause=e?.cause?.code;
+  const hint=e?.name==='TimeoutError'||e?.name==='AbortError'?'TIMEOUT':
+   ['ENOTFOUND','EAI_AGAIN'].includes(cause)?'DNS':
+   ['ECONNRESET','ECONNREFUSED','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT'].includes(cause)?'CONNECTION':
+   ['CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','SELF_SIGNED_CERT_IN_CHAIN','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_TLS_CERT_ALTNAME_INVALID'].includes(cause)?'TLS':'NETWORK';
+  throw problem(code+'_'+hint);
+ }
+ if(response.status>=300&&response.status<400)throw diagnostic(code,response);
+ try{body=await response.json();}catch{
+  if(!response.ok)throw diagnostic(code,response);
+  throw problem(code+'_NON_JSON');
+ }
+ if(!response.ok||!body||typeof body!=='object')throw diagnostic(code,response,body);
  return body;
 }
 async function tokenRequest(fetchImpl,origin,form){
@@ -101,11 +131,12 @@ async function configureZoho({region,clientId,clientSecret,code,pdf,fetchImpl=fe
  const [accounts,mail]=regions[region];
  const r=await tokenRequest(fetchImpl,accounts,{grant_type:'authorization_code',client_id:clientId,client_secret:clientSecret,code});
  if(typeof r.refresh_token!=='string'||!r.refresh_token)throw problem('TEYZA_MAIL_REFRESH_TOKEN_MISSING');
- const list=await jsonRequest(fetchImpl,mail+'/api/accounts',{headers:mailHeaders(r.access_token)},'TEYZA_MAIL_ACCOUNTS_FAILED');
+ const list=await jsonRequest(fetchImpl,mail+'/api/accounts',{method:'GET',headers:{...mailHeaders(r.access_token),'Content-Type':'application/json'}},'TEYZA_MAIL_ACCOUNTS_FAILED');
+ if(!apiOK(list))throw diagnostic('TEYZA_MAIL_ACCOUNTS_FAILED',{ok:false,status:Number(list?.status?.code)},list);
  const matches=Array.isArray(list.data)?list.data.filter(a=>typeof a.accountId==='string'&&/^\d{5,30}$/.test(a.accountId)&&
    a.enabled!==false&&a.outgoingBlocked!==true&&(a.primaryEmailAddress===SENDER||a.mailboxAddress===SENDER||
    (Array.isArray(a.emailAddress)&&a.emailAddress.some(e=>e.mailId===SENDER&&e.isConfirmed===true)))):[];
- if(!apiOK(list)||matches.length!==1)throw problem('TEYZA_MAIL_SENDER_NOT_FOUND');
+ if(matches.length!==1)throw problem('TEYZA_MAIL_SENDER_NOT_FOUND');
  const c={region,clientId,clientSecret,refreshToken:r.refresh_token,accountId:matches[0].accountId};
  const sender=createZohoSender(c,{pdf,fetchImpl});
  const prepared=await sender.prepare(SENDER,{name:'Teyza Support',area:'internal training'},{test:true});

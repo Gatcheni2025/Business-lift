@@ -7,4 +7,4 @@ const {configureZoho}=require('./agent-welcome-mail');
  const c=JSON.parse(fs.readFileSync(0,'utf8'));
  const config=await configureZoho({...c,pdf:fs.readFileSync(process.argv[2])});
  process.stdout.write(JSON.stringify(config));
-})().catch(e=>{process.stderr.write('Zoho setup failed ('+(/^TEYZA_MAIL_[A-Z0-9_]+$/.test(e?.code||'')?e.code:'invalid_input')+'). No applicant email was sent.');process.exitCode=1;});
+})().catch(e=>{process.stderr.write('Zoho setup failed ('+(/^TEYZA_MAIL_[A-Z0-9_]+$/.test(e?.code||'')?e.code:'invalid_input')+'). No applicant email was sent.');process.stderr.write('\n');process.exitCode=1;});
