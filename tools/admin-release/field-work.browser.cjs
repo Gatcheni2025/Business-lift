@@ -18,6 +18,8 @@ async function prepare(context,role){await context.addInitScript(({role})=>{
   const publicContext=await browser.newContext({viewport:{width,height:900}});
   const marketing=await publicContext.newPage();await marketing.goto(origin+'/agents.html');
   await marketing.getByRole('heading',{name:'Connect businesses. Grow your community.'}).waitFor();
+  for(const store of ['https://apps.apple.com/za/app/id6827037733','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'])assert(await marketing.locator('a[href="'+store+'"]').count());
+  assert.equal(await marketing.locator('a[href*="download.html"]').count(),0);
   assert.equal(await marketing.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await marketing.screenshot({path:path.join(out,'agents-recruitment-'+width+'.png'),fullPage:true});await publicContext.close();
   const context=await browser.newContext({viewport:{width,height:844}});
@@ -26,12 +28,14 @@ async function prepare(context,role){await context.addInitScript(({role})=>{
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(origin+'/work.html');
   await page.getByRole('heading',{name:'You’re approved to work in the Teyza app'}).waitFor();
-  assert.equal(await page.locator('#pending a[href="/download.html"]').isVisible(),true);
+  for(const store of ['https://apps.apple.com/za/app/id6827037733','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'])assert.equal(await page.locator('#pending a[href="'+store+'"]').isVisible(),true);
+  assert.equal(await page.locator('#pending a[href*="download.html"]').count(),0);
   assert.equal(await page.locator('#workspace').isVisible(),false);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:path.join(out,'agent-app-handoff-'+width+'.png'),fullPage:true});
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await page.getByRole('heading',{name:'Create an account to apply'}).waitFor();
+  for(const store of ['https://apps.apple.com/za/app/id6827037733','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'])assert.equal(await page.locator('#login a[href="'+store+'"]').isVisible(),true);
   assert.equal(await page.getByRole('button',{name:'Continue with Google'}).isVisible(),true);
   assert.equal(await page.getByRole('button',{name:'Continue with Apple'}).isVisible(),true);
   assert.equal(await page.getByRole('button',{name:'Continue with Facebook'}).isVisible(),true);

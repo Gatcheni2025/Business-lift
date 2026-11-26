@@ -44,3 +44,14 @@
 .agent-how .card{border-radius:22px;padding:26px;min-width:0}
 @media(max-width:900px){.agent-hero .split{grid-template-columns:1fr}.agent-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.agent-rate{padding:16px;align-items:flex-start;gap:12px}.agent-rate>strong{font-size:36px}.agent-hero .actions>a{width:100%;justify-content:center;text-align:center}.agent-preview{padding:12px}.agent-scope-grid{grid-template-columns:1fr}.agent-scope-grid article{padding:18px}.agent-hero h1{font-size:40px}}
+
+/* Official store destinations. No intermediate download landing page. */
+.teyza-store-links{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:12px 0}
+.teyza-store-link{display:flex!important;flex:1 1 124px;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 14px;min-height:52px;border-radius:12px;border:1px solid #fff2;background:#131c19;color:#fff!important;text-decoration:none!important;font:inherit;line-height:1.15;box-sizing:border-box}
+.teyza-store-link small{font-size:10px;color:#e1ebe6}.teyza-store-link strong{font-size:16px;font-weight:750;letter-spacing:-.02em;color:#fff}
+.teyza-store-link:hover{background:#25584a}.teyza-store-link:focus-visible{outline:3px solid #79cfa0;outline-offset:3px}
+@media(max-width:360px){.teyza-store-link{padding:10px 11px}.teyza-store-link strong{font-size:15px}}
+
+.agent-header-stores{margin:0;flex-shrink:0;gap:6px}.agent-header-stores .teyza-store-link{flex:0 0 auto;padding:8px 11px;min-height:44px}.agent-header-stores .teyza-store-link strong{font-size:13px}
+@media(max-width:760px){.agent-header-stores{flex-wrap:wrap;gap:4px}.agent-header-stores .teyza-store-link{padding:7px 9px;min-height:40px}.agent-header-stores .teyza-store-link small{font-size:9px}}
+@media(max-width:420px){.agent-header-stores{width:100%}.agent-header-stores .teyza-store-link{flex:1 1 100px}.header:has(.agent-header-stores){flex-wrap:wrap}}

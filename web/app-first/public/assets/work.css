@@ -23,3 +23,10 @@
 @media(min-width:900px){#application{max-width:780px}#applyForm{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px}#applyForm .check,#applyForm .tiny,#applyForm button,#applicationProgress{grid-column:1/-1}}
 @media(max-width:720px){.auth-grid{grid-template-columns:1fr;gap:24px}.work-story-photo{height:180px}.auth-story>p{font-size:15px}.auth-story h1{font-size:38px}.work-rate>strong{font-size:34px}.work-rate>span{font-size:12px}.auth-panel{padding:22px}}
 @media(max-width:360px){.work-rate{padding:13px;gap:10px}.work-rate>span small{font-size:10px}.work-story-photo{height:145px}}
+
+/* Official store destinations. No intermediate download landing page. */
+.teyza-store-links{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:12px 0}
+.teyza-store-link{display:flex!important;flex:1 1 124px;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 14px;min-height:52px;border-radius:12px;border:1px solid #fff2;background:#131c19;color:#fff!important;text-decoration:none!important;font:inherit;line-height:1.15;box-sizing:border-box}
+.teyza-store-link small{font-size:10px;color:#e1ebe6}.teyza-store-link strong{font-size:16px;font-weight:750;letter-spacing:-.02em;color:#fff}
+.teyza-store-link:hover{background:#25584a}.teyza-store-link:focus-visible{outline:3px solid #79cfa0;outline-offset:3px}
+@media(max-width:360px){.teyza-store-link{padding:10px 11px}.teyza-store-link strong{font-size:15px}}

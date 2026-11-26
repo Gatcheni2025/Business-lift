@@ -45,7 +45,11 @@ void main(){
   final link=ownerWhatsAppLink('082 123 4567',
    'https://teyza.co.za/owner-confirm.html#uniquePrivateToken','Local Spaza');
   expect(link,isNotNull);expect(link,startsWith('https://wa.me/27821234567'));
-  expect(Uri.parse(link!).queryParameters['text'],contains('owner-confirm.html#uniquePrivateToken'));
+  final invitation=Uri.parse(link!).queryParameters['text'];
+  expect(invitation,contains('owner-confirm.html#uniquePrivateToken'));
+  expect(invitation,contains('https://apps.apple.com/za/app/id6827037733'));
+  expect(invitation,contains('https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'));
+  expect(invitation,isNot(contains('teyza.co.za/download.html')));
   expect(ownerWhatsAppLink('invalid','https://teyza.co.za','Shop'),isNull);
  });
  testWidgets('Role chooser shows Agent only for Admin-approved field workers',(tester)async{

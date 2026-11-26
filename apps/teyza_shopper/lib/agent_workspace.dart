@@ -51,7 +51,7 @@ String? ownerWhatsAppLink(String raw,String privateUrl,String shopName){
  if(RegExp(r'^0[0-9]{9}$').hasMatch(digits))digits='27'+digits.substring(1);
  if(!RegExp(r'^27[0-9]{9}$').hasMatch(digits))return null;
  final message='Hello. As agreed during our visit to '+shopName+
- ', please download the Teyza app: https://teyza.co.za/download.html. '+
+ ', please download Teyza from Google Play: https://play.google.com/store/apps/details?id=com.asiyedriver.asiye or the App Store: https://apps.apple.com/za/app/id6827037733. '+
  'Register or sign in as the business owner using your own account, then personally confirm our visit: '+
  privateUrl+'. Registration is free. Admin reviews verification before selling. Do not share OTPs or passwords.';
  return Uri.https('wa.me','/'+digits,{'text':message}).toString();
