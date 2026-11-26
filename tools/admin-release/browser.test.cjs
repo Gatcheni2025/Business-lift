@@ -533,6 +533,9 @@ async function main(){
    assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
+   await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
+   await f.page.getByLabel('Town, township or business name').fill('Durban');
+   await f.page.getByRole('button',{name:'Add confirmed business'}).click();
    const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
    await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
    await form.getByLabel('Township / area').fill('Umlazi');
@@ -561,6 +564,13 @@ async function main(){
    await emailPanel.getByRole('button',{name:'Send email',exact:true}).click();
    await emailPanel.getByText('Invite to Teyza · queued',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_send'));
+   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   const lookup=f.page.getByRole('dialog');await lookup.getByLabel('Town, township or business name').fill('Durban');
+   await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
+   await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
+   await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   await lookup.getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();

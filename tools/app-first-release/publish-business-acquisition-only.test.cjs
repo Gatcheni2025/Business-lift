@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {paths,files,verify,assertR90Ready}=require('./publish-business-acquisition-only.cjs');
 test('Business Acquisition scoped publisher preserves all unrelated site assets and requires backend',()=>{
- assert.equal(paths.length,15);assert(paths.includes('/assets/teyza-app-admin.css'));assert(paths.includes('/assets/teyza-map-first.css'));assert(paths.includes('/js/teyza-business-acquisition.js'));assert(paths.includes('/for-shop-owners.html'));assert(!paths.includes('/seller-subscriptions.html'));
+ assert.equal(paths.length,16);assert(paths.includes('/js/teyza-combined-coverage.mjs'));assert(paths.includes('/assets/teyza-app-admin.css'));assert(paths.includes('/assets/teyza-map-first.css'));assert(paths.includes('/js/teyza-business-acquisition.js'));assert(paths.includes('/for-shop-owners.html'));assert(!paths.includes('/seller-subscriptions.html'));
  assert(!paths.includes('/agents.html'));assert(!paths.includes('/work.html'));assert(!paths.includes('/pay/index.html'));
  const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
@@ -118,4 +118,21 @@ test('Isolated worker uses real SDK discovery and conventional external stage be
  const s=fs.readFileSync(path.resolve(__dirname,'../admin-release/deploy-business-communication-worker.cjs'),'utf8');
  assert(s.includes('FUNCTIONS_MANIFEST_OUTPUT_PATH'));assert(s.includes("os.tmpdir()"));assert(s.includes("f===spec.entry?'index.js':f"));assert(s.includes('keys.length!==1'));assert(s.includes('discover(stage,path.join(stage.dest'));
  assert(s.includes("'functions:'+spec.codebase+':'+spec.fn"));
+});
+
+test('Contact discovery filters recorded addresses by area and protects send shortcuts',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {matchesAcquisitionContact:match,nextCommunication:next,communicationPermitted:allowed}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const caps={email:{invitation:true,welcome:true,membership:true},whatsapp:{invitation:false}};
+ const p={name:'Synthetic Shop',city:'Durban',area:'Umlazi',category:'spaza',email:'shop@example.test',phone:'+27712345678',permissions:{email:{granted:true}},outbound:{}};
+ assert(match(p,'Durban'));assert(match(p,'Durban Umlazi'));assert(!match(p,'Johannesburg'));assert(!match({...p,email:''},'Durban'));
+ assert(match({...p,email:''},'Durban','whatsapp'));assert(!match(p,'Durban','whatsapp',true));assert(!match({...p,optedOut:true},'Durban','email',true));
+ assert.equal(next(p,'email',caps),'invitation');assert.equal(next(p,'whatsapp',caps),null);assert.equal(next({...p,permissions:{}},'email',caps),null);
+ assert.equal(next({...p,optedOut:true},'email',caps),null);assert.equal(next({...p,outbound:{email_invitation:{status:'queued'}}},'email',caps),null);
+ assert.equal(next({...p,seller:{welcomeEmailEligible:true,membershipEligible:true}},'email',caps),'welcome');
+ assert.equal(next({...p,seller:{welcomeEmailEligible:true,membershipEligible:true},emailHistory:{welcome:{sentAt:1}}},'email',caps),'membership');
+ assert(!allowed({...p,seller:{welcomeEmailEligible:false}},'email','welcome'));
+ const m=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs'),'utf8');
+ assert(m.includes('autoSearch=true,compact=false'));assert(m.includes('if(autoSearch)void searchArea(true)'));assert(m.includes('Email not supplied by Google'));assert(m.includes('stamp!==epoch'));
 });

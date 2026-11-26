@@ -9,7 +9,7 @@ const {connect,PROJECT}=require('./firebase-client.cjs');
 const {allFiles,versionName}=require('./hosting-patch.cjs');
 const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=["/admin.html","/admin-review.html","/admin-sellers.html","/admin-login.html","/admin-dashboard.html","/admin/index.html","/admin-payments.html","/admin-support.html","/admin-users.html"];
-const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/for-shop-owners.html'];
+const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/js/teyza-combined-coverage.mjs','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/for-shop-owners.html'];
 const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
 const workRoot=path.resolve(__dirname,'../../web/app-first/public');
 const backupPath=path.resolve(__dirname,'../../hosting-backup-business-acquisition.json');
