@@ -36,6 +36,7 @@ export function manualWhatsappDraftUrl(p){
 }
 export function emailText(kind,p){
  const name=oneLine(p.name)||'Business',area=oneLine(p.area),city=oneLine(p.city);
+ if(kind==='onboarding_guide')return {subject:'Your Teyza getting-started and training guide — '+name,body:['Dear '+name+' Team,','Thank you for requesting help getting started with Teyza.','1. Open the official app download and guide: https://teyza.co.za/for-shop-owners.html','2. Register your own business account for free, complete its profile and verification. Never share passwords or codes.','3. Once approved, explore advertising and eligible selling tools. Selling is optional and membership terms apply.','4. Reply to this email for personal training or help, or visit https://teyza.co.za/support.html.','Teyza Business Onboarding & Support Team\nsupport@teyza.co.za','Reply STOP to opt out of marketing.'].join('\n\n')};
  if(kind==='welcome')return {
   subject:'Welcome to Teyza – '+name,
   body:['Dear '+name+' Team,','Welcome to Teyza! Thank you for registering '+name+' with us.','Please complete any outstanding profile and verification steps in your own account. Once approved and eligible, your business can become discoverable to customers in your area.','Open the Teyza app and sign in to your own business account. For official download links, a guided app preview and help getting started, visit https://teyza.co.za/for-shop-owners.html.','Our Business Onboarding & Support Team can guide you through your profile, verification and using the platform. Never share your password or verification codes.','Reply to this email or contact support@teyza.co.za / 031 566 1165 whenever you need assistance.','Kind regards,\nTeyza Business Onboarding & Support Team\nTEYZA SA (PTY) LTD\nsupport@teyza.co.za | 031 566 1165\nhttps://teyza.co.za'].join('\n\n')
@@ -77,9 +78,42 @@ const whatsappBodies=Object.freeze({
  membership:'Good day {{1}} Team. Thank you for registering on Teyza. Optional seller membership unlocks eligible selling features. Standard full-month membership is R99, subject to current terms: https://teyza.co.za/seller-subscriptions.html. Reply for help or STOP to opt out of marketing.'
 });
 function whatsappText(kind,p){return whatsappBodies[kind]?.replace('{{1}}',()=>oneLine(p.name)||'Business')||'';}
+export function emailEvidence(p,kind){
+ const d=p.outbound?.['email_'+kind],m=p.emailHistory?.[kind];
+ return d?.status==='accepted'&&d.providerId&&Number.isSafeInteger(d.acceptedAt)&&d.acceptedAt<=Date.now()?{at:d.acceptedAt,status:'Zoho accepted — delivery not verified'}:m?.status==='staff_confirmed_in_zoho_sent'&&m.reference&&Number.isSafeInteger(m.sentAt)&&m.sentAt<=Date.now()?{at:m.sentAt,status:'Staff verified Zoho Sent'}:null;
+}
+export function manualNoticePurpose(p){
+ if(p.snapshotOnly||p.optedOut||!p.phone||p.permissions?.whatsapp?.granted!==true||['closed','not_interested'].includes(p.stage)||p.response==='declined')return null;
+ for(const k of ['welcome','onboarding_guide','invitation'])if(emailEvidence(p,k)&&!p.manualWhatsApp?.['email_notice_'+k]?.sentAt&&(k!=='welcome'||p.seller?.welcomeEmailEligible===true))return 'email_notice_'+k;
+ return null;
+}
+export function growthStep(p){
+ if(p.optedOut||['closed','not_interested'].includes(p.stage)||p.response==='declined')return {id:'blocked',label:'Do not contact',tone:'red'};
+ if(p.snapshotOnly)return {id:'live',label:'Open live record',tone:'neutral'};
+ if(!p.phone&&!p.email)return {id:'details',label:'Confirm contacts or arrange field visit',tone:'neutral'};
+ const notice=manualNoticePurpose(p);if(notice)return {id:'manual',purpose:notice,label:notice==='email_notice_welcome'?'Notify owner: welcome email sent':'Notify owner: information email sent',tone:'green'};
+ if(p.seller){
+  if(p.seller.status==='review_required')return {id:'account',label:'Review linked app account',tone:'amber'};
+  if(emailDraftAllowed('welcome',p))return {id:'email',kind:'welcome',label:'Send registration welcome email',tone:'blue'};
+  if(['queued','sending','review_required'].includes(p.outbound?.email_welcome?.status))return {id:'email',kind:'welcome',label:'Check Zoho welcome status',tone:'amber'};
+  if(!p.seller.approved)return {id:'account',label:'Review registration and approval',tone:'amber'};
+  return p.seller.paidMembership||p.seller.activePaidAdvertising?{id:'support',label:'Business growth and support',tone:'purple'}:{id:'approved',label:'Approved — welcome and growth opportunities',tone:'green'};
+ }
+ if(!priorInvitation(p)){
+  if(p.phone&&p.permissions?.whatsapp?.granted===true)return {id:'manual',purpose:'introduction',label:'Introduce Teyza on WhatsApp',tone:'blue'};
+  if(emailDraftAllowed('invitation',p))return {id:'email',kind:'invitation',label:'Send Teyza introduction email',tone:'blue'};
+  return {id:'permission',label:'Establish contact and record opt-in',tone:'neutral'};
+ }
+ if(['queued','sending','review_required'].includes(p.outbound?.email_invitation?.status))return {id:'email',kind:'invitation',label:'Check Zoho introduction status',tone:'amber'};
+ if(!p.response)return {id:'response',label:'Record actual owner response',tone:'amber'};
+ if(emailDraftAllowed('onboarding_guide',p))return {id:'guide',label:'Send requested onboarding / training guide',tone:'blue'};
+ if(!p.downloadConfirmedAt)return {id:'download',label:'Guide app download',tone:'blue'};
+ return {id:'link',label:'Link verified registered app account',tone:'blue'};
+}
 export function emailDraftAllowed(kind,p){
  if(!p.email||p.emailHistory?.[kind]||p.outbound?.['email_'+kind])return false;
  if(kind==='invitation')return !p.optedOut&&!priorInvitation(p)&&p.permissions?.email?.granted===true;
+ if(kind==='onboarding_guide')return !p.optedOut&&!['closed','not_interested'].includes(p.stage)&&p.permissions?.email?.granted===true&&['interested','needs_help'].includes(p.response);
  return kind==='welcome'&&p.seller?.welcomeEmailEligible===true;
 }
 const stages=['identified','interested','registration_started','not_interested','closed'],channels=['phone','email','whatsapp'];
@@ -119,7 +153,7 @@ export function nextCommunication(p,channel,capabilities){
  for(const kind of kinds)if(capabilities?.[channel]?.[kind]===true&&communicationPermitted(p,channel,kind))return kind;
  return null;
 }
-function statusPill(p){const n=el('span',p.optedOut?'DO NOT CONTACT':title(p.stage),'acq-status');n.dataset.state=p.optedOut?'blocked':p.stage;return n;}
+function statusPill(p){const n=el('span',p.optedOut?'DO NOT CONTACT':p.seller?.paidMembership||p.seller?.activePaidAdvertising?'Active paid business':p.seller?.approved?'Approved':p.seller?'Registered · '+title(p.seller.status):title(p.stage),'acq-status acq-growth-status');n.dataset.state=p.optedOut?'blocked':p.stage;n.dataset.tone=growthStep(p).tone;return n;}
 function button(text,click){const b=el('button',text,'button quiet');b.type='button';b.onclick=click;return b;}
 function card(t,d){const c=el('section',undefined,'panel ops-card');c.append(el('h3',t));if(d)c.append(el('p',d,'footnote'));return c;}
 function input(f,label,name,type='text',required=true,max=240){const l=el('label',label),i=el(type==='textarea'?'textarea':'input');if(type!=='textarea')i.type=type;else i.rows=3;i.name=name;i.required=required;i.maxLength=max;l.append(i);f.append(l);return i;}
@@ -240,7 +274,7 @@ export function validateSummaryPage(page,filters,previous=null){
 export function createAcquisitionAdmin({api:request,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',businessTypeFilter='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='contactable',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  let commandEpoch=0,commandPaint=null,commandFilters=normalizedFilters({queue:'new_contact'}),command=null;
- const reportRequests=[];let summaryAfter=0;
+ const reportRequests=[];let summaryAfter=0,manualSender='';
  async function reportPage(data,valid){
   // Burst below the server's 60/minute limit, then pace only when needed.
   // Shared across refresh/filter/list requests, so quick filter changes cannot
@@ -252,7 +286,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
  function resetCommand(status='idle',resetFilters=false){commandEpoch++;if(resetFilters)commandFilters=normalizedFilters({queue:'new_contact'});command=blankCommand(status);}
  const api=async(action,data)=>{const stamp=serial;const result=await request(action,data);if(active&&serial===stamp&&['ops_acquisition_create','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send'].includes(action)){summaryAfter=Date.now();resetCommand('stale');commandPaint?.();}return result;};
  function stopDiscovery(){discoveryEpoch++;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
- function clear(){stopDiscovery();serial++;active=false;resetCommand('idle',true);commandPaint=null;records=[];next=null;selected=null;detail=null;query='';city='all';businessTypeFilter='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='contactable';lookupReady=false;lookupSelection=null;focusMessage=null;newArea='';}
+ function clear(){stopDiscovery();serial++;active=false;manualSender='';resetCommand('idle',true);commandPaint=null;records=[];next=null;selected=null;detail=null;query='';city='all';businessTypeFilter='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='contactable';lookupReady=false;lookupSelection=null;focusMessage=null;newArea='';}
  async function refresh(){stopDiscovery();resetCommand('idle',true);commandPaint=null;focusMessage=null;active=true;const stamp=++serial;const r=await api('ops_acquisition_list');if(!active||stamp!==serial)return;if(r.schema!==1||!Array.isArray(r.prospects))throw Error('Deploy the matching Business Acquisition backend first.');records=r.prospects;next=r.next||null;communications=r.communications||{};selected=null;detail=null;modal=null;}
  async function perform(root,b,fn){if(!active||busy||!root.isConnected)return;const stamp=serial;busy=true;if(b)b.disabled=true;
   try{await fn(stamp);if(active&&serial===stamp&&root.isConnected)render(root);}
@@ -298,8 +332,8 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   }catch(error){if(valid())state.error=error.message||'Could not load matching records.';}
   finally{if(valid()){state.listBusy=false;commandPaint?.();}}
  }
- function nationalPanel(contactActions){
-  const panel=card('National Command Centre','All saved prospects, not just loaded rows. Filters are evaluated on the server; totals appear only after all snapshot pages have been verified.');
+ function nationalPanel(contactActions,workPanel,closeWork){
+  const panel=card('Business pipeline','Saved Teyza records · National filters · Verified progress');
   panel.classList.add('acq-national-report');
   const form=el('form',undefined,'ops-form acq-national-filters');
   function options(label,key,values){const s=choice(form,label,key,values.map(([v])=>v));values.forEach(([,t],i)=>s.options[i].textContent=t);s.value=commandFilters[key];return s;}
@@ -309,21 +343,25 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   options('Filter business type','category',[['','All business types'],...['spaza','retail','food','salon','service','wholesale','manufacturer','other'].map(c=>[c,title(c)])]);
   const mc=input(form,'Official municipality code (optional)','municipalityCode','text',false,12),lc=input(form,'Official locality reference (optional)','localityId','text',false,30),search=input(form,'Search saved businesses','search','search',false,120);
   mc.value=commandFilters.municipalityCode;lc.value=commandFilters.localityId;search.value=commandFilters.search;
+  const advanced=el('details',undefined,'acq-secondary acq-advanced-filters');advanced.append(el('summary','Advanced geographic references'),mc.parentElement,lc.parentElement);form.append(advanced);
   const queue=options('Filter work queue','queue',[['','All matched prospects'],...NATIONAL_QUEUES]);
   submit(form,'Apply national filters',d=>scanCommand(d));panel.append(form);
   const progress=el('p','','footnote');progress.setAttribute('role','status');progress.dataset.nationalReportStatus='true';
   const controls=el('div',undefined,'acq-action-bar'),refreshButton=button('Refresh complete report',()=>scanCommand(commandFilters,false,true)),resumeButton=button('Continue incomplete report',()=>scanCommand(commandFilters,true));controls.append(refreshButton,resumeButton);
   const metrics=el('div',undefined,'field-admin-metrics acq-national-metrics'),queues=el('div',undefined,'acq-national-queues'),rows=el('div',undefined,'acq-national-rows'),more=button('Load more matching records',()=>moreCommandRows());
-  panel.append(progress,controls,el('h3','Conversion and revenue'),metrics,el('p','Contacted includes separately labelled provider acceptance, not delivery. Downloads are owner-confirmed. Paid sellers and advertisers may overlap; paying businesses counts each prospect once. Approval is never inferred from downloads.','footnote'),el('h3','Daily work queues'),queues,el('h3','Matching business records'),rows,more);
-  function chooseQueue(key){queue.value=key;void scanCommand(Object.fromEntries(new FormData(form)));}
+  const insights=el('details',undefined,'acq-secondary'),otherMetrics=el('div',undefined,'field-admin-metrics acq-national-metrics');
+  insights.append(el('summary','More conversion and revenue insights'),otherMetrics,el('p','Provider acceptance is not delivery. Downloads are owner-confirmed. Verified payments are distinct from complimentary selling access.','footnote'));
+  panel.prepend(metrics);panel.append(progress,controls,insights,el('h3','Matching business records'),rows,more);
+  workPanel.append(el('p','Choose a task to open matching records. Counts require a complete snapshot.','footnote'),queues);
+  function chooseQueue(key){queue.value=key;closeWork();void scanCommand(Object.fromEntries(new FormData(form)));}
   function paint(){
    const state=command,complete=state.status==='complete',report=state.report;
    progress.textContent=complete?(state.summary?'Reconciled reporting summary · as of '+time(report.asOf)+' · '+report.scanned+' records. Open live records before acting.':'Complete snapshot · '+time(report.asOf)+' · '+report.scanned+' records inspected across all pages.'):state.status==='loading'?'Calculating complete totals — '+report.scanned+' records inspected. Totals are not available yet.':state.status==='stale'?'Records changed. Refresh the complete report before using totals.':state.status==='incomplete'?'Report incomplete — no totals are available. '+state.error:'Complete national totals have not been loaded.';
    if(complete&&state.error)progress.textContent+=' · '+state.error;
    refreshButton.disabled=state.status==='loading'||state.listBusy;resumeButton.hidden=state.status!=='incomplete'||!report.next;resumeButton.disabled=state.status==='loading';
-   metrics.replaceChildren();queues.replaceChildren();rows.replaceChildren();
+   metrics.replaceChildren();otherMetrics.replaceChildren();queues.replaceChildren();rows.replaceChildren();
    for(const [key,label,workQueue] of NATIONAL_FUNNEL){
-    const tile=workQueue?button('',()=>chooseQueue(workQueue)):el('div');tile.className='field-stat';tile.dataset.metric=key;tile.append(el('small',label),el('strong',complete?report.counts.funnel[key]:'—'));if(workQueue)tile.disabled=!complete;metrics.append(tile);
+    const tile=workQueue?button('',()=>chooseQueue(workQueue)):el('div');tile.className='field-stat';tile.dataset.metric=key;tile.append(el('small',label),el('strong',complete?report.counts.funnel[key]:'—'));if(workQueue)tile.disabled=!complete;(['discovered','readyToContact','registered','approved','payingBusinesses'].includes(key)?metrics:otherMetrics).append(tile);
    }
    for(const [key,label] of NATIONAL_QUEUES.slice(0,14)){
     const item=button(label+' · '+(complete?report.counts.queues[key]:'—'),()=>chooseQueue(key));item.dataset.queue=key;item.disabled=!complete;queues.append(item);
@@ -331,11 +369,11 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    for(const p of state.rows){
     const row=el('article',undefined,'field-visit');row.dataset.prospectId=p.id;
     const evidence=p.seller?.activePaidAdvertising?'Verified paid advertising · '+p.seller.activePaidCampaigns+' active campaign(s)':p.seller?.unpaidCampaigns?'Unpaid / review campaign(s)':p.commercialInterest?'Interest: '+title(p.commercialInterest.kind):'No commercial interest recorded';
-    row.append(el('strong',p.name),el('span',locationText(p)),statusPill(p),el('span',acquisitionContactNote(p)||'Contact details recorded'),el('span','Outreach: '+title(p.outreachState||'not_recorded')+' · Response: '+title(p.response||'not_recorded')+' · Download: '+(p.downloadConfirmedAt?'Owner confirmed':'Not confirmed')),
-     el('span',p.geographyNeedsReview?'Provisional geography — review required':'Official reference '+(p.localityId||'')+' · '+(p.geographySourceVintage||'Check current boundaries')),
-     el('span',p.seller?.approvalSubmitted?'Submitted for approval review':p.seller?.approved?'Approved business':p.seller?'Linked account: '+title(p.seller.status):'No linked registration'),
-     el('span',p.seller?.paidMembership?'Verified paid seller membership':p.seller?.sellingAccess?'Selling access — not verified paid':'No verified paid membership'),
-     el('span',evidence),el('span','Assigned: '+(p.assignedTo||'Unassigned')+' · Follow-up: '+time(p.nextFollowUpAt)),contactActions(p));
+    row.classList.add('acq-pipeline-row');
+    const identity=el('div',undefined,'acq-pipeline-identity');identity.append(el('strong',p.name),el('span',locationText(p),'footnote'),statusPill(p));
+    const journey=el('div',undefined,'acq-pipeline-journey');journey.append(el('span',growthStep(p).label),el('small',acquisitionContactNote(p)||'Contact details recorded'),el('small','Registered: '+time(p.seller?.registeredAt)),el('small','Follow-up: '+time(p.nextFollowUpAt)));
+    const commercial=el('div',undefined,'acq-pipeline-commercial');commercial.append(el('span',p.seller?.paidMembership?'Verified paid seller membership':p.seller?.sellingAccess?'Selling access — not verified paid':'No verified paid membership'),el('small',evidence));
+    row.append(identity,journey,commercial,contactActions(p,true));
     rows.append(row);
    }
    if(!state.rows.length)rows.append(el('p',state.listNext?'No matches in this scan page. Load more matching records.':complete?'No matching businesses in this snapshot.':'Matching records will appear as the snapshot loads.','footnote'));
@@ -379,18 +417,15 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const close=button('Close',()=>{stopDiscovery();modal=null;focusMessage=null;dialog.close();});bar.append(modalTitle,close);const err=el('p','', 'acq-error');err.setAttribute('role','alert');err.hidden=true;dialog.append(bar,err,modalContent);
   dialog.addEventListener('cancel',()=>{stopDiscovery();modal=null;focusMessage=null;});
   const panels={};let selectedListing=null;function open(name){if(modal==='discover'&&name!=='discover')stopDiscovery();modal=name;mount();}
-  function mount(){if(!modal||!panels[modal])return;modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find & Add Businesses',discover:'Find & Add Businesses · live search',add:'Add Business',assets:'Marketing & onboarding',directory:'Registered businesses',business:'Business record'})[modal]||'Business acquisition';err.hidden=true;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){target.open=true;target.scrollIntoView({block:'nearest'});}}}
+  function mount(){if(!modal||!panels[modal])return;modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find & Add Businesses',discover:'Find & Add Businesses · live search',add:'Add Business',assets:'Marketing & onboarding',directory:'Registered businesses',work:"Today's work",business:'Business record'})[modal]||'Business acquisition';err.hidden=true;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){for(let n=target;n;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;target.scrollIntoView({block:'nearest'});}}}
 
-  const intro=card('National business acquisition','All nine South African provinces. Confirm province, municipality, township and category for each saved prospect. Contact only through permitted channels. Registration and verification are free; selling and advertising are optional.');
-  intro.classList.add('acq-hero');intro.append(el('p','Nine provinces · confirmed locations · contact history · conversion evidence','footnote'));const actionBar=el('div',undefined,'acq-action-bar');
-  const discovery=button('Open national coverage map',()=>document.querySelector('[data-admin-view="map"]')?.click());discovery.classList.add('acq-map');actionBar.append(discovery);
-  const find=button('Find businesses by area',()=>open('lookup'));find.classList.add('acq-find');actionBar.append(find);
-  const source=el('a','Business owner information','button quiet');source.href='/for-shop-owners.html';source.target='_blank';source.rel='noopener noreferrer';actionBar.append(source);
-  const add=button('+ Find & Add Businesses',()=>open('lookup'));add.classList.add('acq-add');actionBar.prepend(add);
-  const assetsButton=button('Open marketing & onboarding assets',()=>{panels.assets.querySelector('details').open=true;open('assets');});assetsButton.classList.add('acq-assets');
-  actionBar.append(button('Registered businesses',()=>open('directory')),assetsButton);intro.append(actionBar);
-  workspace.append(intro);
-  workspace.append(nationalPanel(contactActions));
+  const intro=card('Business Growth','Discover, connect, onboard and grow independent local businesses across South Africa.');
+  intro.classList.add('acq-hero','acq-growth-hero');const actionBar=el('div',undefined,'acq-action-bar');
+  const add=button('+ Find & Add Businesses',()=>{lookupQuery='';lookupSelection=null;void openDiscovery(true);});add.classList.add('acq-add');
+  const work=button("Today's work",()=>open('work'));work.classList.add('acq-work-button');
+  actionBar.append(add,work,button('Saved contacts',()=>open('lookup')),button('Registered businesses',()=>document.querySelector('[data-admin-view="sellers"]')?.click()));intro.append(actionBar);
+  panels.work=card("Today's work",'National priorities · '+new Date().toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg'}));
+  workspace.append(intro,nationalPanel(contactActions,panels.work,()=>{if(modal==='work')close.click();}));
   panels.assets=renderAssets(message);
   const areaDirectory=card('Businesses already on Teyza','View approved, verified mapped Teyza businesses in the selected neighbourhood. Google-only businesses remain in the coverage map’s current local search; no bulk extraction or contact list is retained.');
   const areaSearch=el('input');areaSearch.type='search';areaSearch.placeholder='City, township or business name';areaSearch.setAttribute('aria-label','Search mapped Teyza businesses');
@@ -409,13 +444,12 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    focusMessage=channel&&kind?{channel,kind}:null;
    return perform(root,null,stamp=>readDetail(p.id,stamp));
   }
-  function contactActions(p){
+  function contactActions(p,compact=false){
    const actions=el('div',undefined,'acq-contact-actions');
    if(p.snapshotOnly===true){actions.append(button('Open live record',()=>openRecord(p)));return actions;}
-   actions.append(button(newContact(p)?'Contact':'Open record',()=>openRecord(p)));
+   actions.append(button(compact?'Open record':newContact(p)?'Contact':'Open record',()=>openRecord(p)));if(compact)return actions;
    const site=safeBusinessWebsite(p.website);if(site)actions.append(assetLink('Business website',site));
-   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut&&!priorInvitation(p))actions.append(button(p.phoneKind==='whatsapp_only'?'WhatsApp invitation':'Check WhatsApp',()=>openRecord(p,'manual-whatsapp','invitation')));
-   for(const channel of ['email','whatsapp']){
+   for(const channel of ['email']){
     if(!(channel==='email'?p.email:p.phone))continue;
     const kind=nextCommunication(p,channel,communications);
     const send=button(channel==='email'?'Send email':'Send WhatsApp',()=>openRecord(p,channel,kind));
@@ -465,19 +499,19 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const discoveryHost=el('div'),back=button('Back to saved contacts',()=>open('lookup'));
   const confirmedAdd=button('Add confirmed business',()=>{const entered=discoveryHost.querySelector('[aria-label="Town or municipality"]')?.value;prepareManual(entered||lookupQuery);open('add');});
   const discoveryActions=el('div',undefined,'acq-contact-actions');discoveryActions.append(back,confirmedAdd);discoverPanel.append(discoveryActions,discoveryHost);panels.discover=discoverPanel;
-  async function openDiscovery(){
+  async function openDiscovery(guided=false){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
     const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261127-idle-area');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
-    liveDiscovery=createCombinedCoverage({autoSearch:Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||'Durban',initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
+    liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
      resolveSavedPlaces:async ids=>{
       const matches=new Map();
       for(let i=0;i<ids.length;i+=30){const r=await api('ops_acquisition_place_matches',{placeIds:ids.slice(i,i+30)});if(!Array.isArray(r.matches))throw Error('Saved status unavailable');for(const m of r.matches)matches.set(m.placeId,m.id);}
       return matches;
      },
-     onAddBusiness:(p,contact,area)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);open('add');},
+     onAddBusiness:(p,contact,area,areaInfo)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);if(provinces.includes(areaInfo?.province))provinceField.value=areaInfo.province;open('add');},
      onContactBusiness:id=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id});},
      report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
@@ -527,29 +561,43 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
   create.append(button('Back to search',()=>open('lookup')),f);panels.add=create;
   if(detail&&selected===detail.prospect.id){
-   const p=detail.prospect,c=card('Business: '+p.name,'Private onboarding record · '+locationText(p));
+   const p=detail.prospect,c=card('Business: '+p.name,'Guided onboarding · '+locationText(p));c.classList.add('acq-guided-record');
    const added=el('span','Added','acq-status');added.dataset.state='interested';c.append(added,button('Back to business search',()=>open('lookup')));
    c.append(el('p','Contact: '+[p.phoneKind==='whatsapp_only'&&p.phone?'WhatsApp '+p.phone:p.phone,p.email].filter(Boolean).join(' · ')),el('p',acquisitionContactNote(p),'footnote'),el('p','Contact confirmed: '+time(p.contactedAt)+' · Response: '+title(p.response||'not recorded')+' · Download confirmed: '+time(p.downloadConfirmedAt),'footnote'),el('p','Source: '+title(p.source)+' — '+p.sourceReference,'footnote'),el('p','Assigned reviewer: '+p.assignedTo+' · Last saved by '+p.lastActivityBy+' · '+time(p.updatedAt),'footnote'));
    const site=safeBusinessWebsite(p.website);if(site)c.append(assetLink('Open business website',site));
-   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut){
-    const box=el('details',undefined,'acq-message acq-wa-draft');box.dataset.sendChannel='manual-whatsapp';box.dataset.sendKind='invitation';box.append(el('summary','Check WhatsApp & review invitation'));
-    const preview=el('textarea');preview.readOnly=true;preview.rows=9;preview.value=whatsappInvitationDraft(p);preview.setAttribute('aria-label','Personalised WhatsApp invitation');box.append(preview,assetLink('Open WhatsApp — check number only',wa));
-    const result=el('div');result.setAttribute('role','status');box.append(result);
-    const prepare=button('Prepare WhatsApp message',async()=>{
-     prepare.disabled=true;result.replaceChildren(el('p','Rechecking recorded owner permission and contact…','footnote'));
-     try{
-      const r=await api('ops_acquisition_detail',{id:p.id});if(!box.isConnected)return;
-      const fresh=r.prospect,url=manualWhatsappDraftUrl(fresh),prior=Array.isArray(r.events)&&r.events.some(e=>e.type==='contact'&&e.channel==='whatsapp');
-      if(!url||fresh.phone!==p.phone||fresh.revision!==p.revision||prior){result.textContent='Draft blocked: check current owner consent, opt-out, existing account and contact history. Refresh the record.';return;}
-      result.replaceChildren(assetLink('Open prepared WhatsApp message',url),el('p','Review the message in WhatsApp and choose Send yourself. Record actual contact in the activity history. Nothing was sent by Admin.','footnote'));
-     }catch(e){if(box.isConnected){result.textContent=e.message||'Could not verify permission.';onError(e);}}
-     finally{if(box.isConnected)prepare.disabled=false;}
-    });
-    if(manualWhatsappDraftUrl(p))box.append(prepare);else box.append(el('p','Record actual owner permission before preparing an invitation. Prior outreach, opt-out or linked registration blocks a duplicate initial invitation.','footnote'));
+   const step=growthStep(p),guide=el('section',undefined,'acq-next-step');guide.dataset.tone=step.tone;guide.append(el('small','NEXT RECOMMENDED ACTION'),el('h3',step.label));const guideAction=el('div',undefined,'acq-guide-actions');guide.append(guideAction);c.append(guide);
+   const facts=el('div',undefined,'acq-record-facts');
+   for(const [label,value] of [['Discovered',time(p.createdAt)],['Registered',time(p.seller?.registeredAt)],['Approval',p.seller?.approved?'Approved':p.seller?title(p.seller.status):'Not registered'],['Approval date',time(p.seller?.approvedAt)],['WhatsApp permission',p.optedOut?'Opted out':p.permissions?.whatsapp?.granted?'Recorded · '+time(p.permissions.whatsapp.recordedAt):'Not recorded'],['Email permission',p.permissions?.email?.granted?'Recorded · '+time(p.permissions.email.recordedAt):'Not recorded']]){const fact=el('div');fact.append(el('small',label),el('strong',value));facts.append(fact);}c.append(facts);
+   let manualBox=null,missingPanel=null;
+   if(savedWhatsAppCheck(p.phone)&&!p.optedOut){
+    const box=el('details',undefined,'acq-message acq-wa-draft');manualBox=box;box.dataset.sendChannel='manual-whatsapp';box.dataset.sendKind='introduction';box.append(el('summary','Manual WhatsApp · introduction / email reminder'));
+    box.append(el('p','Use the separate Teyza WhatsApp Business account. A chat link does not select the active account or send anything.','footnote'));
+    const purpose=manualNoticePurpose(p)||(!priorInvitation(p)&&p.permissions?.whatsapp?.granted===true?'introduction':null);
+    for(const entry of Object.values(p.manualWhatsApp||{}))box.append(el('p',title(entry.purpose)+' · opened '+time(entry.openedAt)+' · sent '+time(entry.sentAt)+' · sender '+entry.sender,'footnote'));
+    if(purpose){
+     const form=el('form',undefined,'ops-form'),sender=input(form,'Separate Teyza WhatsApp Business sender','sender','tel',true,40);sender.value=manualSender||p.manualWhatsApp?.[purpose]?.sender||'';sender.placeholder='+27… (not official Meta number)';
+     check(form,'I will use this account and the owner agreed to WhatsApp contact.','senderConfirmed');
+     const result=el('div',undefined,'acq-manual-result');result.setAttribute('role','status');
+     submit(form,'Prepare manual WhatsApp',(d,btn)=>{void(async()=>{
+      btn.disabled=true;result.replaceChildren(el('p','Checking live permission, email evidence and contact history…','footnote'));
+      try{
+       const {draft}=await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:d.sender});
+       if(!box.isConnected)return;const base=savedWhatsAppCheck(draft?.recipient);
+       if(!base||draft.purpose!==purpose||typeof draft.text!=='string'||!savedWhatsAppCheck(draft.sender)||draft.recipient!==p.phone)throw Error('Unexpected manual draft response.');
+       manualSender=draft.sender;const url=new URL(base);url.searchParams.set('text',draft.text);
+       const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
+       const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
+       submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
+       const opened=button('Record chat opened only',()=>perform(root,opened,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_opened',purpose,sender:draft.sender,note:'Administrator confirmed chat opened, not sent.',confirmed:true});await readDetail(p.id,stamp);}));
+       opened.disabled=!!p.manualWhatsApp?.[purpose]?.openedAt;
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,assetLink('Open WhatsApp message',url.href),button('Copy message',copyAsset(draft.text,message)),el('p','Review in WhatsApp and send yourself. Record the actual outcome below.','footnote'),opened,log);
+      }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
+     })();});box.append(form,result);
+    }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));
     c.append(box);
    }
    if(!p.optedOut&&(!p.phone||!p.email||!p.website)){
-    const missing=el('details',undefined,'acq-secondary');missing.append(el('summary','Add missing contact details'));
+    const missing=el('details',undefined,'acq-secondary');missingPanel=missing;missing.append(el('summary','Add missing contact details'));
     const form=el('form',undefined,'ops-form');
     if(!p.phone){input(form,'Confirmed phone or WhatsApp number','phone','tel',false,40);const t=choice(form,'Number type','phoneKind',['unconfirmed','whatsapp_only']);t.options[0].textContent='Phone / WhatsApp not yet confirmed';t.options[1].textContent='Confirmed WhatsApp only';}
     if(!p.email)input(form,'Confirmed business email','email','email',false,254);
@@ -604,9 +652,9 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     check(link,'Owner confirmed this exact business account.','ownerConfirmed');
     submit(link,'Link seller account',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:d.sellerUid,ownerConfirmed:d.ownerConfirmed==='on'});await readDetail(p.id,stamp);if(serial===stamp)message('Seller account linked. No approval changed.','success');}));linkPanel.append(link);
    }
-   const direct=card('Send a message','Contact this added business via the existing linked Zoho Mail or the configured WhatsApp provider. Select the channel and message. Review the exact recipient and approved personalised content. A single click queues a message only when the provider is enabled. Provider acceptance is not delivery.');direct.classList.add('acq-communications');
+   const direct=card('Send a message','Zoho Mail · Review recipient and content before queueing. Provider acceptance is not delivery. Meta approval welcomes remain in the existing WhatsApp delivery workspace.');direct.classList.add('acq-communications');
    const refreshStatus=button('Refresh send history',()=>perform(root,null,stamp=>readDetail(p.id,stamp)));direct.append(refreshStatus);
-   for(const channel of ['email','whatsapp']){
+   for(const channel of ['email']){
     const block=el('section',undefined,'acq-channel '+(channel==='email'?'acq-email':'acq-whatsapp'));block.append(el('h4',channel==='email'?'Email · Zoho Mail':'WhatsApp · Business Platform'));
     const destination=channel==='email'?p.email:p.phone;block.append(el('p','Recipient: '+(destination||'Not recorded'),'footnote'));
     for(const kind of ['invitation','welcome','membership']){
@@ -627,11 +675,11 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     }
     direct.append(block);
    }
-   c.append(direct,activityPanel);if(!p.seller)c.append(linkPanel);
+   const directPanel=el('details',undefined,'acq-secondary acq-channel-panel');directPanel.append(el('summary','Zoho email · introduction / registration welcome / membership'),direct);c.append(directPanel,activityPanel);if(!p.seller)c.append(linkPanel);
    const mailPanel=card('Business email desk','Manual fallback only. Use Zoho Sent to record emails sent outside Admin. Do not send another message if a direct send is already recorded.');
    const zoho=el('a','Open Zoho Workplace','button quiet');zoho.href='https://workplace.zoho.com/';zoho.target='_blank';zoho.rel='noopener noreferrer';mailPanel.append(zoho);
-   for(const kind of ['invitation','welcome']){
-    const entry=p.emailHistory?.[kind]||p.outbound?.['email_'+kind],box=el('section',undefined,'panel ops-card');box.append(el('h4',kind==='invitation'?'Business invitation':'Registration welcome'));
+   for(const kind of ['invitation','welcome','onboarding_guide']){
+    const entry=p.emailHistory?.[kind]||p.outbound?.['email_'+kind],box=el('section',undefined,'panel ops-card');box.dataset.emailKind=kind;box.append(el('h4',kind==='invitation'?'Business invitation':kind==='welcome'?'Registration welcome':'Requested onboarding and training guide'));
     if(entry){box.append(el('p','Recorded status: '+title(entry.status)+' · '+time(entry.sentAt||entry.updatedAt),'footnote'));mailPanel.append(box);continue;}
     const allowed=emailDraftAllowed(kind,p);
     if(!allowed){box.append(el('p',kind==='invitation'?'Record email consent first. Prior outreach, opt-out or registration blocks another initial invitation.':'Link the genuine registered seller first. Its owner email must match this record.','footnote'));mailPanel.append(box);continue;}
@@ -641,7 +689,8 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     input(log,'Zoho Sent reference (message ID or subject/reference)','reference','text',true,180);
     input(log,'Sent record note','note','textarea',true,500);
     check(log,'I checked the matching recipient and message in Zoho Sent.','sentConfirmed');
-    submit(log,'Record '+kind+' sent',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'email_sent',kind,sentAt:Date.parse(d.sentAt+'+02:00'),reference:d.reference,note:d.note,sentConfirmed:d.sentConfirmed==='on',confirmed:true});await readDetail(p.id,stamp);if(serial===stamp)message('Email history saved. Delivery not verified.','success');}));
+    if(kind==='onboarding_guide')check(log,'The owner requested this onboarding / training guide and agreed to email contact.','ownerRequestedGuide');
+    submit(log,'Record '+kind+' sent',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'email_sent',kind,sentAt:Date.parse(d.sentAt+'+02:00'),reference:d.reference,note:d.note,sentConfirmed:d.sentConfirmed==='on',ownerRequestedGuide:d.ownerRequestedGuide==='on',confirmed:true});await readDetail(p.id,stamp);if(serial===stamp)message('Email history saved. Delivery not verified.','success');}));
     box.append(log);mailPanel.append(box);
    }
    const manual=el('details',undefined,'acq-secondary');manual.append(el('summary','Manual Zoho mail and Sent records'),mailPanel);c.append(manual);
@@ -650,9 +699,35 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    for(const ticket of detail.support||[]){const line=el('div',undefined,'field-area-row');line.append(el('strong',ticket.subject),el('span',title(ticket.status)+' · '+time(ticket.updatedAt)));help.append(line);}
    if(detail.moreSupport)help.append(el('p','Additional linked support cases exist. Open the support inbox.','footnote'));
    help.append(button('Open seller support inbox',()=>openSupport?.(p.name)));
-   c.append(help);
+   if(p.help?.channel==='email'&&p.help.state!=='resolved'&&p.email){
+    const text='Dear '+oneLine(p.name)+' Team,\n\nThank you for contacting Teyza support. Please tell us which step you need help with, without sending passwords or verification codes.\n\nTeyza Business Support Team\nhttps://teyza.co.za/support.html';
+    help.append(button('Copy requested support email',copyAsset(text,message)),assetLink('Open Zoho Workplace','https://workplace.zoho.com/'),el('p','Record the actual reply or resolution in the activity form after sending.','footnote'));
+   }
+   const helpPanel=el('details',undefined,'acq-secondary');helpPanel.append(el('summary','Business support and linked cases'),help);c.append(helpPanel);
+   function reveal(node){if(!node)return;for(let n=node;n;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;node.scrollIntoView({block:'nearest'});}
+   function recordActivity(type,preferredChannel){kind.value=type;configure();if(preferredChannel&&Array.from(channel.options).some(o=>o.value===preferredChannel))channel.value=preferredChannel;reveal(activityPanel);}
+   const directions={blocked:'Marketing is blocked. Only respond to genuine owner-requested support.',details:'Confirm contact details independently or arrange a field visit.',permission:'Introduce Teyza through a suitable permission request, owner enquiry or field visit. A public number is not WhatsApp opt-in.',manual:'Prepare one manual message and confirm the actual send.',email:'Use Zoho or verified Zoho Sent evidence. A queued email is not proof of sending.',guide:'When the owner requests training, prepare the guide and verify it in Zoho Sent. Then notify them on WhatsApp if permitted.',response:'Record what the owner actually said.',download:'Show the official app and guide. Confirm download only when the owner confirms it.',link:'Confirm the exact registered app account with its owner.',account:'Check the actual account and verification status.',approved:'Use the existing approved Meta welcome workflow and eligible commercial options. No automatic acquisition send is enabled here.',support:'Continue helping the owner with advertising, eligible selling and account support.'};
+   guide.insertBefore(el('p',directions[step.id]||'Open the current record before acting.','footnote'),guideAction);
+   if(step.id==='permission')guideAction.append(button('Record owner opt-in',()=>recordActivity('permission',p.phone?'whatsapp':'email')));
+   if(step.id==='details'&&missingPanel)guideAction.append(button('Confirm business contact details',()=>reveal(missingPanel)));
+   if(step.id==='manual'&&manualBox)guideAction.append(button('Prepare manual message',()=>reveal(manualBox)));
+   if(step.id==='response')guideAction.append(button('Record owner response',()=>recordActivity('response')));
+   if(step.id==='download')guideAction.append(button('Confirm owner download',()=>recordActivity('app_download')));
+   if(step.id==='link')guideAction.append(button('Link existing app account',()=>reveal(linkPanel)));
+   if(step.id==='email')guideAction.append(button('Review Zoho email',()=>reveal(direct.querySelector('[data-send-kind="'+step.kind+'"]')||directPanel)));
+   if(step.id==='guide')guideAction.append(button('Prepare requested training email',()=>reveal(mailPanel.querySelector('[data-email-kind="onboarding_guide"]')||manual)));
+   if(['blocked','support'].includes(step.id))guideAction.append(button('Open support',()=>reveal(helpPanel)));
+   if(['account','approved'].includes(step.id))guideAction.append(button('View business accounts',()=>{close.click();document.querySelector('[data-admin-view="sellers"]')?.click();}));
+   if(step.id==='approved'){guideAction.append(button('Official Meta welcome / support',()=>{close.click();document.querySelector('[data-admin-view="whatsapp"]')?.click();}));if(kind.querySelector('option[value="commercial_interest"]'))guideAction.append(button('Record commercial interest',()=>recordActivity('commercial_interest')));}
+   if(!p.optedOut&&['manual','email','guide','download','approved','support'].includes(step.id))guide.append(button('Artwork & training resources',()=>{panels.assets.querySelector('details').open=true;open('assets');}));
+   if(step.id==='manual'&&manualBox)manualBox.open=true;
+   if(step.id==='guide')manual.open=true;
+   if(step.id==='email'){directPanel.open=true;const target=direct.querySelector('[data-send-kind="'+step.kind+'"]');if(target)target.open=true;}
+   const journey=el('ol',undefined,'acq-journey-list');
+   for(const [label,complete] of [['Contact details identified',!!(p.phone||p.email)],['Owner permission recorded',!!(p.permissions?.email?.granted||p.permissions?.whatsapp?.granted)&&!p.optedOut],['Introduction / contact recorded',outreachRecorded(p)],['Owner response recorded',!!p.response],['Owner-confirmed app download',!!p.downloadConfirmedAt],['Genuine linked registration',!!p.seller&&p.seller.status!=='review_required'],['Business approved',p.seller?.approved===true],['Verified paid advertising or membership',!!(p.seller?.paidMembership||p.seller?.activePaidAdvertising)]]){const li=el('li',label);li.dataset.complete=String(complete);journey.append(li);}
+   c.append(el('h3','Business journey'),journey);
    const history=el('details',undefined,'acq-secondary');history.append(el('summary','Recent activity history'));
-   for(const e of detail.events||[]){const row=el('div',undefined,'field-area-row');row.append(el('strong',title(e.type)),el('span',time(e.createdAt)+' · '+e.actorUid),el('p',[e.channel?title(e.channel):'',e.note||''].filter(Boolean).join(' · ')));history.append(row);}
+   for(const e of detail.events||[]){const row=el('div',undefined,'field-area-row');row.append(el('strong',title(e.type)),el('span',time(e.createdAt)+' · '+e.actorUid),el('p',[e.channel?title(e.channel):'',e.purpose?title(e.purpose):'',e.sender?'Sender '+e.sender:'',e.note||''].filter(Boolean).join(' · ')));history.append(row);}
    if(detail.moreEvents)history.append(el('p','Showing the latest 25 events; older records remain stored.','footnote'));
    c.append(history);panels.business=c;
   }

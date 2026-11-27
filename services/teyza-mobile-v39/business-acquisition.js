@@ -166,7 +166,7 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
     const [s,billing]=await Promise.all([readDoc('teyzaPublicShops/'+key),readDoc('teyzaBilling/'+key)]);
     const facts=await R.sellerSignals({id:key,account:a,shop:s,billing,read:readDoc,ads:loader?loader.ads:uid=>R.allRows(()=>db.collection('teyzaShopperAds').where('ownerUid','==',uid),q=>tx?tx.get(q):q.get()),now:asOf});
     seller={uid:key,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
-     ...facts,welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
+     ...facts,registeredAt:Number.isSafeInteger(a.createdAt)&&a.createdAt>0&&a.createdAt<=asOf?a.createdAt:null,approvedAt:facts.approved&&Number.isSafeInteger(a.approvedAt)&&a.approvedAt>0&&a.approvedAt<=asOf?a.approvedAt:null,welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
      welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
      membershipEligible:facts.approved&&!facts.sellingAccess};
    }else seller={uid:key||null,status:'review_required',listed:false,welcomeEmailEligible:false};

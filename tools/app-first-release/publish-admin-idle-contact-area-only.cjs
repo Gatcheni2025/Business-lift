@@ -11,7 +11,7 @@ const SITE=PROJECT,BASE='sites/'+SITE;
 const aliases=["/admin.html","/admin-review.html","/admin-sellers.html","/admin-login.html","/admin-dashboard.html","/admin/index.html","/admin-payments.html","/admin-support.html","/admin-users.html"];
 const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-app-admin-model.mjs','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/js/teyza-combined-coverage.mjs','/assets/teyza-app-admin.css'];
 const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
-const backupPath=path.resolve(__dirname,'../../hosting-backup-admin-national-acquisition.json');
+const backupPath=path.resolve(__dirname,'../../hosting-backup-admin-guided-growth.json');
 const files=()=>new Map(paths.map(p=>{
  const bytes=zlib.gzipSync(fs.readFileSync(path.join(adminRoot,aliases.includes(p)?'admin.html':p.slice(1))),{level:9});
  return [p,{bytes,hash:crypto.createHash('sha256').update(bytes).digest('hex')}];
@@ -40,7 +40,7 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertAdminReady(health){
- if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminNationalAcquisitionSummarySchema!==1||health.version!=='3.26.0'||health.marketplaceRelease!=='20261126-v61'||health.adminInactivitySession!==true||health.adminSessionRequired!==true||health.adminAreaAutocomplete!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+ if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminNationalAcquisitionSummarySchema!==1||health.adminGuidedBusinessGrowthSchema!==1||health.version!=='3.26.0'||health.marketplaceRelease!=='20261126-v61'||health.adminInactivitySession!==true||health.adminSessionRequired!==true||health.adminAreaAutocomplete!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
   throw Error('Matching national acquisition schema 2 and existing Admin backend capabilities are required. Hosting unchanged.');
  }
 }
