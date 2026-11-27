@@ -225,8 +225,12 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
   if(action==='ops_acquisition_list'){
    let q=db.collection(collection).orderBy('__name__').limit(31);
    if(data.after)q=q.startAfter(D.id(data.after));
-   const result=await q.get(),rows=result.docs.slice(0,30);
-   return {schema:1,prospects:await Promise.all(rows.map(s=>view(s.id,s.data()))),next:result.docs.length>30?rows[29].id:null,communications:await communications.caps()};
+   const asOf=clock();
+   const [page,caps]=await Promise.all([db.runTransaction(async tx=>{
+    const result=await tx.get(q),rows=result.docs.slice(0,30),loader=await snapshotLoader(rows,tx,asOf);
+    return {prospects:await Promise.all(rows.map(s=>view(s.id,s.data(),tx,asOf,loader))),next:result.docs.length>30?rows[29].id:null};
+   },{readOnly:true}),communications.caps()]);
+   return {schema:1,...page,communications:caps};
   }
   if(action==='ops_acquisition_place_matches'){
    if(!Array.isArray(data.placeIds)||data.placeIds.length>30)D.fail(422,'Check at most 30 displayed business references.');

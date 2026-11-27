@@ -805,6 +805,32 @@ async function main(){
    await page.setViewportSize({width:393,height:852});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
+  await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{
+   const stamp=Date.now()-1000,gen='00000000-0000-0000-0000-000000000001';
+   const cached={id:'cached1',name:'Synthetic cached prospect',city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',area:'Umlazi',category:'spaza',stage:'identified',contactNote:'Contact details recorded',snapshotOnly:true,optedOut:false};
+   const live={...cached,snapshotOnly:false,email:'synthetic@example.test',phone:'',permissions:{email:{granted:true}},optedOut:true,revision:1};
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{}}});return true;}
+    if(body.action==='ops_acquisition_detail'){assert.equal(body.data.id,cached.id);await route.fulfill({json:{ok:true,prospect:live,events:[]}});return true;}
+    if(body.action==='ops_acquisition_command_page'){
+     const p=await syntheticCommandPage(body,{asOf:stamp,scanned:1,prospects:[cached],funnel:{discovered:1},queues:{new_contact:1}});
+     if(body.data.preferSummary){delete p.schema;delete p.complete;Object.assign(p,{summarySchema:1,summaryGeneration:gen,completedAt:stamp+500});}
+     await route.fulfill({json:p});return true;
+    }
+    return false;
+   }});
+   const page=f.page;await page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await page.getByText(/Reconciled reporting summary/).waitFor();
+   const row=page.locator('[data-prospect-id="cached1"]');
+   assert.equal(await row.getByRole('button',{name:'Send email',exact:true}).count(),0);
+   assert.equal(await row.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),0);
+   await row.getByRole('button',{name:'Open live record',exact:true}).click();
+   const dialog=page.getByRole('dialog');await dialog.waitFor();
+   assert(await dialog.getByText('DO NOT CONTACT',{exact:true}).first().isVisible());
+   assert(f.calls.some(c=>c.action==='ops_acquisition_detail'&&c.data.id===cached.id));
+   assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{
    let credited=false;
    const f=await pageFor({api:async(route,body)=>{
