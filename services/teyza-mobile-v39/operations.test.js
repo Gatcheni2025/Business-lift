@@ -904,3 +904,41 @@ test('Published generation caches complete scoped totals and indexed queues; sta
  await rejects(service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:first.summaryGeneration,asOf:first.asOf,after:first.next,filters:first.filters}),409);
  const stale=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{}});assert.equal(stale.schema,2);assert.equal(stale.summarySchema,undefined);
 });
+
+test('Guided manual WhatsApp requires explicit separate sender, live permission, actual send evidence and no duplicate introduction',async()=>{
+ const f=setup(),source={name:'Test Shop',city:'Durban',area:'Umlazi',address:'Manual growth test',category:'spaza',phone:'0712345678',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Synthetic owner inquiry',authorisedSource:true};
+ let p=(await f.call('ops_acquisition_create',source)).prospect;
+ const sender='+27712345679',event=(extra)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic actual event',...extra}),draft=(extra={})=>f.call('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose:'introduction',sender,...extra});
+ await rejects(draft(),409);
+ p=(await event({type:'permission',channel:'whatsapp',ownerOptIn:true})).prospect;
+ await rejects(draft({sender:'+27798261972'}),422);await rejects(draft({sender:p.phone}),422);
+ const d=(await draft()).draft;assert.equal(d.recipient,p.phone);assert.equal(d.sender,sender);assert.match(d.text,/Test Shop/);
+ p=(await event({type:'manual_whatsapp_opened',purpose:'introduction',sender})).prospect;
+ assert(p.manualWhatsApp.introduction.openedAt);assert.equal(p.contactedAt,null);
+ await rejects(event({type:'manual_whatsapp_sent',purpose:'introduction',sender,sentConfirmed:false}),422);
+ p=(await event({type:'manual_whatsapp_sent',purpose:'introduction',sender,sentConfirmed:true})).prospect;
+ assert(p.contactedAt);assert(p.manualWhatsApp.introduction.sentAt);assert.equal(p.lastWhatsAppContactAt,now);
+ await rejects(draft(),409);
+ await rejects(event({type:'manual_whatsapp_sent',purpose:'introduction',sender,sentConfirmed:true}),409);
+ await rejects(draft({purpose:'email_notice_onboarding_guide'}),409);
+ p=(await event({type:'permission',channel:'email',ownerOptIn:true})).prospect;
+ p=(await event({type:'response',response:'interested'})).prospect;
+ const mail={type:'email_sent',kind:'onboarding_guide',sentAt:now-1000,sentConfirmed:true,reference:'Synthetic Zoho Sent evidence'};
+ await rejects(event(mail),409);
+ p=(await event({...mail,ownerRequestedGuide:true})).prospect;
+ assert.match((await draft({purpose:'email_notice_onboarding_guide'})).draft.text,/email address/);
+ p=(await event({type:'manual_whatsapp_sent',purpose:'email_notice_onboarding_guide',sender,sentConfirmed:true})).prospect;
+ await rejects(draft({purpose:'email_notice_onboarding_guide'}),409);
+ p=(await event({type:'opt_out'})).prospect;
+ await rejects(draft({purpose:'email_notice_welcome'}),409);
+ assert(![...f.db.records.keys()].some(k=>k.startsWith('teyzaBusinessOutboundWhatsApp/')));
+});
+test('Email reminders reject queued and uncertain Zoho records; accepted email permits only one manual reminder',async()=>{
+ const f=setup();let p=(await f.call('ops_acquisition_create',{name:'Test Shop',city:'Durban',area:'Umlazi',address:'Synthetic Zoho reminder',category:'spaza',phone:'0712345678',email:'shop@example.test',source:'owner_inquiry',sourceReference:'Synthetic',authorisedSource:true,initialConsentChannels:['whatsapp','email'],initialConsentNote:'Synthetic',initialConsentConfirmed:true})).prospect;
+ const ref='teyzaBusinessProspects/'+p.id,request={id:p.id,revision:p.revision,purpose:'email_notice_invitation',sender:'+27712345679'};
+ for(const status of ['queued','sending','review_required','cancelled','accepted']){
+  f.db.records.set(ref,{...f.db.records.get(ref),outbound:{email_invitation:{status,...(status==='accepted'?{providerId:'123456789',acceptedAt:now}:{})}}});
+  if(status==='accepted')assert.equal((await f.call('ops_acquisition_manual_whatsapp',request)).draft.purpose,request.purpose);
+  else await rejects(f.call('ops_acquisition_manual_whatsapp',request),409);
+ }
+});

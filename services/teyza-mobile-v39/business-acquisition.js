@@ -2,7 +2,7 @@
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
 const G=require('./acquisition-geography'),R=require('./acquisition-report'),S=require('./acquisition-summary');
 const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks',identityLinks='teyzaBusinessProspectIdentityKeys';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities','ops_acquisition_command_page']);
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities','ops_acquisition_command_page','ops_acquisition_manual_whatsapp']);
 const provinces=G.provinces;
 const legacyProvince=Object.freeze({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'});
 const cities=Object.keys(legacyProvince);
@@ -11,7 +11,9 @@ const responses=['interested','needs_help','declined','other_response'];
 const commercialInterests=['advertising','selling','both','not_now'];
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
 const sources=['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted'];
-const emailKinds=['invitation','welcome'];
+const emailKinds=['invitation','welcome','onboarding_guide'];
+const manualPurposes=['introduction',...emailKinds.map(k=>'email_notice_'+k)];
+const officialMetaSender='+27798261972';
 const stages=['identified','interested','registration_started','not_interested','closed'];
 const channels=['phone','email','whatsapp'];
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
@@ -176,7 +178,7 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
    lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
-   emailHistory:p.emailHistory||{},outbound:p.outbound||{},help:p.help||null};
+   emailHistory:p.emailHistory||{},outbound:p.outbound||{},manualWhatsApp:p.manualWhatsApp||{},help:p.help||null};
   const queues=R.classify(prospect,asOf).queues;return {...prospect,workQueues:Object.keys(queues).filter(k=>queues[k])};
  }
  // Snapshot pages are anchored at one Firestore readTime. Every seller, payment,
@@ -285,6 +287,39 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    return {prospect:await view(id,saved)};
   }
   const id=D.id(data.id),ref=doc(collection+'/'+id);
+  // Manual acquisition is deliberately not a provider send. Require a fresh
+  // server-side permission/suppression/history check for both the draft and
+  // subsequent staff attestation. A wa.me link cannot select the logged-in
+  // WhatsApp account or prove that a message was sent.
+  async function manualDraft(p,tx){
+   const purpose=choose(data.purpose,manualPurposes,'manual WhatsApp purpose'),sender=phone(data.sender);
+   if(!sender||sender===officialMetaSender||sender===p.phone)D.fail(422,'Choose the separate Teyza manual WhatsApp Business number, not the Meta sender or recipient.');
+   if(!p.phone||p.optedOut===true||await suppressed(p,tx)||p.permissions?.whatsapp?.granted!==true)D.fail(409,'Record current owner WhatsApp permission and a permitted number first.');
+   if(['not_interested','closed'].includes(p.stage)||p.response==='declined')D.fail(409,'This business is closed or declined. Do not send another introduction or reminder.');
+   if(p.manualWhatsApp?.[purpose]?.sentAt)D.fail(409,'Manual message already recorded. Review history before sending again.');
+   const name=String(p.name||'Business').replace(/[\u0000-\u001f\u007f]+/g,' ').trim();
+   if(purpose==='introduction'){
+    const history=await historical(id,p,tx,clock());
+    if(R.priorOutreach({...p,...history}))D.fail(409,'Prior outreach or registration exists. Do not send another initial introduction.');
+    return {purpose,sender,recipient:p.phone,text:['Good day '+name+' team! 👋','Welcome to Teyza! 🌱 We help South African local businesses become easier to discover. Joining and verification are free. Once approved, you can explore advertising and eligible selling opportunities.','Would you like help joining Teyza? Reply YES for assistance or STOP to opt out.','Teyza Business Growth Team · https://teyza.co.za/for-shop-owners.html'].join('\n\n')};
+   }
+   const kind=purpose.slice('email_notice_'.length),direct=p.outbound?.['email_'+kind],manual=p.emailHistory?.[kind];
+   const accepted=direct?.status==='accepted'&&typeof direct.providerId==='string'&&direct.providerId&&Number.isSafeInteger(direct.acceptedAt)&&direct.acceptedAt<=clock();
+   const verified=manual?.status==='staff_confirmed_in_zoho_sent'&&Number.isSafeInteger(manual.sentAt)&&manual.sentAt<=clock()&&typeof manual.reference==='string'&&manual.reference;
+   if(!p.email||!accepted&&!verified)D.fail(409,'Wait for Zoho acceptance or verify the email in Zoho Sent before reminding the owner. Queued or uncertain sends are not evidence.');
+   if(kind==='welcome'){
+    const a=p.sellerUid?await read('teyzaSellerAccounts/'+p.sellerUid,tx):null;
+    if(!a||a.uid!==p.sellerUid||a.deletionPending===true||norm(a.shopName)!==norm(p.name)||norm(a.ownerEmail)!==norm(p.email))D.fail(409,'The linked business account and owner email must still match.');
+   }
+   return {purpose,sender,recipient:p.phone,text:['Good day '+name+' team! 🌱',kind==='welcome'?'Your Teyza registration welcome email has been sent to your recorded email address.':'Your Teyza information and getting-started guide has been sent to your recorded email address.','Please check your inbox (and spam folder if necessary). Reply if you need help with the app or your business profile.','Teyza Business Growth Team · Reply STOP to opt out.'].join('\n\n')};
+  }
+  if(action==='ops_acquisition_manual_whatsapp'){
+   return db.runTransaction(async tx=>{
+    const p=await read(collection+'/'+id,tx);if(!p)D.fail(404,'Business prospect not found.');
+    if(p.revision!==data.revision)D.fail(409,'Refresh this record before preparing a message.');
+    return {draft:await manualDraft(p,tx)};
+   },{readOnly:true});
+  }
   if(action==='ops_acquisition_send'){
    if(data.kind==='invitation'){
     const p=await read(collection+'/'+id);if(!p)D.fail(404,'Business prospect not found.');
@@ -309,7 +344,7 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    return {prospect,events:result.docs.slice(0,25).map(s=>({id:s.id,...s.data()})),moreEvents:result.docs.length>25,support,moreSupport};
   }
   if(action==='ops_acquisition_event'){
-   const type=choose(data.type,['permission','contact','contact_update','geography_update','response','app_download','commercial_interest','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
+   const type=choose(data.type,['permission','contact','contact_update','geography_update','response','app_download','commercial_interest','progress','opt_out','email_sent','help_requested','help_replied','help_resolved','manual_whatsapp_opened','manual_whatsapp_sent'],'activity');
    const note=clean(data.note,'activity note or consent evidence',500);
    if(data.confirmed!==true)D.fail(422,'Confirm this is an accurate record of an actual event.');
    // Resolve an official reference before a Firestore transaction; transaction retries never call external GIS.
@@ -381,6 +416,16 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
      }
      details={...details,channel};
     }
+    if(type==='manual_whatsapp_opened'||type==='manual_whatsapp_sent'){
+     const draft=await manualDraft(p,tx),old=p.manualWhatsApp?.[draft.purpose];
+     if(type==='manual_whatsapp_sent'&&data.sentConfirmed!==true)D.fail(422,'Confirm the actual sent message in the selected manual WhatsApp account.');
+     if(type==='manual_whatsapp_opened'&&old?.openedAt)D.fail(409,'Chat opening already recorded. Record the actual send only after it happens.');
+     const entry={...old,purpose:draft.purpose,sender:draft.sender,
+      ...(type==='manual_whatsapp_opened'?{openedAt:stamp,openedBy:uid}:{sentAt:stamp,sentBy:uid})};
+     update.manualWhatsApp={...p.manualWhatsApp,[draft.purpose]:entry};
+     if(type==='manual_whatsapp_sent'){update.contactedAt=p.contactedAt||stamp;update.lastWhatsAppContactAt=stamp;}
+     details={...details,channel:'whatsapp',purpose:draft.purpose,sender:draft.sender};
+    }
     if(type==='email_sent'){
      const kind=choose(data.kind,emailKinds,'email type');
      if(!p.email)D.fail(422,'This business has no email address.');
@@ -391,6 +436,8 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
      if(p.outbound?.['email_'+kind]||p.emailHistory?.[kind])D.fail(409,'This email type is already recorded. Check the existing history instead of sending again.');
      if(kind==='invitation'){
       if(blocked||p.permissions?.email?.granted!==true)D.fail(409,'Invitation requires recorded email marketing consent and no opt-out.');
+     }else if(kind==='onboarding_guide'){
+      if(blocked||p.permissions?.email?.granted!==true||!['interested','needs_help'].includes(p.response)||data.ownerRequestedGuide!==true)D.fail(409,'A requested onboarding/training guide needs actual owner interest, email consent and a recorded request.');
      }else{
       // Operational welcome only: the registered account must be genuine and the recipient must be its owner.
       const a=p.sellerUid?await tx.get(doc('teyzaSellerAccounts/'+p.sellerUid)):null;
