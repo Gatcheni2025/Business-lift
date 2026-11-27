@@ -1,11 +1,13 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),types=require('./business-types');
+const {hasIdleSession}=require('./admin-session');
 const actions=new Set(['seller_register','seller_plan_select','admin_access','admin_seller_queue','admin_seller_review',
   'notification_list','notification_read','notification_preferences','notification_device_save','notification_device_delete','seller_whatsapp_preferences']);
 const defaults={orders:true,messages:true,stock:true,reviews:true};
 function recentAdmin(auth,clock){
   if(auth.teyzaAdmin!==true||auth.email_verified!==true)D.fail(403,'Teyza administrator access is required.');
   if(auth.teyzaPhoneBootstrap===true)D.fail(401,'Sign in again before reviewing sellers.');
+  if(hasIdleSession(auth,clock))return;
   const age=clock()/1000-auth.auth_time;
   if(!Number.isFinite(age)||age< -60||age>300)D.fail(401,'Sign in again before reviewing sellers. Your review session lasts five minutes.');
 }

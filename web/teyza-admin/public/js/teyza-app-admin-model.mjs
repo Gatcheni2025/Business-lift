@@ -11,13 +11,14 @@ const retryableReads=new Set([
   'ops_catalogue_queue','ops_finance_queue','ops_support_list','ops_users',
   'seller_summary','admin_seller_queue'
 ]);
-export function createApi({user,fetcher=fetch}) {
+export function createApi({user,fetcher=fetch,adminSession=()=>undefined}) {
   return async (action,data={})=>{
     const actor=user();
     if(!actor)throw new AdminError('Sign in with your authorised Teyza administrator account.',401);
+    const session=adminSession();
     const token=await actor.getIdToken();
     const options={method:'POST',cache:'no-store',credentials:'omit',
-      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,data})};
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,data,...(session?{adminSession:session}:{})})};
     const attempts=retryableReads.has(action)?2:1;
     for(let attempt=0;attempt<attempts;attempt++){
       let response;

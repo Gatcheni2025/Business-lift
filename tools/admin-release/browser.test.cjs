@@ -11,7 +11,7 @@ const listeners=[];
 export const browserSessionPersistence={};
 export const auth={currentUser:null};
 function user(value){if(!value)return null;return {uid:value.uid||'admin1',email:value.email||'reviewer@example.test',
- getIdToken:async()=>'synthetic-token',getIdTokenResult:async()=>({claims:{teyzaAdmin:true,email_verified:true,auth_time:Math.floor(Date.now()/1000),...value.claims}})};}
+ getIdToken:async()=>'synthetic-token',getIdTokenResult:async()=>({claims:{teyzaAdmin:true,email_verified:true,auth_time:Math.floor(Date.now()/1000),firebase:{sign_in_provider:'password'},...value.claims}})};}
 window.__setUser=value=>{window.__testIdentity=value;auth.currentUser=user(value);for(const cb of listeners)cb(auth.currentUser);};
 export function getAuth(){return auth;}
 export function onAuthStateChanged(a,cb){listeners.push(cb);auth.currentUser=user(window.__testIdentity);queueMicrotask(()=>cb(auth.currentUser));}
@@ -45,7 +45,7 @@ async function main(){
   const context=await browser.newContext({viewport}),page=await context.newPage(),calls=[],errors=[];let pending=structuredClone(rows),legacyUploaded=false;
   let syntheticUsers=[{uid:'admin1',email:'reviewer@example.test',displayName:'Reviewer',verified:true,disabled:false,admin:true,providers:['google.com']},
     {uid:'shopper2',email:'shopper@example.test',displayName:'Existing Shopper',verified:false,disabled:false,admin:false,providers:['password']}];
-  await page.addInitScript(value=>window.__testIdentity=value,identity);
+  await page.addInitScript(value=>{window.__testIdentity=value;if(value)sessionStorage.setItem('teyza-admin-idle-v1',JSON.stringify({uid:value.uid||'admin1',token:'a'.repeat(64),lastActivity:Date.now()}));},identity);
   await page.route('https://www.gstatic.com/firebasejs/**',r=>r.fulfill({contentType:'application/javascript',body:r.request().url().endsWith('firebase-app.js')?
    'export const getApps=()=>[];export const initializeApp=c=>c;':firebaseAuth}));
   await page.route('https://fonts.googleapis.com/**',r=>r.abort());
@@ -53,6 +53,10 @@ async function main(){
    const body=route.request().postDataJSON();calls.push(body);
    if(api&&await api(route,body)!==false)return;
    let result={ok:true};
+   if(body.action==='admin_session_start')result={ok:true,sessionToken:'b'.repeat(64),idleMs:300000};
+   if(body.action==='admin_session_status')result={ok:true,active:true};
+   if(body.action==='admin_session_touch')result={ok:true,idleMs:300000};
+   if(body.action==='admin_session_end')result={ok:true,signedOut:true};
    if(body.action==='ops_map_shops')result={ok:true,shops:[{sellerUid:'seller1',name:'Synthetic Verified Spaza',category:'spaza',latitude:-29.86,longitude:31.01,city:'Durban',area:'Umlazi',verified:true,source:'teyza_only'}],next:null};
    if(body.action==='ops_sellers')result={ok:true,sellers:rows.map(r=>({...r,approvalStatus:'approved',subscription:'not_started'})),next:null};
    if(body.action==='ops_catalogue_queue')result={ok:true,submissions:[{sellerUid:rows[0].sellerUid,shopName:rows[0].shopName,ownerEmail:rows[0].ownerEmail,approvalStatus:'approved',productCount:1,paymentStatus:'not_started',paidMembership:false}],limited:false};
@@ -1045,11 +1049,16 @@ async function main(){
    const f=await pageFor({identity:{uid:'seller1',claims:{teyzaAdmin:false}}});await f.page.locator('#notice').getByText(/needs administrator access/).waitFor();
    assert(await f.page.locator('#workspace').isHidden());assert.equal(f.calls.length,0);await f.context.close();
   });
-  await check('Expired review session clears private evidence and email reauthentication restores the queue',async()=>{
+  await check('Five-minute idle logout clears evidence; real activity extends the Admin session',async()=>{
    const f=await pageFor();await f.page.clock.install();await f.page.locator('.seller-row').first().click();await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();
-   await f.page.clock.fastForward(301000);await f.page.locator('#loginTitle').getByText('Renew your review session').waitFor();
+   assert.equal(await f.page.locator('#googleLogin,#sessionTime,#renewSession').count(),0);
+   await f.page.clock.fastForward(240000);await f.page.locator('#search').fill('Corner');
+   await f.page.clock.fastForward(120000);assert(await f.page.locator('#workspace').isVisible());
+   assert(f.calls.some(c=>c.action==='admin_session_touch'));
+   await f.page.clock.fastForward(181000);await f.page.locator('#loginTitle').getByText('Welcome back').waitFor();
+   assert(await f.page.locator('#signOut').isHidden());assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(await f.page.locator('#identityDetails').innerText(),'');
-   await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
+   await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
   });
   await check('Late private evidence never crosses an account change',async()=>{
    let release;const delayed=new Promise(resolve=>release=resolve);let started;

@@ -5,6 +5,7 @@ const {createShopFront,valid:validShopFront}=require('./shop-front');
 const offers=require('./shop-services');
 const crypto = require('node:crypto');
 const experience=require('./seller-experience');
+const {createAdminSessions}=require('./admin-session');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
@@ -240,9 +241,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       D.fail(403,'Save your name, phone and delivery address before shopping. An email address is optional.');
     return profile;
   }
-  async function execute(auth, action, data={}) {
+  const adminSessions=createAdminSessions({db,clock,rate,getAuthUser});
+  async function execute(auth, action, data={}, adminSession) {
     if(!auth?.uid)D.fail(401,'Sign in to continue.');
     const uid=D.id(auth.uid);
+    if(action==='admin_session_start')return adminSessions.start(auth);
+    if(action==='admin_session_end')return adminSessions.end(auth,adminSession);
+    if(action==='admin_session_touch')return adminSessions.touch(auth,adminSession);
+    if(adminSession!==undefined||action==='admin_session_status'){
+      auth=await adminSessions.validate(auth,adminSession);
+      if(action==='admin_session_status')return {active:true};
+    }
+    // Older non-portal clients retain their original recent-auth requirements.
+    // A supplied but expired/invalid session never falls back to those checks.
     // Account deletion must be available regardless of an unverified email or
     // shop approval. Pending-closure users cannot create more data or orders.
     if(deletion.actions.has(action))return accountDeletion.execute(auth,action,data);
