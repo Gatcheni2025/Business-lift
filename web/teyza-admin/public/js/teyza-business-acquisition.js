@@ -226,20 +226,31 @@ export function mergeCommandPage(previous,page,filters,{after=null,includeRows=t
  return next;
 }
 
+export function validateSummaryPage(page,filters,previous=null){
+ const fail=()=>{throw Error('Incomplete or inconsistent reporting summary. Refresh the exact report.');};
+ if(page?.summarySchema!==1||typeof page.summaryGeneration!=='string'||!/^[a-f0-9-]{36}$/.test(page.summaryGeneration)||!Number.isSafeInteger(page.asOf)||page.asOf<=0||!Number.isSafeInteger(page.scanned)||page.scanned<0||!page.filters||FILTER_KEYS.some(k=>page.filters[k]!==normalizedFilters(filters)[k])||!Array.isArray(page.prospects)||page.prospects.length>30||page.prospects.some(p=>p.snapshotOnly!==true||p.phone||p.email||typeof p.id!=='string')||new Set(page.prospects.map(p=>p.id)).size!==page.prospects.length||page.next!==null&&!/^[A-Za-z0-9_-]{1,128}$/.test(page.next))fail();
+ for(const group of ['funnel','queues'])for(const key of Object.keys(emptyCommandReport().counts[group])){
+  const n=page.counts?.[group]?.[key];if(!Number.isSafeInteger(n)||n<0||key!=='activePaidCampaigns'&&n>page.scanned)fail();
+ }
+ const f=page.counts.funnel;
+ if(f.discovered!==page.scanned||f.payingBusinesses>f.approved||f.paidSellers>f.payingBusinesses||f.activeAdvertisers>f.payingBusinesses||f.activePaidCampaigns<f.activeAdvertisers||f.awaitingApproval>f.registered||f.approved>f.registered)fail();
+ if(previous&&(previous.summaryGeneration!==page.summaryGeneration||previous.asOf!==page.asOf||JSON.stringify(previous.counts)!==JSON.stringify(page.counts)))fail();
+ return page;
+}
 export function createAcquisitionAdmin({api:request,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',businessTypeFilter='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='contactable',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  let commandEpoch=0,commandPaint=null,commandFilters=normalizedFilters({queue:'new_contact'}),command=null;
- const reportRequests=[];
+ const reportRequests=[];let summaryAfter=0;
  async function reportPage(data,valid){
   // Burst below the server's 60/minute limit, then pace only when needed.
   // Shared across refresh/filter/list requests, so quick filter changes cannot
   // each start an unlimited burst. Server rate limit remains authoritative.
   for(;;){const now=Date.now();while(reportRequests.length&&now-reportRequests[0]>=60000)reportRequests.shift();if(!valid())return null;if(reportRequests.length<45){reportRequests.push(now);return api('ops_acquisition_command_page',data);}await new Promise(resolve=>setTimeout(resolve,Math.max(50,60000-(now-reportRequests[0]))));}
  }
- const blankCommand=(status='idle')=>({status,report:emptyCommandReport(),rows:[],listNext:null,seen:new Set(),error:'',listBusy:false});
+ const blankCommand=(status='idle')=>({status,report:emptyCommandReport(),summary:null,rows:[],listNext:null,seen:new Set(),error:'',listBusy:false});
  command=blankCommand();
  function resetCommand(status='idle',resetFilters=false){commandEpoch++;if(resetFilters)commandFilters=normalizedFilters({queue:'new_contact'});command=blankCommand(status);}
- const api=async(action,data)=>{const stamp=serial;const result=await request(action,data);if(active&&serial===stamp&&['ops_acquisition_create','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send'].includes(action)){resetCommand('stale');commandPaint?.();}return result;};
+ const api=async(action,data)=>{const stamp=serial;const result=await request(action,data);if(active&&serial===stamp&&['ops_acquisition_create','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send'].includes(action)){summaryAfter=Date.now();resetCommand('stale');commandPaint?.();}return result;};
  function stopDiscovery(){discoveryEpoch++;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
  function clear(){stopDiscovery();serial++;active=false;resetCommand('idle',true);commandPaint=null;records=[];next=null;selected=null;detail=null;query='';city='all';businessTypeFilter='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='contactable';lookupReady=false;lookupSelection=null;focusMessage=null;newArea='';}
  async function refresh(){stopDiscovery();resetCommand('idle',true);commandPaint=null;focusMessage=null;active=true;const stamp=++serial;const r=await api('ops_acquisition_list');if(!active||stamp!==serial)return;if(r.schema!==1||!Array.isArray(r.prospects))throw Error('Deploy the matching Business Acquisition backend first.');records=r.prospects;next=r.next||null;communications=r.communications||{};selected=null;detail=null;modal=null;}
@@ -250,7 +261,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
  }
  async function readDetail(id,stamp){const r=await api('ops_acquisition_detail',{id});if(active&&serial===stamp){selected=id;detail=r;modal='business';records=records.some(x=>x.id===id)?records.map(x=>x.id===id?r.prospect:x):[r.prospect,...records];}}
 
- async function scanCommand(filters=commandFilters,resume=false){
+ async function scanCommand(filters=commandFilters,resume=false,exact=false){
   if(!active)return;
   if(!resume){resetCommand();commandFilters=normalizedFilters(filters);}
   const stamp=++commandEpoch,session=serial,state=command,valid=()=>active&&serial===session&&commandEpoch===stamp&&command===state;
@@ -258,8 +269,9 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   try{
    do{
     const after=state.report.next,first=state.report.asOf===null;
-    const page=await reportPage({filters:commandFilters,includeRows:first,...(first?{}:{after,asOf:state.report.asOf})},valid);
+    const page=await reportPage({filters:commandFilters,includeRows:first,...(first?(!exact?{preferSummary:true,summaryAfter}:{}):{after,asOf:state.report.asOf})},valid);
     if(!valid())return;
+    if(first&&page?.summarySchema===1){const summary=validateSummaryPage(page,commandFilters);state.summary=summary;state.report={asOf:summary.asOf,scanned:summary.scanned,counts:summary.counts,next:null,complete:true};state.rows=summary.prospects;state.listNext=summary.next;state.status='complete';commandPaint?.();return;}
     if(page.next&&state.seen.has(page.next))throw Error('Repeated report cursor.');
     const merged=mergeCommandPage(state.report,page,commandFilters,{after,includeRows:first});
     if(first){state.rows=page.prospects;state.listNext=page.next;}
@@ -276,10 +288,11 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   if(!state.listNext||state.listBusy||state.status!=='complete')return;
   state.listBusy=true;state.error='';commandPaint?.();
   try{
-   const after=state.listNext,page=await reportPage({filters:commandFilters,includeRows:true,after,asOf:state.report.asOf},valid);
+   const after=state.listNext,page=await reportPage({filters:commandFilters,includeRows:true,after,asOf:state.report.asOf,...(state.summary?{preferSummary:true,summaryGeneration:state.summary.summaryGeneration,summaryAfter}:{})},valid);
    if(!valid())return;
    // Validate the same snapshot, but never add these already-counted pages.
-   mergeCommandPage({...emptyCommandReport(),asOf:state.report.asOf},page,commandFilters,{after,includeRows:true});
+   if(state.summary){validateSummaryPage(page,commandFilters,state.summary);if(page.next===after)throw Error('Repeated summary cursor.');}
+   else mergeCommandPage({...emptyCommandReport(),asOf:state.report.asOf},page,commandFilters,{after,includeRows:true});
    if(page.prospects.some(p=>state.rows.some(old=>old.id===p.id)))throw Error('Duplicate prospect in snapshot page.');
    state.rows.push(...page.prospects);state.listNext=page.next;
   }catch(error){if(valid())state.error=error.message||'Could not load matching records.';}
@@ -299,13 +312,13 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const queue=options('Filter work queue','queue',[['','All matched prospects'],...NATIONAL_QUEUES]);
   submit(form,'Apply national filters',d=>scanCommand(d));panel.append(form);
   const progress=el('p','','footnote');progress.setAttribute('role','status');progress.dataset.nationalReportStatus='true';
-  const controls=el('div',undefined,'acq-action-bar'),refreshButton=button('Refresh complete report',()=>scanCommand(commandFilters)),resumeButton=button('Continue incomplete report',()=>scanCommand(commandFilters,true));controls.append(refreshButton,resumeButton);
+  const controls=el('div',undefined,'acq-action-bar'),refreshButton=button('Refresh complete report',()=>scanCommand(commandFilters,false,true)),resumeButton=button('Continue incomplete report',()=>scanCommand(commandFilters,true));controls.append(refreshButton,resumeButton);
   const metrics=el('div',undefined,'field-admin-metrics acq-national-metrics'),queues=el('div',undefined,'acq-national-queues'),rows=el('div',undefined,'acq-national-rows'),more=button('Load more matching records',()=>moreCommandRows());
   panel.append(progress,controls,el('h3','Conversion and revenue'),metrics,el('p','Contacted includes separately labelled provider acceptance, not delivery. Downloads are owner-confirmed. Paid sellers and advertisers may overlap; paying businesses counts each prospect once. Approval is never inferred from downloads.','footnote'),el('h3','Daily work queues'),queues,el('h3','Matching business records'),rows,more);
   function chooseQueue(key){queue.value=key;void scanCommand(Object.fromEntries(new FormData(form)));}
   function paint(){
    const state=command,complete=state.status==='complete',report=state.report;
-   progress.textContent=complete?'Complete snapshot · '+time(report.asOf)+' · '+report.scanned+' records inspected across all pages.':state.status==='loading'?'Calculating complete totals — '+report.scanned+' records inspected. Totals are not available yet.':state.status==='stale'?'Records changed. Refresh the complete report before using totals.':state.status==='incomplete'?'Report incomplete — no totals are available. '+state.error:'Complete national totals have not been loaded.';
+   progress.textContent=complete?(state.summary?'Reconciled reporting summary · as of '+time(report.asOf)+' · '+report.scanned+' records. Open live records before acting.':'Complete snapshot · '+time(report.asOf)+' · '+report.scanned+' records inspected across all pages.'):state.status==='loading'?'Calculating complete totals — '+report.scanned+' records inspected. Totals are not available yet.':state.status==='stale'?'Records changed. Refresh the complete report before using totals.':state.status==='incomplete'?'Report incomplete — no totals are available. '+state.error:'Complete national totals have not been loaded.';
    if(complete&&state.error)progress.textContent+=' · '+state.error;
    refreshButton.disabled=state.status==='loading'||state.listBusy;resumeButton.hidden=state.status!=='incomplete'||!report.next;resumeButton.disabled=state.status==='loading';
    metrics.replaceChildren();queues.replaceChildren();rows.replaceChildren();
@@ -398,6 +411,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   }
   function contactActions(p){
    const actions=el('div',undefined,'acq-contact-actions');
+   if(p.snapshotOnly===true){actions.append(button('Open live record',()=>openRecord(p)));return actions;}
    actions.append(button(newContact(p)?'Contact':'Open record',()=>openRecord(p)));
    const site=safeBusinessWebsite(p.website);if(site)actions.append(assetLink('Business website',site));
    const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut&&!priorInvitation(p))actions.append(button(p.phoneKind==='whatsapp_only'?'WhatsApp invitation':'Check WhatsApp',()=>openRecord(p,'manual-whatsapp','invitation')));

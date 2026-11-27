@@ -20,7 +20,7 @@ class FakeDB {
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
     }};return query;}
   transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},getAll:async(...refs)=>{assert(!wrote,'Transaction must read before writing');return Promise.all(refs.map(ref=>ref.get()));},
-    set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
+    create:(ref,value)=>{wrote=true;writes.push(async()=>{assert(!db.records.has(ref.path),'Already exists');await ref.set(value);});},set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
     commit:async()=>{for(const write of writes)await write();}};}
   async runTransaction(fn){const tx=this.transaction(),result=await fn(tx);await tx.commit();return result;}
   batch(){return this.transaction();}
@@ -881,4 +881,26 @@ test('Indexed province streams preserve legacy pilot IDs, deduplicate overlappin
  const ids=[];let after=null,asOf=null,total=0,scanned=0;
  do{const p=await f.call('ops_acquisition_command_page',{filters:{province:'KwaZulu-Natal',category:'spaza'},...(after?{after,asOf}:{})});asOf=p.asOf;after=p.next;total+=p.counts.funnel.discovered;scanned+=p.scanned;ids.push(...p.prospects.map(r=>r.id));}while(after);
  assert.equal(total,75);assert.equal(scanned,76);assert.equal(new Set(ids).size,75);assert.equal(ids.length,75);assert(!ids.includes('other'));assert(!ids.includes('outside'));
+});
+
+test('Published generation caches complete scoped totals and indexed queues; stale cache never authorizes contact',async()=>{
+ const f=setup(),S=require('./acquisition-summary'),{createAcquisition}=require('./business-acquisition');let clock=now;
+ const service=createAcquisition({db:f.db,clock:()=>clock}),root='teyzaBusinessProspects/';
+ const base={name:'Synthetic',city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',area:'Umlazi',category:'spaza',email:'synthetic@example.test',phone:'',stage:'identified',historyVersion:1,permissions:{email:{granted:true}},revision:0};
+ for(let i=0;i<65;i++)f.db.records.set(root+'summary'+String(i).padStart(3,'0'),{...base,...(i===0?{email:'',phone:''}:i===1?{optedOut:true}:{})});
+ const asOf=clock-1000,pre=await service.collectReportingGeneration(asOf);
+ assert.equal(pre.rows.size,65);assert.equal(pre.aggregates.get(S.NATIONAL).queues.new_contact,63);
+ const manifest=await S.publishGeneration({db:f.db,generation:pre,clock:()=>clock});
+ const first=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',category:'spaza',queue:'new_contact'}});
+ assert.equal(first.summarySchema,1);assert.equal(first.summaryGeneration,manifest.generation);assert.equal(first.counts.funnel.discovered,65);assert.equal(first.counts.queues.new_contact,63);assert.equal(first.prospects.length,30);assert(first.prospects.every(p=>p.snapshotOnly&&!p.email&&!p.phone));
+ const next=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:first.summaryGeneration,asOf:first.asOf,after:first.next,filters:first.filters});assert.equal(next.prospects.length,30);assert(!next.prospects.some(p=>first.prospects.some(a=>a.id===p.id)));
+ const empty=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'Limpopo'}});assert.equal(empty.counts.funnel.discovered,0);assert.equal(empty.prospects.length,0);
+ const id=first.prospects[0].id;f.db.records.set(root+id,{...f.db.records.get(root+id),optedOut:true});
+ const detail=await service.execute(admin,'ops_acquisition_detail',{id});assert.equal(detail.prospect.optedOut,true);
+ await rejects(service.execute(admin,'ops_acquisition_send',{id,revision:0,channel:'email',kind:'invitation',confirmed:true}),409);
+ const exact=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryAfter:clock,filters:{}});assert.equal(exact.schema,2);assert.equal(exact.summarySchema,undefined);
+ const text=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{search:'Synthetic'}});assert.equal(text.schema,2);
+ clock+=S.MAX_AGE+1;
+ await rejects(service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:first.summaryGeneration,asOf:first.asOf,after:first.next,filters:first.filters}),409);
+ const stale=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{}});assert.equal(stale.schema,2);assert.equal(stale.summarySchema,undefined);
 });

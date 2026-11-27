@@ -105,6 +105,22 @@ const scan=async(label,filters={},mutate=null)=>{
   const updated=await scan('new snapshot after changes',{queue:'paying'});
   check('Fresh snapshot sees insert, opt-out and refund',updated.counts.funnel.discovered===N+4&&updated.counts.queues.new_contact===N/5-1&&updated.counts.funnel.activeAdvertisers===0&&updated.counts.funnel.paidSellers===1);
   check('Expired snapshot rejected before reads',await api.execute(admin,'ops_acquisition_command_page',{asOf:Date.now()-56*60000}).then(()=>false,e=>e.status===422));
+  // Real SDK validation of immutable summary writes and array-contains query.
+  // This file remains hard-guarded to the loopback demo project.
+  const S=require('../../services/teyza-mobile-v39/acquisition-summary');
+  const collectStart=performance.now(),generation=await api.collectReportingGeneration(updated.asOf);
+  const collectElapsedMs=Math.round(performance.now()-collectStart);
+  const publishStart=performance.now(),manifest=await S.publishGeneration({db,generation});
+  const publishElapsedMs=Math.round(performance.now()-publishStart),summaryStart=performance.now();
+  const summary=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{queue:'new_contact'}});
+  const readElapsedMs=Math.round(performance.now()-summaryStart);
+  check('Published summary exactly matches full snapshot counts',JSON.stringify(summary.counts)===JSON.stringify(updated.counts)&&summary.summaryGeneration===manifest.generation);
+  check('Summary uses indexed queue membership and redacted rows',summary.prospects.length===30&&summary.prospects.every(p=>p.snapshotOnly&&!p.email&&!p.phone));
+  const more=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:summary.summaryGeneration,asOf:summary.asOf,after:summary.next,filters:summary.filters});
+  check('Summary continuation preserves generation and excludes duplicate IDs',more.prospects.length===30&&!more.prospects.some(p=>summary.prospects.some(a=>a.id===p.id)));
+  const scoped=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'KwaZulu-Natal',municipality:'Synthetic municipality '+idx,township:'Synthetic township '+idx,category:'spaza'}});
+  check('Summary scoped geographic totals preserve legacy rows',scoped.counts.funnel.discovered===50);
+  report.summary={collectElapsedMs,publishElapsedMs,readElapsedMs,manifest};
   report.passed=true;
  }catch(e){report.passed=false;report.error=String(e?.message||e);console.error(e);process.exitCode=1;}
  finally{fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));await db.terminate();await deleteApp(app);}

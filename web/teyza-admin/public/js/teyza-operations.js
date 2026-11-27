@@ -1,5 +1,5 @@
 import {createAdminMap} from '/js/teyza-admin-map.mjs';
-import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261127-national-v2';
+import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261127-national-summary-v1';
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261126-rewards';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';

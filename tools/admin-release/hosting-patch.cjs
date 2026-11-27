@@ -91,7 +91,7 @@ async function assertNationalBackend(fetcher=fetch){
  const response=await fetcher('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000),cache:'no-store'});
  if(!response.ok)throw Error('Admin backend health request failed. Hosting unchanged.');
  const health=await response.json();
- if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminInactivitySession!==true||health.adminSessionRequired!==true)
+ if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminNationalAcquisitionSummarySchema!==1||health.adminInactivitySession!==true||health.adminSessionRequired!==true)
   throw Error('Matching national acquisition schema 2 and Admin session backend required. Hosting unchanged.');
 }
 async function patch({client,root,workRoot=null,backupPath,wait=pause,log=console.log,fetcher=fetch}){
