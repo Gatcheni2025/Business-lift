@@ -8,6 +8,11 @@ const {randomBytes}=require('node:crypto');
 const root=path.resolve(__dirname,'../../web/teyza-admin/public'),repo=path.resolve(__dirname,'../..');
 const output=process.env.TEYZA_ADMIN_TEST_OUTPUT||fs.mkdtempSync(path.join(os.tmpdir(),'teyza-growth-preview-'));
 const check=process.argv.includes('--check');
+const live=process.argv.includes('--live-places');
+if(live&&check)throw Error('Automated tests must never call live Places.');
+const nativeFetch=global.fetch.bind(globalThis);
+const {createLivePlacesGate}=require('./places-acceptance-gate.cjs');
+const liveGate=live?createLivePlacesGate({fetchImpl:nativeFetch,log:line=>console.log('PLACES ACCEPTANCE: '+line)}):null;
 const mockSender='+27000000099';
 global.fetch=async()=>{throw Error('Network fetch blocked by synthetic acceptance preview');};
 const {createAcquisition,actions}=require('../../services/teyza-mobile-v39/business-acquisition');
@@ -153,31 +158,32 @@ async function main(){
    assert.equal(denied.status,403);assert(denied.body.includes('Open the Teyza preview window'));
   }
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-  await page.exposeFunction('__previewAcceptZoho',async()=>acceptQueued());
-  await page.addInitScript(()=>{
+  await page.exposeFunction('__previewAcceptZoho',async()=>{if(live)throw Error('Live search only — messaging disabled.');return acceptQueued();});
+  await page.addInitScript((live)=>{
    window.__testIdentity={uid:'admin1'};sessionStorage.setItem('teyza-admin-idle-v1',JSON.stringify({uid:'admin1',token:'a'.repeat(64),lastActivity:Date.now()}));
    document.addEventListener('DOMContentLoaded',()=>{
     const bar=document.createElement('div');bar.id='synthetic-preview-banner';bar.style.cssText='position:fixed;z-index:2147483647;bottom:0;left:0;right:0;background:#6e3c00;color:white;font:600 13px system-ui;padding:7px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap';
-    bar.append('SYNTHETIC PREVIEW · NO LIVE ACCOUNTS OR SENDS · Sender: +27000000099');
+    bar.append(live?'LIVE PLACES ONLY · DEMO ACCOUNTS · SAVE / SEND DISABLED':'SYNTHETIC PREVIEW · NO LIVE ACCOUNTS OR SENDS · Sender: +27000000099');
     const btn=document.createElement('button');btn.textContent='Simulate Zoho acceptance';btn.style.cssText='border:1px solid white;background:white;color:#6e3c00;padding:5px 8px;border-radius:5px;cursor:pointer';
     const note=document.createElement('span');btn.onclick=async()=>{btn.disabled=true;try{note.textContent='Mock accepted total: '+await window.__previewAcceptZoho()+'. Refresh send history.';}catch(e){note.textContent=e.message;}finally{btn.disabled=false;}};
-    bar.append(btn,note);document.body.append(bar);document.body.style.paddingBottom='42px';document.title='TEYZA SAFE PREVIEW · '+document.title;
+    if(!live)bar.append(btn,note);document.body.append(bar);document.body.style.paddingBottom='42px';document.title=(live?'TEYZA LIVE SEARCH ONLY · ':'TEYZA SAFE PREVIEW · ')+document.title;
     // A native dialog is in the browser top layer; the ordinary banner is
     // behind it. Mark each acquisition dialog so preview mode stays obvious.
     const mark=()=>{
      for(const d of document.querySelectorAll('.acq-dialog-bar')){
       if(d.querySelector('[data-preview-label]'))continue;
-      const label=document.createElement('span');label.dataset.previewLabel='true';label.textContent='DEMO ONLY';label.style.cssText='font:700 11px system-ui;background:#f3d59b;color:#6e3c00;border-radius:5px;padding:5px 8px;white-space:nowrap';d.insertBefore(label,d.lastElementChild);
+      const label=document.createElement('span');label.dataset.previewLabel='true';label.textContent=live?'LIVE SEARCH ONLY · SAVES BLOCKED':'DEMO ONLY';label.style.cssText='font:700 11px system-ui;background:#f3d59b;color:#6e3c00;border-radius:5px;padding:5px 8px;white-space:nowrap';d.insertBefore(label,d.lastElementChild);
      }
     };mark();new MutationObserver(mark).observe(document.body,{childList:true,subtree:true});
    });
-  });
+  },live);
   await page.route('https://www.gstatic.com/firebasejs/**',r=>r.fulfill({contentType:'application/javascript',body:r.request().url().endsWith('firebase-app.js')?'export const getApps=()=>[];export const initializeApp=c=>c;':firebaseAuth}));
   const previewAreas=new Map();let searchCalls=0,contactCalls=0;
   await page.route(mobile,async route=>{
    try{
     const body=route.request().postDataJSON(),action=body.action,d=body.data||{};let result;
     if(actions.has(action)){
+     if(live&&!['ops_acquisition_list','ops_acquisition_command_page','ops_acquisition_detail','ops_acquisition_place_matches','ops_acquisition_localities'].includes(action))throw Object.assign(Error('Read-only live search trial: saving, messaging and account changes are disabled.'),{status:403});
      syntheticContact(d);
      if(action==='ops_acquisition_send'&&d.channel!=='email')throw Error('Preview supports simulated email queue only.');
      if(action==='ops_acquisition_link'&&!/^demo-(welcome|pending|paid)$/.test(d.sellerUid||''))throw Error('Use a synthetic linked seller UID only.');
@@ -212,13 +218,15 @@ async function main(){
     await route.fulfill({json:{ok:true,...result}});
    }catch(e){await route.fulfill({status:e.status||422,json:{ok:false,error:e.message}});}
   });
-  await page.route(places+'/shopper-discover?*',route=>{
+  await page.route(places+'/shopper-discover?*',async route=>{
+   if(live){const reply=await liveGate.get(route.request().url(),route.request().method());return route.fulfill(reply);}
    searchCalls++;
    const u=new URL(route.request().url()),lat=Number(u.searchParams.get('lat')),lon=Number(u.searchParams.get('lon')),type=u.searchParams.get('category');
    const entries=['Corner Store','No Phone Listed','Community Shop','Shoprite DEMO Chain'].map((name,i)=>({placeId:'DemoPlace'+type+i+'123456789',name:'DEMO — '+name,address:'Synthetic listing '+(i+1),latitude:lat+.001*i,longitude:lon,shopCategory:type,...(i===0?{phone:'+27000000011'}:{})}));
    return route.fulfill({json:{ok:true,entries}});
   });
-  await page.route(places+'/shopper-place-contact.php?*',route=>{
+  await page.route(places+'/shopper-place-contact.php?*',async route=>{
+   if(live){const reply=await liveGate.get(route.request().url(),route.request().method());return route.fulfill(reply);}
    contactCalls++;
    const id=new URL(route.request().url()).searchParams.get('placeId');
    return route.fulfill({json:{ok:true,phone:id.includes('1'+'123456789')?'':'+27000000012',websiteUrl:''}});
@@ -229,11 +237,18 @@ async function main(){
   await pageStatus.getByText(/Complete snapshot/).waitFor();
   await page.getByLabel('Filter work queue').selectOption('');await page.getByRole('button',{name:'Apply national filters'}).click();
   await page.locator('[data-prospect-id="'+ids.welcome+'"]').waitFor();
-  await page.screenshot({path:path.join(output,'01-business-growth-pipeline.png'),fullPage:true});
+  if(!live)await page.screenshot({path:path.join(output,'01-business-growth-pipeline.png'),fullPage:true});
   console.log('SYNTHETIC BUSINESS GROWTH PREVIEW — use ONLY the browser window opened by this script.');
   console.log('Ordinary Chrome or Edge tabs cannot open this preview. Do not copy the URL.');
-  console.log('No live Firebase, Zoho, Meta or Google calls. All state is in memory.');
-  console.log('Preview sender '+mockSender+'; use only DEMO records and @example.invalid addresses.');
+  if(live){
+   console.log('READ-ONLY LIVE PLACES TRIAL: choose Find & Add Businesses > KwaZulu-Natal > KwaMashu > Spaza and local shops.');
+   console.log('One bounded search (up to eight Text Search requests by current deployed implementation); up to two deliberate contact-detail checks. No automatic retries.');
+   console.log('Only Places requests are live; all account data is synthetic. Saves and sends are blocked. Do not add, export, or contact real listings.');
+   console.log('No listing screenshots or personal contact values are saved by this tool.');
+  }else{
+   console.log('No live Firebase, Zoho, Meta or Google calls. All state is in memory.');
+   console.log('Preview sender '+mockSender+'; use only DEMO records and @example.invalid addresses.');
+  }
   if(check){
    const dialog=page.getByRole('dialog');
    await page.getByRole('button',{name:"Today's work",exact:true}).click();
@@ -310,6 +325,6 @@ async function main(){
    console.log('Review the browser. Close all preview windows to finish. No data persists.');
    await new Promise(resolve=>{browser.on('disconnected',resolve);const closeIfDone=()=>{if(context.pages().length===0)void browser.close();};context.on('page',p=>p.on('close',closeIfDone));page.on('close',closeIfDone);});
   }
- }finally{if(browser?.isConnected())await browser.close();await new Promise(resolve=>server.close(resolve));}
+ }finally{if(browser?.isConnected())await browser.close();await new Promise(resolve=>server.close(resolve));if(live)console.log('FINAL PLACES ACCEPTANCE COUNTS: '+JSON.stringify(liveGate.snapshot()));}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

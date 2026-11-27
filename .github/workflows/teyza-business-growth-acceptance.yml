@@ -17,6 +17,8 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund --prefix services/teyza-mobile-v39
       - run: npx playwright install --with-deps chromium
         working-directory: tools/admin-release
+      - name: Check live Places allowance with mocked HTTP only
+        run: node --test tools/admin-release/places-acceptance-gate.test.cjs
       - name: Check isolated acceptance preview and capture actual candidate screens
         env:
           TEYZA_ADMIN_TEST_OUTPUT: acceptance-previews
