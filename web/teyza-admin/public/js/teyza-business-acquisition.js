@@ -106,7 +106,7 @@ export function growthStep(p){
  }
  if(['queued','sending','review_required'].includes(p.outbound?.email_invitation?.status))return {id:'email',kind:'invitation',label:'Check Zoho introduction status',tone:'amber'};
  if(!p.response)return {id:'response',label:'Record actual owner response',tone:'amber'};
- if(emailDraftAllowed('onboarding_guide',p))return {id:'guide',label:'Send requested onboarding / training guide',tone:'blue'};
+ if(!p.downloadConfirmedAt&&emailDraftAllowed('onboarding_guide',p))return {id:'guide',label:'Send requested onboarding / training guide',tone:'blue'};
  if(!p.downloadConfirmedAt)return {id:'download',label:'Guide app download',tone:'blue'};
  return {id:'link',label:'Link verified registered app account',tone:'blue'};
 }
@@ -502,7 +502,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   async function openDiscovery(guided=false){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261127-idle-area');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261127-guided-growth-v1');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
     liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
@@ -676,7 +676,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     direct.append(block);
    }
    const directPanel=el('details',undefined,'acq-secondary acq-channel-panel');directPanel.append(el('summary','Zoho email · introduction / registration welcome / membership'),direct);c.append(directPanel,activityPanel);if(!p.seller)c.append(linkPanel);
-   const mailPanel=card('Business email desk','Manual fallback only. Use Zoho Sent to record emails sent outside Admin. Do not send another message if a direct send is already recorded.');
+   const mailPanel=card('Business email desk','Manual Zoho · Requested training and supported fallback. Verify actual sent records; do not duplicate a queued or recorded direct send.');
    const zoho=el('a','Open Zoho Workplace','button quiet');zoho.href='https://workplace.zoho.com/';zoho.target='_blank';zoho.rel='noopener noreferrer';mailPanel.append(zoho);
    for(const kind of ['invitation','welcome','onboarding_guide']){
     const entry=p.emailHistory?.[kind]||p.outbound?.['email_'+kind],box=el('section',undefined,'panel ops-card');box.dataset.emailKind=kind;box.append(el('h4',kind==='invitation'?'Business invitation':kind==='welcome'?'Registration welcome':'Requested onboarding and training guide'));
@@ -715,7 +715,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    if(step.id==='download')guideAction.append(button('Confirm owner download',()=>recordActivity('app_download')));
    if(step.id==='link')guideAction.append(button('Link existing app account',()=>reveal(linkPanel)));
    if(step.id==='email')guideAction.append(button('Review Zoho email',()=>reveal(direct.querySelector('[data-send-kind="'+step.kind+'"]')||directPanel)));
-   if(step.id==='guide')guideAction.append(button('Prepare requested training email',()=>reveal(mailPanel.querySelector('[data-email-kind="onboarding_guide"]')||manual)));
+   if(step.id==='guide'){guideAction.append(button('Prepare requested training email',()=>reveal(mailPanel.querySelector('[data-email-kind="onboarding_guide"]')||manual)),button('Continue without optional guide',()=>recordActivity('app_download')));}
    if(['blocked','support'].includes(step.id))guideAction.append(button('Open support',()=>reveal(helpPanel)));
    if(['account','approved'].includes(step.id))guideAction.append(button('View business accounts',()=>{close.click();document.querySelector('[data-admin-view="sellers"]')?.click();}));
    if(step.id==='approved'){guideAction.append(button('Official Meta welcome / support',()=>{close.click();document.querySelector('[data-admin-view="whatsapp"]')?.click();}));if(kind.querySelector('option[value="commercial_interest"]'))guideAction.append(button('Record commercial interest',()=>recordActivity('commercial_interest')));}

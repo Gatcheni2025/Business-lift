@@ -118,10 +118,42 @@ export function attachAreaAutocomplete(input,{api,onSelect=()=>{},onEdit=()=>{},
  },{capture:true});
  return {selected,suggest,clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
 }
-export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
+export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
  const contactCache=new Map();
+ let guideStep=1,guideArea=null;
+ const phoneFilter=elt('select');phoneFilter.setAttribute('aria-label','Phone availability');
+ for(const [id,label] of [['all','All results — numbers first'],['number','Known phone numbers'],['unchecked','Contact not checked'],['missing','No listed phone — field enquiry']]){const o=elt('option',label);o.value=id;phoneFilter.append(o);}
+ const chains=elt('input');chains.type='checkbox';chains.checked=false;
+ const chainLabel=elt('label');chainLabel.append(chains,elt('span',' Include large chains'));
+ const chainName=p=>/\b(?:shoprite|checkers|pick\s*n\s*pay|pnp|spar|superspar|woolworths|makro|boxer|pep\s*stores|kfc|mcdonald'?s|chicken\s*licken|steers|debonairs)\b/i.test(String(p.name||''));
+ const phoneState=p=>{const entry=contactCache.get(p.placeId);return (entry?.state==='ready'?entry.phone:p.phone)?'number':entry?.state==='ready'?'missing':'unchecked';};
+ const rank={number:0,unchecked:1,missing:2};
+ const guide=elt('div');guide.className='acq-discovery-guide';const stepLine=elt('div');stepLine.className='acq-guide-steps';const selectedText=elt('p','');selectedText.className='acq-guide-selection';
+ const continueButton=elt('button','Continue to business type');continueButton.type='button';continueButton.className='button primary';
+ const editButton=elt('button','Change location');editButton.type='button';editButton.className='button quiet';
+ const nextHint=elt('p','');nextHint.setAttribute('role','status');
+ guide.append(stepLine,selectedText,nextHint);
+ function paintGuide(){
+  if(!guided)return;
+  stepLine.replaceChildren();
+  for(const [i,label] of ['Location','Business type','Results'].entries()){const s=elt('span',(i+1)+'. '+label);s.dataset.current=String(guideStep===i+1);s.dataset.done=String(guideStep>i+1);stepLine.append(s);}
+  selectedText.textContent=guideArea?'Selected community: '+guideArea.label:'Choose the province, then a town or township.';
+  province.hidden=guideStep!==1;town.parentElement.hidden=guideStep!==1;
+  town.disabled=guideStep!==1||province.value==='All provinces';
+  continueButton.hidden=guideStep!==1;continueButton.disabled=province.value==='All provinces';
+  category.hidden=guideStep===1;search.hidden=guideStep===1;editButton.hidden=guideStep===1;
+  phoneFilter.hidden=guideStep!==3;chainLabel.hidden=guideStep!==3;businessFilter.hidden=guideStep!==3;layerFilters.hidden=guideStep!==3;
+  mapPanel.hidden=guideStep!==3;
+ }
+ continueButton.onclick=async()=>{
+  nextHint.textContent='';
+  try{if(province.value==='All provinces')throw Error('Choose a province first.');const selected=await locate();if(!selected||selected.province!==province.value)throw Error('Select the correct community in the selected province.');guideArea=selected;guideStep=2;paintGuide();}
+  catch(e){nextHint.textContent=e.message||'Choose a confirmed location.';}
+ };
+ editButton.onclick=()=>{if(searchPending)return;guideStep=1;guideArea=null;resetAreaResults();paintGuide();};
+ phoneFilter.onchange=chains.onchange=()=>{pageSize=pageLength;render();};
  const businessFilter=elt('input');businessFilter.type='search';businessFilter.placeholder='Filter results by business name';businessFilter.setAttribute('aria-label','Filter live business names');
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
  const title=elt('h3',compact?'Google Places · live listings':'Google Places · shop registration opportunities');
@@ -151,12 +183,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const list=elt('div');list.className='tp-combined-results';
  const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
- if(compact){town.value=initialArea?.label||String(initialTown||'Durban').slice(0,100);province.value=initialArea?.province||'All provinces';category.value='all';mapPanel.append(mapNotice,canvas);}
- controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- if(compact){panel.append(title,note,controls,status,count,businessFilter,layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
+ if(compact){town.value=initialArea?.label||String(initialTown||(guided?'':'Durban')).slice(0,100);province.value=initialArea?.province||'All provinces';category.value=guided?'spaza':'all';mapPanel.append(mapNotice,canvas);}
+ if(guided){controls.append(province,town,continueButton,editButton,category,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
+ if(compact){panel.append(title,note);if(guided)panel.append(guide);panel.append(controls,status,count,businessFilter);if(guided)panel.append(phoneFilter,chainLabel);panel.append(layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
  let autocomplete=null;
  function resetAreaResults(){if(searchPending)return;resultEpoch++;contactCache.clear();places=[];searchCompleted=false;searchError='';searchedArea=null;render();}
- if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();};}
+ if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();if(guided){guideStep=1;guideArea=null;paintGuide();if(town.value.trim()&&!town.disabled)autocomplete.suggest();}};if(guided){province.options[0].textContent='Choose a province';paintGuide();}}
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -216,10 +248,10 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const d=await r.json();if(d.ok!==true)throw Error('Contact lookup unavailable');
    if(stamp!==resultEpoch||activation!==epoch||!active)return;
    const entry={state:'ready',phone:typeof d.phone==='string'?d.phone:'',websiteUrl:publicWebsite(d.websiteUrl)||''};
-   contactCache.set(p.placeId,entry);if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
+   contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
   }catch(e){
    if(stamp!==resultEpoch||activation!==epoch||!active)return;
-   const entry={state:'error'};contactCache.set(p.placeId,entry);if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
+   const entry={state:'error'};contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
   }finally{if(stamp===resultEpoch&&activation===epoch)button.disabled=false;}
  }
  function renderCompactList(visible){
@@ -229,14 +261,15 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
   if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
   const q=businessFilter.value.trim().toLowerCase();visible=visible.filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
-  if(!visible.length){list.append(elt('p','No business names match this filter. Clear it to see all local results.'));return;}
+  if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0};for(const p of eligible)stats[phoneState(p)]++;list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
+  if(!visible.length){list.append(elt('p','No results match this view. Change the phone filter or check additional listings.'));return;}
   const savedRows=[];
   list.append(elt('p','Showing '+Math.min(pageSize,visible.length)+' of '+visible.length+' businesses. Contact information is optional; no business is excluded for missing contact details.'));
   for(const p of visible.slice(0,pageSize)){
    const item=elt('article');item.className='acq-live-result acq-business-card';
    const identity=elt('div');identity.className='acq-live-identity';
    identity.append(elt('strong',p.name||'Google-listed business'),elt('span',p.address||p.area||'Location on Google Maps'),elt('small',p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other local business'));
-   const state=elt('span','Manual enquiry available');state.className='acq-manual-chip';
+   const state=elt('span',guided?(phoneState(p)==='number'?'Phone available':phoneState(p)==='missing'?'Field enquiry — no phone':'Contact not checked'):'Manual enquiry available');state.className='acq-manual-chip';if(guided)state.dataset.phoneState=phoneState(p);
    const actions=elt('div');actions.className='acq-contact-actions';
    const details=elt('div');details.className='acq-live-details';details.setAttribute('aria-live','polite');
    const contact=elt('button','View contact details');contact.type='button';contact.className='button quiet';
@@ -252,7 +285,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(onAddBusiness){
     let savedId=null;
     const add=elt('button','Add Business');add.type='button';add.className='button primary';
-    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value);
+    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value,searchedArea);
     actions.prepend(add);
     savedRows.push({id:p.placeId,setSaved(id){savedId=id;state.textContent='Added';state.className='acq-status';state.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state});
    }
@@ -351,7 +384,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  async function startMap(){
   if(active)return;
   active=true;const stamp=++epoch;start.disabled=true;
-  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent='Enter a town or township, choose a category, and select Search this area.';if(autoSearch)void searchArea();else if(town.value.trim())autocomplete?.suggest();return;}
+  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent=guided?'Choose a province and confirm a town or township.':'Enter a town or township, choose a category, and select Search this area.';if(guided)paintGuide();else if(autoSearch)void searchArea();else if(town.value.trim())autocomplete?.suggest();return;}
   status.textContent='Loading configured Google map…';
   try{
    await ensureGoogle();if(stamp!==epoch||!active)return;
@@ -401,12 +434,13 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  }
  async function searchArea(skipGeocode=false){
   if((compact?!active:!map)||searchPending)return;
+  if(guided&&(!guideArea||guideStep===1)){nextHint.textContent='Confirm a community first.';return;}
   const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();businessFilter.value='';pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
   search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}
   status.textContent=compact?'Searching for businesses in the selected area…':'Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
-   const located=skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
+   const located=guided?guideArea:skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
    const c=compact?located:map.getCenter(),lat=compact?c?.lat:c.lat(),lon=compact?c?.lng:c.lng();
    if(!Number.isFinite(lat)||!Number.isFinite(lon))throw Error('Could not locate the selected town.');
    const radius=compact?(located.radius||10000):20000;
@@ -433,14 +467,14 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
    const unique=new Map();let excluded=0;
    for(const item of successful)for(const p of item.value.entries){if(compact&&!withinSearchRadius(p,located)){excluded++;continue;}if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);}
-   places=[...unique.values()];searchCompleted=true;searchPending=false;render();
+   places=[...unique.values()];searchCompleted=true;searchPending=false;if(guided){guideStep=3;paintGuide();}render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?' within '+(radius/1000)+' km of '+located.label+'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
     (incomplete?' Some searches were incomplete.':'')+(excluded?' '+excluded+' out-of-radius result(s) excluded.':'')+' Results are local and may not be exhaustive.';
   }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;if(compact){searchError=e.message;render();}
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
-  finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;}}
+  finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;if(guided)paintGuide();}}
  }
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
