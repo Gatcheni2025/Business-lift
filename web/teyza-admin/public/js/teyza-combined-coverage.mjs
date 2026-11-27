@@ -28,7 +28,7 @@ const areaKey=value=>String(value||'').normalize('NFKC').toLowerCase().trim().re
 export function resolvePilotArea(town,province='All provinces'){
  const key=areaKey(town),prov=areaKey(province);
  const row=pilotAreas.find(([name,p,,, , ,aliases])=>[name,...aliases].some(n=>areaKey(n)===key)&&(prov==='all provinces'||areaKey(p)===prov));
- return row?{label:row[0]+', '+row[1],lat:row[2],lng:row[3],radius:row[4],source:row[5]}:null;
+ return row?{area:row[0],province:row[1],label:row[0]+', '+row[1],lat:row[2],lng:row[3],radius:row[4],source:row[5]}:null;
 }
 const SA={lat:-28.8,lng:24.6};
 const good=p=>Number.isFinite(p?.latitude)&&Number.isFinite(p?.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
@@ -52,9 +52,75 @@ export function whatsappCheckUrl(value){
  const digits=/^0\d{9}$/.test(raw)?'27'+raw.slice(1):/^\+27\d{9}$/.test(raw)?raw.slice(1):/^27\d{9}$/.test(raw)?raw:null;
  return digits?'https://wa.me/'+digits:null;
 }
-export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban',onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
+// Explicit suggestions, never an automatic first-result geocode for acquisition.
+export function pilotAreaSuggestions(query,province='All provinces'){
+ const q=areaKey(query),prov=areaKey(province);
+ if(!q)return [];
+ return pilotAreas.filter(([name,p,,,,,aliases])=>(prov==='all provinces'||areaKey(p)===prov)&&[name,...aliases].some(n=>areaKey(n).startsWith(q))).slice(0,6).map(r=>resolvePilotArea(r[0],r[1]));
+}
+export function withinSearchRadius(place,area){
+ if(!good(place)||!Number.isFinite(area?.lat)||!Number.isFinite(area?.lng)||!Number.isFinite(area?.radius))return false;
+ const rad=Math.PI/180,dLat=(place.latitude-area.lat)*rad,dLng=(place.longitude-area.lng)*rad;
+ const a=Math.sin(dLat/2)**2+Math.cos(area.lat*rad)*Math.cos(place.latitude*rad)*Math.sin(dLng/2)**2;
+ return 6371000*2*Math.asin(Math.min(1,Math.sqrt(a)))<=area.radius;
+}
+export function attachAreaAutocomplete(input,{api,onSelect=()=>{},onEdit=()=>{},province=()=> 'All provinces',initialArea=null}={}){
+ const wrap=elt('div');wrap.className='acq-area-autocomplete';
+ const anchor=input.parentElement?.tagName==='LABEL'?input.parentElement:input;
+ anchor.replaceWith(wrap);wrap.append(anchor);
+ const menu=elt('div');menu.className='acq-area-suggestions';menu.hidden=true;wrap.append(menu);
+ const status=elt('p','');status.className='acq-area-status';status.setAttribute('role','status');wrap.append(status);
+ input.autocomplete='off';
+ let serial=0,timer=null,sessionToken=null,selection=initialArea,buttons=[],index=-1;
+ const validProvince=a=>province()==='All provinces'||areaKey(a.province)===areaKey(province());
+ function close(){clearTimeout(timer);serial++;menu.hidden=true;menu.replaceChildren();buttons=[];index=-1;}
+ function selected(){return selection&&input.value===selection.label&&validProvince(selection)?selection:null;}
+ async function choose(item){
+  const stamp=++serial;clearTimeout(timer);menu.hidden=true;status.textContent='Confirming selected area…';
+  try{
+   const area=item.area|| (await api('admin_area_select',{predictionToken:item.predictionToken})).area;
+   if(stamp!==serial||!input.isConnected)return;
+   if(!area||!validProvince(area)||typeof area.label!=='string'||!Number.isFinite(area.lat)||!Number.isFinite(area.lng)||area.lat< -35||area.lat> -22||area.lng<16||area.lng>34||![5000,8000,10000,20000].includes(area.radius))throw Error('Choose a specific locality in the selected province.');
+   selection=area;input.value=area.label;sessionToken=null;status.textContent='Selected: '+area.label;close();onSelect(area);
+  }catch(error){if(stamp===serial&&input.isConnected){status.textContent=error.message||'Area could not be confirmed. Try again.';}}
+ }
+ function render(items,credit=false){
+  menu.replaceChildren();buttons=[];index=-1;menu.hidden=!items.length;
+  for(const item of items){const b=elt('button',item.label);b.type='button';b.className='acq-area-option';b.onclick=()=>void choose(item);menu.append(b);buttons.push(b);}
+  if(credit&&items.length)menu.append(elt('small','Area suggestions: Google Maps'));
+ }
+ function suggest(){
+  close();selection=null;onEdit();status.textContent='';
+  const q=input.value.trim(),stamp=serial;if(q.length<2)return;
+  const local=pilotAreaSuggestions(q,province()).map(area=>({label:area.label,area}));
+  render(local);
+  if(!api||q.length<3||resolvePilotArea(q,province()))return;
+  timer=setTimeout(async()=>{
+   if(stamp!==serial||!input.isConnected)return;
+   status.textContent='Finding South African areas…';
+   try{
+    sessionToken||=crypto.randomUUID();
+    const r=await api('admin_area_suggest',{query:q,sessionToken});
+    if(stamp!==serial||!input.isConnected)return;
+    const remote=(Array.isArray(r.suggestions)?r.suggestions:[]).filter(x=>typeof x.label==='string'&&typeof x.predictionToken==='string');
+    const labels=new Set(local.map(x=>areaKey(x.label)));
+    const items=[...local,...remote.filter(x=>!labels.has(areaKey(x.label)))].slice(0,8);
+    render(items,remote.length>0);status.textContent=items.length?'Select the correct town and province.':'No matching areas. Try a more specific name.';
+   }catch(error){if(stamp===serial&&input.isConnected)status.textContent='Area suggestions unavailable. Choose a known pilot area or try again.';}
+  },400);
+ }
+ input.addEventListener('input',suggest);
+ input.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!menu.hidden){e.preventDefault();e.stopPropagation();close();return;}
+  if(menu.hidden||!buttons.length)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();index=(index+(e.key==='ArrowDown'?1:buttons.length-1)+buttons.length)%buttons.length;buttons.forEach((b,i)=>b.classList.toggle('highlighted',i===index));return;}
+  if(e.key==='Enter'&&index>=0){e.preventDefault();e.stopImmediatePropagation();buttons[index].click();}
+ },{capture:true});
+ return {selected,suggest,clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
+}
+export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
- let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null;
+ let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
  const contactCache=new Map();
  const businessFilter=elt('input');businessFilter.type='search';businessFilter.placeholder='Filter results by business name';businessFilter.setAttribute('aria-label','Filter live business names');
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
@@ -85,9 +151,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const list=elt('div');list.className='tp-combined-results';
  const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
- if(compact){town.value=String(initialTown||'Durban').slice(0,100);province.value='All provinces';category.value='all';mapPanel.append(mapNotice,canvas);}
+ if(compact){town.value=initialArea?.label||String(initialTown||'Durban').slice(0,100);province.value=initialArea?.province||'All provinces';category.value='all';mapPanel.append(mapNotice,canvas);}
  controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
  if(compact){panel.append(title,note,controls,status,count,businessFilter,layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
+ let autocomplete=null;
+ function resetAreaResults(){if(searchPending)return;resultEpoch++;contactCache.clear();places=[];searchCompleted=false;searchError='';searchedArea=null;render();}
+ if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();};}
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -122,7 +191,14 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   const website=publicWebsite(entry?.websiteUrl);
   host.append(elt('p',phone?'Public phone: '+phone:'Phone: not listed'),elt('p',website?'Business website: available':'Website: not listed'));
   if(website){const a=elt('a','Open business website');a.href=website;a.target='_blank';a.rel='noopener noreferrer';host.append(a);}
-  const wa=whatsappCheckUrl(phone);if(wa){const a=elt('a','Check WhatsApp');a.href=wa;a.target='_blank';a.rel='noopener noreferrer';host.append(a,elt('p','Opens WhatsApp to check the number. No message is sent; registration and consent are not verified.'));}
+  const wa=whatsappCheckUrl(phone);if(wa){
+   const check=elt('button','Check WhatsApp');check.type='button';check.className='button quiet acq-check-whatsapp';
+   const draft=elt('div');draft.className='acq-wa-draft';draft.hidden=true;
+   const a=elt('a','Open WhatsApp — check number only');a.href=wa;a.target='_blank';a.rel='noopener noreferrer';
+   if(invitationDraft){const preview=elt('textarea');preview.readOnly=true;preview.rows=8;preview.value=invitationDraft({name:p.name,area:searchedArea?.area||p.area||town.value,city:''});preview.setAttribute('aria-label','Personalised WhatsApp invitation preview');draft.append(elt('strong','Personalised invitation preview'),preview,elt('p','Add the independently confirmed business and record actual owner permission before opening a prefilled marketing chat.'));}
+   draft.append(a,elt('p','Number check only: WhatsApp registration and owner consent are not verified. Nothing is sent.'));
+   check.onclick=()=>{draft.hidden=!draft.hidden;check.setAttribute('aria-expanded',String(!draft.hidden));};check.setAttribute('aria-expanded','false');host.append(check,draft);
+  }else if(phone)host.append(elt('p','WhatsApp check unavailable for this phone format. Verify a South African number.'));
   host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
  }
  async function lookupContact(p,host,button){
@@ -176,7 +252,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(onAddBusiness){
     let savedId=null;
     const add=elt('button','Add Business');add.type='button';add.className='button primary';
-    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},town.value);
+    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value);
     actions.prepend(add);
     savedRows.push({id:p.placeId,setSaved(id){savedId=id;state.textContent='Added';state.className='acq-status';state.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state});
    }
@@ -275,7 +351,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  async function startMap(){
   if(active)return;
   active=true;const stamp=++epoch;start.disabled=true;
-  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent='Enter a town or township, choose a category, and select Search this area.';if(autoSearch)void searchArea();return;}
+  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent='Enter a town or township, choose a category, and select Search this area.';if(autoSearch)void searchArea();else if(town.value.trim())autocomplete?.suggest();return;}
   status.textContent='Loading configured Google map…';
   try{
    await ensureGoogle();if(stamp!==epoch||!active)return;
@@ -300,10 +376,10 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   const q=town.value.trim(),p=province.value;
   if(!q&&p==='All provinces'){if(compact)throw Error('Enter a town or township.');return;}
   if(compact){
-   const preset=resolvePilotArea(q,p);
-   if(preset)return preset;
+   const selected=autocomplete?.selected();if(selected)return selected;
+   const preset=resolvePilotArea(q,p);if(preset)return preset;
    if(p!=='All provinces'&&resolvePilotArea(q,'All provinces'))throw Error('The named pilot area is in another province. Choose its correct province or All provinces.');
-   await ensureGoogle();
+   throw Error('Select the correct South African area from the suggestions before searching.');
   }
   const address=[q,p==='All provinces'?'':p,'South Africa'].filter(Boolean).join(', ');
   const geocoder=new google.maps.Geocoder();
@@ -334,7 +410,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const c=compact?located:map.getCenter(),lat=compact?c?.lat:c.lat(),lon=compact?c?.lng:c.lng();
    if(!Number.isFinite(lat)||!Number.isFinite(lon))throw Error('Could not locate the selected town.');
    const radius=compact?(located.radius||10000):20000;
-   if(compact){center={lat,lng:lon};if(map){try{map.setCenter(center);}catch{mapNotice.textContent='Map could not update. Business information remains available below.';map=null;canvas.style.display='none';}}}
+   if(compact){searchedArea=located;center={lat,lng:lon};if(map){try{map.setCenter(center);}catch{mapNotice.textContent='Map could not update. Business information remains available below.';map=null;canvas.style.display='none';}}}
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
    if(!town.value.trim()&&province.value==='All provinces'&&Math.abs(lat-SA.lat)<0.02&&Math.abs(lon-SA.lng)<0.02)
     throw Error('Enter a town (such as Durban) or move the map to a populated area before searching.');
@@ -355,13 +431,13 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    }));
    if(stamp!==epoch||!active)return;const successful=searches.filter(r=>r.status==='fulfilled');
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
-   const unique=new Map();
-   for(const item of successful)for(const p of item.value.entries)if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);
+   const unique=new Map();let excluded=0;
+   for(const item of successful)for(const p of item.value.entries){if(compact&&!withinSearchRadius(p,located)){excluded++;continue;}if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);}
    places=[...unique.values()];searchCompleted=true;searchPending=false;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?' within '+(radius/1000)+' km of '+located.label+'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
-    (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
+    (incomplete?' Some searches were incomplete.':'')+(excluded?' '+excluded+' out-of-radius result(s) excluded.':'')+' Results are local and may not be exhaustive.';
   }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;if(compact){searchError=e.message;render();}
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
   finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;}}
@@ -369,5 +445,5 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  for(const input of Object.values(layers))input.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){autocomplete?.clear();searchedArea=null;epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
 }
