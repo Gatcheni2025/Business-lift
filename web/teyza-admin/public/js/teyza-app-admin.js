@@ -47,11 +47,18 @@ function clearWorkspace(){
 }
 async function logout(message='',kind='warning'){
   if(closing)return;closing=true;
-  const revoke=sessionToken&&auth.currentUser?rawApi('admin_session_end').catch(()=>{}):Promise.resolve();
+  const revoke=sessionToken&&auth.currentUser?rawApi('admin_session_end').then(r=>r.signedOut===true,()=>false):Promise.resolve(true);
   sessionToken=null;lastActivity=lastTouch=lastSentActivity=0;touching=false;persistSession();activeUser=null;clearWorkspace();window.scrollTo(0,0);
   if(message)notice(message,kind);
-  try{await signOut(auth);}catch{notice('Your private workspace was cleared. Firebase sign-out could not be confirmed; close this tab before continuing.','error');}
-  finally{closing=false;void revoke;}
+  // Clear local data immediately. Bound the wait for remote invalidation; if
+  // offline, do not misrepresent server termination as confirmed.
+  let timer;
+  try{
+    const ended=await Promise.race([revoke,new Promise(resolve=>{timer=setTimeout(()=>resolve(false),5000);})]);
+    if(!ended)notice('Private data cleared. Server logout could not be confirmed; the idle session will expire.','warning');
+    await signOut(auth);
+  }catch{notice('Your private workspace was cleared. Firebase sign-out could not be confirmed; close this tab before continuing.','error');}
+  finally{clearTimeout(timer);closing=false;}
 }
 function failed(error){
   if(error.stale)return;
@@ -69,7 +76,7 @@ function flushActivity(){
   const now=Date.now(),token=sessionToken,reported=lastActivity;
   if(now-lastTouch<30000||now-reported>60000)return;
   lastTouch=now;touching=true;
-  void rawApi('admin_session_touch',{activityLagMs:now-reported}).then(()=>{if(token===sessionToken)lastSentActivity=reported;}).catch(error=>{if(token===sessionToken&&(error.status===401||error.status===403))failed(error);}).finally(()=>{if(token===sessionToken)touching=false;});
+  void rawApi('admin_session_touch',{activityLagMs:now-reported,activityId:reported}).then(()=>{if(token===sessionToken)lastSentActivity=reported;}).catch(error=>{if(token===sessionToken&&(error.status===401||error.status===403))failed(error);}).finally(()=>{if(token===sessionToken)touching=false;});
 }
 const complianceLabels={
   identity:'Current ID, passport or company registration',

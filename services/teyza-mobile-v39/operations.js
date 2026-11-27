@@ -46,7 +46,7 @@ function whatsappWelcomeView(uid,account,verification,preferences,outbox){
 // inspect documents, run payments or administer Firebase users.
 const SUPPORT_AGENT_ACTIONS=new Set(['ops_whatsapp_support_inbox','ops_support_thread','ops_support_reply']);
 function recentSupportAgent(auth,clock){
- if(auth.teyzaSupportAgent!==true||auth.email_verified!==true)
+ if(auth.teyzaAdmin===true||auth.teyzaSupportAgent!==true||auth.email_verified!==true)
   D.fail(403,'Verified Teyza support-agent access is required.');
  if(auth.teyzaPhoneBootstrap===true)D.fail(401,'Sign in again before handling messages.');
  const age=clock()/1000-auth.auth_time;

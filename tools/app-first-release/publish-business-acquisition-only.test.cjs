@@ -190,7 +190,7 @@ test('Idle/contact/area release publishes only 15 Admin paths and requires both 
  assert.equal(paths.length,15);assert(paths.includes('/js/teyza-app-admin-model.mjs'));
  for(const excluded of ['/index.html','/for-shop-owners.html','/assets/app-first.css','/support-inbox.html','/pay/index.html','/assets/teyza-map-first.css'])assert(!paths.includes(excluded));
  assert.equal(files().size,15);
- const health={ok:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertAdminReady(health));
- for(const flag of ['adminInactivitySession','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
+ for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
 });

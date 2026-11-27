@@ -21,9 +21,7 @@ function recent(actor, now) {
   if(actor?.teyzaPhoneBootstrap===true)D.fail(403,'Sign in normally before deleting your account.');
 }
 function admin(actor,now) {
-  if(actor?.teyzaAdmin!==true||actor?.email_verified!==true||actor?.teyzaPhoneBootstrap===true)
-    D.fail(403,'A verified Teyza administrator is required.');
-  recent(actor,now);
+  require('./seller-experience').recentAdmin(actor,()=>now);
 }
 function publicStatus(record) {
   return {

@@ -40,7 +40,7 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertAdminReady(health){
- if(health?.ok!==true||health.version!=='3.26.0'||health.marketplaceRelease!=='20261126-v61'||health.adminInactivitySession!==true||health.adminAreaAutocomplete!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+ if(health?.ok!==true||health.version!=='3.26.0'||health.marketplaceRelease!=='20261126-v61'||health.adminInactivitySession!==true||health.adminSessionRequired!==true||health.adminAreaAutocomplete!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
   throw Error('Matching Admin inactivity and area autocomplete backend is not active. Hosting unchanged.');
  }
 }

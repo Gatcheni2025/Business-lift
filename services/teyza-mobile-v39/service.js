@@ -5,7 +5,7 @@ const {createShopFront,valid:validShopFront}=require('./shop-front');
 const offers=require('./shop-services');
 const crypto = require('node:crypto');
 const experience=require('./seller-experience');
-const {createAdminSessions}=require('./admin-session');
+const {createAdminSessions,protectedAdminAction,restrictedSupportAction}=require('./admin-session');
 const catalogue=require('./catalogue');
 const onboarding=require('./onboarding');
 const operations=require('./operations');
@@ -248,12 +248,19 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     if(action==='admin_session_start')return adminSessions.start(auth);
     if(action==='admin_session_end')return adminSessions.end(auth,adminSession);
     if(action==='admin_session_touch')return adminSessions.touch(auth,adminSession,data);
-    if(adminSession!==undefined||action==='admin_session_status'){
+    // Gate privileged actions BEFORE any dispatch, including legacy account closure,
+    // payment, evidence and moderation actions. A missing token is never a fallback.
+    if(restrictedSupportAction(auth,action)&&adminSession===undefined){
+      const user=await getAuthUser(uid);
+      if(user?.customClaims?.teyzaAdmin===true)D.fail(401,'Administrators must sign in through Admin with an active password session.');
+      if(!user||user.uid!==uid||user.disabled===true||user.emailVerified!==true||user.customClaims?.teyzaSupportAgent!==true)
+        D.fail(403,'Verified Teyza support-agent access is required.');
+      // The operations module still enforces the existing support-only recent-auth
+      // window, action allowlist and active WhatsApp-thread restriction.
+    }else if(protectedAdminAction(action)||adminSession!==undefined||action==='admin_session_status'){
       auth=await adminSessions.validate(auth,adminSession);
       if(action==='admin_session_status')return {active:true};
     }
-    // Older non-portal clients retain their original recent-auth requirements.
-    // A supplied but expired/invalid session never falls back to those checks.
     // Account deletion must be available regardless of an unverified email or
     // shop approval. Pending-closure users cannot create more data or orders.
     if(deletion.actions.has(action))return accountDeletion.execute(auth,action,data);
@@ -712,9 +719,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {reported:true,reference:reportId};
     }
     if(action==='chat_report_queue'||action==='chat_report_resolve'){
-      if(auth.teyzaAdmin!==true||auth.email_verified!==true||
-          !Number.isFinite(Number(auth.auth_time))||Math.abs(clock()/1000-Number(auth.auth_time))>900)
-        D.fail(403,'Recently authenticated Teyza administrator required.');
+      experience.recentAdmin(auth,clock);
       if(action==='chat_report_queue'){
         const rows=await db.collection('teyzaChatReports').where('status','==','open').limit(50).get();
         return {reports:rows.docs.map(x=>({id:x.id,...x.data()}))};
