@@ -43,11 +43,12 @@ function safeRow(p,facts,scopes){
 }
 // The collector uses the exact unfiltered snapshot API, all rows and all
 // pages. It is read-only and can also be used for staging comparison.
-async function collectGeneration({readPage,asOf}){
+async function collectGeneration({readPage,asOf,pageSize=30}){
+ if(![30,60].includes(pageSize))throw Error('Invalid internal reporting page size.');
  const rows=new Map(),aggregates=new Map([[NATIONAL,R.emptyCounts()]]),seen=new Set();let after=null,pages=0;
  do{
   const page=await readPage({filters:{},asOf,includeRows:true,...(after?{after}:{})});
-  if(page?.schema!==2||page.asOf!==asOf||page.complete!==(page.next===null)||!Array.isArray(page.prospects)||page.prospects.length!==page.scanned||page.scanned>30||page.next&&(!page.scanned||seen.has(page.next)))throw Error('Incomplete exact snapshot; summary not publishable.');
+  if(page?.schema!==2||page.asOf!==asOf||page.complete!==(page.next===null)||!Array.isArray(page.prospects)||page.prospects.length!==page.scanned||page.scanned>pageSize||page.next&&(!page.scanned||seen.has(page.next)))throw Error('Incomplete exact snapshot; summary not publishable.');
   const pageCounts=R.emptyCounts();
   for(const p of page.prospects){
    if(typeof p.id!=='string'||!p.id||rows.has(p.id))throw Error('Duplicate or invalid prospect in exact snapshot.');
@@ -89,7 +90,7 @@ async function readSummaryPage({db,data,clock=Date.now}){
  if(!scope||data.includeRows===false||data.after&&!requested||data.asOf&&!requested)return unavailable();
  return db.runTransaction(async tx=>{
   const snap=await tx.get(db.doc(CONTROL)),manifest=snap.exists?snap.data():null;
-  if(!manifest||manifest.schema!==SCHEMA||typeof manifest.generation!=='string'||!/^[a-f0-9-]{36}$/.test(manifest.generation)||!fresh(manifest.asOf,clock())||data.summaryAfter&&manifest.asOf<=data.summaryAfter||requested&&(requested!==manifest.generation||data.asOf!==manifest.asOf))return unavailable();
+  if(!manifest||manifest.invalidated===true||manifest.schema!==SCHEMA||typeof manifest.generation!=='string'||!/^[a-f0-9-]{36}$/.test(manifest.generation)||!fresh(manifest.asOf,clock())||data.summaryAfter&&manifest.asOf<=data.summaryAfter||requested&&(requested!==manifest.generation||data.asOf!==manifest.asOf))return unavailable();
   const prefix=ROOT+'/'+manifest.generation;
   let q=db.collection(prefix+'/rows').where('lookupKeys','array-contains',lookup(scope,filters.queue)).orderBy('__name__').limit(31);
   if(data.after)q=q.startAfter(D.id(data.after));

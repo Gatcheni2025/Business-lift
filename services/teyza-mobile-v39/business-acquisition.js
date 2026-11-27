@@ -183,14 +183,14 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
  // suppression and legacy-event join uses the SAME read-only transaction.
  // No count is returned as a national total until the client has consumed the
  // final cursor. These pages support sparse results without skipping records.
- async function commandPage(data){
+ async function commandPage(data,internalSize=30){
   const filters=R.parseFilters(data.filters),now=clock();
   const asOf=data.asOf??(Math.floor(now/1000)*1000-1000);
   if(!Number.isSafeInteger(asOf)||asOf>now||now-asOf>55*60000||data.after&&!data.asOf)D.fail(422,'The report snapshot expired. Refresh the national command centre.');
   const cursor=data.after?D.id(data.after):null,includeRows=data.includeRows!==false;
   const {Timestamp}=require('firebase-admin/firestore');
   return db.runTransaction(async tx=>{
-   const size=includeRows?30:60;
+   const size=includeRows?internalSize:60;
    // Use indexed equality for the most geographically selective available
    // field. Pilot provinces have two ordered streams, because older records
    // have only city. Merge by document ID before taking the page boundary;
@@ -453,6 +453,6 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
   }
   D.fail(404,'Unknown acquisition action.');
  }
- return {execute,collectReportingGeneration:asOf=>S.collectGeneration({asOf,readPage:commandPage})};
+ return {execute,collectReportingGeneration:asOf=>S.collectGeneration({asOf,readPage:data=>commandPage(data,60),pageSize:60})};
 }
 module.exports={actions,createAcquisition};
