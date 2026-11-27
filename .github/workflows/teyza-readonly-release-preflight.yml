@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/teyza-readonly-release-preflight.yml'
+      - 'scripts/teyza_release_proration_gate.py'
+      - 'scripts/test_teyza_release_proration_gate.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,11 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test calendar proration validation
+        run: python3 scripts/test_teyza_release_proration_gate.py
       - name: Check production mobile service without credentials or writes
         run: |
           python3 - <<'PY'
           import json
           import urllib.request
+          from scripts.teyza_release_proration_gate import validate_billing_health
           url = 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
           try:
               with urllib.request.urlopen(url, timeout=30) as response:
@@ -33,12 +44,18 @@ jobs:
               'wholesaleConnections','adminUsers','adminSellerDocuments',
               'automaticProductPublication','adminComplimentaryAccess',
               'paystackCheckoutAvailable','sellerApprovalBeforeCheckout',
-              'googlePlaceClaims','whatsappApprovalOptIn')
+              'googlePlaceClaims','whatsappApprovalOptIn',
+              'physicalGoodsPaystack','sellerPaystackSubaccounts',
+              'sellerOnlineShoppingControls','onlineOrderPaymentReadiness',
+              'adminBusinessAcquisition','adminBusinessCommunications',
+              'adminBusinessContactDiscovery','agentRewardReviewEnabled')
           required_false = ('sevenDayTrial','strictSevenDayMembership',
-              'adminProductReview','agentCommissionEnabled')
-          required_exact = {'service':'teyza-mobile','version':'3.25.0',
+              'adminProductReview','agentCommissionEnabled','sellerPaystackNewCheckoutDisabled')
+          required_exact = {'service':'teyza-mobile','version':'3.26.0',
+              'marketplaceRelease':'20261126-v61',
               'billingMode':'paystack_checkout','subscriptionMonthlyCents':9900,
-              'introductoryFirstMonthCents':4900,'promotionSevenDaysCents':2900}
+              'promotionSevenDaysCents':2900,'agentRewardCents':9000,
+              'sellerMembershipBillingMode':'paystack_card_subscription'}
           required_min = {'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
           failures = [f'{key}: expected true' for key in required_true if health.get(key) is not True]
           if health.get('ok') is not True:
@@ -48,6 +65,7 @@ jobs:
               for key,value in required_exact.items() if health.get(key) != value]
           failures += [f'{key}: expected at least {value}' for key,value in required_min.items()
               if not isinstance(health.get(key), int) or isinstance(health.get(key), bool) or health[key] < value]
+          failures.extend(validate_billing_health(health))
           if failures:
               for failure in failures:
                   print('BLOCKED:', failure)
