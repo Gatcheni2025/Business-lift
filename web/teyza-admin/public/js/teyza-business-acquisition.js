@@ -16,6 +16,14 @@ const categoryBenefits={
  manufacturer:['Showcase eligible products and business information to potential customers and trade partners.','Explore connections with participating retailers and eligible trade buyers where supported.','Explore partner delivery options and available savings, subject to terms.'],
  other:['Showcase your products or services with eligible business tools.','Explore relevant participating suppliers and business connections where available.','Explore available partner offers and delivery opportunities, subject to eligibility and terms.']
 };
+export function safeBusinessWebsite(value){
+ try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password&&url.hostname.includes('.')?url.href:null;}catch{return null;}
+}
+export function savedWhatsAppCheck(value){
+ const raw=String(value||'').replace(/[\s().-]/g,'');
+ const digits=/^0\d{9}$/.test(raw)?'27'+raw.slice(1):/^\+27\d{9}$/.test(raw)?raw.slice(1):/^27\d{9}$/.test(raw)?raw:null;
+ return digits?'https://wa.me/'+digits:null;
+}
 const oneLine=v=>String(v??'').replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim();
 export function emailText(kind,p){
  const name=oneLine(p.name)||'Business',area=oneLine(p.area),city=oneLine(p.city);
@@ -75,7 +83,7 @@ export function matchesAcquisitionContact(p,search='',channel='all',readyOnly=fa
  const hasEmail=typeof p.email==='string'&&!!p.email.trim(),hasPhone=typeof p.phone==='string'&&!!p.phone.trim();
  if(channel==='email'&&!hasEmail||channel==='whatsapp'&&!hasPhone||channel==='manual'&&(hasEmail||hasPhone))return false;
  const terms=oneLine(search).toLowerCase().split(/\s+/).filter(Boolean);
- const hay=[p.name,p.city,p.area,p.address,title(p.category)].map(oneLine).join(' ').toLowerCase();
+ const hay=[p.name,p.city,p.area,p.address,p.website,p.phone,p.email,title(p.category)].map(oneLine).join(' ').toLowerCase();
  if(!terms.every(t=>hay.includes(t)))return false;
  const readyEmail=hasEmail&&p.permissions?.email?.granted===true,readyPhone=hasPhone&&p.permissions?.whatsapp?.granted===true;
  return !readyOnly||(!p.optedOut&&(channel==='email'?readyEmail:channel==='whatsapp'?readyPhone:channel==='manual'?false:readyEmail||readyPhone));
@@ -174,7 +182,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   catch(e){if(active&&serial===stamp&&!e.stale){const error=root.querySelector('.acq-dialog[open] .acq-error');if(error){error.hidden=false;error.textContent=e.message||'Could not complete this action.';}onError(e);}}
   finally{if(serial===stamp){busy=false;if(b?.isConnected)b.disabled=false;}}
  }
- async function readDetail(id,stamp){const r=await api('ops_acquisition_detail',{id});if(active&&serial===stamp){selected=id;detail=r;modal='business';records=records.map(x=>x.id===id?r.prospect:x);}}
+ async function readDetail(id,stamp){const r=await api('ops_acquisition_detail',{id});if(active&&serial===stamp){selected=id;detail=r;modal='business';records=records.some(x=>x.id===id)?records.map(x=>x.id===id?r.prospect:x):[r.prospect,...records];}}
  function render(root){
   if(!active)return;
   stopDiscovery();root.querySelector('[data-acquisition]')?.remove();const workspace=el('div');workspace.dataset.acquisition='true';
@@ -182,15 +190,15 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   const modalContent=el('div',undefined,'acq-dialog-content'),bar=el('div',undefined,'acq-dialog-bar'),modalTitle=el('strong','Business acquisition');
   const close=button('Close',()=>{stopDiscovery();modal=null;focusMessage=null;dialog.close();});bar.append(modalTitle,close);const err=el('p','', 'acq-error');err.setAttribute('role','alert');err.hidden=true;dialog.append(bar,err,modalContent);
   dialog.addEventListener('cancel',()=>{stopDiscovery();modal=null;focusMessage=null;});
-  const panels={};function open(name){if(modal==='discover'&&name!=='discover')stopDiscovery();modal=name;mount();}
-  function mount(){if(!modal||!panels[modal])return;modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find a business',discover:'Google Places · live area search',add:'New business prospect',assets:'Marketing & onboarding',directory:'Registered businesses',business:'Business record'})[modal]||'Business acquisition';err.hidden=true;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){target.open=true;target.scrollIntoView({block:'nearest'});}}}
+  const panels={};let selectedListing=null;function open(name){if(modal==='discover'&&name!=='discover')stopDiscovery();modal=name;mount();}
+  function mount(){if(!modal||!panels[modal])return;modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find & Add Businesses',discover:'Find & Add Businesses · live search',add:'Add Business',assets:'Marketing & onboarding',directory:'Registered businesses',business:'Business record'})[modal]||'Business acquisition';err.hidden=true;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){target.open=true;target.scrollIntoView({block:'nearest'});}}}
 
   const intro=card('Direct business onboarding','Pilot cities: Durban and Johannesburg. Discover and invite owners through permitted channels; free registration and verification. Paid selling features are optional. Existing agent and reward records are separate.');
   intro.classList.add('acq-hero');for(const c of cities)intro.append(el('p',c+' — '+areas[c],'footnote'));const actionBar=el('div',undefined,'acq-action-bar');
   const discovery=button('Open national coverage map',()=>document.querySelector('[data-admin-view="map"]')?.click());discovery.classList.add('acq-map');actionBar.append(discovery);
   const find=button('Find businesses by area',()=>open('lookup'));find.classList.add('acq-find');actionBar.append(find);
   const source=el('a','Business owner information','button quiet');source.href='/for-shop-owners.html';source.target='_blank';source.rel='noopener noreferrer';actionBar.append(source);
-  const add=button('+ Add business prospect',()=>open('lookup'));add.classList.add('acq-add');actionBar.prepend(add);
+  const add=button('+ Find & Add Businesses',()=>open('lookup'));add.classList.add('acq-add');actionBar.prepend(add);
   const assetsButton=button('Open marketing & onboarding assets',()=>{panels.assets.querySelector('details').open=true;open('assets');});assetsButton.classList.add('acq-assets');
   actionBar.append(button('Registered businesses',()=>open('directory')),assetsButton);intro.append(actionBar);
   workspace.append(intro);
@@ -219,7 +227,9 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   }
   function contactActions(p){
    const actions=el('div',undefined,'acq-contact-actions');
-   actions.append(button('Open business',()=>openRecord(p)));
+   actions.append(button('Contact',()=>openRecord(p)));
+   const site=safeBusinessWebsite(p.website);if(site)actions.append(assetLink('Business website',site));
+   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut)actions.append(assetLink('Check WhatsApp',wa));
    for(const channel of ['email','whatsapp']){
     if(!(channel==='email'?p.email:p.phone))continue;
     const kind=nextCommunication(p,channel,communications);
@@ -230,7 +240,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    }
    return actions;
   }
-  const lookup=card('Find businesses in an area','Search saved businesses by area, including businesses with no contact details. Choose Search Google Places for live local results, or add an independently confirmed business.');
+  const lookup=card('Find businesses in an area','Search an area for live business listings, then check phone, website or WhatsApp and add a confirmed business. Saved businesses appear below, including those without contact details.');
   const lookupForm=el('div',undefined,'acq-lookup-filters');
   const areaInput=input(lookupForm,'Town, township or business name','lookupQuery','search',false,120);areaInput.value=lookupQuery;areaInput.placeholder='e.g. Durban, Umlazi, Soweto';
   const channelSelect=el('select');channelSelect.setAttribute('aria-label','Contact channel filter');
@@ -246,9 +256,9 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
     identity.append(el('strong',p.name),el('span',[p.area,p.city,title(p.category)].filter(Boolean).join(' · ')),el('span','Email: '+(p.email||'Not recorded')),el('span','Phone: '+(p.phone||'Not recorded')));
     const allowed=matchesAcquisitionContact(p,'',lookupChannel,true);
     const permission=el('span',p.optedOut?'Do not contact':allowed?'Permission recorded':!p.email&&!p.phone?'Manual enquiry needed':'Permission required','acq-status');permission.dataset.state=p.optedOut?'blocked':allowed?'interested':'identified';
-    identity.append(permission);row.append(identity,contactActions(p));lookupResults.append(row);
+    const added=el('span','Added','acq-status');added.dataset.state='interested';identity.append(permission,added);row.append(identity,contactActions(p));lookupResults.append(row);
    }
-   if(!matches.length)lookupResults.append(el('p','No matching saved businesses. Search Google Places to see live business listings, including those without contact details.','acq-empty'));
+   if(!matches.length)lookupResults.append(el('p','No saved businesses match yet. Select Search Google Places above to discover businesses in your chosen area.','acq-empty'));
   }
   areaInput.oninput=()=>{lookupQuery=areaInput.value;showContacts();};
   channelSelect.onchange=()=>{lookupChannel=channelSelect.value;showContacts();};
@@ -258,41 +268,68 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   googleButton.title='Search the entered town across all three business categories';
   areaInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void openDiscovery();}});
   googleButton.classList.add('acq-send-email');
-  const manualAdd=button('Add confirmed business',()=>{newArea=oneLine(lookupQuery);if(newArea.length>100)newArea='';setManualArea();open('add');});manualAdd.classList.add('acq-send-wa');
+  const manualAdd=button('Add confirmed business',()=>{prepareManual(lookupQuery);open('add');});manualAdd.classList.add('acq-send-wa');
   lookupActions.append(googleButton,manualAdd);
   if(next)lookupActions.append(button('Load more saved contacts',()=>perform(root,null,async stamp=>{const r=await api('ops_acquisition_list',{after:next});if(stamp!==serial)return;records=[...new Map([...records,...r.prospects].map(p=>[p.id,p])).values()];next=r.next||null;communications=r.communications||communications;})));
   lookup.append(lookupForm,lookupActions,lookupCount,lookupResults);panels.lookup=lookup;showContacts();
-  const discoverPanel=card('Discover businesses with Google Places','Live business list first; the map is optional. View a business’s available public phone and website on request. Google does not supply emails or verify WhatsApp permission. All listings stay visible, even without contact details. Record independently confirmed information only.');
+  const discoverPanel=card('Discover businesses with Google Places','Live list first; the map is optional. Check public phone and website, open WhatsApp to check a number, or add a business. Google does not provide email or confirm WhatsApp registration. Save only independently confirmed details.');
   const discoveryHost=el('div'),back=button('Back to saved contacts',()=>open('lookup'));
-  const confirmedAdd=button('Add confirmed business',()=>{const entered=discoveryHost.querySelector('[aria-label="Town or municipality"]')?.value;newArea=oneLine(entered||lookupQuery).slice(0,100);setManualArea();open('add');});
+  const confirmedAdd=button('Add confirmed business',()=>{const entered=discoveryHost.querySelector('[aria-label="Town or municipality"]')?.value;prepareManual(entered||lookupQuery);open('add');});
   const discoveryActions=el('div',undefined,'acq-contact-actions');discoveryActions.append(back,confirmedAdd);discoverPanel.append(discoveryActions,discoveryHost);panels.discover=discoverPanel;
   async function openDiscovery(){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261127-list-first-location');
+    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261127-contact-first');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
-    liveDiscovery=createCombinedCoverage({autoSearch:true,compact:true,initialTown:typed||'Durban',report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
+    liveDiscovery=createCombinedCoverage({autoSearch:!!typed,compact:true,initialTown:typed||'Durban',
+     resolveSavedPlaces:async ids=>{
+      const matches=new Map();
+      for(let i=0;i<ids.length;i+=30){const r=await api('ops_acquisition_place_matches',{placeIds:ids.slice(i,i+30)});if(!Array.isArray(r.matches))throw Error('Saved status unavailable');for(const m of r.matches)matches.set(m.placeId,m.id);}
+      return matches;
+     },
+     onAddBusiness:(p,contact,area)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);prepareManual(lookupQuery,p,contact);open('add');},
+     onContactBusiness:id=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id});},
+     report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
     await liveDiscovery.activate();
    }catch(e){if(stamp===discoveryEpoch&&modal==='discover')discoveryHost.replaceChildren(el('p','Google Places could not load. Use the national coverage map or search saved contacts.','footnote'));}
   }
-  const create=card('Add business prospect','Record only information you may lawfully retain, from an owner, permitted source or introduction. Public contact details are not marketing permission. Do not enter passwords, ID numbers, bank details or documents.');
+  const create=card('Add Business','Confirm the business using an independent permitted source, such as its own website or the owner. Only source-confirmed details are saved; public information does not grant marketing permission. Do not enter sensitive documents or credentials.');
+  const listingReference=el('div',undefined,'acq-listing-reference');listingReference.hidden=true;create.append(listingReference);
   const f=el('form',undefined,'ops-form acq-compact-form');
   const nameField=input(f,'Business name','name','text',true,120),pilot=choice(f,'Pilot city','city',cities),townField=input(f,'Township / area','area','text',true,100);const addressField=input(f,'Business address or landmark','address','text',true,220);addressField.parentElement.classList.add('acq-full');
-  function setManualArea(){const match=cities.find(c=>c.toLowerCase()===newArea.toLowerCase());if(match){pilot.value=match;townField.value=match;}else if(newArea){townField.value=newArea;}newArea='';}
-  choice(f,'Business category','category',['spaza','retail','food','salon','service','wholesale','manufacturer','other']);
-  input(f,'Business phone (optional)','phone','tel',false,40);input(f,'Business email (optional)','email','email',false,254);
-  choice(f,'Source','source',['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted']);
-  input(f,'Source reference / authority to retain details','sourceReference','textarea',true,240).parentElement.classList.add('acq-full');
-  check(f,'I confirm Teyza may retain this information for onboarding.','authorisedSource').parentElement.classList.add('acq-full');
+  function setManualArea(){const norm=v=>oneLine(v).toLowerCase().replace(/[ -]/g,'');const match=cities.find(c=>norm(c)===norm(newArea)||areas[c].split(' · ').some(a=>norm(a)===norm(newArea)));if(match)pilot.value=match;else if(newArea)pilot.selectedIndex=-1;if(newArea)townField.value=newArea;newArea='';}pilot.required=true;
+  const categoryField=choice(f,'Business category','category',['spaza','retail','food','salon','service','wholesale','manufacturer','other']);
+  const phoneField=input(f,'Business phone (optional)','phone','tel',false,40);const emailField=input(f,'Business email (optional)','email','email',false,254);
+  const websiteField=input(f,'Business website (optional)','website','url',false,500);
+  const sourceField=choice(f,'Source','source',['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted']);
+  const sourceRef=input(f,'Source reference / authority to retain details','sourceReference','textarea',true,240);sourceRef.parentElement.classList.add('acq-full');
+  const authorised=check(f,'I confirm Teyza may retain this information for onboarding.','authorisedSource');authorised.parentElement.classList.add('acq-full');
+  const independent=check(f,'I independently confirmed the business details using the named permitted source, not Google Maps alone.','independentSourceConfirmed');independent.parentElement.classList.add('acq-full');independent.parentElement.hidden=true;independent.disabled=true;independent.required=false;
+  function prepareManual(area,p=null,contact={}){
+   f.reset();syncConsent();selectedListing=p?{placeId:p.placeId}:null;
+   newArea=oneLine(area).slice(0,100);setManualArea();
+   independent.disabled=!p;independent.required=!!p;independent.parentElement.hidden=!p;
+   listingReference.replaceChildren();listingReference.hidden=!p;
+   if(!p)return;
+   sourceField.value='other_permitted';
+   listingReference.append(el('strong',p.name||'Selected listing'),el('p',p.address||'No address listed','footnote'),el('p','Live Google reference only. Verify each value using the owner or another permitted independent source before saving. Enter missing or corrected details in the form.','footnote'));
+   const site=safeBusinessWebsite(contact?.websiteUrl);const phone=oneLine(contact?.phone);if(phone)listingReference.append(el('p','Public phone: '+phone,'footnote'));if(site)listingReference.append(assetLink('Open business website',site));
+   const wa=savedWhatsAppCheck(phone);if(wa)listingReference.append(assetLink('Check WhatsApp',wa));
+   const use=button('Use independently confirmed details',()=>{
+    if(!independent.checked||!authorised.checked||!sourceRef.value.trim()){message('Record the independent source and check both confirmation boxes first.','info');sourceRef.focus();return;}
+    nameField.value=oneLine(p.name).slice(0,120);addressField.value=oneLine(p.address).slice(0,220);phoneField.value=phone.slice(0,40);websiteField.value=site||'';categoryField.value=p.shopCategory==='spaza'?'spaza':p.shopCategory==='wholesale'?'wholesale':'other';
+    message('Review the source-confirmed details and remove any unconfirmed contact field before saving.','info');
+   });listingReference.append(use);
+  }
   const consentBox=el('fieldset',undefined,'acq-consent acq-full');consentBox.append(el('legend','Owner contact permissions (optional)'),el('p','Select only channels the owner has explicitly agreed to. Leave unchecked if permission has not been obtained.','footnote'));
   const emailOpt=check(consentBox,'Owner opted in to email marketing','initialEmail'),waOpt=check(consentBox,'Owner opted in to WhatsApp marketing','initialWhatsApp');emailOpt.required=false;waOpt.required=false;
   const consentNote=input(consentBox,'Evidence of owner permission','initialConsentNote','textarea',false,500);
   const confirmConsent=check(consentBox,'I confirm the owner explicitly opted in to each selected channel.','initialConsentConfirmed');
   function syncConsent(){const on=emailOpt.checked||waOpt.checked;for(const field of [consentNote,confirmConsent]){field.parentElement.hidden=!on;field.disabled=!on;field.required=on;}}
   emailOpt.onchange=waOpt.onchange=syncConsent;syncConsent();f.append(consentBox);
-  submit(f,'Save business prospect',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business prospect saved. No message sent.','success');}));
+  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
   create.append(button('Back to search',()=>open('lookup')),f);panels.add=create;
   const list=card('Business prospect register','Search loaded records or filter by pilot city. Follow-up dates and latest activity are saved on the server.');
   const filter=el('div',undefined,'field-query'),search=el('input'),select=el('select');
@@ -306,14 +343,28 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   const rows=el('div');
   function showRows(){rows.replaceChildren();const q=query.toLowerCase();const matches=records.filter(p=>matchesStatus(p)&&(city==='all'||p.city===city)&&[p.name,p.city,p.area,p.address,title(p.category)].join(' ').toLowerCase().includes(q));
    for(const p of matches){const row=el('div',undefined,'field-visit');row.append(el('strong',p.name),el('span',[p.city,p.area,title(p.category)].join(' · ')),statusPill(p),el('span','Last activity: '+time(p.lastActivityAt)+' · Follow-up: '+time(p.nextFollowUpAt)),el('span',p.seller?'Seller: '+title(p.seller.status):'No seller linked'),el('span','Invitation: '+communicationLabel(p,'invitation')+' · Welcome: '+communicationLabel(p,'welcome')+' · Membership: '+communicationLabel(p,'membership')),el('span',p.help?'Help: '+title(p.help.state):'No help request logged'),contactActions(p));rows.append(row);}
-   if(!matches.length){const empty=el('div',undefined,'acq-empty');empty.append(el('strong','No matching business prospects'),el('p','Start with a business owner enquiry or permitted business introduction.','footnote'),button('+ Add business prospect',()=>open('lookup')));rows.append(empty);}
+   if(!matches.length){const empty=el('div',undefined,'acq-empty');empty.append(el('strong','No matching business prospects'),el('p','Start with a business owner enquiry or permitted business introduction.','footnote'),button('+ Find & Add Businesses',()=>open('lookup')));rows.append(empty);}
   }
   search.oninput=()=>{query=search.value;showRows();};select.onchange=()=>{city=select.value;showRows();};status.onchange=()=>{statusFilter=status.value;showRows();};filter.append(search,select,status);list.append(filter,rows);showRows();
   if(next)list.append(button('Load more businesses',()=>perform(root,null,async stamp=>{const r=await api('ops_acquisition_list',{after:next});if(stamp!==serial)return;records=[...new Map([...records,...r.prospects].map(p=>[p.id,p])).values()];next=r.next||null;})));
   workspace.append(list);
   if(detail&&selected===detail.prospect.id){
    const p=detail.prospect,c=card('Business: '+p.name,'Private onboarding record · '+p.city+' · '+p.area);
+   const added=el('span','Added','acq-status');added.dataset.state='interested';c.append(added,button('Back to business search',()=>open('lookup')));
    c.append(el('p','Contact: '+[p.phone,p.email].filter(Boolean).join(' · ')),el('p','Source: '+title(p.source)+' — '+p.sourceReference,'footnote'),el('p','Assigned reviewer: '+p.assignedTo+' · Last saved by '+p.lastActivityBy+' · '+time(p.updatedAt),'footnote'));
+   const site=safeBusinessWebsite(p.website);if(site)c.append(assetLink('Open business website',site));
+   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut)c.append(assetLink('Check WhatsApp',wa));
+   if(!p.optedOut&&(!p.phone||!p.email||!p.website)){
+    const missing=el('details',undefined,'acq-secondary');missing.append(el('summary','Add missing contact details'));
+    const form=el('form',undefined,'ops-form');
+    if(!p.phone)input(form,'Confirmed business phone','phone','tel',false,40);
+    if(!p.email)input(form,'Confirmed business email','email','email',false,254);
+    if(!p.website)input(form,'Confirmed business website','website','url',false,500);
+    input(form,'Independent source / evidence','note','textarea',true,500);
+    check(form,'I independently confirmed these details and Teyza may retain them. No contact permission is inferred.','authorisedSource');
+    submit(form,'Save contact details',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'contact_update',note:d.note,phone:d.phone||'',email:d.email||'',website:d.website||'',authorisedSource:d.authorisedSource==='on',confirmed:true});await readDetail(p.id,stamp);if(serial===stamp)message('Contact details saved. No message sent.','success');}));
+    missing.append(form);c.append(missing);
+   }
    c.append(el('strong',p.optedOut?'DO NOT CONTACT':channels.map(x=>title(x)+': '+(p.permissions?.[x]?.granted?'permission recorded':'not recorded')).join(' · ')));
    if(p.seller)c.append(el('p','Linked seller '+p.seller.uid+' · '+title(p.seller.status)+' · '+(p.seller.listed?'Listed':'Listing not confirmed')+'. This workspace does not approve sellers.'));
    const update=el('form',undefined,'ops-form');
@@ -344,7 +395,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
     check(link,'Owner confirmed this exact business account.','ownerConfirmed');
     submit(link,'Link seller account',(d,b)=>perform(root,b,async stamp=>{await api('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid:d.sellerUid,ownerConfirmed:d.ownerConfirmed==='on'});await readDetail(p.id,stamp);if(serial===stamp)message('Seller account linked. No approval changed.','success');}));linkPanel.append(link);
    }
-   const direct=card('Send a message','Select the channel and message. Review the exact recipient and approved personalised content. A single click queues a message only when the provider is enabled. Provider acceptance is not delivery.');direct.classList.add('acq-communications');
+   const direct=card('Send a message','Contact this added business via the existing linked Zoho Mail or the configured WhatsApp provider. Select the channel and message. Review the exact recipient and approved personalised content. A single click queues a message only when the provider is enabled. Provider acceptance is not delivery.');direct.classList.add('acq-communications');
    const refreshStatus=button('Refresh send history',()=>perform(root,null,stamp=>readDetail(p.id,stamp)));direct.append(refreshStatus);
    for(const channel of ['email','whatsapp']){
     const block=el('section',undefined,'acq-channel '+(channel==='email'?'acq-email':'acq-whatsapp'));block.append(el('h4',channel==='email'?'Email · Zoho Mail':'WhatsApp · Business Platform'));
