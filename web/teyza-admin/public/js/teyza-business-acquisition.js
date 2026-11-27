@@ -229,6 +229,13 @@ export function mergeCommandPage(previous,page,filters,{after=null,includeRows=t
 export function createAcquisitionAdmin({api:request,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',businessTypeFilter='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='contactable',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  let commandEpoch=0,commandPaint=null,commandFilters=normalizedFilters({queue:'new_contact'}),command=null;
+ const reportRequests=[];
+ async function reportPage(data,valid){
+  // Burst below the server's 60/minute limit, then pace only when needed.
+  // Shared across refresh/filter/list requests, so quick filter changes cannot
+  // each start an unlimited burst. Server rate limit remains authoritative.
+  for(;;){const now=Date.now();while(reportRequests.length&&now-reportRequests[0]>=60000)reportRequests.shift();if(!valid())return null;if(reportRequests.length<45){reportRequests.push(now);return api('ops_acquisition_command_page',data);}await new Promise(resolve=>setTimeout(resolve,Math.max(50,60000-(now-reportRequests[0]))));}
+ }
  const blankCommand=(status='idle')=>({status,report:emptyCommandReport(),rows:[],listNext:null,seen:new Set(),error:'',listBusy:false});
  command=blankCommand();
  function resetCommand(status='idle',resetFilters=false){commandEpoch++;if(resetFilters)commandFilters=normalizedFilters({queue:'new_contact'});command=blankCommand(status);}
@@ -251,7 +258,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   try{
    do{
     const after=state.report.next,first=state.report.asOf===null;
-    const page=await api('ops_acquisition_command_page',{filters:commandFilters,includeRows:first,...(first?{}:{after,asOf:state.report.asOf})});
+    const page=await reportPage({filters:commandFilters,includeRows:first,...(first?{}:{after,asOf:state.report.asOf})},valid);
     if(!valid())return;
     if(page.next&&state.seen.has(page.next))throw Error('Repeated report cursor.');
     const merged=mergeCommandPage(state.report,page,commandFilters,{after,includeRows:first});
@@ -260,8 +267,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     state.report=merged;
     if(merged.complete){state.status='complete';commandPaint?.();return;}
     commandPaint?.();
-    // This stays below the dedicated 60 requests/minute report rate limit.
-    await new Promise(resolve=>setTimeout(resolve,1250));if(!valid())return;
+    if(!valid())return;
    }while(state.report.next);
   }catch(error){if(!valid())return;state.status='incomplete';state.error=error?.stale?'Session changed.':error.message||'Unable to finish report.';commandPaint?.();}
  }
@@ -270,7 +276,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   if(!state.listNext||state.listBusy||state.status!=='complete')return;
   state.listBusy=true;state.error='';commandPaint?.();
   try{
-   const after=state.listNext,page=await api('ops_acquisition_command_page',{filters:commandFilters,includeRows:true,after,asOf:state.report.asOf});
+   const after=state.listNext,page=await reportPage({filters:commandFilters,includeRows:true,after,asOf:state.report.asOf},valid);
    if(!valid())return;
    // Validate the same snapshot, but never add these already-counted pages.
    mergeCommandPage({...emptyCommandReport(),asOf:state.report.asOf},page,commandFilters,{after,includeRows:true});

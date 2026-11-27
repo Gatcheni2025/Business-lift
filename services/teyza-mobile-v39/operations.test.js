@@ -19,7 +19,7 @@ class FakeDB {
       if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*(sort[0]==='__name__'?a[0].localeCompare(b[0]):((a[1][sort[0]]||0)-(b[1][sort[0]]||0))));
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
     }};return query;}
-  transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},
+  transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},getAll:async(...refs)=>{assert(!wrote,'Transaction must read before writing');return Promise.all(refs.map(ref=>ref.get()));},
     set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
     commit:async()=>{for(const write of writes)await write();}};}
   async runTransaction(fn){const tx=this.transaction(),result=await fn(tx);await tx.commit();return result;}
@@ -857,4 +857,18 @@ test('National queues distinguish contact attempts, evidence, missing contacts a
  assert(!R.matches(geo,R.parseFilters({municipality:'Mangaung'})));
  assert(!R.matches(geo,R.parseFilters({category:'retail'})));
  assert.throws(()=>R.parseFilters({province:'Gauteng',municipalityCode:'ETH'}),e=>e.status===422);
+});
+
+test('National snapshot batches and deduplicates suppression reads without changing live action checks',async()=>{
+ const f=setup(),crypto=require('node:crypto'),email='shared@example.test';
+ const root='teyzaBusinessProspects/',p={name:'Synthetic',city:'Durban',area:'Umlazi',category:'spaza',email,phone:'',stage:'identified',historyVersion:1,permissions:{email:{granted:true}},revision:0};
+ for(let i=0;i<20;i++)f.db.records.set(root+'batch'+i,p);
+ f.db.records.set('teyzaBusinessContactSuppression/email:'+crypto.createHash('sha256').update(email).digest('hex'),{reason:'opt_out'});
+ const tx=f.db.transaction.bind(f.db);let bulk=0,refs=0,point=0;
+ f.db.transaction=()=>{const t=tx(),get=t.get,getAll=t.getAll;t.get=async ref=>{if(ref.path)point++;return get(ref);};t.getAll=async(...r)=>{bulk++;refs+=r.length;return getAll(...r);};return t;};
+ const page=await f.call('ops_acquisition_command_page',{filters:{}});
+ assert.equal(page.counts.funnel.discovered,20);assert.equal(page.counts.queues.blocked,20);assert.equal(page.counts.queues.new_contact,0);
+ assert.equal(bulk,1);assert.equal(refs,1);assert.equal(point,0);
+ assert(page.prospects.every(p=>p.optedOut===true));
+ const detail=await f.call('ops_acquisition_detail',{id:'batch0'});assert.equal(detail.prospect.optedOut,true);
 });

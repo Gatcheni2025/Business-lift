@@ -105,15 +105,64 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    return events.map(s=>s.data());
   },now);
  }
- async function view(id,p,tx=null,asOf=clock()){
-  const [blocked,history]=await Promise.all([p.optedOut===true?true:suppressed(p,tx),historical(id,p,tx,asOf)]);
+ // Page-local loader. Every bulk read and every residual ledger query uses the
+ // caller's exact read-only transaction. Never reuse cached facts across pages,
+ // snapshots, or mutation endpoints.
+ const sellerKey=p=>typeof p.sellerUid==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(p.sellerUid)?p.sellerUid:null;
+ const validLink=(id,p,key,a,linked)=>Boolean(key&&a?.uid===key&&linked?.prospectId===id&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)&&['spaza','retail','wholesale'].includes(a.category));
+ async function snapshotLoader(rows,tx,asOf){
+  const cache=new Map(),histories=new Map(),campaigns=new Map();
+  const entries=rows.map(s=>({id:s.id,p:s.data()}));
+  async function load(paths){
+   const pending=[...new Set(paths)].filter(path=>!cache.has(path));
+   for(let i=0;i<pending.length;i+=200){
+    const chunk=pending.slice(i,i+200),snapshots=await tx.getAll(...chunk.map(doc));
+    if(snapshots.length!==chunk.length)throw Error('Incomplete snapshot batch read.');
+    const byPath=new Map(snapshots.map(s=>[s.ref.path,s]));
+    for(const path of chunk){const s=byPath.get(path);if(!s)throw Error('Missing snapshot batch result.');cache.set(path,s.exists?s.data():null);}
+   }
+  }
+  const get=path=>{if(!cache.has(path))throw Error('Unplanned snapshot dependency: '+path.split('/')[0]);return cache.get(path);};
+  await load(entries.flatMap(({p})=>[...(p.optedOut===true?[]:keys(p).map(k=>suppression+'/'+k)),...(sellerKey(p)?['teyzaSellerAccounts/'+sellerKey(p),links+'/'+sellerKey(p)]:[])]));
+  const owners=new Map();
+  for(const {id,p} of entries){const key=sellerKey(p);if(key){const a=get('teyzaSellerAccounts/'+key);if(validLink(id,p,key,a,get(links+'/'+key)))owners.set(key,a);}}
+  const dependent=['teyzaPublicShops/','teyzaBilling/','teyzaSellerOnboarding/','teyzaMobileVerification/','teyzaSellerIdentity/','teyzaShopFrontPhotos/','teyzaShopLocations/'];
+  // Legacy events lack a parent-id field that would allow one collection-group
+  // query. Preserve complete history via bounded concurrent ledger queries.
+  // Ads do have ownerUid, so share a paginated IN query across up to 30 owners.
+  const legacy=entries.filter(({p})=>p.historyVersion!==1);
+  const advertising=[...owners].filter(([,a])=>a.approvalStatus==='approved'&&['spaza','retail'].includes(a.category)).map(([id])=>id);
+  const tasks=legacy.map(({id,p})=>async()=>{histories.set(id,await historical(id,p,tx,asOf));});
+  for(let i=0;i<advertising.length;i+=30){
+   const ids=advertising.slice(i,i+30);
+   tasks.push(async()=>{
+    const ads=await R.allRows(()=>db.collection('teyzaShopperAds').where('ownerUid','in',ids),q=>tx.get(q),{limit:10000*ids.length});
+    for(const row of ads){
+     const owner=row.data().ownerUid;if(!ids.includes(owner))throw Error('Unexpected campaign owner.');
+     const owned=campaigns.get(owner)||[];owned.push(row);
+     if(owned.length>10000)D.fail(503,'A seller campaign ledger exceeds the safe reporting bound.');
+     campaigns.set(owner,owned);
+    }
+   });
+  }
+  await Promise.all([load([...owners.keys()].flatMap(id=>dependent.map(prefix=>prefix+id))), (async()=>{
+   for(let i=0;i<tasks.length;i+=24)await Promise.all(tasks.slice(i,i+24).map(fn=>fn()));
+  })()]);
+  await load([...campaigns.values()].flatMap(rows=>rows.map(s=>s.data()).filter(a=>a.status==='active'&&Number.isFinite(a.startsAt)&&Number.isFinite(a.endsAt)&&a.startsAt<=asOf&&a.endsAt>asOf&&typeof a.paymentReference==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(a.paymentReference)).map(a=>'teyzaAdPayments/'+a.paymentReference)));
+  return {read:async path=>get(path),blocked:p=>p.optedOut===true||keys(p).some(k=>get(suppression+'/'+k)!==null),
+   history:(id,p)=>p.historyVersion===1?R.history(p,()=>{throw Error('Unexpected legacy lookup');},asOf):histories.get(id),
+   ads:async id=>campaigns.get(id)||[]};
+ }
+ async function view(id,p,tx=null,asOf=clock(),loader=null){
+  const readDoc=loader?loader.read:path=>read(path,tx);
+  const [blocked,history]=await Promise.all(loader?[loader.blocked(p),loader.history(id,p)]:[p.optedOut===true?true:suppressed(p,tx),historical(id,p,tx,asOf)]);
   let seller=null;
   if(p.sellerUid){
-   const key=typeof p.sellerUid==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(p.sellerUid)?p.sellerUid:null;
-   const [a,linked]=key?await Promise.all([read('teyzaSellerAccounts/'+key,tx),read(links+'/'+key,tx)]):[];
-   if(a?.uid===key&&linked?.prospectId===id&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)&&['spaza','retail','wholesale'].includes(a.category)){
-    const [s,billing]=await Promise.all([read('teyzaPublicShops/'+key,tx),read('teyzaBilling/'+key,tx)]);
-    const facts=await R.sellerSignals({id:key,account:a,shop:s,billing,read:path=>read(path,tx),ads:uid=>R.allRows(()=>db.collection('teyzaShopperAds').where('ownerUid','==',uid),q=>tx?tx.get(q):q.get()),now:asOf});
+   const key=sellerKey(p);
+   const [a,linked]=key?await Promise.all([readDoc('teyzaSellerAccounts/'+key),readDoc(links+'/'+key)]):[];
+   if(validLink(id,p,key,a,linked)){
+    const [s,billing]=await Promise.all([readDoc('teyzaPublicShops/'+key),readDoc('teyzaBilling/'+key)]);
+    const facts=await R.sellerSignals({id:key,account:a,shop:s,billing,read:readDoc,ads:loader?loader.ads:uid=>R.allRows(()=>db.collection('teyzaShopperAds').where('ownerUid','==',uid),q=>tx?tx.get(q):q.get()),now:asOf});
     seller={uid:key,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
      ...facts,welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
      welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
@@ -150,12 +199,10 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    else if(filters.category)q=q.where('category','==',filters.category);
    const size=includeRows?30:60;q=q.orderBy('__name__').limit(size+1);if(cursor)q=q.startAfter(cursor);
    const page=await tx.get(q),rows=page.docs.slice(0,size),counts=R.emptyCounts(),prospects=[];
-   // Small batches bound Firestore read fanout for multi-join records.
    const matched=rows.filter(s=>R.matches(s.data(),filters));
-   for(let i=0;i<matched.length;i+=5){
-    const views=await Promise.all(matched.slice(i,i+5).map(s=>view(s.id,s.data(),tx,asOf)));
-    for(const p of views){const facts=R.classify(p,asOf);R.addCounts(counts,facts);if(includeRows&&(!filters.queue||facts.queues[filters.queue]))prospects.push(p);}
-   }
+   const loader=await snapshotLoader(matched,tx,asOf);
+   const views=await Promise.all(matched.map(s=>view(s.id,s.data(),tx,asOf,loader)));
+   for(const p of views){const facts=R.classify(p,asOf);R.addCounts(counts,facts);if(includeRows&&(!filters.queue||facts.queues[filters.queue]))prospects.push(p);}
    const next=page.docs.length>size?rows.at(-1).id:null;
    return {schema:2,asOf,filters,scanned:rows.length,counts,prospects,next,complete:next===null};
   },{readOnly:true,readTime:Timestamp.fromMillis(asOf)});
