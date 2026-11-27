@@ -515,6 +515,14 @@ async function main(){
   await check('Business acquisition saves a consent-aware prospect and displays actual seller status',async()=>{
    let prospect=null;
    const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='admin_area_suggest'){
+     assert.match(body.adminSession,/^[a-f0-9]{64}$/);assert.match(body.data.sessionToken,/^[0-9a-f-]{36}$/i);
+     await route.fulfill({json:{ok:true,suggestions:body.data.query==='Synthetic Remote Township'?[{label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',predictionToken:'synthetic-area-receipt'}]:[]}});return true;
+    }
+    if(body.action==='admin_area_select'){
+     assert.match(body.adminSession,/^[a-f0-9]{64}$/);assert.equal(body.data.predictionToken,'synthetic-area-receipt');
+     await route.fulfill({json:{ok:true,area:{area:'Synthetic Remote Township',province:'KwaZulu-Natal',label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',lat:-29.8579,lng:31.0292,radius:10000,source:'Google Maps'}}});return true;
+    }
     if(!body.action.startsWith('ops_acquisition_'))return false;
     if(body.action==='ops_acquisition_create'){assert.equal(body.data.independentSourceConfirmed,true);assert.equal(body.data.authorisedSource,true);assert.equal(body.data.googlePlaceId,'SyntheticPlace1234');assert.equal(body.data.website,'https://example.test/');assert.equal(body.data.email,'');prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
     else if(body.action==='ops_acquisition_place_matches'){
@@ -567,9 +575,9 @@ async function main(){
    });
    let mapConfigRequests=0;
    await f.page.route('**/assets/teyza-maps-config.json',route=>{mapConfigRequests++;return route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}});});
-   let placesRequests=0,contactRequests=0;
+   let placesRequests=0,contactRequests=0,expectedRadius='20000';
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
-    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),'20000');
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),expectedRadius);
     const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
     const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Spaza',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticWrongArea123',name:'Synthetic Soweto Outside Radius',latitude:-26.268,longitude:27.858,shopCategory:'spaza'}]:[];
     return route.fulfill({json:{ok:true,entries}});
@@ -619,7 +627,19 @@ async function main(){
    assert.equal(await live.locator('.acq-business-card').count(),0);
    assert.equal(await f.page.evaluate(()=>window.__acqGeocoded??null),null);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
-   await live.getByRole('button',{name:'Back to saved contacts'}).click();
+   // Exercise remote suggestion -> selected receipt -> radius request, with no live Maps calls.
+    await live.getByLabel('Town or municipality').fill('Synthetic Remote Township');
+    await live.getByRole('button',{name:'Synthetic Remote Township, KwaZulu-Natal, South Africa',exact:true}).click();
+    await live.getByText('Selected: Synthetic Remote Township, KwaZulu-Natal, South Africa',{exact:true}).waitFor();
+    expectedRadius='10000';
+    await live.getByRole('button',{name:'Search this area',exact:true}).click();
+    await live.getByText('Synthetic Spaza',{exact:true}).waitFor();
+    assert.equal(await live.getByText('Synthetic Soweto Outside Radius',{exact:true}).count(),0);
+    assert.equal(placesRequests,6);
+    assert(f.calls.some(c=>c.action==='admin_area_suggest'&&c.data.query==='Synthetic Remote Township'));
+    assert(f.calls.some(c=>c.action==='admin_area_select'&&c.data.predictionToken==='synthetic-area-receipt'));
+    expectedRadius='20000';
+    await live.getByRole('button',{name:'Back to saved contacts'}).click();
    assert.equal(await f.page.getByText('Synthetic Spaza',{exact:true}).count(),0);
    await f.page.getByLabel('Town, township or business name').fill('Durban');
    await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
@@ -1060,11 +1080,13 @@ async function main(){
    await f.page.clock.fastForward(240000);await f.page.locator('#search').fill('Corner');
     await f.page.waitForTimeout(100);
    await f.page.clock.fastForward(120000);assert(await f.page.locator('#workspace').isVisible());
-   assert(f.calls.some(c=>c.action==='admin_session_touch'));
+   assert(f.calls.some(c=>c.action==='admin_session_touch'&&Number.isSafeInteger(c.data.activityId)&&/^[a-f0-9]{64}$/.test(c.adminSession)));
    await f.page.clock.fastForward(181000);await f.page.locator('#loginTitle').getByText('Welcome back').waitFor();
    assert(await f.page.locator('#signOut').isHidden());assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(await f.page.locator('#identityDetails').innerText(),'');
-   await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('[data-admin-view="overview"]').click();await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();await f.page.locator('.overview-stat').first().click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
+   await f.page.waitForFunction(()=>window.__testIdentity===null);
+    assert(f.calls.some(c=>c.action==='admin_session_end'&&/^[a-f0-9]{64}$/.test(c.adminSession)));
+    await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('[data-admin-view="overview"]').click();await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();await f.page.locator('.overview-stat').first().click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
   });
   await check('Late private evidence never crosses an account change',async()=>{
    let release;const delayed=new Promise(resolve=>release=resolve);let started;
