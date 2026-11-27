@@ -426,7 +426,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   actionBar.append(add,work,button('Saved contacts',()=>open('lookup')),button('Registered businesses',()=>document.querySelector('[data-admin-view="sellers"]')?.click()));intro.append(actionBar);
   panels.work=card("Today's work",'National priorities · '+new Date().toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg'}));
   workspace.append(intro,nationalPanel(contactActions,panels.work,()=>{if(modal==='work')close.click();}));
-  panels.assets=renderAssets(message);
+  panels.assets=renderAssets(message);panels.assets.prepend(button('Back to business record',()=>open('business')));
   const areaDirectory=card('Businesses already on Teyza','View approved, verified mapped Teyza businesses in the selected neighbourhood. Google-only businesses remain in the coverage map’s current local search; no bulk extraction or contact list is retained.');
   const areaSearch=el('input');areaSearch.type='search';areaSearch.placeholder='City, township or business name';areaSearch.setAttribute('aria-label','Search mapped Teyza businesses');
   const areaRows=el('div'),loaded=el('p',registeredLoaded?'Loaded mapped businesses: '+registered.length+(registeredNext?' (more pages available)':''):'Load the existing Teyza map records to check coverage.','footnote');

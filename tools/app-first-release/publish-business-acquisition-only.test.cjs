@@ -247,3 +247,18 @@ test('Materialized summary pages are validated, contain no contact destinations 
  assert.throws(()=>validateSummaryPage({...p,summaryGeneration:'11111111-1111-1111-1111-111111111111'},filters,p));
  assert.throws(()=>validateSummaryPage({...p,counts:{...counts,funnel:{...counts.funnel,discovered:64}}},filters));
 });
+
+test('Guided next action waits for actual Zoho evidence and never treats opening as sending',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {growthStep,manualNoticePurpose,emailDraftAllowed,emailText}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const p={name:'Synthetic',phone:'+27712345678',email:'synthetic@example.test',stage:'identified',permissions:{whatsapp:{granted:true},email:{granted:true}}};
+ assert.equal(growthStep(p).purpose,'introduction');assert.equal(growthStep({...p,permissions:{}}).id,'permission');
+ assert.equal(growthStep({...p,manualWhatsApp:{introduction:{openedAt:123}}}).purpose,'introduction');
+ assert.equal(growthStep({...p,contactedAt:123,manualWhatsApp:{introduction:{sentAt:123}}}).id,'response');
+ for(const status of ['queued','sending','review_required','cancelled'])assert.equal(manualNoticePurpose({...p,outbound:{email_invitation:{status}}}),null);
+ const accepted={...p,outbound:{email_invitation:{status:'accepted',providerId:'123',acceptedAt:Date.now()-1000}}};
+ assert.equal(manualNoticePurpose(accepted),'email_notice_invitation');assert.equal(manualNoticePurpose({...accepted,optedOut:true}),null);
+ assert.equal(manualNoticePurpose({...accepted,manualWhatsApp:{email_notice_invitation:{sentAt:123}}}),null);
+ assert(emailDraftAllowed('onboarding_guide',{...p,response:'needs_help',contactedAt:123}));assert(!emailDraftAllowed('onboarding_guide',p));assert.match(emailText('onboarding_guide',p).body,/training/);
+});
