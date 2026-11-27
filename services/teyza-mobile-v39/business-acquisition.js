@@ -148,15 +148,15 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
    if(filters.localityId)q=q.where('localityId','==',filters.localityId);
    else if(filters.municipalityCode)q=q.where('municipalityCode','==',filters.municipalityCode);
    else if(filters.category)q=q.where('category','==',filters.category);
-   q=q.orderBy('__name__').limit(31);if(cursor)q=q.startAfter(cursor);
-   const page=await tx.get(q),rows=page.docs.slice(0,30),counts=R.emptyCounts(),prospects=[];
+   const size=includeRows?30:60;q=q.orderBy('__name__').limit(size+1);if(cursor)q=q.startAfter(cursor);
+   const page=await tx.get(q),rows=page.docs.slice(0,size),counts=R.emptyCounts(),prospects=[];
    // Small batches bound Firestore read fanout for multi-join records.
    const matched=rows.filter(s=>R.matches(s.data(),filters));
    for(let i=0;i<matched.length;i+=5){
     const views=await Promise.all(matched.slice(i,i+5).map(s=>view(s.id,s.data(),tx,asOf)));
     for(const p of views){const facts=R.classify(p,asOf);R.addCounts(counts,facts);if(includeRows&&(!filters.queue||facts.queues[filters.queue]))prospects.push(p);}
    }
-   const next=page.docs.length>30?rows.at(-1).id:null;
+   const next=page.docs.length>size?rows.at(-1).id:null;
    return {schema:2,asOf,filters,scanned:rows.length,counts,prospects,next,complete:next===null};
   },{readOnly:true,readTime:Timestamp.fromMillis(asOf)});
  }

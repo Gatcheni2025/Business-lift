@@ -5,7 +5,7 @@ const D=require('./domain'),P=require('./publication'),G=require('./acquisition-
 const {isDisplayed}=require('./shopper-ads');
 const onboarding=require('./onboarding'),fronts=require('./shop-front');
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
-const queueKeys=['new_contact','ready_to_contact','permission_needed','field_visit','awaiting_response','registration_help','pending_approval','advertising_opportunity','seller_opportunity','follow_up_due','geography_review','history_review','message_review','blocked'];
+const queueKeys=['new_contact','ready_to_contact','permission_needed','field_visit','awaiting_response','registration_help','pending_approval','advertising_opportunity','seller_opportunity','follow_up_due','geography_review','history_review','message_review','blocked','contactable','contacted','responded','downloaded','registered','approved','paid_seller','active_advertiser','paying'];
 const funnelKeys=['discovered','contactable','readyToContact','contacted','staffConfirmedContact','providerAccepted','responded','downloads','registered','awaitingApproval','approved','paidSellers','activeAdvertisers','activePaidCampaigns','payingBusinesses','sellingAccessNotPaid','advertisingInterest','sellingInterest'];
 const norm=v=>String(v||'').normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');
 const timestamp=(value,now)=>Number.isSafeInteger(value)&&value>0&&value<=now?value:null;
@@ -131,7 +131,7 @@ function classify(p,now){
   seller_opportunity:open&&approved&&!paidSeller&&interested!=='not_now',
   follow_up_due:open&&due,geography_review:p.geographyNeedsReview===true,history_review:p.historyNeedsReview===true,
   message_review:Object.values(p.outbound||{}).some(j=>['review_required','cancelled'].includes(j?.status)||['queued','sending'].includes(j?.status)&&now-(j.updatedAt||0)>600000)||(p.seller?.advertisingReview||0)>0,
-  blocked:p.optedOut===true
+  blocked:p.optedOut===true,contactable:!p.optedOut&&hasContact(p),contacted,responded:Boolean(p.response),downloaded:Boolean(p.downloadConfirmedAt),registered,approved,paid_seller:paidSeller,active_advertiser:paidAd,paying:paidSeller||paidAd
  };
  return {funnel:{discovered:1,contactable:Number(!p.optedOut&&hasContact(p)),readyToContact:Number(ready),contacted:Number(contacted),staffConfirmedContact:Number(confirmed),providerAccepted:Number(accepted),responded:Number(Boolean(p.response)),downloads:Number(Boolean(p.downloadConfirmedAt)),registered:Number(registered),awaitingApproval:Number(pending),approved:Number(approved),paidSellers:Number(paidSeller),activeAdvertisers:Number(paidAd),activePaidCampaigns:paidAd?p.seller.activePaidCampaigns:0,payingBusinesses:Number(paidSeller||paidAd),sellingAccessNotPaid:Number(approved&&p.seller.sellingAccess===true&&!paidSeller),advertisingInterest:Number(approved&&['advertising','both'].includes(interested)),sellingInterest:Number(approved&&['selling','both'].includes(interested))},queues};
 }
