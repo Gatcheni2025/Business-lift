@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const D=require('./domain'),{createService}=require('./service'),C=require('./selfie-crypto');
+const D=require('./domain'),{createService:rawCreateService}=require('./service'),C=require('./selfie-crypto');
+const createService=require('./test-admin-fixtures.cjs').withServiceAdminFixtures(rawCreateService);
 const catalogue=require('./catalogue');
 const P=require('./publication');
 const {DAY}=require('./shop-address');
@@ -1136,7 +1137,8 @@ test('account deletion bypasses shop approval for approved, pending and rejected
 test('Netcash collection is retired and Paystack seller checkout is closed by default',async()=>{
   const {service,db}=fixture();
   await rejects(service.execute(owner,'seller_mandate_submit',{}),410);
-  await rejects(service.execute(owner,'ops_mandate_provider_confirm',{}),410);
+  await rejects(service.execute(owner,'ops_mandate_provider_confirm',{}),403);
+  await rejects(service.execute({...buyer,uid:'retirement-reviewer',teyzaAdmin:true,auth_time:1000},'ops_mandate_provider_confirm',{}),410);
   if(process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
     await rejects(service.execute(owner,'billing_checkout',{checkoutChannel:'web'}),503);
   await rejects(service.execute(owner,'promote_checkout',{}),410);
@@ -1419,4 +1421,67 @@ test('Manufacturer product offerings publish validated category, enquiry price a
   kind:'product',type:'Plumbing',name:'Uniforms'}),422);
  await rejects(f.service.execute(owner,'business_service_save',{
   kind:'product',type:'Fashion & accessories',name:'Uniforms',fulfilmentTypes:['remote']}),422);
+});
+
+test('Raw dispatcher requires a live password-bound session for every privileged action family',async()=>{
+ const actor={uid:'phaseAadmin',email_verified:true,teyzaAdmin:true,auth_time:1000,firebase:{sign_in_provider:'password'}};
+ let now=1000000,enabled=true,adminRole=true;
+ const {service}=fixture({}, {rawAdminFixture:true,clock:()=>now,getAuthUser:async uid=>({uid,disabled:!enabled,emailVerified:true,customClaims:{teyzaAdmin:adminRole}})});
+ const modules=['operations','admin-users','field-agents','mandate','billing-paystack','order-paystack','account-deletion','seller-experience','onboarding','shopper-ads','wholesale-advertising'];
+ const {protectedAdminAction}=require('./admin-session');
+ const endpoints=[...new Set([...modules.flatMap(name=>[...require('./'+name).actions].filter(action=>protectedAdminAction(action))),...require('./shop-address').adminAreaActions,'verification_read','catalogue_review','chat_report_queue','chat_report_resolve'])];
+ assert(endpoints.length>40);
+ for(const action of endpoints)await rejects(service.execute(actor,action,{}),401);
+ const google={...actor,firebase:{sign_in_provider:'google.com'}};
+ await rejects(service.execute(google,'admin_session_start'),401);
+ await rejects(service.execute(google,'ops_sellers'),401);
+ const {sessionToken}=await service.execute(actor,'admin_session_start');
+ await rejects(service.execute(google,'chat_report_queue',{},sessionToken),401);
+ await rejects(service.execute(actor,'chat_report_queue',{},'f'.repeat(64)),401);
+ assert.deepEqual(await service.execute(actor,'chat_report_queue',{},sessionToken),{reports:[]});
+ await rejects(service.execute(actor,'chat_report_queue'),401);
+ now+=240000;await service.execute(actor,'admin_session_touch',{activityId:1},sessionToken);
+ now+=120000;assert.deepEqual(await service.execute(actor,'chat_report_queue',{},sessionToken),{reports:[]});
+ await service.execute(actor,'admin_session_end',{},sessionToken);
+ await rejects(service.execute(actor,'chat_report_queue',{},sessionToken),401);
+ await rejects(service.execute(actor,'admin_session_start'),401);
+ const fresh={...actor,auth_time:now/1000};
+ const next=(await service.execute(fresh,'admin_session_start')).sessionToken;
+ await rejects(service.execute(actor,'chat_report_queue',{},next),401);
+ adminRole=false;await rejects(service.execute(fresh,'chat_report_queue',{},next),403);
+ adminRole=true;enabled=false;await rejects(service.execute(fresh,'chat_report_queue',{},next),403);
+});
+test('Restricted support agent stays restricted; current or dual-role admins cannot use the legacy support path',async()=>{
+ const agent={uid:'supportSynthetic',email_verified:true,teyzaSupportAgent:true,auth_time:1000,firebase:{sign_in_provider:'google.com'}};
+ let claims={teyzaSupportAgent:true};
+ const {service}=fixture({}, {rawAdminFixture:true,getAuthUser:async uid=>({uid,emailVerified:true,disabled:false,customClaims:claims})});
+ assert(Array.isArray((await service.execute(agent,'ops_whatsapp_support_inbox')).tickets));
+ await rejects(service.execute(agent,'ops_sellers'),403);
+ await rejects(service.execute(agent,'chat_report_queue'),403);
+ await rejects(service.execute({...agent,teyzaAdmin:true},'ops_whatsapp_support_inbox'),401);
+ claims={teyzaSupportAgent:true,teyzaAdmin:true};
+ await rejects(service.execute(agent,'ops_whatsapp_support_inbox'),401);
+ claims={};await rejects(service.execute(agent,'ops_whatsapp_support_inbox'),403);
+ assert.deepEqual(await service.execute({...buyer,firebase:{sign_in_provider:'google.com'}},'admin_access'),{admin:false});
+});
+test('Remote Admin area autocomplete is password/session gated and prediction receipts are UID- and purpose-bound',async()=>{
+ const area={id:'RemoteLocality123',formattedAddress:'Synthetic Remote, KwaZulu-Natal, South Africa',types:['locality'],location:{latitude:-29.8579,longitude:31.0292},addressComponents:[{types:['locality'],longText:'Synthetic Remote'},{types:['administrative_area_level_1'],longText:'KwaZulu-Natal'},{types:['country'],shortText:'ZA'}]};
+ const requests=[],actor={uid:'areaAdmin1',teyzaAdmin:true,email_verified:true,auth_time:1000,firebase:{sign_in_provider:'password'}};
+ const sessionToken='11111111-1111-4111-8111-111111111111';
+ const {service}=fixture({}, {rawAdminFixture:true,getAuthUser:async uid=>({uid,emailVerified:true,customClaims:{teyzaAdmin:true}}),addressFetch:async(url,options)=>{
+  requests.push({url,options});return {ok:true,json:async()=>url.includes('places:autocomplete')?{suggestions:[{placePrediction:{placeId:area.id,text:{text:area.formattedAddress}}}]}:area};
+ }});
+ const query={query:'Synthetic Remote',sessionToken};
+ await rejects(service.execute(actor,'admin_area_suggest',query),401);assert.equal(requests.length,0);
+ const adminToken=(await service.execute(actor,'admin_session_start')).sessionToken;
+ const suggested=await service.execute(actor,'admin_area_suggest',query,adminToken);
+ assert.deepEqual(JSON.parse(requests[0].options.body).includedRegionCodes,['za']);
+ assert.deepEqual(JSON.parse(requests[0].options.body).includedPrimaryTypes,['(regions)']);
+ const predictionToken=suggested.suggestions[0].predictionToken;
+ await rejects(service.execute(actor,'seller_address_select',{predictionToken}),422);
+ const other={...actor,uid:'areaAdmin2'},otherToken=(await service.execute(other,'admin_session_start')).sessionToken;
+ await rejects(service.execute(other,'admin_area_select',{predictionToken},otherToken),422);
+ const selected=await service.execute(actor,'admin_area_select',{predictionToken},adminToken);
+ assert.equal(selected.area.area,'Synthetic Remote');assert.equal(selected.area.province,'KwaZulu-Natal');assert.equal(selected.area.radius,10000);
+ assert(requests.at(-1).url.includes('sessionToken='+sessionToken));
 });

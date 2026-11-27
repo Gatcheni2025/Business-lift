@@ -156,7 +156,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
       return;
     }
     const uploads=await readiness();
-    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminAgentRewardReview:true,adminAgentCommunications:true,agentRecruitmentSource:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,businessOfferTerms:true,agentRewardsPagination:true,sellerOnlineShoppingControls:true,onlineOrderPaymentReadiness:true,sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackModernWebhookSignatureVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
+    res.json({ok:true,...uploads,shopFrontPhotos:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminAgentRewardReview:true,adminAgentCommunications:true,agentRecruitmentSource:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,businessOfferTerms:true,agentRewardsPagination:true,sellerOnlineShoppingControls:true,onlineOrderPaymentReadiness:true,sellerOnboarding:true,sellerApprovalBeforeCheckout:true,googlePlaceClaims:true,whatsappApprovalOptIn:true,paystackCheckoutLock:true,paystackRenewalInvoiceVerification:true,paystackModernWebhookSignatureVerification:true,paystackDeletionCancellationSupport:true,catalogueProducts:catalogue.data.products.length,
       catalogueRevision:catalogue.data.version,cataloguePhotos:Object.keys(catalogue.data.photos).length,shopServices:true,orderQuotes:true,orderInboxAlways:true,
       service:'teyza-mobile',accountDeletion:true,accountDeletionAuthLock:true,deletedUserReregister:true,shopperSavedAddresses:true,approvedFreeDiscovery:true,freeSellerPlans:true,paidAreaVisibility:true,wholesaleSourcing:true,protectedWholesalePrices:true,chatModeration:true,sevenDayTrial:false,shopperDeletionProfileClear:true,appleRevocationServer:true,onceOnlyShopperIdentity:true,twoWayChatNotifications:true,wholesaleConnections:true,strictSevenDayMembership:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true,fieldAgentDocuments:true,fieldAgentAdminAreas:true,fieldAgentAdminDocumentBackfill:true,agentEvidenceRetentionDays:90,agentRecruitmentEvidenceRetentionDays:180,agentCommissionEnabled:false,agentRewardReviewEnabled:true,agentRewardCents:9000,sellerNotifications:true,adminReview:true,sellerMandates:false,historicSellerMandatesReadOnly:true,
        sellerMandateRequestV3:false,adminMandatePdfExport:true,adminNetcashManualSubmission:false,
@@ -178,7 +178,7 @@ exports.teyzaMobile=onRequest({region:'us-central1',invoker:'public',secrets:[ve
     try{actor=await admin.auth().verifyIdToken(bearer[1],true);}catch(_){res.status(401).json({error:'Session expired. Sign in again.'});return;}
     // The verified Firebase ID token is passed only inside this trusted request.
     // An Admin SDK custom token is NOT a valid Identity Platform ID token.
-    const result=await service.execute({...actor,verifiedFirebaseIdToken:bearer[1]},req.body?.action,req.body?.data||{});
+    const result=await service.execute({...actor,verifiedFirebaseIdToken:bearer[1]},req.body?.action,req.body?.data||{},req.body?.adminSession);
     res.json({ok:true,...result});
   }catch(error){
     if(!error.status){

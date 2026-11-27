@@ -372,3 +372,14 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-listing-reference .button{width:fit-content;max-width:100%;white-space:normal}
 .acq-live-details a{display:inline-block;margin:6px 12px 6px 0}
 .acq-google-compact>input[type=search]{width:100%;box-sizing:border-box;margin:8px 0}
+
+/* Area autocomplete and manual contact preview, scoped to Admin acquisition. */
+.acq-area-autocomplete{min-width:0;position:relative}
+.acq-area-suggestions{display:grid;gap:4px;padding:5px;border:1px solid #d5e5df;background:#fff;border-radius:10px;margin-top:5px;max-height:220px;overflow:auto}
+.acq-area-suggestions[hidden],.acq-wa-draft[hidden]{display:none!important}
+.acq-area-option{text-align:left;color:#063e45;background:#f4f8f6;border:1px solid transparent;border-radius:7px;padding:9px 10px;cursor:pointer;font:inherit}
+.acq-area-option:hover,.acq-area-option.highlighted,.acq-area-option:focus-visible{border-color:#168454;background:#eaf7e8}
+.acq-area-suggestions small,.acq-area-status{color:#536d70;font-size:12px;margin:4px 0;overflow-wrap:anywhere}
+.acq-check-whatsapp{color:#fff!important;background:#168454!important;border-color:#168454!important;margin:6px 8px 6px 0}
+.acq-wa-draft{min-width:0;margin:8px 0;padding:10px;border:1px solid #d5e5df;border-radius:10px;background:#fff}
+.acq-wa-draft textarea{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:150px;resize:vertical;margin:8px 0;white-space:pre-wrap}

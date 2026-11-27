@@ -1,7 +1,8 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {createAccountDeletion}=require('./account-deletion');
+const {createAccountDeletion:rawCreateAccountDeletion}=require('./account-deletion');
+const createAccountDeletion=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateAccountDeletion);
 
 class FakeDB {
   constructor(seed={}){this.records=new Map(Object.entries(structuredClone(seed)));}
@@ -202,7 +203,7 @@ test('only recently signed-in admin can list and complete; live orders and confi
   }});
   const request=await service.execute(seller,'account_deletion_request',{confirmation:'DELETE'});
   await fail(service.execute(buyer,'ops_account_deletion_queue'),403);
-  await fail(service.execute({...admin,auth_time:now/1000-3600},'ops_account_deletion_queue'),403);
+  await fail(service.execute({...admin,auth_time:now/1000-3600},'ops_account_deletion_queue'),401);
   const q=await service.execute(admin,'ops_account_deletion_queue');
   assert.equal(q.requests[0].reference,request.reference);
   await fail(service.execute(admin,'ops_account_deletion_complete',{uid:'seller1'}),422);

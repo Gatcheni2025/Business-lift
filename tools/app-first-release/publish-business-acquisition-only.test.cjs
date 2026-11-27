@@ -166,3 +166,31 @@ test('Contact-first discovery uses safe website and WhatsApp links without claim
  assert(matchesAcquisitionContact({name:'Example',website:'https://example.test/'},'example.test'));
  assert(src.includes('ops_acquisition_place_matches'));assert(src.includes('independentSourceConfirmed'));assert(src.includes('contact_update'));
 });
+
+test('Admin acquisition confirms local area radius and prepares WhatsApp text only for opted-in records',async()=>{
+ const fs=require('node:fs'),path=require('node:path'),{pathToFileURL}=require('node:url');
+ const root=path.resolve(__dirname,'../../web/teyza-admin/public/js');
+ const {pilotAreaSuggestions,withinSearchRadius,resolvePilotArea}=await import(pathToFileURL(path.join(root,'teyza-combined-coverage.mjs')).href);
+ const {whatsappInvitationDraft,manualWhatsappDraftUrl}=await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(path.join(root,'teyza-business-acquisition.js'))).toString('base64'));
+ const area=resolvePilotArea('KwaMashu');assert.equal(pilotAreaSuggestions('KwaM','KwaZulu-Natal')[0].label,'KwaMashu, KwaZulu-Natal');
+ assert.equal(pilotAreaSuggestions('KwaM','Gauteng').length,0);
+ assert(withinSearchRadius({latitude:-29.7416,longitude:30.9902},area));
+ assert(!withinSearchRadius({latitude:-26.268,longitude:27.858},area));
+ const p={name:'Example Shop',area:'KwaMashu',phone:'071 234 5678'};
+ assert.match(whatsappInvitationDraft(p),/Example Shop.*KwaMashu/s);assert.match(whatsappInvitationDraft(p),/Reply STOP/);
+ assert(whatsappInvitationDraft(p).includes('Android (Google Play): https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'));assert(whatsappInvitationDraft(p).includes('iPhone (App Store): https://apps.apple.com/za/app/id6827037733'));assert(!whatsappInvitationDraft(p).includes('https://teyza.co.za/download.html'));
+ assert.equal(manualWhatsappDraftUrl(p),null);
+ const permitted={...p,permissions:{whatsapp:{granted:true}}},url=new URL(manualWhatsappDraftUrl(permitted));
+ assert.equal(url.origin,'https://wa.me');assert.equal(url.pathname,'/27712345678');assert.equal(url.searchParams.get('text'),whatsappInvitationDraft(p));
+ for(const blocked of [{...permitted,optedOut:true},{...permitted,seller:{uid:'seller'}},{...permitted,outbound:{whatsapp_invitation:{status:'queued'}}}])assert.equal(manualWhatsappDraftUrl(blocked),null);
+});
+
+test('Idle/contact/area release publishes only 15 Admin paths and requires both backend capabilities',()=>{
+ const {paths,files,assertAdminReady}=require('./publish-admin-idle-contact-area-only.cjs');
+ assert.equal(paths.length,15);assert(paths.includes('/js/teyza-app-admin-model.mjs'));
+ for(const excluded of ['/index.html','/for-shop-owners.html','/assets/app-first.css','/support-inbox.html','/pay/index.html','/assets/teyza-map-first.css'])assert(!paths.includes(excluded));
+ assert.equal(files().size,15);
+ const health={ok:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ assert.doesNotThrow(()=>assertAdminReady(health));
+ for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
+});

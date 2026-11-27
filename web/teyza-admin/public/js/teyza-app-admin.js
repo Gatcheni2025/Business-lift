@@ -1,15 +1,23 @@
-import {createOperations} from '/js/teyza-operations.js?v=20261127-contact-first';
+import {createOperations} from '/js/teyza-operations.js?v=20261127-idle-area';
 import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
-import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=R331-network';
-import {onAuthStateChanged,GoogleAuthProvider,EmailAuthProvider,signInWithPopup,signInWithEmailAndPassword,
-  reauthenticateWithPopup,reauthenticateWithCredential,signOut,setPersistence,browserSessionPersistence}
+import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
+import {onAuthStateChanged,signInWithEmailAndPassword,signOut,setPersistence,browserSessionPersistence}
   from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 
 const $=id=>document.getElementById(id),state=new ReviewState();
-const api=createApi({user:()=>auth.currentUser});
+const IDLE_MS=300000,STORAGE_KEY='teyza-admin-idle-v1';
+let sessionToken=null,lastActivity=0,lastTouch=0,lastSentActivity=0,touching=false,closing=false,loginPending=false;
+const rawApi=createApi({user:()=>auth.currentUser,adminSession:()=>sessionToken||undefined});
+const idleExpired=()=>!lastActivity||Date.now()<lastActivity||Date.now()-lastActivity>=IDLE_MS;
+const api=async(action,data)=>{
+  if(!authorised||!sessionToken||idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');throw Object.assign(Error('Session changed.'),{stale:true});}
+  const token=sessionToken,result=await rawApi(action,data);
+  if(token!==sessionToken||!authorised)throw Object.assign(Error('Session changed.'),{stale:true});
+  return result;
+};
 let queueLoaded=false;
 const operations=createOperations({api,onError:failed,getReviewSummary:()=>({loaded:queueLoaded,count:state.rows.length,hasMore:Boolean(state.next)})});
-let activeUser=null,busy=false,expiresAt=0,objectUrl=null,renewing=false,authorised=false,resumeSection=null;
+let activeUser=null,busy=false,objectUrl=null,authorised=false;
 const controls=['refreshQueue','loadMore','viewIdentity','viewSelfie','approveSeller','rejectSeller','requestPhoto','requestCompliance'];
 function notice(message,kind=''){ $('notice').textContent=message;$('notice').className='notice '+kind;$('notice').hidden=false; }
 function set(id,value){$(id).textContent=value||'Not supplied';}
@@ -23,23 +31,52 @@ function clearPhoto(){
 }
 function clearViews(){state.views.clear();clearPhoto();$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;updateControls();}
 function resetDetails(){clearPhoto();$('sellerDetail').hidden=true;$('emptyDetail').hidden=false;$('reviewConfirmed').checked=false;$('claimConfirmed').checked=false;$('claimReview').hidden=true;$('reason').value='';}
-function lock(message,kind='error'){
-  // Preserve only the section identifier; no selected seller, opened document,
-  // bank account or approval confirmation survives an expired review session.
-  if(authorised)resumeSection=operations.currentView();
-  operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;expiresAt=0;resetDetails();$('sellerList').replaceChildren();
-  $('activeSession').hidden=true;
-  $('sectionSearch').value='';filterSections();
-  $('workspace').hidden=true;$('loginPanel').hidden=false;window.scrollTo(0,0);
-  renewing=Boolean(activeUser);$('email').value=activeUser?.email||'';$('email').readOnly=renewing;
-  set('loginTitle',renewing?'Renew your review session':'Welcome back');
-  set('loginHint',renewing?'Sign in again to open a fresh five-minute review session.':'Use your authorised administrator account.');
+function savedSession(user){
+  try{const row=JSON.parse(sessionStorage.getItem(STORAGE_KEY)||'null');
+    return row?.uid===user.uid&&/^[a-f0-9]{64}$/.test(row.token)&&Number.isFinite(row.lastActivity)?row:null;
+  }catch{return null;}
+}
+function persistSession(){
+  try{if(sessionToken&&activeUser)sessionStorage.setItem(STORAGE_KEY,JSON.stringify({uid:activeUser.uid,token:sessionToken,lastActivity}));else sessionStorage.removeItem(STORAGE_KEY);}catch{}
+}
+function clearWorkspace(){
+  operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;resetDetails();$('sellerList').replaceChildren();
+  $('sectionSearch').value='';$('search').value='';for(const id of ['sellerTitle','sellerCategory','submittedAt','sellerEmail','sellerPhone','sellerAddress','sellerCompany','sellerStatus','complianceFollowup'])set(id,'—');$('claimMapLink').removeAttribute('href');$('complianceList').replaceChildren();$('sellerComplianceSummary').replaceChildren();filterSections();$('workspace').hidden=true;$('loginPanel').hidden=false;
+  $('email').readOnly=false;$('password').value='';$('signOut').hidden=true;
+  set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator email and password.');
+}
+async function logout(message='',kind='warning'){
+  if(closing)return;closing=true;
+  const revoke=sessionToken&&auth.currentUser?rawApi('admin_session_end').then(r=>r.signedOut===true,()=>false):Promise.resolve(true);
+  sessionToken=null;lastActivity=lastTouch=lastSentActivity=0;touching=false;persistSession();activeUser=null;clearWorkspace();window.scrollTo(0,0);
   if(message)notice(message,kind);
+  // Clear local data immediately. Bound the wait for remote invalidation; if
+  // offline, do not misrepresent server termination as confirmed.
+  let timer;
+  try{
+    const ended=await Promise.race([revoke,new Promise(resolve=>{timer=setTimeout(()=>resolve(false),5000);})]);
+    if(!ended)notice('Private data cleared. Server logout could not be confirmed; the idle session will expire.','warning');
+    await signOut(auth);
+  }catch{notice('Your private workspace was cleared. Firebase sign-out could not be confirmed; close this tab before continuing.','error');}
+  finally{clearTimeout(timer);closing=false;}
 }
 function failed(error){
-  if(error.status===401){lock(error.message);return;}
-  if(error.status===403){lock(error.message+' Administrator access must be assigned by the Teyza project owner.');return;}
+  if(error.stale)return;
+  if(error.status===401){void logout(error.message);return;}
+  if(error.status===403){void logout(error.message+' Administrator access must be assigned by the Teyza project owner.','error');return;}
   notice(error.message||'The request could not be completed. Please try again.','error');
+}
+function activity(event){
+  if(!event.isTrusted||document.hidden||!authorised)return;
+  if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
+  lastActivity=Date.now();persistSession();flushActivity();
+}
+function flushActivity(){
+  if(!authorised||document.hidden||touching||idleExpired()||lastActivity<=lastSentActivity)return;
+  const now=Date.now(),token=sessionToken,reported=lastActivity;
+  if(now-lastTouch<30000||now-reported>60000)return;
+  lastTouch=now;touching=true;
+  void rawApi('admin_session_touch',{activityLagMs:now-reported,activityId:reported}).then(()=>{if(token===sessionToken)lastSentActivity=reported;}).catch(error=>{if(token===sessionToken&&(error.status===401||error.status===403))failed(error);}).finally(()=>{if(token===sessionToken)touching=false;});
 }
 const complianceLabels={
   identity:'Current ID, passport or company registration',
@@ -228,48 +265,47 @@ async function decide(status){
   }}
   finally{if(state.current(ticket)){busy=false;updateControls();}}
 }
-async function authorise(user){
-  state.account(user.uid);queueLoaded=false;activeUser=user;authorised=false;busy=false;resetDetails();
-  $('signOut').hidden=false;set('accountEmail',user.email||'Teyza administrator');const ticket=state.ticket();
+async function authorise(user,fresh=false){
+  clearWorkspace();state.account(user.uid);activeUser=user;const ticket=state.ticket();
   try{
     const token=await user.getIdTokenResult(true);if(!state.current(ticket))return;
     if(token.claims.teyzaAdmin!==true||token.claims.email_verified!==true){
-      lock('This account needs administrator access and a verified email. The Teyza project owner can grant access to your Firebase user UID.');return;}
-    const time=Number(token.claims.auth_time)*1000;expiresAt=time+300000;
-    if(!Number.isFinite(time)||time>Date.now()+60000||expiresAt<=Date.now()){
-      lock('Sign in again before reviewing sellers. Each private review session lasts five minutes.','warning');return;}
-    authorised=true;renewing=false;$('loginPanel').hidden=true;$('workspace').hidden=false;$('activeSession').hidden=false;
-    $('email').readOnly=false;$('notice').hidden=true;await loadQueue();
-    if(authorised){await operations.load();
-      if(authorised&&resumeSection){const section=resumeSection;resumeSection=null;
-        await operations.navigate(section);}}
-
-  }catch(error){if(state.current(ticket))failed(error);}
-}
-async function login(event,google=false){
-  event?.preventDefault();$('loginButton').disabled=true;$('googleLogin').disabled=true;
-  try{
-    if(google){
-      const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
-      const result=renewing&&activeUser?await reauthenticateWithPopup(activeUser,provider):await signInWithPopup(auth,provider);
-      // Reauthentication does not necessarily emit onAuthStateChanged.
-      if(renewing)await authorise(result.user);
+      await logout('This account needs administrator access and a verified email. The Teyza project owner can grant access to your Firebase user UID.','error');return;}
+    if(token.claims.firebase?.sign_in_provider!=='password'||token.claims.teyzaPhoneBootstrap===true){
+      await logout('Sign in to Admin using your authorised email and password.','warning');return;}
+    if(fresh){
+      sessionToken=null;persistSession();
+      const r=await rawApi('admin_session_start');if(!state.current(ticket))return;
+      if(!/^[a-f0-9]{64}$/.test(r.sessionToken)||r.idleMs!==IDLE_MS)throw Error('Admin inactivity-session service is not available.');
+      sessionToken=r.sessionToken;lastActivity=lastTouch=lastSentActivity=Date.now();persistSession();
     }else{
-      const email=$('email').value.trim(),password=$('password').value;
-      if(renewing&&activeUser){const result=await reauthenticateWithCredential(activeUser,EmailAuthProvider.credential(email,password));await authorise(result.user);}
-      else await signInWithEmailAndPassword(auth,email,password);
+      const stored=savedSession(user);
+      if(!stored){await logout('Sign in with your email and password to open Admin.');return;}
+      sessionToken=stored.token;lastActivity=lastSentActivity=stored.lastActivity;lastTouch=0;
+      if(idleExpired()){await logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
+      const r=await rawApi('admin_session_status');if(!state.current(ticket))return;
+      if(r.active!==true)throw Error('Admin session could not be verified.');
     }
+    if(idleExpired()){await logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
+    authorised=true;$('signOut').hidden=false;set('accountEmail',user.email||'Teyza administrator');
+    $('loginPanel').hidden=true;$('workspace').hidden=false;$('notice').hidden=true;await loadQueue();
+    if(authorised)await operations.load();
+  }catch(error){if(state.current(ticket))await logout(error.message||'Admin session could not be verified.','error');}
+}
+async function login(event){
+  event?.preventDefault();if(loginPending||closing)return;loginPending=true;$('loginButton').disabled=true;
+  try{
+    const email=$('email').value.trim(),password=$('password').value;
+    const result=await signInWithEmailAndPassword(auth,email,password);
+    await authorise(result.user,true);
   }catch(error){const message=({'auth/invalid-credential':'The email or password was not accepted. Please try again.',
-    'auth/popup-blocked':'Allow the Google sign-in popup for teyza.co.za, then try again.',
-    'auth/unauthorized-domain':'Add teyza.co.za to Firebase Authentication authorised domains.',
-    'auth/user-mismatch':'Renew with the same administrator account, or sign out to switch accounts.'})[error.code];notice(message||error.message||'Sign-in could not be completed.','error');}
-  finally{$('password').value='';$('loginButton').disabled=false;$('googleLogin').disabled=false;}
+    'auth/unauthorized-domain':'Add teyza.co.za to Firebase Authentication authorised domains.'})[error.code];notice(message||error.message||'Sign-in could not be completed.','error');}
+  finally{$('password').value='';$('loginButton').disabled=false;loginPending=false;}
 }
 $('enlargePhoto').addEventListener('click',()=>{if(!authorised||!objectUrl||$('evidenceImage').hidden)return;$('largePhoto').src=objectUrl;$('photoDialog').showModal();});
 $('closePhoto').addEventListener('click',()=>{$('photoDialog').close();$('largePhoto').removeAttribute('src');});
-$('emailLogin').addEventListener('submit',login);$('googleLogin').addEventListener('click',()=>login(null,true));
-$('signOut').addEventListener('click',async()=>{resumeSection=null;lock();resumeSection=null;await signOut(auth).catch(failed);});
-$('renewSession').addEventListener('click',()=>lock('Sign in again to renew your review session.','warning'));
+$('emailLogin').addEventListener('submit',login);
+$('signOut').addEventListener('click',()=>void logout());
 $('refreshQueue').addEventListener('click',()=>loadQueue());$('loadMore').addEventListener('click',()=>loadQueue(true));
 $('search').addEventListener('input',drawQueue);$('category').addEventListener('change',drawQueue);
 $('viewIdentity').addEventListener('click',()=>viewEvidence('identity'));$('viewSelfie').addEventListener('click',()=>viewEvidence('selfie'));
@@ -290,22 +326,21 @@ function filterSections(){
 }
 $('sectionSearch').addEventListener('input',filterSections);
 document.addEventListener('teyza-admin-view-change',()=>{clearViews();$('sectionSearch').value='';filterSections();});
+for(const type of ['pointerdown','keydown','input','wheel','touchstart','pointermove'])
+  document.addEventListener(type,activity,{capture:true,passive:true});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){state.generation++;busy=false;clearViews();operations.hideSensitive();return;}
   if(!authorised)return;
-  if(Date.now()>=expiresAt){lock('Your private review session expired. Sign in again to continue.','warning');return;}
-  // Reload the section after clearing private documents, rather than returning to a blank workspace.
+  if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
   operations.load();
 });
 window.addEventListener('pagehide',()=>{state.generation++;clearViews();operations.clear();});
-setInterval(()=>{if(!authorised)return;const remaining=Math.max(0,Math.ceil((expiresAt-Date.now())/1000));
-  if(!remaining){lock('Your private review session expired. Sign in again to continue.','warning');return;}
-  set('sessionTime',`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')} remaining`);updateControls();},1000);
+window.addEventListener('pageshow',event=>{if(event.persisted&&auth.currentUser&&!closing)void authorise(auth.currentUser);});
+setInterval(()=>{if(!authorised)return;if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}flushActivity();updateControls();},1000);
 try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your browser could not save this sign-in session. Allow site storage for teyza.co.za.','warning');}
 onAuthStateChanged(auth,user=>{
-  operations.clear();activeUser=user;state.account(user?.uid||null);queueLoaded=false;busy=false;authorised=false;resetDetails();
-  $('sectionSearch').value='';filterSections();
-  if(user)authorise(user);else{resumeSection=null;renewing=false;expiresAt=0;$('workspace').hidden=true;$('loginPanel').hidden=false;$('signOut').hidden=true;
-    $('activeSession').hidden=true;
-    $('email').readOnly=false;set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator account.');}
+  if(closing||loginPending)return;
+  if(user&&authorised&&user.uid===activeUser?.uid)return;
+  if(user){void authorise(user);return;}
+  sessionToken=null;lastActivity=lastTouch=lastSentActivity=0;touching=false;activeUser=null;persistSession();clearWorkspace();
 });
