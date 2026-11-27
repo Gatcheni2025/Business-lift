@@ -714,7 +714,7 @@ test('National prospect intake, missing-contact routing, WhatsApp-only and evide
  await rejects(f.call('ops_acquisition_create',{...base,province:'Invalid'}),422);
  await rejects(f.call('ops_acquisition_create',{...base,phoneKind:'whatsapp_only'}),422);
  let p=(await f.call('ops_acquisition_create',base)).prospect;
- assert.equal(p.province,'Limpopo');assert.equal(p.municipality,'Polokwane');assert.equal(p.geographyNeedsReview,false);
+ assert.equal(p.province,'Limpopo');assert.equal(p.municipality,'Polokwane');assert.equal(p.geographyNeedsReview,true);assert.equal(p.geographySource,'provisional');
  assert.equal(p.contactQueue,'field_visit');assert.match(p.contactNote,/No phone number or email/);
  const evt=(p,extra)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic owner evidence',...extra});
  p=(await evt(p,{type:'contact_update',phone:'0712345678',phoneKind:'whatsapp_only',authorisedSource:true})).prospect;
@@ -736,9 +736,22 @@ test('Legacy pilot records retain identity and can confirm missing geography; al
  let p=(await f.call('ops_acquisition_create',base)).prospect;
  assert.equal(p.province,'KwaZulu-Natal');assert.equal(p.geographyNeedsReview,true);const id=p.id;
  p=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'geography_update',confirmed:true,note:'Confirmed by owner',province:'KwaZulu-Natal',municipality:'eThekwini',geographyConfirmed:true})).prospect;
- assert.equal(p.id,id);assert.equal(p.geographyNeedsReview,false);
+ assert.equal(p.id,id);assert.equal(p.geographyNeedsReview,true);assert.equal(p.municipality,'eThekwini');
  for(const province of ['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){
   const n=(await f.call('ops_acquisition_create',{...base,city:'Synthetic '+province,area:'Test area',address:'Synthetic '+province,province,municipality:'Test municipality',geographyConfirmed:true})).prospect;
-  assert.equal(n.province,province);assert.equal(n.geographyNeedsReview,false);
+  assert.equal(n.province,province);assert.equal(n.geographyNeedsReview,true);
  }
+});
+
+test('Official allocation derives source codes on the server and preserves legacy IDs and events',async()=>{
+ const f=setup(),G=require('./acquisition-geography'),{createAcquisition}=require('./business-acquisition');
+ const official={localityId:'ETH:123456789',province:'KwaZulu-Natal',municipality:'eThekwini',municipalityCode:'ETH',township:'KwaMashu',townshipCode:'123456789',geographySource:G.SOURCE,geographySourceVintage:G.VINTAGE};
+ const api=createAcquisition({db:f.db,clock:()=>now,geographyLookup:{resolve:async id=>{assert.equal(id,official.localityId);return official;},search:async()=>({localities:[official]})}});
+ const input={name:'Synthetic Shop',city:'Durban',area:'Kwa Mashu',address:'Synthetic 1',category:'spaza',source:'owner_inquiry',sourceReference:'Owner',authorisedSource:true};
+ const p=(await api.execute(admin,'ops_acquisition_create',input)).prospect;
+ await rejects(api.execute(admin,'ops_acquisition_create',{...input,city:'eThekwini',area:'KwaMashu',province:'KwaZulu-Natal',municipality:'eThekwini',localityId:official.localityId,geographyConfirmed:true}),409);
+ const q=(await api.execute(admin,'ops_acquisition_event',{id:p.id,revision:p.revision,type:'geography_update',confirmed:true,note:'Official reference checked',province:'KwaZulu-Natal',municipality:'Untrusted client label',localityId:official.localityId,geographyConfirmed:true})).prospect;
+ assert.equal(q.id,p.id);assert.equal(q.area,'Kwa Mashu');assert.equal(q.township,'KwaMashu');assert.equal(q.municipality,'eThekwini');assert.equal(q.localityId,official.localityId);assert.equal(q.geographyNeedsReview,false);
+ const detail=await api.execute(admin,'ops_acquisition_detail',{id:p.id});
+ assert(detail.events.some(e=>e.type==='created'));assert(detail.events.some(e=>e.type==='geography_update'));
 });

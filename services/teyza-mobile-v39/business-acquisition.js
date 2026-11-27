@@ -1,8 +1,9 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
-const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send']);
-const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'];
+const G=require('./acquisition-geography');
+const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks',identityLinks='teyzaBusinessProspectIdentityKeys';
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities']);
+const provinces=G.provinces;
 const legacyProvince=Object.freeze({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'});
 const cities=Object.keys(legacyProvince);
 const phoneKinds=['unconfirmed','whatsapp_only'];
@@ -50,8 +51,8 @@ const phoneKind=(v,number)=>{
 const contactNote=p=>!p.phone&&!p.email?'No phone number or email recorded — field visit / manual enquiry':
  p.phoneKind==='whatsapp_only'?'No voice phone number — WhatsApp only':
  !p.phone?'No phone number — email available':'';
-const geography=p=>({province:p.province||legacyProvince[p.city]||'',municipality:p.municipality||'',
- geographyNeedsReview:!p.province||!p.municipality});
+const geography=G.projectedGeography;
+const identityKey=(province,name,address)=>hash([province,name,address].map(norm).join('|'));
 const acquisitionProgress=p=>({
  contactedAt:p.contactedAt||p.emailHistory?.invitation?.sentAt||null,
  lastWhatsAppContactAt:p.lastWhatsAppContactAt||null,
@@ -65,10 +66,31 @@ const nextDate=(v,now)=>{
  if(!Number.isSafeInteger(v)||v<now-86400000||v>now+366*86400000)D.fail(422,'Choose a follow-up date within one year.');
  return v;
 };
-function createAcquisition({db,clock=Date.now}){
+function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography()} ){
  const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
  const communications=createCommunication({db,clock});
  const eventsPath=id=>collection+'/'+id+'/events';
+ // Exact normalized name/address in a province is deliberately conservative.
+ // Keep every historic document ID and never merge businesses on a fuzzy name.
+ async function checkLegacyIdentity(tx,province,name,address,exclude){
+  const pilot=cities.find(c=>legacyProvince[c]===province);if(!pilot)return;
+  let after=null,scanned=0;
+  do{
+   let q=db.collection(collection).where('city','==',pilot).orderBy('__name__').limit(201);
+   if(after)q=q.startAfter(after);
+   const page=await tx.get(q),rows=page.docs.slice(0,200);
+   for(const row of rows){const v=row.data();if(row.id!==exclude&&geography(v).province===province&&norm(v.name)===norm(name)&&norm(v.address)===norm(address))D.fail(409,'A legacy business matches this name and address. Open its existing record; do not create another.');}
+   scanned+=rows.length;after=page.docs.length>200?rows.at(-1).id:null;
+   if(after&&scanned>=5000)D.fail(409,'Legacy identity reconciliation requires an audited index backfill before creating more businesses in this province.');
+  }while(after);
+ }
+ async function allocation(data,province,municipality,area){
+  if(!data.localityId)return {province,municipality,township:area,geographySource:'provisional'};
+  const official=await geographyLookup.resolve(data.localityId);
+  if(official.province!==province||official.geographySource!==G.SOURCE||official.geographySourceVintage!==G.VINTAGE)D.fail(422,'Official locality does not match the selected province.');
+  // Canonical names and codes are derived server-side, never copied from hidden client fields.
+  return {...official,geographyVerifiedAt:clock()};
+ }
  function event(tx,id,uid,type,details){
   tx.set(doc(eventsPath(id)+'/'+crypto.randomUUID()),{actorUid:uid,type,...details,createdAt:clock()});
  }
@@ -104,6 +126,7 @@ function createAcquisition({db,clock=Date.now}){
  }
  async function execute(auth,action,data){
   const uid=D.id(auth.uid);
+  if(action==='ops_acquisition_localities')return geographyLookup.search(data.province,data.query);
   if(action==='ops_acquisition_list'){
    let q=db.collection(collection).orderBy('__name__').limit(31);
    if(data.after)q=q.startAfter(D.id(data.after));
@@ -140,18 +163,25 @@ function createAcquisition({db,clock=Date.now}){
    if(!Array.isArray(initialChannels)||initialChannels.length>2||new Set(initialChannels).size!==initialChannels.length||initialChannels.some(c=>!['email','whatsapp'].includes(c)||!contactValue(contact,c)))D.fail(422,'Select only channels with recorded contact details.');
    const initialNote=initialChannels.length?clean(data.initialConsentNote,'actual owner opt-in evidence',500):'';
    if(initialChannels.length&&data.initialConsentConfirmed!==true)D.fail(422,'Confirm actual owner opt-in for each selected channel.');
-   const id=hash([city,area,address,name].map(norm).join('|')),ref=doc(collection+'/'+id);
+   const geo=await allocation(data,province,municipality,area);
+   const key=identityKey(province,name,address),keyRef=doc(identityLinks+'/'+key);
+   const legacyId=hash([city,area,address,name].map(norm).join('|'));
+   const id=national?hash([province,city,area,address,name].map(norm).join('|')):legacyId,ref=doc(collection+'/'+id);
    const saved=await db.runTransaction(async tx=>{
     const old=await tx.get(ref);
+    const historic=national?await tx.get(doc(collection+'/'+legacyId)):old;
+    const identity=await tx.get(keyRef);
+    if(identity.exists||historic.exists)D.fail(409,'This business already exists or needs identity review. Open the existing record.');
+    await checkLegacyIdentity(tx,province,name,address,id);
     const placeRef=googlePlaceId?doc(placeLinks+'/'+hash(googlePlaceId)):null;
     const placeLink=placeRef?await tx.get(placeRef):null;
     if(placeLink?.exists)D.fail(409,'This listing already has an added business. Search again and open its existing record.');
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
     if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
     const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
-    const p={name,city,area,province,municipality,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
+    const p={name,city,area,...geo,identityKey:key,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
-    tx.set(ref,p);if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{contactNote:contact.contactNote,province,municipality});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
+    tx.set(ref,p);tx.set(keyRef,{prospectId:id,province,createdAt:clock(),createdBy:uid});if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{contactNote:contact.contactNote,province,municipality:geo.municipality,localityId:geo.localityId||null});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }
@@ -175,6 +205,8 @@ function createAcquisition({db,clock=Date.now}){
    const type=choose(data.type,['permission','contact','contact_update','geography_update','response','app_download','commercial_interest','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
    const note=clean(data.note,'activity note or consent evidence',500);
    if(data.confirmed!==true)D.fail(422,'Confirm this is an accurate record of an actual event.');
+   // Resolve an official reference before a Firestore transaction; transaction retries never call external GIS.
+   const proposedGeo=type==='geography_update'?await allocation(data,choose(data.province,provinces,'province'),clean(data.municipality,'municipality',100),clean(data.township||'','township',100,false)):null;
    const saved=await db.runTransaction(async tx=>{
     const snap=await tx.get(ref);if(!snap.exists)D.fail(404,'Business prospect not found.');
     const p=snap.data();
@@ -197,10 +229,15 @@ function createAcquisition({db,clock=Date.now}){
     }
     if(type==='geography_update'){
      if(data.geographyConfirmed!==true)D.fail(422,'Confirm the business geography using a permitted source.');
-     if(p.municipality&&p.province)D.fail(409,'Geography is already allocated; escalate corrections for review.');
-     update.province=choose(data.province,provinces,'province');
-     update.municipality=clean(data.municipality,'municipality',100);
-     details={...details,province:update.province,municipality:update.municipality};
+     const previous=geography(p);
+     if(!previous.geographyNeedsReview)D.fail(409,'Official geography is already allocated; escalate corrections for review.');
+     if(previous.province&&previous.province!==proposedGeo.province)D.fail(409,'Province correction requires identity review; existing history is preserved.');
+     const key=identityKey(proposedGeo.province,p.name,p.address),keyRef=doc(identityLinks+'/'+key),identity=await tx.get(keyRef);
+     if(identity.exists&&identity.data().prospectId!==id)D.fail(409,'Another prospect has the same identity. Review both records; never merge automatically.');
+     await checkLegacyIdentity(tx,proposedGeo.province,p.name,p.address,id);
+     Object.assign(update,proposedGeo,{township:proposedGeo.township||p.area,identityKey:key});
+     details={...details,province:update.province,municipality:update.municipality,localityId:update.localityId||null};
+     if(!identity.exists)tx.set(keyRef,{prospectId:id,province:update.province,createdAt:stamp,createdBy:uid});
     }
     if(type==='response'){
      update.response=choose(data.response,responses,'owner response');
