@@ -106,7 +106,7 @@ jobs:
           } elseif ($env:REVIEW_MODE -eq 'current') {
             $samples = @(
               @{ Path = 'web/app-first/public/js/seller-web-billing.mjs'; Sha256 = 'b7c13588efb5b43836723e4b1eb2227e3246076e6938aca8200714261f0eee17' },
-              @{ Path = 'services/teyza-mobile-v39/billing-paystack.test.js'; Sha256 = 'e873e4cd84af19f960b4b8f53e117a4b28d9947b4211cf27ddae110668805a8a' },
+              @{ Path = 'services/teyza-mobile-v39/billing-paystack.test.js'; Sha256 = 'c16a69ec0372ad03cbba73dbf3f8f25a8a9a8795ca33f0e9ac08e5ac62c0745a' },
               @{ Path = 'tools/app-first-release/seller-web-billing.test.cjs'; Sha256 = '2ee5b888ffc3fbcebe9f77afaa454f32e1570e7215d82fa57c706610ce53d777' }
             )
           } else { throw 'Unknown review mode.' }

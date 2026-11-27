@@ -1137,7 +1137,8 @@ test('account deletion bypasses shop approval for approved, pending and rejected
 test('Netcash collection is retired and Paystack seller checkout is closed by default',async()=>{
   const {service,db}=fixture();
   await rejects(service.execute(owner,'seller_mandate_submit',{}),410);
-  await rejects(service.execute(owner,'ops_mandate_provider_confirm',{}),410);
+  await rejects(service.execute(owner,'ops_mandate_provider_confirm',{}),403);
+  await rejects(service.execute({...buyer,uid:'retirement-reviewer',teyzaAdmin:true,auth_time:1000},'ops_mandate_provider_confirm',{}),410);
   if(process.env.TEYZA_SELLER_PAYSTACK_ENABLED!=='true')
     await rejects(service.execute(owner,'billing_checkout',{checkoutChannel:'web'}),503);
   await rejects(service.execute(owner,'promote_checkout',{}),410);
