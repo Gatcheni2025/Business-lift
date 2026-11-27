@@ -318,7 +318,8 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const searches=await Promise.allSettled(kinds.map(async kind=>{
     const url=new URL(ENDPOINT);
     url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
-    url.searchParams.set('radius',String(radius));url.searchParams.set('category',kind);
+    if(compact)url.searchParams.set('radius',String(radius));else url.searchParams.set('radius','20000');
+    url.searchParams.set('category',kind);
     const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(55000)});
     if(!res.ok){let detail='';try{const body=await res.json();detail=String(body.error||'').slice(0,120);}catch(_){}
      throw Error(kind+' discovery HTTP '+res.status+(detail?' ('+detail+')':''));}
