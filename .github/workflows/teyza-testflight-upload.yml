@@ -4,9 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       source_run_id:
-        description: 'Successful signed Teyza store-files run'
+        description: 'Reviewed successful signed iOS build run'
         required: true
-        default: '40283985950'
+        type: string
+      expected_source_sha:
+        description: 'Exact reviewed source commit SHA'
+        required: true
+        type: string
+      expected_version:
+        description: 'Expected iOS version and build, e.g. 1.0.51+61'
+        required: true
         type: string
 
 permissions:
@@ -19,10 +26,97 @@ concurrency:
 
 jobs:
   upload:
-    if: github.repository == 'Gatcheni2025/Business-lift' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'Gatcheni2025/Business-lift' &&
+      github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
+      - name: Verify reviewed source run and signed artifact provenance
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          repo = 'Gatcheni2025/Business-lift'
+          run_id = os.environ['SOURCE_RUN_ID']
+          sha = os.environ['EXPECTED_SOURCE_SHA']
+          version = os.environ['EXPECTED_VERSION']
+          if not re.fullmatch(r'[1-9][0-9]*', run_id):
+              raise SystemExit('Invalid source run ID.')
+          if not re.fullmatch(r'[a-f0-9]{40}', sha):
+              raise SystemExit('Expected exact reviewed 40-character source SHA.')
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+', version):
+              raise SystemExit('Expected exact app version+build.')
+          def get(endpoint):
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + repo + endpoint,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_READ_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'X-GitHub-Api-Version': '2022-11-28'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          run = get('/actions/runs/' + run_id)
+          if (str(run.get('id')) != run_id or
+              (run.get('repository') or {}).get('full_name') != repo or
+              (run.get('head_repository') or {}).get('full_name') != repo or
+              run.get('head_sha') != sha or run.get('status') != 'completed' or
+              run.get('conclusion') != 'success' or
+              run.get('path','').split('@')[0] not in (
+                  '.github/workflows/teyza-mobile-release.yml',
+                  '.github/workflows/teyza-store-files.yml') or
+              run.get('event') not in ('workflow_dispatch','push')):
+              raise SystemExit('Source run provenance does not match approved release.')
+          listing = get('/actions/runs/' + run_id + '/artifacts?name=teyza-ios-release-signed&per_page=100')
+          artifacts = listing.get('artifacts', [])
+          if (listing.get('total_count') != 1 or len(artifacts) != 1 or
+              artifacts[0].get('name') != 'teyza-ios-release-signed' or
+              artifacts[0].get('expired') is not False):
+              raise SystemExit('Expected exactly one available production-signed iOS artifact.')
+          print('Verified reviewed run', run_id, 'artifact', artifacts[0]['id'])
+          PY
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-signed
+          path: ${{ runner.temp }}/teyza-artifact
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify signed release manifest and IPA identity
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'apps/teyza_shopper/scripts')
+          from upload_testflight import verify
+          root = Path(os.environ['RUNNER_TEMP']) / 'teyza-artifact'
+          manifests = list(root.rglob('release-manifest.json'))
+          packages = list(root.rglob('*.ipa'))
+          if len(manifests) != 1 or len(packages) != 1:
+              raise SystemExit('Expected one release manifest and one IPA.')
+          manifest = json.loads(manifests[0].read_text())
+          if (manifest.get('commit') != os.environ['EXPECTED_SOURCE_SHA'] or
+              manifest.get('version') != os.environ['EXPECTED_VERSION'] or
+              manifest.get('releasePurpose') != 'production_candidate' or
+              manifest.get('productionBackendGateVerified') is not True or
+              manifest.get('paymentChannel') != 'store' or
+              manifest.get('inAppDigitalSubscriptionPurchasesEnabled') is not False):
+              raise SystemExit('Artifact is not the reviewed production candidate.')
+          package = verify(manifests[0].parent)
+          if package.resolve() != packages[0].resolve() or '\n' in str(package) or '\r' in str(package):
+              raise SystemExit('Unexpected IPA path.')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('TEYZA_IPA='+str(package)+'\n')
+          PY
       - name: Check upload credentials are configured
         env:
           ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
@@ -33,29 +127,6 @@ jobs:
           import os
           if any(not os.environ.get(k) for k in ('ASC_KEY_ID','ASC_ISSUER_ID','ASC_PRIVATE_KEY')):
               raise SystemExit('Run Teyza Apple upload credentials in asiye_app before uploading.')
-          PY
-      - uses: actions/download-artifact@v4
-        with:
-          name: teyza-ios-release-signed
-          path: ${{ runner.temp }}/teyza-artifact
-          run-id: ${{ inputs.source_run_id }}
-          github-token: ${{ github.token }}
-      - name: Verify the IPA belongs to Teyza
-        run: |
-          python3 - <<'PY'
-          import os, plistlib, zipfile
-          from pathlib import Path
-          packages=list((Path(os.environ['RUNNER_TEMP'])/'teyza-artifact').rglob('*.ipa'))
-          if len(packages)!=1: raise SystemExit('Expected exactly one signed IPA.')
-          path=packages[0]
-          with zipfile.ZipFile(path) as z:
-              names=[n for n in z.namelist() if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/')==2]
-              if len(names)!=1: raise SystemExit('Expected one root iOS application.')
-              info=plistlib.loads(z.read(names[0]))
-          if info.get('CFBundleIdentifier')!='za.co.teyza.shopper': raise SystemExit('IPA belongs to a different app; upload stopped.')
-          if '\n' in str(path): raise SystemExit('Unexpected IPA path.')
-          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('TEYZA_IPA='+str(path)+'\n')
-          print('Verified Teyza IPA:', info['CFBundleShortVersionString'], 'build',info['CFBundleVersion'])
           PY
       - uses: ruby/setup-ruby@v1
         with:

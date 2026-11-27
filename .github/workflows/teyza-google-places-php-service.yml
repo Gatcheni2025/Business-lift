@@ -1,0 +1,36 @@
+name: Teyza Google Places PHP Service
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'api/shopper-discover.php'
+      - 'api/shopper-place-photo.php'
+      - 'api/shopper-google-places-provider.php'
+      - 'docs/TEYZA_R31_GOOGLE_PLACES_AFTER_FIREBASE.md'
+      - '.github/workflows/teyza-google-places-php-service.yml'
+permissions:
+  contents: read
+jobs:
+  verify-php-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and no secret leaks
+        run: |
+          php -l api/shopper-discover.php
+          php -l api/shopper-google-places-provider.php
+          php -l api/shopper-place-photo.php
+          ! grep -R -E 'AIza[A-Za-z0-9_-]{35}' api/shopper-discover.php api/shopper-google-places-provider.php api/shopper-place-photo.php
+      - name: Package PHP endpoints (no credentials)
+        run: |
+          mkdir -p package/api
+          cp api/shopper-discover.php api/shopper-google-places-provider.php api/shopper-place-photo.php package/api/
+          cp docs/TEYZA_R31_GOOGLE_PLACES_AFTER_FIREBASE.md package/README_INSTALL.md
+          (cd package && zip -q -r ../TEYZA_GOOGLE_PLACES_PHP_SERVICE.zip api README_INSTALL.md)
+          unzip -t TEYZA_GOOGLE_PLACES_PHP_SERVICE.zip
+      - name: Upload installable PHP package
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-google-places-php-service
+          path: TEYZA_GOOGLE_PLACES_PHP_SERVICE.zip
+          retention-days: 14

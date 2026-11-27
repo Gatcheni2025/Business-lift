@@ -1,0 +1,46 @@
+// TEYZA Firebase R2 - ADD this match block INSIDE your existing:
+// service cloud.firestore { match /databases/{database}/documents { ... } }
+// Merge with current live rules; DO NOT replace unrelated collections/rules.
+match /teyzaSellerAccounts/{uid} {
+  function signedOwner() { return request.auth != null && request.auth.uid == uid; }
+  function validText(key, maxLen) {
+    return request.resource.data[key] is string
+      && request.resource.data[key].size() <= maxLen;
+  }
+  function validShape() {
+    return request.resource.data.keys().hasAll([
+       'uid','category','shopName','ownerEmail','phone','address',
+       'companyName','registrationNumber','approvalStatus','listingStatus',
+       'createdAt','updatedAt'
+    ]) && request.resource.data.keys().hasOnly([
+       'uid','category','shopName','ownerEmail','phone','address',
+       'companyName','registrationNumber','approvalStatus','listingStatus',
+       'createdAt','updatedAt'
+    ])
+    && request.resource.data.uid == uid
+    && request.resource.data.category in ['spaza','retail']
+    && validText('shopName', 120)
+    && request.resource.data.shopName.size() >= 2
+    && validText('phone',25)
+    && validText('address',250)
+    && validText('companyName',160)
+    && validText('registrationNumber',50)
+    && validText('ownerEmail',320);
+  }
+  allow get: if signedOwner();
+  allow list: if false;
+  allow create: if signedOwner() && validShape()
+     && request.resource.data.ownerEmail == request.auth.token.get('email','')
+     && request.resource.data.approvalStatus == 'pending'
+     && request.resource.data.listingStatus == 'not_listed'
+     && request.resource.data.createdAt == request.time
+     && request.resource.data.updatedAt == request.time;
+  // Category and approval remain immutable from seller browser clients.
+  allow update: if signedOwner() && validShape()
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       'shopName','phone','address','companyName','registrationNumber','updatedAt'
+     ])
+     && request.resource.data.createdAt == resource.data.createdAt
+     && request.resource.data.updatedAt == request.time;
+  allow delete: if false;
+}

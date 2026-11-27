@@ -1,0 +1,161 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:teyza_shopper/native_firebase.dart';
+import 'package:teyza_shopper/seller_firestore.dart';
+import 'package:teyza_shopper/seller_onboarding.dart';
+import 'package:teyza_shopper/seller_phone.dart';
+import 'package:teyza_shopper/seller_tools.dart';
+import 'package:teyza_shopper/shopper_auth.dart';
+import 'package:teyza_shopper/teyza_mobile_api.dart';
+import 'seller_experience_test.dart' as fixtures;
+
+class OnboardApi extends TeyzaMobileApi {
+ OnboardApi(super.session);
+ bool offline=false,complete=false;
+ final calls=<String>[];
+ @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
+  calls.add(action);if(offline)throw const ShopServiceUnavailable();
+  if(action=='seller_onboarding')return {'legalType':'individual','phone':'+27712345678','phoneVerified':complete,
+   if(complete)'identity':{'kind':'id'},if(complete)'selfie':{'status':'pending_review'},
+   if(complete)'shopFront':{'photoId':'front-photo'},if(complete)'locationSaved':true};
+  return {'settings':{},'sellingStatus':'pending_approval','verificationStatus':'pending_review'};
+ }
+}
+class PhoneSession extends fixtures.Session {
+ final links=<List<String>>[];
+ @override Future<void> linkPhone(String id,String code,String number) async {links.add([id,code,number]);phoneVerified=true;phoneNumber=number;}
+}
+class TestPhoneStore implements SessionStore {
+ final values=<String,String>{};
+ @override Future<String?> read(String key) async=>values[key];
+ @override Future<void> write(String key,String value) async{values[key]=value;}
+ @override Future<void> delete(String key) async{values.remove(key);}
+}
+class FakeSender implements PhoneCodeSender {
+ int sends=0;
+ @override Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
+  required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant}) async {sends++;onSent('real-verification-session',7);}
+}
+class InstantSender implements PhoneCodeSender {
+ late void Function(Future<void> Function()) completion;
+ @override Future<void> send(String phone,{int? resendToken,required void Function(String,int?) onSent,
+  required void Function(Object) onError,required void Function(String,String) onAutomatic,void Function(Future<void> Function())? onInstant}) async {completion=onInstant!;}
+}
+void main(){
+ const shop=SellerShop('Local Market','spaza','Durban','pending','not_listed',phone:'+27712345678');
+ testWidgets('Submitting completed setup returns to the dashboard with an approval-pending message',(tester) async {
+  final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
+  await tester.pumpWidget(MaterialApp(home:Builder(builder:(context)=>Scaffold(body:TextButton(
+    onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>SellerOnboardingPage(session:session,shop:shop,api:api))),child:const Text('Open setup'))))));
+  await tester.tap(find.text('Open setup'));await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(find.byKey(const ValueKey('teyza-onboarding-step-title')),180,scrollable:find.byType(Scrollable).first);
+  expect(tester.widget<Text>(find.byKey(const ValueKey('teyza-onboarding-step-title'))).data,'Shop location');
+  final finish=find.widgetWithText(FilledButton,'Submit for review');
+  await tester.scrollUntilVisible(finish,230,scrollable:find.byType(Scrollable).first);await fixtures.visibleTap(tester,finish);
+  expect(find.text('Open setup'),findsOneWidget);expect(find.text('Setup submitted. Your shop will be visible after Teyza approves it.'),findsOneWidget);
+  expect(api.calls.where((c)=>c=='seller_onboarding_complete').length,1);
+  expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ test('South African numbers normalize without changing international numbers or accepting missing country codes',(){
+  expect(normalizeMobile('071 234 5678'),'+27712345678');expect(normalizeMobile('+264 81 123 4567'),'+264811234567');
+  expect(()=>normalizeMobile('12345'),throwsFormatException);
+  expect(NativeFirebase.validAppId('1:983479810697:web:aabb','android'),isFalse);
+ });
+ test('Android bootstrap requires the existing Play package and the Teyza Firebase project',(){
+  final config=<String,Object>{'projectId':'business-lift-3c19c','androidPackageName':'com.asiyedriver.asiye',
+    'androidAppId':'1:983479810697:android:aabbcc'};
+  expect(NativeFirebase.validAndroidConfig(config),isTrue);
+  expect(NativeFirebase.validAndroidConfig({...config,'androidPackageName':'za.co.teyza.shopper'}),isFalse);
+  expect(NativeFirebase.validAndroidConfig({...config,'projectId':'another-project'}),isFalse);
+  expect(NativeFirebase.validAndroidConfig({...config,'androidAppId':'1:983479810697:web:aabbcc'}),isFalse);
+ });
+ testWidgets('Selfie camera opens even when the shop service is unavailable',(tester) async{
+  final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..offline=true;
+  final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();var captured=false;
+  await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,api:api,tool:SellerTool.verification,
+    captureSelfie:() async{captured=true;return bytes;})));await tester.pumpAndSettle();
+  await fixtures.visibleTap(tester,find.text('Open selfie camera'));
+  expect(captured,true);expect(find.text('Retake selfie'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Document camera is independent of service health and cannot silently activate a seller',(tester) async{
+  final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..offline=true;
+  final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();var captured=false;
+  await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api,captureDocument:(_) async{captured=true;return bytes;})));
+  await tester.pumpAndSettle();await fixtures.visibleTap(tester,find.text('Photograph document'));
+  expect(captured,true);await tester.scrollUntilVisible(find.byType(Image),-150,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.byType(Image),findsOneWidget);
+  final next=find.byKey(const ValueKey('teyza-onboarding-next'));
+  await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
+  expect(tester.widget<FilledButton>(next).onPressed,isNull);
+  expect(api.calls.contains('seller_onboarding_complete'),false);
+  session.switchAccount();await tester.pump();expect(find.byType(Image),findsNothing);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('All five server-confirmed steps enable completion while pending manual review',(tester) async{
+  final session=fixtures.Session(),api=OnboardApi(fixtures.Session())..complete=true;
+  await tester.pumpWidget(MaterialApp(home:SellerOnboardingPage(session:session,shop:shop,api:api)));await tester.pumpAndSettle();
+  final next=find.byKey(const ValueKey('teyza-onboarding-next'));
+  await tester.scrollUntilVisible(next,230,scrollable:find.byType(Scrollable).first);
+  await tester.pumpAndSettle();
+  expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
+  final finish=find.widgetWithText(FilledButton,'Submit for review');
+  expect(tester.widget<FilledButton>(finish).onPressed,isNotNull);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('OTP screen sends on consent and links the six digit code to the existing account',(tester) async{
+  final session=PhoneSession(),sender=FakeSender();
+  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender,
+    pendingStore:PendingSmsStore(store:TestPhoneStore()))));await tester.pumpAndSettle();
+  final send=find.widgetWithText(FilledButton,'Send SMS code');expect(tester.widget<FilledButton>(send).onPressed,isNull);
+  await fixtures.visibleTap(tester,find.text('Send me a verification SMS'));await fixtures.visibleTap(tester,send);
+  expect(sender.sends,1);await tester.enterText(find.byType(TextField),'123456');tester.testTextInput.hide();await tester.pump();
+  await tester.scrollUntilVisible(find.text('Verify mobile number'),180,scrollable:find.byType(Scrollable).first);
+  await fixtures.visibleTap(tester,find.text('Verify mobile number'));
+  expect(session.links,[['real-verification-session','123456','+27712345678']]);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+ test('Service 404 has an actionable activation reference, rather than a misleading retry instruction',() async{
+  final session=fixtures.Session();final client=MockClient((_) async=>http.Response('<h1>Not found</h1>',404));
+  await expectLater(TeyzaMobileApi(session,client:client).call('seller_summary'),throwsA(isA<ShopServiceUnavailable>()));
+  client.close();session.dispose();
+ });
+ test('Profile edits write only name and phone, preserving a location selected in another form',() async{
+  final client=MockClient((request) async{
+   final write=(jsonDecode(request.body)['writes'] as List).single as Map;
+   expect(write['updateMask'],{'fieldPaths':['shopName','phone']});
+   final fields=write['update']['fields'] as Map;
+   expect(fields.keys.toSet(),{'shopName','phone'});expect(fields.containsKey('address'),false);
+   return http.Response('{}',200);
+  });
+  await SellerFirestore(uid:'owner',token:'token',client:client).saveProfile('Local Market','+27712345678');client.close();
+ });
+ test('Offline batch retries skip existing drafts and never overwrite reserved stock',() async{
+  var commits=0;
+  final client=MockClient((request) async{
+   if(request.method=='GET')return http.Response(jsonEncode({'documents':[{'name':'projects/demo/documents/teyzaDraftProducts/owner/items/bread',
+    'fields':{'ownerUid':{'stringValue':'owner'},'status':{'stringValue':'draft'},'stockQty':{'integerValue':'0'}}}]}),200);
+   commits++;final writes=jsonDecode(request.body)['writes'] as List;
+   for(final write in writes){expect(write['currentDocument'],{'exists':false});}
+   if(commits==1)return http.Response('{}',409);
+   expect(writes,hasLength(1));expect(writes.single['update']['name'],endsWith('/milk'));return http.Response('{}',200);
+  });
+  final result=await SellerFirestore(uid:'owner',token:'t',client:client).saveNewDrafts([
+   const SellerDraft(id:'bread',name:'Bread',category:'Bakery',priceCents:1800,stock:8),
+   const SellerDraft(id:'milk',name:'Milk',category:'Dairy',priceCents:3000,stock:4)]);
+  expect(commits,2);expect(result,['milk']);client.close();
+ });
+ testWidgets('A late Android instant-verification callback cannot link a changed account',(tester) async{
+  final session=PhoneSession(),sender=InstantSender();var linked=false;
+  await tester.pumpWidget(MaterialApp(home:SellerPhonePage(session:session,phone:'0712345678',sender:sender,
+    pendingStore:PendingSmsStore(store:TestPhoneStore()))));await tester.pumpAndSettle();
+  await fixtures.visibleTap(tester,find.text('Send me a verification SMS'));
+  await fixtures.visibleTap(tester,find.text('Send SMS code'));
+  session.switchAccount();await tester.pump();sender.completion(() async{linked=true;});await tester.pump();expect(linked,false);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();
+ });
+
+}

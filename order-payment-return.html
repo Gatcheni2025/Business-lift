@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#F7F8F5">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Check your order payment | Teyza</title>
+  <link rel="icon" href="/assets/app/icon.svg" type="image/svg+xml">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#F7F8F5;color:#183C34;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55}
+    main{width:min(100% - 40px,520px);margin:0 auto;padding:48px 0 36px}
+    .brand{display:inline-flex;min-height:48px;align-items:center;margin-bottom:36px}
+    .brand img{width:142px;height:auto;display:block}
+    .card{background:#fff;padding:32px;border:1px solid #E3E9E2;border-radius:28px;box-shadow:0 16px 48px #073f3507}
+    .icon{display:grid;place-items:center;width:64px;height:64px;border-radius:20px;background:#EAF3EC;color:#073F35;margin-bottom:24px}
+    .eyebrow{font-size:12px;font-weight:750;letter-spacing:.12em;color:#5D7166;text-transform:uppercase;margin:0 0 10px}
+    h1{font-size:clamp(28px,7vw,38px);line-height:1.15;letter-spacing:-.035em;margin:0 0 18px;color:#073F35}
+    p{font-size:16px;margin:0 0 20px}
+    .steps{padding:18px 20px;background:#F7F8F5;border-radius:18px;margin:24px 0}
+    .steps ol{padding-left:22px;margin:0}
+    .steps li{padding:5px 0}
+    .open{display:flex;align-items:center;justify-content:center;gap:12px;min-height:54px;padding:14px 18px;border-radius:16px;background:#073F35;color:white;text-decoration:none;font-size:16px;font-weight:700;text-align:center}
+    .note{font-size:13px;color:#5D7166;margin:18px 0 0}
+    a:focus-visible{outline:3px solid #168657;outline-offset:5px}
+    .help{font-size:14px;color:#5D7166;text-align:center;margin:26px 8px 0}
+    .help a{color:#073F35;text-underline-offset:4px;display:inline-block;padding:8px 2px}
+    @media(max-width:360px){main{width:calc(100% - 28px);padding-top:28px}.card{padding:24px}.brand{margin-bottom:24px}}
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="/" aria-label="Teyza home"><img src="/assets/app/wordmark.svg" width="142" height="44" alt="Teyza"></a>
+    <section class="card" aria-labelledby="title">
+      <div class="icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M11 19h2M9 12h6m-3-3 3 3-3 3"/></svg></div>
+      <p class="eyebrow">Your next step</p>
+      <h1>Continue in Teyza.</h1>
+      <p>Check your payment and follow your order in the app.</p>
+      <div class="steps"><ol>
+        <li>Open Teyza and select <strong>My orders</strong>.</li>
+        <li>Open this order and choose <strong>Check Paystack payment</strong> if its status is still pending.</li>
+      </ol></div>
+      <a class="open" href="teyza://open">Open Teyza <span aria-hidden="true">→</span></a>
+      <p class="note">Teyza checks the payment with Paystack before showing it as paid. This page does not confirm a charge.</p>
+    </section>
+    <p class="help">Need a hand? <a href="/support.html">Contact Teyza support</a><br><a href="/download.html">Get the official Teyza app</a></p>
+  </main>
+</body>
+</html>

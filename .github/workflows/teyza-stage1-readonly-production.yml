@@ -1,0 +1,68 @@
+name: Teyza Stage 1 read-only production preflight
+on:
+  push:
+    branches:
+      - security/teyza-pay-browser-clean-rebuild-20261110
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: GET live Firebase health and payment-disabled Hosting page without credentials
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const out={checkedAt:new Date().toISOString(),checks:[],readOnly:true,
+            credentialsUsed:false,realPaymentAttempted:false};
+          const check=(name,pass,detail)=>{out.checks.push({name,pass,detail});console.log((pass?'PASS':'FAIL')+' '+name+': '+detail);};
+          async function get(url){
+            const response=await fetch(url,{method:'GET',redirect:'follow',signal:AbortSignal.timeout(15000),headers:{'Accept':'text/html,application/json'}});
+            return {status:response.status,body:await response.text(),url:response.url,headers:response.headers};
+          }
+          try{
+            const h=await get('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile');
+            const data=JSON.parse(h.body);
+            check('backend reachable',h.status===200,'HTTP '+h.status);
+            check('backend version',data.version==='3.25.0','version '+String(data.version));
+            check('new checkout disabled',data.sellerPaystackNewCheckoutDisabled===true,
+              'sellerPaystackNewCheckoutDisabled='+String(data.sellerPaystackNewCheckoutDisabled));
+            check('checkout unavailable',data.paystackCheckoutAvailable===false,
+              'paystackCheckoutAvailable='+String(data.paystackCheckoutAvailable));
+            check('billing disabled',data.sellerMembershipBillingMode==='checkout_disabled',
+              'sellerMembershipBillingMode='+String(data.sellerMembershipBillingMode));
+            check('intro R10',data.introductoryFirstMonthCents===1000,'cents '+String(data.introductoryFirstMonthCents));
+            check('monthly R99',data.subscriptionMonthlyCents===9900,'cents '+String(data.subscriptionMonthlyCents));
+            check('signed webhook capability',data.paystackModernWebhookSignatureVerification===true,
+              'capability='+String(data.paystackModernWebhookSignatureVerification));
+            check('renewal verification capability',data.paystackRenewalInvoiceVerification===true,
+              'capability='+String(data.paystackRenewalInvoiceVerification));
+          }catch(error){check('Firebase backend GET',false,String(error.message).slice(0,180));}
+          try{
+            const p=await get('https://teyza.co.za/pay?security_readonly_check=20261110');
+            check('Hosting reachable',p.status===200,'HTTP '+p.status);
+            check('holding page active',p.body.includes('Business payments.')&&p.body.includes('Coming to Teyza'),
+              'expected payment-disabled holding copy');
+            check('replacement checkout not published',!p.body.includes('id="webCheckout"'),
+              'no live seller-web-checkout controls');
+          }catch(error){check('Hosting GET',false,String(error.message).slice(0,180));}
+          fs.writeFileSync('teyza-stage1-readonly.json',JSON.stringify(out,null,2)+'\n');
+          if(out.checks.some(c=>!c.pass))process.exitCode=1;
+          NODE
+      - name: Publish read-only evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: teyza-stage1-readonly-evidence
+          path: teyza-stage1-readonly.json
+          if-no-files-found: warn
+          retention-days: 14

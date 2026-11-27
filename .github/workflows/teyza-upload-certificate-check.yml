@@ -1,0 +1,77 @@
+name: Teyza Play upload certificate audit
+
+on:
+  push:
+    branches:
+      - fix/teyza-store-auth-readiness-20261101
+    paths:
+      - '.github/workflows/teyza-upload-certificate-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certificate:
+    name: Check public certificate fingerprints only
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TEYZA_ANDROID_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_KEYSTORE_BASE64 }}
+      TEYZA_ANDROID_STORE_PASSWORD: ${{ secrets.TEYZA_ANDROID_STORE_PASSWORD }}
+      TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
+      TEYZA_PLAY_UPLOAD_CERT_SHA256: ${{ vars.TEYZA_PLAY_UPLOAD_CERT_SHA256 }}
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compare public certificate hashes without compiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, os, pathlib, re, subprocess, sys, tempfile
+
+          required = ['TEYZA_ANDROID_KEYSTORE_BASE64',
+                      'TEYZA_ANDROID_STORE_PASSWORD',
+                      'TEYZA_ANDROID_KEY_ALIAS']
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              sys.exit('::error::Missing existing Android signing settings: ' + ', '.join(missing))
+
+          expected = re.sub(r'[:\\s]', '', os.environ.get('TEYZA_PLAY_UPLOAD_CERT_SHA256', '')).upper()
+          if not re.fullmatch(r'[0-9A-F]{64}', expected):
+              sys.exit('::error::Invalid/missing TEYZA_PLAY_UPLOAD_CERT_SHA256 in GitHub variables')
+
+          with tempfile.TemporaryDirectory() as temp:
+              path = pathlib.Path(temp, 'existing-upload.jks')
+              try:
+                  path.write_bytes(base64.b64decode(
+                      os.environ['TEYZA_ANDROID_KEYSTORE_BASE64'], validate=True))
+              except Exception:
+                  sys.exit('::error::Keystore secret is not valid base64')
+              path.chmod(0o600)
+              result = subprocess.run(
+                  ['keytool', '-exportcert', '-keystore', str(path), '-alias',
+                   os.environ['TEYZA_ANDROID_KEY_ALIAS'], '-storepass:env',
+                   'TEYZA_ANDROID_STORE_PASSWORD'],
+                  capture_output=True, env=os.environ, check=False)
+              if result.returncode != 0:
+                  sys.exit('::error::Could not export public certificate from existing GitHub keystore. Check alias/passwords locally.')
+              certificate = result.stdout
+              actual_sha1 = hashlib.sha1(certificate).hexdigest().upper()
+              actual_sha256 = hashlib.sha256(certificate).hexdigest().upper()
+
+          print('Saved GitHub signing key SHA-1: ' + actual_sha1)
+          print('Saved GitHub signing key SHA-256: ' + actual_sha256)
+          print('Play Console UPLOAD certificate SHA-256 (configured): ' + expected)
+          print('These public fingerprints are not private signing material.')
+
+          if actual_sha256 != expected:
+              sys.exit('::error::MISMATCH. Compare the above value with Play Console > '
+                       'App integrity > Upload key certificate. If the Play fingerprint '
+                       'really differs, locate the original upload keystore or request an '
+                       'official upload-key reset. Do not bypass signing validation.')
+          print('PASS: GitHub keystore matches the configured Play upload certificate.')
+          PY

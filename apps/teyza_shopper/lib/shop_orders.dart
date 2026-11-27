@@ -1,0 +1,1244 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'shopper_auth.dart';
+import 'shopper_chat.dart';
+import 'teyza_mobile_api.dart';
+import 'shopper_payment_preference.dart';
+import 'seller_push.dart';
+import 'shopper_design.dart';
+
+const orderLabels = {
+  'requested': 'Awaiting shop confirmation',
+  'confirmed': 'Confirmed by shop',
+  'preparing': 'Being prepared',
+  'ready': 'Ready to collect',
+  'out_for_delivery': 'Out for delivery',
+  'completed': 'Completed',
+  'cancelled': 'Cancelled'
+};
+String shopperOnlinePaymentMessage(String reason) => switch (reason) {
+      'shopper_email_required' =>
+        'Verify an email for secure payment receipts, or choose cash for this order.',
+      'online_orders_disabled' =>
+        'The shop has paused new online orders. You can still browse and message the shop.',
+      'online_payments_disabled' =>
+        'This shop has not enabled online payments. Choose a payment option below.',
+      'settlement_pending' =>
+        'Online payment will be available after the shop’s payment setup is verified.',
+      'provider_not_configured' ||
+      'test_mode' =>
+        'Online payment is not live yet. Choose cash or an available shop payment option.',
+      'seller_approval_pending' ||
+      'shop_setup_incomplete' ||
+      'shop_not_active' ||
+      'selling_access_inactive' =>
+        'The shop is completing its online shopping setup.',
+      'fulfilment_unavailable' =>
+        'The shop has not enabled collection or delivery.',
+      'category_not_supported' =>
+        'Online checkout is not offered for this type of business.',
+      'amount_out_of_range' =>
+        'Online payment is available for baskets from R1 to R50,000. Choose another payment option for this basket.',
+      _ =>
+        'Online payment is available only from participating shops with verified payment setup.'
+    };
+
+class ShopOrdersPanel extends StatefulWidget {
+  final ShopperSession session;
+  final bool asOwner, wholesaleOnly;
+  final TeyzaMobileApi? api;
+  final VoidCallback? onLogin;
+  final Future<bool> Function(Uri)? openCheckout;
+  const ShopOrdersPanel(
+      {super.key,
+      required this.session,
+      this.asOwner = false,
+      this.wholesaleOnly = false,
+      this.api,
+      this.onLogin,
+      this.openCheckout});
+  @override
+  State<ShopOrdersPanel> createState() => _OrdersState();
+}
+
+class _OrdersState extends State<ShopOrdersPanel> with WidgetsBindingObserver {
+  late final api = widget.api ?? TeyzaMobileApi(widget.session);
+  String? uid, error;
+  List<Map<String, dynamic>> orders = [];
+  bool loading = false, working = false, active = true, resumeRequested = false;
+  Timer? poll;
+  int loadVersion = 0;
+  String? returningPayment;
+  StreamSubscription<void>? updates;
+  @override
+  void initState() {
+    super.initState();
+    uid = widget.session.userId;
+    widget.session.addListener(accountChanged);
+    WidgetsBinding.instance.addObserver(this);
+    load();
+    poll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (active && !working) load(quiet: true);
+    });
+    if (widget.asOwner)
+      updates = SellerPush(widget.session).updates.stream.listen((_) {
+        if (active && !working) load(quiet: true);
+      });
+  }
+
+  void accountChanged() {
+    if (uid != widget.session.userId && mounted) {
+      uid = widget.session.userId;
+      loadVersion++;
+      setState(() {
+        orders = [];
+        error = null;
+        loading = false;
+        working = false;
+        returningPayment = null;
+        resumeRequested = false;
+      });
+      load();
+    }
+  }
+
+  @override
+  void dispose() {
+    poll?.cancel();
+    updates?.cancel();
+    widget.session.removeListener(accountChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    active = state == AppLifecycleState.resumed;
+    if (active) {
+      resumeRequested = true;
+      unawaited(checkAfterReturn());
+    }
+  }
+
+  Future<void> checkAfterReturn() async {
+    if (!mounted || working || !resumeRequested) return;
+    resumeRequested = false;
+    final reference = returningPayment;
+    returningPayment = null;
+    if (reference != null && !widget.asOwner) {
+      await verifyPaystack({'paymentReference': reference});
+    } else {
+      await load(quiet: true);
+    }
+  }
+
+  Future<void> load({bool quiet = false}) async {
+    if (loading || widget.session.idToken == null) return;
+    final requestedUid = widget.session.userId, ticket = ++loadVersion;
+    setState(() {
+      loading = true;
+      if (!quiet) error = null;
+    });
+    try {
+      final result = await api.call('order_list', {'asOwner': widget.asOwner});
+      if (mounted &&
+          ticket == loadVersion &&
+          requestedUid == widget.session.userId)
+        setState(() {
+          orders = mobileRows(result['orders'])
+              .where((o) =>
+                  !widget.wholesaleOnly || o['orderType'] == 'wholesale_stock')
+              .toList();
+          error = null;
+        });
+    } catch (e) {
+      if (mounted &&
+          ticket == loadVersion &&
+          requestedUid == widget.session.userId)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted && ticket == loadVersion) setState(() => loading = false);
+    }
+  }
+
+  List<String> nextSteps(Map<String, dynamic> order) {
+    if (widget.asOwner &&
+        ['card_online', 'paystack'].contains(order['paymentMethod']) &&
+        order['paymentStatus'] != 'paid' &&
+        ['confirmed', 'preparing', 'ready', 'out_for_delivery']
+            .contains(order['status']))
+      return order['status'] == 'out_for_delivery' ? [] : ['cancelled'];
+    return switch (order['status']) {
+      'requested' =>
+        widget.asOwner ? ['confirmed', 'cancelled'] : ['cancelled'],
+      'confirmed' => widget.asOwner ? ['preparing', 'cancelled'] : [],
+      'preparing' => widget.asOwner
+          ? [
+              order['mode'] == 'delivery' ? 'out_for_delivery' : 'ready',
+              'cancelled'
+            ]
+          : [],
+      'ready' => widget.asOwner ? ['completed', 'cancelled'] : [],
+      'out_for_delivery' => widget.asOwner ? ['completed'] : [],
+      _ => []
+    };
+  }
+
+  Future<void> update(Map<String, dynamic> order, String status) async {
+    if (working) return;
+    final requestedUid = widget.session.userId;
+    final label =
+        status == 'cancelled' ? 'Cancel this request?' : 'Update this order?';
+    final yes = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+                title: Text(label),
+                content: Text(status == 'confirmed'
+                    ? 'Confirm this order and reserve its available stock?'
+                    : status == 'completed'
+                        ? 'Confirm that the customer has received this order.'
+                        : status == 'cancelled'
+                            ? (order['paymentStatus'] == 'paid'
+                                ? 'This paid order will be cancelled and flagged for refund review. A refund is not issued automatically.'
+                                : 'The customer and shop will both see the cancellation. Any payment in progress must still be checked.')
+                            : 'Set status to ' +
+                                (orderLabels[status] ?? status) +
+                                '?'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Go back')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Confirm'))
+                ]));
+    if (yes != true || !mounted || requestedUid != widget.session.userId)
+      return;
+    setState(() => working = true);
+    try {
+      await api
+          .call('order_update', {'orderId': order['id'], 'status': status});
+      await load();
+    } catch (e) {
+      if (mounted && requestedUid == widget.session.userId)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted && requestedUid == widget.session.userId)
+        setState(() => working = false);
+    }
+  }
+
+  Future<void> payWithPaystack(Map<String, dynamic> order) async {
+    if (working || uid != widget.session.userId) return;
+    final requestedUid = widget.session.userId;
+    setState(() {
+      working = true;
+      error = null;
+    });
+    try {
+      final reply =
+          await api.call('order_paystack_checkout', {'orderId': order['id']});
+      final reference = reply['reference']?.toString() ?? '';
+      if (!RegExp(r'^TZO-[a-f0-9]{26}$').hasMatch(reference) ||
+          !['live', 'test'].contains(reply['paymentEnvironment']) ||
+          reply['amountCents'] != order['totalCents']) {
+        throw StateError(
+            'The payment details changed. Refresh this order before opening checkout.');
+      }
+      final raw = reply['checkoutUrl']?.toString() ?? '';
+      final link = Uri.tryParse(raw);
+      if (link == null ||
+          link.scheme != 'https' ||
+          link.host != 'checkout.paystack.com' ||
+          link.userInfo.isNotEmpty ||
+          (link.hasPort && link.port != 443))
+        throw StateError('Paystack checkout returned an invalid address.');
+      if (!mounted || requestedUid != widget.session.userId) return;
+      returningPayment = reference;
+      await load(quiet: true);
+      if (!mounted || requestedUid != widget.session.userId) return;
+      final opened = await (widget.openCheckout?.call(link) ??
+          launchUrl(link, mode: LaunchMode.externalApplication));
+      if (!opened)
+        throw StateError('Unable to open the Paystack payment page.');
+      if (mounted && requestedUid == widget.session.userId)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(reply['paymentEnvironment'] == 'test'
+                ? 'TEST MODE: no real payment is collected. Return to Teyza and tap Check Paystack payment.'
+                : 'Return here after checkout. Teyza will check the payment with Paystack.')));
+    } catch (e) {
+      if (mounted && requestedUid == widget.session.userId) {
+        await load(quiet: true);
+        if (mounted && requestedUid == widget.session.userId)
+          setState(() => error = mobileError(e));
+      }
+    } finally {
+      if (mounted && requestedUid == widget.session.userId) {
+        setState(() => working = false);
+        unawaited(checkAfterReturn());
+      }
+    }
+  }
+
+  Future<void> verifyPaystack(Map<String, dynamic> order) async {
+    if (working || uid != widget.session.userId) return;
+    final reference = order['paymentReference']?.toString() ?? '';
+    if (reference.isEmpty) return;
+    final requestedUid = widget.session.userId;
+    setState(() {
+      working = true;
+      error = null;
+    });
+    try {
+      final result =
+          await api.call('order_paystack_verify', {'reference': reference});
+      if (mounted && requestedUid == widget.session.userId)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['status'] == 'paid' &&
+                    result['verified'] == true
+                ? 'Paystack confirmed this order was paid.'
+                : result['status'] == 'test_paid'
+                    ? 'Paystack test payment verified; no real funds were transferred.'
+                    : result['status'] == 'refund_review'
+                        ? 'Payment requires Teyza refund review.'
+                        : result['status'] == 'payment_failed'
+                            ? 'That payment attempt did not complete. You can reopen the same checkout.'
+                            : 'Payment is still pending. We have not marked the order as paid.')));
+      if (mounted && requestedUid == widget.session.userId)
+        await load(quiet: true);
+    } catch (e) {
+      if (mounted && requestedUid == widget.session.userId)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted && requestedUid == widget.session.userId)
+        setState(() => working = false);
+    }
+  }
+
+  Future<void> chat(Map<String, dynamic> order) async {
+    try {
+      final result = await api.call('order_chat', {'orderId': order['id']});
+      if (mounted)
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => ShopperChatPage(
+                    session: widget.session,
+                    asOwner: widget.asOwner,
+                    initialThreadId: result['threadId']?.toString(),
+                    initialTitle: widget.asOwner
+                        ? order['shopperName']?.toString()
+                        : order['shopName']?.toString())));
+    } catch (e) {
+      if (mounted) setState(() => error = mobileError(e));
+    }
+  }
+
+  Future<void> rateShop(Map<String, dynamic> order) async {
+    final requestedUid = widget.session.userId;
+    final stars = await showDialog<int>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+                title: const Text('Rate your shop experience'),
+                children: [
+                  const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                          'Your latest rating counts once per shop. You can update it after a completed order.')),
+                  for (var n = 5; n >= 1; n--)
+                    SimpleDialogOption(
+                        onPressed: () => Navigator.pop(ctx, n),
+                        child: Text('$n ${n == 1 ? 'star' : 'stars'}'))
+                ]));
+    if (stars == null || !mounted || requestedUid != widget.session.userId)
+      return;
+    setState(() => working = true);
+    try {
+      await api.call('shop_rate', {'orderId': order['id'], 'stars': stars});
+      if (mounted && requestedUid == widget.session.userId)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Your shop rating has been saved.')));
+    } catch (e) {
+      if (mounted && requestedUid == widget.session.userId)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+      onRefresh: load,
+      child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 30),
+          children: [
+            Text(
+                widget.wholesaleOnly
+                    ? 'Wholesale stock orders'
+                    : widget.asOwner
+                        ? 'Customer orders'
+                        : 'Your orders',
+                style: const TextStyle(
+                    fontSize: 29,
+                    fontWeight: FontWeight.w700,
+                    color: TeyzaDesign.ink)),
+            const SizedBox(height: 7),
+            Text(
+                widget.wholesaleOnly
+                    ? 'Track stock requests placed with approved Teyza wholesalers.'
+                    : widget.asOwner
+                        ? 'Confirm stock, prepare orders and keep shoppers updated.'
+                        : 'Every local order, from shop confirmation to your doorstep.',
+                style: const TextStyle(color: TeyzaDesign.muted, height: 1.5)),
+            if (orders.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Wrap(spacing: 8, runSpacing: 6, children: [
+                    Chip(
+                        avatar:
+                            const Icon(Icons.shopping_bag_outlined, size: 17),
+                        label: Text('${orders.where((o) => ![
+                              'completed',
+                              'cancelled'
+                            ].contains(o['status'])).length} in progress')),
+                    if (orders.any((o) => o['status'] == 'completed'))
+                      Chip(
+                          label: Text(
+                              '${orders.where((o) => o['status'] == 'completed').length} completed')),
+                  ])),
+            const SizedBox(height: 18),
+            if (widget.session.idToken == null)
+              Card(
+                  child: Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Column(children: [
+                        const Icon(Icons.shopping_bag_outlined,
+                            size: 54, color: Color(0xFF3BB77E)),
+                        const SizedBox(height: 12),
+                        const Text('Sign in to see your orders'),
+                        if (widget.onLogin != null)
+                          FilledButton(
+                              onPressed: widget.onLogin,
+                              child: const Text('Sign in'))
+                      ]))),
+            if (loading || working)
+              const Padding(
+                  padding: EdgeInsets.only(bottom: 14),
+                  child: LinearProgressIndicator(minHeight: 2)),
+            if (error != null)
+              Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(error!,
+                            style: const TextStyle(color: Color(0xFF9A3412))),
+                        TextButton(onPressed: load, child: const Text('Retry'))
+                      ])),
+            if (!loading &&
+                error == null &&
+                orders.isEmpty &&
+                widget.session.idToken != null)
+              Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(23)),
+                  child: Column(children: [
+                    Image.asset('assets/images/grocery-basket.png',
+                        height: 145),
+                    const SizedBox(height: 18),
+                    const Text('No orders yet',
+                        style: TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    Text(
+                        widget.asOwner
+                            ? 'Customer requests will appear here.'
+                            : 'Open a participating shop, add products and choose delivery or collection.',
+                        textAlign: TextAlign.center)
+                  ])),
+            for (final order in orders)
+              Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: TeyzaDesign.border)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Expanded(
+                              child: Text(
+                                  (widget.asOwner
+                                              ? order['shopperName']
+                                              : order['shopName'])
+                                          ?.toString() ??
+                                      'Order',
+                                  style: const TextStyle(
+                                      fontSize: 21,
+                                      fontWeight: FontWeight.w700,
+                                      color: TeyzaDesign.ink))),
+                          Icon(
+                              order['mode'] == 'delivery'
+                                  ? Icons.local_shipping_outlined
+                                  : Icons.shopping_bag_outlined,
+                              color: TeyzaDesign.forest)
+                        ]),
+                        const SizedBox(height: 10),
+                        Chip(
+                            backgroundColor: TeyzaDesign.softMint,
+                            side: BorderSide.none,
+                            label: Text(orderLabels[order['status']] ??
+                                'Awaiting confirmation')),
+                        Text(
+                            order['mode'] == 'delivery'
+                                ? 'Delivery'
+                                : 'Collection',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        if (order['mode'] == 'delivery')
+                          Text(order['address']?.toString() ?? ''),
+                        if (widget.asOwner)
+                          Text(
+                              'Contact: ' + (order['phone']?.toString() ?? '')),
+                        const Divider(height: 24),
+                        for (final item in mobileRows(order['items']))
+                          Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(children: [
+                                Expanded(
+                                    child: Text(item['name'].toString() +
+                                        ' ×' +
+                                        item['quantity'].toString())),
+                                Text(money(((item['priceCents'] as num? ?? 0) *
+                                        (item['quantity'] as num? ?? 0))
+                                    .toInt()))
+                              ])),
+                        const Divider(),
+                        Text('Items: ' +
+                            money(
+                                (order['subtotalCents'] as num? ?? 0).toInt())),
+                        if (order['mode'] == 'delivery')
+                          Text('Delivery: ' +
+                              money((order['deliveryFeeCents'] as num? ?? 0)
+                                  .toInt())),
+                        if ((order['cashDiscountCents'] as num? ?? 0) > 0)
+                          Text('Cash discount: −' +
+                              money(
+                                  (order['cashDiscountCents'] as num).toInt())),
+                        Text(order['paymentMethod'] == 'card_online'
+                            ? 'Pay online · after shop confirmation'
+                            : order['paymentMethod'] == 'paystack'
+                                ? (order['paymentStatus'] == 'test_paid'
+                                    ? 'Test payment only'
+                                    : 'Online payment · Paystack')
+                                : order['paymentMethod'] == 'card_at_shop'
+                                    ? 'Card at shop · no extra card charge'
+                                    : order['paymentMethod'] == 'cash'
+                                        ? 'Cash payment'
+                                        : 'Payment to be arranged with shop'),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          const Expanded(
+                              child: Text('Total',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w700))),
+                          Text(
+                              money((order['totalCents'] as num? ?? 0).toInt()),
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.w800))
+                        ]),
+                        const SizedBox(height: 14),
+                        Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(13),
+                            decoration: BoxDecoration(
+                                color: order['paymentStatus'] == 'paid'
+                                    ? TeyzaDesign.softMint
+                                    : const Color(0xFFF5F6F2),
+                                borderRadius: BorderRadius.circular(14)),
+                            child: Text(
+                                switch (order['paymentStatus']) {
+                                  'paid' => widget.asOwner
+                                      ? 'Payment verified by Paystack. Settlement follows your provider schedule.'
+                                      : 'Payment verified by Paystack. Your order is paid.',
+                                  'test_paid' =>
+                                    'Paystack TEST payment only. No real funds were collected.',
+                                  'checkout_pending' => order[
+                                              'paymentCheckoutReady'] ==
+                                          false
+                                      ? 'Payment setup is still being checked. Check the original payment before trying again.'
+                                      : 'Payment is awaiting verification. Returning from checkout does not confirm payment.',
+                                  'payment_failed' =>
+                                    'The last payment attempt did not complete. Check its status or reopen the same secure checkout.',
+                                  'refund_review' =>
+                                    'This payment needs refund review. Contact Teyza support; a refund has not been confirmed.',
+                                  _ => order['paymentMethod'] == 'card_online'
+                                      ? (order['status'] == 'cancelled'
+                                          ? 'Order cancelled. Any payment already started must still be checked.'
+                                          : order['status'] == 'requested'
+                                              ? 'The shop confirms availability first. No online payment has been taken.'
+                                              : 'Your order is confirmed. Pay securely below before the shop prepares it.')
+                                      : 'No online payment has been taken. Pay using the method agreed with the shop.'
+                                },
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    color: TeyzaDesign.muted,
+                                    height: 1.5))),
+                        if (widget.asOwner &&
+                            order['paymentMethod'] == 'card_online' &&
+                            order['paymentStatus'] != 'paid')
+                          const Padding(
+                              padding: EdgeInsets.only(top: 9),
+                              child: Text(
+                                  'Wait for verified payment before preparing or handing over this order.',
+                                  style: TextStyle(
+                                      color: Color(0xFF873D17), fontSize: 12))),
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 7, children: [
+                          for (final status in nextSteps(order))
+                            TextButton(
+                                onPressed: working
+                                    ? null
+                                    : () => update(order, status),
+                                child: Text(switch (status) {
+                                  'confirmed' => 'Confirm order',
+                                  'preparing' => 'Start preparing',
+                                  'ready' => 'Ready to collect',
+                                  'out_for_delivery' => 'Out for delivery',
+                                  'completed' => 'Mark completed',
+                                  _ => 'Cancel'
+                                })),
+                          if (!widget.asOwner &&
+                              order['paymentMethod'] == 'card_online' &&
+                              order['orderType'] != 'wholesale_stock' &&
+                              [
+                                'confirmed',
+                                'preparing',
+                                'ready',
+                                'out_for_delivery'
+                              ].contains(order['status']) &&
+                              ![
+                                'paid',
+                                'test_paid',
+                                'refund_review',
+                                'checkout_pending',
+                                'payment_failed'
+                              ].contains(order['paymentStatus']) &&
+                              (order['paymentReference'] == null ||
+                                  order['paymentReference'] == ''))
+                            FilledButton.icon(
+                                onPressed: working
+                                    ? null
+                                    : () => payWithPaystack(order),
+                                icon: const Icon(Icons.credit_card_outlined,
+                                    size: 17),
+                                label: const Text('Pay with Paystack')),
+                          if (!widget.asOwner &&
+                              ['checkout_pending', 'payment_failed']
+                                  .contains(order['paymentStatus']))
+                            OutlinedButton.icon(
+                                onPressed: working
+                                    ? null
+                                    : () => verifyPaystack(order),
+                                icon: const Icon(Icons.verified_outlined,
+                                    size: 17),
+                                label: const Text('Check Paystack payment')),
+                          if (!widget.asOwner &&
+                              ['checkout_pending', 'payment_failed']
+                                  .contains(order['paymentStatus']) &&
+                              order['paymentCheckoutReady'] != false &&
+                              [
+                                'confirmed',
+                                'preparing',
+                                'ready',
+                                'out_for_delivery'
+                              ].contains(order['status']))
+                            TextButton.icon(
+                                onPressed: working
+                                    ? null
+                                    : () => payWithPaystack(order),
+                                icon: const Icon(Icons.open_in_new, size: 17),
+                                label: const Text('Resume secure payment')),
+                          TextButton.icon(
+                              onPressed: working ? null : () => chat(order),
+                              icon: const Icon(Icons.chat_bubble_outline,
+                                  size: 17),
+                              label: const Text('Message')),
+                          if (!widget.asOwner && order['status'] == 'completed')
+                            TextButton.icon(
+                                onPressed:
+                                    working ? null : () => rateShop(order),
+                                icon: const Icon(Icons.star_outline, size: 17),
+                                label: const Text('Rate shop'))
+                        ])
+                      ]))
+          ]));
+}
+
+class ShopperCheckoutPage extends StatefulWidget {
+  final ShopperSession session;
+  final String shopId, shopName;
+  final List<Map<String, dynamic>> items;
+  final bool delivery, collection, acceptsCard;
+  final int deliveryFeeCents, cashDiscountPercent;
+  final String savedDeliveryAddress, savedPhone;
+  final TeyzaMobileApi? api;
+  final bool wholesale;
+  final bool onlineOrdersEnabled, onlinePaymentsEnabled, onlinePaymentsReady;
+  final String onlinePaymentsReason;
+  final ShopperPaymentPreferenceStore? paymentPreferenceStore;
+  const ShopperCheckoutPage(
+      {super.key,
+      required this.session,
+      required this.shopId,
+      required this.shopName,
+      required this.items,
+      required this.delivery,
+      required this.collection,
+      this.deliveryFeeCents = 0,
+      this.cashDiscountPercent = 0,
+      this.acceptsCard = false,
+      this.api,
+      this.wholesale = false,
+      this.savedDeliveryAddress = '',
+      this.savedPhone = '',
+      this.onlineOrdersEnabled = true,
+      this.onlinePaymentsEnabled = false,
+      this.onlinePaymentsReady = false,
+      this.onlinePaymentsReason = '',
+      this.paymentPreferenceStore});
+  @override
+  State<ShopperCheckoutPage> createState() => _CheckoutState();
+}
+
+class _CheckoutState extends State<ShopperCheckoutPage> {
+  late final String? uid = widget.session.userId;
+  late final api = widget.api ?? TeyzaMobileApi(widget.session);
+  late String mode = widget.collection ? 'collection' : 'delivery';
+  late String paymentMethod = widget.wholesale ? 'arrange_with_shop' : 'cash';
+  final address = TextEditingController(), phone = TextEditingController();
+  final requestId = 'r' + DateTime.now().microsecondsSinceEpoch.toString();
+  bool working = false, checking = false, paymentTouched = false;
+  String? error;
+  int quoteRequest = 0;
+  Map<String, dynamic>? quote;
+  Map<String, dynamic> capability = {};
+  bool? quotedCardAcceptance;
+  bool get acceptsInPersonCard => quotedCardAcceptance ?? widget.acceptsCard;
+  late final preferences =
+      widget.paymentPreferenceStore ?? ShopperPaymentPreferenceStore();
+  Map<String, dynamic> get commerce => capability;
+  bool get onlineReady =>
+      !widget.wholesale &&
+      (commerce.containsKey('onlinePaymentsReady')
+          ? commerce['onlinePaymentsReady'] == true
+          : widget.onlinePaymentsReady);
+  bool get emailEligible => commerce.containsKey('shopperPaymentEligible')
+      ? commerce['shopperPaymentEligible'] == true
+      : widget.session.emailVerified &&
+          widget.session.email?.isNotEmpty == true;
+  bool get canPayOnline => onlineReady && emailEligible;
+  String get onlineReason => onlineReady && !emailEligible
+      ? 'shopper_email_required'
+      : commerce['onlinePaymentsReason']?.toString() ??
+          widget.onlinePaymentsReason;
+  @override
+  void initState() {
+    super.initState();
+    address.text = widget.savedDeliveryAddress;
+    phone.text = widget.savedPhone;
+    widget.session.addListener(accountChanged);
+    initialise();
+  }
+
+  Future<void> initialise() async {
+    await loadQuote();
+    if (mounted) await restorePaymentPreference();
+  }
+
+  Future<void> restorePaymentPreference() async {
+    final current = uid;
+    if (current == null || widget.wholesale) return;
+    try {
+      final saved = await preferences.load(current);
+      if (!mounted || current != widget.session.userId || paymentTouched)
+        return;
+      if (saved == ShopperPaymentPreferenceStore.cardOnline && canPayOnline) {
+        setState(
+            () => paymentMethod = ShopperPaymentPreferenceStore.cardOnline);
+        await loadQuote();
+      } else if (saved == ShopperPaymentPreferenceStore.cardAtShop &&
+          mode == 'collection' &&
+          acceptsInPersonCard) {
+        setState(
+            () => paymentMethod = ShopperPaymentPreferenceStore.cardAtShop);
+        await loadQuote();
+      }
+    } catch (_) {/* The safe default is cash. */}
+  }
+
+  Future<void> selectPayment(String preference) async {
+    if (working || uid != widget.session.userId) return;
+    setState(() {
+      paymentMethod = preference;
+      paymentTouched = true;
+    });
+    // Do not hold back a live quote while the secure storage plugin writes.
+    // Persist the preference independently and recalculate the price now.
+    if (!widget.wholesale &&
+        uid != null &&
+        ShopperPaymentPreferenceStore.choices.contains(preference)) {
+      unawaited(preferences.save(uid!, preference).catchError((Object _) {
+        /* Checkout remains usable on vault failure. */
+      }));
+    }
+    await loadQuote();
+  }
+
+  Future<void> verifyEmail(Future<void> Function() action,
+      {bool sent = false}) async {
+    if (working || uid == null || uid != widget.session.userId) return;
+    setState(() {
+      working = true;
+      error = null;
+    });
+    try {
+      await action();
+      if (!mounted || uid != widget.session.userId) return;
+      if (sent)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Check your inbox, verify your email, then tap Check verification.')));
+      await loadQuote();
+    } catch (e) {
+      if (mounted && uid == widget.session.userId)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted && uid == widget.session.userId)
+        setState(() => working = false);
+    }
+  }
+
+  void accountChanged() {
+    if (mounted && uid != widget.session.userId) {
+      quoteRequest++;
+      address.clear();
+      phone.clear();
+      setState(() {
+        quote = null;
+        capability = {};
+        error = 'Your account changed. Reopen your basket.';
+        checking = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    quoteRequest++;
+    widget.session.removeListener(accountChanged);
+    address.dispose();
+    phone.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic> get request => {
+        'shopId': widget.shopId,
+        'mode': mode,
+        'paymentMethod': paymentMethod,
+        'items': widget.items
+            .map((x) => {'id': x['id'], 'quantity': x['quantity']})
+            .toList()
+      };
+  Future<void> loadQuote() async {
+    if (uid != widget.session.userId) return;
+    if (uid == null || widget.session.idToken == null) {
+      setState(() =>
+          error = 'Sign in to send your order. Your basket is still saved.');
+      return;
+    }
+    if (!widget.onlineOrdersEnabled) {
+      setState(
+          () => error = shopperOnlinePaymentMessage('online_orders_disabled'));
+      return;
+    }
+    if (!widget.collection && !widget.delivery) {
+      setState(() => error =
+          'This shop is not currently accepting delivery or collection requests.');
+      return;
+    }
+    final ticket = ++quoteRequest;
+    setState(() {
+      checking = true;
+      quote = null;
+      error = null;
+    });
+    try {
+      final result = await api.call('order_quote', request);
+      if (!mounted || uid != widget.session.userId || ticket != quoteRequest)
+        return;
+      if (result['quote'] is! Map)
+        throw StateError(
+            'Could not check the current order total. Please retry.');
+      final current = Map<String, dynamic>.from(result['quote'] as Map);
+      if (current['quoteId'] is! String || current['totalCents'] is! num)
+        throw StateError(
+            'Could not check the current order total. Please retry.');
+      setState(() {
+        quote = current;
+        if (current['cardPayments'] is bool)
+          quotedCardAcceptance = current['cardPayments'] as bool;
+        if (current['commerce'] is Map)
+          capability = Map<String, dynamic>.from(current['commerce'] as Map);
+      });
+    } catch (e) {
+      if (mounted && uid == widget.session.userId && ticket == quoteRequest)
+        setState(() => error = mobileError(e));
+    } finally {
+      if (mounted && ticket == quoteRequest) setState(() => checking = false);
+    }
+  }
+
+  Future<void> submit() async {
+    if (working ||
+        checking ||
+        quote == null ||
+        uid == null ||
+        uid != widget.session.userId ||
+        !widget.onlineOrdersEnabled) return;
+    if (paymentMethod == 'card_online' && !canPayOnline) {
+      setState(() => error = shopperOnlinePaymentMessage(onlineReason));
+      return;
+    }
+    if (phone.text.replaceAll(RegExp(r'\D'), '').length < 9 ||
+        (mode == 'delivery' && address.text.trim().length < 8)) {
+      setState(() => error =
+          'Enter your contact number and, for delivery, a complete delivery address.');
+      return;
+    }
+    setState(() {
+      working = true;
+      error = null;
+    });
+    try {
+      await api.call('order_request', {
+        ...request,
+        'requestId': requestId,
+        'phone': phone.text.trim(),
+        'address': address.text.trim(),
+        'expectedQuoteId': quote!['quoteId']
+      });
+      if (mounted && uid == widget.session.userId) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted && uid == widget.session.userId)
+        setState(() {
+          error = mobileError(e);
+          quote = null;
+        });
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  int cents(String key) => (quote?[key] as num? ?? 0).toInt();
+  Widget section(String number, String title, List<Widget> children) =>
+      Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: TeyzaDesign.border)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: TeyzaDesign.softOrange,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text(number,
+                      style: const TextStyle(
+                          color: TeyzaDesign.forest,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700))),
+              const SizedBox(width: 11),
+              Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: TeyzaDesign.ink)))
+            ]),
+            const SizedBox(height: 16),
+            ...children
+          ]));
+  @override
+  Widget build(BuildContext context) {
+    final hasOptions = widget.collection || widget.delivery;
+    final editable = !working && uid != null && uid == widget.session.userId;
+    return Scaffold(
+        backgroundColor: TeyzaDesign.ivory,
+        appBar: AppBar(
+            backgroundColor: TeyzaDesign.deepTeal,
+            foregroundColor: Colors.white,
+            flexibleSpace: const DecoratedBox(decoration: BoxDecoration(gradient: TeyzaDesign.brandGradient)),
+            title: Text(widget.wholesale
+                ? 'Wholesale stock request'
+                : 'Your checkout')),
+        body: SafeArea(
+            top: false,
+            child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+                children: [
+                  Text(widget.shopName,
+                      style: const TextStyle(
+                          fontSize: 27,
+                          fontWeight: FontWeight.w700,
+                          color: TeyzaDesign.ink)),
+                  const SizedBox(height: 7),
+                  const Text(
+                      'Review your basket and choose how to receive it. The shop confirms availability before payment.',
+                      style: TextStyle(color: TeyzaDesign.muted, height: 1.5)),
+                  const SizedBox(height: 24),
+                  section('01', 'Collection or delivery', [
+                    if (hasOptions)
+                      SegmentedButton<String>(
+                          segments: [
+                            if (widget.collection)
+                              const ButtonSegment(
+                                  value: 'collection',
+                                  label: Text('Collect'),
+                                  icon: Icon(Icons.shopping_bag_outlined)),
+                            if (widget.delivery)
+                              const ButtonSegment(
+                                  value: 'delivery',
+                                  label: Text('Delivery'),
+                                  icon: Icon(Icons.local_shipping_outlined))
+                          ],
+                          selected: {
+                            mode
+                          },
+                          onSelectionChanged: !editable
+                              ? null
+                              : (v) {
+                                  setState(() {
+                                    mode = v.first;
+                                    if (mode == 'delivery' &&
+                                        paymentMethod ==
+                                            ShopperPaymentPreferenceStore
+                                                .cardAtShop)
+                                      paymentMethod = 'cash';
+                                  });
+                                  loadQuote();
+                                }),
+                    const SizedBox(height: 12),
+                    Text(
+                        mode == 'delivery'
+                            ? 'The shop confirms delivery to your saved address.'
+                            : 'Collect your order after the shop tells you it is ready.',
+                        style: const TextStyle(
+                            color: TeyzaDesign.muted, fontSize: 13)),
+                  ]),
+                  section(
+                      '02',
+                      widget.wholesale
+                          ? 'Payment with wholesaler'
+                          : 'How would you like to pay?',
+                      [
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          if (widget.wholesale)
+                            ChoiceChip(
+                                label: const Text('Arrange with supplier'),
+                                selected: paymentMethod == 'arrange_with_shop',
+                                onSelected: !editable
+                                    ? null
+                                    : (_) {
+                                        setState(() => paymentMethod =
+                                            'arrange_with_shop');
+                                        loadQuote();
+                                      }),
+                          ChoiceChip(
+                              label: Text(mode == 'delivery'
+                                  ? 'Cash on delivery'
+                                  : 'Cash'),
+                              selected: paymentMethod == 'cash',
+                              onSelected: !editable
+                                  ? null
+                                  : (_) => selectPayment('cash')),
+                          if (mode == 'collection' && acceptsInPersonCard)
+                            ChoiceChip(
+                                label: const Text('Card at the shop'),
+                                selected: paymentMethod == 'card_at_shop',
+                                onSelected: !editable
+                                    ? null
+                                    : (_) => selectPayment('card_at_shop')),
+                          if (!widget.wholesale && onlineReady)
+                            ChoiceChip(
+                                key: const ValueKey('checkout-pay-online'),
+                                avatar: const Icon(Icons.lock_outline_rounded,
+                                    size: 17),
+                                label: const Text('Pay online'),
+                                selected: paymentMethod == 'card_online',
+                                onSelected: !editable ||
+                                        !canPayOnline ||
+                                        quote == null ||
+                                        checking
+                                    ? null
+                                    : (_) => selectPayment('card_online')),
+                        ]),
+                        if (paymentMethod == 'card_at_shop')
+                          const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                  'No extra card charge. Pay the shop’s advertised price.')),
+                        if (paymentMethod == 'card_online')
+                          const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                  'After the shop confirms, open Orders to pay securely with Paystack. Teyza never stores your card details.',
+                                  style: TextStyle(
+                                      color: TeyzaDesign.muted, height: 1.5))),
+                        if (!widget.wholesale && !canPayOnline) ...[
+                          const SizedBox(height: 12),
+                          Text(shopperOnlinePaymentMessage(onlineReason),
+                              style: const TextStyle(
+                                  color: TeyzaDesign.muted, height: 1.5)),
+                          if (onlineReady && !emailEligible)
+                            Wrap(spacing: 8, runSpacing: 4, children: [
+                              if (widget.session.googleSignInAvailable &&
+                                  (widget.session.googleSignInConfigured ||
+                                      widget.session.googleRequest != null))
+                                OutlinedButton(
+                                    onPressed: editable
+                                        ? () => verifyEmail(widget
+                                            .session.verifyShopperWithGoogle)
+                                        : null,
+                                    child: const Text('Verify with Google')),
+                              if (widget.session.appleSignInAvailable)
+                                OutlinedButton(
+                                    onPressed: editable
+                                        ? () => verifyEmail(widget
+                                            .session.verifyShopperWithApple)
+                                        : null,
+                                    child: const Text('Verify with Apple')),
+                              if (widget.session.email?.isNotEmpty == true &&
+                                  !widget.session.emailVerified)
+                                TextButton(
+                                    onPressed: editable
+                                        ? () => verifyEmail(
+                                            widget
+                                                .session.sendEmailVerification,
+                                            sent: true)
+                                        : null,
+                                    child:
+                                        const Text('Email verification link')),
+                              TextButton(
+                                  onPressed: editable
+                                      ? () => verifyEmail(
+                                          widget.session.refreshEmailStatus)
+                                      : null,
+                                  child: const Text('Check verification')),
+                            ])
+                        ],
+                      ]),
+                  section('03', 'Contact & delivery details', [
+                    TextField(
+                        controller: phone,
+                        enabled: editable,
+                        keyboardType: TextInputType.phone,
+                        autofillHints: const [AutofillHints.telephoneNumber],
+                        decoration: const InputDecoration(
+                            labelText: 'Contact number',
+                            prefixIcon: Icon(Icons.phone_outlined))),
+                    if (mode == 'delivery') ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                          controller: address,
+                          enabled: editable,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                              labelText: 'Full delivery address',
+                              prefixIcon: Icon(Icons.location_on_outlined))),
+                    ],
+                  ]),
+                  section('04', 'Review your basket', [
+                    if (checking) const LinearProgressIndicator(),
+                    for (final item in quote == null
+                        ? widget.items
+                        : mobileRows(quote!['items']))
+                      ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(item['name'].toString()),
+                          trailing: Text('×' + item['quantity'].toString())),
+                    if (quote != null) ...[
+                      const Divider(height: 24),
+                      Text('Item subtotal: ' + money(cents('subtotalCents'))),
+                      if (mode == 'delivery')
+                        Text('Delivery fee: ' +
+                            (cents('deliveryFeeCents') == 0
+                                ? 'FREE (R0 on quote)'
+                                : money(cents('deliveryFeeCents')))),
+                      if (cents('cashDiscountCents') > 0)
+                        Text('10% cash discount on items: −' +
+                            money(cents('cashDiscountCents'))),
+                      if (paymentMethod == 'card_at_shop')
+                        Text('Extra card charge: ' +
+                            money(cents('cardFeeCents'))),
+                      const SizedBox(height: 14),
+                      Text('Total: ' + money(cents('totalCents')),
+                          style: const TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w700,
+                              color: TeyzaDesign.forest)),
+                    ],
+                  ]),
+                  const SizedBox(height: 15),
+                  Text(widget.wholesale
+                      ? 'The wholesaler confirms stock and delivery. This is a wholesale request, not a payment. After receipt, add stock and set retail prices in My Products.'
+                      : paymentMethod == 'card_online'
+                          ? 'The shop must confirm your order before the Paystack card-payment link becomes available.'
+                          : 'The shop will confirm stock and delivery availability. Payment is arranged directly with the shop.'),
+                  if (error != null)
+                    Semantics(
+                        liveRegion: true,
+                        child: Container(
+                            padding: const EdgeInsets.all(16),
+                            margin: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                                color: const Color(0xFFFFF4E7),
+                                borderRadius: BorderRadius.circular(16)),
+                            child: Text(error!,
+                                style: const TextStyle(
+                                    color: Color(0xFF873D17))))),
+                  TextButton.icon(
+                      onPressed: checking || !editable ? null : loadQuote,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh order total')),
+                  FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: TeyzaDesign.leaf, foregroundColor: Colors.white),
+                      onPressed: !editable ||
+                              checking ||
+                              quote == null ||
+                              !widget.onlineOrdersEnabled
+                          ? null
+                          : submit,
+                      child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                              working ? 'Sending…' : 'Send order request'))),
+                  const SizedBox(height: 10),
+                  const Text('Sending this request does not take a payment.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: TeyzaDesign.muted, fontSize: 12)),
+                ])));
+  }
+}

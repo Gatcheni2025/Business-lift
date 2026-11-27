@@ -96,6 +96,16 @@ async function load(){
   loading=true;
   try{
     state=await api("seller-readiness");
+    if(state.sellerCategory==="spaza"){
+      // The simple Spaza flow is a full page, never a dashboard nested in an iframe.
+      modal.hidden=true;
+      document.body.classList.remove("ob2-open");
+      const params=new URLSearchParams(location.search);
+      if(params.has("onboarding")&&!state.productReady){
+        location.replace("business-profile.html?setup=spaza");
+      }
+      return;
+    }
     if(state.productReady){modal.hidden=true;document.body.classList.remove("ob2-open");return;}
     modal.hidden=false;document.body.classList.add("ob2-open");
     const v=state.businessVerification||{};
@@ -110,7 +120,9 @@ async function load(){
       stage(1);
       notice(approval==="rejected"?
         "Teyza could not approve this verification yet. Review the verification note, correct the highlighted item and resubmit.":
-        "Your verification has been submitted. Teyza will review it before selling is unlocked.");
+        state.sellerCategory==="spaza"
+          ?"Your application is in review. Spaza shops are prioritised when all identity and address checks are complete."
+          :"Your retail / wholesale application is in review. Teyza will check your business details, identity and address.");
       return;
     }
     modal.hidden=true;document.body.classList.remove("ob2-open");

@@ -1,0 +1,8 @@
+{
+  "functions": [
+    {
+      "source": "services/teyza-places-v34",
+      "codebase": "teyza-places"
+    }
+  ]
+}

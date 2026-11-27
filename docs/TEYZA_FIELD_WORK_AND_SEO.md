@@ -1,0 +1,70 @@
+# Teyza Work and search readiness — 29 October 2026
+
+This document describes the Business-lift field-work workflow. The current changes are a release candidate and have not been deployed by creating this kit. Production deployment requires independently verified live-payment readiness; the production scripts intentionally reject a Paystack test key. Keep using the test key while completing isolated sandbox and store-billing tests.
+
+## Activate
+
+Download `teyza-field-work-and-seo-kit` from the newest passing field-work workflow on the current website branch. Extract once into a fresh folder. Install Node 22 and use the authorised Firebase CLI account for `business-lift-3c19c`. In PowerShell in that folder:
+
+```powershell
+Unblock-File -LiteralPath '.\DEPLOY-FIELD-WORK.ps1'
+Unblock-File -LiteralPath '.\DEPLOY-MOBILE.ps1'
+Unblock-File -LiteralPath '.\DEPLOY-WEBSITE.ps1'
+Unblock-File -LiteralPath '.\DEPLOY-ADMIN.ps1'
+.\DEPLOY-FIELD-WORK.ps1
+```
+
+The combined script deploys only the existing mobile Functions codebase first, checks `fieldAgentWorkspace`, checks both field-work and discovery health flags, then clones and overlays the existing Hosting release followed by a separate admin navigation overlay. It verifies unrelated files are preserved and refuses to publish over a concurrent release. It does not replace Firestore/Storage rules, grant admin roles or change DNS. Existing Google Places and verification encryption secrets are reused. Do not deploy the partial public folder with plain `firebase deploy`. Keep the Hosting backup files; the supplied rollback script restores the previous website only while this update is still live.
+
+If the backend already deployed but the website upload stopped, run `RESUME-FIELD-WORK.ps1` from a current kit. It verifies the backend health and retries the website and admin overlays without deploying the backend again. The uploader retries temporary network errors, reports a safe error code if available, and still checks file preservation before publishing.
+
+After activation:
+
+- `/agents.html`: public programme explanation and application entry.
+- `/work.html`: agent application, sign-in, guided visits and administrator work review.
+- `/owner-confirm.html#<one-time-link-token>`: the owner's private visit confirmation. Tokens expire after seven days; generating a new link replaces the old link.
+- `/how-it-works.html` and `/for-shop-owners.html`: clear public shopper/seller guides.
+- `/work-privacy.html`: evidence use, access, consent and retention notice.
+
+Open **HR & field team** inside `/admin` for applications, team directory, area management, signups and work reviews (no redirect); or use your existing authorised Teyza administrator account on `/work.html` and select **Review team**. Review agent ID/CV evidence and approve before assigning visits. Seller verification remains in `/admin`. Agent and owner sign-in supports email/password, Google, Apple and South African phone/SMS (subject to the existing Firebase provider/domain configuration). Each new agent uses their own account, verifies email or phone, supplies contact, address, working-area details, ID/passport number, a private identity-document attachment and a PDF CV, and consents to evidence handling. Recruitment documents are encrypted and scheduled for removal after 180 days. Approvals require a fresh administrator document review. An administrator must approve the application before the guided dashboard opens. Agents can update their own details. HR can filter work by agent and search a selected full address. Employment/contractor status, applicable wage protection and expense terms must be agreed separately before work starts; agent approval is not an employment contract.
+
+## Nearby search and team-recorded leads
+
+Approved agents and recently authenticated admins can search by current device position or select a full South African address. Google Places results, Teyza shop locations and team-recorded shops appear separately. A same-name Teyza shop within 100 metres is marked as a possible match, never a definitive identity match. Teyza results require a saved current shop pin; searches are limited and do not include every business, every unpinned registration or every Google listing. Verify any result with the owner before a visit. Agents can record a shop they personally find, with the owner's permission and fresh on-site device GPS. They can mark it as not found on Google or not checked; neither label proves absence from Google. Google results are transient, and team records are entered independently, not copied from Google. A missing or partial Google service is reported while other records remain available. Google Places calls use the existing server secret and are rate limited.
+
+## Guided visit
+
+The agent creates a shop visit with the owner's permission, records a fresh device location (accuracy at most 100 m), takes a shop-front photo and an in-shop selfie through the live camera, and shares the owner confirmation link. A fresh capture session expires after three minutes. Coordinates must be fresh within 60 seconds when submitted. A new location resets photo completion so old photos cannot silently represent a later visit.
+
+The owner signs in using the same account used to register their shop in the app. Confirmation is bound to that account and to one agent visit, with self-referral and duplicate attribution blocked. Confirmation does not collect bank details, create a mandate or start a payment. Seller verification continues separately in the app. Agents cannot see the owner's private identity or banking details.
+
+The agent submits after the two current photos, location and owner confirmation are recorded. Work remains pending. A separate recent administrator must open both current photos, inspect the location and owner evidence and confirm review before approving. Work approval does not approve the seller, publish a shop or collect a payment.
+
+Camera images, timestamps and device GPS can be spoofed; the portal does not claim facial recognition, automatic liveness, geofenced attendance proof or guaranteed physical presence. Capture sessions, duplicate-image detection, owner confirmation and manual review provide layered checks. Review the reported position against the owner's saved shop pin and request changes when evidence is inconsistent.
+
+## Privacy and records
+
+Evidence is encrypted with the existing server verification key before private storage; no public photo URL or download token is returned. Work images are registered for retention before upload and removed after 90 days by an hourly agent-evidence cleanup function. A failed submission may retain an unlinked encrypted image until cleanup. Expired camera sessions and owner-link tokens are also removed in bounded hourly batches. Private pages use no-store, noindex and no-referrer; all API reads/writes require verified Firebase identity and ownership or a current trusted admin session. Production rules must retain default denial of unknown private collections; never add client-write permissions for agent approval, evidence, attribution, audit or commission collections. Existing repository rules deny these collections.
+
+Agent visit responses expose progress and photo metadata, not storage paths, bank accounts, owner ID numbers or other agents' records. Private evidence views are tied to reviewer, visit revision and image and expire after five minutes for approval. Audit records are separate from public shop data. Visit, attribution and accounting records remain for relationship administration and disputes; privacy requests go to support@teyza.co.za.
+
+## Membership and work records
+
+Agent commission tracking has been retired. Existing historical records are retained, and older clients cannot record a new commission payout. Agree any separate work arrangements directly with Teyza.
+
+Shop registration and owner visit confirmation are free. Product-selling membership is presented when the owner chooses to add products: R49 for the first eligible month, then R99 per month. A product action or opening a membership page never starts a charge by itself. Paystack remains in test mode, and store-compliant in-app billing and isolated end-to-end payment testing still need to be completed. No test payment is treated as live paid access.
+
+## Search audit and repair
+
+Observed live on 29 October: both `https://teyza.co.za/` and `https://www.teyza.co.za/` returned HTTP 200 with `X-Robots-Tag: noindex,nofollow`, despite index/follow HTML metadata. robots.txt and sitemap.xml also returned that blocking header. A public `site:` search produced no results in the tools used; this alone does not prove the site's Google indexing status. Search Console was not available in this session.
+
+The overlay removes inherited robot header directives while retaining other headers, explicitly permits indexing for the reviewed public pages and restores noindex for non-public existing HTML files, private route prefixes, work/owner pages and admin. Public pages have canonical URLs, descriptive titles, summaries, social metadata and truthful WebPage/Organization structure. The home page explains the business in plain language and links to shopper, seller and field-agent guides. There are no invented review scores, fake local branches or guaranteed finance/order claims. The sitemap includes public information pages, not authenticated work pages. Private pages are crawlable so engines can read noindex; login and server authorization protect their data.
+
+After deployment, `check-live-seo.cjs` checks public headers and private noindex. Also inspect both domain variants. Verify `teyza.co.za` in Google Search Console and Bing Webmaster Tools, submit `https://teyza.co.za/sitemap.xml`, and inspect/request indexing of the home page and new guides. Search engines decide whether/when to index and rank the site. No ranking or indexing guarantee is made.
+
+References: https://developers.google.com/search/docs/crawling-indexing/block-indexing and https://developers.google.com/search/docs/fundamentals/seo-starter-guide
+
+## Verification and limits
+
+Automated tests use synthetic accounts, image bytes, locations, mandates and invoices. They do not apply for real agent accounts, contact shops, collect money, publish a pending shop or send recruitment messages. Test physical Android/iPhone camera permission, GPS accuracy, owner confirmation on a separate device and your payment-provider/bank process after deployment. The web portal pages do not themselves require a native app rebuild. The separate seller logout correction does require installing app version 1.0.23 (33); owners use their compatible app for shop registration and identity verification.
+

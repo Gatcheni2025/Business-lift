@@ -1,0 +1,62 @@
+{
+  "policyVersion": "teyza-ads-operator-source-approval-v1",
+  "approvalType": "authorised_project_owner_and_operator",
+  "decision": "approved",
+  "approvedDate": "2026-11-19",
+  "operatorApprovalPr": 185,
+  "operatorApprovalHeadAtTimeOfApproval": "0bd0cce9825ad5121316a5794e609af9554f6fae",
+  "approvedFiles": [
+    {
+      "file": "web/app-first/public/ads/index.html",
+      "sha256": "c75135506ed813f699840c4d3994ccbd70f5fbc5485c3abb0b4540c7119c2b7c",
+      "windowsCrLfSha256": "e9edc472c48f58d31f25a90cccb4dd70a968a80691cd525dc5e64b61679b8314"
+    },
+    {
+      "file": "web/app-first/public/js/ads-web-billing.mjs",
+      "sha256": "2976df5040849dd385b88c24cbc7bdaab3c7eb2a566d9175493ff48ad1a88097",
+      "windowsCrLfSha256": "6ef53b019667c037577bf9fcf92b1931f5f838b2ea0acee3cb33e2add5c42cdc"
+    }
+  ],
+  "mirroredRootContentMustMatch": true,
+  "approvedSha256Representation": "Canonical Git checkout LF UTF-8",
+  "lineEndingEquivalenceVerified": true,
+  "waivesExternalThirdPartyMalwareVerdict": true,
+  "externalAnalystVerdict": "not_received",
+  "basis": "On 2026-11-19 the project owner explicitly directed approval and publishing of PR #185's new security fingerprints, while requiring a safe decision for existing email-only sellers. The reviewed social-first Ads HTML and JS now preserve existing email-only accounts via an explicit collapsed existing-account login and Firebase linkWithPopup to the original UID. The current operator-waiver status remains an accepted owner-level source review, not an independent malware verdict. Checkout, business ownership, review and price confirmation remain server-enforced. Exact canonical LF SHA-256 and deterministic Windows CRLF-equivalent hashes pinned.",
+  "scope": "Operator-approved PR #185 Ads website HTML and JS source only; not a backend payment change, WhatsApp login activation, mobile WebView checkout, broader Firebase Hosting publication or bypass of seller identity validation.",
+  "previousApproval": {
+    "operatorApprovalPr": 177,
+    "approvedDate": "2026-11-18",
+    "operatorApprovalHeadAtTimeOfApproval": "821fe917f2975ee8010bc3f5a2fa546e88894730",
+    "approvedFiles": [
+      {
+        "file": "web/app-first/public/ads/index.html",
+        "sha256": "a36466ffbcc5c78cb851fa261165f5c39324c94df40ec735a04d46ed8b045bb3",
+        "windowsCrLfSha256": "86f7da7545d3ad2e6d1542029da19288d49f404519d2a201ddd9763d84cd86d7"
+      },
+      {
+        "file": "web/app-first/public/js/ads-web-billing.mjs",
+        "sha256": "3486c055633528e125ee97dd77c99e05b663a0951fd185e25737364fb7978e03",
+        "windowsCrLfSha256": "8fee649e9574f5ed4f06e0e6f106429e967e2176e837587cff1c595fbc4ac369"
+      }
+    ],
+    "previousApproval": {
+      "approvedDate": "2026-11-11",
+      "operatorApprovalPr": 149,
+      "approvedFiles": [
+        {
+          "file": "web/app-first/public/ads/index.html",
+          "sha256": "6273f912f6a77b894f97dfbb13aeef4cab8a7319c714a9dcaf29672d4244d980",
+          "windowsCrLfSha256": "99820c9ab75619fca188954599a556e464cfe60b884cfdf548d9450103777a6e"
+        },
+        {
+          "file": "web/app-first/public/js/ads-web-billing.mjs",
+          "sha256": "3b3fec7f5ab7fe09ee6ea96b0bd04f76fd1bf56745c5e43a879b0acd14935289",
+          "windowsCrLfSha256": "df590bc65b3da45118a438a269caa2884a4f58ca9db5e216f7272e3ab95494cb"
+        }
+      ],
+      "basis": "Authorised project owner explicitly approved the new independent teyza.co.za/ads/ website source and JavaScript fingerprint for draft PR #149 on 2026-11-11, and waived an external third-party malware verdict. This approval applies to the exact unchanged reviewed source bytes, not to arbitrary subsequent edits."
+    },
+    "basis": "On 2026-11-18, the authorised project owner explicitly reviewed PR #177's standalone advertising website and checkout JS and approved the Windows working-tree SHA-256 fingerprints 86f7da7545d3ad2e6d1542029da19288d49f404519d2a201ddd9763d84cd86d7 and 8fee649e9574f5ed4f06e0e6f106429e967e2176e837587cff1c595fbc4ac369, retaining the waiver of an external third-party malware verdict. Exact deterministic LF-to-CRLF conversion of Git source yields those fingerprints; canonical Git LF SHA-256 values are separately recorded under approvedFiles[].sha256. Both are pinned to exactly the same reviewed source content."
+  }
+}

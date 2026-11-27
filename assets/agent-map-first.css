@@ -1,0 +1,44 @@
+/* TEYZA field map-first enhancement; all existing approval/evidence UX retained. */
+.field-dashboard-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0 20px}
+.field-dashboard-card{min-width:0;display:flex;flex-direction:column;gap:11px;padding:18px;background:linear-gradient(140deg,#fff,#edf8f3);border:1px solid #dae9e2;border-radius:18px;box-shadow:0 8px 24px rgba(4,53,38,.07)}
+.field-dashboard-card:nth-child(2){background:linear-gradient(140deg,#fff,#fffaed)}
+.field-dashboard-card:nth-child(3){background:linear-gradient(140deg,#fff,#e9f9fb)}
+.field-dashboard-card.field-commission{background:linear-gradient(120deg,#095549,#087e54);color:white}
+.field-dashboard-card span{font-size:12px;font-weight:700}.field-dashboard-card strong{font-size:clamp(22px,2.5vw,31px);line-height:1.05}.field-dashboard-card small{font-size:11px;line-height:1.5;opacity:.8}
+.field-map-shell{margin:18px 0 20px;background:#fff;border:1px solid #d7e9e0;border-radius:20px;padding:15px;box-shadow:0 8px 22px rgba(4,53,38,.06)}
+.field-map-heading{display:flex;justify-content:space-between;gap:20px;align-items:baseline;margin:3px 6px 12px}
+.field-map-heading h3{font-size:18px;color:#08483d;margin:0}.field-map-heading p{font-size:12px;color:#618078;max-width:560px;line-height:1.5;margin:0}
+.field-map-canvas{height:min(58vh,570px);min-height:380px;border-radius:16px;border:1px solid #cfe6dc;background:linear-gradient(135deg,#e5f3ed,#cbe4d9)}
+.field-map-status{font-size:12px;color:#55736b;margin:11px 4px 2px}
+@media(max-width:1040px){.field-dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.field-map-heading{display:block}.field-map-heading p{margin-top:5px}}
+@media(max-width:590px){.field-dashboard-cards{grid-template-columns:1fr}.field-map-canvas{min-height:340px}.field-map-shell{padding:10px}}
+
+.field-rewards{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px;padding:16px 20px;border-radius:16px;background:#edf8f1;border:1px solid #cde6d5}
+.field-rewards strong{font-size:16px;color:#0b5a40}.field-rewards p{margin:0;max-width:570px;font-size:12px;line-height:1.55}
+.agent-registration-guide{border:1px solid #d5e9dd;border-radius:16px;padding:14px 18px;margin:16px 0;background:#f8fcf8}
+.agent-registration-guide summary{cursor:pointer;font-weight:750;color:#09634c}
+.agent-registration-guide ol{margin:14px 0 0;padding-left:23px;font-size:13px;color:#295344;line-height:1.7}
+.nearby-card{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.nearby-card a,.nearby-card button{margin-top:5px}
+.nearby-controls label{min-width:210px}
+@media(max-width:700px){.field-rewards{flex-direction:column;align-items:flex-start}}
+
+/* Agent-first guided visit: one prominent next action and consented owner invitation. */
+.visit-flow-intro{border:1px solid #b9ddc9;border-radius:12px;background:#ecf8f1;padding:13px 16px;line-height:1.6;font-weight:600;color:#125840}
+.owner-invite{display:grid;gap:12px;margin-top:12px;background:#f5faf7;border:1px solid #c9e7d3;padding:16px;border-radius:12px}
+.owner-invite label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.owner-invite input[type="tel"]{min-width:0;max-width:420px;padding:12px;border:1px solid #bfd6c8;border-radius:9px;background:white}
+.owner-invite label.check{display:flex;align-items:flex-start;gap:9px}
+.owner-invite button{max-width:max-content}
+.task-complete{opacity:.78}.task-complete .step-dot{background:#daf2e4;color:#0d7651}
+.nearby-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.nearby-controls label{flex:1 1 200px}.nearby-controls button{min-height:45px}
+@media(max-width:700px){.nearby-controls>*{width:100%}.owner-invite button{width:100%;max-width:none}}
+
+.agent-journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 18px}
+.agent-journey>div{display:grid;grid-template-columns:36px 1fr;column-gap:10px;align-items:center;background:#f0f8f3;border:1px solid #d5e9dc;border-radius:14px;padding:14px}
+.agent-journey span{grid-row:span 2;background:#08775d;color:#fff;font-weight:800;border-radius:50%;display:grid;place-items:center;width:32px;height:32px}
+.agent-journey strong{font-size:15px;color:#124a3a}.agent-journey small{font-size:12px;color:#4b7467}
+.agent-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;margin-bottom:18px;background:#eff9f3;border:1px solid #c9e3d4;border-radius:15px;padding:13px 18px}
+.agent-summary strong{color:#095b42}.agent-summary p{margin:0;flex:1 1 320px;font-size:12px}.agent-summary button{margin-left:auto}
+@media(max-width:700px){.agent-journey{grid-template-columns:1fr}.agent-summary{display:block}.agent-summary>*{display:block;margin:9px 0}.agent-summary button{width:100%}}
