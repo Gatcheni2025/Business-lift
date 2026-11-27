@@ -512,11 +512,22 @@ async function main(){
    let prospect=null;
    const f=await pageFor({api:async(route,body)=>{
     if(!body.action.startsWith('ops_acquisition_'))return false;
-    if(body.action==='ops_acquisition_create'){prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
-    else if(body.action==='ops_acquisition_event'){assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:1};await route.fulfill({json:{ok:true,prospect}});}
-    else if(body.action==='ops_acquisition_send'){assert.equal(body.data.channel,'email');assert.equal(body.data.kind,'invitation');assert.equal(body.data.confirmed,true);prospect={...prospect,outbound:{email_invitation:{status:'queued',updatedAt:Date.now()}},revision:2};await route.fulfill({json:{ok:true,message:{status:'queued'}}});}
+    if(body.action==='ops_acquisition_create'){assert.equal(body.data.independentSourceConfirmed,true);assert.equal(body.data.authorisedSource,true);assert.equal(body.data.googlePlaceId,'SyntheticPlace1234');assert.equal(body.data.website,'https://example.test/');assert.equal(body.data.email,'');prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    else if(body.action==='ops_acquisition_place_matches'){
+     assert(Array.isArray(body.data.placeIds));assert(body.data.placeIds.length<=30);
+     await route.fulfill({json:{ok:true,matches:prospect?.googlePlaceId&&body.data.placeIds.includes(prospect.googlePlaceId)?[{placeId:prospect.googlePlaceId,id:prospect.id}]:[]}});
+    }
+    else if(body.action==='ops_acquisition_event'){
+     assert.equal(body.data.revision,prospect.revision);
+     if(body.data.type==='contact_update'){
+      assert.equal(body.data.authorisedSource,true);assert.equal(body.data.confirmed,true);assert.equal(body.data.email,'synthetic@example.test');
+      assert(!prospect.email);prospect={...prospect,email:body.data.email,revision:prospect.revision+1};
+     }else{assert.equal(body.data.type,'permission');assert.equal(body.data.channel,'email');assert.equal(body.data.ownerOptIn,true);prospect={...prospect,permissions:{email:{granted:true}},revision:prospect.revision+1};}
+     await route.fulfill({json:{ok:true,prospect}});
+    }
+    else if(body.action==='ops_acquisition_send'){assert.equal(body.data.channel,'email');assert.equal(body.data.kind,'invitation');assert.equal(body.data.confirmed,true);prospect={...prospect,outbound:{email_invitation:{status:'queued',updatedAt:Date.now()}},revision:prospect.revision+1};await route.fulfill({json:{ok:true,message:{status:'queued'}}});}
     else if(body.action==='ops_acquisition_detail')await route.fulfill({json:{ok:true,prospect,events:[]}});
-    else await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{email:{invitation:true},whatsapp:{invitation:false}}}});
+    else await route.fulfill({json:{ok:true,schema:1,prospects:[{id:'manual-prospect',name:'Synthetic Saved Manual Shop',city:'Durban',area:'Umlazi',address:'Synthetic Manual Road',category:'spaza',stage:'identified',phone:'',email:'',permissions:{},optedOut:false,revision:0}],next:null,communications:{email:{invitation:true},whatsapp:{invitation:false}}}});
     return true;
    }});
    await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
@@ -532,51 +543,123 @@ async function main(){
    await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
    assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
-   await f.page.getByRole('button',{name:'+ Add business prospect',exact:true}).first().click();
+   await f.page.getByRole('button',{name:'+ Find & Add Businesses',exact:true}).first().click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
+   assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'all');
+   await f.page.getByText('Synthetic Saved Manual Shop',{exact:true}).last().waitFor();
+   const findDialog=f.page.getByRole('dialog');assert(await findDialog.getByText('Manual enquiry needed',{exact:true}).isVisible());
+   await findDialog.getByLabel('Contact channel filter').selectOption('email');assert.equal(await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).count(),0);
+   await findDialog.getByLabel('Contact channel filter').selectOption('all');
    await f.page.getByLabel('Town, township or business name').fill('Durban');
    // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
    await f.page.evaluate(()=>{
-    class MapMock{constructor(_node,opts){this.center=opts.center;this.zoom=opts.zoom;}
+    class MapMock{constructor(_node,opts){if(window.__acqFailMap)throw Error('Synthetic map error');this.center=opts.center;this.zoom=opts.zoom;}
      setCenter(p){this.center={lat:typeof p.lat==='function'?p.lat():p.lat,lng:typeof p.lng==='function'?p.lng():p.lng};}getCenter(){return {lat:()=>this.center.lat,lng:()=>this.center.lng};}
      setZoom(z){this.zoom=z;}getZoom(){return this.zoom;}panTo(p){this.setCenter(p);}}
     class MarkerMock{setMap(){}addListener(){}}
     class InfoWindowMock{open(){}}
-    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([{geometry:{location:{lat:()=>-29.86,lng:()=>31.02}}}],'OK');}}
+    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([],'REQUEST_DENIED');}}
     window.google={maps:{Map:MapMock,Marker:MarkerMock,InfoWindow:InfoWindowMock,Geocoder:GeocoderMock,SymbolPath:{CIRCLE:0}}};
    });
-   await f.page.route('**/assets/teyza-maps-config.json',route=>route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}}));
-   let placesRequests=0;
+   let mapConfigRequests=0;
+   await f.page.route('**/assets/teyza-maps-config.json',route=>{mapConfigRequests++;return route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}});});
+   let placesRequests=0,contactRequests=0;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
-    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('category'),'spaza');assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
-    return route.fulfill({json:{ok:true,entries:[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}]}});
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),'20000');
+    const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
+    const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Spaza',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'}]:[];
+    return route.fulfill({json:{ok:true,entries}});
+   });
+   await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
+    contactRequests++;const id=new URL(route.request().url()).searchParams.get('placeId');
+    return route.fulfill({json:id==='SyntheticPlace1234'?{ok:true,phone:'031 555 0100',websiteUrl:'https://example.test/'}:{ok:true,phone:'',websiteUrl:''}});
    });
    await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
    const live=f.page.getByRole('dialog');
-   const searchArea=live.getByRole('button',{name:'Search this area'});
-   await searchArea.waitFor();await f.page.waitForFunction(()=>!document.querySelector('.acq-google-compact .tp-combined-controls button:last-of-type')?.disabled);
-   assert.equal(placesRequests,0);
+   await live.getByText('Synthetic Spaza',{exact:true}).waitFor();
+   await live.getByText('Synthetic No Contact',{exact:true}).waitFor();
+   assert.equal(placesRequests,3);assert.equal(contactRequests,0);
    assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
-   await searchArea.click();
-   await live.getByText('Synthetic Google Shop',{exact:true}).waitFor();assert.equal(placesRequests,1);
-   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Durban, South Africa');
-   await live.getByRole('button',{name:/Synthetic Google Shop/}).click();
-   assert(await live.getByText(/Email not supplied by Google/).isVisible());
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded??null),null);assert.equal(mapConfigRequests,0);
+   await live.getByText(/within 20 km of Durban, KwaZulu-Natal/).waitFor();
+   assert.equal(await live.locator('.acq-optional-map').evaluate(e=>e.open),false);
+   assert.equal(await live.locator('.tp-combined-map').isVisible(),false);
+   const shop=live.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
+   const noContact=live.locator('.acq-business-card').filter({hasText:'Synthetic No Contact'});
+   await shop.getByRole('button',{name:'View contact details'}).click();
+   await shop.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
+   assert.equal(await shop.getByRole('link',{name:'Open business website'}).getAttribute('href'),'https://example.test/');
+   assert.equal(await shop.getByRole('link',{name:'Check WhatsApp',exact:true}).getAttribute('href'),'https://wa.me/27315550100');
+   assert.equal(await shop.getByRole('link',{name:'Check WhatsApp',exact:true}).getAttribute('target'),'_blank');
+   await noContact.getByRole('button',{name:'View contact details'}).click();
+   await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
+   assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
+   assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
+   assert.equal(await noContact.getByRole('link',{name:'Check WhatsApp',exact:true}).count(),0);
+   assert(await noContact.getByRole('button',{name:'Add Business',exact:true}).isVisible());
+   assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
+   await f.page.evaluate(()=>window.__acqFailMap=true);
+   await shop.getByRole('button',{name:'Show on map',exact:true}).click();
+   await live.getByText('Map could not load. Business information remains available above.',{exact:true}).waitFor();
+   assert.equal(await live.locator('.acq-business-card').count(),2);
+   assert(await noContact.getByText('Phone: not listed',{exact:true}).isVisible());
+   assert.equal(mapConfigRequests,1);
+   await live.getByLabel('Town or municipality').fill('Unknown Test Town');
+   await live.getByRole('button',{name:'Search this area',exact:true}).click();
+   await live.getByText(/Search failed: .*REQUEST_DENIED/).waitFor();assert.equal(placesRequests,3);
+   assert.equal(await live.locator('.acq-business-card').count(),0);
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Unknown Test Town, South Africa');
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
    await live.getByRole('button',{name:'Back to saved contacts'}).click();
-   assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);
-   await f.page.getByRole('button',{name:'Add confirmed business'}).click();
-   const form=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save business prospect'})});
-   await form.getByLabel('Business name',{exact:true}).fill('Synthetic Spaza');
-   await form.getByLabel('Township / area').fill('Umlazi');
-   await form.getByLabel('Business address or landmark').fill('Synthetic Road');
-   await form.getByLabel('Business phone (optional)').fill('0712345678');
-   await form.getByLabel('Business email (optional)').fill('synthetic@example.test');
+   assert.equal(await f.page.getByText('Synthetic Spaza',{exact:true}).count(),0);
+   await f.page.getByLabel('Town, township or business name').fill('Durban');
+   await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
+   const chosen=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
+   await chosen.getByRole('button',{name:'View contact details'}).click();
+   await chosen.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
+   await chosen.getByRole('button',{name:'Add Business',exact:true}).click();
+   const form=f.page.getByRole('dialog').locator('form').filter({has:f.page.getByRole('button',{name:'Add Business',exact:true})});
+   await form.getByLabel('Business name',{exact:true}).waitFor();
+   assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'');
+   await f.page.getByRole('button',{name:'Use independently confirmed details'}).click();
+   assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'');
    await form.getByLabel('Source reference / authority to retain details').fill('Synthetic owner request');
    await form.getByLabel('I confirm Teyza may retain this information for onboarding.').check();
-   await form.getByRole('button',{name:'Save business prospect'}).click();
+   await form.getByLabel('I independently confirmed the business details using the named permitted source, not Google Maps alone.').check();
+   await f.page.getByRole('button',{name:'Use independently confirmed details'}).click();
+   assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'Synthetic Spaza');
+   assert.equal(await form.getByLabel('Business website (optional)').inputValue(),'https://example.test/');
+   await form.getByLabel('Township / area').fill('Umlazi');
+   await form.getByLabel('I independently confirmed the business details using the named permitted source, not Google Maps alone.').uncheck();
+   await form.getByRole('button',{name:'Add Business',exact:true}).click();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,0);
+   await form.getByLabel('I independently confirmed the business details using the named permitted source, not Google Maps alone.').check();
+   await form.getByRole('button',{name:'Add Business',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await f.page.getByRole('dialog').getByText('Added',{exact:true}).waitFor();
+   assert.equal(prospect.googlePlaceId,'SyntheticPlace1234');assert.equal(prospect.website,'https://example.test/');
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_send').length,0);
+   await f.page.getByRole('button',{name:'Back to business search'}).click();
+   await f.page.getByLabel('Town, township or business name').fill('Durban');
+   await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
+   const saved=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
+   await saved.getByText('Added',{exact:true}).waitFor();
+   assert.equal(await saved.getByRole('button',{name:'Add Business',exact:true}).count(),0);
+   await saved.getByRole('button',{name:'Contact',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
    await f.page.getByRole('heading',{name:'Send a message'}).waitFor();
+   assert.equal(await f.page.getByLabel('email invitation send preview').count(),0);
+   await f.page.getByText('Add missing contact details',{exact:true}).click();
+   const missing=f.page.locator('form').filter({has:f.page.getByRole('button',{name:'Save contact details',exact:true})});
+   await missing.getByLabel('Confirmed business email').fill('synthetic@example.test');
+   await missing.getByLabel('Independent source / evidence').fill('Synthetic owner-provided address');
+   await missing.getByLabel('I independently confirmed these details and Teyza may retain them. No contact permission is inferred.').check();
+   await missing.getByRole('button',{name:'Save contact details',exact:true}).click();
+   await f.page.getByText('Recipient: synthetic@example.test',{exact:true}).waitFor();
+   assert.equal(await f.page.getByLabel('email invitation send preview').count(),0);
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_send').length,0);
    await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
    assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
    await f.page.getByText('Record contact permission, follow-up or support activity',{exact:true}).click();
@@ -608,7 +691,7 @@ async function main(){
    await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
    await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
    await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
-   await lookup.getByRole('button',{name:'Open business',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await lookup.locator('.acq-contact-row').filter({hasText:'Synthetic Spaza'}).getByRole('button',{name:'Contact',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();

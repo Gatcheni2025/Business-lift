@@ -347,3 +347,28 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-live-result{padding:8px 0;border-bottom:1px solid #e2eae5}
 .acq-live-result>a{display:inline-block;margin:4px 8px;color:#245eab;font-size:13px;font-weight:650}
 @media(max-width:700px){.acq-lookup-filters,.acq-compact-form.ops-form,.acq-contact-row,.acq-google-compact .tp-combined-controls{grid-template-columns:1fr}.acq-contact-row .acq-contact-actions{justify-content:flex-start;max-width:none}}
+
+/* List-first discovery: businesses remain visible independently of the map. */
+.acq-google-compact .tp-combined-results{display:grid;grid-template-columns:minmax(0,1fr);max-height:none;overflow:visible;gap:10px}
+.acq-google-compact .tp-google-credit{font-size:13px!important;font-weight:650;color:#5e5e5e!important;white-space:normal}
+.acq-business-card{padding:14px 16px;background:white;border:1px solid #dce8e2;border-radius:12px;display:grid;gap:8px;min-width:0}
+.acq-live-identity{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.acq-live-identity>strong{font-size:16px;color:#00484d}
+.acq-live-identity>span{font-size:13px;color:#41676b}
+.acq-live-identity>small{color:#245eab;font-weight:600}
+.acq-manual-chip{font-size:12px;font-weight:650;color:#925d10;background:#fff2d7;border-radius:999px;width:fit-content;padding:4px 9px}
+.acq-live-details{background:#f4f8f6;border-radius:8px;padding:8px 12px;overflow-wrap:anywhere}
+.acq-live-details p{margin:4px 0;font-size:13px;color:#385c61}
+.acq-live-details a,.acq-business-card .acq-contact-actions a{color:#245eab;font-size:13px;font-weight:650}
+.acq-optional-map{margin-top:14px;border:1px solid #dce8e2;border-radius:10px;background:#fff;padding:12px}
+.acq-optional-map>summary{cursor:pointer;font-weight:700;color:#00545b}
+.acq-google-compact .tp-combined-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.acq-google-compact .tp-combined-controls input,.acq-google-compact .tp-combined-controls select{width:100%;min-width:0}
+@media(max-width:700px){.acq-google-compact .tp-combined-controls{grid-template-columns:1fr}.acq-business-card{padding:12px}}
+
+/* Contact-first discovery: public reference stays separate from the confirmed record. */
+.acq-listing-reference:not([hidden]){display:grid;gap:8px;padding:14px 16px;border:1px solid #dce8e2;border-radius:12px;background:#f4f8f6;margin:12px 0;overflow-wrap:anywhere}
+.acq-listing-reference[hidden]{display:none}
+.acq-listing-reference .button{width:fit-content;max-width:100%;white-space:normal}
+.acq-live-details a{display:inline-block;margin:6px 12px 6px 0}
+.acq-google-compact>input[type=search]{width:100%;box-sizing:border-box;margin:8px 0}

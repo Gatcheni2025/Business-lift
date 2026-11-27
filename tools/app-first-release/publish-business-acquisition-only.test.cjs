@@ -7,8 +7,8 @@ test('Business Acquisition scoped publisher preserves all unrelated site assets 
  const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
  assert.doesNotThrow(()=>verify(before,after,items));assert.throws(()=>verify(before,new Map([...after,['/agents.html','changed']]),items));
- const health={ok:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
- assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));
+ const health={ok:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));assert.throws(()=>assertR90Ready({...health,adminBusinessContactDiscovery:false}));
 });
 test('Business invitation destination shows the actual app and direct store links before optional detail',()=>{const fs=require('node:fs'),path=require('node:path');const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');const main=html.slice(html.indexOf('<main id="main">'),html.indexOf('</main>'));const hero=main.slice(0,main.indexOf('data-teyza-demo'));for(const text of ['Put your business','/assets/app/home.webp','/assets/app/nearby-shops.webp','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733','Get help getting started'])assert(hero.includes(text),text);assert(main.includes('example shop, items and request are illustrative'));assert(main.includes('tel:+27315661165'));assert(main.includes('Registration and verification are free'));assert(main.includes('/seller-subscriptions.html'));assert(html.includes('/assets/app-demo.js'));});
 
@@ -126,7 +126,7 @@ test('Contact discovery filters recorded addresses by area and protects send sho
  const {matchesAcquisitionContact:match,nextCommunication:next,communicationPermitted:allowed}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
  const caps={email:{invitation:true,welcome:true,membership:true},whatsapp:{invitation:false}};
  const p={name:'Synthetic Shop',city:'Durban',area:'Umlazi',category:'spaza',email:'shop@example.test',phone:'+27712345678',permissions:{email:{granted:true}},outbound:{}};
- assert(match(p,'Durban'));assert(match(p,'Durban Umlazi'));assert(!match(p,'Johannesburg'));assert(!match({...p,email:''},'Durban'));
+ assert(match(p,'Durban'));assert(match(p,'Durban Umlazi'));assert(!match(p,'Johannesburg'));assert(!match({...p,email:''},'Durban','email'));assert(match({...p,email:'',phone:''},'Durban'));assert(match({...p,email:'',phone:''},'Durban','manual'));assert(!match(p,'Durban','manual'));assert(!match({...p,email:'',phone:''},'Durban','all',true));
  assert(match({...p,email:''},'Durban','whatsapp'));assert(!match(p,'Durban','whatsapp',true));assert(!match({...p,optedOut:true},'Durban','email',true));
  assert.equal(next(p,'email',caps),'invitation');assert.equal(next(p,'whatsapp',caps),null);assert.equal(next({...p,permissions:{}},'email',caps),null);
  assert.equal(next({...p,optedOut:true},'email',caps),null);assert.equal(next({...p,outbound:{email_invitation:{status:'queued'}}},'email',caps),null);
@@ -134,5 +134,35 @@ test('Contact discovery filters recorded addresses by area and protects send sho
  assert.equal(next({...p,seller:{welcomeEmailEligible:true,membershipEligible:true},emailHistory:{welcome:{sentAt:1}}},'email',caps),'membership');
  assert(!allowed({...p,seller:{welcomeEmailEligible:false}},'email','welcome'));
  const m=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs'),'utf8');
- assert(m.includes('autoSearch=true,compact=false'));assert(m.includes('if(autoSearch)void searchArea(true)'));assert(m.includes('Email not supplied by Google'));assert(m.includes('stamp!==epoch'));
+ assert(m.includes('autoSearch=true,compact=false'));assert(m.includes('if(autoSearch)void searchArea(true)'));assert(m.includes('Email not supplied by Google'));assert(m.includes('renderCompactList(visible)'));assert(m.includes('if(autoSearch)void searchArea()'));assert(m.includes('shopper-place-contact.php'));assert(m.includes('pageSize+=pageLength'));assert(m.includes('stamp!==epoch'));
+});
+
+test('Pilot area resolution uses independent, exact locality centres with bounded radii and no silent fallback',async()=>{
+ const path=require('node:path'),{pathToFileURL}=require('node:url');
+ const {resolvePilotArea:resolve}=await import(pathToFileURL(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs')).href);
+ const durban=resolve(' Durban ','All provinces');assert.equal(durban.lat,-29.8579);assert.equal(durban.lng,31.0292);assert.equal(durban.radius,20000);
+ assert.equal(resolve('Johannesburg','Gauteng').radius,20000);
+ for(const name of ['Umlazi','KwaMashu','Inanda','Ntuzuma','Clermont','Lamontville','KwaDabeka','Soweto','Alexandra','Diepsloot','Orange Farm','Tembisa']){
+  const p=resolve(name);assert(p,name);assert(p.radius>=5000&&p.radius<=8000);assert(p.lat>=-35&&p.lat<=-22&&p.lng>=16&&p.lng<=34);assert(p.source);
+ }
+ assert.equal(resolve('Kwa Mashu','KwaZulu-Natal').label,'KwaMashu, KwaZulu-Natal');
+ assert.equal(resolve('Durban','Gauteng'),null);assert.equal(resolve('Tembisa','Eastern Cape'),null);assert.equal(resolve('No Such Town'),null);
+});
+
+
+test('Contact-first discovery uses safe website and WhatsApp links without claiming account verification',async()=>{
+ const fs=require('node:fs'),path=require('node:path'),{pathToFileURL}=require('node:url');
+ const file=path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js');
+ const src=fs.readFileSync(file,'utf8');
+ const {safeBusinessWebsite,savedWhatsAppCheck,matchesAcquisitionContact}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const {whatsappCheckUrl}=await import(pathToFileURL(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs')).href);
+ assert.equal(safeBusinessWebsite('https://example.test/contact'),'https://example.test/contact');
+ assert.equal(safeBusinessWebsite('http://example.test/'),'http://example.test/');
+ assert.equal(safeBusinessWebsite('javascript:alert(1)'),null);assert.equal(safeBusinessWebsite('https://user:pass@example.test'),null);
+ for(const check of [savedWhatsAppCheck,whatsappCheckUrl]){
+  assert.equal(check('071 234 5678'),'https://wa.me/27712345678');assert.equal(check('+27 31 555 0100'),'https://wa.me/27315550100');
+  assert.equal(check('invalid'),null);assert.equal(check('0712345678?text=spam'),null);
+ }
+ assert(matchesAcquisitionContact({name:'Example',website:'https://example.test/'},'example.test'));
+ assert(src.includes('ops_acquisition_place_matches'));assert(src.includes('independentSourceConfirmed'));assert(src.includes('contact_update'));
 });
