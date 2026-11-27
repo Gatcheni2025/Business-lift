@@ -30,6 +30,13 @@ const rows=[{sellerUid:'seller1',shopName:'Corner Spaza',category:'spaza',addres
  evidenceId:'company1',evidenceKind:'company',companyName:'Town Retail Pty Ltd',registrationNumber:'SYNTHETIC-ONLY',submissionId:'selfie2',submittedAt:1792910000000,expired:false},
  {sellerUid:'admin1',shopName:'Reviewer Own Shop',category:'spaza',evidenceId:'own-doc',submissionId:'own-selfie',expired:false}];
 
+async function syntheticCommandPage(body,{asOf,scanned=0,prospects=[],funnel={},queues={},next=null}={}){
+ const source=fs.readFileSync(path.join(root,'js/teyza-business-acquisition.js'),'utf8');
+ const {emptyCommandReport}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const counts=emptyCommandReport().counts;Object.assign(counts.funnel,funnel);Object.assign(counts.queues,queues);
+ const filters=Object.fromEntries(['province','category','queue','municipality','township','municipalityCode','localityId','search'].map(k=>[k,String(body.data.filters?.[k]||'').trim()]));
+ return {ok:true,schema:2,asOf:body.data.asOf||asOf||Date.now()-1000,filters,scanned,counts,prospects,next,complete:next===null};
+}
 async function main(){
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://local').pathname;
@@ -524,7 +531,9 @@ async function main(){
      await route.fulfill({json:{ok:true,area:{area:'Synthetic Remote Township',province:'KwaZulu-Natal',label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',lat:-29.8579,lng:31.0292,radius:10000,source:'Google Maps'}}});return true;
     }
     if(!body.action.startsWith('ops_acquisition_'))return false;
-    if(body.action==='ops_acquisition_create'){assert.equal(body.data.independentSourceConfirmed,true);assert.equal(body.data.authorisedSource,true);assert.equal(body.data.googlePlaceId,'SyntheticPlace1234');assert.equal(body.data.website,'https://example.test/');assert.equal(body.data.email,'');prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
+    if(body.action==='ops_acquisition_command_page')await route.fulfill({json:await syntheticCommandPage(body)});
+    else if(body.action==='ops_acquisition_localities'){assert.equal(body.data.province,'KwaZulu-Natal');assert.equal(body.data.query,'Umlazi');await route.fulfill({json:{ok:true,vintage:'Synthetic government reference',localities:[{province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',localityId:'ETH:123456789'}]}});}
+    else if(body.action==='ops_acquisition_create'){assert.equal(body.data.localityId,'ETH:123456789');assert.equal(body.data.geographyConfirmed,true);assert.equal(body.data.independentSourceConfirmed,true);assert.equal(body.data.authorisedSource,true);assert.equal(body.data.googlePlaceId,'SyntheticPlace1234');assert.equal(body.data.website,'https://example.test/');assert.equal(body.data.email,'');prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
     else if(body.action==='ops_acquisition_place_matches'){
      assert(Array.isArray(body.data.placeIds));assert(body.data.placeIds.length<=30);
      await route.fulfill({json:{ok:true,matches:prospect?.googlePlaceId&&body.data.placeIds.includes(prospect.googlePlaceId)?[{placeId:prospect.googlePlaceId,id:prospect.id}]:[]}});
@@ -557,11 +566,13 @@ async function main(){
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'+ Find & Add Businesses',exact:true}).first().click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
-   assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'all');
-   await f.page.getByText('Synthetic Saved Manual Shop',{exact:true}).last().waitFor();
-   const findDialog=f.page.getByRole('dialog');assert(await findDialog.getByText('Manual enquiry needed',{exact:true}).isVisible());
+   assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'contactable');
+   const findDialog=f.page.getByRole('dialog');assert.equal(await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).count(),0);
+   await findDialog.getByLabel('Contact channel filter').selectOption('manual');
+   await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).waitFor();
+   assert(await findDialog.getByText('Field visit / manual enquiry',{exact:true}).isVisible());
    await findDialog.getByLabel('Contact channel filter').selectOption('email');assert.equal(await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).count(),0);
-   await findDialog.getByLabel('Contact channel filter').selectOption('all');
+   await findDialog.getByLabel('Contact channel filter').selectOption('contactable');
    await f.page.getByLabel('Town, township or business name').fill('Durban');
    // Real popup behavior, mocked Google API: no live billable calls or prospect writes.
    await f.page.evaluate(()=>{
@@ -659,6 +670,12 @@ async function main(){
    assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'Synthetic Spaza');
    assert.equal(await form.getByLabel('Business website (optional)').inputValue(),'https://example.test/');
    await form.getByLabel('Township / area').fill('Umlazi');
+   await form.getByLabel('Province',{exact:true}).selectOption('KwaZulu-Natal');
+   await form.getByLabel('Town / city').fill('Durban');
+   await form.getByRole('button',{name:'Find official locality reference'}).click();
+   await form.getByRole('button',{name:'Umlazi — eThekwini (ETH:123456789)'}).click();
+   assert.equal(await form.getByLabel('Municipality',{exact:true}).inputValue(),'eThekwini');
+   await form.getByLabel('I confirm the province, municipality, town and township for this business.').check();
    await form.getByLabel('I independently confirmed the business details using the named permitted source, not Google Maps alone.').uncheck();
    await form.getByRole('button',{name:'Add Business',exact:true}).click();
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,0);
@@ -717,16 +734,75 @@ async function main(){
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
    const lookup=f.page.getByRole('dialog');await lookup.getByLabel('Town, township or business name').fill('Durban');
+   assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
+   await lookup.getByLabel('Contact channel filter').selectOption('all');
    await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();assert(await lookup.getByRole('button',{name:'Send email',exact:true}).isDisabled());
    await lookup.getByLabel('Town, township or business name').fill('Johannesburg');assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
    await lookup.getByLabel('Town, township or business name').fill('Umlazi');await lookup.getByText('Synthetic Spaza',{exact:true}).waitFor();
-   await lookup.locator('.acq-contact-row').filter({hasText:'Synthetic Spaza'}).getByRole('button',{name:'Contact',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   await lookup.locator('.acq-contact-row').filter({hasText:'Synthetic Spaza'}).getByRole('button',{name:'Open record',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
    await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
    await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('National Command Centre withholds partial totals, forwards filters and separates paid advertising from complimentary access',async()=>{
+   const stamp=Date.now()-1000;let releaseSecond,failSecond=true;
+   const gate=new Promise(resolve=>{releaseSecond=resolve;});
+   const base={city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',area:'Umlazi',category:'spaza',stage:'identified',permissions:{},optedOut:false,revision:0,geographyNeedsReview:true};
+   const fresh={...base,id:'p001',name:'Synthetic WhatsApp only',phone:'+27712345678',phoneKind:'whatsapp_only',email:'',permissions:{whatsapp:{granted:true}},workQueues:['new_contact','ready_to_contact']};
+   const missing={...base,id:'p031',name:'Synthetic field visit',phone:'',email:'',workQueues:['field_visit'],contactNote:'No phone number or email recorded'};
+   const historic={...base,id:'p032',name:'Synthetic already contacted',phone:'+27712345679',contactedAt:stamp-1000,outreachState:'staff_confirmed',workQueues:['awaiting_response']};
+   const paying={...base,id:'p033',name:'Synthetic paid advertiser',stage:'registered',seller:{status:'approved',approved:true,sellingAccess:true,paidMembership:true,activePaidAdvertising:true,activePaidCampaigns:2},workQueues:['paying']};
+   const free={...base,id:'p034',name:'Synthetic complimentary seller',stage:'registered',seller:{status:'approved',approved:true,sellingAccess:true,paidMembership:false,activePaidAdvertising:false,unpaidCampaigns:1},workQueues:['approved','advertising_opportunity']};
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{}}});return true;}
+    if(body.action!=='ops_acquisition_command_page')return false;
+    const d=body.data,filter=d.filters;
+    if(filter.province){
+     assert.equal(filter.province,'KwaZulu-Natal');assert.equal(filter.municipality,'eThekwini');assert.equal(filter.township,'Umlazi');assert.equal(filter.category,'spaza');
+     const rows=filter.queue==='field_visit'?[missing]:filter.queue==='paying'?[paying]:filter.queue==='approved'?[paying,free]:[];
+     await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:4,prospects:rows,funnel:{discovered:4,contacted:1,staffConfirmedContact:1,registered:2,approved:2,paidSellers:1,activeAdvertisers:1,activePaidCampaigns:2,payingBusinesses:1,sellingAccessNotPaid:1},queues:{field_visit:1,awaiting_response:1,paying:1,approved:2}})});return true;
+    }
+    if(!d.after){
+     assert.equal(filter.queue,'new_contact');assert.equal(d.includeRows,true);
+     await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:30,prospects:[fresh],funnel:{discovered:30,contactable:1,readyToContact:1},queues:{new_contact:1,ready_to_contact:1},next:'p030'})});return true;
+    }
+    assert.equal(d.asOf,stamp);assert.equal(d.after,'p030');
+    if(!d.includeRows){
+     await gate;
+     if(failSecond){failSecond=false;await route.fulfill({status:503,json:{error:'Synthetic report page unavailable'}});return true;}
+    }
+    await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:4,prospects:[],funnel:{discovered:4,contacted:1,staffConfirmedContact:1,registered:2,approved:2,paidSellers:1,activeAdvertisers:1,activePaidCampaigns:2,payingBusinesses:1,sellingAccessNotPaid:1},queues:{field_visit:1,awaiting_response:1,paying:1,approved:2}})});return true;
+   }});
+   const page=f.page;
+   await page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   const metric=k=>page.locator('[data-metric="'+k+'"] strong'),status=page.locator('[data-national-report-status]');
+   await page.getByText('Synthetic WhatsApp only',{exact:true}).waitFor();
+   assert.equal(await metric('discovered').innerText(),'—');
+   assert.match(await status.innerText(),/Calculating complete totals/);
+   releaseSecond();await page.getByText(/Report incomplete — no totals are available/).waitFor();
+   assert.equal(await metric('discovered').innerText(),'—');
+   await page.getByRole('button',{name:'Continue incomplete report'}).click();
+   await page.getByText(/Complete snapshot.*34 records inspected/).waitFor();
+   assert.equal(await metric('discovered').innerText(),'34');assert.equal(await metric('paidSellers').innerText(),'1');assert.equal(await metric('activePaidCampaigns').innerText(),'2');assert.equal(await metric('payingBusinesses').innerText(),'1');
+   await page.getByLabel('Filter province').selectOption('KwaZulu-Natal');
+   await page.getByLabel('Municipality name (exact)').fill('eThekwini');
+   await page.getByLabel('Township / area name (exact)').fill('Umlazi');
+   await page.getByLabel('Filter business type').selectOption('spaza');
+   await page.getByLabel('Filter work queue').selectOption('field_visit');
+   await page.getByRole('button',{name:'Apply national filters'}).click();
+   await page.getByText('Synthetic field visit',{exact:true}).waitFor();assert.equal(await page.locator('[data-prospect-id="p001"]').count(),0);
+   await page.locator('[data-metric="approved"]').click();
+   await page.getByText('Synthetic complimentary seller',{exact:true}).waitFor();
+   assert(await page.locator('[data-prospect-id="p034"]').getByText('Selling access — not verified paid').isVisible());
+   assert(await page.locator('[data-prospect-id="p033"]').getByText('Verified paid advertising · 2 active campaign(s)',{exact:true}).isVisible());
+   await page.locator('[data-metric="payingBusinesses"]').click();
+   await page.getByText('Synthetic paid advertiser',{exact:true}).waitFor();assert.equal(await page.locator('[data-prospect-id="p034"]').count(),0);
+   assert(!f.calls.some(x=>['ops_acquisition_send','ops_acquisition_create','ops_acquisition_event','ops_acquisition_link'].includes(x.action)));
+   await page.setViewportSize({width:393,height:852});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('Admin R90 rewards require fresh eligibility and explicit approval, never a payment',async()=>{

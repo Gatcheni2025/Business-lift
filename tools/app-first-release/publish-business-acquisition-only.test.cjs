@@ -220,6 +220,7 @@ test('Both scoped national publishers fail before any Hosting call on a stale or
 });
 
 test('National Admin report accepts complete cursor pages only, with identical snapshot and filters',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
  const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
  const {emptyCommandReport,mergeCommandPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
  const filters={province:'KwaZulu-Natal',category:'spaza',queue:'new_contact',municipality:'eThekwini',township:'Umlazi',municipalityCode:'',localityId:'',search:''};
