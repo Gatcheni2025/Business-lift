@@ -121,6 +121,70 @@ const scan=async(label,filters={},mutate=null)=>{
   const scoped=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'KwaZulu-Natal',municipality:'Synthetic municipality '+idx,township:'Synthetic township '+idx,category:'spaza'}});
   check('Summary scoped geographic totals preserve legacy rows',scoped.counts.funnel.discovered===50);
   report.summary={collectElapsedMs,publishElapsedMs,readElapsedMs,manifest};
+  // Batch 4: exact incremental publication against the real SDK. All writes
+  // below are loopback synthetic fixtures or the managed summary namespace.
+  const F=require('../../services/teyza-mobile-v39/acquisition-refresh');
+  const refresh=opts=>F.refresh({db,collect:api.collectReportingGeneration,retention:false,...opts});
+  await delay(2200);
+  const full=await refresh();
+  check('First managed generation leaves the existing audit generation intact',full.kind==='full'&&full.manifest.generation!==manifest.generation&&(await db.doc(S.ROOT+'/'+manifest.generation).get()).exists);
+  const firstManaged=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{queue:'new_contact'}});
+  const unchangedRef=db.doc(S.ROOT+'/'+full.manifest.generation+'/rows/p0004'),unchangedBefore=await unchangedRef.get();
+  const mutationStart=Date.now(),expires=mutationStart+10000;
+  const batch=db.batch();
+  batch.update(db.doc(root+'/p0000'),{contactedAt:mutationStart-1000,response:'interested',downloadConfirmedAt:mutationStart-1000});
+  batch.update(db.doc(root+'/p0005'),{province:'Western Cape',municipality:'Synthetic moved municipality',township:'Synthetic moved township',area:'Synthetic moved township'});
+  batch.delete(db.doc(root+'/p0001'));batch.create(db.doc(root+'/zz-incremental'),{...base,name:'Synthetic new prospect'});
+  const h=require('node:crypto').createHash('sha256').update('synthetic-10@example.test').digest('hex');
+  batch.create(db.doc('teyzaBusinessContactSuppression/email:'+h),{recordedAt:mutationStart});
+  batch.update(db.doc('teyzaBilling/s-paid'),{paidUntil:expires});
+  batch.update(db.doc('teyzaShopperAds/ad-s-paid'),{endsAt:expires});
+  batch.update(db.doc('teyzaAdPayments/ref-s-paid'),{refunded:false});
+  await batch.commit();await delay(2200);
+  const delta=await refresh();
+  check('Incremental publication writes only affected rows and scopes',delta.kind==='delta'&&delta.manifest.generation===full.manifest.generation&&delta.manifest.asOf>full.manifest.asOf&&delta.rowWrites===6&&delta.summaryWrites<full.summaryWrites);
+  const untouched=await unchangedRef.get();
+  check('Unchanged summary row retains its Firestore update time',untouched.updateTime.isEqual(unchangedBefore.updateTime));
+  const fresh=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{queue:'new_contact'}});
+  const exact=await api.collectReportingGeneration(delta.manifest.asOf);
+  check('Incremental counts match independent exact reconciliation',require('node:util').isDeepStrictEqual(fresh.counts,exact.aggregates.get(S.NATIONAL))&&fresh.counts.funnel.discovered===904&&fresh.counts.queues.new_contact===176&&fresh.counts.funnel.downloads===181&&fresh.counts.queues.blocked===182);
+  check('Geographic move creates correct scoped aggregate',(await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'Western Cape',municipality:'Synthetic moved municipality'}})).counts.funnel.discovered===1);
+  check('Removed prospect summary absent and new prospect summary present',!(await db.doc(S.ROOT+'/'+delta.manifest.generation+'/rows/p0001').get()).exists&&(await db.doc(S.ROOT+'/'+delta.manifest.generation+'/rows/zz-incremental').get()).exists);
+  await assert.rejects(api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:firstManaged.summaryGeneration,asOf:firstManaged.asOf,after:firstManaged.next,filters:firstManaged.filters}),e=>e.status===409);
+  check('Old continuation cannot mix incremental versions',true);
+  const duplicate=await refresh({asOf:delta.manifest.asOf});
+  check('Duplicate refresh at same snapshot does not write summaries',duplicate.kind==='already_current'&&duplicate.summaryWrites===0);
+  check('Pre-expiry commercial facts reconcile against the fixed snapshot',fresh.counts.funnel.paidSellers===Number(delta.manifest.asOf<expires)&&fresh.counts.funnel.activeAdvertisers===Number(delta.manifest.asOf<expires));
+  await delay(Math.max(2200,expires-Date.now()+2200));
+  const expired=await refresh();
+  const expiredPage=await api.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{queue:'paying'}});
+  check('Time-based payment and advertising expiry reconciles without source writes',expired.kind==='delta'&&expiredPage.counts.funnel.paidSellers===0&&expiredPage.counts.funnel.activeAdvertisers===0&&expiredPage.counts.funnel.payingBusinesses===0);
+  await delay(2200);
+  const noop=await refresh();
+  check('Unchanged source refresh only advances three control/state documents',noop.kind==='delta'&&noop.rowWrites===0&&noop.scopeWrites===0&&noop.summaryWrites===3);
+  const pointerBeforeFailure=(await db.doc(S.CONTROL).get()).data();
+  await delay(2200);
+  await assert.rejects(F.refresh({db,collect:async()=>{throw Error('Synthetic incomplete reconciliation');},retention:false}),/Synthetic incomplete reconciliation/);
+  check('Failed reconciliation leaves previous published pointer intact',require('node:util').isDeepStrictEqual((await db.doc(S.CONTROL).get()).data(),pointerBeforeFailure));
+  const lease=await F.acquire(db,Date.now);assert(lease);
+  const busy=await refresh();check('Overlapping scheduled refresh is blocked by lease',busy.kind==='busy'&&busy.summaryWrites===0);
+  await F.release(db,lease);
+  check('Stored reporting fingerprint audit verifies all rows and scopes',await F.auditPrior(db,pointerBeforeFailure,Date.now));
+  // Create synthetic expired managed manifests; retain two newest prior
+  // versions plus the active one, and never clean the original unmanaged audit.
+  const oldIds=['00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000013'];
+  for(const [i,gen] of oldIds.entries()){
+   const old=Date.now()-F.RETENTION_MS-60000+i*1000,prefix=S.ROOT+'/'+gen;
+   await db.doc(prefix).create({schema:1,generation:gen,managed:true,asOf:old,completedAt:old});
+   await db.doc(prefix+'/rows/test').create({synthetic:true});await db.doc(prefix+'/scopes/test').create({synthetic:true});await db.doc(prefix+'/maintenance/state').create({synthetic:true});
+  }
+  const retentionLease=await F.acquire(db,Date.now);assert(retentionLease);
+  const limited=await F.retain({db,token:retentionLease,clock:Date.now,limit:2});
+  check('Retention respects per-run deletion bound',limited.deleted===2&&limited.generations===0&&(await db.doc(S.ROOT+'/'+oldIds[0]).get()).exists);
+  const cleaned=await F.retain({db,token:retentionLease,clock:Date.now,limit:2});
+  await F.release(db,retentionLease);
+  check('Retention deletes only expired superseded managed generation',cleaned.deleted===2&&cleaned.generations===1&&!(await db.doc(S.ROOT+'/'+oldIds[0]).get()).exists&&(await db.doc(S.ROOT+'/'+oldIds[1]).get()).exists&&(await db.doc(S.ROOT+'/'+oldIds[2]).get()).exists&&(await db.doc(S.ROOT+'/'+manifest.generation).get()).exists&&(await db.doc(S.ROOT+'/'+noop.manifest.generation).get()).exists);
+  report.incremental={initialWrites:full.summaryWrites,deltaWrites:delta.summaryWrites,deltaRowWrites:delta.rowWrites,deltaScopeWrites:delta.scopeWrites,expiryWrites:expired.summaryWrites,unchangedWrites:noop.summaryWrites,retentionDeletes:limited.deleted+cleaned.deleted};
   report.passed=true;
  }catch(e){report.passed=false;report.error=String(e?.message||e);console.error(e);process.exitCode=1;}
  finally{fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));await db.terminate();await deleteApp(app);}

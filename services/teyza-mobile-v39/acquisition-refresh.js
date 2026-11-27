@@ -18,6 +18,8 @@ const equal=(a,b)=>canonical(a)===canonical(b);
 const data=s=>s.exists?s.data():null;
 const bytes=v=>Buffer.byteLength(canonical(v));
 function need(ok,reason){if(!ok)throw Error(reason);}
+class IntegrityError extends Error{}
+function integrity(ok,reason){if(!ok)throw new IntegrityError(reason);}
 function managed(m){return m?.managed===true&&m.schema===S.SCHEMA&&uuid(m.generation)&&Number.isSafeInteger(m.asOf)&&Number.isSafeInteger(m.completedAt);}
 function fingerprint(g){
  need(g.rows instanceof Map&&g.aggregates instanceof Map&&S.validCounts(g.aggregates.get(S.NATIONAL))&&g.aggregates.get(S.NATIONAL).funnel.discovered===g.rows.size,'Invalid exact generation.');
@@ -30,12 +32,13 @@ function fingerprint(g){
  return {encoded,fingerprintHash:hash(encoded)};
 }
 function decode(state,manifest){
- need(state&&typeof state.encoded==='string'&&Buffer.byteLength(state.encoded)<=MAX_STATE_BYTES&&hash(state.encoded)===manifest.fingerprintHash&&state.asOf===manifest.asOf,'Invalid prior fingerprint state.');
- const parsed=JSON.parse(state.encoded);
+ integrity(state&&typeof state.encoded==='string'&&Buffer.byteLength(state.encoded)<=MAX_STATE_BYTES&&hash(state.encoded)===manifest.fingerprintHash&&state.asOf===manifest.asOf,'Invalid prior fingerprint state.');
+ let parsed;try{parsed=JSON.parse(state.encoded);}catch{throw new IntegrityError('Unreadable prior fingerprint state.');}
+ integrity(parsed&&typeof parsed==='object','Invalid prior fingerprint object.');
  function map(entries,valid,size){
-  need(Array.isArray(entries)&&entries.length===size,'Incomplete fingerprint state.');
+  integrity(Array.isArray(entries)&&entries.length===size,'Incomplete fingerprint state.');
   const m=new Map();
-  for(const entry of entries){need(Array.isArray(entry)&&entry.length===2&&valid(entry[0])&&scopeId(entry[1])&&!m.has(entry[0]),'Invalid fingerprint entry.');m.set(...entry);}
+  for(const entry of entries){integrity(Array.isArray(entry)&&entry.length===2&&valid(entry[0])&&scopeId(entry[1])&&!m.has(entry[0]),'Invalid fingerprint entry.');m.set(...entry);}
   return m;
  }
  return {rows:map(parsed.rows,rowId,manifest.prospectCount),scopes:map(parsed.scopes,scopeId,manifest.scopeCount)};
@@ -123,17 +126,17 @@ async function auditPrior(db,m,clock){
  return db.runTransaction(async tx=>{
   const p=data(await tx.get(db.doc(S.CONTROL)));need(equal(p,m),'Pointer changed before stored summary audit.');
   const [meta,state]=await Promise.all([tx.get(db.doc(manifestPath(m.generation))),tx.get(db.doc(statePath(m.generation)))]);
-  need(equal(data(meta),m),'Manifest mismatch.');
+  integrity(equal(data(meta),m),'Manifest mismatch.');
   const expected=decode(data(state),m);
   for(const group of ['rows','scopes']){
    const hashes=expected[group];let after=null,n=0;
    do{
     let q=db.collection(manifestPath(m.generation)+'/'+group).orderBy('__name__').limit(201);if(after)q=q.startAfter(after);
     const result=await tx.get(q),rows=result.docs.slice(0,200);
-    for(const r of rows){const v=r.data();need(hashes.get(r.id)===hash(group==='rows'?v:v.counts),'Stored reporting content failed fingerprint audit.');n++;}
+    for(const r of rows){const v=r.data(),value=group==='rows'?v:v.counts;integrity(value&&hashes.get(r.id)===hash(value),'Stored reporting content failed fingerprint audit.');n++;}
     after=result.docs.length>200?rows.at(-1).id:null;
    }while(after);
-   need(n===hashes.size,'Stored reporting count failed fingerprint audit.');
+   integrity(n===hashes.size,'Stored reporting count failed fingerprint audit.');
   }
   return true;
  },{readOnly:true});
@@ -195,7 +198,9 @@ async function refresh({db,collect,clock=Date.now,asOf=Math.floor(clock()/1000)*
     if(!Number.isSafeInteger(prior.auditedAt)||clock()-prior.auditedAt>=AUDIT_MS){await auditPrior(db,prior,clock);audited=true;}
     plan=deltaPlan(state,g,f);
    }catch(e){
-    // Fail closed if a prior generation's integrity cannot be established.
+    // A confirmed integrity discrepancy invalidates the cache. Transient
+    // Firestore errors stop the run instead of forcing an expensive rebuild.
+    if(!(e instanceof IntegrityError))throw e;
     prior=await invalidate(db,token,prior,clock);
    }
   }
@@ -206,4 +211,4 @@ async function refresh({db,collect,clock=Date.now,asOf=Math.floor(clock()/1000)*
   return result;
  }finally{await release(db,token);}
 }
-module.exports={LEASE,LEASE_MS,RETENTION_MS,AUDIT_MS,MAX_DELTA_WRITES,MAX_FULL_WRITES,MAX_RETENTION_DELETES,fingerprint,decode,deltaPlan,refresh,retain,acquire,release,auditPrior};
+module.exports={IntegrityError,LEASE,LEASE_MS,RETENTION_MS,AUDIT_MS,MAX_DELTA_WRITES,MAX_FULL_WRITES,MAX_RETENTION_DELETES,fingerprint,decode,deltaPlan,refresh,retain,acquire,release,auditPrior};
