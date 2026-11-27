@@ -206,4 +206,5 @@ test('National contact queues exclude missing contacts without deleting their re
  const permitted={...wa,permissions:{whatsapp:{granted:true}}};const url=new URL(manualWhatsappDraftUrl(permitted));assert.equal(url.pathname,'/27712345678');assert.match(url.searchParams.get('text'),/Synthetic/);
  assert.equal(manualWhatsappDraftUrl({...permitted,lastWhatsAppContactAt:123}),null);
  assert(!match({...p,optedOut:true},'','manual'));assert(!match({...wa,optedOut:true},'','contactable'));
+ for(const completed of [{contactedAt:123},{response:'interested'},{downloadConfirmedAt:123},{seller:{status:'pending'}},{outbound:{whatsapp_invitation:{status:'queued'}}},{stage:'closed'}])assert(!match({...wa,...completed},'','contactable'));
 });
