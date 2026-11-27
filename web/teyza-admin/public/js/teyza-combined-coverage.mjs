@@ -47,10 +47,16 @@ export function categoryCounts(places){
  for(const place of places)if(Object.hasOwn(counts,place.shopCategory))counts[place.shopCategory]++;
  return counts;
 }
-export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban'}={}){
+export function whatsappCheckUrl(value){
+ const raw=String(value||'').replace(/[\s().-]/g,'');
+ const digits=/^0\d{9}$/.test(raw)?'27'+raw.slice(1):/^\+27\d{9}$/.test(raw)?raw.slice(1):/^27\d{9}$/.test(raw)?raw:null;
+ return digits?'https://wa.me/'+digits:null;
+}
+export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban',onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null;
  const contactCache=new Map();
+ const businessFilter=elt('input');businessFilter.type='search';businessFilter.placeholder='Filter results by business name';businessFilter.setAttribute('aria-label','Filter live business names');
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
  const title=elt('h3',compact?'Google Places · live listings':'Google Places · shop registration opportunities');
  const note=elt('p',compact?'Search for local businesses by town and category. All current listings remain visible, even when contact information is missing. Select a business to look up its publicly listed phone and website.':'Choose a town or move the map, then search Google Places for potential Teyza registrations. Google-only means no matching published Teyza Place ID, not confirmed unregistered. Searches are local, not a national census.');
@@ -81,7 +87,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
  if(compact){town.value=String(initialTown||'Durban').slice(0,100);province.value='All provinces';category.value='all';mapPanel.append(mapNotice,canvas);}
  controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- if(compact){panel.append(title,note,controls,status,count,layerFilters,attribution,list,mapPanel);}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
+ if(compact){panel.append(title,note,controls,status,count,businessFilter,layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -104,7 +110,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const boundsFor=(p)=>({lat:p.latitude,lng:p.longitude});
 
  function publicWebsite(value){
-  try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}
+  try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password&&url.hostname.includes('.')?url.href:null;}catch{return null;}
  }
  function mapsLink(p){const a=elt('a','View on Google Maps');a.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name||'Business')+'&query_place_id='+encodeURIComponent(p.placeId);a.target='_blank';a.rel='noopener noreferrer';return a;}
  function paintContact(host,p,entry){
@@ -116,6 +122,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   const website=publicWebsite(entry?.websiteUrl);
   host.append(elt('p',phone?'Public phone: '+phone:'Phone: not listed'),elt('p',website?'Business website: available':'Website: not listed'));
   if(website){const a=elt('a','Open business website');a.href=website;a.target='_blank';a.rel='noopener noreferrer';host.append(a);}
+  const wa=whatsappCheckUrl(phone);if(wa){const a=elt('a','Check WhatsApp');a.href=wa;a.target='_blank';a.rel='noopener noreferrer';host.append(a,elt('p','Opens WhatsApp to check the number. No message is sent; registration and consent are not verified.'));}
   host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
  }
  async function lookupContact(p,host,button){
@@ -145,6 +152,9 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   if(searchError){list.append(elt('p','Search failed: '+searchError+' Check the town and try again.'));return;}
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
   if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
+  const q=businessFilter.value.trim().toLowerCase();visible=visible.filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
+  if(!visible.length){list.append(elt('p','No business names match this filter. Clear it to see all local results.'));return;}
+  const savedRows=[];
   list.append(elt('p','Showing '+Math.min(pageSize,visible.length)+' of '+visible.length+' businesses. Contact information is optional; no business is excluded for missing contact details.'));
   for(const p of visible.slice(0,pageSize)){
    const item=elt('article');item.className='acq-live-result acq-business-card';
@@ -162,7 +172,23 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    actions.append(contact,mapsLink(p));
    const mapButton=elt('button','Show on map');mapButton.type='button';mapButton.className='button quiet';
    mapButton.onclick=async()=>{mapPanel.open=true;const stamp=epoch;await ensureCompactMap();if(stamp!==epoch||!active)return;try{if(map){map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const marker=placesById.get(p.placeId);marker?.popup.open({map,anchor:marker.marker});}}catch{mapNotice.textContent='Map could not update. Business information remains available above.';}mapPanel.scrollIntoView({block:'nearest'});};
-   actions.append(mapButton);item.append(identity,state,details,actions);list.append(item);
+   actions.append(mapButton);
+   if(onAddBusiness){
+    let savedId=null;
+    const add=elt('button','Add Business');add.type='button';add.className='button primary';
+    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},town.value);
+    actions.prepend(add);
+    savedRows.push({id:p.placeId,setSaved(id){savedId=id;state.textContent='Added';state.className='acq-status';state.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state});
+   }
+   item.append(identity,state,details,actions);list.append(item);
+  }
+  if(resolveSavedPlaces&&savedRows.length){
+   const stamp=resultEpoch,activation=epoch;
+   for(const row of savedRows)row.button.disabled=true;
+   Promise.resolve().then(()=>resolveSavedPlaces(savedRows.map(r=>r.id))).then(matches=>{
+    if(stamp!==resultEpoch||activation!==epoch||!active)return;
+    for(const row of savedRows){if(!row.button.isConnected)continue;const id=matches?.get(row.id);if(id)row.setSaved(id);else row.button.disabled=false;}
+   }).catch(()=>{if(stamp!==resultEpoch||activation!==epoch||!active)return;for(const row of savedRows){if(row.button.isConnected){row.button.disabled=false;row.state.textContent='Saved status unavailable; duplicate check on save';}}});
   }
   if(pageSize<visible.length){
    const more=elt('button','Show more businesses');more.type='button';more.className='button quiet';
@@ -299,7 +325,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  }
  async function searchArea(skipGeocode=false){
   if((compact?!active:!map)||searchPending)return;
-  const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
+  const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();businessFilter.value='';pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
   search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}
   status.textContent=compact?'Searching for businesses in the selected area…':'Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});

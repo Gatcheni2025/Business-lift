@@ -686,3 +686,23 @@ test('Create prospect may record actual initial owner permissions, never infers 
  assert.equal(p.permissions.email.granted,true);assert.equal(p.permissions.whatsapp.granted,true);
  const d=await f.call('ops_acquisition_detail',{id:p.id});assert.equal(d.events.filter(e=>e.type==='permission').length,2);
 });
+
+
+test('Acquisition stores independently verified website and place reference, prevents duplicate Place IDs and adds only missing contacts',async()=>{
+ const f=setup(),data={name:'Synthetic Place Shop',city:'Durban',area:'Umlazi',address:'Independent Road',category:'spaza',source:'owner_provided',sourceReference:'Owner confirmation',authorisedSource:true,googlePlaceId:'SyntheticPlace1234',website:'https://example.test/contact'};
+ await rejects(f.call('ops_acquisition_create',data),422);
+ await rejects(f.call('ops_acquisition_create',{...data,independentSourceConfirmed:true,website:'javascript:alert(1)'}),422);
+ let p=(await f.call('ops_acquisition_create',{...data,independentSourceConfirmed:true})).prospect;
+ assert.equal(p.website,'https://example.test/contact');assert.equal(p.googlePlaceId,'SyntheticPlace1234');assert.deepEqual(p.permissions,{});
+ assert.deepEqual((await f.call('ops_acquisition_place_matches',{placeIds:['SyntheticPlace1234','SyntheticPlace5678']})).matches,[{placeId:'SyntheticPlace1234',id:p.id}]);
+ await rejects(f.call('ops_acquisition_create',{...data,name:'Different Name',independentSourceConfirmed:true}),409);
+ await rejects(f.call('ops_acquisition_place_matches',{placeIds:['invalid!']}),422);
+ const evt=(v,extra)=>f.call('ops_acquisition_event',{id:v.id,revision:v.revision,type:'contact_update',confirmed:true,note:'Independent owner source',authorisedSource:true,...extra});
+ await rejects(evt(p,{email:'owner@example.test',authorisedSource:false}),422);
+ p=(await evt(p,{email:'owner@example.test',phone:'0712345678'})).prospect;
+ assert.equal(p.email,'owner@example.test');assert.equal(p.phone,'+27712345678');assert.deepEqual(p.permissions,{});
+ await rejects(evt(p,{email:'different@example.test'}),409);
+ const detail=await f.call('ops_acquisition_detail',{id:p.id});assert(detail.events.some(e=>e.type==='contact_update'));
+ const blocked=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'opt_out',confirmed:true,note:'Synthetic opt out'})).prospect;
+ await rejects(evt(blocked,{email:'other@example.test'}),409);
+});

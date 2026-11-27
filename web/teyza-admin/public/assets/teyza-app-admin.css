@@ -365,3 +365,10 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-google-compact .tp-combined-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .acq-google-compact .tp-combined-controls input,.acq-google-compact .tp-combined-controls select{width:100%;min-width:0}
 @media(max-width:700px){.acq-google-compact .tp-combined-controls{grid-template-columns:1fr}.acq-business-card{padding:12px}}
+
+/* Contact-first discovery: public reference stays separate from the confirmed record. */
+.acq-listing-reference:not([hidden]){display:grid;gap:8px;padding:14px 16px;border:1px solid #dce8e2;border-radius:12px;background:#f4f8f6;margin:12px 0;overflow-wrap:anywhere}
+.acq-listing-reference[hidden]{display:none}
+.acq-listing-reference .button{width:fit-content;max-width:100%;white-space:normal}
+.acq-live-details a{display:inline-block;margin:6px 12px 6px 0}
+.acq-google-compact>input[type=search]{width:100%;box-sizing:border-box;margin:8px 0}
