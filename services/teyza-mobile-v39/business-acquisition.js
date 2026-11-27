@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
-const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send']);
+const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks';
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send']);
 const cities=['Durban','Johannesburg'];
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
 const sources=['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted'];
@@ -22,6 +22,18 @@ function phone(v){
 function email(v){
  v=clean(v,'business email',254,false).toLowerCase();
  if(v&&!/^[^\s@<>,;"\\]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,63}$/.test(v))D.fail(422,'Enter a valid business email.');
+ return v;
+}
+function website(v){
+ v=clean(v,'business website',500,false);
+ if(!v)return '';
+ let url;try{url=new URL(v);}catch{D.fail(422,'Enter a valid business website URL.');}
+ if(!['http:','https:'].includes(url.protocol)||url.username||url.password||!url.hostname.includes('.'))D.fail(422,'Enter a public HTTP or HTTPS business website URL.');
+ return url.href;
+}
+function placeId(v){
+ v=clean(v,'Google Place ID',200,false);
+ if(v&&!/^[A-Za-z0-9_-]{10,200}$/.test(v))D.fail(422,'Invalid Google Place ID.');
  return v;
 }
 const contactValue=(p,c)=>c==='email'?p.email:p.phone;
@@ -57,7 +69,7 @@ function createAcquisition({db,clock=Date.now}){
      membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock())};
    }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
-  return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,
+  return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,website:p.website||'',googlePlaceId:p.googlePlaceId||'',
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
    lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
@@ -71,12 +83,23 @@ function createAcquisition({db,clock=Date.now}){
    const result=await q.get(),rows=result.docs.slice(0,30);
    return {schema:1,prospects:await Promise.all(rows.map(s=>view(s.id,s.data()))),next:result.docs.length>30?rows[29].id:null,communications:await communications.caps()};
   }
+  if(action==='ops_acquisition_place_matches'){
+   if(!Array.isArray(data.placeIds)||data.placeIds.length>30)D.fail(422,'Check at most 30 displayed business references.');
+   const ids=[...new Set(data.placeIds.map(placeId))].filter(Boolean);
+   const matches=await Promise.all(ids.map(async key=>{
+    const link=await read(placeLinks+'/'+hash(key));
+    return link?.prospectId?{placeId:key,id:link.prospectId}:null;
+   }));
+   return {matches:matches.filter(Boolean)};
+  }
   if(action==='ops_acquisition_create'){
    if(data.authorisedSource!==true)D.fail(422,'Confirm that Teyza may retain these business contact details.');
    const name=clean(data.name,'business name',120),city=choose(data.city,cities,'pilot city'),area=clean(data.area,'township or area',100),address=clean(data.address,'business street address or landmark',220);
    const category=choose(data.category,categories,'business category'),source=choose(data.source,sources,'source');
    const sourceReference=clean(data.sourceReference,'source and permission to retain details',240);
-   const contact={phone:phone(data.phone),email:email(data.email)};
+   const contact={phone:phone(data.phone),email:email(data.email),website:website(data.website)};
+   const googlePlaceId=placeId(data.googlePlaceId);
+   if(googlePlaceId&&data.independentSourceConfirmed!==true)D.fail(422,'Confirm the saved details using an independent permitted source, not Google Maps alone.');
    const initialChannels=data.initialConsentChannels??[];
    if(!Array.isArray(initialChannels)||initialChannels.length>2||new Set(initialChannels).size!==initialChannels.length||initialChannels.some(c=>!['email','whatsapp'].includes(c)||!contactValue(contact,c)))D.fail(422,'Select only channels with recorded contact details.');
    const initialNote=initialChannels.length?clean(data.initialConsentNote,'actual owner opt-in evidence',500):'';
@@ -84,12 +107,15 @@ function createAcquisition({db,clock=Date.now}){
    const id=hash([city,area,address,name].map(norm).join('|')),ref=doc(collection+'/'+id);
    const saved=await db.runTransaction(async tx=>{
     const old=await tx.get(ref);
+    const placeRef=googlePlaceId?doc(placeLinks+'/'+hash(googlePlaceId)):null;
+    const placeLink=placeRef?await tx.get(placeRef):null;
+    if(placeLink?.exists)D.fail(409,'This listing already has an added business. Search again and open its existing record.');
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
     if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
     const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
-    const p={name,city,area,address,category,source,sourceReference,...contact,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
+    const p={name,city,area,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
-    tx.set(ref,p);event(tx,id,uid,'created',{});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
+    tx.set(ref,p);if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }
@@ -110,7 +136,7 @@ function createAcquisition({db,clock=Date.now}){
    return {prospect,events:result.docs.slice(0,25).map(s=>({id:s.id,...s.data()})),moreEvents:result.docs.length>25,support,moreSupport};
   }
   if(action==='ops_acquisition_event'){
-   const type=choose(data.type,['permission','contact','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
+   const type=choose(data.type,['permission','contact','contact_update','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
    const note=clean(data.note,'activity note or consent evidence',500);
    if(data.confirmed!==true)D.fail(422,'Confirm this is an accurate record of an actual event.');
    const saved=await db.runTransaction(async tx=>{
@@ -120,6 +146,17 @@ function createAcquisition({db,clock=Date.now}){
     const blocked=p.optedOut===true||await suppressed(p,tx);
     const stamp=clock(),update={updatedAt:stamp,lastActivityAt:stamp,lastActivityBy:uid,revision:p.revision+1};
     let details={note};
+    if(type==='contact_update'){
+     if(blocked)D.fail(409,'Do not contact: an opt-out is recorded. Contact details cannot be changed here.');
+     if(data.authorisedSource!==true)D.fail(422,'Confirm the independently sourced contact details may be retained.');
+     const additions={phone:phone(data.phone),email:email(data.email),website:website(data.website)};
+     const fields=Object.keys(additions).filter(k=>!!additions[k]);
+     if(!fields.length)D.fail(422,'Enter at least one missing contact detail.');
+     if(fields.some(k=>!!p[k]))D.fail(409,'Only missing contact details may be added. Existing destinations and permissions cannot be replaced here.');
+     if(await suppressed({...p,...Object.fromEntries(fields.map(k=>[k,additions[k]]))},tx))D.fail(409,'Contact is suppressed. Do not add it to this business.');
+     for(const key of fields)update[key]=additions[key];
+     details={...details,fields};
+    }
     if(type==='permission'||type==='contact'){
      if(blocked)D.fail(409,'Do not contact: an opt-out is recorded for this business or contact.');
      const channel=choose(data.channel,channels,'communication channel');
