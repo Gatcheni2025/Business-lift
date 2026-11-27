@@ -4,6 +4,32 @@ const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyza
 const CONFIG='/assets/teyza-maps-config.json';
 const CONTACT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php';
 const pageLength=30;
+// Independently sourced approximate locality centres (not Google Places data).
+// City/Soweto: GeoNames https://www.geonames.org/za/largest-cities-in-south-africa.html
+// Durban townships and Gauteng main places: Statistics SA main-place pages, IDs below.
+// Lamontville: SAPS public station location (a local reference point).
+const pilotAreas=[
+ ['Durban','KwaZulu-Natal',-29.8579,31.0292,20000,'GeoNames 1007311',['ethekwini','durban central']],
+ ['Johannesburg','Gauteng',-26.202,28.044,20000,'GeoNames largest cities',['joburg','jo burg','johannesburg cbd']],
+ ['Umlazi','KwaZulu-Natal',-29.9662,30.8875,5000,'Stats SA 10459',[]],
+ ['KwaMashu','KwaZulu-Natal',-29.7416,30.9902,5000,'Stats SA 10351',['kwa mashu']],
+ ['Inanda','KwaZulu-Natal',-29.6962,30.9437,5000,'Stats SA 10333 (Inanda A)',['inanda a']],
+ ['Ntuzuma','KwaZulu-Natal',-29.7382,30.943,5000,'Stats SA 10352',[]],
+ ['Clermont','KwaZulu-Natal',-29.793,30.9055,5000,'Stats SA 10410',[]],
+ ['Lamontville','KwaZulu-Natal',-29.94046,30.93923,5000,'SAPS station 642',[]],
+ ['KwaDabeka','KwaZulu-Natal',-29.7697,30.9104,5000,'Stats SA 10409',['kwa dabeka']],
+ ['Soweto','Gauteng',-26.268,27.858,8000,'GeoNames largest cities',[]],
+ ['Alexandra','Gauteng',-26.1016,28.1052,5000,'Stats SA 11305',['alex']],
+ ['Diepsloot','Gauteng',-25.9379,28.0185,5000,'Stats SA 11294',[]],
+ ['Orange Farm','Gauteng',-26.469,27.8648,5000,'Stats SA 11325',['orangefarm']],
+ ['Tembisa','Gauteng',-26.0106,28.2219,5000,'Stats SA 11262 (Ekurhuleni)',['thembisa']]
+];
+const areaKey=value=>String(value||'').normalize('NFKC').toLowerCase().trim().replace(/[-\s]+/g,' ');
+export function resolvePilotArea(town,province='All provinces'){
+ const key=areaKey(town),prov=areaKey(province);
+ const row=pilotAreas.find(([name,p,,, , ,aliases])=>[name,...aliases].some(n=>areaKey(n)===key)&&(prov==='all provinces'||areaKey(p)===prov));
+ return row?{label:row[0]+', '+row[1],lat:row[2],lng:row[3],radius:row[4],source:row[5]}:null;
+}
 const SA={lat:-28.8,lng:24.6};
 const good=p=>Number.isFinite(p?.latitude)&&Number.isFinite(p?.longitude)&&p.latitude>=-35&&p.latitude<=-22&&p.longitude>=16&&p.longitude<=34;
 const elt=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e;};
@@ -23,7 +49,7 @@ export function categoryCounts(places){
 }
 export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,initialTown='Durban'}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
- let resultEpoch=0,pageSize=pageLength,searchError='',center=null;
+ let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null;
  const contactCache=new Map();
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
  const title=elt('h3',compact?'Google Places · live listings':'Google Places · shop registration opportunities');
@@ -35,7 +61,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  for(const p of ['All provinces','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){const o=elt('option',p);o.value=p;province.append(o);}
  const category=elt('select');category.setAttribute('aria-label','Google business type');
  for(const [id,t] of [['spaza','Spaza and local shops'],['variety','Other businesses (salons, services, retail)'],['wholesale','Wholesalers'],['all','All three categories (3 searches)']]){const o=elt('option',t);o.value=id;category.append(o);}
- const start=elt('button','Retry Google map');start.type='button';start.className='button primary';
+ const start=elt('button',compact?'Retry business search':'Retry Google map');start.type='button';start.className='button primary';
  const search=elt('button',compact?'Search this area':'Find shops needing Teyza registration');search.type='button';search.className='button quiet';search.disabled=true;
  const showT=elt('input');showT.type='checkbox';showT.checked=!compact;
  const showG=elt('input');showG.type='checkbox';showG.checked=true;
@@ -48,7 +74,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const count=elt('div');count.className='tp-discovery-counts';count.setAttribute('aria-live','polite');
  const attribution=elt('p',compact?'Business information: Google Maps. Live results are not saved or exported.':'Business information © Google Maps; search results are shown only on this Google map and are not saved as a business directory.');attribution.className='tp-google-credit';
  const toggle=(input,label)=>{const item=elt('label');item.append(input,elt('span',' '+label));return item;};
- const status=elt('p','Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
+ const status=elt('p',compact?'Ready to search local businesses.':'Loading the national shop map and checking Google Maps configuration…');status.setAttribute('role','status');
  const canvas=elt('div');canvas.className='tp-combined-map';canvas.style.cssText=compact?'display:none;height:260px;min-height:230px;border-radius:12px;overflow:hidden;margin-top:12px':'display:none;height:480px;min-height:340px;border-radius:15px;overflow:hidden;margin-top:12px';
  const list=elt('div');list.className='tp-combined-results';
  const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
@@ -135,7 +161,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    contact.onclick=()=>lookupContact(p,details,contact);
    actions.append(contact,mapsLink(p));
    const mapButton=elt('button','Show on map');mapButton.type='button';mapButton.className='button quiet';
-   mapButton.onclick=()=>{mapPanel.open=true;ensureCompactMap();try{if(map){map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const marker=placesById.get(p.placeId);marker?.popup.open({map,anchor:marker.marker});}}catch{mapNotice.textContent='Map could not update. Business information remains available above.';}mapPanel.scrollIntoView({block:'nearest'});};
+   mapButton.onclick=async()=>{mapPanel.open=true;const stamp=epoch;await ensureCompactMap();if(stamp!==epoch||!active)return;try{if(map){map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const marker=placesById.get(p.placeId);marker?.popup.open({map,anchor:marker.marker});}}catch{mapNotice.textContent='Map could not update. Business information remains available above.';}mapPanel.scrollIntoView({block:'nearest'});};
    actions.append(mapButton);item.append(identity,state,details,actions);list.append(item);
   }
   if(pageSize<visible.length){
@@ -143,16 +169,19 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    more.onclick=()=>{pageSize+=pageLength;renderCompactList(visible);};list.append(more);
   }
  }
- function ensureCompactMap(){
-  if(!compact||!active||!google||!mapPanel.open)return;
+ async function ensureCompactMap(){
+  if(!compact||!active||!mapPanel.open)return;
+  const stamp=epoch;
   try{
+   mapNotice.textContent='Loading optional Google map…';
+   await ensureGoogle();if(stamp!==epoch||!active||!mapPanel.open)return;
    mapNotice.textContent='';
    if(!map){
     canvas.style.display='block';
     map=new google.maps.Map(canvas,{center:center||{lat:-29.8587,lng:31.0218},zoom:11,mapTypeControl:false});
     render(true);
    }
-  }catch(e){map=null;canvas.style.display='none';mapNotice.textContent='Map could not load. Business information remains available above.';}
+  }catch(e){if(stamp!==epoch||!active)return;map=null;canvas.style.display='none';mapNotice.textContent='Map could not load. Business information remains available above.';}
  }
  if(compact)mapPanel.addEventListener('toggle',()=>{if(mapPanel.open)ensureCompactMap();});
 
@@ -203,31 +232,36 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(apiKey)+'&callback='+encodeURIComponent(cb)+'&v=weekly';
   script.async=true;script.onerror=()=>finish(Error('Cannot load Google Maps script.'));document.head.append(script);
  });}
- async function startMap(){
-  if(active)return;
-  active=true;const stamp=++epoch;start.disabled=true;status.textContent='Loading configured Google map…';
-  try{
-   const response=await fetch(CONFIG,{cache:'no-store'});
+ async function ensureGoogle(){
+  if(google)return google;
+  if(googleLoading)return googleLoading;
+  const stamp=epoch;
+  const task=(async()=>{
+   const response=await fetch(CONFIG,{cache:'no-store',signal:AbortSignal.timeout(15000)});
    if(!response.ok)throw Error('Google Maps is not configured for this site yet. The national Teyza map remains available.');
    const configuration=await response.json();
    const value=configuration?.browserKey;
    if(typeof value!=='string'||!/^AIza[A-Za-z0-9_-]{30,80}$/.test(value))
     throw Error('Google Maps browser configuration is invalid. The national Teyza map remains available.');
-   const loadedGoogle=await loadMap(value);if(stamp!==epoch||!active)return;google=loadedGoogle;
-   if(!compact){canvas.style.display='block';map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});}
+   const loadedGoogle=await loadMap(value);if(stamp!==epoch||!active)throw Error('Search closed.');google=loadedGoogle;return google;
+  })();googleLoading=task;try{return await task;}finally{if(googleLoading===task)googleLoading=null;}
+ }
+ async function startMap(){
+  if(active)return;
+  active=true;const stamp=++epoch;start.disabled=true;
+  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent='Enter a town or township, choose a category, and select Search this area.';if(autoSearch)void searchArea();return;}
+  status.textContent='Loading configured Google map…';
+  try{
+   await ensureGoogle();if(stamp!==epoch||!active)return;
+   canvas.style.display='block';map=new google.maps.Map(canvas,{center:SA,zoom:5,mapTypeControl:false});
    shown=true;search.disabled=false;
    status.textContent='Google map ready. Select a province or town and search locally for additional Google-listed businesses.';
    onReady?.();render();
    // One bounded, non-recurring discovery sample gives operators live evidence
    // rather than an empty map. No national background crawling is performed.
-   if(compact){
-    status.textContent='Enter a town or township, choose a category, and select Search this area.';
-    if(autoSearch)void searchArea();
-   }else{
-    town.value='Durban';province.value='KwaZulu-Natal';category.value='all';
-    map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
-    if(autoSearch)void searchArea(true);
-   }
+   town.value='Durban';province.value='KwaZulu-Natal';category.value='all';
+   map.setCenter({lat:-29.8587,lng:31.0218});map.setZoom(11);
+   if(autoSearch)void searchArea(true);
   }catch(e){
    if(stamp!==epoch)return;active=false;start.disabled=false;
    if(!start.isConnected)controls.prepend(start);
@@ -239,22 +273,41 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  async function locate(){
   const q=town.value.trim(),p=province.value;
   if(!q&&p==='All provinces'){if(compact)throw Error('Enter a town or township.');return;}
+  if(compact){
+   const preset=resolvePilotArea(q,p);
+   if(preset)return preset;
+   if(p!=='All provinces'&&resolvePilotArea(q,'All provinces'))throw Error('The named pilot area is in another province. Choose its correct province or All provinces.');
+   await ensureGoogle();
+  }
   const address=[q,p==='All provinces'?'':p,'South Africa'].filter(Boolean).join(', ');
   const geocoder=new google.maps.Geocoder();
-  const matches=await new Promise((resolve,reject)=>geocoder.geocode({address,componentRestrictions:{country:'ZA'}},(results,code)=>code==='OK'&&results?.length?resolve(results):reject(Error('Could not locate that South African town/municipality.'))));
+  const matches=await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('Location lookup timed out. Try a supported pilot town or check the location.')),15000);
+   try{geocoder.geocode({address,componentRestrictions:{country:'ZA'}},(results,code)=>{
+    clearTimeout(timer);
+    if(code==='OK'&&results?.length){resolve(results);return;}
+    const status=/^[A-Z_]{2,40}$/.test(String(code))?code:'UNAVAILABLE';
+    reject(Error('Could not locate that South African town/municipality ('+status+'). Check the town and province.'));
+   });}catch(e){clearTimeout(timer);reject(Error('Location lookup unavailable.'));}
+  });
   if(!active)return;const point=matches[0].geometry.location;
-  if(compact)return {lat:point.lat(),lng:point.lng()};
+  if(compact){
+   if(matches[0].partial_match)throw Error('Location only partially matched. Enter a more specific town and province.');
+   return {lat:point.lat(),lng:point.lng(),radius:10000,label:matches[0].formatted_address||address};
+  }
   if(!map)return;map.setCenter(point);map.setZoom(q?11:7);
  }
  async function searchArea(skipGeocode=false){
-  if((compact?!google:!map)||searchPending)return;
+  if((compact?!active:!map)||searchPending)return;
   const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
-  search.disabled=true;status.textContent='Searching Google Places around the selected map area…';
+  search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}
+  status.textContent=compact?'Searching for businesses in the selected area…':'Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
    const located=skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
    const c=compact?located:map.getCenter(),lat=compact?c?.lat:c.lat(),lon=compact?c?.lng:c.lng();
    if(!Number.isFinite(lat)||!Number.isFinite(lon))throw Error('Could not locate the selected town.');
+   const radius=compact?(located.radius||10000):20000;
    if(compact){center={lat,lng:lon};if(map){try{map.setCenter(center);}catch{mapNotice.textContent='Map could not update. Business information remains available below.';map=null;canvas.style.display='none';}}}
    if(lat < -35||lat > -22||lon < 16||lon > 34)throw Error('Map centre is outside the supported South African bounds.');
    if(!town.value.trim()&&province.value==='All provinces'&&Math.abs(lat-SA.lat)<0.02&&Math.abs(lon-SA.lng)<0.02)
@@ -265,7 +318,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const searches=await Promise.allSettled(kinds.map(async kind=>{
     const url=new URL(ENDPOINT);
     url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
-    url.searchParams.set('radius','20000');url.searchParams.set('category',kind);
+    url.searchParams.set('radius',String(radius));url.searchParams.set('category',kind);
     const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(55000)});
     if(!res.ok){let detail='';try{const body=await res.json();detail=String(body.error||'').slice(0,120);}catch(_){}
      throw Error(kind+' discovery HTTP '+res.status+(detail?' ('+detail+')':''));}
@@ -280,14 +333,14 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    places=[...unique.values()];searchCompleted=true;searchPending=false;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
-   status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
+   status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?' within '+(radius/1000)+' km of '+located.label+'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
     (incomplete?' Some searches were incomplete.':'')+' Results are local and may not be exhaustive.';
   }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;if(compact){searchError=e.message;render();}
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
-  finally{if(stamp===epoch)search.disabled=false;}
+  finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;}}
  }
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  for(const input of Object.values(layers))input.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
 }

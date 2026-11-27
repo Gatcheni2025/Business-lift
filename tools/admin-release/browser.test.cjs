@@ -547,13 +547,14 @@ async function main(){
      setZoom(z){this.zoom=z;}getZoom(){return this.zoom;}panTo(p){this.setCenter(p);}}
     class MarkerMock{setMap(){}addListener(){}}
     class InfoWindowMock{open(){}}
-    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([{geometry:{location:{lat:()=>-29.86,lng:()=>31.02}}}],'OK');}}
+    class GeocoderMock{geocode(args,cb){window.__acqGeocoded=args.address;cb([],'REQUEST_DENIED');}}
     window.google={maps:{Map:MapMock,Marker:MarkerMock,InfoWindow:InfoWindowMock,Geocoder:GeocoderMock,SymbolPath:{CIRCLE:0}}};
    });
-   await f.page.route('**/assets/teyza-maps-config.json',route=>route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}}));
+   let mapConfigRequests=0;
+   await f.page.route('**/assets/teyza-maps-config.json',route=>{mapConfigRequests++;return route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}});});
    let placesRequests=0,contactRequests=0;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
-    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.86');assert.equal(u.searchParams.get('lon'),'31.02');
+    placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),'20000');
     const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
     const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Google Shop',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'}]:[];
     return route.fulfill({json:{ok:true,entries}});
@@ -568,7 +569,8 @@ async function main(){
    await live.getByText('Synthetic No Contact',{exact:true}).waitFor();
    assert.equal(placesRequests,3);assert.equal(contactRequests,0);
    assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
-   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Durban, South Africa');
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded??null),null);assert.equal(mapConfigRequests,0);
+   await live.getByText(/within 20 km of Durban, KwaZulu-Natal/).waitFor();
    assert.equal(await live.locator('.acq-optional-map').evaluate(e=>e.open),false);
    assert.equal(await live.locator('.tp-combined-map').isVisible(),false);
    const shop=live.locator('.acq-business-card').filter({hasText:'Synthetic Google Shop'});
@@ -586,6 +588,12 @@ async function main(){
    await live.getByText('Map could not load. Business information remains available above.',{exact:true}).waitFor();
    assert.equal(await live.locator('.acq-business-card').count(),2);
    assert(await noContact.getByText('Phone: not listed',{exact:true}).isVisible());
+   assert.equal(mapConfigRequests,1);
+   await live.getByLabel('Town or municipality').fill('Unknown Test Town');
+   await live.getByRole('button',{name:'Search this area',exact:true}).click();
+   await live.getByText(/Search failed: .*REQUEST_DENIED/).waitFor();assert.equal(placesRequests,3);
+   assert.equal(await live.locator('.acq-business-card').count(),0);
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Unknown Test Town, South Africa');
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
    await live.getByRole('button',{name:'Back to saved contacts'}).click();
    assert.equal(await f.page.getByText('Synthetic Google Shop',{exact:true}).count(),0);

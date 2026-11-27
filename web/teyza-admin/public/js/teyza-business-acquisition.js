@@ -269,7 +269,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   async function openDiscovery(){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261126-list-first');
+    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261127-list-first-location');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
     liveDiscovery=createCombinedCoverage({autoSearch:true,compact:true,initialTown:typed||'Durban',report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});

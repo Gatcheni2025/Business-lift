@@ -136,3 +136,15 @@ test('Contact discovery filters recorded addresses by area and protects send sho
  const m=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs'),'utf8');
  assert(m.includes('autoSearch=true,compact=false'));assert(m.includes('if(autoSearch)void searchArea(true)'));assert(m.includes('Email not supplied by Google'));assert(m.includes('renderCompactList(visible)'));assert(m.includes('if(autoSearch)void searchArea()'));assert(m.includes('shopper-place-contact.php'));assert(m.includes('pageSize+=pageLength'));assert(m.includes('stamp!==epoch'));
 });
+
+test('Pilot area resolution uses independent, exact locality centres with bounded radii and no silent fallback',async()=>{
+ const path=require('node:path'),{pathToFileURL}=require('node:url');
+ const {resolvePilotArea:resolve}=await import(pathToFileURL(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-combined-coverage.mjs')).href);
+ const durban=resolve(' Durban ','All provinces');assert.equal(durban.lat,-29.8579);assert.equal(durban.lng,31.0292);assert.equal(durban.radius,20000);
+ assert.equal(resolve('Johannesburg','Gauteng').radius,20000);
+ for(const name of ['Umlazi','KwaMashu','Inanda','Ntuzuma','Clermont','Lamontville','KwaDabeka','Soweto','Alexandra','Diepsloot','Orange Farm','Tembisa']){
+  const p=resolve(name);assert(p,name);assert(p.radius>=5000&&p.radius<=8000);assert(p.lat>=-35&&p.lat<=-22&&p.lng>=16&&p.lng<=34);assert(p.source);
+ }
+ assert.equal(resolve('Kwa Mashu','KwaZulu-Natal').label,'KwaMashu, KwaZulu-Natal');
+ assert.equal(resolve('Durban','Gauteng'),null);assert.equal(resolve('Tembisa','Eastern Cape'),null);assert.equal(resolve('No Such Town'),null);
+});
