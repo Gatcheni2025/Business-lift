@@ -41,7 +41,7 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertR90Ready(health){
- if(health?.ok!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+ if(health?.ok!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
   throw Error('Matching business acquisition and R90 backend is not active. Hosting unchanged.');
  }
 }
