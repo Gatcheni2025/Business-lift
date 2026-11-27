@@ -571,7 +571,7 @@ async function main(){
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
     placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),'20000');
     const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
-    const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Spaza',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'}]:[];
+    const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Spaza',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticWrongArea123',name:'Synthetic Soweto Outside Radius',latitude:-26.268,longitude:27.858,shopCategory:'spaza'}]:[];
     return route.fulfill({json:{ok:true,entries}});
    });
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
@@ -582,6 +582,7 @@ async function main(){
    const live=f.page.getByRole('dialog');
    await live.getByText('Synthetic Spaza',{exact:true}).waitFor();
    await live.getByText('Synthetic No Contact',{exact:true}).waitFor();
+   assert.equal(await live.getByText('Synthetic Soweto Outside Radius',{exact:true}).count(),0);
    assert.equal(placesRequests,3);assert.equal(contactRequests,0);
    assert.equal(await live.getByLabel('Town or municipality').inputValue(),'Durban');
    assert.equal(await f.page.evaluate(()=>window.__acqGeocoded??null),null);assert.equal(mapConfigRequests,0);
@@ -593,13 +594,17 @@ async function main(){
    await shop.getByRole('button',{name:'View contact details'}).click();
    await shop.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
    assert.equal(await shop.getByRole('link',{name:'Open business website'}).getAttribute('href'),'https://example.test/');
-   assert.equal(await shop.getByRole('link',{name:'Check WhatsApp',exact:true}).getAttribute('href'),'https://wa.me/27315550100');
-   assert.equal(await shop.getByRole('link',{name:'Check WhatsApp',exact:true}).getAttribute('target'),'_blank');
+   assert.equal(await shop.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),1);
+   await shop.getByRole('button',{name:'Check WhatsApp',exact:true}).click();
+   assert.match(await shop.getByLabel('Personalised WhatsApp invitation preview').inputValue(),/Synthetic Spaza.*Durban/s);
+   const checkLink=shop.getByRole('link',{name:'Open WhatsApp — check number only',exact:true});
+   assert.equal(await checkLink.getAttribute('href'),'https://wa.me/27315550100');
+   assert.equal(await checkLink.getAttribute('target'),'_blank');
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
    assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
    assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
-   assert.equal(await noContact.getByRole('link',{name:'Check WhatsApp',exact:true}).count(),0);
+   assert.equal(await noContact.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),0);
    assert(await noContact.getByRole('button',{name:'Add Business',exact:true}).isVisible());
    assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
    await f.page.evaluate(()=>window.__acqFailMap=true);
@@ -610,9 +615,9 @@ async function main(){
    assert.equal(mapConfigRequests,1);
    await live.getByLabel('Town or municipality').fill('Unknown Test Town');
    await live.getByRole('button',{name:'Search this area',exact:true}).click();
-   await live.getByText(/Search failed: .*REQUEST_DENIED/).waitFor();assert.equal(placesRequests,3);
+   await live.getByText(/Search failed: .*Select the correct South African area/).waitFor();assert.equal(placesRequests,3);
    assert.equal(await live.locator('.acq-business-card').count(),0);
-   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded),'Unknown Test Town, South Africa');
+   assert.equal(await f.page.evaluate(()=>window.__acqGeocoded??null),null);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_send').length,0);
    await live.getByRole('button',{name:'Back to saved contacts'}).click();
    assert.equal(await f.page.getByText('Synthetic Spaza',{exact:true}).count(),0);

@@ -25,6 +25,15 @@ export function savedWhatsAppCheck(value){
  return digits?'https://wa.me/'+digits:null;
 }
 const oneLine=v=>String(v??'').replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim();
+export function whatsappInvitationDraft(p){
+ const name=oneLine(p.name).slice(0,120)||'Business',area=oneLine(p.area||p.city).slice(0,120)||'your area';
+ return ['Hi '+name+' team! 👋','We came across your business while exploring '+area+', and we’d love to help more local customers discover you.','With Teyza, you can showcase your business, products or services and make it easier for customers to find you.','Getting started is FREE — there is no charge to register and verify your business. Optional selling and promotional features are available.','📲 Download Teyza: https://teyza.co.za/download.html','Need help getting started? Simply reply to this message and our team will guide you.','Let’s grow local businesses together!','Teyza Business Onboarding Team','Reply STOP if you prefer not to receive further marketing messages.'].join('\n\n');
+}
+export function manualWhatsappDraftUrl(p){
+ const wa=savedWhatsAppCheck(p?.phone);
+ if(!wa||p.optedOut||p.seller||p.permissions?.whatsapp?.granted!==true||p.outbound?.whatsapp_invitation)return null;
+ const u=new URL(wa);u.searchParams.set('text',whatsappInvitationDraft(p));return u.href;
+}
 export function emailText(kind,p){
  const name=oneLine(p.name)||'Business',area=oneLine(p.area),city=oneLine(p.city);
  if(kind==='welcome')return {
@@ -173,9 +182,9 @@ function renderAssets(message){
 }
 
 export function createAcquisitionAdmin({api,onError,message,openSupport}){
- let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='all',lookupReady=false,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
+ let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='all',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  function stopDiscovery(){discoveryEpoch++;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
- function clear(){stopDiscovery();serial++;active=false;records=[];next=null;selected=null;detail=null;query='';city='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='all';lookupReady=false;focusMessage=null;newArea='';}
+ function clear(){stopDiscovery();serial++;active=false;records=[];next=null;selected=null;detail=null;query='';city='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='all';lookupReady=false;lookupSelection=null;focusMessage=null;newArea='';}
  async function refresh(){stopDiscovery();focusMessage=null;active=true;const stamp=++serial;const r=await api('ops_acquisition_list');if(!active||stamp!==serial)return;if(r.schema!==1||!Array.isArray(r.prospects))throw Error('Deploy the matching Business Acquisition backend first.');records=r.prospects;next=r.next||null;communications=r.communications||{};selected=null;detail=null;modal=null;}
  async function perform(root,b,fn){if(!active||busy||!root.isConnected)return;const stamp=serial;busy=true;if(b)b.disabled=true;
   try{await fn(stamp);if(active&&serial===stamp&&root.isConnected)render(root);}
@@ -229,7 +238,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    const actions=el('div',undefined,'acq-contact-actions');
    actions.append(button('Contact',()=>openRecord(p)));
    const site=safeBusinessWebsite(p.website);if(site)actions.append(assetLink('Business website',site));
-   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut)actions.append(assetLink('Check WhatsApp',wa));
+   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut)actions.append(button('Check WhatsApp',()=>openRecord(p,'manual-whatsapp','invitation')));
    for(const channel of ['email','whatsapp']){
     if(!(channel==='email'?p.email:p.phone))continue;
     const kind=nextCommunication(p,channel,communications);
@@ -242,7 +251,7 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   }
   const lookup=card('Find businesses in an area','Search an area for live business listings, then check phone, website or WhatsApp and add a confirmed business. Saved businesses appear below, including those without contact details.');
   const lookupForm=el('div',undefined,'acq-lookup-filters');
-  const areaInput=input(lookupForm,'Town, township or business name','lookupQuery','search',false,120);areaInput.value=lookupQuery;areaInput.placeholder='e.g. Durban, Umlazi, Soweto';
+  const areaInput=input(lookupForm,'Town, township or business name','lookupQuery','search',false,120);areaInput.value=lookupSelection?.label||lookupQuery;areaInput.placeholder='e.g. Durban, Umlazi, Soweto';
   const channelSelect=el('select');channelSelect.setAttribute('aria-label','Contact channel filter');
   for(const [v,label] of [['all','All businesses (including missing contacts)'],['email','Email address available'],['whatsapp','Phone recorded (WhatsApp not necessarily verified)'],['manual','No email or phone recorded']]){const o=el('option',label);o.value=v;channelSelect.append(o);}
   channelSelect.value=lookupChannel;const channelLabel=el('label','Contact channel');channelLabel.append(channelSelect);lookupForm.append(channelLabel);
@@ -260,13 +269,17 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    }
    if(!matches.length)lookupResults.append(el('p','No saved businesses match yet. Select Search Google Places above to discover businesses in your chosen area.','acq-empty'));
   }
-  areaInput.oninput=()=>{lookupQuery=areaInput.value;showContacts();};
+  areaInput.oninput=()=>{lookupSelection=null;lookupQuery=areaInput.value;showContacts();};
+  void import('/js/teyza-combined-coverage.mjs?v=20261127-idle-area').then(({attachAreaAutocomplete})=>{
+   if(!active||root.querySelector('[data-acquisition]')!==workspace)return;
+   attachAreaAutocomplete(areaInput,{api,initialArea:lookupSelection,onEdit:()=>{lookupSelection=null;lookupQuery=areaInput.value;showContacts();},onSelect:area=>{lookupSelection=area;lookupQuery=area.area;showContacts();}});
+  }).catch(()=>{});
   channelSelect.onchange=()=>{lookupChannel=channelSelect.value;showContacts();};
   onlyReady.onchange=()=>{lookupReady=onlyReady.checked;showContacts();};
   const lookupActions=el('div',undefined,'acq-contact-actions');
   const googleButton=button('Search Google Places',()=>openDiscovery());
   googleButton.title='Search the entered town across all three business categories';
-  areaInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void openDiscovery();}});
+  areaInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.defaultPrevented){e.preventDefault();void openDiscovery();}});
   googleButton.classList.add('acq-send-email');
   const manualAdd=button('Add confirmed business',()=>{prepareManual(lookupQuery);open('add');});manualAdd.classList.add('acq-send-wa');
   lookupActions.append(googleButton,manualAdd);
@@ -279,16 +292,16 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
   async function openDiscovery(){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage}=await import('/js/teyza-combined-coverage.mjs?v=20261127-contact-first');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261127-idle-area');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
-    liveDiscovery=createCombinedCoverage({autoSearch:!!typed,compact:true,initialTown:typed||'Durban',
+    liveDiscovery=createCombinedCoverage({autoSearch:Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||'Durban',initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
      resolveSavedPlaces:async ids=>{
       const matches=new Map();
       for(let i=0;i<ids.length;i+=30){const r=await api('ops_acquisition_place_matches',{placeIds:ids.slice(i,i+30)});if(!Array.isArray(r.matches))throw Error('Saved status unavailable');for(const m of r.matches)matches.set(m.placeId,m.id);}
       return matches;
      },
-     onAddBusiness:(p,contact,area)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);prepareManual(lookupQuery,p,contact);open('add');},
+     onAddBusiness:(p,contact,area)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);open('add');},
      onContactBusiness:id=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id});},
      report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
@@ -353,7 +366,23 @@ export function createAcquisitionAdmin({api,onError,message,openSupport}){
    const added=el('span','Added','acq-status');added.dataset.state='interested';c.append(added,button('Back to business search',()=>open('lookup')));
    c.append(el('p','Contact: '+[p.phone,p.email].filter(Boolean).join(' · ')),el('p','Source: '+title(p.source)+' — '+p.sourceReference,'footnote'),el('p','Assigned reviewer: '+p.assignedTo+' · Last saved by '+p.lastActivityBy+' · '+time(p.updatedAt),'footnote'));
    const site=safeBusinessWebsite(p.website);if(site)c.append(assetLink('Open business website',site));
-   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut)c.append(assetLink('Check WhatsApp',wa));
+   const wa=savedWhatsAppCheck(p.phone);if(wa&&!p.optedOut){
+    const box=el('details',undefined,'acq-message acq-wa-draft');box.dataset.sendChannel='manual-whatsapp';box.dataset.sendKind='invitation';box.append(el('summary','Check WhatsApp & review invitation'));
+    const preview=el('textarea');preview.readOnly=true;preview.rows=9;preview.value=whatsappInvitationDraft(p);preview.setAttribute('aria-label','Personalised WhatsApp invitation');box.append(preview,assetLink('Open WhatsApp — check number only',wa));
+    const result=el('div');result.setAttribute('role','status');box.append(result);
+    const prepare=button('Prepare WhatsApp message',async()=>{
+     prepare.disabled=true;result.replaceChildren(el('p','Rechecking recorded owner permission and contact…','footnote'));
+     try{
+      const r=await api('ops_acquisition_detail',{id:p.id});if(!box.isConnected)return;
+      const fresh=r.prospect,url=manualWhatsappDraftUrl(fresh),prior=Array.isArray(r.events)&&r.events.some(e=>e.type==='contact'&&e.channel==='whatsapp');
+      if(!url||fresh.phone!==p.phone||fresh.revision!==p.revision||prior){result.textContent='Draft blocked: check current owner consent, opt-out, existing account and contact history. Refresh the record.';return;}
+      result.replaceChildren(assetLink('Open prepared WhatsApp message',url),el('p','Review the message in WhatsApp and choose Send yourself. Record actual contact in the activity history. Nothing was sent by Admin.','footnote'));
+     }catch(e){if(box.isConnected){result.textContent=e.message||'Could not verify permission.';onError(e);}}
+     finally{if(box.isConnected)prepare.disabled=false;}
+    });
+    if(manualWhatsappDraftUrl(p))box.append(prepare);else box.append(el('p','Record actual owner permission before preparing an invitation. No marketing message is opened for opted-out or already registered businesses.','footnote'));
+    c.append(box);
+   }
    if(!p.optedOut&&(!p.phone||!p.email||!p.website)){
     const missing=el('details',undefined,'acq-secondary');missing.append(el('summary','Add missing contact details'));
     const form=el('form',undefined,'ops-form');

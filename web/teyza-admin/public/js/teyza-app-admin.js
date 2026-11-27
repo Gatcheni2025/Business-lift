@@ -1,4 +1,4 @@
-import {createOperations} from '/js/teyza-operations.js?v=20261127-contact-first';
+import {createOperations} from '/js/teyza-operations.js?v=20261127-idle-area';
 import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
 import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
 import {onAuthStateChanged,signInWithEmailAndPassword,signOut,setPersistence,browserSessionPersistence}
