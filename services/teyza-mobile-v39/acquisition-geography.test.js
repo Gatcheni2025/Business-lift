@@ -26,3 +26,36 @@ test('Ambiguous, unavailable and malformed sources fail closed; provisional is n
  await assert.rejects(a.g.resolve('ETH:1 OR 1=1'),e=>e.status===422);
  assert.equal(G.projectedGeography({city:'Durban',area:'Umlazi'}).geographyNeedsReview,true);
 });
+
+test('Reviewed whole-municipality mergers keep historical source provenance and resolve stable canonical IDs',async()=>{
+ const rows=[{munic_code:'MP322',sub_place_code:111111111,sub_place_name:'Synthetic Mbombela locality'},{munic_code:'NW402',sub_place_code:222222222,sub_place_name:'Synthetic Tlokwe locality'}];
+ const queries=[];
+ const g=G.createGeography({fetcher:async(url)=>{
+  const u=new URL(url),where=u.searchParams.get('where');queries.push(where);
+  const north=where.includes('NW')||where.includes('222222222');
+  const attributes=u.pathname.includes('/2/')?[north?{munic_code:'NW405',munic_name:'JB Marks'}:{munic_code:'MP326',munic_name:'City of Mbombela'}]:[rows[north?1:0]];
+  return {ok:true,json:async()=>({features:attributes.map(attributes=>({attributes}))})};
+ }});
+ for(const [province,term,current,old,sub] of [['Mpumalanga','Synthetic Mbombela','MP326','MP322','111111111'],['North West','Synthetic Tlokwe','NW405','NW402','222222222']]){
+  const r=(await g.search(province,term)).localities[0];
+  assert.equal(r.localityId,current+':'+sub);assert.equal(r.municipalityCode,current);assert.equal(r.sourceMunicipalityCode,old);
+  assert.equal(r.municipalityCrosswalkEffectiveYear,2016);assert.equal(r.municipalityCrosswalkSource,'MDB-2023-2016-amalgamations');
+  assert.deepEqual(await g.resolve(r.localityId),r);
+  assert(queries.some(q=>q.includes('munic_code IN')&&q.includes("'"+old+"'")&&q.includes("'"+current+"'")&&q.includes('sub_place_code = '+sub)));
+  assert.equal(G.projectedGeography(r).geographyNeedsReview,false);
+  assert.equal(G.projectedGeography({...r,sourceMunicipalityCode:'KZN211'}).geographyNeedsReview,true);
+  await assert.rejects(g.resolve(old+':'+sub),e=>e.status===422);
+ }
+});
+test('Amalgamation never guesses a split municipality or accepts contradictory sub-place names',async()=>{
+ const g=G.createGeography({fetcher:async(url)=>{
+  const u=new URL(url),isMunicipality=u.pathname.includes('/2/');
+  const rows=isMunicipality?[{munic_code:'MP326',munic_name:'City of Mbombela'}]:[
+   {munic_code:'MP322',sub_place_code:111111111,sub_place_name:'Old name'},
+   {munic_code:'MP326',sub_place_code:111111111,sub_place_name:'Different name'},
+   {munic_code:'LIM352',sub_place_code:222222222,sub_place_name:'Former split municipality'}];
+  return {ok:true,json:async()=>({features:rows.map(attributes=>({attributes}))})};
+ }});
+ await assert.rejects(g.resolve('MP326:111111111'),e=>e.status===409);
+ assert.equal((await g.search('Limpopo','Former')).localities.length,0);
+});

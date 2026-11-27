@@ -54,7 +54,17 @@ async function sample([province,expectedMunicipalityCode,terms]){
    }
   }catch(e){attempts.push({term,error:cleanError(e)});}
  }
- return {province,expectedMunicipalityCode,ok:false,attempts,elapsedMs:Math.round(performance.now()-start)};
+ // Diagnose source rows which the locality join omitted. Public fields only;
+ // no coordinates, business data, or automatic boundary guessing.
+ const rawDiagnostics=[];
+ for(const term of terms){
+  try{
+   const u=new URL(base+'/0/query');u.search=new URLSearchParams({where:"UPPER(sub_place_name) LIKE '"+term.toUpperCase().replaceAll("'","''")+"%'",outFields:'munic_code,sub_place_code,sub_place_name',returnGeometry:'false',f:'json',resultRecordCount:'50',orderByFields:'objectid ASC'});
+   const r=await publicGet(u.href);assert(r.ok);const data=await r.json();assert(!data.error&&Array.isArray(data.features));
+   rawDiagnostics.push({term,rows:data.features.map(x=>x.attributes),more:data.exceededTransferLimit===true});
+  }catch(e){rawDiagnostics.push({term,error:cleanError(e)});}
+ }
+ return {province,expectedMunicipalityCode,ok:false,attempts,rawDiagnostics,elapsedMs:Math.round(performance.now()-start)};
 }
 (async()=>{
  const layers=await Promise.all([metadata(0,['objectid','munic_code','sub_place_code','sub_place_name']),metadata(2,['objectid','munic_code','munic_name','province_code'])]);

@@ -11,6 +11,13 @@ const prefixes=Object.freeze({'Eastern Cape':['EC'],'Free State':['FS'],Gauteng:
 // Metro codes and names: South African government local-government directory.
 // https://www.gov.za/links/local-government
 const metros=Object.freeze({BUF:['Eastern Cape','Buffalo City'],NMA:['Eastern Cape','Nelson Mandela Bay'],MAN:['Free State','Mangaung'],EKU:['Gauteng','City of Ekurhuleni'],JHB:['Gauteng','City of Johannesburg'],TSH:['Gauteng','City of Tshwane'],ETH:['KwaZulu-Natal','eThekwini'],CPT:['Western Cape','City of Cape Town']});
+// Whole-municipality amalgamations only; no inference for divided/partial areas.
+// MDB 2023 investigation, pre/post-merger table; effective after 2016 LGE.
+// https://www.demarcation.org.za/wp-content/uploads/2023/09/Investigation-of-the-feasibility-of-aligning-amalgamations-with-the-Census-FINAL-REPORT.pdf
+const mergers=Object.freeze({MP322:'MP326',MP323:'MP326',NW401:'NW405',NW402:'NW405'});
+const MERGER_SOURCE='MDB-2023-2016-amalgamations';
+const canonicalMunicipality=m=>Object.hasOwn(mergers,m)?mergers[m]:m;
+const originalCodes=m=>[m,...Object.entries(mergers).filter(([,v])=>v===m).map(([k])=>k)];
 const provinces=Object.freeze(Object.keys(prefixes));
 const norm=v=>String(v||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
 const code=v=>typeof v==='string'&&/^[A-Z0-9]{2,12}$/.test(v)?v:null;
@@ -42,7 +49,7 @@ function createGeography({fetcher=fetch}={}){
  }
  async function rowsWithMunicipalities(rows){
   const valid=rows.filter(r=>provinceFor(r.munic_code)&&subcode(r.sub_place_code)&&label(r.sub_place_name));
-  const codes=[...new Set(valid.map(r=>r.munic_code))];
+  const codes=[...new Set(valid.map(r=>canonicalMunicipality(r.munic_code)))];
   const locals=codes.filter(c=>!Object.hasOwn(metros,c));
   const names=new Map(codes.filter(c=>Object.hasOwn(metros,c)).map(c=>[c,metros[c][1]]));
   if(locals.length){
@@ -57,11 +64,17 @@ function createGeography({fetcher=fetch}={}){
   }
   const byId=new Map(),ambiguous=new Set();
   for(const r of valid){
-   const municipality=names.get(r.munic_code);if(!municipality)continue;
-   const locality={localityId:r.munic_code+':'+subcode(r.sub_place_code),province:provinceFor(r.munic_code),municipality,municipalityCode:r.munic_code,township:label(r.sub_place_name),townshipCode:subcode(r.sub_place_code),geographySource:SOURCE,geographySourceVintage:VINTAGE};
+   const municipalityCode=canonicalMunicipality(r.munic_code),municipality=names.get(municipalityCode);
+   if(!municipality||provinceFor(municipalityCode)!==provinceFor(r.munic_code))continue;
+   const locality={localityId:municipalityCode+':'+subcode(r.sub_place_code),province:provinceFor(municipalityCode),municipality,municipalityCode,township:label(r.sub_place_name),townshipCode:subcode(r.sub_place_code),geographySource:SOURCE,geographySourceVintage:VINTAGE,
+    ...(r.munic_code===municipalityCode?{}:{sourceMunicipalityCode:r.munic_code,municipalityCrosswalkSource:MERGER_SOURCE,municipalityCrosswalkEffectiveYear:2016})};
    const old=byId.get(locality.localityId);
+   // Multiple historic/current rows are acceptable only when the sub-place
+   // names agree; prefer the direct current code, otherwise retain provenance
+   // and choose a deterministic source code for duplicate identical labels.
    if(old&&norm(old.township)!==norm(locality.township))ambiguous.add(locality.localityId);
-   else byId.set(locality.localityId,locality);
+   else if(!old||(!locality.sourceMunicipalityCode&&old.sourceMunicipalityCode)||
+    (old.sourceMunicipalityCode&&locality.sourceMunicipalityCode&&locality.sourceMunicipalityCode<old.sourceMunicipalityCode))byId.set(locality.localityId,locality);
   }
   return [...byId.values()].filter(r=>!ambiguous.has(r.localityId));
  }
@@ -77,7 +90,11 @@ function createGeography({fetcher=fetch}={}){
  }
  async function resolve(id){
   const {municipalityCode,subplaceCode}=parseLocalityId(id);
-  const result=await query(0,'munic_code = '+quoted(municipalityCode)+' AND sub_place_code = '+subplaceCode,'munic_code,sub_place_code,sub_place_name',10);
+  const canonical=canonicalMunicipality(municipalityCode);
+  if(canonical!==municipalityCode)D.fail(422,'Select the updated official locality reference.');
+  const codes=originalCodes(canonical);
+  const municipalityWhere=codes.length===1?'munic_code = '+quoted(canonical):'munic_code IN ('+codes.map(quoted).join(',')+')';
+  const result=await query(0,municipalityWhere+' AND sub_place_code = '+subplaceCode,'munic_code,sub_place_code,sub_place_name',10);
   if(result.more)D.fail(409,'Ambiguous official locality reference. Select another verified record.');
   const rows=(await rowsWithMunicipalities(result.rows)).filter(r=>r.localityId===id);
   if(rows.length!==1)D.fail(409,'The official locality reference could not be uniquely verified.');
@@ -91,6 +108,10 @@ function projectedGeography(p){
  if(p.geographySource===SOURCE&&p.geographySourceVintage===VINTAGE&&p.localityId&&p.municipality&&p.township&&p.municipalityCode&&p.townshipCode){
   try{const ids=parseLocalityId(p.localityId);verified=ids.municipalityCode===p.municipalityCode&&ids.subplaceCode===p.townshipCode&&provinceFor(ids.municipalityCode)===province;}catch(_){}
  }
- return {province,municipality:p.municipality||'',township:p.township||p.area||'',municipalityCode:verified?p.municipalityCode:'',townshipCode:verified?p.townshipCode:'',localityId:verified?p.localityId:'',geographySource:verified?SOURCE:'provisional',geographySourceVintage:verified?VINTAGE:'',geographyNeedsReview:!verified};
+ if(verified&&p.sourceMunicipalityCode){
+  verified=Object.hasOwn(mergers,p.sourceMunicipalityCode)&&mergers[p.sourceMunicipalityCode]===p.municipalityCode&&p.municipalityCrosswalkSource===MERGER_SOURCE&&p.municipalityCrosswalkEffectiveYear===2016;
+ }
+ return {province,municipality:p.municipality||'',township:p.township||p.area||'',municipalityCode:verified?p.municipalityCode:'',townshipCode:verified?p.townshipCode:'',localityId:verified?p.localityId:'',geographySource:verified?SOURCE:'provisional',geographySourceVintage:verified?VINTAGE:'',geographyNeedsReview:!verified,
+  ...(verified&&p.sourceMunicipalityCode?{sourceMunicipalityCode:p.sourceMunicipalityCode,municipalityCrosswalkSource:MERGER_SOURCE,municipalityCrosswalkEffectiveYear:2016}:{})};
 }
 module.exports={createGeography,projectedGeography,parseLocalityId,provinceFor,provinces,SOURCE,VINTAGE};
