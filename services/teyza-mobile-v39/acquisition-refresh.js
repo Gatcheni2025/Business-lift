@@ -3,7 +3,7 @@
 // Never treat eventual Firestore event delivery as a complete change feed.
 // Existing actions and payment/consent authorities are not called by this worker.
 const crypto=require('node:crypto'),S=require('./acquisition-summary');
-const LEASE='teyzaAcquisitionReportControl/refreshLease';
+const LEASE='teyzaAcquisitionReportControl/refreshLease',FULL_ATTEMPT='teyzaAcquisitionReportControl/fullBuildAttempt';
 const LEASE_MS=5*60000,RETENTION_MS=24*3600000,AUDIT_MS=60*60000;
 const MAX_DELTA_WRITES=350,MAX_FULL_WRITES=5000,MAX_DELTA_BYTES=6*1024*1024,MAX_STATE_BYTES=700000;
 const FULL_COOLDOWN_MS=30*60000,MAX_RETENTION_DELETES=200,MAX_MANIFESTS=500;
@@ -23,7 +23,7 @@ function integrity(ok,reason){if(!ok)throw new IntegrityError(reason);}
 function managed(m){return m?.managed===true&&m.schema===S.SCHEMA&&uuid(m.generation)&&Number.isSafeInteger(m.asOf)&&Number.isSafeInteger(m.completedAt);}
 function fingerprint(g){
  need(g.rows instanceof Map&&g.aggregates instanceof Map&&S.validCounts(g.aggregates.get(S.NATIONAL))&&g.aggregates.get(S.NATIONAL).funnel.discovered===g.rows.size,'Invalid exact generation.');
- need(g.rows.size+g.aggregates.size+3<=MAX_FULL_WRITES,'Managed generation exceeds rollout write bound. Partition before rollout.');
+ need(g.rows.size+g.aggregates.size+5<=MAX_FULL_WRITES,'Managed generation exceeds rollout write bound. Partition before rollout.');
  const encode=(values,valid)=>[...values].map(([id,value])=>{need(valid(id),'Unsafe reporting document ID.');return [id,hash(value)];}).sort(([a],[b])=>a<b?-1:a>b?1:0);
  for(const [id,row] of g.rows)need(row.display?.id===id&&row.display.snapshotOnly===true&&!Object.hasOwn(row.display,'email')&&!Object.hasOwn(row.display,'phone')&&Array.isArray(row.lookupKeys),'Invalid redacted summary row.');
  for(const counts of g.aggregates.values())need(S.validCounts(counts),'Invalid aggregate.');
@@ -81,6 +81,14 @@ function manifest(id,g,f,clock,prior=null,audited=false){
 async function publishFull({db,g,f,prior,token,clock}){
  if(managed(prior)&&prior.invalidated!==true&&clock()-prior.createdAt<FULL_COOLDOWN_MS)throw Error('Large change requires a reviewed rebuild; full-write cooldown active.');
  const id=crypto.randomUUID(),prefix=manifestPath(id),docs=[];
+ // Persist an attempt BEFORE any row write. Even a crash before publication
+ // consumes the cooldown, preventing repeated unmanifested partial builds.
+ await db.runTransaction(async tx=>{
+  await guard(tx,db,token,prior,clock,g.asOf);
+  const ref=db.doc(FULL_ATTEMPT),last=data(await tx.get(ref)),now=clock();
+  need(!last||Number.isSafeInteger(last.startedAt)&&now-last.startedAt>=FULL_COOLDOWN_MS,'Recent full build attempt; cooldown active. Inspect partial builds before retrying.');
+  tx.set(ref,{generation:id,asOf:g.asOf,startedAt:now,status:'started'});
+ });
  for(const [key,row] of g.rows)docs.push([prefix+'/rows/'+key,row]);
  for(const [key,counts] of g.aggregates)docs.push([prefix+'/scopes/'+key,{counts}]);
  // Each partial batch has a lease/pointer/freshness guard; no pointer becomes
@@ -96,10 +104,13 @@ async function publishFull({db,g,f,prior,token,clock}){
  const next=manifest(id,g,f,clock,null,true);
  await db.runTransaction(async tx=>{
   await guard(tx,db,token,prior,clock,g.asOf);
+  const attemptRef=db.doc(FULL_ATTEMPT),attempt=data(await tx.get(attemptRef));
+  need(attempt?.generation===id&&attempt.status==='started','Full build attempt changed.');
   tx.create(db.doc(statePath(id)),{asOf:g.asOf,encoded:f.encoded});
   tx.create(db.doc(prefix),next);tx.set(db.doc(S.CONTROL),next);
+  tx.update(attemptRef,{status:'completed',completedAt:clock()});
  });
- return {kind:'full',manifest:next,summaryWrites:confirmed+3,rowWrites:g.rows.size,scopeWrites:g.aggregates.size};
+ return {kind:'full',manifest:next,summaryWrites:confirmed+5,rowWrites:g.rows.size,scopeWrites:g.aggregates.size};
 }
 async function publishDelta({db,g,f,prior,token,clock,plan,audited}){
  const prefix=manifestPath(prior.generation),next=manifest(prior.generation,g,f,clock,prior,audited);
@@ -211,4 +222,4 @@ async function refresh({db,collect,clock=Date.now,asOf=Math.floor(clock()/1000)*
   return result;
  }finally{await release(db,token);}
 }
-module.exports={IntegrityError,LEASE,LEASE_MS,RETENTION_MS,AUDIT_MS,MAX_DELTA_WRITES,MAX_FULL_WRITES,MAX_RETENTION_DELETES,fingerprint,decode,deltaPlan,refresh,retain,acquire,release,auditPrior};
+module.exports={IntegrityError,LEASE,FULL_ATTEMPT,LEASE_MS,RETENTION_MS,AUDIT_MS,MAX_DELTA_WRITES,MAX_FULL_WRITES,MAX_RETENTION_DELETES,fingerprint,decode,deltaPlan,refresh,retain,acquire,release,auditPrior};

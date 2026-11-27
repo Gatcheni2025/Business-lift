@@ -191,6 +191,17 @@ const scan=async(label,filters={},mutate=null)=>{
   const cleaned=await F.retain({db,token:retentionLease,clock:Date.now,limit:2});
   await F.release(db,retentionLease);
   check('Retention deletes only expired superseded managed generation',cleaned.deleted===2&&cleaned.generations===1&&!(await db.doc(S.ROOT+'/'+oldIds[0]).get()).exists&&(await db.doc(S.ROOT+'/'+oldIds[1]).get()).exists&&(await db.doc(S.ROOT+'/'+oldIds[2]).get()).exists&&(await db.doc(S.ROOT+'/'+manifest.generation).get()).exists&&(await db.doc(S.ROOT+'/'+noop.manifest.generation).get()).exists);
+  const attempt=(await db.doc(F.FULL_ATTEMPT).get()).data();
+  check('Full-build journal records one completed attempt',attempt.status==='completed'&&attempt.generation===full.manifest.generation);
+  const orphan=S.ROOT+'/00000000-0000-0000-0000-000000000099/rows/test';await db.doc(orphan).create({synthetic:true});
+  const guardLease=await F.acquire(db,Date.now);try{await F.retain({db,token:guardLease,clock:Date.now});}finally{await F.release(db,guardLease);}
+  check('Unmanifested partial generation never automatically removed',(await db.doc(orphan).get()).exists);
+  const corrupted={...pointerBeforeFailure,auditedAt:Date.now()-F.AUDIT_MS-1000};
+  await db.doc(S.CONTROL).set(corrupted);await db.doc(S.ROOT+'/'+corrupted.generation).set(corrupted);
+  await unchangedRef.update({display:{...unchangedBefore.data().display,name:'Synthetic integrity fault'}});
+  await delay(2200);
+  await assert.rejects(refresh(),/Recent full build attempt; cooldown active/);
+  check('Confirmed corruption invalidates cached reporting and cooldown prevents repeated full builds',(await db.doc(S.CONTROL).get()).data().invalidated===true&&(await S.readSummaryPage({db,data:{filters:{}}}))===null&&(await db.doc(F.FULL_ATTEMPT).get()).data().generation===full.manifest.generation);
   report.incremental={initialWrites:full.summaryWrites,deltaWrites:delta.summaryWrites,deltaRowWrites:delta.rowWrites,deltaScopeWrites:delta.scopeWrites,expiryWrites:expired.summaryWrites,unchangedWrites:noop.summaryWrites,retentionDeletes:limited.deleted+cleaned.deleted};
   report.passed=true;
  }catch(e){report.passed=false;report.error=String(e?.message||e);console.error(e);process.exitCode=1;}
