@@ -57,7 +57,7 @@ function setup(options={}){
   if(method==='PATCH'){if(body.config)version.config=body.config;if(body.status)version.status=body.status;return {name,...version};}
   return {name,config:version.config};
  },upload:async()=>{if(options.failUpload)throw new Error('Upload failed');}};
- return {client,source,next,calls,config,existing,versions,backupPath:path.join(directory,'backup.json'),log:()=>{},wait:async()=>{},root,live:()=>live};
+ return {client,source,next,calls,config,existing,versions,fetcher:async()=>({ok:true,json:async()=>({ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminInactivitySession:true,adminSessionRequired:true})}),backupPath:path.join(directory,'backup.json'),log:()=>{},wait:async()=>{},root,live:()=>live};
 }
 test('Hosting overlay preserves unrelated files, configuration and the exact rollback version before publication',async()=>{
  const f=setup(),result=await patch(f);assert.equal(f.live(),f.next);assert.equal(result.sourceVersion,f.source);
@@ -174,4 +174,15 @@ test('Marketplace publication clones once and verifies all unchanged files befor
  for(const p of ['/pay/index.html','/ads/index.html','/order-payment-return.html','/assets/teyza-maps-config.json','/index.html'])assert.equal(files.get(p),f.existing.get(p));
  for(const p of ['/agents.html','/work.html','/owner-confirm.html','/support-inbox.html','/assets/work.css','/assets/teyza-agents-map-first.css','/js/owner-confirm.js'])assert(files.has(p),p);
  await rollback(f);assert.equal(f.live(),f.source);
+});
+
+test('National publisher refuses missing or wrong schema before any Hosting operation, and rechecks before release',async()=>{
+ for(const health of [{ok:true},{ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:1},{ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:'2'}]){
+  const f=setup();f.fetcher=async()=>({ok:true,json:async()=>health});
+  await assert.rejects(patch(f),/national acquisition schema 2/);assert.equal(f.calls.length,0);
+ }
+ const f=setup(),good=f.fetcher;let checks=0;
+ f.fetcher=async()=>++checks===1?good():({ok:true,json:async()=>({ok:true})});
+ await assert.rejects(patch(f),/national acquisition schema 2/);
+ assert.equal(checks,2);assert.equal(f.live(),f.source);assert(!f.calls.some(c=>c.uri.endsWith('/channels/live/releases')));
 });

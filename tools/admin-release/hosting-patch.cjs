@@ -87,7 +87,15 @@ async function current(client,channel='live'){
  const r=await client.hosting('GET','/'+BASE+'/channels/'+channel);
  return versionName(r.release?.version?.name);
 }
-async function patch({client,root,workRoot=null,backupPath,wait=pause,log=console.log}){
+async function assertNationalBackend(fetcher=fetch){
+ const response=await fetcher('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000),cache:'no-store'});
+ if(!response.ok)throw Error('Admin backend health request failed. Hosting unchanged.');
+ const health=await response.json();
+ if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminInactivitySession!==true||health.adminSessionRequired!==true)
+  throw Error('Matching national acquisition schema 2 and Admin session backend required. Hosting unchanged.');
+}
+async function patch({client,root,workRoot=null,backupPath,wait=pause,log=console.log,fetcher=fetch}){
+ await assertNationalBackend(fetcher);
  const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+SITE+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw new Error('teyza.co.za is not attached to the expected Firebase Hosting site.');
  const source=await current(client),original=await client.hosting('GET','/'+source),before=await allFiles(client,source),files=overlay(root,{workRoot});
@@ -119,6 +127,7 @@ async function patch({client,root,workRoot=null,backupPath,wait=pause,log=consol
   if(canonical(normal(configured.config))!==canonical(normal(config)))throw new Error('Hosting configuration did not match the reviewed admin overlay.');
  }
  await client.hosting('PATCH','/'+version,{status:'FINALIZED'},{updateMask:'status'});
+ await assertNationalBackend(fetcher);
  // Refuse to overwrite a newer deployment published while this overlay was prepared.
  if(await current(client)!==source)throw new Error('The live website changed during preparation. Nothing was published. Run DEPLOY-ADMIN again to use the new live version.');
  const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:workRoot?'Teyza marketplace v61 Admin, Agents and Work branding':'Teyza scoped Admin update'},{versionName:version});
