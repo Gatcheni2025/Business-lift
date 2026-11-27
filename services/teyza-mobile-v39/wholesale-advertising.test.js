@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createWholesaleAdvertising}=require('./wholesale-advertising');
+const {createWholesaleAdvertising:rawCreateWholesaleAdvertising}=require('./wholesale-advertising');
+const createWholesaleAdvertising=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateWholesaleAdvertising);
 const started=Date.parse('2026-11-09T09:00:00Z');
 class FakeDB{
  constructor(data){this.docs=new Map(Object.entries(structuredClone(data)));}

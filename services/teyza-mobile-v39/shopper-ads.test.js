@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {quote,distanceKm,isDisplayed,createShopperAds}=require('./shopper-ads');
+const {quote,distanceKm,isDisplayed,createShopperAds:rawCreateShopperAds}=require('./shopper-ads');
+const createShopperAds=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateShopperAds);
 const NOW=Date.parse('2026-11-11T10:00:00Z');
 const rejects=(p,status)=>assert.rejects(p,e=>e.status===status);
 class FakeDB{

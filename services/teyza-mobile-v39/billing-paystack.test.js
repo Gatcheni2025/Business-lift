@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createBilling,verifySignature,validCheckoutUrl,nextMonth,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION,PRORATED_TERMS_VERSION}=require('./billing-paystack');
+const {createBilling:rawCreateBilling,verifySignature,validCheckoutUrl,nextMonth,MONTHLY_CENTS,PROMO_CENTS,SUBSCRIPTION_TERMS_VERSION,PRORATED_TERMS_VERSION}=require('./billing-paystack');
+const createBilling=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateBilling);
 const NOW=Date.parse('2026-11-04T07:00:00+02:00');
 const consent={recurringConsent:true,termsVersion:SUBSCRIPTION_TERMS_VERSION};
 function fixture(seed={},options={}) {

@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createAdminUsers}=require('./admin-users');
+const {createAdminUsers:rawCreateAdminUsers}=require('./admin-users');
+const createAdminUsers=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateAdminUsers);
 
 const now=1_800_000_000_000;
 const admin={uid:'admin1',teyzaAdmin:true,email_verified:true,auth_time:now/1000};

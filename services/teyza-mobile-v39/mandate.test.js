@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createMandate,VERSION,terms,schedule}=require('./mandate'),cipher=require('./selfie-crypto');
+const {createMandate:rawCreateMandate,VERSION,terms,schedule}=require('./mandate'),cipher=require('./selfie-crypto');
+const createMandate=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateMandate);
 class FakeDB {
   constructor(seed={}){this.records=new Map(Object.entries(structuredClone(seed)));this.serial=0;}
   doc(path){const db=this;return {path,id:path.split('/').pop(),get:async()=>db.snapshot(path),

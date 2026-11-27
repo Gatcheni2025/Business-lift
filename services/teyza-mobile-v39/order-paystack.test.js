@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createOrderPaystack}=require('./order-paystack');
+const {createOrderPaystack:rawCreateOrderPaystack}=require('./order-paystack');
+const createOrderPaystack=require('./test-admin-fixtures.cjs').withModuleAdminFixtures(rawCreateOrderPaystack);
 const NOW=1800000000000;
 class FakeDB{
  constructor(){this.records=new Map();this.queue=Promise.resolve();}
