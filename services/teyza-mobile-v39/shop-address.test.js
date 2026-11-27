@@ -103,3 +103,11 @@ test('Signed address detects an exact Google business name at the same location,
  await assert.rejects(api.matchingBusiness('wrong-uid',receipt,'Corner Spaza'),e=>e.status===422);
  assert(requests.some(x=>x.url.includes('places:searchText')));
 });
+
+test('Admin area details accept specific South African localities and reject unrelated or coarse results',()=>{
+ const {adminAreaDetails,adminAreaActions,actions}=require('./shop-address');
+ const place={id:'SyntheticArea123',formattedAddress:'KwaMashu, KwaZulu-Natal, South Africa',types:['sublocality_level_1'],location:{latitude:-29.7416,longitude:30.9902},addressComponents:[{types:['sublocality_level_1'],longText:'KwaMashu'},{types:['administrative_area_level_1'],longText:'KwaZulu-Natal'},{types:['country'],shortText:'ZA'}]};
+ assert.equal(adminAreaDetails(place).area,'KwaMashu');assert.equal(adminAreaDetails(place).radius,5000);
+ assert(adminAreaActions.has('admin_area_suggest'));assert(!actions.has('admin_area_suggest'));
+ for(const bad of [{...place,types:['country']},{...place,location:{latitude:0,longitude:0}},{...place,addressComponents:place.addressComponents.map(x=>x.types.includes('country')?{...x,shortText:'US'}:x)}])assert.throws(()=>adminAreaDetails(bad),e=>e.status===422);
+});

@@ -2,6 +2,7 @@
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication');
 const DAY=86400000,COORDINATE_TTL=30*DAY,SELECTION_TTL=30*60000;
 const actions=new Set(['seller_address_suggest','seller_address_select','seller_claim_suggest','seller_claim_select','seller_claim_by_id']);
+const adminAreaActions=new Set(['admin_area_suggest','admin_area_select']);
 const validPlaceId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{4,256}$/.test(value);
 const session=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DETAILS='id,formattedAddress,addressComponents,location,types';
@@ -24,6 +25,18 @@ function addressDetails(place){
  return {placeId:place.id,address:D.text(place.formattedAddress,'selected street address',250),
   area:D.text(area,'suburb',100),city:D.text(city,'town',100),
   province:component('administrative_area_level_1'),postalCode:component('postal_code'),countryCode:'ZA',latitude,longitude};
+}
+// Area selection is ephemeral and separate from signed seller-address receipts.
+function adminAreaDetails(place){
+ const parts=Array.isArray(place.addressComponents)?place.addressComponents:[];
+ const component=(...types)=>{for(const type of types){const p=parts.find(x=>x.types?.includes(type));if(p?.longText)return p.longText;}return '';};
+ const areaTypes=['neighborhood','sublocality_level_5','sublocality_level_4','sublocality_level_3','sublocality_level_2','sublocality_level_1','sublocality','locality','postal_town','administrative_area_level_4','administrative_area_level_3','administrative_area_level_2'];
+ const type=areaTypes.find(t=>place.types?.includes(t));
+ const area=type?component(type,...areaTypes):'',province=component('administrative_area_level_1');
+ const lat=place.location?.latitude,lng=place.location?.longitude;
+ if(parts.find(x=>x.types?.includes('country'))?.shortText!=='ZA'||!type||!area||!province||!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -35||lat> -22||lng<16||lng>34)
+  D.fail(422,'Select a specific South African town, township, suburb or municipality, not a street, province or country.');
+ return {area:D.text(area,'selected area',100),province:D.text(province,'province',100),label:D.text(place.formattedAddress,'selected area label',250),lat,lng,radius:/sublocality|neighborhood/.test(type)?5000:10000,source:'Google Maps'};
 }
 function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=fetch,clock=Date.now,rate}){
  function signingKey(){const key=getSigningKey();if(!key)D.fail(503,'Address selection is temporarily unavailable. Please retry.');return key;}
@@ -49,36 +62,37 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
    return await response.json();
   }catch(_){D.fail(503,'Address search is temporarily unavailable. Please retry.');}
  }
- async function details(placeId,sessionToken,claim=false){
+ async function details(placeId,sessionToken,claim=false,area=false){
   if(!validPlaceId(placeId))D.fail(422,'Select an address from the suggestions.');
   const query=new URLSearchParams({languageCode:'en',regionCode:'ZA',...(sessionToken?{sessionToken}:{})});
   const place=await request('places/'+placeId+'?'+query,{fields:DETAILS+(claim?',displayName,businessStatus':'')});
   if(place.id!==placeId)D.fail(422,'That address changed. Search and select it again.');
-  return claim?place:addressDetails(place);
+  return claim||area?place:addressDetails(place);
  }
  async function execute(uid,action,data){
-  const directClaim=action==='seller_claim_by_id';
+  const directClaim=action==='seller_claim_by_id',areaSearch=adminAreaActions.has(action);
   const claiming=action==='seller_claim_suggest'||action==='seller_claim_select'||directClaim;
-  if(action==='seller_address_suggest'||action==='seller_claim_suggest'){
+  if(action==='seller_address_suggest'||action==='seller_claim_suggest'||action==='admin_area_suggest'){
    const input=D.text(data.query,'address search',180);
-   if(input.length<4)return {suggestions:[]};
+   if(input.length<(areaSearch?3:4))return {suggestions:[]};
    if(!session(data.sessionToken))D.fail(422,'Start a new address search.');
-   await rate(uid,'address-search',120,600000);
+   await rate(uid,areaSearch?'admin-area-search':'address-search',120,600000);
    const result=await request('places:autocomplete',{fields:'suggestions.placePrediction.placeId,suggestions.placePrediction.text',
     body:{input,sessionToken:data.sessionToken,includedRegionCodes:['za'],languageCode:'en',regionCode:'ZA',
-      includedPrimaryTypes:claiming?['establishment']:['street_address','premise','subpremise'],includeQueryPredictions:false}});
+      includedPrimaryTypes:areaSearch?['(regions)']:claiming?['establishment']:['street_address','premise','subpremise'],includeQueryPredictions:false}});
    const issuedAt=clock(),expiresAt=issuedAt+SELECTION_TTL;
    return {suggestions:(Array.isArray(result.suggestions)?result.suggestions:[]).slice(0,5).flatMap(row=>{
     const p=row.placePrediction;
     if(!validPlaceId(p?.placeId)||typeof p.text?.text!=='string'||!p.text.text.trim()||p.text.text.length>350)return [];
-    return [{placeId:p.placeId,label:p.text.text,predictionToken:seal({v:1,purpose:claiming?'claim_prediction':'prediction',uid,issuedAt,expiresAt,
+    return [{placeId:p.placeId,label:p.text.text,predictionToken:seal({v:1,purpose:areaSearch?'admin_area_prediction':claiming?'claim_prediction':'prediction',uid,issuedAt,expiresAt,
       placeId:p.placeId,sessionToken:data.sessionToken})}];
    })};
   }
   if(directClaim&&!validPlaceId(data.placeId))D.fail(422,'Choose a Google Maps business to claim.');
-  const prediction=directClaim?{placeId:data.placeId,sessionToken:null}:open(data.predictionToken,uid,claiming?'claim_prediction':'prediction');
-  await rate(uid,'address-select',30,3600000);
-  const place=await details(prediction.placeId,prediction.sessionToken,claiming),issuedAt=clock();
+  const prediction=directClaim?{placeId:data.placeId,sessionToken:null}:open(data.predictionToken,uid,areaSearch?'admin_area_prediction':claiming?'claim_prediction':'prediction');
+  await rate(uid,areaSearch?'admin-area-select':'address-select',30,3600000);
+  const place=await details(prediction.placeId,prediction.sessionToken,claiming,areaSearch),issuedAt=clock();
+  if(areaSearch)return {area:adminAreaDetails(place)};
   if(claiming){
    const country=place.addressComponents?.find(p=>p.types?.includes('country'))?.shortText;
    if(country!=='ZA'||place.businessStatus==='CLOSED_PERMANENTLY')D.fail(422,'Choose a currently operating business in South Africa.');
@@ -131,4 +145,4 @@ function createShopAddress({getPlacesKey=()=>'',getSigningKey=()=>'',fetchImpl=f
  }
  return {execute,location,claim,matchingBusiness,refresh:placeId=>details(placeId)};
 }
-module.exports={actions,createShopAddress,addressDetails,COORDINATE_TTL,DAY};
+module.exports={actions,adminAreaActions,createShopAddress,addressDetails,adminAreaDetails,COORDINATE_TTL,DAY};

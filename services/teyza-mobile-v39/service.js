@@ -288,6 +288,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
       return {saved:true,profile};
     }
     if(fieldAgents.actions.has(action))return agentWorkspace.execute(auth,action,data);
+    if(addresses.adminAreaActions.has(action)){experience.recentAdmin(auth,clock);return shopAddress.execute(uid,action,data);}
     if(addresses.actions.has(action))return shopAddress.execute(uid,action,data);
     if(locations.actions.has(action))return shopLocation.execute(auth,action,data);
     if(ratings.actions.has(action))return shopRatings.execute(auth,action,data);
