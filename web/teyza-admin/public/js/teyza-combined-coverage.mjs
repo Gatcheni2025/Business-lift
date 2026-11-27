@@ -467,7 +467,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
    const unique=new Map();let excluded=0;
    for(const item of successful)for(const p of item.value.entries){if(compact&&!withinSearchRadius(p,located)){excluded++;continue;}if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);}
-   places=[...unique.values()];searchCompleted=true;searchPending=false;if(guided){guideStep=3;paintGuide();}render();
+   places=[...unique.values()];if(guided){guideStep=3;paintGuide();}searchCompleted=true;searchPending=false;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?' within '+(radius/1000)+' km of '+located.label+'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+

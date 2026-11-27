@@ -421,7 +421,7 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
      if(type==='manual_whatsapp_sent'&&data.sentConfirmed!==true)D.fail(422,'Confirm the actual sent message in the selected manual WhatsApp account.');
      if(type==='manual_whatsapp_opened'&&old?.openedAt)D.fail(409,'Chat opening already recorded. Record the actual send only after it happens.');
      const entry={...old,purpose:draft.purpose,sender:draft.sender,
-      ...(type==='manual_whatsapp_opened'?{openedAt:stamp,openedBy:uid}:{sentAt:stamp,sentBy:uid})};
+      ...(type==='manual_whatsapp_opened'?{openedAt:stamp,openedBy:uid,openedSender:draft.sender}:{sentAt:stamp,sentBy:uid,sentSender:draft.sender})};
      update.manualWhatsApp={...p.manualWhatsApp,[draft.purpose]:entry};
      if(type==='manual_whatsapp_sent'){update.contactedAt=p.contactedAt||stamp;update.lastWhatsAppContactAt=stamp;}
      details={...details,channel:'whatsapp',purpose:draft.purpose,sender:draft.sender};

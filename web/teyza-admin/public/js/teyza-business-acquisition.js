@@ -105,7 +105,7 @@ export function growthStep(p){
   return {id:'permission',label:'Establish contact and record opt-in',tone:'neutral'};
  }
  if(['queued','sending','review_required'].includes(p.outbound?.email_invitation?.status))return {id:'email',kind:'invitation',label:'Check Zoho introduction status',tone:'amber'};
- if(!p.response)return {id:'response',label:'Record actual owner response',tone:'amber'};
+ if(!['interested','needs_help'].includes(p.response))return {id:'response',label:'Record actual owner response',tone:'amber'};
  if(!p.downloadConfirmedAt&&emailDraftAllowed('onboarding_guide',p))return {id:'guide',label:'Send requested onboarding / training guide',tone:'blue'};
  if(!p.downloadConfirmedAt)return {id:'download',label:'Guide app download',tone:'blue'};
  return {id:'link',label:'Link verified registered app account',tone:'blue'};
@@ -573,7 +573,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     const box=el('details',undefined,'acq-message acq-wa-draft');manualBox=box;box.dataset.sendChannel='manual-whatsapp';box.dataset.sendKind='introduction';box.append(el('summary','Manual WhatsApp · introduction / email reminder'));
     box.append(el('p','Use the separate Teyza WhatsApp Business account. A chat link does not select the active account or send anything.','footnote'));
     const purpose=manualNoticePurpose(p)||(!priorInvitation(p)&&p.permissions?.whatsapp?.granted===true?'introduction':null);
-    for(const entry of Object.values(p.manualWhatsApp||{}))box.append(el('p',title(entry.purpose)+' · opened '+time(entry.openedAt)+' · sent '+time(entry.sentAt)+' · sender '+entry.sender,'footnote'));
+    for(const entry of Object.values(p.manualWhatsApp||{}))box.append(el('p',title(entry.purpose)+' · opened '+time(entry.openedAt)+' · sent '+time(entry.sentAt)+' · sender '+(entry.sentSender||entry.openedSender||entry.sender),'footnote'));
     if(purpose){
      const form=el('form',undefined,'ops-form'),sender=input(form,'Separate Teyza WhatsApp Business sender','sender','tel',true,40);sender.value=manualSender||p.manualWhatsApp?.[purpose]?.sender||'';sender.placeholder='+27… (not official Meta number)';
      check(form,'I will use this account and the owner agreed to WhatsApp contact.','senderConfirmed');
@@ -585,12 +585,25 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
        if(!box.isConnected)return;const base=savedWhatsAppCheck(draft?.recipient);
        if(!base||draft.purpose!==purpose||typeof draft.text!=='string'||!savedWhatsAppCheck(draft.sender)||draft.recipient!==p.phone)throw Error('Unexpected manual draft response.');
        manualSender=draft.sender;const url=new URL(base);url.searchParams.set('text',draft.text);
+       const launch=assetLink('Open WhatsApp message',url.href);let launching=false;
+       launch.addEventListener('click',async e=>{
+        e.preventDefault();if(launching||!box.isConnected)return;
+        const win=window.open('about:blank','_blank');
+        if(!win){message('Allow popups and try again. No message was sent.','info');return;}
+        win.opener=null;launching=true;
+        try{
+         const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
+         if(!box.isConnected||current?.purpose!==purpose||current?.recipient!==draft.recipient||current?.sender!==draft.sender||current?.text!==draft.text)throw Error('The draft changed. Refresh this record.');
+         win.location.replace(url.href);
+        }catch(error){try{win.close();}catch{}if(box.isConnected)message(error.message||'Current permission could not be verified.','error');}
+        finally{launching=false;}
+       });
        const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
        const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
        submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
        const opened=button('Record chat opened only',()=>perform(root,opened,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_opened',purpose,sender:draft.sender,note:'Administrator confirmed chat opened, not sent.',confirmed:true});await readDetail(p.id,stamp);}));
        opened.disabled=!!p.manualWhatsApp?.[purpose]?.openedAt;
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,assetLink('Open WhatsApp message',url.href),button('Copy message',copyAsset(draft.text,message)),el('p','Review in WhatsApp and send yourself. Record the actual outcome below.','footnote'),opened,log);
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launch,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','Review in WhatsApp and send yourself. Record the actual outcome below.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));
