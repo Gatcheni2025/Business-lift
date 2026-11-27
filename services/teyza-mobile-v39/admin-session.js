@@ -43,14 +43,17 @@ function createAdminSessions({db,clock=Date.now,rate,getAuthUser}){
   // Only server-verified requests carry this non-JSON marker.
   return {...auth,[verifiedSession]:row.expiresAt};
  }
- async function touch(auth,token){
+ async function touch(auth,token,data={}){
+  const lag=data.activityLagMs??0;
+  if(!Number.isSafeInteger(lag)||lag<0||lag>60000)D.fail(400,'Invalid activity update.');
   await currentAdmin(auth);
   await rate(auth.uid,'admin-session-touch',12,60000);
   return db.runTransaction(async tx=>{
    const ref=refFor(auth),snap=await tx.get(ref);
    const row=active(auth,snap.exists?snap.data():null,token),now=clock();
-   // A background read or a rapid duplicate heartbeat cannot extend the session.
-   if(now-row.lastActiveAt>=15000)tx.update(ref,{lastActiveAt:now,expiresAt:now+IDLE_MS});
+   // A delayed activity report preserves the original activity time, not the heartbeat time.
+   const activityAt=now-lag;
+   if(activityAt>row.lastActiveAt)tx.update(ref,{lastActiveAt:activityAt,expiresAt:activityAt+IDLE_MS});
    return {idleMs:IDLE_MS};
   });
  }

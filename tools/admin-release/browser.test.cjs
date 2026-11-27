@@ -1058,12 +1058,13 @@ async function main(){
    const f=await pageFor();await f.page.clock.install();await f.page.locator('.seller-row').first().click();await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();
    assert.equal(await f.page.locator('#googleLogin,#sessionTime,#renewSession').count(),0);
    await f.page.clock.fastForward(240000);await f.page.locator('#search').fill('Corner');
+    await f.page.waitForTimeout(100);
    await f.page.clock.fastForward(120000);assert(await f.page.locator('#workspace').isVisible());
    assert(f.calls.some(c=>c.action==='admin_session_touch'));
    await f.page.clock.fastForward(181000);await f.page.locator('#loginTitle').getByText('Welcome back').waitFor();
    assert(await f.page.locator('#signOut').isHidden());assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
    assert.equal(await f.page.locator('#evidenceImage').getAttribute('src'),null);assert.equal(await f.page.locator('#identityDetails').innerText(),'');
-   await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
+   await f.page.locator('#email').fill('reviewer@example.test');await f.page.locator('#password').fill('synthetic-password');await f.page.locator('#loginButton').click();await f.page.locator('[data-admin-view="overview"]').click();await f.page.getByRole('heading',{name:'Your operations, at a glance.'}).waitFor();await f.page.locator('.overview-stat').first().click();await f.page.locator('.seller-row').first().waitFor();assert(await f.page.locator('#workspace').isVisible());await f.context.close();
   });
   await check('Late private evidence never crosses an account change',async()=>{
    let release;const delayed=new Promise(resolve=>release=resolve);let started;

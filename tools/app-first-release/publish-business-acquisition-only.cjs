@@ -51,6 +51,7 @@ async function checkR90Ready(){
  assertR90Ready(await response.json());
 }
 async function deploy(client){
+ if(fs.readFileSync(path.join(adminRoot,'js/teyza-app-admin-model.mjs'),'utf8').includes('adminSession=()=>undefined'))throw Error('Use the matching Admin idle/contact/area publisher. Hosting unchanged.');
  await checkR90Ready();
  const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+SITE+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');

@@ -35,3 +35,11 @@ test('Read-only status cannot refresh idle lifetime and start requires fresh aut
  await assert.rejects(f.sessions.validate(f.actor,sessionToken),e=>e.status===401);
  f.advance(1000);await assert.rejects(f.sessions.start(f.actor),e=>e.status===401);
 });
+
+test('Trailing activity reports extend expiry from the actual activity rather than heartbeat time',async()=>{
+ const f=fixture(),{sessionToken}=await f.sessions.start(f.actor);
+ f.advance(45000);await f.sessions.touch(f.actor,sessionToken,{activityLagMs:20000});
+ assert.equal(f.row().expiresAt,f.clock()-20000+IDLE_MS);
+ await assert.rejects(f.sessions.touch(f.actor,sessionToken,{activityLagMs:-1}),e=>e.status===400);
+ f.advance(IDLE_MS-20000);await assert.rejects(f.sessions.validate(f.actor,sessionToken),e=>e.status===401);
+});

@@ -6,7 +6,7 @@ import {onAuthStateChanged,signInWithEmailAndPassword,signOut,setPersistence,bro
 
 const $=id=>document.getElementById(id),state=new ReviewState();
 const IDLE_MS=300000,STORAGE_KEY='teyza-admin-idle-v1';
-let sessionToken=null,lastActivity=0,lastTouch=0,touching=false,closing=false,loginPending=false;
+let sessionToken=null,lastActivity=0,lastTouch=0,lastSentActivity=0,touching=false,closing=false,loginPending=false;
 const rawApi=createApi({user:()=>auth.currentUser,adminSession:()=>sessionToken||undefined});
 const idleExpired=()=>!lastActivity||Date.now()<lastActivity||Date.now()-lastActivity>=IDLE_MS;
 const api=async(action,data)=>{
@@ -41,14 +41,14 @@ function persistSession(){
 }
 function clearWorkspace(){
   operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;resetDetails();$('sellerList').replaceChildren();
-  $('sectionSearch').value='';filterSections();$('workspace').hidden=true;$('loginPanel').hidden=false;
+  $('sectionSearch').value='';$('search').value='';for(const id of ['sellerTitle','sellerCategory','submittedAt','sellerEmail','sellerPhone','sellerAddress','sellerCompany','sellerStatus','complianceFollowup'])set(id,'—');$('claimMapLink').removeAttribute('href');$('complianceList').replaceChildren();$('sellerComplianceSummary').replaceChildren();filterSections();$('workspace').hidden=true;$('loginPanel').hidden=false;
   $('email').readOnly=false;$('password').value='';$('signOut').hidden=true;
   set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator email and password.');
 }
 async function logout(message='',kind='warning'){
   if(closing)return;closing=true;
   const revoke=sessionToken&&auth.currentUser?rawApi('admin_session_end').catch(()=>{}):Promise.resolve();
-  sessionToken=null;lastActivity=lastTouch=0;touching=false;persistSession();activeUser=null;clearWorkspace();window.scrollTo(0,0);
+  sessionToken=null;lastActivity=lastTouch=lastSentActivity=0;touching=false;persistSession();activeUser=null;clearWorkspace();window.scrollTo(0,0);
   if(message)notice(message,kind);
   try{await signOut(auth);}catch{notice('Your private workspace was cleared. Firebase sign-out could not be confirmed; close this tab before continuing.','error');}
   finally{closing=false;void revoke;}
@@ -62,11 +62,14 @@ function failed(error){
 function activity(event){
   if(!event.isTrusted||document.hidden||!authorised)return;
   if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
-  const now=Date.now(),token=sessionToken;
-  lastActivity=now;persistSession();
-  if(touching||now-lastTouch<30000)return;
+  lastActivity=Date.now();persistSession();flushActivity();
+}
+function flushActivity(){
+  if(!authorised||document.hidden||touching||idleExpired()||lastActivity<=lastSentActivity)return;
+  const now=Date.now(),token=sessionToken,reported=lastActivity;
+  if(now-lastTouch<30000||now-reported>60000)return;
   lastTouch=now;touching=true;
-  void rawApi('admin_session_touch').catch(error=>{if(token===sessionToken&&(error.status===401||error.status===403))failed(error);}).finally(()=>{if(token===sessionToken)touching=false;});
+  void rawApi('admin_session_touch',{activityLagMs:now-reported}).then(()=>{if(token===sessionToken)lastSentActivity=reported;}).catch(error=>{if(token===sessionToken&&(error.status===401||error.status===403))failed(error);}).finally(()=>{if(token===sessionToken)touching=false;});
 }
 const complianceLabels={
   identity:'Current ID, passport or company registration',
@@ -267,11 +270,11 @@ async function authorise(user,fresh=false){
       sessionToken=null;persistSession();
       const r=await rawApi('admin_session_start');if(!state.current(ticket))return;
       if(!/^[a-f0-9]{64}$/.test(r.sessionToken)||r.idleMs!==IDLE_MS)throw Error('Admin inactivity-session service is not available.');
-      sessionToken=r.sessionToken;lastActivity=lastTouch=Date.now();persistSession();
+      sessionToken=r.sessionToken;lastActivity=lastTouch=lastSentActivity=Date.now();persistSession();
     }else{
       const stored=savedSession(user);
       if(!stored){await logout('Sign in with your email and password to open Admin.');return;}
-      sessionToken=stored.token;lastActivity=stored.lastActivity;lastTouch=0;
+      sessionToken=stored.token;lastActivity=lastSentActivity=stored.lastActivity;lastTouch=0;
       if(idleExpired()){await logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
       const r=await rawApi('admin_session_status');if(!state.current(ticket))return;
       if(r.active!==true)throw Error('Admin session could not be verified.');
@@ -326,11 +329,11 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('pagehide',()=>{state.generation++;clearViews();operations.clear();});
 window.addEventListener('pageshow',event=>{if(event.persisted&&auth.currentUser&&!closing)void authorise(auth.currentUser);});
-setInterval(()=>{if(!authorised)return;if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}updateControls();},1000);
+setInterval(()=>{if(!authorised)return;if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}flushActivity();updateControls();},1000);
 try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your browser could not save this sign-in session. Allow site storage for teyza.co.za.','warning');}
 onAuthStateChanged(auth,user=>{
   if(closing||loginPending)return;
   if(user&&authorised&&user.uid===activeUser?.uid)return;
   if(user){void authorise(user);return;}
-  sessionToken=null;lastActivity=lastTouch=0;touching=false;activeUser=null;persistSession();clearWorkspace();
+  sessionToken=null;lastActivity=lastTouch=lastSentActivity=0;touching=false;activeUser=null;persistSession();clearWorkspace();
 });

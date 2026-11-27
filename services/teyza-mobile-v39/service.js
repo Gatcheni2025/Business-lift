@@ -247,7 +247,7 @@ function createService({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,getA
     const uid=D.id(auth.uid);
     if(action==='admin_session_start')return adminSessions.start(auth);
     if(action==='admin_session_end')return adminSessions.end(auth,adminSession);
-    if(action==='admin_session_touch')return adminSessions.touch(auth,adminSession);
+    if(action==='admin_session_touch')return adminSessions.touch(auth,adminSession,data);
     if(adminSession!==undefined||action==='admin_session_status'){
       auth=await adminSessions.validate(auth,adminSession);
       if(action==='admin_session_status')return {active:true};

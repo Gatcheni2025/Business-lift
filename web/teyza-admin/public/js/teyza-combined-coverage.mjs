@@ -113,7 +113,7 @@ export function attachAreaAutocomplete(input,{api,onSelect=()=>{},onEdit=()=>{},
  input.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!menu.hidden){e.preventDefault();e.stopPropagation();close();return;}
   if(menu.hidden||!buttons.length)return;
-  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();index=(index+(e.key==='ArrowDown'?1:buttons.length-1)+buttons.length)%buttons.length;buttons.forEach((b,i)=>b.classList.toggle('highlighted',i===index));return;}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();index=index<0?(e.key==='ArrowDown'?0:buttons.length-1):(index+(e.key==='ArrowDown'?1:buttons.length-1)+buttons.length)%buttons.length;buttons.forEach((b,i)=>b.classList.toggle('highlighted',i===index));return;}
   if(e.key==='Enter'&&index>=0){e.preventDefault();e.stopImmediatePropagation();buttons[index].click();}
  },{capture:true});
  return {selected,suggest,clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
