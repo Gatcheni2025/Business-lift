@@ -4,14 +4,33 @@ on:
     paths:
       - '.github/workflows/teyza-defender-source-review.yml'
       - 'docs/TEYZA_DEFENDER_AND_STORE_REVIEW.md'
+      - 'docs/TEYZA_PAY_OPERATOR_SOURCE_APPROVAL_20261110.json'
+      - 'web/app-first/public/js/seller-web-billing.mjs'
+      - 'web/app-first/public/pay.html'
+      - 'web/app-first/public/pay/index.html'
+      - 'services/teyza-mobile-v39/billing-paystack.test.js'
+      - 'tools/app-first-release/seller-web-billing.test.cjs'
+      - 'scripts/package_teyza_seller_security_candidate.py'
+      - 'scripts/audit_teyza_seller_security_candidate.py'
   workflow_dispatch:
+    inputs:
+      review_mode:
+        description: 'Select current candidate or original reported samples'
+        type: choice
+        required: true
+        options:
+          - current
+          - historical
+        default: current
 permissions:
   contents: read
   actions: read
 jobs:
   defender_source_scan:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      REVIEW_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.review_mode == 'historical' && 'historical' || 'current' }}
     steps:
       - name: Check the hosted runner has active Defender
         shell: pwsh
@@ -57,9 +76,16 @@ jobs:
         run: |
           git config --global core.autocrlf false
           if ($LASTEXITCODE -ne 0) { throw 'Could not configure exact checkout bytes.' }
-      - name: Check out only the three files for review
+      - name: Check out current candidate without persisted credentials
+        if: env.REVIEW_MODE == 'current'
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
+      - name: Check out only the original three historical samples
+        if: env.REVIEW_MODE == 'historical'
+        uses: actions/checkout@v4
+        with:
+          ref: f48a9576b9f43310acb7a0d783ea4118f19700e5
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -71,11 +97,19 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $start = (Get-Date).AddMinutes(-10)
+          if ($env:REVIEW_MODE -eq 'historical') {
           $samples = @(
             @{ Path = 'web/app-first/public/js/seller-web-billing.mjs'; Sha256 = '82F8E042D9346A34AB410FBE75F858A32C71BA8C190E3B44BC9E243F4D07506E' },
             @{ Path = 'services/teyza-mobile-v39/billing-paystack.test.js'; Sha256 = '0A348D6373F61EF4A222FD217813DEA9ED31F14B105F6FFBC9588534E0A19EF3' },
             @{ Path = 'tools/app-first-release/seller-web-billing.test.cjs'; Sha256 = '72D6C4A1C4B57DC34AAB2C9DEDDEFA8AC7AECB32D0B592995C83EBF9D8411BAB' }
           )
+          } elseif ($env:REVIEW_MODE -eq 'current') {
+            $samples = @(
+              @{ Path = 'web/app-first/public/js/seller-web-billing.mjs'; Sha256 = 'b7c13588efb5b43836723e4b1eb2227e3246076e6938aca8200714261f0eee17' },
+              @{ Path = 'services/teyza-mobile-v39/billing-paystack.test.js'; Sha256 = 'e873e4cd84af19f960b4b8f53e117a4b28d9947b4211cf27ddae110668805a8a' },
+              @{ Path = 'tools/app-first-release/seller-web-billing.test.cjs'; Sha256 = '2ee5b888ffc3fbcebe9f77afaa454f32e1570e7215d82fa57c706610ce53d777' }
+            )
+          } else { throw 'Unknown review mode.' }
           foreach ($sample in $samples) {
             $path = Join-Path $env:GITHUB_WORKSPACE $sample.Path
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -83,7 +117,7 @@ jobs:
             }
             $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
             if ($actual -ne $sample.Sha256) {
-              throw ('File differs from the reported sample: ' + $sample.Path + ' SHA-256 ' + $actual)
+              throw ('File differs from the pinned review sample: ' + $sample.Path + ' SHA-256 ' + $actual)
             }
             Write-Host ('Scanning exact sample: ' + $sample.Path)
             Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
@@ -102,8 +136,21 @@ jobs:
             throw 'Defender recorded a recent threat on this runner. Review the result; do not release.'
           }
           Write-Host 'No recent Defender detection was recorded for this source scan.'
-          Write-Host 'This does not scan the original ZIP and is not a Microsoft analyst verdict or release authorization.'
-      - name: Scan the exact reported GitHub artifact without extracting it
+          Write-Host 'Source scan is not a Microsoft analyst verdict or release authorization.'
+      - uses: actions/setup-python@v5
+        if: env.REVIEW_MODE == 'current'
+        with:
+          python-version: '3.12'
+      - name: Build and audit current source-only candidate
+        if: env.REVIEW_MODE == 'current'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/package_teyza_seller_security_candidate.py
+          if ($LASTEXITCODE -ne 0) { throw 'Security candidate packaging failed.' }
+          python scripts/audit_teyza_seller_security_candidate.py
+          if ($LASTEXITCODE -ne 0) { throw 'Exact-source security audit failed.' }
+      - name: Scan the selected archive without extracting or executing it
         shell: pwsh
         env:
           GH_READ_TOKEN: ${{ github.token }}
@@ -121,16 +168,22 @@ jobs:
             Write-Host 'Enabled archive scanning on the disposable runner.'
           }
           $start = (Get-Date).AddMinutes(-10)
-          $path = Join-Path $env:RUNNER_TEMP 'reported-teyza-artifact.zip'
-          $url = 'https://api.github.com/repos/Gatcheni2025/Business-lift/actions/artifacts/13510067984/zip'
-          $headers = @{ Authorization = "Bearer $env:GH_READ_TOKEN"; Accept = 'application/vnd.github+json' }
-          Invoke-WebRequest -Uri $url -Headers $headers -OutFile $path -ErrorAction Stop
+          if ($env:REVIEW_MODE -eq 'historical') {
+            $path = Join-Path $env:RUNNER_TEMP 'reported-teyza-artifact.zip'
+            $url = 'https://api.github.com/repos/Gatcheni2025/Business-lift/actions/artifacts/13510067984/zip'
+            $headers = @{ Authorization = "Bearer $env:GH_READ_TOKEN"; Accept = 'application/vnd.github+json' }
+            Invoke-WebRequest -Uri $url -Headers $headers -OutFile $path -ErrorAction Stop
+            $expected = '5EF2FDD15A8A89CCBF9A0098DA774445EEAAC1DC25E8389689779476BD3535ED'
+          } elseif ($env:REVIEW_MODE -eq 'current') {
+            $path = Join-Path $env:GITHUB_WORKSPACE 'dist/TEYZA_SELLER_SECURITY_REVIEW_CANDIDATE_20261106.zip'
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Current audited archive unavailable.' }
+            $expected = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+          } else { throw 'Unknown review mode.' }
           if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw 'The original artifact was unavailable or quarantined. No clean archive result.'
+            throw 'Selected archive unavailable or quarantined. No clean archive result.'
           }
-          $expected = '5EF2FDD15A8A89CCBF9A0098DA774445EEAAC1DC25E8389689779476BD3535ED'
           if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
-            throw 'The downloaded artifact does not match GitHub metadata. No archive scan was performed.'
+            throw 'Archive hash differs from expected evidence. No scan performed.'
           }
           Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
           $detections = @(Get-MpThreatDetection | Where-Object {
@@ -140,7 +193,10 @@ jobs:
             $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
             throw 'Defender detected or removed a review item. The archive is not cleared.'
           }
-          Write-Host 'Defender recorded no recent detection for the original GitHub artifact.'
+          if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
+            throw 'Archive changed during scan.'
+          }
+          Write-Host ('Defender recorded no recent detection for ' + $env:REVIEW_MODE + ' archive; SHA256: ' + $expected)
           Write-Host 'A nested archive may be treated differently across Defender configurations. An analyst verdict is still required.'
       - name: Report recent Defender detections when review stops
         if: failure()
