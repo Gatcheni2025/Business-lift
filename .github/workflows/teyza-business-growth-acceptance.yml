@@ -1,0 +1,30 @@
+name: Teyza Business Growth synthetic acceptance
+on:
+  push:
+    branches: ['audit/teyza-business-growth-acceptance-20261127']
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix tools/admin-release
+      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix services/teyza-mobile-v39
+      - run: npx playwright install --with-deps chromium
+        working-directory: tools/admin-release
+      - name: Check isolated acceptance preview and capture actual candidate screens
+        env:
+          TEYZA_ADMIN_TEST_OUTPUT: acceptance-previews
+        run: node tools/admin-release/business-growth-preview.cjs --check
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: teyza-business-growth-acceptance
+          path: acceptance-previews/*.png
+          if-no-files-found: warn
+          retention-days: 14
