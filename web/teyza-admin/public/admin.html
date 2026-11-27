@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en-ZA"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#00545B">
+<meta name="teyza-admin-release" content="R335-local-vector-map">
+<title>Teyza Admin | Marketplace operations</title>
+<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/assets/teyza-app-admin.css?v=20261127-contact-first">
+<link rel="stylesheet" href="/assets/teyza-map-first.css?v=20261126-communications"></head><body>
+<svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+ <symbol id="icon-overview" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5v9a1 1 0 0 1-1 1h-5.2v-6.2H9.7v6.2H4.5a1 1 0 0 1-1-1z"/></symbol>
+ <symbol id="icon-review" viewBox="0 0 24 24"><path d="M7 4.5h10l2 2v13H5v-15zM8.2 10l2.2 2.2 4.8-4.8M8 16h8"/></symbol>
+ <symbol id="icon-sellers" viewBox="0 0 24 24"><path d="M4 9.2h16M5 9v10.5h14V9M3.5 9l2-5h13l2 5a3 3 0 0 1-4 1.5 3.1 3.1 0 0 1-4.5 0 3.1 3.1 0 0 1-4.5 0 3 3 0 0 1-4-1.5zM9 19v-5h6v5"/></symbol>
+ <symbol id="icon-billing" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17M7 15h4"/></symbol>
+ <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.8 19c.2-3.1 2-5 5.2-5s5 1.9 5.2 5zM16 6a2.8 2.8 0 0 1 0 5.5M16.5 14c2.4.3 3.6 2 3.7 4.4"/></symbol>
+ <symbol id="icon-support" viewBox="0 0 24 24"><path d="M4 16v-4a8 8 0 0 1 16 0v4M4 12H3v4h3v-4zM20 12h1v4h-3v-4zM18.5 18c-1.3 1.5-3 2-5 2"/></symbol>
+ <symbol id="icon-finance" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 17v-4M11.8 17V9M17 17V5M5 10l5-3 4 1 5-4"/></symbol>
+ <symbol id="icon-field" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3"/><path d="M5.5 20v-1.5c0-3 2.4-5.3 5.5-5.3h2c3.1 0 5.5 2.3 5.5 5.3V20z"/></symbol>
+ <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></symbol>
+</svg>
+<header class="topbar"><a href="/" class="brand"><img class="admin-wordmark" src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="148" height="48"><span><b>Admin</b><small>Marketplace operations</small></span></a>
+<div class="account"><div class="account-identity"><small>TEYZA OPERATIONS</small><span id="accountEmail">Secure seller review</span></div><div class="session" id="activeSession" hidden><span id="sessionTime">Review session</span><button id="renewSession" class="button quiet small">Renew session</button></div><button id="signOut" class="button quiet small" hidden>Sign out</button></div></header>
+<main class="shell">
+ <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+ <section id="loginPanel" class="login-panel">
+  <div class="login-intro"><span class="login-brand"><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="196" height="57"></span><span class="eyebrow">NATIONAL MARKETPLACE OPERATIONS</span><h2>Local businesses.<br>One powerful view.</h2><p>Manage verified shops and businesses, coordinate field teams and review marketplace activity across South Africa.</p><div class="login-scope" aria-label="Admin workspaces"><span><svg aria-hidden="true"><use href="#icon-sellers"></use></svg>Business accounts</span><span><svg aria-hidden="true"><use href="#icon-field"></use></svg>Agents &amp; field team</span><span><svg aria-hidden="true"><use href="#icon-billing"></use></svg>Finance &amp; payments</span><span><svg aria-hidden="true"><use href="#icon-support"></use></svg>Support &amp; reviews</span></div><div class="intro-foot">Shops · Manufacturers · Product sellers · Services</div></div>
+  <div class="login-form"><h2 id="loginTitle">Welcome back</h2><p id="loginHint">Use your authorised administrator account.</p>
+   <button id="googleLogin" class="button google" type="button"><span aria-hidden="true">G</span> Continue with Google</button><div class="divider">or continue with email</div>
+   <form id="emailLogin"><label>Email address<input id="email" type="email" autocomplete="username" required placeholder="you@teyza.co.za"></label>
+    <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+    <button id="loginButton" class="button primary full" type="submit">Sign in to Admin <span aria-hidden="true">→</span></button></form>
+   <p class="footnote">Administrator access is assigned by the Teyza project owner. Seller accounts cannot approve shops.</p>
+  </div>
+ </section>
+ <section id="workspace" hidden><div class="dashboard-layout">
+ <aside class="dashboard-sidebar" aria-label="Workspace navigation">
+  <div class="sidebar-intro"><span class="sidebar-kicker">WORKSPACE</span><strong>Marketplace control room</strong><span>Shops, businesses &amp; field teams</span></div>
+  <label class="nav-search" for="sectionSearch"><svg aria-hidden="true"><use href="#icon-search"></use></svg><span class="sr-only">Find an admin section</span><input id="sectionSearch" type="search" placeholder="Find a section" autocomplete="off"></label>
+  <p class="nav-hint">WORKSPACE</p>
+  <nav id="adminNavigation" class="admin-nav" aria-label="Admin workspaces">
+   <button type="button" data-admin-view="overview" data-keywords="dashboard home summary reports" disabled><svg aria-hidden="true"><use href="#icon-overview"></use></svg><span>Operations overview</span></button>
+   <button type="button" hidden data-admin-view="approvals" data-keywords="approvals pending id identity selfie registration" disabled><svg aria-hidden="true"><use href="#icon-review"></use></svg><span>Business verification queue</span></button>
+   <button type="button" data-admin-view="map" data-keywords="map national coverage google spaza registered businesses locations home" disabled><svg aria-hidden="true"><use href="#icon-sellers"></use></svg><span>National coverage map</span></button>
+   <button type="button" data-admin-view="acquisition" data-keywords="business acquisition crm prospects consent onboarding follow-up durban johannesburg township" disabled><svg aria-hidden="true"><use href="#icon-sellers"></use></svg><span>Business acquisition</span></button>
+   <button type="button" data-admin-view="sellers" data-keywords="shops products accounts documents exceptions" disabled><svg aria-hidden="true"><use href="#icon-sellers"></use></svg><span>Business accounts</span></button>
+   <button type="button" data-admin-view="products" data-keywords="ads advertising campaigns review approve reject creative products moderation" disabled><svg aria-hidden="true"><use href="#icon-review"></use></svg><span>Ads &amp; product reviews</span></button>
+   <button type="button" data-admin-view="billing" data-keywords="payment paystack bank r99 historic mandate subscription" disabled><svg aria-hidden="true"><use href="#icon-billing"></use></svg><span>Finance &amp; payments</span></button>
+   <button type="button" data-admin-view="users" data-keywords="people access shoppers account" disabled><svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Users &amp; access</span></button>
+   <button type="button" data-admin-view="whatsapp" data-keywords="whatsapp meta approval welcome authentication sender template messages" disabled><svg aria-hidden="true"><use href="#icon-support"></use></svg><span>WhatsApp delivery</span></button>
+   <button type="button" data-admin-view="support" data-keywords="whatsapp chat messages conversation inbox agents help requests cases" disabled><svg aria-hidden="true"><use href="#icon-support"></use></svg><span>Support inbox</span></button>
+   <button type="button" data-admin-view="finance" data-keywords="loan stock applications" disabled><svg aria-hidden="true"><use href="#icon-finance"></use></svg><span>Stock finance</span></button>
+   <button type="button" data-admin-view="field" data-keywords="agents employees hr applications areas" disabled><svg aria-hidden="true"><use href="#icon-field"></use></svg><span>Agents &amp; field team</span></button>
+  </nav><p id="sectionResults" class="nav-empty" role="status" hidden>No sections match. Try another term.</p>
+  <div class="sidebar-note"><span class="sidebar-note-mark" aria-hidden="true">✳</span><div><strong>Growing together</strong><p>See registered businesses, discover leads and coordinate field teams.</p></div></div>
+ </aside>
+ <div class="dashboard-main">
+<div id="operationsPanel"></div><div id="approvalView" hidden>
+  <button id="backToBusinessAccounts" type="button" class="button quiet">← Back to Business accounts</button>
+  <div class="workspace-title"><div><span class="eyebrow">REVIEW DESK</span><h2>One business approval, then free shop visibility</h2><p>Review the email, verified phone, ID or passport, selfie, shop-front photo and location in one final decision. An approved business is discoverable for free. An active verified membership separately unlocks selling or wholesaler advertising; individual products do not require admin approval.</p></div></div>
+  <div class="metrics"><article><span class="metric-label">Awaiting review · loaded</span><strong id="queueCount">0</strong><small>Current owner submissions</small></article><article><span class="metric-label">Spaza shops · loaded</span><strong id="spazaCount">0</strong><small>Serving local neighbourhoods</small></article><article><span class="metric-label">Other retail · loaded</span><strong id="retailCount">0</strong><small>Retail and wholesale owners</small></article></div>
+  <div class="review-layout">
+   <section class="panel queue-panel" aria-labelledby="queueTitle"><div class="panel-heading"><div><h3 id="queueTitle">Waiting for your review</h3><p>New and resubmitted owner photos.</p></div><button id="refreshQueue" class="button quiet small">Refresh</button></div>
+    <label class="search-label" for="search">Find a loaded seller<input id="search" type="search" placeholder="Shop, owner, phone or area"></label>
+    <label class="category-label" for="category">Shop category<select id="category"><option value="all">All shop types</option><option value="spaza">Spaza shops</option><option value="retail">Other retail / wholesale</option></select></label>
+    <p id="queueHint" class="footnote"></p><div id="sellerList" class="seller-list" aria-live="polite"></div><button id="loadMore" class="button quiet full" hidden>Load more sellers</button>
+   </section>
+   <section class="panel detail-panel" aria-labelledby="sellerTitle"><div id="emptyDetail" class="empty-detail"><div class="empty-mark" aria-hidden="true">✓</div><h3>Select a seller</h3><p>Open a shop to review its registration<br>and private verification photos.</p></div>
+    <div id="sellerDetail" hidden><p id="sellerComplianceSummary" class="seller-compliance-summary" role="status" aria-live="polite"></p><div class="detail-heading"><div><span class="eyebrow" id="sellerCategory">SHOP REGISTRATION</span><h2 id="sellerTitle"></h2><p id="submittedAt"></p></div><span class="status-pill" id="sellerStatus">Awaiting review</span></div>
+     <dl class="seller-facts"><div><dt>Owner email</dt><dd id="sellerEmail"></dd></div><div><dt>Mobile number</dt><dd id="sellerPhone"></dd></div><div><dt>Shop address</dt><dd id="sellerAddress"></dd></div><div><dt>Registration</dt><dd id="sellerCompany"></dd></div></dl>
+     <div id="claimReview" class="notice warning" hidden><strong>Google Maps business claim</strong><p>Check the listing and independently confirm that this applicant is authorised to manage the business on Teyza.</p><a id="claimMapLink" target="_blank" rel="noopener noreferrer">Open Google Maps listing ↗</a><label class="confirm-check"><input id="claimConfirmed" type="checkbox">I reviewed the listing and the applicant's authority to represent this business.</label></div>
+     <div id="selfReview" class="notice warning" hidden>Another administrator must review your own shop.</div>
+     <div class="section-title"><h3>Owner verification — part of final approval</h3><span>Private evidence</span></div><p class="evidence-note">Open the current document and selfie, then compare the owner's details. Photos are shown only in this review session.</p>
+     <div class="evidence-buttons"><button id="viewIdentity" class="evidence-button"><span class="step">01</span><span><strong id="identityLabel">ID / passport</strong><small id="identityState">Open document</small></span><span aria-hidden="true">↗</span></button><button id="viewSelfie" class="evidence-button"><span class="step">02</span><span><strong>Owner selfie</strong><small id="selfieState">Open photo</small></span><span aria-hidden="true">↗</span></button></div>
+     <button type="button" id="enlargePhoto" class="button quiet">Enlarge current image</button><div class="evidence-viewer"><p id="imageHint">Choose a document or selfie above.</p><img id="evidenceImage" alt="Private verification evidence" hidden></div>
+     <dl id="identityDetails" class="identity-details" hidden></dl>
+     <section class="compliance-check" aria-labelledby="complianceTitle"><h3 id="complianceTitle">Verification requirements</h3><p class="footnote">See the seller's current compliance status and what must be completed before approval.</p><ul id="complianceList" aria-live="polite"></ul><p id="complianceFollowup" class="footnote"></p></section>
+     <div class="review-decision"><h3>Final seller approval</h3><label class="confirm-check"><input id="reviewConfirmed" type="checkbox">I inspected the document and selfie and checked that they belong to this shop owner.</label>
+      <label>Recommendation for the seller<textarea id="reason" rows="3" maxlength="400" placeholder="Required when rejecting or requesting a new selfie. Explain what to correct and how to resubmit."></textarea></label>
+      <p id="decisionHint" class="notice warning" role="status">Open both photos to enable approval. Verified mobile registration is checked by the server.</p>
+      <div class="decision-buttons"><button id="approveSeller" class="button primary" disabled>Approve seller <span aria-hidden="true">✓</span></button><button id="requestCompliance" class="button quiet">Send missing requirements</button><button id="requestPhoto" class="button quiet">Request new selfie</button><button id="rejectSeller" class="button danger">Reject seller</button></div>
+      <p class="footnote">Once approved, the shop can appear nearby for free. A separate verified membership unlocks seller products or wholesaler advertising. Products publish automatically without individual admin approval.</p>
+     </div>
+    </div>
+   </section>
+  </div>
+ </div></div></div></section>
+ <footer><img src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="86" height="27"><span>Local shops. Local businesses.</span><small>Admin · Secure operations</small></footer>
+</main><dialog id="photoDialog" class="photo-dialog"><div class="photo-toolbar"><strong>Private verification image</strong><button type="button" id="closePhoto" class="button quiet">Close</button></div><img id="largePhoto" alt="Enlarged private verification evidence"></dialog><script type="module" src="/js/teyza-app-admin.js?v=20261127-contact-first"></script></body></html>

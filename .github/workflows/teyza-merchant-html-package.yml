@@ -1,0 +1,38 @@
+name: Teyza Merchant HTML Package
+on:
+  push:
+    branches:
+      - feature/teyza-marketplace-foundation
+    paths:
+      - '.github/workflows/teyza-merchant-html-package.yml'
+      - 'merchant-marketplace.html'
+      - 'assets/merchant-marketplace.css'
+      - 'js/merchant-marketplace.js'
+      - 'dashboard.html'
+      - 'store.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package_merchant_portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble safe merchant HTML patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/teyza-merchant-html/assets dist/teyza-merchant-html/js
+          cp merchant-marketplace.html dashboard.html store.html dist/teyza-merchant-html/
+          cp assets/merchant-marketplace.css dist/teyza-merchant-html/assets/
+          cp js/merchant-marketplace.js dist/teyza-merchant-html/js/
+          printf '%s\n' 'TEYZA merchant HTML patch (development branch only)' 'These HTML files are NOT a standalone PHP/Firebase backend.' 'merchant-marketplace.html is a merchant-only portal, linked from dashboard.html and store.html.' 'Deploy to a Firebase STAGING origin only after supplying staging Firebase config and service Functions.' 'Never overwrite your live customer site or PHP endpoints with this patch without merging/reconciling the current site version.' > dist/teyza-merchant-html/README-FIRST.txt
+          (cd dist && zip -r -q ../teyza-merchant-html-patch.zip teyza-merchant-html)
+      - name: Upload merchant HTML patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-merchant-html-patch
+          path: teyza-merchant-html-patch.zip
+          retention-days: 14

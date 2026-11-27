@@ -31,21 +31,25 @@ async function openVerificationFile(uid,type='proof'){
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
-function approvalReady(v){
-  return Boolean(v.phoneVerified&&v.identityVerified&&v.locationConfirmed&&v.proofOfAddressUploaded&&v.proofAddressMatchVerified);
+function approvalReady(v,category){
+  return Boolean(v.phoneVerified&&v.identityVerified&&v.locationConfirmed&&(
+    category==="spaza"?v.shopPhotoUploaded:(v.proofOfAddressUploaded&&v.proofAddressMatchVerified)));
 }
 
 function render(list){
   box.innerHTML=list.length?list.map(s=>{
     const b=s.business||{},a=s.companyApproval||{},v=s.verification||{},proof=v.proofOfAddress||{};
-    const ready=approvalReady(v);
+    const category=s.sellerCategory==="retail"?"retail":"spaza";
+    const details=s.retailDetails||{};
+    const ready=!s.categorySelectionRequired && approvalReady(v,category) && (category==="spaza"||s.retailDetailsReady===true);
+    const route=s.categorySelectionRequired?"AWAITING SHOP TYPE":category==="spaza"?"PRIORITY · SPAZA":"RETAIL / WHOLESALE";
     const proofMatch=v.proofAddressMatchVerified?'Address matches ✓':v.proofAddressMatchStatus==='mismatch'?'Address mismatch':'Needs address review';
     const checklist=[
       ['Phone',v.phoneVerified],
       ['Identity',v.identityVerified],
       ['Map location',v.locationConfirmed],
-      ['Proof uploaded',v.proofOfAddressUploaded],
-      ['Proof matches map',v.proofAddressMatchVerified],
+      ...(category==="spaza"?[['Shop picture',v.shopPhotoUploaded]]:[
+        ['Proof uploaded',v.proofOfAddressUploaded],['Proof matches map',v.proofAddressMatchVerified]]),
     ].map(([label,done])=>`<span class="review-chip ${done?'done':'pending'}">${done?'✓':'○'} ${esc(label)}</span>`).join('');
     return `<article class="seller-card">
       <div class="seller-main">
@@ -53,19 +57,24 @@ function render(list){
           ${b.logoUrl?`<img class="seller-logo" src="${esc(b.logoUrl)}" alt="">`:'<div class="seller-logo seller-logo-empty">T</div>'}
           <div><h2>${esc(b.businessName||'Unnamed business')}</h2><small>${esc(s.email||'')}</small></div>
         </div>
-        <div class="seller-meta"><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
+        <div class="seller-meta"><span class="pill">${esc(route)}</span><span class="pill">Profile ${b.profileComplete?'complete':'incomplete'}</span><span class="pill">Verification ${Number(v.completed||0)}/4</span><span class="pill approval-${esc(a.status||'pending')}">${esc(a.status||'pending')}</span></div>
         <div class="review-checklist">${checklist}</div>
         <div class="address-review">
           <div><span>Confirmed map address</span><strong>${esc(v.location?.address||b.address||'Not confirmed')}</strong></div>
           <div><span>Proof uploaded for</span><strong>${esc(proof.addressAtUpload||'Not uploaded')}</strong></div>
           <div><span>Address review</span><strong class="${v.proofAddressMatchVerified?'ok':v.proofAddressMatchStatus==='mismatch'?'bad':'wait'}">${esc(proofMatch)}</strong></div>
         </div>
+        ${category==="retail"?
+          `<div class="address-review"><div><span>Retail type</span><strong>${esc(details.retailKind||"Not supplied")}</strong></div><div><span>Business structure</span><strong>${esc(details.legalStructure||"Not supplied")}</strong></div><div><span>Registration</span><strong>${esc(details.registrationNumber||"Sole trader / not supplied")}</strong></div></div>`:''}
         ${b.about?`<p class="seller-about">${esc(b.about)}</p>`:''}
-        ${!ready?'<p class="approval-note">Company approval stays locked until phone, identity, map location and proof-of-address checks are complete.</p>':''}
+        ${!ready?`<p class="approval-note">${category==="retail"?
+          "Retail business details, phone, identity, map address and proof-of-address checks must all be complete.":
+          "Priority Spaza review: verify phone, ID/face photo, shop address and shop picture. Company registration and proof of address are optional."}</p>`:''}
       </div>
       <div class="seller-actions">
         ${v.proofOfAddressUploaded?`<button class="button" data-view-proof data-uid="${esc(s.uid)}">View proof of address</button><button class="button address-ok" data-address-match="true" data-uid="${esc(s.uid)}">✓ Address matches map</button><button class="button" data-address-match="false" data-uid="${esc(s.uid)}">Address mismatch</button>`:''}
         ${v.identitySubmitted&&!v.identityVerified?'<button class="button" data-identity-decision="verified" data-uid="'+esc(s.uid)+'">Verify identity</button><button class="button" data-identity-decision="rejected" data-uid="'+esc(s.uid)+'">Reject identity</button>':''}
+        ${category==="spaza"?`<button class="button" data-mandate-setup data-uid="${esc(s.uid)}">Assign R99 debit-order link</button>`:''}
         <button class="button button-primary" data-decision="approved" data-uid="${esc(s.uid)}" ${ready?'':'disabled title="Complete all verification checks first"'}>Approve seller</button>
         <button class="button" data-decision="rejected" data-uid="${esc(s.uid)}">Reject seller</button>
       </div>
@@ -98,6 +107,19 @@ box.addEventListener('click',async e=>{
     const note=identity.dataset.identityDecision==='rejected'?prompt('Reason identity verification was rejected:','')||'':'';
     identity.disabled=true;
     try{await api('admin-identity',{method:'POST',body:JSON.stringify({uid:identity.dataset.uid,status:identity.dataset.identityDecision,note})});await load()}catch(x){alert(x.message)}finally{identity.disabled=false}
+    return;
+  }
+  const mandate=e.target.closest('[data-mandate-setup]');
+  if(mandate){
+    const url=prompt('Paste a UNIQUE seller-specific HTTPS mandate link generated by your approved debit-order provider. The domain must be in TEYZA_MANDATE_ALLOWED_HOSTS:');
+    if(!url)return;
+    mandate.disabled=true;
+    try{
+      await api('admin-debit-order-link',{method:'POST',body:JSON.stringify({uid:mandate.dataset.uid,url:url.trim()})});
+      alert('The secure mandate link is saved. It does not mean payment has been received or the listing activated.');
+      await load();
+    }catch(x){alert(x.message)}
+    finally{mandate.disabled=false}
     return;
   }
   const b=e.target.closest('[data-decision]');

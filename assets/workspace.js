@@ -1,7 +1,18 @@
 (() => {
  document.body.classList.add('dashboard-contrast');
  document.title=document.title.replace(/Business Expo/gi,'Teyza');
- document.querySelectorAll('.workspace-brand').forEach(brand=>{brand.innerHTML='<span class="teyza-logo-mark"><span>T</span></span><span class="teyza-word">TEYZA<small>Everyone can sell.</small></span>';});
+ // The approved growing-Y logo must not be overwritten with the old plain T.
+ document.querySelectorAll('.workspace-brand').forEach(brand=>{
+   brand.replaceChildren();
+   brand.setAttribute('aria-label','TEYZA seller home');
+   const img=document.createElement('img');
+   img.className='workspace-sprout-wordmark';
+   img.alt='TEYZA';
+   img.src='assets/teyza-sprout-wordmark-light.svg?v=full-r3';
+   img.width=155;
+   img.height=45;
+   brand.appendChild(img);
+ });
  document.querySelectorAll('.sidebar-footer>small,.workspace-footer>span').forEach(el=>el.textContent='TEYZA · Everyone can sell.');
  document.querySelectorAll('p,h1,h2,h3,small,span').forEach(el=>{if(el.children.length===0&&/Business Expo/i.test(el.textContent))el.textContent=el.textContent.replace(/Business Expo/gi,'Teyza');});
  const sidebar=document.getElementById('sidebar');
@@ -67,3 +78,11 @@
   }
  }
 })();
+
+// Load the simplified Teyza local shop navigation (no external channel setup).
+if (!document.querySelector('script[data-shop-first]')) {
+ const script=document.createElement('script');script.src='assets/shop-first-workspace.js?v=1';script.dataset.shopFirst='1';document.body.append(script);
+}
+if (!document.querySelector('link[data-shop-first]')) {
+ const link=document.createElement('link');link.rel='stylesheet';link.href='assets/shop-first-workspace.css?v=1';link.dataset.shopFirst='1';document.head.append(link);
+}

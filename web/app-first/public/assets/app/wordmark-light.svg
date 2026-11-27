@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 370" role="img" aria-labelledby="title desc"><title id="title">TEYZA</title><desc id="desc">TEYZA wordmark with a growing green and golden Y-shaped flower</desc><defs>
+<linearGradient id="teal" x1="0" y1="0" x2=".28" y2="1"><stop stop-color="#087780"/><stop offset="1" stop-color="#003A46"/></linearGradient>
+<linearGradient id="stem" x1="0" y1="0" x2=".73" y2="1"><stop stop-color="#C2EE37"/><stop offset=".48" stop-color="#62C32D"/><stop offset="1" stop-color="#078553"/></linearGradient>
+<linearGradient id="leaf" x1="0" y1="0" x2="1" y2=".85"><stop stop-color="#ADE929"/><stop offset=".48" stop-color="#55C02B"/><stop offset="1" stop-color="#087D4B"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2=".45" y2="1"><stop stop-color="#FFE136"/><stop offset=".49" stop-color="#FFB31C"/><stop offset="1" stop-color="#F66A1D"/></linearGradient>
+<linearGradient id="square" x1="0" y1="0" x2=".95" y2="1"><stop stop-color="#087B80"/><stop offset="1" stop-color="#00404D"/></linearGradient>
+</defs><g fill="#FFFFFF">
+<path d="M38 130H200C220 130 233 143 233 161V163C233 181 219 195 199 195H145V303C145 329 133 344 112 344H103C82 344 70 329 70 303V195H38C18 195 7 181 7 163V161C7 143 19 130 38 130Z"/>
+<path d="M280 130H437C458 130 470 145 470 161C470 181 457 194 436 194H344V211H425C444 211 455 224 455 242C455 261 442 273 424 273H344V280H439C459 280 472 294 472 313C472 332 457 345 437 345H277C257 345 244 333 244 313V163C244 142 257 130 280 130Z"/>
+<path d="M822 130H963C988 130 1002 143 1002 162C1002 175 996 185 985 196L901 278H964C986 278 1000 292 1000 311C1000 332 987 345 965 345H793C770 345 758 331 758 314C758 301 762 293 775 280L863 195H822C801 195 788 182 788 163C788 143 800 130 822 130Z"/>
+<path fill-rule="evenodd" d="M1068 345C1041 345 1027 327 1036 302L1097 158C1106 137 1119 130 1139 130H1164C1182 130 1198 138 1206 158L1270 299C1282 324 1268 345 1246 345H1222C1205 345 1197 339 1188 322L1179 305H1118L1110 325C1105 340 1095 345 1078 345Z M1135 253H1165L1151 213Z"/>
+</g><g aria-label="Growing Y flower and leaves">
+<path d="M485 21C555 24 619 55 632 173C593 164 551 143 524 108C505 80 501 43 485 21Z" fill="url(#leaf)"/>
+<path d="M486 21C548 47 597 111 628 171C581 159 535 122 520 85Z" fill="#BDF02D" opacity=".28"/>
+<path d="M508 34C564 65 604 109 628 164" fill="none" stroke="#136D47" stroke-width="4" stroke-linecap="round" opacity=".3"/>
+<path d="M629 171C633 110 656 66 698 42C730 23 762 18 790 22C753 62 737 117 684 154C661 171 644 197 641 220Z" fill="url(#sun)"/>
+<path d="M655 146C681 86 731 42 790 22C737 59 701 118 648 186Z" fill="#FFE86B" opacity=".3"/>
+<path d="M649 179C678 123 723 61 773 35" stroke="#FFE887" stroke-width="4" fill="none" opacity=".44"/>
+<path d="M558 140C585 158 606 174 625 205C639 224 643 245 644 276V305C644 332 628 346 605 346H586C560 346 545 327 545 303V233C543 194 523 165 495 137C529 145 543 148 558 140Z" fill="url(#stem)"/>
+<path d="M541 164C589 183 619 236 620 329C608 338 594 343 579 343C586 290 569 219 541 164Z" fill="#007B55" opacity=".18"/>
+</g></svg>

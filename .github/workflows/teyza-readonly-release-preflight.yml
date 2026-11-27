@@ -1,0 +1,57 @@
+name: Teyza read-only release preflight
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/teyza-readonly-release-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production_health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check production mobile service without credentials or writes
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          url = 'https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  health = json.load(response)
+          except Exception as error:
+              raise SystemExit('Production health could not be read: ' + str(error))
+          print('Service:', health.get('service'), '| Version:', health.get('version'))
+          required_true = ('verificationUploads','shopFrontPhotos','approvalRequired',
+              'shopLocations','addressAutocomplete','shopServices','orderQuotes',
+              'orderInboxAlways','accountDeletion','accountDeletionAuthLock',
+              'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery',
+              'freeSellerPlans','paidAreaVisibility','wholesaleSourcing',
+              'protectedWholesalePrices','chatModeration','shopperDeletionProfileClear',
+              'appleRevocationServer','onceOnlyShopperIdentity','twoWayChatNotifications',
+              'wholesaleConnections','adminUsers','adminSellerDocuments',
+              'automaticProductPublication','adminComplimentaryAccess',
+              'paystackCheckoutAvailable','sellerApprovalBeforeCheckout',
+              'googlePlaceClaims','whatsappApprovalOptIn')
+          required_false = ('sevenDayTrial','strictSevenDayMembership',
+              'adminProductReview','agentCommissionEnabled')
+          required_exact = {'service':'teyza-mobile','version':'3.25.0',
+              'billingMode':'paystack_checkout','subscriptionMonthlyCents':9900,
+              'introductoryFirstMonthCents':4900,'promotionSevenDaysCents':2900}
+          required_min = {'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
+          failures = [f'{key}: expected true' for key in required_true if health.get(key) is not True]
+          if health.get('ok') is not True:
+              failures.append('ok: expected true')
+          failures += [f'{key}: expected false' for key in required_false if health.get(key) is not False]
+          failures += [f'{key}: expected {value!r}, got {health.get(key)!r}'
+              for key,value in required_exact.items() if health.get(key) != value]
+          failures += [f'{key}: expected at least {value}' for key,value in required_min.items()
+              if not isinstance(health.get(key), int) or isinstance(health.get(key), bool) or health[key] < value]
+          if failures:
+              for failure in failures:
+                  print('BLOCKED:', failure)
+              raise SystemExit('The current signed-release backend gate is not met. No changes were made.')
+          print('Backend health values match the current release gate.')
+          print('This public health check does not verify payment mode, webhooks, settlements, signing, or store policy.')
+          PY

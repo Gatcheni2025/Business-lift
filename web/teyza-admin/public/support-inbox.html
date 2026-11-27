@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Teyza | Support Agent Inbox</title>
+<meta name="theme-color" content="#00545B">
+<link rel="stylesheet" href="/assets/teyza-support-inbox.css?v=20261126-brand">
+</head>
+<body>
+<header class="topbar"><div class="brand"><img class="support-wordmark" src="/assets/teyza-sprout-wordmark.svg" alt="Teyza" width="146" height="44"><span><strong>Support Centre</strong><small>Marketplace operations</small></span></div>
+<div class="right"><span class="private">Private staff workspace</span><span id="identity"></span><button id="logout" hidden type="button">Sign out</button></div></header>
+<main>
+<section id="login" class="login-card">
+ <span class="eyebrow">STAFF ACCESS</span>
+ <h1>Help your community, one conversation at a time.</h1>
+ <p>Sign in with your authorised Teyza support-agent or administrator account. This inbox contains private business-owner messages.</p>
+ <button id="google" class="google" type="button">Continue with Google</button>
+ <form id="email-form"><label>Email address<input id="email" autocomplete="username" type="email" required></label>
+ <label>Password<input id="password" autocomplete="current-password" type="password" required></label>
+ <button type="submit">Sign in securely</button></form>
+ <p class="hint">Support access must be granted by the Teyza operator. Contact your administrator if your account is not authorised.</p>
+</section>
+<section id="workspace" class="workspace" hidden>
+ <div class="page-intro"><span class="eyebrow">AGENT WORKSPACE</span>
+ <h1>WhatsApp Support Inbox</h1>
+ <p>Conversations started by approved business owners on Teyza's Meta WhatsApp number. Refreshes automatically while this page is open.</p></div>
+ <div class="layout">
+  <aside class="queue">
+   <div class="queue-head"><div><h2>Conversations</h2><small id="queue-meta">Loading…</small></div><button id="refresh" type="button">Refresh</button></div>
+   <label class="search-label">Find a business<input id="search" type="search" placeholder="Search by business name or message" autocomplete="off"></label>
+   <div id="tickets" class="tickets" role="list" aria-live="polite"></div>
+   <button id="more" hidden type="button">Load more</button>
+  </aside>
+  <section class="conversation">
+   <div id="conversation-placeholder" class="placeholder"><span>💬</span><h2>Choose a conversation</h2><p>Select a WhatsApp chat to read messages and respond as Teyza Support.</p></div>
+   <div id="thread-panel" hidden>
+    <div class="thread-header"><div><h2 id="thread-title">Conversation</h2><p id="thread-meta"></p></div><span class="channel">WhatsApp</span></div>
+    <div id="thread" class="messages" role="log" aria-live="polite"></div>
+    <form id="reply-form" class="reply-form">
+     <label for="reply">Reply to this seller</label>
+     <textarea id="reply" rows="3" maxlength="1000" placeholder="Type a helpful reply…" required></textarea>
+     <p id="send-hint" class="send-hint">Replies are sent to the same WhatsApp chat when permitted by Meta.</p>
+     <div class="reply-actions"><span>Never ask for passwords, OTPs or payment details.</span><button id="send" type="submit">Send reply</button></div>
+    </form>
+   </div>
+  </section>
+ </div>
+ <p class="security">Only approved, opted-in sellers with an active WhatsApp support handoff appear here. Admin responses are submitted to Teyza's secure backend and sent by the WhatsApp worker. An API-accepted message is not proof of delivery.</p>
+</section>
+<div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+</main>
+<script type="module" src="/js/teyza-support-inbox.js"></script>
+</body></html>

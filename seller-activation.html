@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en-ZA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#003F4A"><meta name="robots" content="noindex,nofollow">
+<title>Activate Spaza Shop | TEYZA</title>
+<link rel="icon" href="assets/teyza-icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/spaza-onboarding.css?v=20261020spaza1">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3faf6;color:#003f4a;font:15px/1.6 Inter,system-ui,sans-serif}
+header{background:#003f4a;padding:18px max(18px,calc((100% - 1080px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}
+header img{display:block;width:150px;height:auto}header a{color:#dafce6;font-size:13px}
+main{max-width:900px;padding:38px 20px 76px;margin:auto}
+.intro{margin-bottom:25px}.intro h1{font-size:clamp(27px,4.4vw,42px);line-height:1.1;margin:11px 0}.intro p{color:#526e64;max-width:680px}
+.eyebrow{font-size:11px;font-weight:900;letter-spacing:1.3px;color:#0b9469}
+.card{background:#fff;border:1px solid #d8e9df;padding:26px;border-radius:22px;box-shadow:0 12px 35px #004c3010;margin-bottom:18px}
+.plan{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.price{font-size:35px;font-weight:900;white-space:nowrap}.price small{font-size:14px;color:#62786f}
+h2{font-size:19px;margin:0 0 12px}.muted{color:#567167}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:18px 0}
+.check{border-radius:12px;background:#f3f7f5;padding:12px 14px;font-size:13px;font-weight:700;color:#65746f}
+.check.done{background:#e3f6ea;color:#08714e}
+label.consent{display:flex;align-items:flex-start;gap:12px;padding:15px;background:#f6faf7;border-radius:14px;margin:21px 0;font-size:13px}
+label.consent input{width:21px;height:21px;flex-shrink:0}
+button,.btn{font:inherit;background:#079b65;border:0;color:#fff;border-radius:12px;padding:15px 20px;cursor:pointer;font-weight:800;text-decoration:none;display:inline-block}
+button:disabled{opacity:.55;cursor:not-allowed}.secondary{color:#035848;background:#e1f5ea}
+.status{padding:17px;border-radius:14px;margin:16px 0;background:#f0f7f2;border:1px solid #d6e8dc;white-space:pre-wrap}
+.status.error{background:#fff0ed;color:#8d3127;border-color:#ffcabd}
+.footer-note{font-size:12px;color:#60766b;line-height:1.7}
+@media(max-width:600px){.card{padding:18px}.checks{grid-template-columns:1fr}.plan{flex-wrap:wrap}}
+</style></head>
+<body><header><img src="assets/teyza-sprout-wordmark-light.svg" width="150" height="45" alt="TEYZA"><a href="dashboard.html">← Dashboard</a></header>
+<main><div class="intro"><span class="eyebrow">SPAZA SHOP · LISTING ACTIVATION</span>
+<h1>Activate your Spaza Shop</h1><p>One simple R99/month listing. Complete seller verification, then authorise your debit order through our approved payment provider. No card or bank details are collected on this Teyza page.</p></div>
+<section class="card"><div class="plan"><div><span class="eyebrow">BASIC LISTING</span><h2>Be found by customers near you</h2><p class="muted">Store details, location, directions and services. Product prices require a Plus subscription.</p></div><div class="price">R99 <small>/month</small></div></div>
+<div class="checks" data-checklist>
+<span class="check" data-check="business">○ Shop details</span>
+<span class="check" data-check="phone">○ Phone OTP</span>
+<span class="check" data-check="identity">○ ID/passport + face photo</span>
+<span class="check" data-check="location">○ Shop address</span>
+<span class="check" data-check="photo">○ Shop photo</span>
+<span class="check" data-check="approval">○ Teyza approval</span>
+</div>
+<a class="btn secondary" href="business-profile.html?setup=spaza">Edit verification details</a>
+<label class="consent"><input type="checkbox" data-listing-consent><span>I consent to Teyza displaying my approved shop name, photo and approximate business location publicly, and understand the Basic listing costs R99 every month until cancelled according to the mandate terms.</span></label>
+<button type="button" data-activate disabled>Request R99 debit-order activation →</button>
+<div class="status" data-activation-status role="status" aria-live="polite">Checking your shop and subscription status…</div>
+<div data-mandate-row hidden><a data-mandate-link class="btn" target="_blank" rel="noopener noreferrer">Open secure bank mandate →</a><p class="footer-note">On your bank mandate provider’s secure website, review the debit date, authorise the R99 monthly collection and retain your confirmation. Returning here does not activate a listing until the payment is independently verified.</p></div>
+</section>
+<section class="card"><h2>What happens next?</h2><p class="muted">Teyza reviews the face photo and identity document, confirms your phone and shop details, and supplies a secure debit-order setup link. Your shop appears to customers only after approval and confirmed payment.</p>
+<p class="footer-note">Your captured selfie is used for manual identity review; this flow does not claim automated biometric matching or liveness certification. If a payment provider link has not yet been configured, the page will show “Awaiting secure mandate link” rather than request banking information here.</p></section>
+</main>
+<script type="module" src="js/spaza-activation.js?v=20261020spaza1"></script></body></html>

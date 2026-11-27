@@ -1,41 +1,776 @@
-# GitHub displays manual workflow_dispatch controls only for workflows present
-# on the default branch. The actual Teyza release implementation remains on
-# feat/teyza-account-deletion-review-20261101 until the PR is reviewed.
-# Select that branch under "Use workflow from" before clicking "Run workflow".
 name: Teyza Android and iOS Release
+# PR runs only check compilation and are intentionally unsigned. Manually running
+# this workflow defaults to unsigned validation. Explicit signed_release=true
+# selects signed distribution and requires original secrets. On the default
+# branch, use the workflow branch selector to choose a reviewed release ref.
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'Teyza SIGNED QA preview' || github.event_name == 'workflow_dispatch' && inputs.signed_release && 'Teyza SIGNED distribution' || 'Teyza UNSIGNED PR preview' }} - ${{ github.ref_name }}
 
 on:
+  pull_request:
+    paths:
+      - 'apps/teyza_shopper/**'
+      - 'services/teyza-mobile-v39/**'
+      - 'firebase.teyza-mobile-v39.json'
+      - 'tools/seller-access/**'
+      - 'scripts/package_teyza_seller_access.py'
+      - '.github/workflows/teyza-mobile-release.yml'
   workflow_dispatch:
     inputs:
       upload_existing_ios_run:
-        description: 'Upload signed IPA from a previous signed run (otherwise leave empty)'
+        description: 'Upload the signed IPA from this successful run to Apple; skip rebuilding'
+        type: string
+        default: ''
+      expected_source_sha:
+        description: 'Optional exact source commit expected by the requestor'
         type: string
         default: ''
       signed_release:
-        description: 'Sign Android and iOS using existing store credentials'
+        description: 'SIGNED AAB + APK + IPA using existing Play/Apple keys; requires Firebase Teyza 3.26.0 with online-shopping controls'
+        type: boolean
+        default: false
+      qa_signing_only:
+        description: 'QA-only signed APK, AAB and IPA; latest backend not required; digital-membership purchases disabled; physical-goods payments depend on live server readiness; not a payment sandbox'
+        type: boolean
+        default: false
+      direct_mandate_qa:
+        description: 'Also build a signed direct-distribution Android QA APK with the R99 debit mandate. Never upload it to Google Play.'
+        type: boolean
+        default: false
+      direct_mandate_debug_qa:
+        description: 'Also build a DEBUG-signed Android-direct APK with the R99 mandate for local testing; never upload it to Play.'
         type: boolean
         default: false
       upload_to_testflight:
-        description: 'Upload signed iOS IPA to TestFlight after building'
+        description: 'Upload the SIGNED iOS IPA to TestFlight after successful checks (optional)'
         type: boolean
         default: false
       platforms:
         description: 'Platforms to prepare'
         type: choice
-        options:
-          - all
-          - android
-          - ios
+        options: [all, android, ios]
+        default: all
+  workflow_call:
+    inputs:
+      signed_release:
+        type: boolean
+        default: false
+      upload_to_testflight:
+        type: boolean
+        default: false
+      platforms:
+        type: string
         default: all
 
 permissions:
   contents: read
 
+concurrency:
+  group: teyza-mobile-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TEYZA_FACEBOOK_APP_ID: ${{ vars.TEYZA_FACEBOOK_APP_ID }}
+  TEYZA_FACEBOOK_CLIENT_TOKEN: ${{ secrets.TEYZA_FACEBOOK_CLIENT_TOKEN }}
+  APP: apps/teyza_shopper
+  TEYZA_FIREBASE_ANDROID_APP_ID: ${{ vars.TEYZA_FIREBASE_ANDROID_APP_ID }}
+  TEYZA_FIREBASE_IOS_APP_ID: ${{ vars.TEYZA_FIREBASE_IOS_APP_ID || '1:983479810697:ios:4aae4823892dd145db2458' }}
+  TEYZA_GOOGLE_WEB_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_WEB_CLIENT_ID }}
+  TEYZA_GOOGLE_IOS_CLIENT_ID: ${{ vars.TEYZA_GOOGLE_IOS_CLIENT_ID }}
+  TEYZA_GOOGLE_MAPS_ANDROID_KEY: ${{ secrets.TEYZA_GOOGLE_MAPS_ANDROID_KEY }}
+  TEYZA_GOOGLE_MAPS_IOS_KEY: ${{ secrets.TEYZA_GOOGLE_MAPS_IOS_KEY }}
+  TEYZA_IOS_BUNDLE_ID: ${{ vars.TEYZA_IOS_BUNDLE_ID || 'za.co.teyza.shopper' }}
+  SIGNING_MODE: ${{ inputs.signed_release && 'signed' || 'unsigned' }}
+  QA_SIGNING_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.qa_signing_only && 'true' || 'false' }}
+  TEYZA_DIRECT_MANDATE_QA: ${{ github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa && 'true' || 'false' }}
+  TEYZA_DIRECT_MANDATE_DEBUG_QA: ${{ github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa && 'true' || 'false' }}
+
 jobs:
-  choose-reviewed-branch:
-    runs-on: ubuntu-latest
+  upload_existing_ios:
+    if: github.event_name == 'workflow_dispatch' && inputs.upload_existing_ios_run != ''
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - name: Select the reviewed Teyza release branch
+      - uses: actions/checkout@v4
+      - name: Require a successful signed build from this release branch
+        uses: actions/github-script@v7
+        env:
+          SOURCE_RUN: ${{ inputs.upload_existing_ios_run }}
+        with:
+          script: |
+            if (!/^\d+$/.test(process.env.SOURCE_RUN)) throw new Error('Source run must be numeric');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: Number(process.env.SOURCE_RUN)});
+            if (run.event !== 'workflow_dispatch' || run.conclusion !== 'success' || run.head_branch !== context.ref.replace('refs/heads/', '') || run.path !== '.github/workflows/teyza-mobile-release.yml') {
+              throw new Error('Source must be a successful manual mobile release from this branch');
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-${{ inputs.qa_signing_only && 'qa-signed' || 'signed' }}
+          path: apple-upload
+          run-id: ${{ inputs.upload_existing_ios_run }}
+          github-token: ${{ github.token }}
+      - name: Verify IPA and upload to App Store Connect
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 apps/teyza_shopper/scripts/upload_testflight.py apple-upload
+
+  checks:
+    if: inputs.upload_existing_ios_run == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test signed QA preview isolation from production release gating
+        run: python3 scripts/test_teyza_signed_qa.py
+      - name: Test calendar-prorated seller billing release gate
+        run: python3 scripts/test_teyza_release_proration_gate.py
+      - name: Guard against duplicate Google Play version codes
+        run: python3 apps/teyza_shopper/scripts/test_play_version_code.py
+      - name: Declare release signing mode and reject contradictory TestFlight requests
+        env:
+          REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          TARGET_PLATFORMS: ${{ inputs.platforms }}
+        shell: bash
         run: |
-          echo "::error::The default-branch workflow is a safe launcher only. Select feat/teyza-account-deletion-review-20261101 under Use workflow from to execute the full signed release workflow."
-          exit 1
+          if [ -n "$EXPECTED_SOURCE_SHA" ] && [ "$GITHUB_SHA" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo '::error::The requested source commit changed. Signing stopped.'
+            exit 1
+          fi
+          echo "### Teyza build mode: $SIGNING_MODE" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$QA_SIGNING_ONLY" = true ]; then
+            if [ "$SIGNING_MODE" != signed ] || [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+              echo '::error::QA signing requires a manual signed_release=true request.'
+              exit 1
+            fi
+            echo 'Signed QA/TestFlight preview ONLY. This build still uses the existing production Firebase accounts/data; use dedicated test accounts. Digital-membership purchases stay disabled. Physical-goods payments depend on live server readiness; this is not a payment sandbox. NOT cleared for Play production or public distribution.' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$SIGNING_MODE" = signed ]; then
+            echo "This is a SIGNED production candidate. All existing backend health and billing checks still apply." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "This is an UNSIGNED code-validation preview. Its AAB and iOS archive are NOT ready for Play Console or TestFlight. Use Actions > Run workflow > signed_release=true to produce store artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$TEYZA_DIRECT_MANDATE_QA" = true ]; then
+             if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$SIGNING_MODE" != signed ] || [ "$QA_SIGNING_ONLY" != true ] || [ "$TARGET_PLATFORMS" != android ] || [ "$REQUEST_TESTFLIGHT" = true ] || [ "$TEYZA_DIRECT_MANDATE_DEBUG_QA" = true ]; then
+               echo '::error::Direct mandate APK is Android-only, manual, signed and QA-only; never combine with store/TestFlight production publishing.'
+               exit 1
+             fi
+             echo 'Direct-channel mandate APK will be uploaded as a SEPARATE QA artifact. It is NOT a Play Store AAB and still uses the existing production Firebase project; use dedicated test accounts.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$TEYZA_DIRECT_MANDATE_DEBUG_QA" = true ]; then
+            if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$SIGNING_MODE" != unsigned ] || [ "$QA_SIGNING_ONLY" = true ] || [ "$TARGET_PLATFORMS" != android ] || [ "$REQUEST_TESTFLIGHT" = true ]; then
+              echo '::error::Android-direct mandate DEBUG QA requires manual dispatch, signed_release=false, qa_signing_only=false, and platforms=android.'
+              exit 1
+            fi
+            echo 'Android-direct mandate DEBUG APK is only for side-loaded QA testing, not a Play bundle or distribution release. It uses production Firebase; use dedicated test accounts.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$SIGNING_MODE" != signed ]; then
+            echo '::error::TestFlight requires signed_release=true. Re-run manually with signed distribution enabled.'
+            exit 1
+          fi
+      - name: Read-only backend identity for QA-only signed preview
+        if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true
+        env:
+          REQUEST_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
+          TARGET_PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          if [ "$REQUEST_TESTFLIGHT" = true ] && [ "$TARGET_PLATFORMS" = android ]; then
+            echo '::error::TestFlight requires the iOS platform.'
+            exit 1
+          fi
+          python3 - <<'PY_QA'
+          import json, urllib.request
+          url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
+          with urllib.request.urlopen(url, timeout=30) as response:
+              health=json.load(response)
+          if health.get('ok') is not True or health.get('service') != 'teyza-mobile':
+              raise SystemExit('::error::QA signing still requires a responding Teyza backend. No Firebase resources were modified.')
+          print('QA-only signing against the unchanged Firebase project. Backend version:',
+                health.get('version','unknown'))
+          print('Digital-membership purchases stay disabled. Physical-goods payments depend on live server readiness; this is not a payment sandbox. Existing production Firebase data is NOT isolated.')
+          print('Do not use the QA binaries as production-ready or claim R324 seller approval is live.')
+          PY_QA
+      - name: Require authentic Meta Facebook login configuration for signed apps
+        if: env.SIGNING_MODE == 'signed'
+        shell: bash
+        run: |
+          if ! [[ "$TEYZA_FACEBOOK_APP_ID" =~ ^[0-9]{5,30}$ ]] || [ "${#TEYZA_FACEBOOK_CLIENT_TOKEN}" -lt 8 ]; then
+            echo '::error::Set TEYZA_FACEBOOK_APP_ID (Actions variable) and TEYZA_FACEBOOK_CLIENT_TOKEN (Actions secret), and verify the Facebook provider in Firebase/Meta before signed distribution.'
+            exit 1
+          fi
+      - name: Require mobile Maps SDK keys for signed Agent map release
+        if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
+        shell: bash
+        run: |
+          if [ "${{ inputs.platforms }}" != ios ] && [ -z "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" ]; then
+            echo '::error::Configure TEYZA_GOOGLE_MAPS_ANDROID_KEY with an Android package/certificate-restricted Maps SDK key.'
+            exit 1
+          fi
+          if [ "${{ inputs.platforms }}" != android ] && [ -z "$TEYZA_GOOGLE_MAPS_IOS_KEY" ]; then
+            echo '::error::Configure TEYZA_GOOGLE_MAPS_IOS_KEY with an iOS bundle-restricted Maps SDK key.'
+            exit 1
+          fi
+      - name: Require current seller service before a signed store build
+        if: env.SIGNING_MODE == 'signed' && inputs.qa_signing_only != true
+        env:
+          TEYZA_RELEASE_PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          python3 - <<'PY_GATE'
+          import os, urllib.request, json
+          from urllib.error import HTTPError, URLError
+          from scripts.teyza_release_proration_gate import validate_billing_health
+          url='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile'
+          try:
+              with urllib.request.urlopen(url,timeout=30) as response:
+                  health=json.load(response)
+          except (HTTPError, URLError, TimeoutError, ValueError) as error:
+              raise SystemExit('Firebase mobile health request failed: '+str(error))
+          required_true=('verificationUploads','shopFrontPhotos','approvalRequired',
+                         'shopLocations','addressAutocomplete','shopServices',
+                         'orderQuotes','orderInboxAlways','accountDeletion','accountDeletionAuthLock',
+                         'deletedUserReregister','shopperSavedAddresses','approvedFreeDiscovery','freeSellerPlans',
+                         'paidAreaVisibility','wholesaleSourcing','protectedWholesalePrices','chatModeration',
+                         'shopperDeletionProfileClear','appleRevocationServer','onceOnlyShopperIdentity',
+                         'twoWayChatNotifications','wholesaleConnections','adminUsers','adminSellerDocuments',
+                         'automaticProductPublication','adminComplimentaryAccess',
+                         'paystackCheckoutAvailable','sellerApprovalBeforeCheckout','googlePlaceClaims','whatsappApprovalOptIn',
+                         'physicalGoodsPaystack','sellerPaystackSubaccounts','sellerOnlineShoppingControls','onlineOrderPaymentReadiness')
+          required_false=('sevenDayTrial','strictSevenDayMembership','adminProductReview','agentCommissionEnabled')
+          required_min={'catalogueRevision':2,'catalogueProducts':378,'cataloguePhotos':96}
+          required_exact={'version':'3.26.0','billingMode':'paystack_checkout',
+                          'subscriptionMonthlyCents':9900,'promotionSevenDaysCents':2900}
+          failures=[]
+          failures.extend(field+' (expected true)' for field in required_true if health.get(field) is not True)
+          failures.extend(field+' (expected false)' for field in required_false if health.get(field) is not False)
+          failures.extend(field+' (unexpected value '+repr(health.get(field))+')'
+                          for field,expected in required_exact.items() if health.get(field)!=expected)
+          # Exact terms and calendar amount must agree with the live, SA-date-based
+          # prorated R99 contract; never bypass the guard or switch billing off.
+          failures.extend(validate_billing_health(health))
+          failures.extend(field+' (expected >='+str(minimum)+')' for field,minimum in required_min.items()
+                          if not isinstance(health.get(field),int) or isinstance(health.get(field),bool)
+                          or health[field]<minimum)
+          if os.environ.get('TEYZA_RELEASE_PLATFORMS','all')!='android' and not os.environ.get('TEYZA_FIREBASE_IOS_APP_ID'):
+              failures.append('GitHub Actions variable TEYZA_FIREBASE_IOS_APP_ID is empty')
+          if failures:
+              print('::error::Signed Teyza release prerequisites are not met:')
+              for failure in failures:
+                  print('::error::'+failure)
+              raise SystemExit('Deploy the latest scoped Teyza mobile service and configure missing Firebase native app variables. Do not bypass this release gate.')
+          print('Signed Teyza release preflight passed: expected Firebase service flags and native app variables verified.')
+          PY_GATE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test seller rules repair and private owner access in Firestore emulator
+        working-directory: tools/seller-access
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run test:rules
+      - name: Package scoped seller access repair
+        if: env.QA_SIGNING_ONLY != 'true'
+        run: python3 scripts/package_teyza_seller_access.py
+      - uses: actions/upload-artifact@v4
+        if: env.QA_SIGNING_ONLY != 'true'
+        with:
+          name: teyza-seller-access-r310-repair
+          path: TEYZA_SELLER_ACCESS_R310_REPAIR.zip
+          retention-days: 30
+      - name: Check mobile service authorization and validation
+        if: runner.os == 'Linux'
+        run: |
+          npm ci --prefix services/teyza-mobile-v39 --ignore-scripts --no-audit --no-fund
+          node --test services/teyza-mobile-v39/*.test.js
+          GCLOUD_PROJECT=demo-teyza-catalogue node -e "const assert=require('node:assert/strict'); const e=require('./services/teyza-mobile-v39'); for(const name of ['teyzaMobile','teyzaMobilePurgeSelfies','teyzaDeletionSignInRepair','teyzaCatalogueDraftChanged','teyzaCatalogueShopChanged','teyzaCatalogueApprovalChanged','teyzaSellerOrderNotification','teyzaSellerStockNotification','teyzaSellerVerificationNotification','teyzaSellerAccountNotification','teyzaSellerMessageNotification','teyzaSellerPushNotification','teyzaPublicationRepair','teyzaShopLocationRefresh']) assert(e[name].__endpoint,name); console.log('Firebase function exports, including account deletion sign-in recovery, load successfully');"
+      - name: Verify shared product catalogue and photo assets
+        run: |
+          python3 scripts/verify_teyza_catalogue.py
+          python3 scripts/test_teyza_store_files.py
+          python3 apps/teyza_shopper/scripts/test_prepare_mobile_release.py
+      - name: Parse WhatsApp rollout and OAuth diagnostic PowerShell helpers
+        shell: pwsh
+        run: |
+          foreach ($file in @('tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-General.ps1', 'tools/whatsapp-pilot/Deploy-Teyza-WhatsApp-Pilot.ps1', 'tools/facebook-auth/Check-Teyza-Facebook-Auth.ps1')) {
+            $parseTokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+          }
+      - name: Test activation helper without live credentials
+        shell: pwsh
+        run: ./scripts/test_teyza_activation.ps1
+      - name: Verify existing Play package connection without live credentials
+        shell: pwsh
+        run: ./tools/store-release/test-play-package.ps1
+      - name: Package existing Play app setup
+        if: env.QA_SIGNING_ONLY != 'true'
+        run: python3 scripts/package_existing_play_setup.py
+      - uses: actions/upload-artifact@v4
+        if: env.QA_SIGNING_ONLY != 'true'
+        with:
+          name: teyza-existing-play-setup
+          path: build/teyza-existing-play-setup/
+          retention-days: 30
+      # This kit includes the files awaiting Microsoft Defender review.
+      - name: Package mobile service deployment kit
+        if: env.QA_SIGNING_ONLY != 'true' && github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
+        run: python3 scripts/package_teyza_mobile.py
+      - uses: actions/upload-artifact@v4
+        if: env.QA_SIGNING_ONLY != 'true' && github.event_name == 'workflow_dispatch' && vars.TEYZA_DEPLOY_KIT_REVIEW_CLEARED == 'true'
+        with:
+          name: teyza-mobile-r315-deploy-kit
+          path: build/teyza-mobile-deploy/
+          retention-days: 30
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve packages
+        working-directory: apps/teyza_shopper
+        run: flutter pub get
+      - name: Analyze authentication and app
+        working-directory: apps/teyza_shopper
+        run: flutter analyze --no-fatal-infos
+      - name: Test shopper, Spaza and retail access
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_CAPTURE_UI: '1'
+        run: flutter test
+      - name: Save phone UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-phone-ui-previews
+          path: apps/teyza_shopper/build/ui-preview/*.png
+          if-no-files-found: warn
+
+  android:
+    if: inputs.platforms != 'ios'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TEYZA_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/teyza-upload.jks
+      TEYZA_ANDROID_KEYSTORE_BASE64: ${{ secrets.TEYZA_ANDROID_KEYSTORE_BASE64 }}
+      TEYZA_ANDROID_STORE_PASSWORD: ${{ secrets.TEYZA_ANDROID_STORE_PASSWORD }}
+      TEYZA_ANDROID_KEY_ALIAS: ${{ secrets.TEYZA_ANDROID_KEY_ALIAS }}
+      TEYZA_ANDROID_KEY_PASSWORD: ${{ secrets.TEYZA_ANDROID_KEY_PASSWORD }}
+      TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.TEYZA_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+      TEYZA_PLAY_UPLOAD_CERT_SHA256: ${{ vars.TEYZA_PLAY_UPLOAD_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate Android platform
+        working-directory: apps/teyza_shopper
+        run: flutter create --platforms=android --org za.co.teyza --project-name teyza_shopper .
+      - name: Use official Gradle distribution CDN with retries
+        working-directory: apps/teyza_shopper
+        run: |
+          python3 scripts/test_configure_gradle_download.py
+          python3 scripts/configure_gradle_download.py
+          # GitHub Releases currently returns 504 even when Maven Central
+          # redirects Kotlin's compiler JAR. Install CI-only, group-scoped
+          # mirror in the ephemeral runner; keep local developer builds intact.
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/ci-kotlin-mirror.init.gradle "$HOME/.gradle/init.d/teyza-kotlin-mirror.init.gradle"
+      - name: Load existing upload key for a requested signed release
+        if: env.SIGNING_MODE == 'signed'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          required=['TEYZA_ANDROID_KEYSTORE_BASE64','TEYZA_ANDROID_STORE_PASSWORD',
+                    'TEYZA_ANDROID_KEY_ALIAS','TEYZA_ANDROID_KEY_PASSWORD']
+          missing=[key for key in required if not os.environ.get(key)]
+          if missing: raise SystemExit('Missing release secrets: '+', '.join(missing))
+          path=Path(os.environ['TEYZA_ANDROID_KEYSTORE_PATH'])
+          path.write_bytes(base64.b64decode(os.environ['TEYZA_ANDROID_KEYSTORE_BASE64'],validate=True))
+          path.chmod(0o600)
+          PY
+      - name: Configure identity, permissions and explicit release signing
+        working-directory: apps/teyza_shopper
+        run: |
+          python3 scripts/prepare_mobile_release.py android --signing "$SIGNING_MODE"
+          python3 -m pip install --quiet pillow cairosvg
+          python3 scripts/make_launcher_icon.py
+      - name: Build Android App Bundle
+        working-directory: apps/teyza_shopper
+        run: flutter build appbundle --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+      - name: Verify merged bundle has no advertising permissions
+        working-directory: apps/teyza_shopper
+        run: python3 scripts/check_ad_permissions.py build/app/outputs/bundle/release/app-release.aab
+      - name: Verify bundle signature and package release evidence
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          python3 scripts/package_mobile_release.py android
+          if [ "$SIGNING_MODE" = signed ]; then
+            jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab > build/release/signature.txt
+            grep -q 'jar verified' build/release/signature.txt
+          fi
+      - name: Build and verify a production-key APK alongside the signed AAB
+        if: env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
+          python3 ../../scripts/package_teyza_store_apk.py
+      - name: Upload verified signed Android APK for direct device testing
+        if: env.SIGNING_MODE == 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-${{ inputs.qa_signing_only && 'qa-signed' || 'signed' }}
+          path: apps/teyza_shopper/build/release/teyza-*-signed.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Keep the Play-safe signed AAB and signed store APK unchanged above.
+      # A second manually opted-in signed APK exercises in-app debit mandate
+      # on independently distributed Android only; it must NEVER be uploaded
+      # as an alternative Play Store artifact.
+      - name: Build separate Android-direct R99 mandate QA APK
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa == true && inputs.qa_signing_only == true && env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --release --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-release.apk
+          python3 ../../scripts/package_teyza_direct_mandate_qa.py
+      - name: Upload Android-direct mandate QA APK (NOT GOOGLE PLAY)
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_qa == true && inputs.qa_signing_only == true && env.SIGNING_MODE == 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-direct-mandate-qa-signed
+          path: apps/teyza_shopper/build/direct-mandate-qa/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build installable debug APK for device testing
+        if: env.SIGNING_MODE != 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          # Debug APK is installable for smoke tests, but not Play upload signed.
+          # Keep it separate from the unsigned release AAB.
+          python3 scripts/prepare_mobile_release.py android --signing test
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+          python3 scripts/apk_fingerprints.py build/app/outputs/flutter-apk/app-debug.apk
+      - name: Upload installable Android test APK
+        if: env.SIGNING_MODE != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-debug-testing-only
+          path: |
+            apps/teyza_shopper/build/app/outputs/flutter-apk/app-debug.apk
+            apps/teyza_shopper/build/app/outputs/flutter-apk/test-signing-fingerprints.json
+          if-no-files-found: error
+          retention-days: 30
+      # Opt-in debug-signed direct-channel APK. Never generated on PR
+      # checks and never substituted for a Play Store artifact.
+      - name: Build Android-direct mandate DEBUG QA APK
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true && env.SIGNING_MODE != 'signed'
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter build apk --debug --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=direct
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p build/direct-mandate-debug-qa
+          cp build/app/outputs/flutter-apk/app-debug.apk build/direct-mandate-debug-qa/Teyza-Direct-Mandate-DEBUG-QA.apk
+      - name: Upload Android-direct mandate DEBUG QA APK
+        if: github.event_name == 'workflow_dispatch' && inputs.direct_mandate_debug_qa == true && env.SIGNING_MODE != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-apk-direct-mandate-debug-qa
+          path: apps/teyza_shopper/build/direct-mandate-debug-qa/Teyza-Direct-Mandate-DEBUG-QA.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload Android bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-android-aab-${{ inputs.qa_signing_only && 'qa-signed' || env.SIGNING_MODE }}
+          path: apps/teyza_shopper/build/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f "$TEYZA_ANDROID_KEYSTORE_PATH"
+
+  ios:
+    if: inputs.platforms != 'android'
+    needs: checks
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      TEYZA_APPLE_TEAM_ID: ${{ vars.TEYZA_APPLE_TEAM_ID }}
+      TEYZA_IOS_CERTIFICATE_BASE64: ${{ secrets.TEYZA_IOS_CERTIFICATE_BASE64 }}
+      TEYZA_IOS_CERTIFICATE_PASSWORD: ${{ secrets.TEYZA_IOS_CERTIFICATE_PASSWORD }}
+      TEYZA_IOS_PROFILE_BASE64: ${{ secrets.TEYZA_IOS_PROFILE_BASE64 }}
+      TEYZA_IOS_KEYCHAIN_PASSWORD: ${{ secrets.TEYZA_IOS_KEYCHAIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate iOS platform
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter create --platforms=ios --org za.co.teyza --project-name teyza_shopper .
+          flutter pub get
+          python3 scripts/prepare_mobile_release.py ios --signing "$SIGNING_MODE"
+          ruby -c scripts/configure_ios_signing.rb
+          python3 -m venv "$RUNNER_TEMP/teyza-icons"
+          "$RUNNER_TEMP/teyza-icons/bin/pip" install --quiet pillow cairosvg
+          brew list cairo >/dev/null 2>&1 || brew install cairo
+          export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix)/lib"
+          "$RUNNER_TEMP/teyza-icons/bin/python" scripts/make_launcher_icon.py
+          xcodebuild -version
+      - name: Verify branded iOS launch assets
+        working-directory: apps/teyza_shopper
+        run: |
+          "$RUNNER_TEMP/teyza-icons/bin/python" - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from PIL import Image, ImageChops
+          root=Path('ios/Runner/Assets.xcassets/LaunchImage.imageset')
+          images=json.loads((root/'Contents.json').read_text())['images']
+          assert {item['scale'] for item in images}=={'1x','2x','3x'}
+          storyboard=ET.parse('ios/Runner/Base.lproj/LaunchScreen.storyboard')
+          resource=storyboard.find(".//resources/image[@name='LaunchImage']")
+          assert resource is not None and resource.get('width')=='96' and resource.get('height')=='96'
+          canvas=storyboard.find(".//view[@key='view']/color[@key='backgroundColor']")
+          assert canvas is not None and canvas.get('customColorSpace')=='sRGB'
+          assert all(abs(float(canvas.get(channel))-value/255)<1e-9
+                     for channel,value in (('red',247),('green',248),('blue',245)))
+          assert float(canvas.get('alpha'))==1
+          for item in images:
+              pixels=96*int(item['scale'].rstrip('x'))
+              with Image.open(root/item['filename']) as image:
+                  assert image.size==(pixels,pixels) and image.mode=='RGB'
+                  assert image.getpixel((0,0))==(247,248,245)
+                  assert ImageChops.difference(image,Image.new('RGB',image.size,'#F7F8F5')).getbbox()
+          print('Three branded iOS launch images verified; no template placeholders.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teyza-ios-launch-preview
+          path: apps/teyza_shopper/ios/Runner/Assets.xcassets/LaunchImage.imageset/*.png
+          retention-days: 30
+      - name: Install Apple distribution signing for a requested signed release
+        if: env.SIGNING_MODE == 'signed'
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          required=['TEYZA_IOS_CERTIFICATE_BASE64','TEYZA_IOS_CERTIFICATE_PASSWORD',
+                    'TEYZA_IOS_PROFILE_BASE64','TEYZA_IOS_KEYCHAIN_PASSWORD','TEYZA_APPLE_TEAM_ID']
+          missing=[key for key in required if not os.environ.get(key)]
+          if missing: raise SystemExit('Missing Apple signing settings: '+', '.join(missing))
+          for key,name in [('TEYZA_IOS_CERTIFICATE_BASE64','teyza.p12'),
+                           ('TEYZA_IOS_PROFILE_BASE64','teyza.mobileprovision')]:
+            path=Path(os.environ['RUNNER_TEMP'])/name
+            path.write_bytes(base64.b64decode(os.environ[key],validate=True)); path.chmod(0o600)
+          PY
+          keychain="$RUNNER_TEMP/teyza-signing.keychain-db"
+          security create-keychain -p "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security import "$RUNNER_TEMP/teyza.p12" -P "$TEYZA_IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$TEYZA_IOS_KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/teyza.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/teyza.mobileprovision" > "$RUNNER_TEMP/teyza-profile.plist"
+          export TEYZA_IOS_PROFILE_PLIST="$RUNNER_TEMP/teyza-profile.plist"
+          # A compiled entitlement alone does not enable Sign in with Apple.
+          # The distribution provisioning profile must explicitly contain it.
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          profile = plistlib.loads((Path(os.environ['RUNNER_TEMP']) / 'teyza-profile.plist').read_bytes())
+          entitlements = profile.get('Entitlements', {})
+          apple = entitlements.get('com.apple.developer.applesignin', [])
+          if 'Default' not in apple:
+              raise SystemExit('::error::Apple Sign In entitlement is missing from the saved iOS provisioning profile. Enable Sign in with Apple on the Teyza Apple App ID and generate a new distribution profile.')
+          bundle = os.environ['TEYZA_IOS_BUNDLE_ID']
+          team = os.environ['TEYZA_APPLE_TEAM_ID']
+          application_id = entitlements.get('application-identifier', '')
+          if application_id != f'{team}.{bundle}':
+              raise SystemExit('::error::iOS provisioning profile app ID does not match the Teyza Team ID and bundle ID.')
+          print('Teyza signed iOS profile confirms Apple Sign In, matching bundle and Team ID.')
+          PY
+          gem install --user-install xcodeproj --no-document
+          ruby scripts/configure_ios_signing.rb
+      - name: Build iOS release archive or signed IPA
+        working-directory: apps/teyza_shopper
+        shell: bash
+        run: |
+          if [ "$SIGNING_MODE" = signed ]; then
+            flutter build ipa --release --export-options-plist=ios/ExportOptions.plist --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_IOS_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+            test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
+          else
+            flutter build ipa --release --no-codesign --dart-define=TEYZA_GOOGLE_WEB_CLIENT_ID="$TEYZA_GOOGLE_WEB_CLIENT_ID" --dart-define=TEYZA_FIREBASE_ANDROID_APP_ID="$TEYZA_FIREBASE_ANDROID_APP_ID" --dart-define=TEYZA_FIREBASE_IOS_APP_ID="$TEYZA_FIREBASE_IOS_APP_ID" --dart-define=TEYZA_GOOGLE_IOS_CLIENT_ID="$TEYZA_GOOGLE_IOS_CLIENT_ID" --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_IOS_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          fi
+          python3 scripts/package_mobile_release.py ios
+      - name: Upload iOS release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-ios-release-${{ inputs.qa_signing_only && 'qa-signed' || env.SIGNING_MODE }}
+          path: apps/teyza_shopper/build/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload verified signed IPA to TestFlight (explicit opt-in only)
+        if: github.event_name == 'workflow_dispatch' && inputs.signed_release == true && inputs.upload_to_testflight == true
+        working-directory: apps/teyza_shopper
+        env:
+          TEYZA_ASC_ISSUER_ID: ${{ secrets.TEYZA_ASC_ISSUER_ID }}
+          TEYZA_ASC_KEY_ID: ${{ secrets.TEYZA_ASC_KEY_ID }}
+          TEYZA_ASC_PRIVATE_KEY: ${{ secrets.TEYZA_ASC_PRIVATE_KEY }}
+        run: python3 scripts/upload_testflight.py build/release
+      - name: Remove Apple signing material
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/teyza-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/teyza.p12" "$RUNNER_TEMP/teyza.mobileprovision" "$RUNNER_TEMP/teyza-profile.plist"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/teyza.mobileprovision"
+
+
+  facebook_contract:
+    if: inputs.upload_existing_ios_run == ''
+    name: Check optional Meta SDK integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Synthetic values only for compilation/tests. This job publishes no app.
+      TEYZA_FACEBOOK_APP_ID: '123456789'
+      TEYZA_FACEBOOK_CLIENT_TOKEN: 'synthetic-client-token'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate and configure both native wrappers with test-only Meta settings
+        working-directory: apps/teyza_shopper
+        run: |
+          flutter create --platforms=android,ios --org za.co.teyza --project-name teyza_shopper .
+          python3 scripts/configure_gradle_download.py
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/ci-kotlin-mirror.init.gradle "$HOME/.gradle/init.d/teyza-kotlin-mirror.init.gradle"
+          rm -f test/widget_test.dart
+          python3 scripts/prepare_mobile_release.py android --signing test
+          python3 scripts/prepare_mobile_release.py ios
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test test/session_test.dart test/social_auth_test.dart test/seller_mode_test.dart
+          flutter build apk --debug --dart-define=TEYZA_NATIVE_MAPS_READY="$(test -n "$TEYZA_GOOGLE_MAPS_ANDROID_KEY" && printf true || printf false)" --dart-define=TEYZA_PAYMENT_CHANNEL=store
+          python3 scripts/check_ad_permissions.py build/app/outputs/flutter-apk/app-debug.apk
+
+  qa_binary_defender_scan:
+    name: Scan signed QA app binaries with Defender
+    if: github.event_name == 'workflow_dispatch' && inputs.qa_signing_only == true && inputs.signed_release == true && inputs.platforms == 'all'
+    needs: [android, ios]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+    steps:
+      - name: Verify Defender is active on the disposable runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $status = Get-MpComputerStatus
+          if (-not $status.AMServiceEnabled -or -not $status.AntivirusEnabled) {
+            throw 'Microsoft Defender is not active; no clean binary scan can be reported.'
+          }
+          $preference = Get-MpPreference
+          foreach ($path in @($preference.ExclusionPath)) {
+            if ($path -in @('C:\', 'D:\')) {
+              Remove-MpPreference -ExclusionPath $path -ErrorAction Stop
+            }
+          }
+          $preference = Get-MpPreference
+          $exclusions = @($preference.ExclusionPath; $preference.ExclusionExtension; $preference.ExclusionProcess) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          if (@($exclusions).Count -gt 0) {
+            throw 'Defender exclusions remain on this runner; no clean binary scan can be reported.'
+          }
+          if ($preference.DisableArchiveScanning) {
+            Set-MpPreference -DisableArchiveScanning $false -ErrorAction Stop
+            if ((Get-MpPreference).DisableArchiveScanning) { throw 'Defender archive scanning is disabled.' }
+          }
+          try { Update-MpSignature -ErrorAction Stop | Out-Null }
+          catch { Write-Warning 'Signature update failed; checking installed signature age.' }
+          $status = Get-MpComputerStatus
+          if (-not $status.AntivirusSignatureLastUpdated -or
+              $status.AntivirusSignatureLastUpdated -lt (Get-Date).AddDays(-3)) {
+            throw 'Defender signatures are missing or older than three days.'
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value ('TEYZA_SCAN_START=' + (Get-Date).ToUniversalTime().ToString('o'))
+          Write-Host ('Defender engine: ' + $status.AMEngineVersion + '; signatures: ' + $status.AntivirusSignatureVersion)
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-android-apk-qa-signed
+          path: qa-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-android-aab-qa-signed
+          path: qa-aab
+      - uses: actions/download-artifact@v4
+        with:
+          name: teyza-ios-release-qa-signed
+          path: qa-ios
+      - name: Scan the signed APK, AAB and IPA without executing them
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $start = [DateTime]::Parse($env:TEYZA_SCAN_START).ToLocalTime()
+          $targets = @(
+            @{ Directory = 'qa-apk'; Pattern = '*.apk' },
+            @{ Directory = 'qa-aab'; Pattern = '*.aab' },
+            @{ Directory = 'qa-ios'; Pattern = '*.ipa' }
+          )
+          foreach ($target in $targets) {
+            $matches = @(Get-ChildItem -LiteralPath $target.Directory -Filter $target.Pattern -File -Recurse)
+            if ($matches.Count -ne 1) { throw ('Expected exactly one binary in ' + $target.Directory) }
+            $path = $matches[0].FullName
+            $before = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            Start-MpScan -ScanType CustomScan -ScanPath $path -ErrorAction Stop
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $before) {
+              throw ('A binary was removed or changed during the scan: ' + $target.Directory)
+            }
+            Write-Host ($target.Pattern + ' SHA-256 ' + $before)
+          }
+          $detections = @(Get-MpThreatDetection | Where-Object {
+            $_.InitialDetectionTime -ge $start -or $_.LastThreatStatusChangeTime -ge $start
+          })
+          if ($detections.Count -gt 0) {
+            $detections | Select-Object ThreatID, InitialDetectionTime, ActionSuccess | Format-Table | Out-String | Write-Host
+            throw 'Defender recorded a recent detection; do not distribute these QA binaries.'
+          }
+          Write-Host 'No recent Defender detection was recorded for the signed app binaries.'
+          Write-Host 'This is not a Microsoft analyst verdict on the separately flagged website files.'

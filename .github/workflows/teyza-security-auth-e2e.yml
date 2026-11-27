@@ -1,0 +1,30 @@
+name: Teyza security browser authentication E2E
+on:
+  push:
+    branches:
+      - security/teyza-pay-browser-clean-rebuild-20261110
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-auth-e2e:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned test dependencies without install scripts
+        working-directory: tools/app-first-release
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run browser auth and payment-return integration tests (synthetic accounts)
+        working-directory: tools/app-first-release
+        run: node --test seller-auth-browser-e2e.test.cjs
+      - name: Verify payment unit tests (offline)
+        working-directory: tools/app-first-release
+        run: node --test seller-web-billing.test.cjs

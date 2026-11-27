@@ -1,0 +1,3 @@
+export const money=cents=>new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format((cents||0)/100);
+export function cents(value){if(!/^\d+(\.\d{1,2})?$/.test(String(value).trim()))throw Error('Enter a rand amount with no more than two decimals.');const [r,c='']=String(value).trim().split('.');const n=Number(r)*100+Number(c.padEnd(2,'0'));if(!Number.isSafeInteger(n)||n<=0)throw Error('Enter a positive amount.');return n;}
+export function statementRows(entries){return entries.map(e=>[new Date(e.createdAt).toLocaleDateString('en-ZA'),e.description,e.period||'',e.reference||'',money(e.debitCents),money(e.creditCents),money(e.balanceCents)]);}

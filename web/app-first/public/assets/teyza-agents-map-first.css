@@ -1,0 +1,63 @@
+/* TEYZA 2026 national field recruitment — additive, responsive stylesheet. */
+/* The preview uses illustrative points, never live shop counts or private agent data. */
+.agent-hero{background:radial-gradient(circle at 72% 20%,#dff7e8 0,transparent 42%),linear-gradient(155deg,#f8fdfb,#eaf6ef);padding-block:clamp(50px,7vw,105px)}
+.agent-hero .split{align-items:center;grid-template-columns:minmax(0,1fr) minmax(330px,.95fr);gap:clamp(20px,4vw,60px)}
+.agent-hero h1{font-size:clamp(38px,4.3vw,66px);line-height:1.08;letter-spacing:-.055em;max-width:760px;color:#084940}
+.agent-highlight{color:#078c62}.agent-hero .lead{color:#416e63;max-width:600px}.agent-hero .actions{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}
+.agent-preview{position:relative;display:grid;gap:14px;border:1px solid #d6eee4;border-radius:24px;background:#fff;padding:22px;box-shadow:0 24px 65px #053f3523;overflow:hidden}
+.agent-preview-head{display:grid;gap:5px}.agent-preview-head strong{font-size:25px;line-height:1.2;letter-spacing:-.03em;color:#0b5548}
+.agent-preview-subtitle{font-size:12px;color:#658579}.agent-preview-stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.agent-preview-stats>div{display:grid;gap:7px;border-radius:13px;background:#edf8f0;padding:13px}.agent-preview-stats>div:nth-child(2){background:#eef5ff}
+.agent-preview-stats small{font-size:11px;color:#648174}.agent-preview-stats strong{font-size:15px;color:#124e41}
+.agent-preview-map{position:relative;height:252px;border-radius:18px;overflow:hidden;background-color:#d7eee3;background-image:linear-gradient(43deg,transparent 46%,#ffffffbd 47%,#ffffffbd 50%,transparent 51%),linear-gradient(125deg,transparent 35%,#ffffffc0 36%,#ffffffc0 40%,transparent 41%),repeating-linear-gradient(90deg,transparent 0 49px,#aacdc01c 50px 51px),repeating-linear-gradient(0deg,transparent 0 49px,#aacdc01c 50px 51px)}
+.agent-preview-map:before{content:"";position:absolute;width:80%;height:145px;border:20px solid #b7dfcb;border-radius:55% 40% 60% 35%;transform:rotate(-24deg);left:10%;top:26px;opacity:.62}
+.agent-preview-dot{position:absolute;z-index:1;width:20px;height:20px;border:3px solid white;border-radius:50%;box-shadow:0 3px 9px #053c3066}
+.agent-dot-green{background:#00976b;top:30%;left:33%}.agent-dot-blue{background:#2877dc;top:53%;left:68%}.agent-dot-purple{background:#9161d3;top:71%;left:43%}
+.agent-preview-pin{position:absolute;z-index:2;background:white;border-radius:9px;padding:6px 10px;color:#1d5647;box-shadow:0 4px 10px #083e2927;font-size:11px;font-weight:700}
+.agent-pin-one{top:20%;left:24%}.agent-pin-two{top:43%;left:57%}
+.agent-preview-caption{position:absolute;bottom:10px;right:10px;left:10px;text-align:center;color:#527d70;background:#ffffffdc;border-radius:11px;padding:7px;font-size:11px}
+.agent-preview-footer{display:flex;flex-wrap:wrap;gap:9px}.agent-pill{background:#f0f7f4;color:#315d52;padding:6px 9px;border-radius:30px;font-size:11px}
+.agent-pill:nth-child(1){color:#008e63}.agent-pill:nth-child(2){color:#2969cb}.agent-pill:nth-child(3){color:#8445bd}
+.agent-reward{border-radius:16px;padding:16px 19px;background:linear-gradient(125deg,#074b44,#078963);color:#fff}
+.agent-reward>span{font-size:10px;letter-spacing:.13em;font-weight:750}.agent-reward>strong{display:block;font-size:39px;line-height:1.3;letter-spacing:-.04em}.agent-reward>strong small{font-size:15px;font-weight:500}.agent-reward p{font-size:11px;color:#e4f5ec;margin:5px 0 0;line-height:1.5}
+.agent-preview>a.btn{justify-self:start}.agent-how{background:#f2f8f3}.agent-how .cards{margin-top:24px}.agent-how .card{border-radius:20px;box-shadow:0 6px 17px #0a4f3210}
+@media(max-width:920px){.agent-hero .split{grid-template-columns:1fr}.agent-preview{width:100%;max-width:720px}}
+@media(max-width:540px){.agent-hero{padding-block:40px}.agent-preview{padding:14px;border-radius:16px}.agent-preview-map{height:220px}.agent-hero h1{font-size:38px}.agent-preview-stats{grid-template-columns:1fr}}
+
+/* Marketplace recruitment: premium editorial photography and clear reward terms. */
+.agent-hero .split{grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);align-items:center}
+.agent-hero h1{font-size:clamp(38px,5.5vw,76px);line-height:1.03;letter-spacing:-.06em}
+.agent-hero .lead{font-size:clamp(16px,1.4vw,19px);line-height:1.65}
+.agent-rate{display:flex;gap:16px;align-items:center;border-radius:20px;padding:20px 22px;margin:25px 0 12px;background:#064b43;color:#fff}
+.agent-rate>strong{font-size:clamp(32px,5vw,51px);letter-spacing:-.05em;line-height:1;flex-shrink:0}
+.agent-rate b{display:block;font-size:15px}.agent-rate span{display:block;color:#d0efe1;font-size:12px;line-height:1.5;margin-top:5px}
+.agent-meta{font-size:12px;color:#52796e}
+.agent-preview{padding:15px;gap:12px;border-radius:26px}
+.agent-hero-photo{width:100%;height:clamp(150px,18vw,240px);object-fit:cover;object-position:center;border-radius:18px}
+.agent-preview-map{height:165px}.agent-preview-stats>div{padding:10px}.agent-reward{padding:12px 16px}.agent-reward>strong{font-size:28px}
+.agent-preview .agent-preview-caption{font-size:10px}.agent-preview>a.btn{width:100%;justify-content:center;text-align:center}
+.agent-scope-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:24px}
+.agent-scope-grid article{padding:24px 18px;background:#fff;border:1px solid #d8e7df;border-radius:20px}
+.agent-scope-grid b{display:block;font-size:19px;color:#084940;margin-bottom:8px}
+.agent-scope-grid span{color:#537165;font-size:14px;line-height:1.55}
+.agent-business-scope{background:#f7faf5}
+.agent-how .card{border-radius:22px;padding:26px;min-width:0}
+@media(max-width:900px){.agent-hero .split{grid-template-columns:1fr}.agent-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.agent-rate{padding:16px;align-items:flex-start;gap:12px}.agent-rate>strong{font-size:36px}.agent-hero .actions>a{width:100%;justify-content:center;text-align:center}.agent-preview{padding:12px}.agent-scope-grid{grid-template-columns:1fr}.agent-scope-grid article{padding:18px}.agent-hero h1{font-size:40px}}
+
+/* Official store destinations. No intermediate download landing page. */
+.teyza-store-links{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:12px 0}
+.teyza-store-link{display:flex!important;flex:1 1 124px;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 14px;min-height:52px;border-radius:12px;border:1px solid #fff2;background:#131c19;color:#fff!important;text-decoration:none!important;font:inherit;line-height:1.15;box-sizing:border-box}
+.teyza-store-link small{font-size:10px;color:#e1ebe6}.teyza-store-link strong{font-size:16px;font-weight:750;letter-spacing:-.02em;color:#fff}
+.teyza-store-link:hover{background:#25584a}.teyza-store-link:focus-visible{outline:3px solid #79cfa0;outline-offset:3px}
+@media(max-width:360px){.teyza-store-link{padding:10px 11px}.teyza-store-link strong{font-size:15px}}
+
+.agent-header-stores{margin:0;flex-shrink:0;gap:6px}.agent-header-stores .teyza-store-link{flex:0 0 auto;padding:8px 11px;min-height:44px}.agent-header-stores .teyza-store-link strong{font-size:13px}
+@media(max-width:760px){.agent-header-stores{flex-wrap:wrap;gap:4px}.agent-header-stores .teyza-store-link{padding:7px 9px;min-height:40px}.agent-header-stores .teyza-store-link small{font-size:9px}}
+@media(max-width:420px){.agent-header-stores{width:100%}.agent-header-stores .teyza-store-link{flex:1 1 100px}.header:has(.agent-header-stores){flex-wrap:wrap}}
+
+/* Recruitment campaign: keep primary application and app download actions visible. */
+.agent-download{margin-top:22px;max-width:490px;border-top:1px solid #c8e0d4;padding-top:15px}.agent-download b{color:#084940}.agent-download p{font-size:14px;color:#416e63;margin:4px 0 8px}.agent-hero .btn.secondary{color:#084940;border-color:#7aa69a}.agent-faq{background:#eef8f2}.agent-faq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.agent-faq-grid .card{padding:22px;border-radius:18px}.agent-faq-grid h3{font-size:21px;margin-top:0}.agent-faq-grid p{color:#416e63}.agent-faq-grid .btn{white-space:normal;text-align:center}.agent-faq .agent-meta{max-width:800px}@media(max-width:650px){.agent-faq-grid{grid-template-columns:1fr}.agent-download .teyza-store-link{flex:1 1 120px}.agent-faq .actions .btn{width:100%}}
+
+/* Accessible, script-free earnings illustrations: all choices remain readable without CSS or JavaScript. */
+.agent-earnings{background:#fff}.agent-earnings-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(22px,4vw,55px);align-items:center}.agent-earnings h2{color:#084940;max-width:540px}.agent-earnings p{color:#416e63}.agent-earnings-note{font-size:13px;line-height:1.65}.agent-earnings-calc{position:relative;min-inline-size:0;max-width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:20px;border:1px solid #c9e5d8;border-radius:20px;background:#f5faf6}.agent-earnings-calc legend{font-size:15px;font-weight:750;color:#084940;padding:0 8px}.agent-earnings-calc input[type=radio]{position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap}.agent-earnings-calc label{display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;padding:10px 4px;min-height:64px;background:#fff;border:1px solid #b6d2c5;border-radius:10px;color:#194d40;cursor:pointer;line-height:1.3;font-size:12px;overflow-wrap:anywhere}.agent-earnings-calc label span{font-size:16px;font-weight:750}.agent-earnings-calc input:checked+label{border-color:#087f5b;background:#ddf3e7;box-shadow:inset 0 0 0 1px #087f5b}.agent-earnings-calc input:focus-visible+label{outline:3px solid #b47712;outline-offset:2px}.agent-earnings-results{grid-column:1/-1;background:#064b43;border-radius:14px;padding:18px;margin-top:8px;color:#fff}.agent-earnings-result{display:none}.agent-earnings-result>span{font-size:12px;font-weight:650;color:#d1eadd}.agent-earnings-result>strong{display:block;font-size:clamp(34px,5vw,52px);line-height:1.2;letter-spacing:-.04em;color:#c2ee45}.agent-earnings-result>p{font-size:14px;color:#fff;margin:4px 0 0}#earnings-0:checked~.agent-earnings-results [data-earnings="0"],#earnings-1:checked~.agent-earnings-results [data-earnings="1"],#earnings-5:checked~.agent-earnings-results [data-earnings="5"],#earnings-10:checked~.agent-earnings-results [data-earnings="10"],#earnings-20:checked~.agent-earnings-results [data-earnings="20"],#earnings-50:checked~.agent-earnings-results [data-earnings="50"],#earnings-100:checked~.agent-earnings-results [data-earnings="100"]{display:block}#earnings-disclaimer{grid-column:1/-1;margin:0;font-size:12px;color:#416e63;line-height:1.5}@media(max-width:760px){.agent-earnings-layout{grid-template-columns:1fr}.agent-earnings-calc{padding:14px}}@media(max-width:360px){.agent-earnings-calc{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}}

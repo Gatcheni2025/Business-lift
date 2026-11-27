@@ -1,0 +1,220 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:teyza_shopper/seller_notifications.dart';
+import 'package:teyza_shopper/seller_premium.dart';
+import 'package:teyza_shopper/seller_firestore.dart';
+import 'package:teyza_shopper/seller_registration.dart';
+import 'package:teyza_shopper/seller_registration_draft.dart';
+import 'package:teyza_shopper/seller_review.dart';
+import 'package:teyza_shopper/seller_tools.dart';
+import 'package:teyza_shopper/shopper_auth.dart';
+import 'package:teyza_shopper/teyza_mobile_api.dart';
+
+const addressFixture={'address':'12 Main Road, KwaMashu, Durban, South Africa','area':'KwaMashu','city':'Durban',
+  'latitude':-29.7402,'longitude':30.992,'placeId':'address-durban-1','addressSelection':'address-receipt'};
+Future<void> selectAddress(WidgetTester tester) async {
+  final field=find.byKey(const ValueKey('shop-address-search'));await tester.ensureVisible(field);
+  await tester.enterText(field,'12 Main Road Durban');tester.testTextInput.hide();
+  await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
+  await visibleTap(tester,find.widgetWithText(ListTile,addressFixture['address'] as String));
+}
+
+class Session extends ShopperSession{
+ Session(){isReady=true;userId='owner';emailVerified=true;idToken='token';}
+ @override Future<String> freshIdToken() async=>'token';
+ void switchAccount(){userId='another';notifyListeners();}
+}
+class RegistrationMemoryStore implements SessionStore {
+ final values=<String,String>{};
+ @override Future<String?> read(String key) async=>values[key];
+ @override Future<void> write(String key,String value) async{values[key]=value;}
+ @override Future<void> delete(String key) async{values.remove(key);}
+}
+SellerRegistrationDraftStore registrationDraftStore()=>SellerRegistrationDraftStore(store:RegistrationMemoryStore());
+class ExperienceApi extends TeyzaMobileApi{
+ ExperienceApi(super.session);
+ final calls=<({String action,Map<String,dynamic> data})>[];
+ bool denied=false;
+ Uint8List? image;
+ @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async{
+  calls.add((action:action,data:data));
+  if(denied)throw StateError('Teyza administrator access is required.');
+  return switch(action){
+   'seller_address_suggest'=>{'suggestions':[{'placeId':addressFixture['placeId'],'label':addressFixture['address'],'predictionToken':'prediction-receipt'}]},
+   'seller_address_select'=>{'selection':addressFixture},
+   'seller_claim_suggest'=>{'suggestions':[{'label':'Neighbourhood Market, Durban','predictionToken':'claim-prediction'}]},
+   'seller_claim_select'=>{'claim':{'name':'Neighbourhood Market','displayAddress':addressFixture['address'],
+    'claimSelection':'claim-receipt','addressSelection':addressFixture}},
+   'seller_claim_by_id'=>{'claim':{'name':'Neighbourhood Market','displayAddress':addressFixture['address'],
+    'claimSelection':'claim-receipt','addressSelection':addressFixture}},
+   'notification_list'=>{'notifications':[{'id':'notice','title':'New order request','body':'Open your orders to respond.','read':false,'target':'orders'}]},
+   'admin_seller_queue'=>{'sellers':[{'sellerUid':'seller1','submissionId':'submission1','shopName':'Durban Corner Shop','category':'spaza',
+    'address':'KwaMashu, Durban','phone':'0712345678','ownerEmail':'owner@example.test','approvalStatus':'pending','listingStatus':'not_listed'}]},
+   'verification_read'=>{'imageBase64':base64Encode(image!)},
+   'seller_summary'=>{'settings':{},'credit':[]},
+   _=>{'ok':true}
+  };
+ }
+}
+Future<void> visibleTap(WidgetTester tester,Finder finder) async{
+ await tester.ensureVisible(finder);await tester.pumpAndSettle();
+ expect(finder.hitTestable(),findsOneWidget);await tester.tap(finder);await tester.pumpAndSettle();
+}
+void main(){
+ testWidgets('Notifications mark only the selected item and clear private rows on account switch',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerNotificationsPage(session:session,api:api)));
+  await tester.pumpAndSettle();expect(find.text('New order request'),findsOneWidget);
+  await visibleTap(tester,find.text('New order request'));
+  expect(api.calls.last.data,{'ids':['notice']});
+  session.switchAccount();await tester.pump();expect(find.text('New order request'),findsNothing);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Review desk denies non-admins and cannot expose seller registrations',(tester) async{
+  final session=Session(),api=ExperienceApi(Session())..denied=true;
+  await tester.pumpWidget(MaterialApp(home:SellerReviewPage(session:session,api:api)));await tester.pumpAndSettle();
+  expect(find.text('Teyza administrator access is required.'),findsOneWidget);expect(find.text('Durban Corner Shop'),findsNothing);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Admin approval requires opening the private photo, confirming review and confirming the decision',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  api.image=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();
+  await tester.pumpWidget(MaterialApp(home:SellerReviewPage(session:session,api:api)));await tester.pumpAndSettle();
+  await tester.tap(find.text('Durban Corner Shop'));await tester.pumpAndSettle();
+  var approve=find.widgetWithText(FilledButton,'Approve seller');
+  await tester.scrollUntilVisible(approve,200,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();
+  expect(tester.widget<FilledButton>(approve).onPressed,isNull);
+  await visibleTap(tester,find.text('View private selfie'));
+  expect(api.calls.last.data,{'sellerUid':'seller1','submissionId':'submission1'});
+  final confirmed=find.text('I have reviewed this selfie and the shop registration.');
+  await visibleTap(tester,confirmed);
+  await visibleTap(tester,approve);
+  await tester.tap(find.text('Confirm review'));await tester.pumpAndSettle();
+  final call=api.calls.firstWhere((r)=>r.action=='admin_seller_review');expect(call.data['status'],'approved');
+  expect(call.data['submissionId'],'submission1');expect(call.data.containsKey('listingStatus'),isFalse);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Seller registration is native and cannot continue without required shop details',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
+  final next=find.byKey(const ValueKey('teyza-registration-next'));
+  await tester.scrollUntilVisible(next,200,scrollable:find.byType(Scrollable).first);
+  expect(tester.widget<FilledButton>(next).onPressed,isNotNull);
+  await visibleTap(tester,next);
+  expect(find.text('Enter shop name'),findsOneWidget);
+  expect(find.textContaining('Enter a valid mobile number'),findsOneWidget);
+  expect(api.calls,isEmpty);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Owner camera preview requires consent and submits a pending review, never an approval',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  final bytes=(await rootBundle.load('assets/images/essentials/bread.webp')).buffer.asUint8List();
+  await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,tool:SellerTool.verification,api:api,captureSelfie:() async=>bytes)));
+  await tester.pumpAndSettle();await visibleTap(tester,find.text('Open selfie camera'));
+  expect(find.text('Retake selfie'),findsOneWidget);
+  await visibleTap(tester,find.text('Submit selfie for review'));
+  expect(api.calls.where((r)=>r.action=='verification_selfie'),isEmpty);
+  final consent=find.text('I agree to submit my selfie for Teyza shop-owner verification.');await visibleTap(tester,consent);
+  await visibleTap(tester,find.text('Submit selfie for review'));
+  final submission=api.calls.firstWhere((r)=>r.action=='verification_selfie');expect(submission.data['consent'],true);
+  expect(submission.data.containsKey('status'),false);expect(find.text('Selfie awaiting review'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('A native registration opens the resumable document, selfie and OTP checklist',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextFormField).at(0),'Neighbourhood Market');
+  await tester.enterText(find.byType(TextFormField).at(1),'0712345678');
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
+  await selectAddress(tester);
+  tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('No — this is a new business listing'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I confirm that these are my shop’s details and shoppers may see this business address and map location.'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  final request=api.calls.firstWhere((r)=>r.action=='seller_register');
+  expect(request.data['category'],'spaza');expect(request.data['shopName'],'Neighbourhood Market');
+  expect(request.data['addressSelection'],'address-receipt');expect(request.data['locationConsent'],true);
+  expect(request.data.containsKey('approvalStatus'),false);
+  expect(find.textContaining('7-day'),findsNothing);
+  expect(api.calls.any((r)=>r.action=='seller_plan_select'),false,
+    reason:'Registration must never activate a trial or subscription');
+  await tester.scrollUntilVisible(find.text('ID or passport'),180,scrollable:find.byType(Scrollable).first);
+  expect(find.text('ID or passport'),findsWidgets);
+  expect(find.text('Step 1 of 5'),findsNothing);
+  expect(find.byKey(const ValueKey('teyza-onboarding-step-title')),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('A Google business claim pre-fills the shop and address but still requires seller verification',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.binding.setSurfaceSize(const Size(390,844));addTearDown(()=>tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore())));await tester.pumpAndSettle();
+  await tester.enterText(find.widgetWithText(TextFormField,'Shop name'),'Neighbourhood Market');
+  await tester.enterText(find.widgetWithText(TextFormField,'Contact number'),'0712345678');
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('Already on Google Maps? Find your business'));
+  final search=find.byKey(const ValueKey('seller-claim-search'));await tester.enterText(search,'Neighbourhood Market');
+  tester.testTextInput.hide();await tester.pump(const Duration(milliseconds:500));await tester.pumpAndSettle();
+  await visibleTap(tester,find.widgetWithText(ListTile,'Neighbourhood Market, Durban'));
+  expect(find.text('Shop address from Google Maps'),findsOneWidget);
+  tester.testTextInput.hide();await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I own this business or have written authority to represent it.'));
+  await visibleTap(tester,find.text('I can provide registration or ownership documents if requested.'));
+  await visibleTap(tester,find.text('I can verify the business phone number or another official contact.'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('I am authorised to represent this business, and shoppers may see its address and map location.'));
+  await visibleTap(tester,find.text('Send my approval update and getting-started link on WhatsApp'));
+  await visibleTap(tester,find.byKey(const ValueKey('teyza-registration-next')));
+  final request=api.calls.firstWhere((r)=>r.action=='seller_register');
+  expect(request.data['shopName'],'Neighbourhood Market');expect(request.data['googleClaimSelection'],'claim-receipt');
+  expect(request.data['addressSelection'],'address-receipt');expect(request.data['whatsappConsent'],true);
+  expect(request.data['googleClaimAnswers']['authorized'],true);
+  expect(request.data['googleClaimAnswers']['canProvideEvidence'],true);
+  await tester.scrollUntilVisible(find.text('ID or passport'),180,scrollable:find.byType(Scrollable).first);
+  expect(find.text('ID or passport'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Registration opened from a Google listing resolves it server-side before prefilling',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerRegistrationPage(session:session,api:api,draftStore:registrationDraftStore(),initialGooglePlaceId:'place-123')));
+  await tester.pumpAndSettle();
+  expect(api.calls.first.action,'seller_claim_by_id');expect(api.calls.first.data['placeId'],'place-123');
+  expect(find.text('Google Maps: Neighbourhood Market'),findsOneWidget);
+  expect(find.text('Shop address from Google Maps'),findsOneWidget);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Camera denial gives a recoverable permission message without submitting a selfie',(tester) async{
+  final session=Session(),api=ExperienceApi(Session());
+  await tester.pumpWidget(MaterialApp(home:SellerToolPage(session:session,tool:SellerTool.verification,api:api,
+   captureSelfie:() async=>throw StateError('Camera denied'))));await tester.pumpAndSettle();
+  await visibleTap(tester,find.text('Open selfie camera'));
+  expect(find.textContaining('Allow camera access'),findsOneWidget);expect(api.calls.where((r)=>r.action=='verification_selfie'),isEmpty);
+  await tester.pumpWidget(const SizedBox.shrink());session.dispose();api.session.dispose();
+ });
+ testWidgets('Premium shop header and setup remain readable at 320px with larger text',(tester) async{
+  await tester.binding.setSurfaceSize(const Size(320,740));addTearDown(()=>tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(MaterialApp(home:Scaffold(body:MediaQuery(data:const MediaQueryData(textScaler:TextScaler.linear(1.5)),
+   child:ListView(padding:const EdgeInsets.all(16),children:[
+    SellerShopHero(shop:const SellerShop('KwaMashu Fresh Market','retail','Durban','pending','not_listed'),productCount:184),
+    SellerSetupCard(products:184,verification:'pending_review',onVerify:(){},onProducts:(){})
+   ])))));await tester.pumpAndSettle();expect(tester.takeException(),isNull);
+  await tester.pumpWidget(const SizedBox.shrink());
+ });
+ testWidgets('Owner approval cannot label a paused public listing as live',(tester) async{
+  for(final status in ['suspended','active']){
+   await tester.pumpWidget(MaterialApp(home:Scaffold(body:SellerShopHero(
+    shop:const SellerShop('Corner Shop','spaza','Durban','approved','active'),publicationStatus:status,
+    shopLive:status=='active',productCount:5))));await tester.pumpAndSettle();
+   expect(find.text('Shop is live'),status=='active'?findsOneWidget:findsNothing);
+   expect(find.text('Listing is paused'),status=='suspended'?findsOneWidget:findsNothing);
+  }
+  await tester.pumpWidget(const SizedBox.shrink());
+ });
+}

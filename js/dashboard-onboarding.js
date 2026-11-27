@@ -1,9 +1,31 @@
-if(window.self===window.top){
-import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";import {auth} from "./firebase-config.js";
-const modal=document.querySelector("[data-dashboard-onboarding]"),frame=document.querySelector("[data-modal-frame]"),loading=document.querySelector("[data-modal-loading]");
-async function readiness(user){const token=await user.getIdToken();const r=await fetch("api/workspace.php?action=seller-readiness",{headers:{Authorization:"Bearer "+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Unable to load seller setup.");return d}
-function showStage(n){document.querySelector("[data-modal-step]").textContent="Step "+n+" of 3";document.querySelectorAll("[data-modal-stage]").forEach(x=>{const v=Number(x.dataset.modalStage);x.classList.toggle("active",v===n);x.classList.toggle("done",v<n)})}
-function openStep(d){if(d.productReady){modal.hidden=true;document.body.classList.remove("onboarding-modal-open");history.replaceState({},document.title,"dashboard.html");location.reload();return}let n=1,src="business-profile.html?embedded=1";if(d.businessComplete&&!d.deliveryComplete){n=2;src="delivery-settings.html?embedded=1"}else if(d.businessComplete&&d.deliveryComplete&&!d.paymentComplete){n=3;src="seller-onboarding.html?embedded=1#payment-setup"}showStage(n);modal.hidden=false;document.body.classList.add("onboarding-modal-open");frame.src=src;frame.hidden=false;loading.hidden=true}
-onAuthStateChanged(auth,async user=>{if(!user)return;try{const d=await readiness(user);if(!d.productReady)openStep(d)}catch(e){modal.hidden=false;loading.hidden=false;loading.textContent=e.message}});
-window.addEventListener("message",async e=>{if(e.origin!==location.origin||e.data?.type!=="teyza-onboarding-next")return;const user=auth.currentUser;if(user)openStep(await readiness(user))});
+/* Legacy compatibility module: old iframe popup retired as of full-site R3.
+   This file remains only so stale cached HTML cannot open nested dashboards. */
+import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {auth} from "./firebase-config.js";
+
+const legacy=document.querySelector("[data-dashboard-onboarding]");
+if(legacy){
+  legacy.hidden=true;
+  legacy.remove();
+  document.body.classList.remove("onboarding-modal-open");
 }
+onAuthStateChanged(auth,async user=>{
+  if(!user||!location.pathname.endsWith("/dashboard.html"))return;
+  try{
+    const token=await user.getIdToken();
+    const response=await fetch("api/workspace.php?action=seller-readiness",{
+      cache:"no-store",headers:{Authorization:"Bearer "+token}
+    });
+    if(!response.ok)return;
+    const readiness=await response.json();
+    if(!readiness.ok)return;
+    if(readiness.sellerCategory==="spaza"&&!readiness.productReady){
+      const url="business-profile.html?setup=spaza";
+      // Never nest another dashboard/verification dialog inside a frame.
+      if(window.self!==window.top)window.top.location.replace(url);
+      else location.replace(url);
+    }
+  }catch(error){
+    console.warn("Old onboarding compatibility check:",error);
+  }
+});
