@@ -190,20 +190,28 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
   const cursor=data.after?D.id(data.after):null,includeRows=data.includeRows!==false;
   const {Timestamp}=require('firebase-admin/firestore');
   return db.runTransaction(async tx=>{
-   let q=db.collection(collection);
-   // Indexed exact fields where safe. Province/name filters also include
-   // legacy records with no materialized geography; they are evaluated on
-   // the server within each bounded cursor page, never only on loaded rows.
-   if(filters.localityId)q=q.where('localityId','==',filters.localityId);
-   else if(filters.municipalityCode)q=q.where('municipalityCode','==',filters.municipalityCode);
-   else if(filters.category)q=q.where('category','==',filters.category);
-   const size=includeRows?30:60;q=q.orderBy('__name__').limit(size+1);if(cursor)q=q.startAfter(cursor);
-   const page=await tx.get(q),rows=page.docs.slice(0,size),counts=R.emptyCounts(),prospects=[];
+   const size=includeRows?30:60;
+   // Use indexed equality for the most geographically selective available
+   // field. Pilot provinces have two ordered streams, because older records
+   // have only city. Merge by document ID before taking the page boundary;
+   // the common cursor is safe for both streams and duplicate IDs count once.
+   const select=[];
+   if(filters.localityId)select.push(['localityId',filters.localityId]);
+   else if(filters.municipalityCode)select.push(['municipalityCode',filters.municipalityCode]);
+   else if(filters.province){select.push(['province',filters.province]);const pilot=cities.find(c=>legacyProvince[c]===filters.province);if(pilot)select.push(['city',pilot]);}
+   else if(filters.category)select.push(['category',filters.category]);
+   else select.push(null);
+   const pages=await Promise.all(select.map(async field=>{
+    let q=db.collection(collection);if(field)q=q.where(field[0],'==',field[1]);
+    q=q.orderBy('__name__').limit(size+1);if(cursor)q=q.startAfter(cursor);return tx.get(q);
+   }));
+   const candidates=[...new Map(pages.flatMap(p=>p.docs).map(s=>[s.id,s])).values()].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
+   const rows=candidates.slice(0,size),counts=R.emptyCounts(),prospects=[];
    const matched=rows.filter(s=>R.matches(s.data(),filters));
    const loader=await snapshotLoader(matched,tx,asOf);
    const views=await Promise.all(matched.map(s=>view(s.id,s.data(),tx,asOf,loader)));
    for(const p of views){const facts=R.classify(p,asOf);R.addCounts(counts,facts);if(includeRows&&(!filters.queue||facts.queues[filters.queue]))prospects.push(p);}
-   const next=page.docs.length>size?rows.at(-1).id:null;
+   const next=candidates.length>size?rows.at(-1).id:null;
    return {schema:2,asOf,filters,scanned:rows.length,counts,prospects,next,complete:next===null};
   },{readOnly:true,readTime:Timestamp.fromMillis(asOf)});
  }

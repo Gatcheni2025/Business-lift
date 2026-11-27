@@ -14,7 +14,10 @@ const metros=Object.freeze({BUF:['Eastern Cape','Buffalo City'],NMA:['Eastern Ca
 // Whole-municipality amalgamations only; no inference for divided/partial areas.
 // MDB 2023 investigation, pre/post-merger table; effective after 2016 LGE.
 // https://www.demarcation.org.za/wp-content/uploads/2023/09/Investigation-of-the-feasibility-of-aligning-amalgamations-with-the-Census-FINAL-REPORT.pdf
-const mergers=Object.freeze({MP322:'MP326',MP323:'MP326',NW401:'NW405',NW402:'NW405'});
+// 2026-11-27 complete public inventory: audit commit 727f490a67c12577a0ba0e1ee3e4818e74e73c14.
+// 27 additional predecessor codes confirmed present, 1,299 source features.
+const mergers=Object.freeze({"MP322":"MP326","MP323":"MP326","NW401":"NW405","NW402":"NW405","EC143":"EC145","EC144":"EC145","EC127":"EC129","EC128":"EC129","EC132":"EC139","EC133":"EC139","EC134":"EC139","EC103":"EC101","EC107":"EC101","FS164":"MAN","GT482":"GT485","GT483":"GT485","KZN431":"KZN436","KZN432":"KZN436","KZN234":"KZN237","KZN236":"KZN237","KZN232":"KZN238","KZN233":"KZN238","KZN273":"KZN276","KZN274":"KZN276","KZN215":"KZN216","LIM474":"LIM476","LIM475":"LIM476","LIM364":"LIM368","LIM365":"LIM368","NC081":"NC087","NC083":"NC087"});
+const splitMunicipalities=Object.freeze(['KZN211','KZN283','LIM352','LIM342']);
 const MERGER_SOURCE='MDB-2023-2016-amalgamations';
 const canonicalMunicipality=m=>Object.hasOwn(mergers,m)?mergers[m]:m;
 const originalCodes=m=>[m,...Object.entries(mergers).filter(([,v])=>v===m).map(([k])=>k)];
@@ -48,7 +51,7 @@ function createGeography({fetcher=fetch}={}){
   }catch(_){D.fail(503,'Official locality reference unavailable. Retry or save a provisional location for review; no authoritative allocation was assumed.');}
  }
  async function rowsWithMunicipalities(rows){
-  const valid=rows.filter(r=>provinceFor(r.munic_code)&&subcode(r.sub_place_code)&&label(r.sub_place_name));
+  const valid=rows.filter(r=>provinceFor(r.munic_code)&&!splitMunicipalities.includes(r.munic_code)&&subcode(r.sub_place_code)&&label(r.sub_place_name));
   const codes=[...new Set(valid.map(r=>canonicalMunicipality(r.munic_code)))];
   const locals=codes.filter(c=>!Object.hasOwn(metros,c));
   const names=new Map(codes.filter(c=>Object.hasOwn(metros,c)).map(c=>[c,metros[c][1]]));
@@ -92,6 +95,7 @@ function createGeography({fetcher=fetch}={}){
   const {municipalityCode,subplaceCode}=parseLocalityId(id);
   const canonical=canonicalMunicipality(municipalityCode);
   if(canonical!==municipalityCode)D.fail(422,'Select the updated official locality reference.');
+  if(splitMunicipalities.includes(canonical))D.fail(409,'Former municipality was divided; official spatial boundary review required.');
   const codes=originalCodes(canonical);
   const municipalityWhere=codes.length===1?'munic_code = '+quoted(canonical):'munic_code IN ('+codes.map(quoted).join(',')+')';
   const result=await query(0,municipalityWhere+' AND sub_place_code = '+subplaceCode,'munic_code,sub_place_code,sub_place_name',10);
@@ -106,7 +110,7 @@ function projectedGeography(p){
  const province=p.province||(p.city==='Durban'?'KwaZulu-Natal':p.city==='Johannesburg'?'Gauteng':'');
  let verified=false;
  if(p.geographySource===SOURCE&&p.geographySourceVintage===VINTAGE&&p.localityId&&p.municipality&&p.township&&p.municipalityCode&&p.townshipCode){
-  try{const ids=parseLocalityId(p.localityId);verified=ids.municipalityCode===p.municipalityCode&&ids.subplaceCode===p.townshipCode&&provinceFor(ids.municipalityCode)===province;}catch(_){}
+  try{const ids=parseLocalityId(p.localityId);verified=ids.municipalityCode===p.municipalityCode&&ids.subplaceCode===p.townshipCode&&provinceFor(ids.municipalityCode)===province&&canonicalMunicipality(ids.municipalityCode)===ids.municipalityCode&&!splitMunicipalities.includes(ids.municipalityCode);}catch(_){}
  }
  if(verified&&p.sourceMunicipalityCode){
   verified=Object.hasOwn(mergers,p.sourceMunicipalityCode)&&mergers[p.sourceMunicipalityCode]===p.municipalityCode&&p.municipalityCrosswalkSource===MERGER_SOURCE&&p.municipalityCrosswalkEffectiveYear===2016;
@@ -114,4 +118,4 @@ function projectedGeography(p){
  return {province,municipality:p.municipality||'',township:p.township||p.area||'',municipalityCode:verified?p.municipalityCode:'',townshipCode:verified?p.townshipCode:'',localityId:verified?p.localityId:'',geographySource:verified?SOURCE:'provisional',geographySourceVintage:verified?VINTAGE:'',geographyNeedsReview:!verified,
   ...(verified&&p.sourceMunicipalityCode?{sourceMunicipalityCode:p.sourceMunicipalityCode,municipalityCrosswalkSource:MERGER_SOURCE,municipalityCrosswalkEffectiveYear:2016}:{})};
 }
-module.exports={createGeography,projectedGeography,parseLocalityId,provinceFor,provinces,SOURCE,VINTAGE};
+module.exports={createGeography,projectedGeography,parseLocalityId,provinceFor,provinces,SOURCE,VINTAGE,mergers,splitMunicipalities};

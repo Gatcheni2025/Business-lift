@@ -92,7 +92,7 @@ const scan=async(label,filters={},mutate=null)=>{
   check('Paid seller and paid advertiser count once',f.paidSellers===1&&f.activeAdvertisers===1&&f.activePaidCampaigns===1&&f.payingBusinesses===1&&f.sellingAccessNotPaid===1);
   const idx=G.provinces.indexOf('KwaZulu-Natal');
   const filtered=await scan('province municipality township category',{province:'KwaZulu-Natal',municipality:'Synthetic municipality '+idx,township:'Synthetic township '+idx,category:'spaza'});
-  check('All filtered rows including legacy province fallback',filtered.counts.funnel.discovered===50);
+  check('All filtered rows including legacy province fallback',filtered.counts.funnel.discovered===50&&filtered.scanned===103);
   const coded=await scan('official code equality',{province:'KwaZulu-Natal',municipalityCode:'ETH',localityId:'ETH:123456789'});
   check('Official reference filter excludes unmapped legacy rows',coded.counts.funnel.discovered===80);
   const concurrent=await scan('fixed snapshot with concurrent changes',{queue:'paying'},async()=>{

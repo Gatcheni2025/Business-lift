@@ -59,3 +59,27 @@ test('Amalgamation never guesses a split municipality or accepts contradictory s
  await assert.rejects(g.resolve('MP326:111111111'),e=>e.status===409);
  assert.equal((await g.search('Limpopo','Former')).localities.length,0);
 });
+
+test('All 31 documented predecessor codes reconcile with stable successor locality IDs; divided municipalities stay provisional',async()=>{
+ const expected={"MP322":"MP326","MP323":"MP326","NW401":"NW405","NW402":"NW405","EC143":"EC145","EC144":"EC145","EC127":"EC129","EC128":"EC129","EC132":"EC139","EC133":"EC139","EC134":"EC139","EC103":"EC101","EC107":"EC101","FS164":"MAN","GT482":"GT485","GT483":"GT485","KZN431":"KZN436","KZN432":"KZN436","KZN234":"KZN237","KZN236":"KZN237","KZN232":"KZN238","KZN233":"KZN238","KZN273":"KZN276","KZN274":"KZN276","KZN215":"KZN216","LIM474":"LIM476","LIM475":"LIM476","LIM364":"LIM368","LIM365":"LIM368","NC081":"NC087","NC083":"NC087"};
+ assert.deepEqual(G.mergers,expected);
+ for(const [old,target] of Object.entries(expected)){
+  const province=G.provinceFor(target),sub='123456789',row={munic_code:old,sub_place_code:Number(sub),sub_place_name:'Synthetic locality'};
+  const geo=G.createGeography({fetcher:async url=>{
+   const u=new URL(url),isMunicipality=u.pathname.includes('/2/'),where=u.searchParams.get('where');
+   if(!isMunicipality&&where.includes('sub_place_code ='))assert(where.includes("'"+old+"'")&&where.includes("'"+target+"'"));
+   return {ok:true,json:async()=>({features:[{attributes:isMunicipality?{munic_code:target,munic_name:'Synthetic municipality'}:row}]})};
+  }});
+  const result=(await geo.search(province,'Synthetic')).localities[0];
+  assert.equal(result.localityId,target+':'+sub);assert.equal(result.sourceMunicipalityCode,old);assert.equal(result.province,province);
+  assert.deepEqual(await geo.resolve(result.localityId),result);assert.equal(G.projectedGeography(result).geographyNeedsReview,false);
+  await assert.rejects(geo.resolve(old+':'+sub),e=>e.status===422);
+ }
+ for(const old of ['KZN211','KZN283','LIM352','LIM342']){
+  const province=G.provinceFor(old);
+  const geo=G.createGeography({fetcher:async url=>({ok:true,json:async()=>({features:[{attributes:new URL(url).pathname.includes('/2/')?{munic_code:old,munic_name:'Former municipality'}:{munic_code:old,sub_place_code:123456789,sub_place_name:'Synthetic locality'}}]})})});
+  assert.equal((await geo.search(province,'Synthetic')).localities.length,0);
+  await assert.rejects(geo.resolve(old+':123456789'),e=>e.status===409);
+  assert.equal(G.projectedGeography({province,municipality:'Former',township:'Synthetic',municipalityCode:old,townshipCode:'123456789',localityId:old+':123456789',geographySource:G.SOURCE,geographySourceVintage:G.VINTAGE}).geographyNeedsReview,true);
+ }
+});

@@ -872,3 +872,13 @@ test('National snapshot batches and deduplicates suppression reads without chang
  assert(page.prospects.every(p=>p.optedOut===true));
  const detail=await f.call('ops_acquisition_detail',{id:'batch0'});assert.equal(detail.prospect.optedOut,true);
 });
+
+test('Indexed province streams preserve legacy pilot IDs, deduplicate overlapping streams, and retain exact counts across cursors',async()=>{
+ const f=setup(),root='teyzaBusinessProspects/',base={name:'Synthetic',area:'Umlazi',category:'spaza',email:'',phone:'',stage:'identified',historyVersion:1,permissions:{}};
+ for(let i=0;i<75;i++)f.db.records.set(root+'p'+String(i).padStart(3,'0'),{...base,...(i%3===0?{city:'Durban',province:'KwaZulu-Natal'}:i%3===1?{city:'Durban'}:{city:'Richards Bay',province:'KwaZulu-Natal'})});
+ f.db.records.set(root+'other',{...base,city:'Durban',province:'Gauteng'});
+ f.db.records.set(root+'outside',{...base,city:'Polokwane',province:'Limpopo'});
+ const ids=[];let after=null,asOf=null,total=0,scanned=0;
+ do{const p=await f.call('ops_acquisition_command_page',{filters:{province:'KwaZulu-Natal',category:'spaza'},...(after?{after,asOf}:{})});asOf=p.asOf;after=p.next;total+=p.counts.funnel.discovered;scanned+=p.scanned;ids.push(...p.prospects.map(r=>r.id));}while(after);
+ assert.equal(total,75);assert.equal(scanned,76);assert.equal(new Set(ids).size,75);assert.equal(ids.length,75);assert(!ids.includes('other'));assert(!ids.includes('outside'));
+});

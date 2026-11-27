@@ -70,7 +70,19 @@ async function sample([province,expectedMunicipalityCode,terms]){
  const layers=await Promise.all([metadata(0,['objectid','munic_code','sub_place_code','sub_place_name']),metadata(2,['objectid','munic_code','munic_name','province_code'])]);
  const results=[];
  for(let i=0;i<samples.length;i+=3)results.push(...await Promise.all(samples.slice(i,i+3).map(sample)));
- const report={capturedAt:new Date().toISOString(),source:base,vintage:G.VINTAGE,mode:'public GET only',requests,layers,results,provincesPassed:results.filter(x=>x.ok).length,provincesTested:results.length,allSamplesPassed:layers.every(x=>x.ok)&&results.every(x=>x.ok),currentBoundaryCoverageCertified:false,limitations:['These are representative search and round-trip checks, not all-township coverage.','Expected codes are review fixtures; a sample miss requires source/alias/boundary investigation.','Municipality layer is 2018; current MDB and Stats SA reference crosswalk remains a release requirement.']};
+ // Round-trip one published sub-place per inventoried predecessor code.
+ async function predecessor([old,target]){
+  try{
+   const u=new URL(base+'/0/query');u.search=new URLSearchParams({where:"munic_code = '"+old+"'",outFields:'munic_code,sub_place_code,sub_place_name',returnGeometry:'false',f:'json',resultRecordCount:'5',orderByFields:'objectid ASC'});
+   const response=await publicGet(u.href);assert(response.ok);const data=await response.json();assert(!data.error&&Array.isArray(data.features));
+   const attempts=[];
+   for(const f of data.features){const a=f.attributes;try{const r=await geo.resolve(target+':'+String(a.sub_place_code));assert.equal(r.municipalityCode,target);assert.equal(r.province,G.provinceFor(target));assert.equal(r.township.trim().toLowerCase(),String(a.sub_place_name).trim().toLowerCase());return {old,target,ok:true,reference:r};}catch(e){attempts.push(cleanError(e));}}
+   return {old,target,ok:false,attempts};
+  }catch(e){return {old,target,ok:false,error:cleanError(e)};}
+ }
+ const predecessorResults=[],mappings=Object.entries(G.mergers);
+ for(let i=0;i<mappings.length;i+=5)predecessorResults.push(...await Promise.all(mappings.slice(i,i+5).map(predecessor)));
+ const report={capturedAt:new Date().toISOString(),source:base,vintage:G.VINTAGE,mode:'public GET only',requests,layers,results,predecessorResults,predecessorsPassed:predecessorResults.filter(x=>x.ok).length,predecessorsTested:mappings.length,provincesPassed:results.filter(x=>x.ok).length,provincesTested:results.length,allSamplesPassed:layers.every(x=>x.ok)&&results.every(x=>x.ok)&&predecessorResults.every(x=>x.ok),currentBoundaryCoverageCertified:false,limitations:['These are representative search and round-trip checks, not all-township coverage.','Expected codes are review fixtures; a sample miss requires source/alias/boundary investigation.','Municipality layer is 2018; current MDB and Stats SA reference crosswalk remains a release requirement.']};
  fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2));
  console.log(JSON.stringify(report,null,2));
  if(!report.allSamplesPassed)process.exitCode=1;
