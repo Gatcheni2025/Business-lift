@@ -782,3 +782,79 @@ test('National report counts every snapshot page, filters on server, and reconci
  await rejects(f.call('ops_acquisition_command_page',{}, {uid:'seller1',email_verified:true}),403);
  assert.deepEqual([...f.db.records],before);
 });
+
+test('National report reconciles paid memberships, current ad transactions, approval evidence and duplicate-free paying businesses without writes',async()=>{
+ const f=setup(),R=require('./acquisition-report'),day=86400000;
+ const make=async(name,category,sellerUid,address)=>{
+  let p=(await f.call('ops_acquisition_create',{name,category,city:'Durban',area:'Umlazi',address,source:'owner_inquiry',sourceReference:'Synthetic owner enquiry',authorisedSource:true})).prospect;
+  return (await f.call('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid,ownerConfirmed:true})).prospect;
+ };
+ const set=(path,value)=>f.db.records.set(path,value);
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ set('teyzaSellerAccounts/seller1',{...account,listingPlan:'basic'});
+ set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',approvalStatus:'approved',identityVerified:true,latitude:-29.85,longitude:31.02});
+ const paid={ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:now+day};
+ set('teyzaBilling/seller1',paid);
+ const p=await make('Test Shop','spaza','seller1','Synthetic paid');
+ const pending=await make('Second','retail','seller2','Synthetic pending');
+ const expiry=now+day;
+ set('teyzaMobileVerification/seller2',{ownerUid:'seller2',status:'pending_review',objectPath:'teyza-private/mobile-verification/seller2/selfie',expiresAt:expiry});
+ set('teyzaSellerIdentity/seller2',{ownerUid:'seller2',status:'pending_review',objectPath:'teyza-private/mobile-verification/seller2/identity',expiresAt:expiry});
+ const ad={ownerUid:'seller1',status:'active',paymentStatus:'paid',radiusKm:10,amountCents:2900,latitude:-29.85,longitude:31.02,startsAt:now-20000,endsAt:expiry};
+ const payment={ownerUid:'seller1',status:'paid',environment:'live',currency:'ZAR',amountCents:2900,verifiedAt:now-20000,transactionId:'gateway-123'};
+ const variants=[
+  ['good',{},{}],['good2',{},{}],['unpaid',{status:'approved_unpaid',paymentStatus:'unpaid'},{}],
+  ['expired',{endsAt:now-2000},{}],['paused',{status:'paused'},{}],['sandbox',{}, {environment:'test'}],
+  ['wrongowner',{}, {ownerUid:'seller2'}],['wrongamount',{}, {amountCents:999}],
+  ['wrongcampaign',{}, {advertisementId:'another'}],['refund',{}, {refunded:true}],
+  ['reversed',{}, {reversed:true}],['wrongcurrency',{}, {currency:'USD'}],
+  ['notverified',{}, {verifiedAt:null}],['future',{}, {verifiedAt:now+day}],['missingtransaction',{}, {transactionId:''}]
+ ];
+ for(const [id,adOverride,payOverride] of variants){const reference='TZA-'+id;set('teyzaShopperAds/'+id,{...ad,paymentReference:reference,...adOverride});set('teyzaAdPayments/'+reference,{...payment,advertisementId:id,...payOverride});}
+ set('teyzaShopperAds/nopayment',{...ad,paymentReference:'TZA-missing'});
+ const before=structuredClone([...f.db.records]);
+ const options=[],run=f.db.runTransaction.bind(f.db);f.db.runTransaction=(fn,opt)=>{if(opt)options.push(opt);return run(fn);};
+ const page=await f.call('ops_acquisition_command_page',{filters:{queue:'paying'}});
+ assert.equal(page.complete,true);assert.equal(page.counts.funnel.discovered,2);assert.equal(page.counts.funnel.registered,2);assert.equal(page.counts.funnel.awaitingApproval,1);
+ assert.equal(page.counts.funnel.approved,1);assert.equal(page.counts.funnel.paidSellers,1);assert.equal(page.counts.funnel.activeAdvertisers,1);
+ assert.equal(page.counts.funnel.activePaidCampaigns,2);assert.equal(page.counts.funnel.payingBusinesses,1);assert.equal(page.counts.queues.paying,1);
+ assert.deepEqual(page.prospects.map(x=>x.id),[p.id]);assert.equal(page.prospects[0].seller.unpaidCampaigns,1);assert(page.prospects[0].seller.advertisingReview>=8);
+ assert(options.some(o=>o.readOnly===true&&o.readTime.toMillis()===page.asOf));
+ assert.deepEqual([...f.db.records],before);
+ const review=await f.call('ops_acquisition_command_page',{filters:{queue:'pending_approval'},asOf:page.asOf});
+ assert.deepEqual(review.prospects.map(x=>x.id),[pending.id]);
+ const countOnly=await f.call('ops_acquisition_command_page',{asOf:page.asOf,includeRows:false});assert.deepEqual(countOnly.prospects,[]);assert.equal(countOnly.counts.funnel.payingBusinesses,1);
+ for(const billing of [
+  {ownerUid:'seller1',adminComplimentaryStatus:'active',adminComplimentaryReason:'Synthetic complimentary access',adminComplimentaryBy:'admin1',adminComplimentaryUntil:expiry},
+  {ownerUid:'seller1',mandateAccessStatus:'active',mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate1',mandateAccessUntil:expiry},
+  {...paid,paymentEnvironment:'test'},{...paid,paidUntil:now-2000}
+ ]){
+  set('teyzaBilling/seller1',billing);const result=await f.call('ops_acquisition_command_page',{});
+  assert.equal(result.counts.funnel.paidSellers,0);assert.equal(result.counts.funnel.payingBusinesses,1,'Only the genuine live advertiser remains paying');
+  assert.equal(result.counts.funnel.sellingAccessNotPaid,Number(Boolean(billing.adminComplimentaryStatus||billing.mandateAccessStatus)));
+ }
+ set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'suspended',approvalStatus:'approved',identityVerified:true,latitude:-29.85,longitude:31.02});
+ const suspended=await f.call('ops_acquisition_command_page',{});
+ assert.equal(suspended.counts.funnel.activeAdvertisers,0);assert.equal(suspended.counts.funnel.payingBusinesses,0);
+});
+test('National queues distinguish contact attempts, evidence, missing contacts and SAST follow-up dates',async()=>{
+ const R=require('./acquisition-report'),stamp=now-10000;
+ const base={stage:'identified',phone:'0712345678',phoneKind:'whatsapp_only',permissions:{whatsapp:{granted:true}},seller:null};
+ assert.equal(R.classify(base,now).queues.ready_to_contact,true);
+ assert.equal(R.classify({...base,permissions:{phone:{granted:true}}},now).queues.permission_needed,true);
+ const missing=R.classify({...base,phone:'',email:''},now);assert.equal(missing.queues.new_contact,false);assert.equal(missing.queues.field_visit,true);
+ const historic=await R.history({...base,historyVersion:0},async()=>[{type:'message_accepted',kind:'invitation',channel:'email',acceptedAt:stamp}],now);
+ const accepted=R.classify({...base,...historic},now);assert.equal(accepted.queues.new_contact,false);assert.equal(accepted.queues.awaiting_response,true);assert.equal(accepted.funnel.providerAccepted,1);assert.equal(accepted.funnel.staffConfirmedContact,0);
+ const unknown=await R.history({...base,stage:'registration_started'},async()=>[],now);
+ assert.equal(R.classify({...base,...unknown},now).queues.history_review,true);
+ const download=R.classify({...base,downloadConfirmedAt:stamp},now);assert.equal(download.funnel.downloads,1);assert.equal(download.funnel.approved,0);assert.equal(download.queues.registration_help,true);
+ assert.equal(R.classify({...base,optedOut:true},now).queues.new_contact,false);
+ const tomorrow=(Math.floor((now+7200000)/86400000)+1)*86400000-7200000;
+ assert.equal(R.classify({...base,nextFollowUpAt:tomorrow-1},now).queues.follow_up_due,true);
+ assert.equal(R.classify({...base,nextFollowUpAt:tomorrow},now).queues.follow_up_due,false);
+ const geo={city:'Durban',area:'Umlazi',province:'KwaZulu-Natal',municipality:'eThekwini',category:'spaza'};
+ assert(R.matches(geo,R.parseFilters({province:'KwaZulu-Natal',municipality:' ETHEKWINI ',township:'Umlazi',category:'spaza'})));
+ assert(!R.matches(geo,R.parseFilters({municipality:'Mangaung'})));
+ assert(!R.matches(geo,R.parseFilters({category:'retail'})));
+ assert.throws(()=>R.parseFilters({province:'Gauteng',municipalityCode:'ETH'}),e=>e.status===422);
+});

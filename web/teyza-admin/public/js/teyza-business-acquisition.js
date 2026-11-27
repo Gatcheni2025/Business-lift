@@ -97,7 +97,7 @@ const locationText=p=>[p.province,p.municipality,p.city,p.township||p.area,title
 const confirmedContact=p=>Boolean(p.contactedAt||p.emailHistory?.invitation?.sentAt);
 const outreachRecorded=p=>confirmedContact(p)||Boolean(p.providerAcceptedAt)||wasAccepted(p,'invitation');
 const priorInvitation=p=>Boolean(outreachRecorded(p)||p.invitationRequested||p.historyNeedsReview||hasRequested(p,'invitation')||p.response||p.downloadConfirmedAt||p.seller||p.stage&&p.stage!=='identified');
-const newContact=p=>Array.isArray(p.workQueues)?p.workQueues.includes('new_contact'):!p.optedOut&&hasContact(p)&&!priorInvitation(p);
+const newContact=p=>!p.optedOut&&hasContact(p)&&!priorInvitation(p)&&(!Array.isArray(p.workQueues)||p.workQueues.includes('new_contact'));
 export function matchesAcquisitionContact(p,search='',channel='all',readyOnly=false){
  const hasEmail=typeof p.email==='string'&&!!p.email.trim(),hasPhone=typeof p.phone==='string'&&!!p.phone.trim();
  if(channel==='contactable'&&!newContact(p)||channel==='email'&&!hasEmail||channel==='whatsapp'&&!hasPhone||channel==='whatsapp_only'&&(!hasPhone||p.phoneKind!=='whatsapp_only')||channel==='manual'&&(hasEmail||hasPhone||p.optedOut))return false;

@@ -126,7 +126,7 @@ function classify(p,now){
   new_contact:newContact,ready_to_contact:ready,permission_needed:newContact&&!permitted,
   field_visit:open&&!hasContact(p)&&!registered&&!contacted&&!p.response&&!p.downloadConfirmedAt,
   awaiting_response:open&&contacted&&!p.response&&!registered&&!p.downloadConfirmedAt,
-  registration_help:open&&(!registered&&(p.downloadConfirmedAt||['interested','needs_help'].includes(p.response)||p.stage==='registration_started')||registered&&!approved&&!pending),
+  registration_help:open&&(!registered&&(p.downloadConfirmedAt||['interested','needs_help'].includes(p.response)||p.stage==='registration_started')||registered&&!approved&&!pending&&['pending','needs_changes'].includes(p.seller.status)),
   pending_approval:pending,advertising_opportunity:open&&approved&&!paidAd&&interested!=='not_now',
   seller_opportunity:open&&approved&&!paidSeller&&interested!=='not_now',
   follow_up_due:open&&due,geography_review:p.geographyNeedsReview===true,history_review:p.historyNeedsReview===true,

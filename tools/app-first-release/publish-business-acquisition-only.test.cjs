@@ -218,3 +218,18 @@ test('Both scoped national publishers fail before any Hosting call on a stale or
   }
  }
 });
+
+test('National Admin report accepts complete cursor pages only, with identical snapshot and filters',async()=>{
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {emptyCommandReport,mergeCommandPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const filters={province:'KwaZulu-Natal',category:'spaza',queue:'new_contact',municipality:'eThekwini',township:'Umlazi',municipalityCode:'',localityId:'',search:''};
+ const counts=(discovered,paid)=>{const c=emptyCommandReport().counts;Object.assign(c.funnel,{discovered,registered:paid,approved:paid,paidSellers:paid,activeAdvertisers:paid,activePaidCampaigns:paid+1,payingBusinesses:paid});return c;};
+ const first={schema:2,asOf:1793090000000,filters,scanned:30,counts:counts(25,1),prospects:[{id:'new1'}],next:'cursor1',complete:false};
+ const partial=mergeCommandPage(emptyCommandReport(),first,filters);assert.equal(partial.complete,false);
+ const second={...first,scanned:60,counts:counts(55,2),prospects:[],next:null,complete:true};
+ const result=mergeCommandPage(partial,second,filters,{after:'cursor1',includeRows:false});assert.equal(result.complete,true);assert.equal(result.scanned,90);assert.equal(result.counts.funnel.discovered,80);assert.equal(result.counts.funnel.payingBusinesses,3);
+ for(const bad of [{...second,asOf:first.asOf+1},{...second,filters:{...filters,province:'Gauteng'}},{...second,next:'cursor1',complete:false},{...second,prospects:[{id:'unexpected'}]},{...second,counts:{funnel:{},queues:{}}},{...second,counts:{...second.counts,funnel:{...second.counts.funnel,paidSellers:61}}}]){
+  assert.throws(()=>mergeCommandPage(partial,bad,filters,{after:'cursor1',includeRows:false}),/Incomplete or inconsistent/);
+ }
+ assert.equal(partial.counts.funnel.discovered,25,'Invalid later pages cannot mutate accumulated state');
+});

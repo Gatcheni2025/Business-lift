@@ -14,7 +14,7 @@ const metros=Object.freeze({BUF:['Eastern Cape','Buffalo City'],NMA:['Eastern Ca
 const provinces=Object.freeze(Object.keys(prefixes));
 const norm=v=>String(v||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
 const code=v=>typeof v==='string'&&/^[A-Z0-9]{2,12}$/.test(v)?v:null;
-const subcode=v=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0?String(v):typeof v==='string'&&/^\d{4,15}$/.test(v)?v:null;
+const subcode=v=>{const s=typeof v==='number'&&Number.isSafeInteger(v)&&v>0?String(v):v;return typeof s==='string'&&/^\d{4,15}$/.test(s)?s:null;};
 function provinceFor(m){
  if(!code(m))return null;
  if(Object.hasOwn(metros,m))return metros[m][0];
@@ -86,7 +86,7 @@ function createGeography({fetcher=fetch}={}){
  return {search,resolve};
 }
 function projectedGeography(p){
- const province=p.province||({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'})[p.city]||'';
+ const province=p.province||(p.city==='Durban'?'KwaZulu-Natal':p.city==='Johannesburg'?'Gauteng':'');
  let verified=false;
  if(p.geographySource===SOURCE&&p.geographySourceVintage===VINTAGE&&p.localityId&&p.municipality&&p.township&&p.municipalityCode&&p.townshipCode){
   try{const ids=parseLocalityId(p.localityId);verified=ids.municipalityCode===p.municipalityCode&&ids.subplaceCode===p.townshipCode&&provinceFor(ids.municipalityCode)===province;}catch(_){}
