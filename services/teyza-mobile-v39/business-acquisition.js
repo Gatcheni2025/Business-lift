@@ -2,7 +2,12 @@
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
 const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks';
 const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send']);
-const cities=['Durban','Johannesburg'];
+const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'];
+const legacyProvince=Object.freeze({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'});
+const cities=Object.keys(legacyProvince);
+const phoneKinds=['unconfirmed','whatsapp_only'];
+const responses=['interested','needs_help','declined','other_response'];
+const commercialInterests=['advertising','selling','both','not_now'];
 const categories=['spaza','retail','food','salon','service','wholesale','manufacturer','other'];
 const sources=['owner_inquiry','partner_introduction','owner_provided','permitted_business_directory','in_person','other_permitted'];
 const emailKinds=['invitation','welcome'];
@@ -36,7 +41,24 @@ function placeId(v){
  if(v&&!/^[A-Za-z0-9_-]{10,200}$/.test(v))D.fail(422,'Invalid Google Place ID.');
  return v;
 }
-const contactValue=(p,c)=>c==='email'?p.email:p.phone;
+const contactValue=(p,c)=>c==='email'?p.email:c==='phone'&&p.phoneKind==='whatsapp_only'?'':p.phone;
+const phoneKind=(v,number)=>{
+ const kind=choose(v??'unconfirmed',phoneKinds,'contact number type');
+ if(kind==='whatsapp_only'&&!number)D.fail(422,'Enter the independently confirmed WhatsApp number.');
+ return kind;
+};
+const contactNote=p=>!p.phone&&!p.email?'No phone number or email recorded — field visit / manual enquiry':
+ p.phoneKind==='whatsapp_only'?'No voice phone number — WhatsApp only':
+ !p.phone?'No phone number — email available':'';
+const geography=p=>({province:p.province||legacyProvince[p.city]||'',municipality:p.municipality||'',
+ geographyNeedsReview:!p.province||!p.municipality});
+const acquisitionProgress=p=>({
+ contactedAt:p.contactedAt||p.emailHistory?.invitation?.sentAt||null,
+ lastWhatsAppContactAt:p.lastWhatsAppContactAt||null,
+ response:p.response||null,responseRecordedAt:p.responseRecordedAt||null,
+ downloadConfirmedAt:p.downloadConfirmedAt||null,
+ commercialInterest:p.commercialInterest||null
+});
 function keys(p){return [...new Set([p.phone?'phone:'+hash(p.phone):null,p.email?'email:'+hash(p.email):null].filter(Boolean))];}
 const nextDate=(v,now)=>{
  if(v===null||v===undefined||v==='')return null;
@@ -66,10 +88,15 @@ function createAcquisition({db,clock=Date.now}){
      listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true,
      welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
      welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
-     membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock())};
+     membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock()),
+     paidMembership:a.approvalStatus==='approved'&&P.entitled(p.sellerUid,a,billing,clock()),
+     sellingAccess:a.approvalStatus==='approved'&&P.eligible(p.sellerUid,a,billing,clock())};
    }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
   return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,website:p.website||'',googlePlaceId:p.googlePlaceId||'',
+   ...geography(p),phoneKind:p.phoneKind||'unconfirmed',contactNote:contactNote(p),
+   contactQueue:blocked?'blocked':p.phone||p.email?'contact_details_available':'field_visit',
+   ...acquisitionProgress(p),
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
    lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
@@ -94,10 +121,19 @@ function createAcquisition({db,clock=Date.now}){
   }
   if(action==='ops_acquisition_create'){
    if(data.authorisedSource!==true)D.fail(422,'Confirm that Teyza may retain these business contact details.');
-   const name=clean(data.name,'business name',120),city=choose(data.city,cities,'pilot city'),area=clean(data.area,'township or area',100),address=clean(data.address,'business street address or landmark',220);
+   const name=clean(data.name,'business name',120),area=clean(data.area,'township or area',100),address=clean(data.address,'business street address or landmark',220);
+   // Legacy pilot clients remain compatible until their Admin UI is updated. Their
+   // municipality is deliberately not guessed; new national entries require confirmation.
+   const national=data.province!==undefined||data.municipality!==undefined;
+   const city=national?clean(data.city,'town or city',100):choose(data.city,cities,'legacy pilot city');
+   const province=national?choose(data.province,provinces,'province'):legacyProvince[city];
+   const municipality=national?clean(data.municipality,'municipality',100):'';
+   if(national&&data.geographyConfirmed!==true)D.fail(422,'Confirm the business province, municipality and township.');
    const category=choose(data.category,categories,'business category'),source=choose(data.source,sources,'source');
    const sourceReference=clean(data.sourceReference,'source and permission to retain details',240);
    const contact={phone:phone(data.phone),email:email(data.email),website:website(data.website)};
+   contact.phoneKind=phoneKind(data.phoneKind,contact.phone);
+   contact.contactNote=contactNote(contact);
    const googlePlaceId=placeId(data.googlePlaceId);
    if(googlePlaceId&&data.independentSourceConfirmed!==true)D.fail(422,'Confirm the saved details using an independent permitted source, not Google Maps alone.');
    const initialChannels=data.initialConsentChannels??[];
@@ -113,9 +149,9 @@ function createAcquisition({db,clock=Date.now}){
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
     if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
     const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
-    const p={name,city,area,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
+    const p={name,city,area,province,municipality,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
-    tx.set(ref,p);if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
+    tx.set(ref,p);if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{contactNote:contact.contactNote,province,municipality});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }
@@ -136,7 +172,7 @@ function createAcquisition({db,clock=Date.now}){
    return {prospect,events:result.docs.slice(0,25).map(s=>({id:s.id,...s.data()})),moreEvents:result.docs.length>25,support,moreSupport};
   }
   if(action==='ops_acquisition_event'){
-   const type=choose(data.type,['permission','contact','contact_update','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
+   const type=choose(data.type,['permission','contact','contact_update','geography_update','response','app_download','commercial_interest','progress','opt_out','email_sent','help_requested','help_replied','help_resolved'],'activity');
    const note=clean(data.note,'activity note or consent evidence',500);
    if(data.confirmed!==true)D.fail(422,'Confirm this is an accurate record of an actual event.');
    const saved=await db.runTransaction(async tx=>{
@@ -155,7 +191,37 @@ function createAcquisition({db,clock=Date.now}){
      if(fields.some(k=>!!p[k]))D.fail(409,'Only missing contact details may be added. Existing destinations and permissions cannot be replaced here.');
      if(await suppressed({...p,...Object.fromEntries(fields.map(k=>[k,additions[k]]))},tx))D.fail(409,'Contact is suppressed. Do not add it to this business.');
      for(const key of fields)update[key]=additions[key];
-     details={...details,fields};
+     if(fields.includes('phone'))update.phoneKind=phoneKind(data.phoneKind,additions.phone);
+     update.contactNote=contactNote({...p,...update});
+     details={...details,fields,contactNote:update.contactNote};
+    }
+    if(type==='geography_update'){
+     if(data.geographyConfirmed!==true)D.fail(422,'Confirm the business geography using a permitted source.');
+     if(p.municipality&&p.province)D.fail(409,'Geography is already allocated; escalate corrections for review.');
+     update.province=choose(data.province,provinces,'province');
+     update.municipality=clean(data.municipality,'municipality',100);
+     details={...details,province:update.province,municipality:update.municipality};
+    }
+    if(type==='response'){
+     update.response=choose(data.response,responses,'owner response');
+     update.responseRecordedAt=stamp;
+     if(update.response==='declined'){update.stage='not_interested';update.nextFollowUpAt=null;}
+     details={...details,response:update.response};
+    }
+    if(type==='app_download'){
+     if(data.ownerConfirmedDownload!==true)D.fail(422,'Record actual owner confirmation of the download, not a link click.');
+     if(p.downloadConfirmedAt)D.fail(409,'A download confirmation is already recorded.');
+     update.downloadConfirmedAt=stamp;
+     details={...details,source:'owner_confirmed'};
+    }
+    if(type==='commercial_interest'){
+     if(blocked)D.fail(409,'Do not contact: an opt-out is recorded.');
+     const a=p.sellerUid?await tx.get(doc('teyzaSellerAccounts/'+p.sellerUid)):null;
+     const seller=a?.exists?a.data():null;
+     if(!seller||seller.uid!==p.sellerUid||seller.deletionPending===true||seller.approvalStatus!=='approved'||norm(seller.shopName)!==norm(p.name))
+      D.fail(409,'Commercial follow-up requires the genuinely linked approved business.');
+     update.commercialInterest={kind:choose(data.interest,commercialInterests,'commercial interest'),recordedAt:stamp,recordedBy:uid};
+     details={...details,interest:update.commercialInterest.kind};
     }
     if(type==='permission'||type==='contact'){
      if(blocked)D.fail(409,'Do not contact: an opt-out is recorded for this business or contact.');
@@ -164,7 +230,11 @@ function createAcquisition({db,clock=Date.now}){
      if(type==='permission'){
       if(data.ownerOptIn!==true)D.fail(422,'Record explicit permission from the owner for this channel.');
       update.permissions={...p.permissions,[channel]:{granted:true,recordedAt:stamp,recordedBy:uid}};
-     }else if(p.permissions?.[channel]?.granted!==true)D.fail(409,'Record actual owner permission for this channel first.');
+     }else{
+      if(p.permissions?.[channel]?.granted!==true)D.fail(409,'Record actual owner permission for this channel first.');
+      update.contactedAt=p.contactedAt||stamp;
+      if(channel==='whatsapp')update.lastWhatsAppContactAt=stamp;
+     }
      details={...details,channel};
     }
     if(type==='email_sent'){
@@ -186,6 +256,7 @@ function createAcquisition({db,clock=Date.now}){
      }
      const entry={kind,sentAt,recordedAt:stamp,recordedBy:uid,reference,status:'staff_confirmed_in_zoho_sent'};
      update.emailHistory={...p.emailHistory,[kind]:entry};
+     if(kind==='invitation')update.contactedAt=p.contactedAt||sentAt;
      details={...details,...entry,channel:'email'};
     }
     if(type==='help_requested'){

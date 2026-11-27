@@ -707,3 +707,38 @@ test('Acquisition stores independently verified website and place reference, pre
  const blocked=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'opt_out',confirmed:true,note:'Synthetic opt out'})).prospect;
  await rejects(evt(blocked,{email:'other@example.test'}),409);
 });
+
+test('National prospect intake, missing-contact routing, WhatsApp-only and evidence-based conversion',async()=>{
+ const f=setup(),base={name:'Synthetic National Shop',city:'Polokwane',province:'Limpopo',municipality:'Polokwane',area:'Seshego',address:'Synthetic address',category:'retail',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true,geographyConfirmed:true};
+ await rejects(f.call('ops_acquisition_create',{...base,geographyConfirmed:false}),422);
+ await rejects(f.call('ops_acquisition_create',{...base,province:'Invalid'}),422);
+ await rejects(f.call('ops_acquisition_create',{...base,phoneKind:'whatsapp_only'}),422);
+ let p=(await f.call('ops_acquisition_create',base)).prospect;
+ assert.equal(p.province,'Limpopo');assert.equal(p.municipality,'Polokwane');assert.equal(p.geographyNeedsReview,false);
+ assert.equal(p.contactQueue,'field_visit');assert.match(p.contactNote,/No phone number or email/);
+ const evt=(p,extra)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic owner evidence',...extra});
+ p=(await evt(p,{type:'contact_update',phone:'0712345678',phoneKind:'whatsapp_only',authorisedSource:true})).prospect;
+ assert.equal(p.phone,'+27712345678');assert.equal(p.phoneKind,'whatsapp_only');assert.equal(p.contactQueue,'contact_details_available');assert.match(p.contactNote,/WhatsApp only/);
+ await rejects(evt(p,{type:'permission',channel:'phone',ownerOptIn:true}),422);
+ await rejects(evt(p,{type:'contact',channel:'whatsapp'}),409);
+ p=(await evt(p,{type:'permission',channel:'whatsapp',ownerOptIn:true})).prospect;
+ p=(await evt(p,{type:'contact',channel:'whatsapp'})).prospect;
+ assert.equal(p.contactedAt,now);assert.equal(p.lastWhatsAppContactAt,now);
+ p=(await evt(p,{type:'response',response:'interested'})).prospect;assert.equal(p.response,'interested');
+ await rejects(evt(p,{type:'app_download',ownerConfirmedDownload:false}),422);
+ p=(await evt(p,{type:'app_download',ownerConfirmedDownload:true})).prospect;
+ assert.equal(p.downloadConfirmedAt,now);assert.equal(p.seller,null);
+ await rejects(evt(p,{type:'commercial_interest',interest:'both'}),409);
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});
+test('Legacy pilot records retain identity and can confirm missing geography; all nine provinces accepted',async()=>{
+ const f=setup(),base={name:'Synthetic shop',city:'Durban',area:'Umlazi',address:'Legacy synthetic',category:'spaza',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true};
+ let p=(await f.call('ops_acquisition_create',base)).prospect;
+ assert.equal(p.province,'KwaZulu-Natal');assert.equal(p.geographyNeedsReview,true);const id=p.id;
+ p=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'geography_update',confirmed:true,note:'Confirmed by owner',province:'KwaZulu-Natal',municipality:'eThekwini',geographyConfirmed:true})).prospect;
+ assert.equal(p.id,id);assert.equal(p.geographyNeedsReview,false);
+ for(const province of ['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){
+  const n=(await f.call('ops_acquisition_create',{...base,city:'Synthetic '+province,area:'Test area',address:'Synthetic '+province,province,municipality:'Test municipality',geographyConfirmed:true})).prospect;
+  assert.equal(n.province,province);assert.equal(n.geographyNeedsReview,false);
+ }
+});

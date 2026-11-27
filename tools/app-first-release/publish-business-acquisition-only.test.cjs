@@ -194,3 +194,16 @@ test('Idle/contact/area release publishes only 15 Admin paths and requires both 
  assert.doesNotThrow(()=>assertAdminReady(health));
  for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
 });
+
+test('National contact queues exclude missing contacts without deleting their records and prepare consent-led WhatsApp only',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {matchesAcquisitionContact:match,acquisitionContactNote,manualWhatsappDraftUrl}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const p={name:'Synthetic',province:'Limpopo',municipality:'Polokwane',city:'Polokwane',area:'Seshego',phone:'',email:''};
+ assert(!match(p,'','contactable'));assert(match(p,'Limpopo Seshego','manual'));assert(match(p,'','all'));assert.match(acquisitionContactNote(p),/No phone number or email/);
+ const wa={...p,phone:'+27712345678',phoneKind:'whatsapp_only'};
+ assert(match(wa,'','contactable'));assert(match(wa,'','whatsapp_only'));assert(!match(wa,'','manual'));assert.equal(manualWhatsappDraftUrl(wa),null);
+ const permitted={...wa,permissions:{whatsapp:{granted:true}}};const url=new URL(manualWhatsappDraftUrl(permitted));assert.equal(url.pathname,'/27712345678');assert.match(url.searchParams.get('text'),/Synthetic/);
+ assert.equal(manualWhatsappDraftUrl({...permitted,lastWhatsAppContactAt:123}),null);
+ assert(!match({...p,optedOut:true},'','manual'));assert(!match({...wa,optedOut:true},'','contactable'));
+});

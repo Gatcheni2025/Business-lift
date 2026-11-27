@@ -1,0 +1,24 @@
+# Teyza national business acquisition — draft increment 1
+
+Base: production-verified Admin revision da06e0ff64ee068d94812af65e6e0a34b3eceb15. This is development-only; no deployment, merge, contact sending, auth changes, billing changes or rules changes are authorised by this branch.
+
+## Implemented candidate
+- Nine-province intake with explicitly confirmed province, municipality, city and township; business category already retained. Pilot clients remain compatible until the matching Admin release; legacy records require geographic review (no guessed municipality). Existing prospect IDs, consent, suppression, assignment and histories stay intact.
+- No phone/email records remain in the prospect register and field-visit filter; excluded from the default active contact list. Notes distinguish missing details, email-only and independently confirmed WhatsApp-only. WhatsApp-only reuses the established normalized destination field and forbids treating it as a voice-call channel. It does not infer WhatsApp registration or marketing permission.
+- Manual WhatsApp invitations reuse existing personalized text and store links and require recorded owner permission, fresh prospect revision, and no existing invitation/contact or opt-out. Opening WhatsApp is not sending.
+- Staff-confirmed contact, actual owner response, explicitly owner-confirmed app download, linked genuine seller status, approved-business commercial interest, and verified live paid seller membership are separate. No conversion action writes seller approval, payment or advertising records. Provider acceptance is not delivery; registration is not a download.
+- Loaded-page filters and counts are labelled as such. These are NOT national aggregate counts yet.
+
+## Release blockers / next increments
+1. Run all backend, browser, app and security regression checks. Add synthetic end-to-end coverage for national search, contact entry, suppression, legacy geography allocation, approval and browser sign-out. Recheck immutable production base; review an exact scoped publisher/cache-busting strategy and backend health capability gate before any release.
+2. National scale: verified province/municipality/township identifiers and aliases, indexed server-side filtering and pagination, staff/geography assignment and audited migration of older prospects and historical contact events. Do not infer location from an ambiguous place name. Preserve existing IDs and deduplicate independent first-party records, including cross-province collision review. Google listing search remains ephemeral; only independently confirmed permitted information is saved. All-township discovery depends on listing coverage; field agents fill gaps.
+3. Build a national command centre with accurate server-side totals: discovered, contactable, contact due, contacted (staff-confirmed or separately labelled provider-accepted), responded, owner-confirmed downloads, genuine linked registration, pending approval, approved, paid seller and paid active advertiser. Use per-stage timestamps/evidence, not manual assertions of account approval or payment. Filter province/municipality/township/category/staff; record assignments and follow-ups. No-contact is distinct from unverified, opt-out and non-response.
+4. Commercial conversion: owner interest is separate from ad review, paid campaign and live placement. Join exact linked seller UID to genuine advertising and verified live payment records; validate campaign ownership, active window, approval and payment reconciliation. Paid seller membership uses live gateway entitlement (not complimentary or mandate access); preserve R99 full-month terms and proration. Keep advertising and selling independent and optional. No automatic marketing, seller approval or charges.
+5. Separate production sign-off: synthetic tests first, guarded mobile-only deploy and post-deploy preservation of unrelated functions, auth, secrets, Firestore and payments, then scoped Admin Hosting publication and browser acceptance. Never merge or publish from this draft without review.
+
+## Known increment limits
+- National locations are staff-confirmed text, not a complete authoritative township directory. There is no national background scraping or bulk messaging.
+- The active contact list and conversion counters cover only loaded pages; no new global indexes or migration have been applied.
+- Existing phone records may still be unconfirmed for WhatsApp. A distinct second number when both channels differ and explicit reclassification of existing numbers are follow-up work.
+- Manual download confirmation is not install telemetry. Existing historical contact events require reconciliation before historical aggregate counts can be trusted.
+- Active paid advertising and independent campaign/payment reconciliation are not implemented in increment 1.
