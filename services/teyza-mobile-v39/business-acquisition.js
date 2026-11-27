@@ -1,8 +1,8 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
-const G=require('./acquisition-geography');
+const G=require('./acquisition-geography'),R=require('./acquisition-report');
 const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks',identityLinks='teyzaBusinessProspectIdentityKeys';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities']);
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities','ops_acquisition_command_page']);
 const provinces=G.provinces;
 const legacyProvince=Object.freeze({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'});
 const cities=Object.keys(legacyProvince);
@@ -67,7 +67,7 @@ const nextDate=(v,now)=>{
  return v;
 };
 function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography()} ){
- const doc=p=>db.doc(p),read=async p=>{const s=await doc(p).get();return s.exists?s.data():null;};
+ const doc=p=>db.doc(p),read=async(p,tx=null)=>{const ref=doc(p),s=await(tx?tx.get(ref):ref.get());return s.exists?s.data():null;};
  const communications=createCommunication({db,clock});
  const eventsPath=id=>collection+'/'+id+'/events';
  // Exact normalized name/address in a province is deliberately conservative.
@@ -99,34 +99,71 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
   const rows=await Promise.all(refs.map(r=>tx?tx.get(r):r.get()));
   return rows.some(s=>s.exists);
  }
- async function view(id,p){
-  const blocked=p.optedOut===true||await suppressed(p);
+ async function historical(id,p,tx,now){
+  return R.history(p,async()=>{
+   const events=await R.allRows(()=>db.collection(eventsPath(id)).where('type','in',['contact','email_sent','message_accepted']),q=>tx?tx.get(q):q.get());
+   return events.map(s=>s.data());
+  },now);
+ }
+ async function view(id,p,tx=null,asOf=clock()){
+  const [blocked,history]=await Promise.all([p.optedOut===true?true:suppressed(p,tx),historical(id,p,tx,asOf)]);
   let seller=null;
   if(p.sellerUid){
-   const a=await read('teyzaSellerAccounts/'+p.sellerUid);
-   if(a?.uid===p.sellerUid&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)){
-    const [s,billing]=await Promise.all([read('teyzaPublicShops/'+p.sellerUid),read('teyzaBilling/'+p.sellerUid)]);
-    seller={uid:p.sellerUid,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
-     listed:s?.sellerUid===p.sellerUid&&s.status==='active'&&s.approvalStatus==='approved'&&s.identityVerified===true,
-     welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
+   const key=typeof p.sellerUid==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(p.sellerUid)?p.sellerUid:null;
+   const [a,linked]=key?await Promise.all([read('teyzaSellerAccounts/'+key,tx),read(links+'/'+key,tx)]):[];
+   if(a?.uid===key&&linked?.prospectId===id&&a.deletionPending!==true&&norm(a.shopName)===norm(p.name)&&['spaza','retail','wholesale'].includes(a.category)){
+    const [s,billing]=await Promise.all([read('teyzaPublicShops/'+key,tx),read('teyzaBilling/'+key,tx)]);
+    const facts=await R.sellerSignals({id:key,account:a,shop:s,billing,read:path=>read(path,tx),ads:uid=>R.allRows(()=>db.collection('teyzaShopperAds').where('ownerUid','==',uid),q=>tx?tx.get(q):q.get()),now:asOf});
+    seller={uid:key,status:['approved','pending','rejected','suspended','needs_changes'].includes(a.approvalStatus)?a.approvalStatus:'pending',
+     ...facts,welcomeEmailEligible:!!p.email&&norm(a.ownerEmail)===norm(p.email),
      welcomeWhatsAppEligible:!!p.phone&&String(a.phone||'').replace(/[\s().-]/g,'').replace(/^0(\d{9})$/,'+27$1')===p.phone,
-     membershipEligible:a.approvalStatus==='approved'&&!P.eligible(p.sellerUid,a,billing,clock()),
-     paidMembership:a.approvalStatus==='approved'&&P.entitled(p.sellerUid,a,billing,clock()),
-     sellingAccess:a.approvalStatus==='approved'&&P.eligible(p.sellerUid,a,billing,clock())};
-   }else seller={uid:p.sellerUid,status:'review_required',listed:false,welcomeEmailEligible:false};
+     membershipEligible:facts.approved&&!facts.sellingAccess};
+   }else seller={uid:key||null,status:'review_required',listed:false,welcomeEmailEligible:false};
   }
-  return {id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,website:p.website||'',googlePlaceId:p.googlePlaceId||'',
+  const prospect={id,name:p.name,city:p.city,area:p.area,address:p.address,category:p.category,phone:p.phone,email:p.email,website:p.website||'',googlePlaceId:p.googlePlaceId||'',
    ...geography(p),phoneKind:p.phoneKind||'unconfirmed',contactNote:contactNote(p),
    contactQueue:blocked?'blocked':p.phone||p.email?'contact_details_available':'field_visit',
-   ...acquisitionProgress(p),
+   ...acquisitionProgress(p),...history,
    source:p.source,sourceReference:p.sourceReference,stage:p.stage,permissions:p.permissions||{},optedOut:blocked,
    nextFollowUpAt:blocked?null:p.nextFollowUpAt??null,createdAt:p.createdAt,updatedAt:p.updatedAt,lastActivityAt:p.lastActivityAt,
    lastActivityBy:p.lastActivityBy,assignedTo:p.assignedTo,revision:p.revision,seller,
    emailHistory:p.emailHistory||{},outbound:p.outbound||{},help:p.help||null};
+  const queues=R.classify(prospect,asOf).queues;return {...prospect,workQueues:Object.keys(queues).filter(k=>queues[k])};
+ }
+ // Snapshot pages are anchored at one Firestore readTime. Every seller, payment,
+ // suppression and legacy-event join uses the SAME read-only transaction.
+ // No count is returned as a national total until the client has consumed the
+ // final cursor. These pages support sparse results without skipping records.
+ async function commandPage(data){
+  const filters=R.parseFilters(data.filters),now=clock();
+  const asOf=data.asOf??(Math.floor(now/1000)*1000-1000);
+  if(!Number.isSafeInteger(asOf)||asOf>now||now-asOf>55*60000||data.after&&!data.asOf)D.fail(422,'The report snapshot expired. Refresh the national command centre.');
+  const cursor=data.after?D.id(data.after):null,includeRows=data.includeRows!==false;
+  const {Timestamp}=require('firebase-admin/firestore');
+  return db.runTransaction(async tx=>{
+   let q=db.collection(collection);
+   // Indexed exact fields where safe. Province/name filters also include
+   // legacy records with no materialized geography; they are evaluated on
+   // the server within each bounded cursor page, never only on loaded rows.
+   if(filters.localityId)q=q.where('localityId','==',filters.localityId);
+   else if(filters.municipalityCode)q=q.where('municipalityCode','==',filters.municipalityCode);
+   else if(filters.category)q=q.where('category','==',filters.category);
+   q=q.orderBy('__name__').limit(31);if(cursor)q=q.startAfter(cursor);
+   const page=await tx.get(q),rows=page.docs.slice(0,30),counts=R.emptyCounts(),prospects=[];
+   // Small batches bound Firestore read fanout for multi-join records.
+   const matched=rows.filter(s=>R.matches(s.data(),filters));
+   for(let i=0;i<matched.length;i+=5){
+    const views=await Promise.all(matched.slice(i,i+5).map(s=>view(s.id,s.data(),tx,asOf)));
+    for(const p of views){const facts=R.classify(p,asOf);R.addCounts(counts,facts);if(includeRows&&(!filters.queue||facts.queues[filters.queue]))prospects.push(p);}
+   }
+   const next=page.docs.length>30?rows.at(-1).id:null;
+   return {schema:2,asOf,filters,scanned:rows.length,counts,prospects,next,complete:next===null};
+  },{readOnly:true,readTime:Timestamp.fromMillis(asOf)});
  }
  async function execute(auth,action,data){
   const uid=D.id(auth.uid);
   if(action==='ops_acquisition_localities')return geographyLookup.search(data.province,data.query);
+  if(action==='ops_acquisition_command_page')return commandPage(data);
   if(action==='ops_acquisition_list'){
    let q=db.collection(collection).orderBy('__name__').limit(31);
    if(data.after)q=q.startAfter(D.id(data.after));
@@ -179,14 +216,22 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
     if(old.exists)D.fail(409,'This business already exists for the same name and location. Open its existing record.');
     if(initialChannels.length&&await suppressed(contact,tx))D.fail(409,'Contact is suppressed. Do not record new marketing consent here.');
     const permissions=Object.fromEntries(initialChannels.map(c=>[c,{granted:true,recordedAt:clock(),recordedBy:uid}]));
-    const p={name,city,area,...geo,identityKey:key,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
+    const p={name,city,area,...geo,identityKey:key,historyVersion:1,address,category,source,sourceReference,...contact,googlePlaceId,stage:'identified',permissions,optedOut:false,nextFollowUpAt:null,
      sellerUid:null,assignedTo:uid,createdAt:clock(),updatedAt:clock(),lastActivityAt:clock(),lastActivityBy:uid,revision:0};
     tx.set(ref,p);tx.set(keyRef,{prospectId:id,province,createdAt:clock(),createdBy:uid});if(placeRef)tx.set(placeRef,{prospectId:id,linkedAt:clock(),linkedBy:uid});event(tx,id,uid,'created',{contactNote:contact.contactNote,province,municipality:geo.municipality,localityId:geo.localityId||null});for(const channel of initialChannels)event(tx,id,uid,'permission',{channel,note:initialNote});return p;
    });
    return {prospect:await view(id,saved)};
   }
   const id=D.id(data.id),ref=doc(collection+'/'+id);
-  if(action==='ops_acquisition_send')return communications.enqueue(uid,id,data);
+  if(action==='ops_acquisition_send'){
+   if(data.kind==='invitation'){
+    const p=await read(collection+'/'+id);if(!p)D.fail(404,'Business prospect not found.');
+    // enqueue independently rechecks the exact revision and consent in a
+    // transaction. No second initial invitation after historical outreach.
+    if(R.priorOutreach({...p,...await historical(id,p,null,clock())}))D.fail(409,'Prior outreach or progress exists. Review contact history instead of sending another initial invitation.');
+   }
+   return communications.enqueue(uid,id,data);
+  }
   if(action==='ops_acquisition_detail'){
    const p=await read(collection+'/'+id);if(!p)D.fail(404,'Business prospect not found.');
    const result=await db.collection(eventsPath(id)).orderBy('createdAt','desc').limit(26).get();

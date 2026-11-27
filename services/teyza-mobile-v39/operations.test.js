@@ -14,7 +14,7 @@ class FakeDB {
     where:(...filter)=>{filters.push(filter);return query;},orderBy:(...args)=>{sort=args;return query;},
     startAfter:value=>{after=value;return query;},limit:value=>{max=value;return query;},get:async()=>{
       let rows=[...db.records].filter(([key,value])=>key.startsWith(path+'/')&&key.slice(path.length+1).indexOf('/')===-1&&
-        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):value[field]<=wanted));
+        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):op==='in'?wanted.includes(value[field]):value[field]<=wanted));
       if(after)rows=rows.filter(([key])=>key.split('/').pop()>after);
       if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*(sort[0]==='__name__'?a[0].localeCompare(b[0]):((a[1][sort[0]]||0)-(b[1][sort[0]]||0))));
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
@@ -754,4 +754,31 @@ test('Official allocation derives source codes on the server and preserves legac
  assert.equal(q.id,p.id);assert.equal(q.area,'Kwa Mashu');assert.equal(q.township,'KwaMashu');assert.equal(q.municipality,'eThekwini');assert.equal(q.localityId,official.localityId);assert.equal(q.geographyNeedsReview,false);
  const detail=await api.execute(admin,'ops_acquisition_detail',{id:p.id});
  assert(detail.events.some(e=>e.type==='created'));assert(detail.events.some(e=>e.type==='geography_update'));
+});
+
+test('National report counts every snapshot page, filters on server, and reconciles old contacts outside recent history',async()=>{
+ const f=setup(),R=require('./acquisition-report'),id='legacy1';
+ const base={name:'Historic Spaza',city:'Durban',area:'Umlazi',address:'Legacy',category:'spaza',phone:'+27712345678',email:'',stage:'identified',permissions:{whatsapp:{granted:true}},revision:0};
+ f.db.records.set('teyzaBusinessProspects/'+id,base);
+ f.db.records.set('teyzaBusinessProspects/'+id+'/events/old-contact',{type:'contact',channel:'whatsapp',createdAt:now-1000000});
+ for(let i=0;i<35;i++)f.db.records.set('teyzaBusinessProspects/'+id+'/events/new-'+i,{type:'permission',channel:'whatsapp',createdAt:now-10000+i});
+ for(let i=0;i<65;i++)f.db.records.set('teyzaBusinessProspects/p'+String(i).padStart(3,'0'),{...base,name:'Prospect '+i,city:i<32?'Polokwane':'Durban',province:i<32?'Limpopo':'KwaZulu-Natal',municipality:i<32?'Polokwane':'eThekwini',area:i<32?'Seshego':'Umlazi',category:i<32?'retail':'spaza',historyVersion:1,phone:i%2?'':base.phone,permissions:i%2?{}:base.permissions});
+ const before=structuredClone([...f.db.records]);const filters={province:'KwaZulu-Natal',category:'spaza',township:'Umlazi',queue:'new_contact'};
+ const total=R.emptyCounts();let cursor=null,asOf=null,pages=0,seen=[],scanned=0;
+ do{
+  const page=await f.call('ops_acquisition_command_page',{filters,...(cursor?{after:cursor,asOf}:{} )});
+  assert.equal(page.schema,2);assert.equal(page.asOf,asOf??page.asOf);asOf=page.asOf;cursor=page.next;pages++;scanned+=page.scanned;
+  for(const group of ['funnel','queues'])for(const k of Object.keys(total[group]))total[group][k]+=page.counts[group][k];
+  seen.push(...page.prospects);
+ }while(cursor);
+ assert(pages>1);assert.equal(total.funnel.discovered,34);assert.equal(total.funnel.contacted,1);assert.equal(total.funnel.staffConfirmedContact,1);
+ assert(!seen.some(p=>p.id===id));assert(seen.every(p=>p.province==='KwaZulu-Natal'&&p.category==='spaza'&&p.phone));
+ assert.equal(scanned,34);assert.equal(total.queues.new_contact,seen.length);
+ const detail=await f.call('ops_acquisition_detail',{id});assert.equal(detail.prospect.lastWhatsAppContactAt,now-1000000);assert(!detail.events.some(e=>e.type==='contact'));
+ await rejects(f.call('ops_acquisition_send',{id,revision:0,channel:'whatsapp',kind:'invitation',confirmed:true}),409);
+ await rejects(f.call('ops_acquisition_command_page',{filters:{province:'Not a province'}}),422);
+ await rejects(f.call('ops_acquisition_command_page',{after:'p001'}),422);
+ await rejects(f.call('ops_acquisition_command_page',{asOf:now-56*60000}),422);
+ await rejects(f.call('ops_acquisition_command_page',{}, {uid:'seller1',email_verified:true}),403);
+ assert.deepEqual([...f.db.records],before);
 });
