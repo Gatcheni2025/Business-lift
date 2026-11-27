@@ -12,7 +12,7 @@ const aliases=["/admin.html","/admin-review.html","/admin-sellers.html","/admin-
 const paths=[...aliases,'/js/teyza-app-admin.js','/js/teyza-operations.js','/js/teyza-business-acquisition.js','/js/teyza-combined-coverage.mjs','/assets/teyza-app-admin.css','/assets/teyza-map-first.css','/for-shop-owners.html'];
 const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
 const workRoot=path.resolve(__dirname,'../../web/app-first/public');
-const backupPath=path.resolve(__dirname,'../../hosting-backup-business-acquisition.json');
+const backupPath=path.resolve(__dirname,'../../hosting-backup-business-acquisition-national.json');
 const files=()=>new Map(paths.map(p=>{
  const bytes=zlib.gzipSync(fs.readFileSync(path.join(p==='/for-shop-owners.html'?workRoot:adminRoot,aliases.includes(p)?'admin.html':p.slice(1))),{level:9});
  return [p,{bytes,hash:crypto.createHash('sha256').update(bytes).digest('hex')}];
@@ -41,18 +41,18 @@ function verify(before,after,managed){
  for(const [p,v] of managed)if(after.get(p)!==v.hash)throw Error('Agent asset was not verified: '+p);
 }
 function assertR90Ready(health){
- if(health?.ok!==true||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
-  throw Error('Matching business acquisition and R90 backend is not active. Hosting unchanged.');
+ if(health?.ok!==true||health.adminNationalAcquisition!==true||health.adminNationalAcquisitionSchema!==2||health.adminNationalAcquisitionSummarySchema!==1||health.adminBusinessAcquisition!==true||health.adminBusinessCommunications!==true||health.adminBusinessContactDiscovery!==true||health.agentRewardReviewEnabled!==true||health.agentRewardCents!==9000||health.agentCommissionEnabled!==false||health.fieldAgentWorkspace!==true||health.fieldAgentDiscovery!==true){
+  throw Error('Matching national acquisition schema 2 and existing Admin backend capabilities are required. Hosting unchanged.');
  }
 }
-async function checkR90Ready(){
- const response=await fetch('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000)});
+async function checkR90Ready(fetcher=fetch){
+ const response=await fetcher('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaMobile',{signal:AbortSignal.timeout(30000)});
  if(!response.ok)throw Error('Field reward health request failed.');
  assertR90Ready(await response.json());
 }
-async function deploy(client){
+async function deploy(client,{fetcher=fetch}={}){
  if(fs.readFileSync(path.join(adminRoot,'js/teyza-app-admin-model.mjs'),'utf8').includes('adminSession=()=>undefined'))throw Error('Use the matching Admin idle/contact/area publisher. Hosting unchanged.');
- await checkR90Ready();
+ await checkR90Ready(fetcher);
  const domain=await client.hosting('GET','/projects/'+PROJECT+'/sites/'+SITE+'/customDomains/teyza.co.za');
  if(!domain.name?.endsWith('/customDomains/teyza.co.za'))throw Error('Incorrect Hosting domain; no changes made.');
  const source=await current(client);
@@ -79,6 +79,7 @@ async function deploy(client){
   if(canonical(result.config)!==canonical(original.config))throw Error('Unexpected Hosting configuration change.');
  }
  await client.hosting('PATCH','/'+candidate,{status:'FINALIZED'},{updateMask:'status'});
+ await checkR90Ready(fetcher);
  if(await current(client)!==source)throw Error('Another release went live; no release was published.');
  const release=await client.hosting('POST','/'+BASE+'/channels/live/releases',{message:'Scoped Teyza Business Acquisition'},{versionName:candidate});
  if(await current(client)!==candidate)throw Error('Published version not confirmed.');

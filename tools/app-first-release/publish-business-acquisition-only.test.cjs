@@ -7,7 +7,7 @@ test('Business Acquisition scoped publisher preserves all unrelated site assets 
  const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
  assert.doesNotThrow(()=>verify(before,after,items));assert.throws(()=>verify(before,new Map([...after,['/agents.html','changed']]),items));
- const health={ok:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));assert.throws(()=>assertR90Ready({...health,adminBusinessContactDiscovery:false}));
 });
 test('Business invitation destination shows the actual app and direct store links before optional detail',()=>{const fs=require('node:fs'),path=require('node:path');const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');const main=html.slice(html.indexOf('<main id="main">'),html.indexOf('</main>'));const hero=main.slice(0,main.indexOf('data-teyza-demo'));for(const text of ['Put your business','/assets/app/home.webp','/assets/app/nearby-shops.webp','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733','Get help getting started'])assert(hero.includes(text),text);assert(main.includes('example shop, items and request are illustrative'));assert(main.includes('tel:+27315661165'));assert(main.includes('Registration and verification are free'));assert(main.includes('/seller-subscriptions.html'));assert(html.includes('/assets/app-demo.js'));});
@@ -190,7 +190,60 @@ test('Idle/contact/area release publishes only 15 Admin paths and requires both 
  assert.equal(paths.length,15);assert(paths.includes('/js/teyza-app-admin-model.mjs'));
  for(const excluded of ['/index.html','/for-shop-owners.html','/assets/app-first.css','/support-inbox.html','/pay/index.html','/assets/teyza-map-first.css'])assert(!paths.includes(excluded));
  assert.equal(files().size,15);
- const health={ok:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertAdminReady(health));
  for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
+});
+
+test('National contact queues exclude missing contacts without deleting their records and prepare consent-led WhatsApp only',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {matchesAcquisitionContact:match,acquisitionContactNote,manualWhatsappDraftUrl}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const p={name:'Synthetic',province:'Limpopo',municipality:'Polokwane',city:'Polokwane',area:'Seshego',phone:'',email:''};
+ assert(!match(p,'','contactable'));assert(match(p,'Limpopo Seshego','manual'));assert(match(p,'','all'));assert.match(acquisitionContactNote(p),/No phone number or email/);
+ const wa={...p,phone:'+27712345678',phoneKind:'whatsapp_only'};
+ assert(match(wa,'','contactable'));assert(match(wa,'','whatsapp_only'));assert(!match(wa,'','manual'));assert.equal(manualWhatsappDraftUrl(wa),null);
+ const permitted={...wa,permissions:{whatsapp:{granted:true}}};const url=new URL(manualWhatsappDraftUrl(permitted));assert.equal(url.pathname,'/27712345678');assert.match(url.searchParams.get('text'),/Synthetic/);
+ assert.equal(manualWhatsappDraftUrl({...permitted,lastWhatsAppContactAt:123}),null);
+ assert(!match({...p,optedOut:true},'','manual'));assert(!match({...wa,optedOut:true},'','contactable'));
+ for(const completed of [{contactedAt:123},{response:'interested'},{downloadConfirmedAt:123},{seller:{status:'pending'}},{outbound:{whatsapp_invitation:{status:'queued'}}},{stage:'closed'}])assert(!match({...wa,...completed},'','contactable'));
+});
+
+test('Both scoped national publishers fail before any Hosting call on a stale or incompatible backend',async()=>{
+ for(const file of ['./publish-admin-idle-contact-area-only.cjs','./publish-business-acquisition-only.cjs']){
+  const p=require(file);let calls=0;const client={hosting:async()=>{calls++;throw Error('unexpected Hosting operation');}};
+  for(const health of [{ok:true},{ok:true,adminNationalAcquisition:false,adminNationalAcquisitionSchema:2},{ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:1}]){
+   await assert.rejects(p.deploy(client,{fetcher:async()=>({ok:true,json:async()=>health})}),/national acquisition schema 2|matching Admin idle/);
+   assert.equal(calls,0);
+  }
+ }
+});
+
+test('National Admin report accepts complete cursor pages only, with identical snapshot and filters',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {emptyCommandReport,mergeCommandPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const filters={province:'KwaZulu-Natal',category:'spaza',queue:'new_contact',municipality:'eThekwini',township:'Umlazi',municipalityCode:'',localityId:'',search:''};
+ const counts=(discovered,paid)=>{const c=emptyCommandReport().counts;Object.assign(c.funnel,{discovered,registered:paid,approved:paid,paidSellers:paid,activeAdvertisers:paid,activePaidCampaigns:paid+1,payingBusinesses:paid});return c;};
+ const first={schema:2,asOf:1793090000000,filters,scanned:30,counts:counts(25,1),prospects:[{id:'new1'}],next:'cursor1',complete:false};
+ const partial=mergeCommandPage(emptyCommandReport(),first,filters);assert.equal(partial.complete,false);
+ const second={...first,scanned:60,counts:counts(55,2),prospects:[],next:null,complete:true};
+ const result=mergeCommandPage(partial,second,filters,{after:'cursor1',includeRows:false});assert.equal(result.complete,true);assert.equal(result.scanned,90);assert.equal(result.counts.funnel.discovered,80);assert.equal(result.counts.funnel.payingBusinesses,3);
+ for(const bad of [{...second,asOf:first.asOf+1},{...second,filters:{...filters,province:'Gauteng'}},{...second,next:'cursor1',complete:false},{...second,prospects:[{id:'unexpected'}]},{...second,counts:{funnel:{},queues:{}}},{...second,counts:{...second.counts,funnel:{...second.counts.funnel,paidSellers:61}}}]){
+  assert.throws(()=>mergeCommandPage(partial,bad,filters,{after:'cursor1',includeRows:false}),/Incomplete or inconsistent/);
+ }
+ assert.equal(partial.counts.funnel.discovered,25,'Invalid later pages cannot mutate accumulated state');
+});
+
+test('Materialized summary pages are validated, contain no contact destinations and cannot mix generations',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {emptyCommandReport,validateSummaryPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const filters={province:'',category:'',queue:'new_contact',municipality:'',township:'',municipalityCode:'',localityId:'',search:''},counts=emptyCommandReport().counts;
+ counts.funnel.discovered=65;counts.queues.new_contact=65;
+ const p={summarySchema:1,summaryGeneration:'00000000-0000-0000-0000-000000000000',asOf:1793090000000,filters,counts,scanned:65,prospects:[{id:'synthetic',snapshotOnly:true}],next:'synthetic'};
+ assert.equal(validateSummaryPage(p,filters),p);
+ assert.throws(()=>validateSummaryPage({...p,prospects:[{id:'synthetic',snapshotOnly:true,email:'synthetic@example.test'}]},filters));
+ assert.throws(()=>validateSummaryPage({...p,summaryGeneration:'11111111-1111-1111-1111-111111111111'},filters,p));
+ assert.throws(()=>validateSummaryPage({...p,counts:{...counts,funnel:{...counts.funnel,discovered:64}}},filters));
 });

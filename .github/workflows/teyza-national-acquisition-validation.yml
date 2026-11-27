@@ -1,0 +1,66 @@
+name: Teyza national acquisition isolated validation
+on:
+  pull_request:
+    paths:
+      - 'tools/national-acquisition-validation/**'
+      - 'services/teyza-mobile-v39/acquisition-*.js'
+      - 'services/teyza-mobile-v39/business-acquisition.js'
+      - '.github/workflows/teyza-national-acquisition-validation.yml'
+permissions:
+  contents: read
+jobs:
+  government_reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read public government metadata and round-trip nine province samples
+        run: node tools/national-acquisition-validation/geography-probe.cjs national-validation/geography-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-geography-audit
+          path: national-validation/geography-audit.json
+          if-no-files-found: warn
+          retention-days: 30
+  firestore_emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            services/teyza-mobile-v39/package-lock.json
+            tools/admin-release/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --prefix services/teyza-mobile-v39 --no-audit --no-fund
+      - run: npm ci --prefix tools/admin-release --ignore-scripts --no-audit --no-fund
+      - name: Run real Firestore SDK against isolated loopback emulator only
+        working-directory: tools/national-acquisition-validation
+        env:
+          GCLOUD_PROJECT: demo-teyza-national-validation
+          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN GOOGLE_GHA_CREDS_PATH CLOUDSDK_AUTH_ACCESS_TOKEN
+          mkdir -p ../../national-validation
+          ../admin-release/node_modules/.bin/firebase emulators:exec --only firestore --project demo-teyza-national-validation --config emulator-only.json "node firestore-probe.cjs ../../national-validation/emulator-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-firestore-emulator-audit
+          path: national-validation/emulator-audit.json
+          if-no-files-found: warn
+          retention-days: 30

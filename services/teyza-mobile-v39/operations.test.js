@@ -14,13 +14,13 @@ class FakeDB {
     where:(...filter)=>{filters.push(filter);return query;},orderBy:(...args)=>{sort=args;return query;},
     startAfter:value=>{after=value;return query;},limit:value=>{max=value;return query;},get:async()=>{
       let rows=[...db.records].filter(([key,value])=>key.startsWith(path+'/')&&key.slice(path.length+1).indexOf('/')===-1&&
-        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):value[field]<=wanted));
+        filters.every(([field,op,wanted])=>op==='=='?value[field]===wanted:op==='array-contains'?value[field]?.includes(wanted):op==='in'?wanted.includes(value[field]):value[field]<=wanted));
       if(after)rows=rows.filter(([key])=>key.split('/').pop()>after);
       if(sort)rows.sort((a,b)=>(sort[1]==='desc'?-1:1)*(sort[0]==='__name__'?a[0].localeCompare(b[0]):((a[1][sort[0]]||0)-(b[1][sort[0]]||0))));
       const docs=rows.slice(0,max).map(([key])=>db.snapshot(key));return {docs,size:docs.length};
     }};return query;}
-  transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},
-    set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
+  transaction(){const writes=[],db=this;let wrote=false;return {get:async ref=>{assert(!wrote,'Transaction must read before writing');return ref.get();},getAll:async(...refs)=>{assert(!wrote,'Transaction must read before writing');return Promise.all(refs.map(ref=>ref.get()));},
+    create:(ref,value)=>{wrote=true;writes.push(async()=>{assert(!db.records.has(ref.path),'Already exists');await ref.set(value);});},set:(ref,value,options)=>{wrote=true;writes.push(()=>ref.set(value,options));},update:(ref,value)=>{wrote=true;writes.push(()=>ref.update(value));},
     commit:async()=>{for(const write of writes)await write();}};}
   async runTransaction(fn){const tx=this.transaction(),result=await fn(tx);await tx.commit();return result;}
   batch(){return this.transaction();}
@@ -706,4 +706,201 @@ test('Acquisition stores independently verified website and place reference, pre
  const detail=await f.call('ops_acquisition_detail',{id:p.id});assert(detail.events.some(e=>e.type==='contact_update'));
  const blocked=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'opt_out',confirmed:true,note:'Synthetic opt out'})).prospect;
  await rejects(evt(blocked,{email:'other@example.test'}),409);
+});
+
+test('National prospect intake, missing-contact routing, WhatsApp-only and evidence-based conversion',async()=>{
+ const f=setup(),base={name:'Synthetic National Shop',city:'Polokwane',province:'Limpopo',municipality:'Polokwane',area:'Seshego',address:'Synthetic address',category:'retail',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true,geographyConfirmed:true};
+ await rejects(f.call('ops_acquisition_create',{...base,geographyConfirmed:false}),422);
+ await rejects(f.call('ops_acquisition_create',{...base,province:'Invalid'}),422);
+ await rejects(f.call('ops_acquisition_create',{...base,phoneKind:'whatsapp_only'}),422);
+ let p=(await f.call('ops_acquisition_create',base)).prospect;
+ assert.equal(p.province,'Limpopo');assert.equal(p.municipality,'Polokwane');assert.equal(p.geographyNeedsReview,true);assert.equal(p.geographySource,'provisional');
+ assert.equal(p.contactQueue,'field_visit');assert.match(p.contactNote,/No phone number or email/);
+ const evt=(p,extra)=>f.call('ops_acquisition_event',{id:p.id,revision:p.revision,confirmed:true,note:'Synthetic owner evidence',...extra});
+ p=(await evt(p,{type:'contact_update',phone:'0712345678',phoneKind:'whatsapp_only',authorisedSource:true})).prospect;
+ assert.equal(p.phone,'+27712345678');assert.equal(p.phoneKind,'whatsapp_only');assert.equal(p.contactQueue,'contact_details_available');assert.match(p.contactNote,/WhatsApp only/);
+ await rejects(evt(p,{type:'permission',channel:'phone',ownerOptIn:true}),422);
+ await rejects(evt(p,{type:'contact',channel:'whatsapp'}),409);
+ p=(await evt(p,{type:'permission',channel:'whatsapp',ownerOptIn:true})).prospect;
+ p=(await evt(p,{type:'contact',channel:'whatsapp'})).prospect;
+ assert.equal(p.contactedAt,now);assert.equal(p.lastWhatsAppContactAt,now);
+ p=(await evt(p,{type:'response',response:'interested'})).prospect;assert.equal(p.response,'interested');
+ await rejects(evt(p,{type:'app_download',ownerConfirmedDownload:false}),422);
+ p=(await evt(p,{type:'app_download',ownerConfirmedDownload:true})).prospect;
+ assert.equal(p.downloadConfirmedAt,now);assert.equal(p.seller,null);
+ await rejects(evt(p,{type:'commercial_interest',interest:'both'}),409);
+ assert.equal(f.db.records.has('teyzaBilling/seller1'),false);
+});
+test('Legacy pilot records retain identity and can confirm missing geography; all nine provinces accepted',async()=>{
+ const f=setup(),base={name:'Synthetic shop',city:'Durban',area:'Umlazi',address:'Legacy synthetic',category:'spaza',source:'owner_inquiry',sourceReference:'Owner enquiry',authorisedSource:true};
+ let p=(await f.call('ops_acquisition_create',base)).prospect;
+ assert.equal(p.province,'KwaZulu-Natal');assert.equal(p.geographyNeedsReview,true);const id=p.id;
+ p=(await f.call('ops_acquisition_event',{id:p.id,revision:p.revision,type:'geography_update',confirmed:true,note:'Confirmed by owner',province:'KwaZulu-Natal',municipality:'eThekwini',geographyConfirmed:true})).prospect;
+ assert.equal(p.id,id);assert.equal(p.geographyNeedsReview,true);assert.equal(p.municipality,'eThekwini');
+ for(const province of ['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){
+  const n=(await f.call('ops_acquisition_create',{...base,city:'Synthetic '+province,area:'Test area',address:'Synthetic '+province,province,municipality:'Test municipality',geographyConfirmed:true})).prospect;
+  assert.equal(n.province,province);assert.equal(n.geographyNeedsReview,true);
+ }
+});
+
+test('Official allocation derives source codes on the server and preserves legacy IDs and events',async()=>{
+ const f=setup(),G=require('./acquisition-geography'),{createAcquisition}=require('./business-acquisition');
+ const official={localityId:'ETH:123456789',province:'KwaZulu-Natal',municipality:'eThekwini',municipalityCode:'ETH',township:'KwaMashu',townshipCode:'123456789',geographySource:G.SOURCE,geographySourceVintage:G.VINTAGE};
+ const api=createAcquisition({db:f.db,clock:()=>now,geographyLookup:{resolve:async id=>{assert.equal(id,official.localityId);return official;},search:async()=>({localities:[official]})}});
+ const input={name:'Synthetic Shop',city:'Durban',area:'Kwa Mashu',address:'Synthetic 1',category:'spaza',source:'owner_inquiry',sourceReference:'Owner',authorisedSource:true};
+ const p=(await api.execute(admin,'ops_acquisition_create',input)).prospect;
+ await rejects(api.execute(admin,'ops_acquisition_create',{...input,city:'eThekwini',area:'KwaMashu',province:'KwaZulu-Natal',municipality:'eThekwini',localityId:official.localityId,geographyConfirmed:true}),409);
+ const q=(await api.execute(admin,'ops_acquisition_event',{id:p.id,revision:p.revision,type:'geography_update',confirmed:true,note:'Official reference checked',province:'KwaZulu-Natal',municipality:'Untrusted client label',localityId:official.localityId,geographyConfirmed:true})).prospect;
+ assert.equal(q.id,p.id);assert.equal(q.area,'Kwa Mashu');assert.equal(q.township,'KwaMashu');assert.equal(q.municipality,'eThekwini');assert.equal(q.localityId,official.localityId);assert.equal(q.geographyNeedsReview,false);
+ const detail=await api.execute(admin,'ops_acquisition_detail',{id:p.id});
+ assert(detail.events.some(e=>e.type==='created'));assert(detail.events.some(e=>e.type==='geography_update'));
+});
+
+test('National report counts every snapshot page, filters on server, and reconciles old contacts outside recent history',async()=>{
+ const f=setup(),R=require('./acquisition-report'),id='legacy1';
+ const base={name:'Historic Spaza',city:'Durban',area:'Umlazi',address:'Legacy',category:'spaza',phone:'+27712345678',email:'',stage:'identified',permissions:{whatsapp:{granted:true}},revision:0};
+ f.db.records.set('teyzaBusinessProspects/'+id,base);
+ f.db.records.set('teyzaBusinessProspects/'+id+'/events/old-contact',{type:'contact',channel:'whatsapp',createdAt:now-1000000});
+ for(let i=0;i<35;i++)f.db.records.set('teyzaBusinessProspects/'+id+'/events/new-'+i,{type:'permission',channel:'whatsapp',createdAt:now-10000+i});
+ for(let i=0;i<65;i++)f.db.records.set('teyzaBusinessProspects/p'+String(i).padStart(3,'0'),{...base,name:'Prospect '+i,city:i<32?'Polokwane':'Durban',province:i<32?'Limpopo':'KwaZulu-Natal',municipality:i<32?'Polokwane':'eThekwini',area:i<32?'Seshego':'Umlazi',category:i<32?'retail':'spaza',historyVersion:1,phone:i%2?'':base.phone,permissions:i%2?{}:base.permissions});
+ const before=structuredClone([...f.db.records]);const filters={province:'KwaZulu-Natal',category:'spaza',township:'Umlazi',queue:'new_contact'};
+ const total=R.emptyCounts();let cursor=null,asOf=null,pages=0,seen=[],scanned=0;
+ do{
+  const page=await f.call('ops_acquisition_command_page',{filters,...(cursor?{after:cursor,asOf}:{} )});
+  assert.equal(page.schema,2);assert.equal(page.asOf,asOf??page.asOf);asOf=page.asOf;cursor=page.next;pages++;scanned+=page.scanned;
+  for(const group of ['funnel','queues'])for(const k of Object.keys(total[group]))total[group][k]+=page.counts[group][k];
+  seen.push(...page.prospects);
+ }while(cursor);
+ assert(pages>1);assert.equal(total.funnel.discovered,34);assert.equal(total.funnel.contacted,1);assert.equal(total.funnel.staffConfirmedContact,1);
+ assert(!seen.some(p=>p.id===id));assert(seen.every(p=>p.province==='KwaZulu-Natal'&&p.category==='spaza'&&p.phone));
+ assert.equal(scanned,34);assert.equal(total.queues.new_contact,seen.length);
+ const detail=await f.call('ops_acquisition_detail',{id});assert.equal(detail.prospect.lastWhatsAppContactAt,now-1000000);assert(!detail.events.some(e=>e.type==='contact'));
+ await rejects(f.call('ops_acquisition_send',{id,revision:0,channel:'whatsapp',kind:'invitation',confirmed:true}),409);
+ await rejects(f.call('ops_acquisition_command_page',{filters:{province:'Not a province'}}),422);
+ await rejects(f.call('ops_acquisition_command_page',{after:'p001'}),422);
+ await rejects(f.call('ops_acquisition_command_page',{asOf:now-56*60000}),422);
+ await rejects(f.call('ops_acquisition_command_page',{}, {uid:'seller1',email_verified:true}),403);
+ assert.deepEqual([...f.db.records],before);
+});
+
+test('National report reconciles paid memberships, current ad transactions, approval evidence and duplicate-free paying businesses without writes',async()=>{
+ const f=setup(),R=require('./acquisition-report'),day=86400000;
+ const make=async(name,category,sellerUid,address)=>{
+  let p=(await f.call('ops_acquisition_create',{name,category,city:'Durban',area:'Umlazi',address,source:'owner_inquiry',sourceReference:'Synthetic owner enquiry',authorisedSource:true})).prospect;
+  return (await f.call('ops_acquisition_link',{id:p.id,revision:p.revision,sellerUid,ownerConfirmed:true})).prospect;
+ };
+ const set=(path,value)=>f.db.records.set(path,value);
+ const account=f.db.records.get('teyzaSellerAccounts/seller1');
+ set('teyzaSellerAccounts/seller1',{...account,listingPlan:'basic'});
+ set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'active',approvalStatus:'approved',identityVerified:true,latitude:-29.85,longitude:31.02});
+ const paid={ownerUid:'seller1',status:'paid',paymentProvider:'paystack',paymentEnvironment:'live',paidUntil:now+day};
+ set('teyzaBilling/seller1',paid);
+ const p=await make('Test Shop','spaza','seller1','Synthetic paid');
+ const pending=await make('Second','retail','seller2','Synthetic pending');
+ const expiry=now+day;
+ set('teyzaMobileVerification/seller2',{ownerUid:'seller2',status:'pending_review',objectPath:'teyza-private/mobile-verification/seller2/selfie',expiresAt:expiry});
+ set('teyzaSellerIdentity/seller2',{ownerUid:'seller2',status:'pending_review',objectPath:'teyza-private/mobile-verification/seller2/identity',expiresAt:expiry});
+ const ad={ownerUid:'seller1',status:'active',paymentStatus:'paid',radiusKm:10,amountCents:2900,latitude:-29.85,longitude:31.02,startsAt:now-20000,endsAt:expiry};
+ const payment={ownerUid:'seller1',status:'paid',environment:'live',currency:'ZAR',amountCents:2900,verifiedAt:now-20000,transactionId:'gateway-123'};
+ const variants=[
+  ['good',{},{}],['good2',{},{}],['unpaid',{status:'approved_unpaid',paymentStatus:'unpaid'},{}],
+  ['expired',{endsAt:now-2000},{}],['paused',{status:'paused'},{}],['sandbox',{}, {environment:'test'}],
+  ['wrongowner',{}, {ownerUid:'seller2'}],['wrongamount',{}, {amountCents:999}],
+  ['wrongcampaign',{}, {advertisementId:'another'}],['refund',{}, {refunded:true}],
+  ['reversed',{}, {reversed:true}],['wrongcurrency',{}, {currency:'USD'}],
+  ['notverified',{}, {verifiedAt:null}],['future',{}, {verifiedAt:now+day}],['missingtransaction',{}, {transactionId:''}]
+ ];
+ for(const [id,adOverride,payOverride] of variants){const reference='TZA-'+id;set('teyzaShopperAds/'+id,{...ad,paymentReference:reference,...adOverride});set('teyzaAdPayments/'+reference,{...payment,advertisementId:id,...payOverride});}
+ set('teyzaShopperAds/nopayment',{...ad,paymentReference:'TZA-missing'});
+ const before=structuredClone([...f.db.records]);
+ const options=[],run=f.db.runTransaction.bind(f.db);f.db.runTransaction=(fn,opt)=>{if(opt)options.push(opt);return run(fn);};
+ const page=await f.call('ops_acquisition_command_page',{filters:{queue:'paying'}});
+ assert.equal(page.complete,true);assert.equal(page.counts.funnel.discovered,2);assert.equal(page.counts.funnel.registered,2);assert.equal(page.counts.funnel.awaitingApproval,1);
+ assert.equal(page.counts.funnel.approved,1);assert.equal(page.counts.funnel.paidSellers,1);assert.equal(page.counts.funnel.activeAdvertisers,1);
+ assert.equal(page.counts.funnel.activePaidCampaigns,2);assert.equal(page.counts.funnel.payingBusinesses,1);assert.equal(page.counts.queues.paying,1);
+ assert.deepEqual(page.prospects.map(x=>x.id),[p.id]);assert.equal(page.prospects[0].seller.unpaidCampaigns,1);assert(page.prospects[0].seller.advertisingReview>=8);
+ assert(options.some(o=>o.readOnly===true&&o.readTime.toMillis()===page.asOf));
+ assert.deepEqual([...f.db.records],before);
+ const review=await f.call('ops_acquisition_command_page',{filters:{queue:'pending_approval'},asOf:page.asOf});
+ assert.deepEqual(review.prospects.map(x=>x.id),[pending.id]);
+ const countOnly=await f.call('ops_acquisition_command_page',{asOf:page.asOf,includeRows:false});assert.deepEqual(countOnly.prospects,[]);assert.equal(countOnly.counts.funnel.payingBusinesses,1);
+ for(const billing of [
+  {ownerUid:'seller1',adminComplimentaryStatus:'active',adminComplimentaryReason:'Synthetic complimentary access',adminComplimentaryBy:'admin1',adminComplimentaryUntil:expiry},
+  {ownerUid:'seller1',mandateAccessStatus:'active',mandateAccessKind:'processing_7d',mandateAccessMandateId:'mandate1',mandateAccessUntil:expiry},
+  {...paid,paymentEnvironment:'test'},{...paid,paidUntil:now-2000}
+ ]){
+  set('teyzaBilling/seller1',billing);const result=await f.call('ops_acquisition_command_page',{});
+  assert.equal(result.counts.funnel.paidSellers,0);assert.equal(result.counts.funnel.payingBusinesses,1,'Only the genuine live advertiser remains paying');
+  assert.equal(result.counts.funnel.sellingAccessNotPaid,Number(Boolean(billing.adminComplimentaryStatus||billing.mandateAccessStatus)));
+ }
+ set('teyzaPublicShops/seller1',{sellerUid:'seller1',status:'suspended',approvalStatus:'approved',identityVerified:true,latitude:-29.85,longitude:31.02});
+ const suspended=await f.call('ops_acquisition_command_page',{});
+ assert.equal(suspended.counts.funnel.activeAdvertisers,0);assert.equal(suspended.counts.funnel.payingBusinesses,0);
+});
+test('National queues distinguish contact attempts, evidence, missing contacts and SAST follow-up dates',async()=>{
+ const R=require('./acquisition-report'),stamp=now-10000;
+ const base={stage:'identified',phone:'0712345678',phoneKind:'whatsapp_only',permissions:{whatsapp:{granted:true}},seller:null};
+ assert.equal(R.classify(base,now).queues.ready_to_contact,true);
+ assert.equal(R.classify({...base,permissions:{phone:{granted:true}}},now).queues.permission_needed,true);
+ const missing=R.classify({...base,phone:'',email:''},now);assert.equal(missing.queues.new_contact,false);assert.equal(missing.queues.field_visit,true);
+ const historic=await R.history({...base,historyVersion:0},async()=>[{type:'message_accepted',kind:'invitation',channel:'email',acceptedAt:stamp}],now);
+ const accepted=R.classify({...base,...historic},now);assert.equal(accepted.queues.new_contact,false);assert.equal(accepted.queues.awaiting_response,true);assert.equal(accepted.funnel.providerAccepted,1);assert.equal(accepted.funnel.staffConfirmedContact,0);
+ const unknown=await R.history({...base,stage:'registration_started'},async()=>[],now);
+ assert.equal(R.classify({...base,...unknown},now).queues.history_review,true);
+ const download=R.classify({...base,downloadConfirmedAt:stamp},now);assert.equal(download.funnel.downloads,1);assert.equal(download.funnel.approved,0);assert.equal(download.queues.registration_help,true);
+ assert.equal(R.classify({...base,optedOut:true},now).queues.new_contact,false);
+ const tomorrow=(Math.floor((now+7200000)/86400000)+1)*86400000-7200000;
+ assert.equal(R.classify({...base,nextFollowUpAt:tomorrow-1},now).queues.follow_up_due,true);
+ assert.equal(R.classify({...base,nextFollowUpAt:tomorrow},now).queues.follow_up_due,false);
+ const geo={city:'Durban',area:'Umlazi',province:'KwaZulu-Natal',municipality:'eThekwini',category:'spaza'};
+ assert(R.matches(geo,R.parseFilters({province:'KwaZulu-Natal',municipality:' ETHEKWINI ',township:'Umlazi',category:'spaza'})));
+ assert(!R.matches(geo,R.parseFilters({municipality:'Mangaung'})));
+ assert(!R.matches(geo,R.parseFilters({category:'retail'})));
+ assert.throws(()=>R.parseFilters({province:'Gauteng',municipalityCode:'ETH'}),e=>e.status===422);
+});
+
+test('National snapshot batches and deduplicates suppression reads without changing live action checks',async()=>{
+ const f=setup(),crypto=require('node:crypto'),email='shared@example.test';
+ const root='teyzaBusinessProspects/',p={name:'Synthetic',city:'Durban',area:'Umlazi',category:'spaza',email,phone:'',stage:'identified',historyVersion:1,permissions:{email:{granted:true}},revision:0};
+ for(let i=0;i<20;i++)f.db.records.set(root+'batch'+i,p);
+ f.db.records.set('teyzaBusinessContactSuppression/email:'+crypto.createHash('sha256').update(email).digest('hex'),{reason:'opt_out'});
+ const tx=f.db.transaction.bind(f.db);let bulk=0,refs=0,point=0;
+ f.db.transaction=()=>{const t=tx(),get=t.get,getAll=t.getAll;t.get=async ref=>{if(ref.path)point++;return get(ref);};t.getAll=async(...r)=>{bulk++;refs+=r.length;return getAll(...r);};return t;};
+ const page=await f.call('ops_acquisition_command_page',{filters:{}});
+ assert.equal(page.counts.funnel.discovered,20);assert.equal(page.counts.queues.blocked,20);assert.equal(page.counts.queues.new_contact,0);
+ assert.equal(bulk,1);assert.equal(refs,1);assert.equal(point,0);
+ assert(page.prospects.every(p=>p.optedOut===true));
+ const detail=await f.call('ops_acquisition_detail',{id:'batch0'});assert.equal(detail.prospect.optedOut,true);
+});
+
+test('Indexed province streams preserve legacy pilot IDs, deduplicate overlapping streams, and retain exact counts across cursors',async()=>{
+ const f=setup(),root='teyzaBusinessProspects/',base={name:'Synthetic',area:'Umlazi',category:'spaza',email:'',phone:'',stage:'identified',historyVersion:1,permissions:{}};
+ for(let i=0;i<75;i++)f.db.records.set(root+'p'+String(i).padStart(3,'0'),{...base,...(i%3===0?{city:'Durban',province:'KwaZulu-Natal'}:i%3===1?{city:'Durban'}:{city:'Richards Bay',province:'KwaZulu-Natal'})});
+ f.db.records.set(root+'other',{...base,city:'Durban',province:'Gauteng'});
+ f.db.records.set(root+'outside',{...base,city:'Polokwane',province:'Limpopo'});
+ const ids=[];let after=null,asOf=null,total=0,scanned=0;
+ do{const p=await f.call('ops_acquisition_command_page',{filters:{province:'KwaZulu-Natal',category:'spaza'},...(after?{after,asOf}:{})});asOf=p.asOf;after=p.next;total+=p.counts.funnel.discovered;scanned+=p.scanned;ids.push(...p.prospects.map(r=>r.id));}while(after);
+ assert.equal(total,75);assert.equal(scanned,76);assert.equal(new Set(ids).size,75);assert.equal(ids.length,75);assert(!ids.includes('other'));assert(!ids.includes('outside'));
+});
+
+test('Published generation caches complete scoped totals and indexed queues; stale cache never authorizes contact',async()=>{
+ const f=setup(),S=require('./acquisition-summary'),{createAcquisition}=require('./business-acquisition');let clock=now;
+ const service=createAcquisition({db:f.db,clock:()=>clock}),root='teyzaBusinessProspects/';
+ const base={name:'Synthetic',city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',area:'Umlazi',category:'spaza',email:'synthetic@example.test',phone:'',stage:'identified',historyVersion:1,permissions:{email:{granted:true}},revision:0};
+ for(let i=0;i<65;i++)f.db.records.set(root+'summary'+String(i).padStart(3,'0'),{...base,...(i===0?{email:'',phone:''}:i===1?{optedOut:true}:{})});
+ const asOf=clock-1000,pre=await service.collectReportingGeneration(asOf);
+ assert.equal(pre.rows.size,65);assert.equal(pre.aggregates.get(S.NATIONAL).queues.new_contact,63);
+ const manifest=await S.publishGeneration({db:f.db,generation:pre,clock:()=>clock});
+ const first=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',category:'spaza',queue:'new_contact'}});
+ assert.equal(first.summarySchema,1);assert.equal(first.summaryGeneration,manifest.generation);assert.equal(first.counts.funnel.discovered,65);assert.equal(first.counts.queues.new_contact,63);assert.equal(first.prospects.length,30);assert(first.prospects.every(p=>p.snapshotOnly&&!p.email&&!p.phone));
+ const next=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:first.summaryGeneration,asOf:first.asOf,after:first.next,filters:first.filters});assert.equal(next.prospects.length,30);assert(!next.prospects.some(p=>first.prospects.some(a=>a.id===p.id)));
+ const empty=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{province:'Limpopo'}});assert.equal(empty.counts.funnel.discovered,0);assert.equal(empty.prospects.length,0);
+ const id=first.prospects[0].id;f.db.records.set(root+id,{...f.db.records.get(root+id),optedOut:true});
+ const detail=await service.execute(admin,'ops_acquisition_detail',{id});assert.equal(detail.prospect.optedOut,true);
+ await rejects(service.execute(admin,'ops_acquisition_send',{id,revision:0,channel:'email',kind:'invitation',confirmed:true}),409);
+ const exact=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryAfter:clock,filters:{}});assert.equal(exact.schema,2);assert.equal(exact.summarySchema,undefined);
+ const text=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{search:'Synthetic'}});assert.equal(text.schema,2);
+ clock+=S.MAX_AGE+1;
+ await rejects(service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,summaryGeneration:first.summaryGeneration,asOf:first.asOf,after:first.next,filters:first.filters}),409);
+ const stale=await service.execute(admin,'ops_acquisition_command_page',{preferSummary:true,filters:{}});assert.equal(stale.schema,2);assert.equal(stale.summarySchema,undefined);
 });
