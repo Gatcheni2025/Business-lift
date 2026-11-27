@@ -178,6 +178,7 @@ test('Admin acquisition confirms local area radius and prepares WhatsApp text on
  assert(!withinSearchRadius({latitude:-26.268,longitude:27.858},area));
  const p={name:'Example Shop',area:'KwaMashu',phone:'071 234 5678'};
  assert.match(whatsappInvitationDraft(p),/Example Shop.*KwaMashu/s);assert.match(whatsappInvitationDraft(p),/Reply STOP/);
+ assert(whatsappInvitationDraft(p).includes('Android (Google Play): https://play.google.com/store/apps/details?id=com.asiyedriver.asiye'));assert(whatsappInvitationDraft(p).includes('iPhone (App Store): https://apps.apple.com/za/app/id6827037733'));assert(!whatsappInvitationDraft(p).includes('https://teyza.co.za/download.html'));
  assert.equal(manualWhatsappDraftUrl(p),null);
  const permitted={...p,permissions:{whatsapp:{granted:true}}},url=new URL(manualWhatsappDraftUrl(permitted));
  assert.equal(url.origin,'https://wa.me');assert.equal(url.pathname,'/27712345678');assert.equal(url.searchParams.get('text'),whatsappInvitationDraft(p));
