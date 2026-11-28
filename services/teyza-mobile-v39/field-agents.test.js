@@ -371,3 +371,17 @@ test('Admin visit coverage counts only a matching approved R90 ledger, never a m
  assert.equal((await f.call('agent_admin_visits',{},admin)).visits[0].registrationRewardApproved,true);
  assert.equal((await f.call('agent_visits',{},agent)).visits[0].registrationRewardApproved,undefined);
 });
+
+test('Invited agent can see only own minimal status before verification; no profile or work access',async()=>{
+ const f=setup();
+ f.db.records.set('teyzaFieldAgents/invited',{uid:'invited',name:'Private name',email:'private@example.test',status:'pending',registrationSource:'admin_invited',revision:0});
+ const user={uid:'invited',email_verified:false,firebase:{sign_in_provider:'password'}};
+ assert.deepEqual(await f.call('agent_access_status',{agentUid:'agent1'},user),{status:'pending'});
+ assert.deepEqual(await f.call('agent_access_status',{agentUid:'invited'},{uid:'other',email_verified:false}),{status:null});
+ await rejects(f.call('agent_access_status',{}, {...user,teyzaPhoneBootstrap:true}),403);
+ await rejects(f.call('agent_access_status',{}, {...user,firebase:{sign_in_provider:'anonymous'}}),403);
+ await rejects(f.call('agent_profile',{},user),403);
+ await rejects(f.call('agent_visits',{}, {...user,email_verified:true}),403);
+ await rejects(f.call('agent_admin_profiles',{}, {...user,email_verified:true}),403);
+ await rejects(f.call('agent_admin_profile_decide',{agentUid:'invited',revision:0,status:'approved'},admin),409);
+});

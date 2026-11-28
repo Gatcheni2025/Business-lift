@@ -1,14 +1,14 @@
 'use strict';
 const crypto=require('node:crypto'),D=require('./domain'),{recentAdmin}=require('./seller-experience'),{saveUpload}=require('./upload-storage'),discovery=require('./field-discovery');
 const provinces=['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'];
-const actions=new Set(['agent_admin_communications','agent_admin_communications_recheck','agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
+const actions=new Set(['agent_admin_communications','agent_admin_communications_recheck','agent_admin_area_assign','agent_admin_application_upload','agent_admin_application_evidence','agent_profile','agent_access_status','agent_apply','agent_visits','agent_visit_start','agent_visit_get','agent_location','agent_capture_begin','agent_photo_submit','agent_owner_link','agent_owner_inspect','agent_owner_confirm','agent_visit_submit','agent_admin_profiles','agent_admin_profile_decide','agent_admin_visits','agent_admin_photo','agent_admin_visit_decide','agent_admin_commission_paid','agent_rewards','agent_admin_reward_status','agent_admin_reward_approve','agent_profile_update','agent_admin_nearby',...discovery.actions]);
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),DAY=86400000;
 const REWARD_CENTS=9000;
 const recruitmentSources=new Set(['meta_johannesburg','meta_durban','meta_cape_town']);
 const recruitmentSource=value=>recruitmentSources.has(value)?value:null;
 const timestampMs=value=>value?.toMillis?.()??(value instanceof Date?value.getTime():typeof value==='number'?value:NaN);
 function distance(a,b){if(!a||!b||![a.latitude,a.longitude,b.latitude,b.longitude].every(Number.isFinite))return null;const r=Math.PI/180,x=(b.latitude-a.latitude)*r,y=(b.longitude-a.longitude)*r,t=Math.sin(x/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(y/2)**2;return Math.round(6371000*2*Math.atan2(Math.sqrt(t),Math.sqrt(1-t)));}
-function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null}:null;}
+function profileView(p){return p?{uid:p.uid,name:p.name,phone:p.phone,email:p.email||'',address:p.address||'',province:p.province,area:p.area,status:p.status,revision:p.revision,reviewNote:p.reviewNote||'',hasDocuments:!!p.evidenceId&&p.documentsExpireAt>Date.now(),identityType:p.identityType||'',documentsExpireAt:p.documentsExpireAt||null,createdAt:p.createdAt||null,registrationSource:p.registrationSource==='admin_invited'?'admin_invited':null}:null;}
 function visitView(id,v){return {id,shopName:v.shopName,address:v.address,area:v.area,province:v.province,status:v.status,revision:v.revision,createdAt:v.createdAt,
  location:v.location||null,ownerConfirmed:!!v.sellerUid,reviewNote:v.reviewNote||'',photos:Object.fromEntries(Object.entries(v.photos||{}).map(([k,p])=>[k,{id:p.id,capturedAt:p.capturedAt,expiresAt:p.expiresAt}]))};}
 // Documents and ID number are encrypted together in private object storage.
@@ -82,6 +82,14 @@ function createFieldAgents({db,bucket,sanitizeImage,encryptSelfie,decryptSelfie,
   return {state:'eligible',reason:'New verified registration and unique agent attribution confirmed.',sellerUid,rewardRef,visit};
  }
  async function execute(auth,action,data={}){
+  // Authenticated account holders may check only their own invitation status
+  // before email verification. This is not profile access or work permission.
+  if(action==='agent_access_status'){
+   if(!auth?.uid||auth.teyzaPhoneBootstrap||auth.firebase?.sign_in_provider==='anonymous')D.fail(403,'Sign in using your own account.');
+   const uid=D.id(auth.uid);await rate(uid,'field-agent-access-status',30,60000);
+   const p=await read('teyzaFieldAgents/'+uid);
+   return {status:p?.uid===uid&&p.registrationSource==='admin_invited'&&['pending','approved','suspended','rejected'].includes(p.status)?p.status:null};
+  }
   verified(auth);const uid=D.id(auth.uid),admin=action.startsWith('agent_admin_');if(admin)recentAdmin(auth,clock);
   await rate(uid,'field-agent',80,60000);
   if(action==='agent_admin_communications')return communications.list(data);

@@ -14,6 +14,7 @@ class FakeDB{
    async update(data){const old=db.rows.get(path);if(!old)throw Error('Missing '+path);
      db.rows.set(path,{...old,...structuredClone(data)});}
  };}
+ async runTransaction(fn){const writes=[];const tx={get:ref=>ref.get(),set:(ref,data)=>writes.push(()=>ref.set(data))};const result=await fn(tx);for(const write of writes)await write();return result;}
 }
 function fixture({sendFails=false}={}){
  const db=new FakeDB(),users=new Map([
@@ -150,4 +151,44 @@ test('Users and access distinguishes approved account, pending verification and 
   assert.equal(result.seller.registrationReady,true);
   assert.equal(result.seller.verifiedOwner,true);
   assert.equal(result.seller.sellingUnlocked,true);
+});
+
+const agentInvite={mode:'new',email:'field@example.test',displayName:'Field Worker',phone:'0712345678',province:'Gauteng',area:'Soweto',confirmed:true};
+test('Admin provisions one pending agent identity without granting claims or approving work',async()=>{
+ const {service,db,users,sent}=fixture();
+ await reject(service.execute(regular,'ops_agent_user_provision',agentInvite),403);
+ await reject(service.execute(admin,'ops_agent_user_provision',{...agentInvite,confirmed:false}),422);
+ await reject(service.execute(admin,'ops_agent_user_provision',{...agentInvite,province:'invalid'}),422);
+ const created=await service.execute(admin,'ops_agent_user_provision',{...agentInvite,status:'approved',teyzaAdmin:true,emailVerified:true,password:'injected'});
+ const uid=created.profile.uid;
+ assert.equal(created.profile.status,'pending');assert.equal(created.inviteSent,true);
+ assert.equal(users.get(uid).emailVerified,false);assert.equal(users.get(uid).customClaims,undefined);
+ assert.equal(db.rows.get('teyzaFieldAgents/'+uid).status,'pending');
+ assert.equal(db.rows.get('teyzaAdminProvisionedUsers/'+uid).requestedRole,'agent');
+ assert.equal(db.rows.get('teyzaSellerAccounts/'+uid),undefined);
+ assert.deepEqual(sent,['field@example.test']);
+ assert(!JSON.stringify(created).includes('injected'));
+ assert.equal((await service.execute(admin,'ops_user_detail',{userUid:uid})).user.agentStatus,'pending');
+ await reject(service.execute(admin,'ops_agent_user_provision',agentInvite),409);
+});
+test('Explicit existing account link keeps credentials, UID and prior role; no reset email is sent',async()=>{
+ const {service,db,users,sent}=fixture();
+ const original=structuredClone(users.get('shopper1'));
+ db.rows.set('teyzaAdminProvisionedUsers/shopper1',{ownerUid:'shopper1',requestedRole:'shopper',invitationStatus:'sent'});
+ await reject(service.execute(admin,'ops_agent_user_provision',{...agentInvite,email:original.email}),409);
+ const result=await service.execute(admin,'ops_agent_user_provision',{...agentInvite,mode:'existing',email:original.email});
+ assert.equal(result.profile.uid,'shopper1');assert.equal(result.invitationStatus,'existing_account');
+ assert.deepEqual(users.get('shopper1'),original);assert.deepEqual(sent,[]);
+ assert.equal(db.rows.get('teyzaAdminProvisionedUsers/shopper1').requestedRole,'shopper');
+ await reject(service.execute(admin,'ops_agent_user_provision',{...agentInvite,mode:'existing',email:original.email}),409);
+ await reject(service.execute(admin,'ops_agent_user_provision',{...agentInvite,mode:'existing',email:'reviewer@teyza.co.za'}),403);
+});
+test('Invitation failure retains the pending application for a reviewed resend',async()=>{
+ const {service,db}=fixture({sendFails:true});
+ const created=await service.execute(admin,'ops_agent_user_provision',agentInvite);
+ assert.equal(created.inviteSent,false);
+ assert.equal(created.invitationStatus,'failed');
+ assert.equal(db.rows.get('teyzaFieldAgents/'+created.profile.uid).status,'pending');
+ assert.equal(db.rows.get('teyzaAdminProvisionedUsers/'+created.profile.uid).invitationStatus,'failed');
+ await reject(service.execute(admin,'ops_agent_user_provision',agentInvite),409);
 });

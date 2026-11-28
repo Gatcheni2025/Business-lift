@@ -467,6 +467,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
   bool _checkoutOpening = false;
   bool _observedAnonymous = false;
   bool _agentApproved = false, _agentMode = false, _rolePicker = false;
+  String? _agentPendingStatus;
+  bool _agentVerificationBusy = false;
+  String? _agentVerificationMessage;
   // App launches as a browsable shopfront. Owner/agent access is an explicit
   // account action, never a default route from persisted session credentials.
   bool _accountFlowRequested = false;
@@ -596,6 +599,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
       _observedUid = uid;
       _checkedSellerUid = null;
       _agentApproved = false;
+      _agentPendingStatus = null;
+      _agentVerificationBusy = false;
+      _agentVerificationMessage = null;
       _agentMode = false;
       _rolePicker = false;
       _sellerAccount = null;
@@ -696,6 +702,57 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _checkInvitedAgent({bool send = false}) async {
+    if (_agentVerificationBusy || session.userId == null) return;
+    final uid = session.userId!;
+    setState(() { _agentVerificationBusy = true; _agentVerificationMessage = null; });
+    try {
+      if (send) {
+        await session.sendEmailVerification();
+        if (mounted && session.userId == uid) setState(() => _agentVerificationMessage = 'Verification link sent. Open your email, then tap Check verification and approval.');
+      } else {
+        await session.refreshEmailStatus();
+        if (!mounted || session.userId != uid) return;
+        await resolveSellerWorkspace(uid);
+        if (mounted && session.userId == uid && _agentPendingStatus != null)
+          setState(() => _agentVerificationMessage = session.contactVerified ? 'Agent access is not approved yet. Contact Teyza Admin.' : 'Verify your email using the link, then check again.');
+      }
+    } catch (_) {
+      if (mounted && session.userId == uid) setState(() => _agentVerificationMessage = 'Could not check your account. Check your connection and try again.');
+    } finally {
+      if (mounted && session.userId == uid) setState(() => _agentVerificationBusy = false);
+    }
+  }
+
+  Widget _invitedAgentAccessPage() => Scaffold(
+    appBar: AppBar(title: const Text('Field Agent access'),
+      leading: IconButton(onPressed: () => navigateToTab(0), icon: const Icon(Icons.arrow_back_rounded)),
+      actions: [TextButton(onPressed: session.signOut, child: const Text('Sign out'))]),
+    body: SafeArea(child: Center(child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.badge_outlined, size: 52),
+        const SizedBox(height: 16),
+        Text(!session.contactVerified ? 'Verify your account email' :
+          _agentPendingStatus == 'suspended' ? 'Agent access suspended' :
+          _agentPendingStatus == 'rejected' ? 'Application not approved' : 'Awaiting agent approval',
+          textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Text(!session.contactVerified
+          ? 'Use the verification link sent to your own email address before opening the Agent workspace.'
+          : 'Teyza Admin must review your application and enable field work. No visits can be submitted until approval.',
+          textAlign: TextAlign.center),
+        if (_agentVerificationMessage != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(_agentVerificationMessage!, textAlign: TextAlign.center)),
+        if (!session.contactVerified && session.email != null)
+          FilledButton(onPressed: _agentVerificationBusy ? null : () => _checkInvitedAgent(send: true),
+            child: const Text('Send verification email')),
+        OutlinedButton(onPressed: _agentVerificationBusy ? null : () => _checkInvitedAgent(),
+          child: const Text('Check verification and approval')),
+        TextButton(onPressed: () => navigateToTab(0), child: const Text('Continue browsing')),
+      ])))),
+
+  );
+
   Future<void> resolveSellerWorkspace(String uid) async {
     setState(() {
       _accountResolving = true;
@@ -715,9 +772,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                 SellerFirestore(uid: uid, token: token))
             .shop(),
         if (checkService) api.call('shopper_profile_read'),
-        if (checkService && (session.contactVerified))
+        if (checkService)
           api
-              .call('agent_profile')
+              .call(session.contactVerified ? 'agent_profile' : 'agent_access_status')
               .catchError((Object _) => <String, dynamic>{}),
       ]).timeout(const Duration(seconds: 15));
       if (!mounted ||
@@ -733,7 +790,13 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         _sellerAccount =
             account?.hasRegisteredCategory == true ? account : null;
         _hasShopperAccount = profile is Map && profile['ownerUid'] == uid;
-        _agentApproved = agentShouldOfferMode(agent, currentUid: uid);
+        _agentApproved = session.contactVerified && agentShouldOfferMode(agent, currentUid: uid);
+        final agentProfile = agent['profile'];
+        final candidateStatus = session.contactVerified
+            ? (agentProfile is Map && agentProfile['uid'] == uid ? agentProfile['status'] : null)
+            : agent['status'];
+        _agentPendingStatus = !_agentApproved && ['pending', 'approved', 'suspended', 'rejected'].contains(candidateStatus)
+            ? candidateStatus as String : null;
         _accountResolving = false;
         final count = (_hasShopperAccount ? 1 : 0) +
             (_sellerAccount != null ? 1 : 0) +
@@ -752,6 +815,7 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
         return;
       }
       if (!_accountFlowRequested || _rolePicker || _needsRegistration) return;
+      if (_agentPendingStatus != null && !_hasShopperAccount && _sellerAccount == null && !_agentApproved) return;
       if (_pendingClaimPlaceId != null) {
         _chooseRole('seller');
         return;
@@ -2653,6 +2717,9 @@ class _ShopperHomeState extends State<ShopperHome> with WidgetsBindingObserver {
                               onPressed: session.signOut,
                               child: const Text('Sign out'))
                         ])))));
+      if (_accountFlowRequested && _agentPendingStatus != null && !_agentApproved &&
+          !_hasShopperAccount && _sellerAccount == null && _pendingClaimPlaceId == null)
+        return _invitedAgentAccessPage();
       if (_accountFlowRequested && _needsRegistration)
         return Scaffold(
             appBar: AppBar(
