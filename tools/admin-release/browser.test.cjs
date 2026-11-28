@@ -553,18 +553,18 @@ async function main(){
    }});
    await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business Acquisition Command Centre'}).waitFor();
-   await f.page.getByRole('button',{name:'Open marketing & onboarding assets'}).click();
-   await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
-   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
-   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
-   await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
-   await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
-   const checks=f.page.getByRole('button',{name:'Check published video',exact:true});
-   await checks.first().click();await f.page.getByRole('link',{name:'Watch video',exact:true}).waitFor();
-   await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
-   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
-   await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
-   await f.page.getByRole('button',{name:'+ Find & Add Businesses',exact:true}).first().click();
+   assert.equal(await f.page.getByRole('button',{name:'Open national coverage map',exact:true}).count(),0);
+   assert.equal(await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).count(),0);
+   await f.page.getByRole('button',{name:"+ Find & Add Businesses",exact:true}).click();
+   await f.page.getByText('Choose the province, then a town or township.',{exact:true}).waitFor();
+   const wizard=f.page.getByRole('dialog');assert(await wizard.getByRole('button',{name:'Continue to business type'}).isDisabled());
+   await wizard.getByLabel('Province',{exact:true}).selectOption('KwaZulu-Natal');
+   await wizard.getByLabel('Town or municipality').fill('Durban');
+   await wizard.getByRole('button',{name:'Continue to business type'}).click();
+   await wizard.getByText('Selected community: Durban, KwaZulu-Natal',{exact:true}).waitFor();
+   assert(await wizard.getByLabel('Google business type').isVisible());
+   await wizard.getByRole('button',{name:'Close',exact:true}).click();
+   await f.page.getByRole('button',{name:'Saved contacts',exact:true}).click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
    assert.equal(await f.page.getByLabel('Contact channel filter').inputValue(),'contactable');
    const findDialog=f.page.getByRole('dialog');assert.equal(await findDialog.getByText('Synthetic Saved Manual Shop',{exact:true}).count(),0);
@@ -586,7 +586,7 @@ async function main(){
    });
    let mapConfigRequests=0;
    await f.page.route('**/assets/teyza-maps-config.json',route=>{mapConfigRequests++;return route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}});});
-   let placesRequests=0,contactRequests=0,expectedRadius='20000';
+   let placesRequests=0,contactRequests=0,expectedRadius='20000',failNextContact=true;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
     placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),expectedRadius);
     const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
@@ -595,6 +595,7 @@ async function main(){
    });
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
     contactRequests++;const id=new URL(route.request().url()).searchParams.get('placeId');
+    if(id==='SyntheticPlace1234'&&failNextContact){failNextContact=false;return route.fulfill({status:403,json:{ok:false,error:'Synthetic trial allowance'}});}
     return route.fulfill({json:id==='SyntheticPlace1234'?{ok:true,phone:'031 555 0100',websiteUrl:'https://example.test/'}:{ok:true,phone:'',websiteUrl:''}});
    });
    await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
@@ -611,6 +612,12 @@ async function main(){
    const shop=live.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    const noContact=live.locator('.acq-business-card').filter({hasText:'Synthetic No Contact'});
    await shop.getByRole('button',{name:'View contact details'}).click();
+   await shop.getByText('Contact check unavailable',{exact:true}).waitFor();
+   await shop.getByText(/Request blocked \(HTTP 403\)/).waitFor();
+   assert.equal(await shop.getByText('No phone listed',{exact:true}).count(),0);
+   assert.equal(contactRequests,1);
+   await shop.getByRole('button',{name:'Retry contact check'}).click();
+   await shop.getByText('Phone available',{exact:true}).waitFor();
    await shop.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
    assert.equal(await shop.getByRole('link',{name:'Open business website'}).getAttribute('href'),'https://example.test/');
    assert.equal(await shop.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),1);
@@ -621,11 +628,12 @@ async function main(){
    assert.equal(await checkLink.getAttribute('target'),'_blank');
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
+   assert(await noContact.getByText('No phone listed',{exact:true}).isVisible());
    assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
    assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
    assert.equal(await noContact.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),0);
    assert(await noContact.getByRole('button',{name:'Add Business',exact:true}).isVisible());
-   assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
+   assert.equal(contactRequests,3);assert.equal(await live.locator('.acq-business-card').count(),2);
    await f.page.evaluate(()=>window.__acqFailMap=true);
    await shop.getByRole('button',{name:'Show on map',exact:true}).click();
    await live.getByText('Map could not load. Business information remains available above.',{exact:true}).waitFor();
@@ -695,6 +703,7 @@ async function main(){
    await saved.getByRole('button',{name:'Contact',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
+   await f.page.getByText('Zoho email · introduction / registration welcome / membership',{exact:true}).click();
    await f.page.getByRole('heading',{name:'Send a message'}).waitFor();
    assert.equal(await f.page.getByLabel('email invitation send preview').count(),0);
    await f.page.getByText('Add missing contact details',{exact:true}).click();
@@ -703,9 +712,11 @@ async function main(){
    await missing.getByLabel('Independent source / evidence').fill('Synthetic owner-provided address');
    await missing.getByLabel('I independently confirmed these details and Teyza may retain them. No contact permission is inferred.').check();
    await missing.getByRole('button',{name:'Save contact details',exact:true}).click();
+   await f.page.getByText('Zoho email · introduction / registration welcome / membership',{exact:true}).click();
    await f.page.getByText('Recipient: synthetic@example.test',{exact:true}).waitFor();
    assert.equal(await f.page.getByLabel('email invitation send preview').count(),0);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_send').length,0);
+   await f.page.getByText('Business support and linked cases',{exact:true}).click();
    await f.page.getByRole('heading',{name:'Business help and support'}).waitFor();
    assert.equal(await f.page.getByRole('button',{name:'Record invitation sent'}).count(),0);
    await f.page.getByText('Record contact permission, follow-up or support activity',{exact:true}).click();
@@ -718,12 +729,22 @@ async function main(){
    const draft=f.page.getByLabel('email invitation send preview');await draft.waitFor();const copy=await draft.inputValue();
    assert(copy.includes('Synthetic Spaza – Grow your business with Teyza'));assert(copy.includes('Umlazi, Durban'));assert(copy.includes('source stock for your spaza shop'));
    assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
+   await f.page.getByRole('button',{name:'Artwork & training resources'}).click();
+   await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
+   await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
+   await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
+   const checks=f.page.getByRole('button',{name:'Check published video',exact:true});
+   await checks.first().click();await f.page.getByRole('link',{name:'Watch video',exact:true}).waitFor();
+   await checks.last().click();await f.page.getByText('Not published / not verified',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),1);
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
-   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   await f.page.getByRole('button',{name:'Saved contacts',exact:true}).click();
    const contactDialog=f.page.getByRole('dialog');await contactDialog.getByLabel('Town, township or business name').fill('Durban');
    await contactDialog.getByText('Synthetic Spaza',{exact:true}).waitFor();
    assert(await contactDialog.getByRole('button',{name:'Send email',exact:true}).isEnabled());
-   assert(await contactDialog.getByRole('button',{name:'Send WhatsApp',exact:true}).isDisabled());
+   assert.equal(await contactDialog.getByRole('button',{name:'Send WhatsApp',exact:true}).count(),0);
    await contactDialog.getByRole('button',{name:'Send email',exact:true}).click();
    await f.page.getByLabel('email invitation send preview').waitFor();
    const emailPanel=f.page.locator('.acq-email');
@@ -732,7 +753,7 @@ async function main(){
    await emailPanel.getByText('Invite to Teyza · queued',{exact:true}).waitFor();
    assert(f.calls.some(c=>c.action==='ops_acquisition_send'));
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
-   await f.page.getByRole('button',{name:'Find businesses by area',exact:true}).click();
+   await f.page.getByRole('button',{name:'Saved contacts',exact:true}).click();
    const lookup=f.page.getByRole('dialog');await lookup.getByLabel('Town, township or business name').fill('Durban');
    assert.equal(await lookup.getByText('Synthetic Spaza',{exact:true}).count(),0);
    await lookup.getByLabel('Contact channel filter').selectOption('all');
@@ -742,8 +763,7 @@ async function main(){
    await lookup.locator('.acq-contact-row').filter({hasText:'Synthetic Spaza'}).getByRole('button',{name:'Open record',exact:true}).click();await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    await f.page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Registered businesses',exact:true}).click();
-   await f.page.getByRole('button',{name:'Load mapped Teyza businesses'}).click();
-   await f.page.getByText('Synthetic Verified Spaza',{exact:true}).waitFor();
+   assert.equal(await f.page.getByRole('dialog').count(),0);
    assert(f.calls.some(c=>c.action==='ops_acquisition_create'&&c.data.city==='Durban'&&c.data.authorisedSource===true));
    await f.page.setViewportSize({width:393,height:852});assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.deepEqual(f.errors,[]);await f.context.close();
@@ -787,13 +807,14 @@ async function main(){
    assert.equal(await metric('discovered').innerText(),'—');
    await page.getByRole('button',{name:'Continue incomplete report'}).click();
    await page.getByText(/Complete snapshot.*34 records inspected/).waitFor();
-   assert.equal(await metric('discovered').innerText(),'34');assert.equal(await metric('paidSellers').innerText(),'1');assert.equal(await metric('activePaidCampaigns').innerText(),'2');assert.equal(await metric('payingBusinesses').innerText(),'1');
+   assert.equal(await metric('discovered').innerText(),'34');await page.getByText('More conversion and revenue insights',{exact:true}).click();assert.equal(await metric('paidSellers').innerText(),'1');assert.equal(await metric('activePaidCampaigns').innerText(),'2');assert.equal(await metric('payingBusinesses').innerText(),'1');
    await page.getByLabel('Filter province').selectOption('KwaZulu-Natal');
    await page.getByLabel('Municipality name (exact)').fill('eThekwini');
    await page.getByLabel('Township / area name (exact)').fill('Umlazi');
    await page.getByLabel('Filter business type').selectOption('spaza');
    await page.getByLabel('Filter work queue').selectOption('field_visit');
-   await page.getByRole('button',{name:'Apply national filters'}).click();
+   await page.getByRole('button',{name:"Today's work",exact:true}).click();
+   await page.getByRole('dialog').getByRole('button',{name:/No phone or email — field visits/}).click();
    await page.getByText('Synthetic field visit',{exact:true}).waitFor();assert.equal(await page.locator('[data-prospect-id="p001"]').count(),0);
    await page.locator('[data-metric="approved"]').click();
    await page.getByText('Synthetic complimentary seller',{exact:true}).waitFor();
@@ -803,6 +824,39 @@ async function main(){
    await page.getByText('Synthetic paid advertiser',{exact:true}).waitFor();assert.equal(await page.locator('[data-prospect-id="p034"]').count(),0);
    assert(!f.calls.some(x=>['ops_acquisition_send','ops_acquisition_create','ops_acquisition_event','ops_acquisition_link'].includes(x.action)));
    await page.setViewportSize({width:393,height:852});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
+  await check('Guided manual WhatsApp separates chat opening from sending and waits for email acceptance',async()=>{
+   const stamp=Date.now()-1000,base={id:'manual-guided',name:'Synthetic Guided Business',city:'Durban',province:'KwaZulu-Natal',area:'Umlazi',category:'spaza',stage:'identified',phone:'+27712345678',email:'synthetic@example.test',permissions:{whatsapp:{granted:true},email:{granted:true}},revision:0,optedOut:false};
+   let prospect={...base},prepares=0,events=0;
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[prospect],next:null,communications:{email:{invitation:true}}}});return true;}
+    if(body.action==='ops_acquisition_command_page'){await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:1,prospects:[prospect],funnel:{discovered:1},queues:{new_contact:1}})});return true;}
+    if(body.action==='ops_acquisition_detail'){await route.fulfill({json:{ok:true,prospect,events:[]}});return true;}
+    if(body.action==='ops_acquisition_manual_whatsapp'){prepares++;assert.equal(body.data.sender,'+27712345679');assert.equal(body.data.purpose,'introduction');await route.fulfill({json:{ok:true,draft:{purpose:'introduction',sender:body.data.sender,recipient:prospect.phone,text:'Synthetic permitted introduction'}}});return true;}
+    if(body.action==='ops_acquisition_event'){
+     events++;const d=body.data;assert.equal(d.purpose,'introduction');assert.equal(d.sender,'+27712345679');
+     if(d.type==='manual_whatsapp_opened')prospect={...prospect,manualWhatsApp:{introduction:{purpose:'introduction',sender:d.sender,openedAt:stamp}},revision:prospect.revision+1};
+     else{assert.equal(d.type,'manual_whatsapp_sent');assert.equal(d.sentConfirmed,true);prospect={...prospect,contactedAt:stamp,lastWhatsAppContactAt:stamp,manualWhatsApp:{introduction:{...prospect.manualWhatsApp.introduction,sentAt:stamp}},revision:prospect.revision+1};}
+     await route.fulfill({json:{ok:true,prospect}});return true;
+    }
+    return false;
+   }});
+   const page=f.page;await page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await page.locator('[data-prospect-id="manual-guided"]').getByRole('button',{name:'Open record',exact:true}).click();
+   const dialog=page.getByRole('dialog');await dialog.getByRole('heading',{name:'Introduce Teyza on WhatsApp',exact:true}).waitFor();
+   async function prepare(){
+    await dialog.getByLabel('Separate Teyza WhatsApp Business sender').fill('+27712345679');
+    await dialog.getByLabel('I will use this account and the owner agreed to WhatsApp contact.').check();
+    await dialog.getByRole('button',{name:'Prepare manual WhatsApp',exact:true}).click();
+    await dialog.getByLabel('Verified manual WhatsApp preview').waitFor();
+    const url=new URL(await dialog.getByRole('link',{name:'Open WhatsApp message'}).getAttribute('href'));assert.equal(url.pathname,'/27712345678');assert.equal(url.searchParams.get('text'),'Synthetic permitted introduction');
+   }
+   await prepare();assert.equal(events,0);await dialog.getByRole('button',{name:'Record chat opened only'}).click();
+   await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
+   await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
+   await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
+   assert.equal(prepares,2);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{

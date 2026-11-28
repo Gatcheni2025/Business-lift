@@ -7,7 +7,7 @@ test('Business Acquisition scoped publisher preserves all unrelated site assets 
  const items=files(),before=new Map([['/index.html','home'],['/agents.html','agents'],['/pay/index.html','pay'],...paths.filter(p=>p!=='/js/teyza-business-acquisition.js').map(p=>[p,'old'])]),after=new Map(before);
  for(const [p,v] of items)after.set(p,v.hash);
  assert.doesNotThrow(()=>verify(before,after,items));assert.throws(()=>verify(before,new Map([...after,['/agents.html','changed']]),items));
- const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertR90Ready(health));assert.throws(()=>assertR90Ready({...health,adminBusinessAcquisition:false}));assert.throws(()=>assertR90Ready({...health,adminBusinessContactDiscovery:false}));
 });
 test('Business invitation destination shows the actual app and direct store links before optional detail',()=>{const fs=require('node:fs'),path=require('node:path');const html=fs.readFileSync(path.resolve(__dirname,'../../web/app-first/public/for-shop-owners.html'),'utf8');const main=html.slice(html.indexOf('<main id="main">'),html.indexOf('</main>'));const hero=main.slice(0,main.indexOf('data-teyza-demo'));for(const text of ['Put your business','/assets/app/home.webp','/assets/app/nearby-shops.webp','https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733','Get help getting started'])assert(hero.includes(text),text);assert(main.includes('example shop, items and request are illustrative'));assert(main.includes('tel:+27315661165'));assert(main.includes('Registration and verification are free'));assert(main.includes('/seller-subscriptions.html'));assert(html.includes('/assets/app-demo.js'));});
@@ -190,7 +190,7 @@ test('Idle/contact/area release publishes only 15 Admin paths and requires both 
  assert.equal(paths.length,15);assert(paths.includes('/js/teyza-app-admin-model.mjs'));
  for(const excluded of ['/index.html','/for-shop-owners.html','/assets/app-first.css','/support-inbox.html','/pay/index.html','/assets/teyza-map-first.css'])assert(!paths.includes(excluded));
  assert.equal(files().size,15);
- const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertAdminReady(health));
  for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
 });
@@ -246,4 +246,19 @@ test('Materialized summary pages are validated, contain no contact destinations 
  assert.throws(()=>validateSummaryPage({...p,prospects:[{id:'synthetic',snapshotOnly:true,email:'synthetic@example.test'}]},filters));
  assert.throws(()=>validateSummaryPage({...p,summaryGeneration:'11111111-1111-1111-1111-111111111111'},filters,p));
  assert.throws(()=>validateSummaryPage({...p,counts:{...counts,funnel:{...counts.funnel,discovered:64}}},filters));
+});
+
+test('Guided next action waits for actual Zoho evidence and never treats opening as sending',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {growthStep,manualNoticePurpose,emailDraftAllowed,emailText}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const p={name:'Synthetic',phone:'+27712345678',email:'synthetic@example.test',stage:'identified',permissions:{whatsapp:{granted:true},email:{granted:true}}};
+ assert.equal(growthStep(p).purpose,'introduction');assert.equal(growthStep({...p,permissions:{}}).id,'permission');
+ assert.equal(growthStep({...p,manualWhatsApp:{introduction:{openedAt:123}}}).purpose,'introduction');
+ assert.equal(growthStep({...p,contactedAt:123,manualWhatsApp:{introduction:{sentAt:123}}}).id,'response');
+ for(const status of ['queued','sending','review_required','cancelled'])assert.equal(manualNoticePurpose({...p,outbound:{email_invitation:{status}}}),null);
+ const accepted={...p,outbound:{email_invitation:{status:'accepted',providerId:'123',acceptedAt:Date.now()-1000}}};
+ assert.equal(manualNoticePurpose(accepted),'email_notice_invitation');assert.equal(manualNoticePurpose({...accepted,optedOut:true}),null);
+ assert.equal(manualNoticePurpose({...accepted,manualWhatsApp:{email_notice_invitation:{sentAt:123}}}),null);
+ assert(emailDraftAllowed('onboarding_guide',{...p,response:'needs_help',contactedAt:123}));assert(!emailDraftAllowed('onboarding_guide',p));assert.match(emailText('onboarding_guide',p).body,/training/);
 });

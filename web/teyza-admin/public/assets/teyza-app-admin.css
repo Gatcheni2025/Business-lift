@@ -386,3 +386,30 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 
 /* National acquisition: exact snapshot filters, metrics and daily queues. */
 .acq-national-report{display:grid;gap:1rem;min-width:0}.acq-national-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:.7rem;align-items:end}.acq-national-metrics{grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:.65rem}.acq-national-metrics button.field-stat{text-align:left;cursor:pointer;color:inherit}.acq-national-metrics button:disabled{cursor:default;opacity:1}.acq-national-queues{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.5rem}.acq-national-queues .button{text-align:left;white-space:normal}.acq-national-rows{display:grid;gap:.55rem;min-width:0;overflow-wrap:anywhere}.acq-official-locality{display:grid;gap:.45rem;min-width:0}.acq-official-locality [role=status]{display:grid;gap:.4rem;min-width:0}.acq-official-locality .button{white-space:normal;text-align:left}
+
+/* Guided Business Growth */
+.acq-growth-hero{padding:24px!important;display:grid;gap:8px}.acq-growth-hero h3{font-size:26px;letter-spacing:-.03em;margin:0}.acq-growth-hero .acq-work-button{background:white;color:#00545b;border-color:white}
+.acq-national-report{padding:20px!important;border-radius:18px;gap:14px}.acq-national-report>.acq-national-metrics{grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr))}
+.acq-national-metrics .field-stat{border-radius:13px;background:#f7faf8;border:1px solid #dce8e3;min-height:88px;padding:14px}.acq-national-metrics .field-stat strong{font-size:28px;color:#00484d}
+.acq-national-filters .acq-advanced-filters{grid-column:1/-1;margin:0}
+.acq-pipeline-row{display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(0,1.1fr) minmax(0,.9fr) auto;align-items:center;gap:14px!important;background:#fff;border:1px solid #dfeae6;border-radius:13px;padding:16px!important}
+.acq-pipeline-row>div{min-width:0;overflow-wrap:anywhere}.acq-pipeline-identity,.acq-pipeline-journey,.acq-pipeline-commercial{display:grid;gap:5px}
+.acq-pipeline-identity strong{font-size:16px;color:#123c43}.acq-pipeline-journey>span{font-weight:700;color:#00545b}.acq-pipeline-row small{font-size:12px;color:#52716e}
+.acq-growth-status{justify-self:start;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700}
+.acq-growth-status[data-tone=green],.acq-next-step[data-tone=green]{background:#e8f5e9;color:#16643b;border-color:#cbe7cd}
+.acq-growth-status[data-tone=amber],.acq-next-step[data-tone=amber]{background:#fff4db;color:#81570b;border-color:#efddb7}
+.acq-growth-status[data-tone=blue],.acq-next-step[data-tone=blue]{background:#eaf3fa;color:#1f5275;border-color:#cddfec}
+.acq-growth-status[data-tone=purple],.acq-next-step[data-tone=purple]{background:#f1e9fc;color:#6945a1;border-color:#e0d3f5}
+.acq-growth-status[data-tone=red],.acq-next-step[data-tone=red]{background:#fceaea;color:#962f39;border-color:#efccd0}
+.acq-growth-status[data-tone=neutral],.acq-next-step[data-tone=neutral]{background:#eaf0ee;color:#45645e;border-color:#d3e1dc}
+.acq-guided-record{display:grid;gap:12px}.acq-guided-record>p{margin:0}
+.acq-next-step{padding:20px;border-radius:14px;border:1px solid #cbe2d1;display:grid;gap:10px;color:#143d43}.acq-next-step>small{font-size:12px;font-weight:800;letter-spacing:.1em}.acq-next-step h3{margin:0;font-size:23px;letter-spacing:-.02em}
+.acq-guide-actions{display:flex;gap:8px;flex-wrap:wrap}.acq-guide-actions>.button:first-child{background:#00545b;color:white;border-color:#00545b;min-height:44px;flex:1}
+.acq-record-facts{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px;border:1px solid #dce9e4;border-radius:12px}.acq-record-facts>div{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}.acq-record-facts small{font-size:12px;color:#587773}.acq-record-facts strong{font-size:14px}
+.acq-journey-list{list-style:none;margin:0;padding:0;display:grid;gap:0}.acq-journey-list li{position:relative;padding:9px 10px 9px 34px;border-left:1px solid #d6e5df;margin-left:10px;color:#53716d}.acq-journey-list li::before{content:"";position:absolute;left:-7px;top:12px;width:12px;height:12px;border:1px solid #b5cdc3;border-radius:50%;background:white}.acq-journey-list li[data-complete=true]{color:#174b42;font-weight:650}.acq-journey-list li[data-complete=true]::before{background:#1c8b63;border-color:#1c8b63;box-shadow:0 0 0 3px #e2f1e9}
+.acq-manual-result{display:grid;gap:8px}.acq-national-queues{grid-template-columns:1fr;gap:6px}.acq-national-queues .button{display:block;padding:13px 15px;background:white;border-color:#dce8e4}
+@media(max-width:900px){.acq-pipeline-row{grid-template-columns:1fr 1fr}.acq-pipeline-row .acq-contact-actions{justify-content:flex-start}}@media(max-width:560px){.acq-pipeline-row{grid-template-columns:1fr}.acq-record-facts{grid-template-columns:1fr 1fr}.acq-growth-hero{padding:16px!important}.acq-next-step{padding:14px}}
+
+.acq-discovery-guide{display:grid;gap:8px;padding:14px;background:#f1f7f4;border-radius:12px;border:1px solid #d6e7dd}.acq-guide-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.acq-guide-steps span{padding:8px 5px;text-align:center;font-size:12px;color:#496a64;border-bottom:3px solid #d4e4de;font-weight:700}.acq-guide-steps span[data-current=true]{color:#00545b;border-color:#7cbf38}.acq-guide-steps span[data-done=true]{color:#1c7953;border-color:#1c7953}.acq-guide-selection{font-weight:700;color:#12464a}.acq-google-compact [hidden]{display:none!important}.acq-manual-chip[data-phone-state=number]{background:#e4f4e6;color:#16643b}.acq-manual-chip[data-phone-state=missing]{background:#fff1dc;color:#8c600d}
+
+.acq-manual-chip[data-phone-state=unchecked]{background:#eaf0ee;color:#49645d}.acq-manual-chip[data-phone-state=loading]{background:#e7f1fb;color:#245a91}.acq-manual-chip[data-phone-state=failed]{background:#fce8e8;color:#a12e38}.acq-google-compact .acq-status[hidden]{display:none!important}
