@@ -210,7 +210,7 @@ test('National contact queues exclude missing contacts without deleting their re
 });
 
 test('Both scoped national publishers fail before any Hosting call on a stale or incompatible backend',async()=>{
- for(const file of ['./publish-admin-idle-contact-area-only.cjs','./publish-business-acquisition-only.cjs']){
+ for(const file of ['./publish-admin-idle-contact-area-only.cjs','./publish-business-acquisition-only.cjs','./publish-admin-whatsapp-benefits-only.cjs']){
   const p=require(file);let calls=0;const client={hosting:async()=>{calls++;throw Error('unexpected Hosting operation');}};
   for(const health of [{ok:true},{ok:true,adminNationalAcquisition:false,adminNationalAcquisitionSchema:2},{ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:1}]){
    await assert.rejects(p.deploy(client,{fetcher:async()=>({ok:true,json:async()=>health})}),/national acquisition schema 2|matching Admin idle/);
@@ -278,4 +278,51 @@ test('Commercial snapshot counts unique paying businesses, payment overlap and m
  assert.equal(urls.app,'https://wa.me/27712345678?text='+encodeURIComponent(text));assert.equal(urls.web,'https://web.whatsapp.com/send?phone=27712345678&text='+encodeURIComponent(text));
  const special='Literal + & # %20\n🌱';assert.equal(new URL(verifiedWhatsappLinks('071 234 5678',special).app).searchParams.get('text'),special);
  assert.throws(()=>verifiedWhatsappLinks('not a number',text));assert.throws(()=>verifiedWhatsappLinks('+27712345678',''));
+});
+
+test('WhatsApp benefits category mapping, consent gating, and PNG clipboard fetch fail closed',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {benefitsPictures,benefitsPictureFor,reviewedBenefitsPicture,approvedBenefitsBlob}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const manifest=require('./whatsapp-benefits-manifest.json');
+ assert.equal(benefitsPictures.length,8);
+ assert.deepEqual(benefitsPictures.map(x=>x.href).sort(),manifest.assets.map(x=>x.path).sort());
+ for(const {category,path:href} of manifest.assets){
+  assert.equal(benefitsPictureFor(category).href,href);
+  assert.equal(reviewedBenefitsPicture({category,phone:'+27712345678',permissions:{whatsapp:{granted:true}}},'introduction').href,href);
+ }
+ assert.equal(benefitsPictureFor('__proto__').category,'other');
+ assert.equal(benefitsPictureFor('../bad').category,'other');
+ const p={category:'food',phone:'+27712345678',permissions:{whatsapp:{granted:true}},optedOut:false};
+ for(const blocked of [{...p,optedOut:true},{...p,permissions:{}},{...p,phone:''}])assert.equal(reviewedBenefitsPicture(blocked,'introduction'),null);
+ for(const purpose of ['email_notice_welcome','email_notice_invitation','support',undefined])assert.equal(reviewedBenefitsPicture(p,purpose),null);
+ let checked=0,fetches=0;
+ const picture=benefitsPictureFor('food'),revalidate=async()=>{checked++;};
+ const raw=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public',picture.href));
+ const response=()=>new Response(raw,{headers:{'content-type':'image/png'}});
+ const b=await approvedBenefitsBlob(picture,revalidate,async(href,options)=>{fetches++;assert.equal(href,picture.href);assert.equal(options.redirect,'error');assert.equal(checked,1);return response();});
+ assert.equal(b.type,'image/png');assert.equal(b.size,raw.length);
+ await assert.rejects(approvedBenefitsBlob(picture,async()=>{throw Error('Permission revoked');},async()=>{fetches++;return response();}),/Permission revoked/);assert.equal(fetches,1);
+ await assert.rejects(approvedBenefitsBlob({href:'https://other.example/image.png'},revalidate,async()=>response()),/Unknown benefits picture/);
+ await assert.rejects(approvedBenefitsBlob(picture,revalidate,async()=>new Response('<html>not an image</html>',{headers:{'content-type':'text/html'}})),/unavailable/);
+});
+test('Pinned benefits publisher verifies all eight approved PNGs and preserves existing Hosting assets',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const old=require('./publish-admin-idle-contact-area-only.cjs'),p=require('./publish-admin-whatsapp-benefits-only.cjs'),manifest=require('./whatsapp-benefits-manifest.json');
+ assert.equal(old.paths.length,15);assert.equal(p.paths.length,23);assert.equal(new Set(p.paths).size,23);
+ assert.deepEqual(p.artworkPaths,manifest.assets.map(a=>a.path));
+ assert.equal(p.expectedSource,'sites/business-lift-3c19c/versions/865c7ccb478670fd');
+ const managed=p.files();assert.equal(managed.size,23);
+ for(const a of manifest.assets){
+  const raw=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public',a.path));
+  assert.doesNotThrow(()=>p.verifyArtwork(raw,a));
+  const altered=Buffer.from(raw);altered[altered.length-1]^=1;assert.throws(()=>p.verifyArtwork(altered,a),/integrity/);
+ }
+ const before=new Map(old.paths.map(x=>[x,'previous-'+x]));for(let i=0;i<147;i++)before.set('/unrelated-'+i,'preserved-'+i);
+ assert.doesNotThrow(()=>p.assertBaseline(p.expectedSource,before));assert.throws(()=>p.assertBaseline('sites/business-lift-3c19c/versions/0000000000000000',before),/baseline/);
+ const staged=new Map(before);for(const [k,v] of managed)staged.set(k,v.hash);
+ assert.equal(staged.size,170);assert.doesNotThrow(()=>p.verify(before,staged,managed));
+ assert.throws(()=>p.verify(before,new Map([...staged,['/unrelated-0','changed']]),managed),/Unrelated/);
+ const missing=new Map(staged);missing.delete(p.artworkPaths[0]);assert.throws(()=>p.verify(before,missing,managed));
+ assert.throws(()=>p.assertBaseline(p.expectedSource,staged),/baseline/);
 });

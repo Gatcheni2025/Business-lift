@@ -434,3 +434,15 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-priority strong{flex:none;color:#00545b;font-size:19px}
 @media(max-width:560px){.acq-commercial-summary{padding:12px}.acq-commercial-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+
+/* Category-specific, reviewed WhatsApp artwork; layout stays within record dialog. */
+.acq-benefits-picture{display:grid;gap:10px;padding:14px;border:1px solid #dce8e3;border-radius:12px;background:#f8fbf9;min-width:0}
+.acq-benefits-picture h4,.acq-benefits-picture p{margin:0}
+.acq-benefits-layout{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr);gap:14px;align-items:start}
+.acq-benefits-layout img{display:block;width:100%;height:auto;aspect-ratio:4/5;object-fit:contain;border-radius:8px;background:#064d54}
+.acq-benefits-layout img[hidden]{display:none}
+.acq-benefits-actions{display:grid;gap:8px;min-width:0}
+.acq-benefits-actions .button{white-space:normal;overflow-wrap:anywhere;text-align:center}
+.acq-benefits-actions .footnote{overflow-wrap:anywhere}
+@media(max-width:560px){.acq-benefits-layout{grid-template-columns:1fr}.acq-benefits-layout img{max-width:230px;margin-inline:auto}}
+

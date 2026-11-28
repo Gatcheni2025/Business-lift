@@ -43,7 +43,7 @@ async function main(){
   const file=['/admin','/admin/','/admin.html','/admin-sellers.html'].includes(p)?path.join(root,'admin.html'):
    p==='/assets/teyza-sprout-wordmark.svg'?path.join(repo,p):path.join(root,p);
   if(!file.startsWith(root+path.sep)&&file!==path.join(repo,'/assets/teyza-sprout-wordmark.svg')||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
-  res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'application/javascript');res.end(fs.readFileSync(file));
+  res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'application/javascript');res.end(fs.readFileSync(file));
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port;
  let browser;try{browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.TEYZA_ADMIN_CHROMIUM?{executablePath:process.env.TEYZA_ADMIN_CHROMIUM}:{})});}
@@ -943,25 +943,40 @@ async function main(){
     assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),draftText);
     assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
+   assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
    await prepare();assert.equal(events,0);
+   const art=dialog.locator('[data-benefits-category="spaza"]');
+   await art.waitFor();
+   const poster=art.getByRole('img',{name:'Spaza shop benefits picture — Teyza benefits'});
+   await poster.waitFor();
+   await page.waitForFunction(()=>{const i=document.querySelector('[data-benefits-category="spaza"] img');return i?.complete&&i.naturalWidth===1080&&i.naturalHeight===1350;});
+   assert.equal(await poster.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');
+   const download=art.getByRole('link',{name:'Download benefits picture',exact:true});assert.equal(await download.getAttribute('href'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');assert.notEqual(await download.getAttribute('download'),null);
+   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{const blob=await items[0].getType('image/png');window.__benefitsCopy={size:blob.size,type:blob.type};}}});});
+   await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
+   await art.getByText(/Picture copied\. Paste it into WhatsApp/).waitFor();
+   assert.deepEqual(await page.evaluate(()=>window.__benefitsCopy),{size:647472,type:'image/png'});assert.equal(prepares,2);assert.equal(events,0);
+   await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
+   await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
+   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,2);assert.equal(events,0);
    // Intercept the popup before navigation. No real WhatsApp traffic or send.
    await f.context.route('https://web.whatsapp.com/send?*',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic WhatsApp</title></html>'}));
    const opened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
    const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
    const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),draftText);assert(url.href.includes('%20'));
-   await popup.close();assert.equal(prepares,2);assert.equal(events,0);
+   await popup.close();assert.equal(prepares,3);assert.equal(events,0);
    await f.context.route('https://wa.me/**',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic app handoff</title></html>'}));
    const appOpened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).click();
    const appPopup=await appOpened;await appPopup.waitForURL('https://wa.me/**');
    const appUrl=new URL(appPopup.url());assert.equal(appUrl.pathname,'/27712345678');assert.equal(appUrl.searchParams.get('text'),draftText);assert(appUrl.href.includes('%20'));
-   await appPopup.close();assert.equal(prepares,3);assert.equal(events,0);
+   await appPopup.close();assert.equal(prepares,4);assert.equal(events,0);
    await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,4);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,5);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{
@@ -986,6 +1001,7 @@ async function main(){
    await row.getByRole('button',{name:'Open live record',exact:true}).click();
    const dialog=page.getByRole('dialog');await dialog.waitFor();
    assert(await dialog.getByText('DO NOT CONTACT',{exact:true}).first().isVisible());
+   assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
    assert(f.calls.some(c=>c.action==='ops_acquisition_detail'&&c.data.id===cached.id));
    assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
