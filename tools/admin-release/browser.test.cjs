@@ -590,6 +590,18 @@ async function main(){
    await wizard.getByText('Selected: Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',{exact:true}).waitFor();
    await wizard.getByRole('button',{name:'Continue to business type'}).click();
    await wizard.getByText('Selected community: Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',{exact:true}).waitFor();
+   const easternPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*';
+   let easternSearches=0;await f.page.route(easternPattern,route=>{
+    const q=new URL(route.request().url()).searchParams;easternSearches++;
+    assert.equal(q.get('scope'),'admin-local-v1');assert.equal(q.get('lat'),'-32.99');assert.equal(q.get('lon'),'27.9');assert.equal(q.get('radius'),easternSearches===1?'5000':'20000');
+    return route.fulfill({json:{ok:true,searchScope:'admin-local-v1',searchRadiusKm:Number(q.get('radius'))/1000,entries:easternSearches===1?[]:[{placeId:'SyntheticEasternSpaza123',name:'Synthetic Eastern Local Shop',latitude:-32.99,longitude:27.9,shopCategory:'spaza'}],diagnostics:{queriesAttempted:6,queriesFailed:0,providerRows:easternSearches===1?0:1,outsideRadius:0,categoryExcluded:0,missingLocationOrClosed:0}}});
+   });
+   await wizard.getByRole('button',{name:'Search this area',exact:true}).click();
+   await wizard.getByText(/No matching mapped businesses were returned/).waitFor();assert.equal(easternSearches,1);
+   await wizard.getByLabel('Business search radius').selectOption('20000');assert.equal(easternSearches,1);
+   await wizard.getByRole('button',{name:'Search this area',exact:true}).click();
+   await wizard.getByText('Synthetic Eastern Local Shop',{exact:true}).waitFor();assert.equal(easternSearches,2);
+   await f.page.unroute(easternPattern);
    await wizard.getByRole('button',{name:'Change location',exact:true}).click();
    await wizard.getByLabel('Province',{exact:true}).selectOption('KwaZulu-Natal');
    assert.equal(await wizard.getByLabel('Town or municipality').inputValue(),'');
@@ -612,8 +624,8 @@ async function main(){
    const guidedContactPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*';
    await f.page.route(guidedSearchPattern,route=>{
     guidedSearches++;
-    const kind=new URL(route.request().url()).searchParams.get('category');
-    return route.fulfill({json:{ok:true,entries:kind==='spaza'?[
+    const q=new URL(route.request().url()).searchParams,kind=q.get('category');assert.equal(q.get('scope'),'admin-local-v1');
+    return route.fulfill({json:{ok:true,searchScope:'admin-local-v1',searchRadiusKm:Number(q.get('radius'))/1000,entries:kind==='spaza'?[
      {placeId:'SyntheticFuel12345',name:"TotalEnergies Synthetic Service Station",latitude:-29.86,longitude:31.02,shopCategory:'spaza',primaryType:'gas_station',types:['gas_station','convenience_store']},
      {placeId:'SyntheticIndependent123',name:'Shalom Spaza',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},
      {placeId:'SyntheticNoPhone123',name:'Independent Tuck Shop',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}
@@ -666,9 +678,9 @@ async function main(){
    let placesRequests=0,contactRequests=0,expectedRadius='20000',failNextContact=true;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
     placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),expectedRadius);
-    const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
+    const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));assert.equal(u.searchParams.get('scope'),'admin-local-v1');
     const entries=category==='spaza'?[{placeId:'SyntheticPlace1234',name:'Synthetic Spaza',address:'Synthetic Local Road',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticPlace5678',name:'Synthetic No Contact',address:'Synthetic No Contact Road',latitude:-29.87,longitude:31.02,shopCategory:'spaza'},{placeId:'SyntheticWrongArea123',name:'Synthetic Soweto Outside Radius',latitude:-26.268,longitude:27.858,shopCategory:'spaza'}]:[];
-    return route.fulfill({json:{ok:true,entries}});
+    return route.fulfill({json:{ok:true,searchScope:'admin-local-v1',searchRadiusKm:Number(expectedRadius)/1000,entries}});
    });
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
     contactRequests++;const id=new URL(route.request().url()).searchParams.get('placeId');
@@ -704,6 +716,7 @@ async function main(){
    assert.equal(await checkLink.getAttribute('href'),'https://wa.me/27315550100');
    assert.equal(await checkLink.getAttribute('target'),'_blank');
    assert(await shop.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).isVisible());
+   const publicPreview=shop.locator('[data-preview-category="spaza"]');await publicPreview.locator('summary').click();const previewImage=publicPreview.getByRole('img');await previewImage.waitFor();assert.equal(await previewImage.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');await previewImage.scrollIntoViewIfNeeded();await f.page.waitForFunction(()=>Array.from(document.querySelectorAll('.acq-business-card [data-preview-category="spaza"][open] img')).some(i=>i.complete&&i.naturalWidth===1080&&i.naturalHeight===1350));assert.equal(await shop.locator('[data-benefits-category]').count(),0);
    assert(!new URL(await checkLink.getAttribute('href')).searchParams.has('text'));
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    // Switching to an external chat must not erase this exact search or
@@ -964,6 +977,7 @@ async function main(){
     assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
    assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
+   const preArt=dialog.locator('[data-preview-category="spaza"]'),preImage=preArt.getByRole('img');await preImage.waitFor();assert.equal(await preImage.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');await preImage.scrollIntoViewIfNeeded();await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-preview-category="spaza"][open] img')).some(i=>i.complete&&i.naturalWidth===1080&&i.naturalHeight===1350));
    await prepare();assert.equal(events,0);
    const listBefore=f.calls.filter(c=>c.action==='ops_acquisition_list').length;
    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
@@ -988,27 +1002,28 @@ async function main(){
    await dialog.getByRole('button',{name:'Copy reviewed message',exact:true}).click();
    await dialog.getByText(/Message copied\. Paste it in WhatsApp/).waitFor();
    assert.equal(await page.evaluate(()=>window.__reviewedText),draftText);assert.equal(prepares,3);
+   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Copy message & download picture',exact:true}).click();const downloaded=await downloadEvent;assert.equal(downloaded.suggestedFilename(),'teyza-benefits-spaza-v1.png');assert.deepEqual(fs.readFileSync(await downloaded.path()),fs.readFileSync(path.join(root,'assets/admin-benefits/teyza-benefits-spaza-v1.png')));await dialog.getByText(/paste the reviewed text as its caption/).waitFor();assert.equal(prepares,4);assert.equal(events,0);
    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
    await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
-   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,3);assert.equal(events,0);
+   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,4);assert.equal(events,0);
    // Intercept the popup before navigation. No real WhatsApp traffic or send.
    await f.context.route('https://web.whatsapp.com/send?*',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic WhatsApp</title></html>'}));
    const opened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
    const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
    const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),draftText);assert(url.href.includes('%20'));
-   await popup.close();assert.equal(prepares,4);assert.equal(events,0);
+   await popup.close();assert.equal(prepares,5);assert.equal(events,0);
    await f.context.route('https://wa.me/**',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic app handoff</title></html>'}));
    const appOpened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).click();
    const appPopup=await appOpened;await appPopup.waitForURL('https://wa.me/**');
    const appUrl=new URL(appPopup.url());assert.equal(appUrl.pathname,'/27712345678');assert.equal(appUrl.searchParams.get('text'),draftText);assert(appUrl.href.includes('%20'));
-   await appPopup.close();assert.equal(prepares,5);assert.equal(events,0);
+   await appPopup.close();assert.equal(prepares,6);assert.equal(events,0);
    await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,6);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,7);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{

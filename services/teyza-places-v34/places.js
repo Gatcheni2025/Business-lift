@@ -82,13 +82,23 @@ function mapResult(place, kind, lat, lon) {
     isTeyzaMerchant: false
   };
 }
-async function searchPage({key, text, lat, lon, radius, pageToken, fetchImpl}) {
+// Explicitly requested Admin-only geographic mode. Shopper requests without
+// scope retain the previous location bias and response shape.
+const ADMIN_SCOPE='admin-local-v1';
+function adminViewport(lat,lon,radius){
+ if(!Number.isFinite(lat)||lat< -35||lat> -22||!Number.isFinite(lon)||lon<16||lon>34||!Number.isFinite(radius)||radius<500||radius>50000)throw Error('Invalid South African Admin search area');
+ const rad=Math.PI/180,angle=radius/6371000;
+ // Circumscribed bounding rectangle: keep the final exact radius filter.
+ const deltaLat=angle/rad,deltaLon=Math.asin(Math.min(1,Math.sin(angle)/Math.cos(lat*rad)))/rad;
+ return {low:{latitude:lat-deltaLat,longitude:lon-deltaLon},high:{latitude:lat+deltaLat,longitude:lon+deltaLon}};
+}
+async function searchPage({key, text, lat, lon, radius, pageToken, fetchImpl,scope}) {
   const response = await fetchImpl('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELD_MASK},
     body: JSON.stringify({textQuery: text, pageSize: 20, languageCode: 'en', regionCode: 'ZA',
-      locationBias: {circle: {center: {latitude: lat, longitude: lon}, radius}},
-      ...(text==='plumber services'||text==='electrical services'?{includePureServiceAreaBusinesses:true}:{}),
+      ...(scope===ADMIN_SCOPE?{locationRestriction:{rectangle:adminViewport(lat,lon,radius)}}:{locationBias:{circle:{center:{latitude:lat,longitude:lon},radius}}}),
+      ...(scope!==ADMIN_SCOPE&&(text==='plumber services'||text==='electrical services')?{includePureServiceAreaBusinesses:true}:{}),
       ...(pageToken ? {pageToken} : {})}),
     signal: AbortSignal.timeout(8500)
   });
@@ -96,15 +106,19 @@ async function searchPage({key, text, lat, lon, radius, pageToken, fetchImpl}) {
   const data = await response.json();
   return {places: Array.isArray(data.places) ? data.places : [], nextPageToken: data.nextPageToken};
 }
-async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
+async function discover({key, lat, lon, radius, kind, scope,fetchImpl = fetch}) {
+  const strict=scope===ADMIN_SCOPE;
+  if(strict)adminViewport(lat,lon,radius);
   const texts = QUERIES[kind];
-  const first = await Promise.allSettled(texts.map(text => searchPage({key, text, lat, lon, radius, fetchImpl})));
-  const unique = new Map();
+  const first = await Promise.allSettled(texts.map(text => searchPage({key, text, lat, lon, radius, fetchImpl,scope})));
+  const unique = new Map(),diagnostics={queriesAttempted:first.length,queriesFailed:first.filter(r=>r.status==='rejected').length,providerRows:0,categoryExcluded:0,missingLocationOrClosed:0,outsideRadius:0};
   function merge(places) {
     for (const p of places) {
-      if (!kindMatch(p, kind)) continue;
+      diagnostics.providerRows++;
+      if (!kindMatch(p, kind)){diagnostics.categoryExcluded++;continue;}
       const entry = mapResult(p, kind, lat, lon);
-      if (!entry || (entry.distanceKm!==null&&entry.distanceKm > radius / 1000)) continue;
+      if(!entry||(strict&&entry.distanceKm===null)){diagnostics.missingLocationOrClosed++;continue;}
+      if(strict?distance(lat,lon,entry.latitude,entry.longitude)>radius/1000:(entry.distanceKm!==null&&entry.distanceKm>radius/1000)){diagnostics.outsideRadius++;continue;}
       if (!unique.has(entry.id) || (!unique.get(entry.id).photoRef && entry.photoRef)) unique.set(entry.id, entry);
     }
   }
@@ -116,7 +130,8 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
   if (unique.size < 30) {
     const pages = first.flatMap((result, index) => result.status === 'fulfilled' && result.value.nextPageToken ?
       [{text: texts[index], pageToken: result.value.nextPageToken}] : []).slice(0, 2);
-    const extra = await Promise.allSettled(pages.map(page => searchPage({key, lat, lon, radius, fetchImpl, ...page})));
+    const extra = await Promise.allSettled(pages.map(page => searchPage({key, lat, lon, radius, fetchImpl, scope,...page})));
+    diagnostics.queriesAttempted+=extra.length;diagnostics.queriesFailed+=extra.filter(r=>r.status==='rejected').length;
     for (const result of extra) {
       if (result.status === 'fulfilled') merge(result.value.places);
       else partial = true;
@@ -128,6 +143,7 @@ async function discover({key, lat, lon, radius, kind, fetchImpl = fetch}) {
   return {ok: true, version: '3.6', provider: 'google_places', category: kind, entries,
     returned: entries.length, photoCount: entries.filter(p => p.photoRef).length,
     searchRadiusKm: radius / 1000,
+    ...(strict?{searchScope:ADMIN_SCOPE,diagnostics}:{}),
     attributions: [{name: 'Google Maps', url: 'https://maps.google.com/'}],
     warning: partial ? 'Partial Google Places results' : null};
 }
@@ -172,4 +188,4 @@ async function fetchContact({key,placeId,fetchImpl=fetch}){
     websiteUrl:typeof place.websiteUri==='string'&&place.websiteUri.startsWith('https://')?place.websiteUri:''};
 }
 
-module.exports = {ROOT, FIELD_MASK, num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto, fetchContact};
+module.exports = {ROOT, FIELD_MASK, ADMIN_SCOPE,adminViewport,num, category, photoResource, kindMatch, mapResult, discover, trustedPhotoUri, fetchPhoto, fetchContact};
