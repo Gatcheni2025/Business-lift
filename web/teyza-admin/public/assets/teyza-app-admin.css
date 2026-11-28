@@ -446,3 +446,10 @@ footer{color:var(--muted)}footer img{object-fit:contain;flex:none}
 .acq-benefits-actions .footnote{overflow-wrap:anywhere}
 @media(max-width:560px){.acq-benefits-layout{grid-template-columns:1fr}.acq-benefits-layout img{max-width:230px;margin-inline:auto}}
 
+
+/* Keep the same acquisition DOM when another tab/application has focus.
+   Never reveal the suspended workspace before checking the active session. */
+html.acq-session-paused #workspace,html.acq-session-paused .acq-dialog,html.acq-session-paused .acq-dialog *{visibility:hidden!important;pointer-events:none!important}
+html.acq-session-paused .acq-dialog::backdrop{background:#f3f6f3;backdrop-filter:none}
+html.acq-session-paused body{overflow:hidden}
+

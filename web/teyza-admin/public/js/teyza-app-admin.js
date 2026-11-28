@@ -1,4 +1,4 @@
-import {createOperations} from '/js/teyza-operations.js?v=20261128-whatsapp-benefits-v1';
+import {createOperations} from '/js/teyza-operations.js?v=20261128-admin-continuity-v1';
 import {auth} from '/js/teyza-app-admin-firebase.mjs?v=R323';
 import {createApi,ReviewState,filteredRows,photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
 import {onAuthStateChanged,signInWithEmailAndPassword,signOut,setPersistence,browserSessionPersistence}
@@ -7,6 +7,14 @@ import {onAuthStateChanged,signInWithEmailAndPassword,signOut,setPersistence,bro
 const $=id=>document.getElementById(id),state=new ReviewState();
 const IDLE_MS=300000,STORAGE_KEY='teyza-admin-idle-v1';
 let sessionToken=null,lastActivity=0,lastTouch=0,lastSentActivity=0,touching=false,closing=false,loginPending=false;
+let acquisitionPaused=false,visibilityEpoch=0;
+// Admin is a normal browser workspace. Never offer or initiate PWA installation.
+window.addEventListener('beforeinstallprompt',event=>event.preventDefault());
+function pauseAcquisitionUi(paused){
+ acquisitionPaused=paused;document.documentElement.classList.toggle('acq-session-paused',paused);
+ $('workspace').inert=paused;
+ for(const dialog of document.querySelectorAll('.acq-dialog'))dialog.inert=paused;
+}
 const rawApi=createApi({user:()=>auth.currentUser,adminSession:()=>sessionToken||undefined});
 const idleExpired=()=>!lastActivity||Date.now()<lastActivity||Date.now()-lastActivity>=IDLE_MS;
 const api=async(action,data)=>{
@@ -40,7 +48,7 @@ function persistSession(){
   try{if(sessionToken&&activeUser)sessionStorage.setItem(STORAGE_KEY,JSON.stringify({uid:activeUser.uid,token:sessionToken,lastActivity}));else sessionStorage.removeItem(STORAGE_KEY);}catch{}
 }
 function clearWorkspace(){
-  operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;resetDetails();$('sellerList').replaceChildren();
+  visibilityEpoch++;pauseAcquisitionUi(false);operations.clear();state.clear();queueLoaded=false;busy=false;authorised=false;resetDetails();$('sellerList').replaceChildren();
   $('sectionSearch').value='';$('search').value='';for(const id of ['sellerTitle','sellerCategory','submittedAt','sellerEmail','sellerPhone','sellerAddress','sellerCompany','sellerStatus','complianceFollowup'])set(id,'—');$('claimMapLink').removeAttribute('href');$('complianceList').replaceChildren();$('sellerComplianceSummary').replaceChildren();filterSections();$('workspace').hidden=true;$('loginPanel').hidden=false;
   $('email').readOnly=false;$('password').value='';$('signOut').hidden=true;
   set('accountEmail','Secure seller review');set('loginTitle','Welcome back');set('loginHint','Use your authorised administrator email and password.');
@@ -67,12 +75,12 @@ function failed(error){
   notice(error.message||'The request could not be completed. Please try again.','error');
 }
 function activity(event){
-  if(!event.isTrusted||document.hidden||!authorised)return;
+  if(!event.isTrusted||document.hidden||!authorised||acquisitionPaused)return;
   if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
   lastActivity=Date.now();persistSession();flushActivity();
 }
 function flushActivity(){
-  if(!authorised||document.hidden||touching||idleExpired()||lastActivity<=lastSentActivity)return;
+  if(!authorised||document.hidden||acquisitionPaused||touching||idleExpired()||lastActivity<=lastSentActivity)return;
   const now=Date.now(),token=sessionToken,reported=lastActivity;
   if(now-lastTouch<30000||now-reported>60000)return;
   lastTouch=now;touching=true;
@@ -329,12 +337,34 @@ document.addEventListener('teyza-admin-view-change',()=>{clearViews();$('section
 for(const type of ['pointerdown','keydown','input','wheel','touchstart','pointermove'])
   document.addEventListener(type,activity,{capture:true,passive:true});
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){state.generation++;busy=false;clearViews();operations.hideSensitive();return;}
+  const stamp=++visibilityEpoch;
+  if(document.hidden){
+    state.generation++;busy=false;clearViews();
+    // Keep the live acquisition DOM and its ephemeral search state, but
+    // visually conceal it until the SAME authenticated session is verified.
+    // Private identity/mandate views still follow the existing purge path.
+    if(authorised&&!idleExpired()&&operations.canPauseAcquisition()){
+      pauseAcquisitionUi(true);return;
+    }
+    pauseAcquisitionUi(false);operations.hideSensitive();return;
+  }
   if(!authorised)return;
   if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}
-  operations.load();
+  if(!acquisitionPaused){void operations.load();return;}
+  const token=sessionToken,uid=activeUser?.uid;
+  void (async()=>{
+    try{
+      const r=await rawApi('admin_session_status');
+      if(stamp!==visibilityEpoch||document.hidden||token!==sessionToken||uid!==activeUser?.uid||!authorised)return;
+      if(r.active!==true||idleExpired()||auth.currentUser?.uid!==uid)throw Error('Admin session expired or access changed.');
+      pauseAcquisitionUi(false);
+      // No reload, list refresh, or search. Resume the identical controls.
+    }catch(error){
+      if(stamp===visibilityEpoch&&token===sessionToken&&authorised&&!document.hidden)void logout(error.message||'Could not verify the Admin session. Sign in again.','warning');
+    }
+  })();
 });
-window.addEventListener('pagehide',()=>{state.generation++;clearViews();operations.clear();});
+window.addEventListener('pagehide',()=>{visibilityEpoch++;pauseAcquisitionUi(false);state.generation++;clearViews();operations.clear();});
 window.addEventListener('pageshow',event=>{if(event.persisted&&auth.currentUser&&!closing)void authorise(auth.currentUser);});
 setInterval(()=>{if(!authorised)return;if(idleExpired()){void logout('You were signed out after five minutes of inactivity. Sign in again.');return;}flushActivity();updateControls();},1000);
 try{await setPersistence(auth,browserSessionPersistence);}catch(_){notice('Your browser could not save this sign-in session. Allow site storage for teyza.co.za.','warning');}

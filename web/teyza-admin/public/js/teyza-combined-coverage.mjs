@@ -181,7 +181,7 @@ export function createContactReviewAllowance(initial=25){
 export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
- const contactCache=new Map(),reviewAllowance=createContactReviewAllowance();
+ const contactCache=new Map(),reviewAllowance=createContactReviewAllowance(),confirmedSaved=new Map(),visibleSaved=new Map();
  let reviewBusy=false,reviewUnchecked=0;
  let guideStep=1,guideArea=null;
  const directory=elt('section');directory.className='acq-locality-directory';directory.hidden=true;
@@ -380,11 +380,11 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const check=elt('button','Check WhatsApp');check.type='button';check.className='button quiet acq-check-whatsapp';
    const draft=elt('div');draft.className='acq-wa-draft';draft.hidden=true;
    const a=elt('a','Open WhatsApp — check number only');a.href=wa;a.target='_blank';a.rel='noopener noreferrer';
-   if(invitationDraft){const preview=elt('textarea');preview.readOnly=true;preview.rows=8;preview.value=invitationDraft({name:p.name,area:searchedArea?.area||p.area||town.value,city:''});preview.setAttribute('aria-label','Personalised WhatsApp invitation preview');draft.append(elt('strong','Personalised invitation preview'),preview,elt('p','Add the independently confirmed business and record actual owner permission before opening a prefilled marketing chat.'));}
-   draft.append(a,elt('p','Number check only: WhatsApp registration and owner consent are not verified. Nothing is sent. This link intentionally opens an empty composer.'));
+   draft.append(elt('strong','Number check — opens an empty conversation'),a,elt('p','WhatsApp registration and owner consent are not verified. Nothing is sent. For the reviewed message and matching picture, use Prepare WhatsApp message instead.'));
+   if(invitationDraft){const preview=elt('textarea');preview.readOnly=true;preview.rows=4;preview.value=invitationDraft({name:p.name,area:searchedArea?.area||p.area||town.value,city:''});preview.setAttribute('aria-label','Personalised WhatsApp invitation preview');draft.append(elt('strong','Invitation example — not yet approved for this recipient'),preview,elt('p','Confirm the business independently and record actual owner permission before preparing marketing material.'));}
    check.onclick=()=>{draft.hidden=!draft.hidden;check.setAttribute('aria-expanded',String(!draft.hidden));};check.setAttribute('aria-expanded','false');host.append(check,draft);
    if(invitationDraft&&onAddBusiness){
-    const prepare=elt('button','Prepare WhatsApp message');prepare.type='button';prepare.className='button quiet acq-check-whatsapp';
+    const prepare=elt('button','Prepare WhatsApp message');prepare.type='button';prepare.className='button primary acq-check-whatsapp';
     const status=elt('p','For a prefilled introduction, open or add the confirmed business and review recorded owner permission.');status.setAttribute('role','status');
     prepare.onclick=()=>{
      const record=host.closest('.acq-business-card')?.querySelector('[data-acq-record-action]');
@@ -421,7 +421,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   }finally{if(guided)reviewBusy=false;if(stamp===resultEpoch&&activation===epoch&&button.isConnected)updateStatus();if(guided&&active)syncReview();}
  }
  function renderCompactList(visible){
-  list.replaceChildren();if(guided){reviewUnchecked=0;syncReview();}
+  list.replaceChildren();visibleSaved.clear();if(guided){reviewUnchecked=0;syncReview();}
   if(searchPending){list.append(elt('p','Searching for businesses. Results will appear here.'));return;}
   if(searchError){list.append(elt('p','Search failed: '+searchError+' Check the town and try again.'));return;}
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
@@ -462,17 +462,20 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
     add.onclick=()=>openBusiness();
     add.addEventListener('acq-prepare-whatsapp',()=>openBusiness(true));
     actions.prepend(add);
-    savedRows.push({id:p.placeId,setSaved(id){savedId=id;savedStatus.hidden=false;savedStatus.textContent='Added';savedStatus.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state:savedStatus});
+    const row={id:p.placeId,setSaved(id){savedId=id;confirmedSaved.set(p.placeId,id);savedStatus.hidden=false;savedStatus.textContent='Added';savedStatus.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state:savedStatus};
+    visibleSaved.set(p.placeId,row);
+    if(confirmedSaved.has(p.placeId))row.setSaved(confirmedSaved.get(p.placeId));
+    savedRows.push(row);
    }
    item.append(identity,state,savedStatus,details,actions);list.append(item);
   }
   if(resolveSavedPlaces&&savedRows.length){
    const stamp=resultEpoch,activation=epoch;
-   for(const row of savedRows)row.button.disabled=true;
+   for(const row of savedRows)if(!confirmedSaved.has(row.id))row.button.disabled=true;
    Promise.resolve().then(()=>resolveSavedPlaces(savedRows.map(r=>r.id))).then(matches=>{
     if(stamp!==resultEpoch||activation!==epoch||!active)return;
-    for(const row of savedRows){if(!row.button.isConnected)continue;const id=matches?.get(row.id);if(id)row.setSaved(id);else row.button.disabled=false;}
-   }).catch(()=>{if(stamp!==resultEpoch||activation!==epoch||!active)return;for(const row of savedRows){if(row.button.isConnected){row.button.disabled=false;row.state.hidden=false;row.state.textContent='Saved status unavailable; duplicate check on save';}}});
+    for(const row of savedRows){if(!list.contains(row.button))continue;const id=confirmedSaved.get(row.id)||matches?.get(row.id);if(id)row.setSaved(id);else row.button.disabled=false;}
+   }).catch(()=>{if(stamp!==resultEpoch||activation!==epoch||!active)return;for(const row of savedRows){if(list.contains(row.button)&&!confirmedSaved.has(row.id)){row.button.disabled=false;row.state.hidden=false;row.state.textContent='Saved status unavailable; duplicate check on save';}}});
   }
   if(pageSize<visible.length){
    const more=elt('button','Show more businesses');more.type='button';more.className='button quiet';
@@ -610,7 +613,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  async function searchArea(skipGeocode=false){
   if((compact?!active:!map)||searchPending)return;
   if(guided&&(!guideArea||guideStep===1)){nextHint.textContent='Confirm a community first.';return;}
-  const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();businessFilter.value='';pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
+  const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();confirmedSaved.clear();visibleSaved.clear();businessFilter.value='';pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
   search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}
   status.textContent=compact?'Searching for businesses in the selected area…':'Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
@@ -654,5 +657,5 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  for(const input of Object.values(layers))input.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){autocomplete?.clear();resetDirectory();browseCache.clear();searchedArea=null;epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),markSaved(placeId,id){if(!active||!places.some(p=>p.placeId===placeId)||typeof id!=='string'||!id)return;confirmedSaved.set(placeId,id);visibleSaved.get(placeId)?.setSaved(id);},setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){autocomplete?.clear();resetDirectory();browseCache.clear();searchedArea=null;epoch++;resultEpoch++;contactCache.clear();confirmedSaved.clear();visibleSaved.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
 }

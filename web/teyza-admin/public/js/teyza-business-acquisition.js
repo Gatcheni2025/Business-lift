@@ -175,6 +175,15 @@ const benefitCategories=Object.freeze(['spaza','retail','wholesale','food','salo
 export const benefitsPictures=Object.freeze(benefitCategories.map(category=>Object.freeze({
  category,name:title(category)+' benefits picture',href:'/assets/admin-benefits/teyza-benefits-'+category+'-v1.png'
 })));
+// A suggestion after independent confirmation, not proof of a category.
+export function suggestedSavedCategory(p){
+ if(p?.adminCategoryLabel==='Food / takeaway')return 'food';
+ if(p?.adminCategoryLabel==='Salon / personal care')return 'salon';
+ if(p?.adminCategoryLabel==='Automotive service'||['plumber','electrician','laundry','dry_cleaner','courier_service','car_repair','car_wash','tire_shop'].includes(p?.primaryType))return 'service';
+ if(p?.adminCategoryLabel==='Pharmacy'||['hardware_store','furniture_store','clothing_store','department_store','home_goods_store','auto_parts_store'].includes(p?.primaryType))return 'retail';
+ if(p?.shopCategory==='spaza'||p?.shopCategory==='wholesale')return p.shopCategory;
+ return 'other';
+}
 export function benefitsPictureFor(category){
  return benefitsPictures.find(p=>p.category===category)||benefitsPictures.at(-1);
 }
@@ -346,6 +355,7 @@ export function commercialSnapshot(report){
 export function createAcquisitionAdmin({api:request,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',businessTypeFilter='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='contactable',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
  let commandEpoch=0,commandPaint=null,commandFilters=normalizedFilters({queue:'new_contact'}),command=null;
+ let discoveryScroll=0,discoveryBridge=null;
  const reportRequests=[];let summaryAfter=0,manualSender='';
  async function reportPage(data,valid){
   // Burst below the server's 60/minute limit, then pace only when needed.
@@ -357,7 +367,11 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
  command=blankCommand();
  function resetCommand(status='idle',resetFilters=false){commandEpoch++;if(resetFilters)commandFilters=normalizedFilters({queue:'new_contact'});command=blankCommand(status);}
  const api=async(action,data)=>{const stamp=serial;const result=await request(action,data);if(active&&serial===stamp&&['ops_acquisition_create','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send'].includes(action)){summaryAfter=Date.now();resetCommand('stale');commandPaint?.();}return result;};
- function stopDiscovery(){discoveryEpoch++;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
+ function rememberDiscovery(){
+  const dialog=liveDiscovery?.panel.closest('.acq-dialog[open]');
+  if(dialog)discoveryScroll=dialog.scrollTop;
+ }
+ function stopDiscovery(){discoveryEpoch++;discoveryScroll=0;discoveryBridge=null;if(liveDiscovery){liveDiscovery.clear();liveDiscovery=null;}}
  function clear(){stopDiscovery();serial++;active=false;manualSender='';resetCommand('idle',true);commandPaint=null;records=[];next=null;selected=null;detail=null;query='';city='all';businessTypeFilter='all';statusFilter='all';busy=false;registered=[];registeredNext=null;registeredLoaded=false;modal=null;communications={};lookupQuery='';lookupChannel='contactable';lookupReady=false;lookupSelection=null;focusMessage=null;newArea='';}
  async function refresh(){stopDiscovery();resetCommand('idle',true);commandPaint=null;focusMessage=null;active=true;const stamp=++serial;const r=await api('ops_acquisition_list');if(!active||stamp!==serial)return;if(r.schema!==1||!Array.isArray(r.prospects))throw Error('Deploy the matching Business Acquisition backend first.');records=r.prospects;next=r.next||null;communications=r.communications||{};selected=null;detail=null;modal=null;}
  async function perform(root,b,fn){if(!active||busy||!root.isConnected)return;const stamp=serial;busy=true;if(b)b.disabled=true;
@@ -507,17 +521,26 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
 
  function render(root){
   if(!active)return;
-  stopDiscovery();root.querySelector('[data-acquisition]')?.remove();const workspace=el('div');workspace.dataset.acquisition='true';
+  rememberDiscovery();root.querySelector('[data-acquisition]')?.remove();const workspace=el('div');workspace.dataset.acquisition='true';
   const dialog=el('dialog',undefined,'acq-dialog');dialog.setAttribute('aria-label','Business acquisition workspace');
   const modalContent=el('div',undefined,'acq-dialog-content'),bar=el('div',undefined,'acq-dialog-bar'),modalTitle=el('strong','Business acquisition');
-  const close=button('Close',()=>{stopDiscovery();modal=null;focusMessage=null;dialog.close();});bar.append(modalTitle,close);const err=el('p','', 'acq-error');err.setAttribute('role','alert');err.hidden=true;dialog.append(bar,err,modalContent);
-  dialog.addEventListener('cancel',()=>{stopDiscovery();modal=null;focusMessage=null;});
-  const panels={};let selectedListing=null;function open(name){if(modal==='discover'&&name!=='discover')stopDiscovery();modal=name;mount();}
-  function mount(){if(!modal||!panels[modal])return;modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find & Add Businesses',discover:'Find & Add Businesses · live search',add:'Add Business',assets:'Marketing & onboarding',directory:'Registered businesses',work:"Today's work",business:'Business record'})[modal]||'Business acquisition';err.hidden=true;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){for(let n=target;n;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;target.scrollIntoView({block:'nearest'});}}}
+  const close=button('Close',()=>{rememberDiscovery();modal=null;focusMessage=null;dialog.close();});bar.append(modalTitle,close);const err=el('p','', 'acq-error');err.setAttribute('role','alert');err.hidden=true;dialog.append(bar,err,modalContent);
+  dialog.addEventListener('cancel',()=>{rememberDiscovery();modal=null;focusMessage=null;});
+  const panels={};let selectedListing=null;
+  function open(name){rememberDiscovery();modal=name;if(name!=='business')focusMessage=null;mount();}
+  function mount(){
+   if(!modal||!panels[modal])return;
+   if(modal==='discover'&&liveDiscovery)discoveryHost.replaceChildren(liveDiscovery.panel);
+   modalContent.replaceChildren(panels[modal]);modalTitle.textContent=({lookup:'Find & Add Businesses',discover:'Find & Add Businesses · live search',add:'Add Business',assets:'Marketing & onboarding',directory:'Registered businesses',work:"Today's work",business:'Business record'})[modal]||'Business acquisition';err.hidden=true;
+   if(!dialog.open)dialog.showModal();
+   if(modal==='discover'&&liveDiscovery){const top=discoveryScroll;dialog.scrollTop=top;requestAnimationFrame(()=>{if(modal==='discover'&&dialog.isConnected&&dialog.open)dialog.scrollTop=top;});}
+   else dialog.scrollTop=0;
+   if(modal==='business'&&focusMessage){const target=dialog.querySelector('[data-send-channel="'+focusMessage.channel+'"][data-send-kind="'+focusMessage.kind+'"]');if(target){for(let n=target;n;n=n.parentElement)if(n.tagName==='DETAILS')n.open=true;target.scrollIntoView({block:'nearest'});}}
+  }
 
   const intro=card('Business Growth','Discover, connect, onboard and grow independent local businesses across South Africa.');
   intro.classList.add('acq-hero','acq-growth-hero');const actionBar=el('div',undefined,'acq-action-bar');
-  const add=button('+ Find & Add Businesses',()=>{lookupQuery='';lookupSelection=null;void openDiscovery(true);});add.classList.add('acq-add');
+  const add=button('+ Find & Add Businesses',()=>{if(liveDiscovery){open('discover');return;}lookupQuery='';lookupSelection=null;void openDiscovery(true);});add.classList.add('acq-add');
   const work=button("Today's work",()=>open('work'));work.classList.add('acq-work-button');
   actionBar.append(add,work,button('Saved contacts',()=>open('lookup')),button('Registered businesses',()=>document.querySelector('[data-admin-view="sellers"]')?.click()));intro.append(actionBar);
   panels.work=card("Today's work",'National priorities · '+new Date().toLocaleDateString('en-ZA',{timeZone:'Africa/Johannesburg'}));
@@ -590,17 +613,20 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   areaInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.defaultPrevented){e.preventDefault();void openDiscovery();}});
   googleButton.classList.add('acq-send-email');
   const manualAdd=button('Add confirmed business',()=>{prepareManual(lookupQuery);open('add');});manualAdd.classList.add('acq-send-wa');
-  lookupActions.append(googleButton,manualAdd);
+  lookupActions.append(googleButton,manualAdd);if(liveDiscovery)lookupActions.append(button('Resume current search',()=>open('discover')));
   if(next)lookupActions.append(button('Load more saved contacts',()=>perform(root,null,async stamp=>{const r=await api('ops_acquisition_list',{after:next});if(stamp!==serial)return;records=[...new Map([...records,...r.prospects].map(p=>[p.id,p])).values()];next=r.next||null;communications=r.communications||communications;})));
   lookup.append(lookupForm,lookupActions,lookupCount,lookupResults);panels.lookup=lookup;showContacts();
   const discoverPanel=card('Discover businesses with Google Places','Live list first; the map is optional. Check public phone and website, open WhatsApp to check a number, or add a business. Google does not provide email or confirm WhatsApp registration. Save only independently confirmed details.');
   const discoveryHost=el('div'),back=button('Back to saved contacts',()=>open('lookup'));
   const confirmedAdd=button('Add confirmed business',()=>{const entered=discoveryHost.querySelector('[aria-label="Town or municipality"]')?.value;prepareManual(entered||lookupQuery);open('add');});
-  const discoveryActions=el('div',undefined,'acq-contact-actions');discoveryActions.append(back,confirmedAdd);discoverPanel.append(discoveryActions,discoveryHost);panels.discover=discoverPanel;
+  const discoveryActions=el('div',undefined,'acq-contact-actions');discoveryActions.append(back,confirmedAdd,button('Start new search',()=>{lookupQuery='';lookupSelection=null;void openDiscovery(true);}));discoverPanel.append(discoveryActions,el('p','Your search stays available while you open WhatsApp or a business record. Start a new search only when you want to change the working area.','footnote'),discoveryHost);panels.discover=discoverPanel;
+  if(liveDiscovery)discoveryHost.append(liveDiscovery.panel);
+  function bindDiscovery(){discoveryBridge={add:(p,contact,area,areaInfo)=>{if(modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);if(provinces.includes(areaInfo?.province))provinceField.value=areaInfo.province;open('add');},contact:(id,prepareWhatsApp)=>{if(modal==='discover')void openRecord({id},prepareWhatsApp?'manual-whatsapp':null,prepareWhatsApp?'introduction':null);}};}
+  bindDiscovery();
   async function openDiscovery(guided=false){
-   stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
+   stopDiscovery();bindDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-whatsapp-handoff-v1');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-admin-continuity-v1');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
     liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
@@ -609,8 +635,8 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
       for(let i=0;i<ids.length;i+=30){const r=await api('ops_acquisition_place_matches',{placeIds:ids.slice(i,i+30)});if(!Array.isArray(r.matches))throw Error('Saved status unavailable');for(const m of r.matches)matches.set(m.placeId,m.id);}
       return matches;
      },
-     onAddBusiness:(p,contact,area,areaInfo)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);if(provinces.includes(areaInfo?.province))provinceField.value=areaInfo.province;open('add');},
-     onContactBusiness:(id,prepareWhatsApp=false)=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id},prepareWhatsApp?'manual-whatsapp':null,prepareWhatsApp?'introduction':null);},
+     onAddBusiness:(p,contact,area,areaInfo)=>{if(stamp===discoveryEpoch&&active)discoveryBridge?.add(p,contact,area,areaInfo);},
+     onContactBusiness:(id,prepareWhatsApp=false)=>{if(stamp===discoveryEpoch&&active)discoveryBridge?.contact(id,prepareWhatsApp);},
      report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
     await liveDiscovery.activate();
@@ -646,7 +672,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    const wa=savedWhatsAppCheck(phone);if(wa)listingReference.append(assetLink('Check WhatsApp',wa));
    const use=button('Use independently confirmed details',()=>{
     if(!independent.checked||!authorised.checked||!sourceRef.value.trim()){message('Record the independent source and check both confirmation boxes first.','info');sourceRef.focus();return;}
-    nameField.value=oneLine(p.name).slice(0,120);addressField.value=oneLine(p.address).slice(0,220);phoneField.value=phone.slice(0,40);websiteField.value=site||'';categoryField.value=p.shopCategory==='spaza'?'spaza':p.shopCategory==='wholesale'?'wholesale':'other';
+    nameField.value=oneLine(p.name).slice(0,120);addressField.value=oneLine(p.address).slice(0,220);phoneField.value=phone.slice(0,40);websiteField.value=site||'';categoryField.value=suggestedSavedCategory(p);
     message('Review the source-confirmed details and remove any unconfirmed contact field before saving.','info');
    });listingReference.append(use);
   }
@@ -656,11 +682,12 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const confirmConsent=check(consentBox,'I confirm the owner explicitly opted in to each selected channel.','initialConsentConfirmed');
   function syncConsent(){const on=emailOpt.checked||waOpt.checked;for(const field of [consentNote,confirmConsent]){field.parentElement.hidden=!on;field.disabled=!on;field.required=on;}}
   emailOpt.onchange=waOpt.onchange=syncConsent;syncConsent();f.append(consentBox);
-  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=r.prospect?.permissions?.whatsapp?.granted===true&&!r.prospect.optedOut&&savedWhatsAppCheck(r.prospect.phone)&&!priorInvitation(r.prospect)?{channel:'manual-whatsapp',kind:'introduction'}:null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
+  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;if(selectedListing?.placeId&&r.prospect?.id)liveDiscovery?.markSaved(selectedListing.placeId,r.prospect.id);focusMessage=r.prospect?.permissions?.whatsapp?.granted===true&&!r.prospect.optedOut&&savedWhatsAppCheck(r.prospect.phone)&&!priorInvitation(r.prospect)?{channel:'manual-whatsapp',kind:'introduction'}:null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
   create.append(button('Back to search',()=>open('lookup')),f);panels.add=create;
+  create.prepend(button('Back to current results',()=>{if(liveDiscovery)open('discover');else open('lookup');}));
   if(detail&&selected===detail.prospect.id){
    const p=detail.prospect,c=card('Business: '+p.name,'Guided onboarding · '+locationText(p));c.classList.add('acq-guided-record');
-   const added=el('span','Added','acq-status');added.dataset.state='interested';c.append(added,button('Back to business search',()=>open('lookup')));
+   const added=el('span','Added','acq-status');added.dataset.state='interested';c.append(added,button('Back to business search',()=>open('lookup')));if(liveDiscovery)c.append(button('Back to current results',()=>open('discover')));
    c.append(el('p','Contact: '+[p.phoneKind==='whatsapp_only'&&p.phone?'WhatsApp '+p.phone:p.phone,p.email].filter(Boolean).join(' · ')),el('p',acquisitionContactNote(p),'footnote'),el('p','Contact confirmed: '+time(p.contactedAt)+' · Response: '+title(p.response||'not recorded')+' · Download confirmed: '+time(p.downloadConfirmedAt),'footnote'),el('p','Source: '+title(p.source)+' — '+p.sourceReference,'footnote'),el('p','Assigned reviewer: '+p.assignedTo+' · Last saved by '+p.lastActivityBy+' · '+time(p.updatedAt),'footnote'));
    const site=safeBusinessWebsite(p.website);if(site)c.append(assetLink('Open business website',site));
    const step=growthStep(p),guide=el('section',undefined,'acq-next-step');guide.dataset.tone=step.tone;guide.append(el('small','NEXT RECOMMENDED ACTION'),el('h3',step.label));const guideAction=el('div',undefined,'acq-guide-actions');guide.append(guideAction);c.append(guide);
@@ -698,8 +725,8 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
        };
        // Buttons intentionally have no destination href: middle-click or
        // context menus must not bypass the fresh server permission check.
-       const launch=button('Open WhatsApp Web — prefilled message',()=>launchTo(urls.web));
-       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));launchApp.classList.add('acq-send-wa');
+       const launch=button('Open WhatsApp Web — prefilled message',()=>launchTo(urls.web));launch.classList.add('acq-send-wa');
+       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));
        const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
        const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
        submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
@@ -709,8 +736,21 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
         const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
         if(!box.isConnected||current?.purpose!==purpose||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');
        };
-       const picture=reviewedBenefitsPicture(p,purpose);
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launchApp,launch,button('Copy reviewed message',async()=>{try{await revalidate();await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),...(picture?[renderBenefitsPicture(picture,revalidate,message)]:[]),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
+       const picture=reviewedBenefitsPicture(p,purpose),copyStatus=el('p','','footnote');copyStatus.setAttribute('role','status');
+       const copyMessage=button('Copy reviewed message',async()=>{
+        if(copyMessage.disabled||!box.isConnected)return;copyMessage.disabled=true;let checked=false;
+        const approvedText=async()=>{await revalidate();checked=true;return new Blob([draft.text],{type:'text/plain'});};
+        try{
+         if(window.isSecureContext&&navigator.clipboard?.write&&typeof ClipboardItem==='function'){
+          const blob=approvedText();blob.catch(()=>{});await navigator.clipboard.write([new ClipboardItem({'text/plain':blob})]);
+         }else{await approvedText();await navigator.clipboard.writeText(draft.text);}
+         if(box.isConnected)copyStatus.textContent='Message copied. Paste it in WhatsApp if the composer is empty. No message sent.';
+        }catch(e){
+         if(box.isConnected&&checked){preview.focus();preview.select();copyStatus.textContent='Clipboard unavailable. Press Ctrl+C to copy the selected reviewed text, then paste in WhatsApp.';}
+         else if(box.isConnected)copyStatus.textContent=e.message||'Permission could not be verified.';
+        }finally{if(box.isConnected)copyMessage.disabled=false;}
+       });
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),el('p','1. Copy the reviewed message if needed. 2. Open WhatsApp Web in a separate tab (recommended) or your existing WhatsApp app. 3. Paste the message if the composer is empty; then copy or attach the matching picture. Return to these results without starting a new search.','footnote'),preview,copyMessage,copyStatus,launch,launchApp,...(picture?[renderBenefitsPicture(picture,revalidate,message)]:[]),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));

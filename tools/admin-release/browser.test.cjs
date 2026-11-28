@@ -706,6 +706,22 @@ async function main(){
    assert(await shop.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).isVisible());
    assert(!new URL(await checkLink.getAttribute('href')).searchParams.has('text'));
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
+   // Switching to an external chat must not erase this exact search or
+   // cause another Places/contact request. The UI is concealed until the
+   // existing authenticated session is checked on return.
+   const beforeScroll=await live.evaluate(e=>e.scrollTop),listBefore=f.calls.filter(c=>c.action==='ops_acquisition_list').length;
+   await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+   await f.page.waitForFunction(()=>document.documentElement.classList.contains('acq-session-paused'));
+   assert.equal(await shop.getByText('Phone available',{exact:true}).isVisible(),false);
+   await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+   await f.page.waitForFunction(()=>!document.documentElement.classList.contains('acq-session-paused'));
+   await shop.getByText('Phone available',{exact:true}).waitFor();
+   assert.equal(await live.evaluate(e=>e.scrollTop),beforeScroll);
+   assert.equal(placesRequests,3);assert.equal(contactRequests,2);
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_list').length,listBefore);
+   assert(f.calls.some(c=>c.action==='admin_session_status'));
+   assert.equal(await f.page.evaluate(()=>!window.dispatchEvent(new Event('beforeinstallprompt',{cancelable:true}))),true);
+   await f.page.evaluate(()=>delete document.hidden);
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
    assert(await noContact.getByText('No phone listed',{exact:true}).isVisible());
@@ -777,13 +793,13 @@ async function main(){
    assert.equal(prospect.googlePlaceId,'SyntheticPlace1234');assert.equal(prospect.website,'https://example.test/');
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_send').length,0);
-   await f.page.getByRole('button',{name:'Back to business search'}).click();
-   await f.page.getByLabel('Town, township or business name').fill('Durban');
-   await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
+   const searchesBeforeReturn=placesRequests,contactsBeforeReturn=contactRequests;
+   await f.page.getByRole('button',{name:'Back to current results',exact:true}).click();
    const saved=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    await saved.getByText('Added',{exact:true}).waitFor();
    assert.equal(await saved.getByRole('button',{name:'Add Business',exact:true}).count(),0);
-   await saved.getByRole('button',{name:'View contact details',exact:true}).click();
+   assert(await saved.getByRole('button',{name:'Contact details checked',exact:true}).isDisabled());
+   assert.equal(placesRequests,searchesBeforeReturn);assert.equal(contactRequests,contactsBeforeReturn);
    await saved.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
@@ -949,6 +965,14 @@ async function main(){
    }
    assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
    await prepare();assert.equal(events,0);
+   const listBefore=f.calls.filter(c=>c.action==='ops_acquisition_list').length;
+   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+   assert(await page.evaluate(()=>document.documentElement.classList.contains('acq-session-paused')));
+   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+   await page.waitForFunction(()=>!document.documentElement.classList.contains('acq-session-paused'));
+   assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),draftText);
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_list').length,listBefore);assert.equal(prepares,1);
+   await page.evaluate(()=>delete document.hidden);
    const art=dialog.locator('[data-benefits-category="spaza"]');
    await art.waitFor();
    const poster=art.getByRole('img',{name:'Spaza shop benefits picture — Teyza benefits'});
@@ -960,27 +984,31 @@ async function main(){
    await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
    await art.getByText(/Picture copied\. Paste it into WhatsApp/).waitFor();
    assert.deepEqual(await page.evaluate(()=>window.__benefitsCopy),{size:647472,type:'image/png'});assert.equal(prepares,2);assert.equal(events,0);
+   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{const blob=await items[0].getType('text/plain');window.__reviewedText=await blob.text();}}});});
+   await dialog.getByRole('button',{name:'Copy reviewed message',exact:true}).click();
+   await dialog.getByText(/Message copied\. Paste it in WhatsApp/).waitFor();
+   assert.equal(await page.evaluate(()=>window.__reviewedText),draftText);assert.equal(prepares,3);
    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
    await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
-   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,2);assert.equal(events,0);
+   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,3);assert.equal(events,0);
    // Intercept the popup before navigation. No real WhatsApp traffic or send.
    await f.context.route('https://web.whatsapp.com/send?*',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic WhatsApp</title></html>'}));
    const opened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
    const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
    const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),draftText);assert(url.href.includes('%20'));
-   await popup.close();assert.equal(prepares,3);assert.equal(events,0);
+   await popup.close();assert.equal(prepares,4);assert.equal(events,0);
    await f.context.route('https://wa.me/**',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic app handoff</title></html>'}));
    const appOpened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).click();
    const appPopup=await appOpened;await appPopup.waitForURL('https://wa.me/**');
    const appUrl=new URL(appPopup.url());assert.equal(appUrl.pathname,'/27712345678');assert.equal(appUrl.searchParams.get('text'),draftText);assert(appUrl.href.includes('%20'));
-   await appPopup.close();assert.equal(prepares,4);assert.equal(events,0);
+   await appPopup.close();assert.equal(prepares,5);assert.equal(events,0);
    await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,5);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,6);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{
@@ -1415,6 +1443,28 @@ async function main(){
     assert(!f.calls.some(x=>x.action==='billing_checkout'));
     assert.deepEqual(f.errors,[]);
     await f.context.close();
+  });
+  await check('Suspended acquisition cannot resume if the existing admin session was revoked',async()=>{
+   let revoked=false,revokedChecks=0;
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{}}});return true;}
+    if(body.action==='ops_acquisition_command_page'){await route.fulfill({json:await syntheticCommandPage(body)});return true;}
+    if(body.action==='admin_session_status'&&revoked){revokedChecks++;await route.fulfill({json:{ok:true,active:false}});return true;}
+    return false;
+   }});
+   await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
+   await f.page.getByRole('button',{name:'+ Find & Add Businesses',exact:true}).click();
+   await f.page.getByRole('dialog').waitFor();
+   revoked=true;
+   await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+   assert(await f.page.evaluate(()=>document.documentElement.classList.contains('acq-session-paused')));
+   await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+   await f.page.locator('#loginPanel').waitFor({state:'visible'});
+   assert.equal(await f.page.locator('[data-acquisition]').count(),0);assert(await f.page.locator('#workspace').isHidden());
+   await f.page.waitForFunction(()=>window.__testIdentity===null);
+   assert.equal(revokedChecks,1);assert(f.calls.some(c=>c.action==='admin_session_end'));
+   assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
+   await f.context.close();
   });
   await check('Hiding the tab clears documents, view receipts in the UI and approval confirmation',async()=>{
    const f=await pageFor();await f.page.locator('.seller-row').first().click();await f.page.locator('#viewIdentity').click();await f.page.locator('#identityState').getByText('Viewed in this review').waitFor();
