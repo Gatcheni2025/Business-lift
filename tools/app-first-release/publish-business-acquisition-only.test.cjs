@@ -335,3 +335,12 @@ test('Pinned benefits publisher verifies all eight approved PNGs and preserves e
  const missing=new Map(staged);missing.delete(p.artworkPaths[0]);assert.throws(()=>p.verify(before,missing,managed));
  assert.throws(()=>p.assertBaseline(p.expectedSource,staged),/baseline/);
 });
+
+test('Independently confirmed discovery form suggests the relevant benefits category',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {suggestedSavedCategory,benefitsPictureFor}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ for(const [p,category] of [[{shopCategory:'variety',adminCategoryLabel:'Food / takeaway'},'food'],[{shopCategory:'variety',adminCategoryLabel:'Salon / personal care'},'salon'],[{primaryType:'plumber'},'service'],[{primaryType:'clothing_store'},'retail'],[{shopCategory:'spaza'},'spaza'],[{shopCategory:'wholesale'},'wholesale'],[{adminCategoryLabel:'Fuel station'},'other']]){
+  assert.equal(suggestedSavedCategory(p),category);assert.equal(benefitsPictureFor(category).category,category);
+ }
+});

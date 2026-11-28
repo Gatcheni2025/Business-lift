@@ -1,5 +1,5 @@
 import {createAdminMap} from '/js/teyza-admin-map.mjs';
-import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261128-whatsapp-benefits-v1';
+import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261128-admin-continuity-v1';
 import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261126-rewards';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
@@ -1052,5 +1052,5 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  },20000);
  for(const b of navButtons)b.onclick=()=>safely(()=>navigate(b.dataset.adminView));
  document.getElementById('backToBusinessAccounts').onclick=()=>safely(()=>navigate('sellers'));
- return {clear,currentView:()=>view,navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();acquisitionAdmin.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
+ return {clear,currentView:()=>view,canPauseAcquisition:()=>ready&&view==='acquisition'&&!!root.querySelector('[data-acquisition]'),navigate,async load(){ready=true;const stamp=generation;try{await refresh();}catch(e){if(!e.stale){onError(e);if(ready)show();}}finally{if(ready&&generation===stamp)enableNavigation(true);}},hideSensitive(){coverageMap.clear();acquisitionAdmin.clear();fieldAdmin.hideSensitive();clearMandatePhoto();clearMandateDialogs();generation++;selected=null;detail=null;root.replaceChildren();},show};
 }
