@@ -1461,6 +1461,7 @@ async function main(){
    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
    await f.page.locator('#loginPanel').waitFor({state:'visible'});
    assert.equal(await f.page.locator('[data-acquisition]').count(),0);assert(await f.page.locator('#workspace').isHidden());
+   await f.page.waitForFunction(()=>window.__testIdentity===null);
    assert.equal(revokedChecks,1);assert(f.calls.some(c=>c.action==='admin_session_end'));
    assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
    await f.context.close();
