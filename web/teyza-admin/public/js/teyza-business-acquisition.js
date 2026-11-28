@@ -34,9 +34,10 @@ export function whatsappInvitationDraft(p){
 export function verifiedWhatsappLinks(recipient,text){
  const base=savedWhatsAppCheck(recipient);
  if(!base||typeof text!=='string'||!text.trim()||text.length>8000)throw Error('Invalid reviewed WhatsApp draft.');
- const app=new URL(base);app.searchParams.set('text',text);
- const web=new URL('https://web.whatsapp.com/send');web.searchParams.set('phone',app.pathname.slice(1));web.searchParams.set('text',text);
- return {app:app.href,web:web.href};
+ // Follow WhatsApp's documented percent-encoded text format. Use
+ // encodeURIComponent once, not form encoding (+ for spaces).
+ const digits=new URL(base).pathname.slice(1),encoded=encodeURIComponent(text);
+ return {app:'https://wa.me/'+digits+'?text='+encoded,web:'https://web.whatsapp.com/send?phone='+digits+'&text='+encoded};
 }
 export function manualWhatsappDraftUrl(p){
  const wa=savedWhatsAppCheck(p?.phone);
@@ -551,7 +552,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   async function openDiscovery(guided=false){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-discovery-review-v1');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-whatsapp-handoff-v1');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
     liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
@@ -561,7 +562,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
       return matches;
      },
      onAddBusiness:(p,contact,area,areaInfo)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);if(provinces.includes(areaInfo?.province))provinceField.value=areaInfo.province;open('add');},
-     onContactBusiness:id=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id});},
+     onContactBusiness:(id,prepareWhatsApp=false)=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id},prepareWhatsApp?'manual-whatsapp':null,prepareWhatsApp?'introduction':null);},
      report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
     await liveDiscovery.activate();
@@ -607,7 +608,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const confirmConsent=check(consentBox,'I confirm the owner explicitly opted in to each selected channel.','initialConsentConfirmed');
   function syncConsent(){const on=emailOpt.checked||waOpt.checked;for(const field of [consentNote,confirmConsent]){field.parentElement.hidden=!on;field.disabled=!on;field.required=on;}}
   emailOpt.onchange=waOpt.onchange=syncConsent;syncConsent();f.append(consentBox);
-  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
+  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=r.prospect?.permissions?.whatsapp?.granted===true&&!r.prospect.optedOut&&savedWhatsAppCheck(r.prospect.phone)&&!priorInvitation(r.prospect)?{channel:'manual-whatsapp',kind:'introduction'}:null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
   create.append(button('Back to search',()=>open('lookup')),f);panels.add=create;
   if(detail&&selected===detail.prospect.id){
    const p=detail.prospect,c=card('Business: '+p.name,'Guided onboarding · '+locationText(p));c.classList.add('acq-guided-record');
@@ -642,6 +643,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
         try{
          const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
          if(!box.isConnected||current?.purpose!==purpose||current?.recipient!==draft.recipient||current?.sender!==draft.sender||current?.text!==draft.text)throw Error('The draft changed. Refresh this record.');
+         if(win.closed)throw Error('The WhatsApp window was closed. Reopen the reviewed draft.');
          win.location.replace(href);
         }catch(error){try{win.close();}catch{}if(box.isConnected)message(error.message||'Current permission could not be verified.','error');}
         finally{launching=false;}
@@ -649,14 +651,13 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
        // Buttons intentionally have no destination href: middle-click or
        // context menus must not bypass the fresh server permission check.
        const launch=button('Open WhatsApp Web — prefilled message',()=>launchTo(urls.web));
-       launch.classList.add('acq-send-wa');
-       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));
+       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));launchApp.classList.add('acq-send-wa');
        const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
        const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
        submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
        const opened=button('Record chat opened only',()=>perform(root,opened,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_opened',purpose,sender:draft.sender,note:'Administrator confirmed chat opened, not sent.',confirmed:true});await readDetail(p.id,stamp);}));
        opened.disabled=!!p.manualWhatsApp?.[purpose]?.openedAt;
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launch,launchApp,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','The reviewed text is prefilled in the WhatsApp message input. Check the recipient and the separate Teyza Business account; press Send yourself. Opening a chat is not a sent message.','footnote'),opened,log);
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launchApp,launch,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.purpose!==purpose||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));

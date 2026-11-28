@@ -703,6 +703,9 @@ async function main(){
    const checkLink=shop.getByRole('link',{name:'Open WhatsApp — check number only',exact:true});
    assert.equal(await checkLink.getAttribute('href'),'https://wa.me/27315550100');
    assert.equal(await checkLink.getAttribute('target'),'_blank');
+   assert(await shop.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).isVisible());
+   assert(!new URL(await checkLink.getAttribute('href')).searchParams.has('text'));
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
    assert(await noContact.getByText('No phone listed',{exact:true}).isVisible());
@@ -742,7 +745,10 @@ async function main(){
    const chosen=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    await chosen.getByRole('button',{name:'View contact details'}).click();
    await chosen.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
-   await chosen.getByRole('button',{name:'Add Business',exact:true}).click();
+   await chosen.getByRole('button',{name:'Add Business',exact:true}).waitFor({state:'visible'});
+   await f.page.waitForFunction(()=>Array.from(document.querySelectorAll('.acq-business-card')).some(card=>card.textContent.includes('Synthetic Spaza')&&!card.querySelector('[data-acq-record-action]')?.disabled));
+   await chosen.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).click();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    const form=f.page.getByRole('dialog').locator('form').filter({has:f.page.getByRole('button',{name:'Add Business',exact:true})});
    await form.getByLabel('Business name',{exact:true}).waitFor();
    assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'');
@@ -777,8 +783,10 @@ async function main(){
    const saved=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    await saved.getByText('Added',{exact:true}).waitFor();
    assert.equal(await saved.getByRole('button',{name:'Add Business',exact:true}).count(),0);
-   await saved.getByRole('button',{name:'Contact',exact:true}).click();
+   await saved.getByRole('button',{name:'View contact details',exact:true}).click();
+   await saved.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
    await f.page.getByText('Zoho email · introduction / registration welcome / membership',{exact:true}).click();
    await f.page.getByRole('heading',{name:'Send a message'}).waitFor();
@@ -910,12 +918,12 @@ async function main(){
   });
   await check('Guided manual WhatsApp separates chat opening from sending and waits for email acceptance',async()=>{
    const stamp=Date.now()-1000,base={id:'manual-guided',name:'Synthetic Guided Business',city:'Durban',province:'KwaZulu-Natal',area:'Umlazi',category:'spaza',stage:'identified',phone:'+27712345678',email:'synthetic@example.test',permissions:{whatsapp:{granted:true},email:{granted:true}},revision:0,optedOut:false};
-   let prospect={...base},prepares=0,events=0;
+   let prospect={...base},prepares=0,events=0;const draftText='Synthetic permitted introduction 🌱\n\nExample & Sons + 100%';
    const f=await pageFor({api:async(route,body)=>{
     if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[prospect],next:null,communications:{email:{invitation:true}}}});return true;}
     if(body.action==='ops_acquisition_command_page'){await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:1,prospects:[prospect],funnel:{discovered:1},queues:{new_contact:1}})});return true;}
     if(body.action==='ops_acquisition_detail'){await route.fulfill({json:{ok:true,prospect,events:[]}});return true;}
-    if(body.action==='ops_acquisition_manual_whatsapp'){prepares++;assert.equal(body.data.sender,'+27712345679');assert.equal(body.data.purpose,'introduction');await route.fulfill({json:{ok:true,draft:{purpose:'introduction',sender:body.data.sender,recipient:prospect.phone,text:'Synthetic permitted introduction'}}});return true;}
+    if(body.action==='ops_acquisition_manual_whatsapp'){prepares++;assert.equal(body.data.sender,'+27712345679');assert.equal(body.data.purpose,'introduction');await route.fulfill({json:{ok:true,draft:{purpose:'introduction',sender:body.data.sender,recipient:prospect.phone,text:draftText}}});return true;}
     if(body.action==='ops_acquisition_event'){
      events++;const d=body.data;assert.equal(d.purpose,'introduction');assert.equal(d.sender,'+27712345679');
      if(d.type==='manual_whatsapp_opened')prospect={...prospect,manualWhatsApp:{introduction:{purpose:'introduction',sender:d.sender,openedAt:stamp}},revision:prospect.revision+1};
@@ -932,7 +940,7 @@ async function main(){
     await dialog.getByLabel('I will use this account and the owner agreed to WhatsApp contact.').check();
     await dialog.getByRole('button',{name:'Prepare manual WhatsApp',exact:true}).click();
     await dialog.getByLabel('Verified manual WhatsApp preview').waitFor();
-    assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),'Synthetic permitted introduction');
+    assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),draftText);
     assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
    await prepare();assert.equal(events,0);
@@ -941,13 +949,19 @@ async function main(){
    const opened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
    const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
-   const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),'Synthetic permitted introduction');
+   const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),draftText);assert(url.href.includes('%20'));
    await popup.close();assert.equal(prepares,2);assert.equal(events,0);
+   await f.context.route('https://wa.me/**',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic app handoff</title></html>'}));
+   const appOpened=f.context.waitForEvent('page');
+   await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).click();
+   const appPopup=await appOpened;await appPopup.waitForURL('https://wa.me/**');
+   const appUrl=new URL(appPopup.url());assert.equal(appUrl.pathname,'/27712345678');assert.equal(appUrl.searchParams.get('text'),draftText);assert(appUrl.href.includes('%20'));
+   await appPopup.close();assert.equal(prepares,3);assert.equal(events,0);
    await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,3);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,4);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{

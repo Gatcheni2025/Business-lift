@@ -275,5 +275,7 @@ test('Commercial snapshot counts unique paying businesses, payment overlap and m
  const urls=verifiedWhatsappLinks('+27712345678',text),app=new URL(urls.app),web=new URL(urls.web);
  assert.equal(app.origin,'https://wa.me');assert.equal(app.pathname,'/27712345678');assert.equal(app.searchParams.get('text'),text);
  assert.equal(web.origin,'https://web.whatsapp.com');assert.equal(web.pathname,'/send');assert.equal(web.searchParams.get('phone'),'27712345678');assert.equal(web.searchParams.get('text'),text);
+ assert.equal(urls.app,'https://wa.me/27712345678?text='+encodeURIComponent(text));assert.equal(urls.web,'https://web.whatsapp.com/send?phone=27712345678&text='+encodeURIComponent(text));
+ const special='Literal + & # %20\n🌱';assert.equal(new URL(verifiedWhatsappLinks('071 234 5678',special).app).searchParams.get('text'),special);
  assert.throws(()=>verifiedWhatsappLinks('not a number',text));assert.throws(()=>verifiedWhatsappLinks('+27712345678',''));
 });

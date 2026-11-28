@@ -381,8 +381,20 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const draft=elt('div');draft.className='acq-wa-draft';draft.hidden=true;
    const a=elt('a','Open WhatsApp — check number only');a.href=wa;a.target='_blank';a.rel='noopener noreferrer';
    if(invitationDraft){const preview=elt('textarea');preview.readOnly=true;preview.rows=8;preview.value=invitationDraft({name:p.name,area:searchedArea?.area||p.area||town.value,city:''});preview.setAttribute('aria-label','Personalised WhatsApp invitation preview');draft.append(elt('strong','Personalised invitation preview'),preview,elt('p','Add the independently confirmed business and record actual owner permission before opening a prefilled marketing chat.'));}
-   draft.append(a,elt('p','Number check only: WhatsApp registration and owner consent are not verified. Nothing is sent.'));
+   draft.append(a,elt('p','Number check only: WhatsApp registration and owner consent are not verified. Nothing is sent. This link intentionally opens an empty composer.'));
    check.onclick=()=>{draft.hidden=!draft.hidden;check.setAttribute('aria-expanded',String(!draft.hidden));};check.setAttribute('aria-expanded','false');host.append(check,draft);
+   if(invitationDraft&&onAddBusiness){
+    const prepare=elt('button','Prepare WhatsApp message');prepare.type='button';prepare.className='button quiet acq-check-whatsapp';
+    const status=elt('p','For a prefilled introduction, open or add the confirmed business and review recorded owner permission.');status.setAttribute('role','status');
+    prepare.onclick=()=>{
+     const record=host.closest('.acq-business-card')?.querySelector('[data-acq-record-action]');
+     if(!record||record.disabled){status.textContent='Saved business status is still being checked. Please try again when Add Business or Contact is available.';return;}
+     // Reuse the existing saved-record/independent-source flow. Do not
+     // generate a send link from a public Google phone number.
+     record.dispatchEvent(new CustomEvent('acq-prepare-whatsapp'));
+    };
+    host.append(prepare,status);
+   }
   }else if(phone)host.append(elt('p','WhatsApp check unavailable for this phone format. Verify a South African number.'));
   host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
  }
@@ -441,7 +453,14 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(onAddBusiness){
     let savedId=null;
     const add=elt('button','Add Business');add.type='button';add.className='button primary';
-    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)?.state==='ready'?contactCache.get(p.placeId):{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value,searchedArea);
+    add.dataset.acqRecordAction='true';
+    function openBusiness(prepareWhatsApp=false){
+     if(add.disabled||!active||!add.isConnected)return;
+     if(savedId)onContactBusiness?.(savedId,prepareWhatsApp);
+     else onAddBusiness(p,contactCache.get(p.placeId)?.state==='ready'?contactCache.get(p.placeId):{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value,searchedArea);
+    }
+    add.onclick=()=>openBusiness();
+    add.addEventListener('acq-prepare-whatsapp',()=>openBusiness(true));
     actions.prepend(add);
     savedRows.push({id:p.placeId,setSaved(id){savedId=id;savedStatus.hidden=false;savedStatus.textContent='Added';savedStatus.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state:savedStatus});
    }
