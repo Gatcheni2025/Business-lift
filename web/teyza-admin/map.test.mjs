@@ -171,3 +171,33 @@ test('Contact phone status distinguishes unchecked, pending, failed and confirme
  assert.match(contactLookupIssue(429),/limit reached/);
  assert.match(contactLookupIssue(502),/HTTP 502/);
 });
+
+test('Guided admin classification uses provider type and explicit names, not search order; recognised chains are not a verification claim',async()=>{
+ const {classifyAdminListing,isRecognisedChain,preferAdminListing}=await import('./public/js/teyza-combined-coverage.mjs');
+ const fuel={name:"TotalEnergies Manjoe's Service Station",primaryType:'gas_station',types:['gas_station','convenience_store'],shopCategory:'spaza'};
+ assert.equal(classifyAdminListing(fuel).category,'variety');
+ assert.equal(classifyAdminListing(fuel).label,'Fuel station');
+ assert(isRecognisedChain(fuel));
+ assert(isRecognisedChain({name:'KwaMashu SPAR',shopCategory:'spaza'}));
+ assert(!isRecognisedChain({name:'Sparky Spaza',shopCategory:'spaza'}));
+ assert(!isRecognisedChain({name:'Shell Beads and Crafts',shopCategory:'variety'}));
+ assert(!isRecognisedChain({name:'Independent Service Station',primaryType:'gas_station',shopCategory:'variety'}));
+ assert.equal(classifyAdminListing({name:'Shalom Spaza',shopCategory:'variety'}).category,'spaza');
+ assert.equal(classifyAdminListing({name:'Local Salon',shopCategory:'spaza'}).category,'variety');
+ assert.equal(classifyAdminListing({name:'Local Bulk Supplier',primaryType:'wholesaler',shopCategory:'spaza'}).category,'wholesale');
+ assert.match(classifyAdminListing({name:'Unclear listing',shopCategory:'spaza'}).label,/verify type/);
+ const fallback={name:'Unclear listing',shopCategory:'spaza'};
+ const confirmed={...fallback,primaryType:'gas_station',shopCategory:'variety'};
+ const a=preferAdminListing(preferAdminListing(undefined,fallback),confirmed);
+ const b=preferAdminListing(preferAdminListing(undefined,confirmed),fallback);
+ assert.equal(a.shopCategory,'variety');assert.equal(b.shopCategory,'variety');
+});
+test('Individual contact review allowance counts attempted calls and cannot reset on adjustment',async()=>{
+ const {createContactReviewAllowance}=await import('./public/js/teyza-combined-coverage.mjs');
+ const review=createContactReviewAllowance(10);
+ for(let n=0;n<10;n++)assert(review.reserve());
+ assert.equal(review.remaining,0);assert.equal(review.reserve(),false);
+ assert.equal(review.setLimit(100),false);assert(review.setLimit(25));assert.equal(review.used,10);
+ assert.equal(review.remaining,15);assert(review.reserve());assert.equal(review.setLimit(10),false);
+ assert.equal(review.limit,25);assert.equal(review.used,11);
+});

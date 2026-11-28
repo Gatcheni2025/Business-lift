@@ -590,6 +590,39 @@ async function main(){
    await wizard.getByRole('button',{name:'Continue to business type'}).click();
    await wizard.getByText('Selected community: Durban, KwaZulu-Natal',{exact:true}).waitFor();
    assert(await wizard.getByLabel('Google business type').isVisible());
+   let guidedSearches=0,guidedContacts=0;
+   const guidedSearchPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*';
+   const guidedContactPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*';
+   await f.page.route(guidedSearchPattern,route=>{
+    guidedSearches++;
+    const kind=new URL(route.request().url()).searchParams.get('category');
+    return route.fulfill({json:{ok:true,entries:kind==='spaza'?[
+     {placeId:'SyntheticFuel12345',name:"TotalEnergies Synthetic Service Station",latitude:-29.86,longitude:31.02,shopCategory:'spaza',primaryType:'gas_station',types:['gas_station','convenience_store']},
+     {placeId:'SyntheticIndependent123',name:'Shalom Spaza',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},
+     {placeId:'SyntheticNoPhone123',name:'Independent Tuck Shop',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}
+    ]:[]}});
+   });
+   await f.page.route(guidedContactPattern,route=>{guidedContacts++;return route.fulfill({json:{ok:true,phone:'',websiteUrl:''}});});
+   await wizard.getByRole('button',{name:'Search this area',exact:true}).click();
+   await wizard.getByText('Shalom Spaza',{exact:true}).waitFor();
+   assert.equal(guidedSearches,1);assert.equal(guidedContacts,0);
+   assert.equal(await wizard.getByText('TotalEnergies Synthetic Service Station',{exact:true}).count(),0);
+   await wizard.getByText('Include large chains',{exact:false}).click();
+   const fuel=wizard.locator('.acq-business-card').filter({hasText:'TotalEnergies Synthetic Service Station'});
+   await fuel.getByText('Fuel station',{exact:true}).waitFor();
+   await wizard.getByText('Include large chains',{exact:false}).click();
+   await wizard.getByLabel('Contact review allowance').selectOption('10');
+   await wizard.getByRole('button',{name:'Review next unchecked business',exact:true}).click();
+   assert.equal(guidedContacts,0);
+   await wizard.getByLabel('Phone availability').selectOption('all');
+   const reviewed=wizard.locator('.acq-business-card').filter({hasText:'Shalom Spaza'});
+   await reviewed.getByRole('button',{name:'View contact details',exact:true}).click();
+   await reviewed.getByText('No phone listed',{exact:true}).waitFor();
+   await wizard.getByText('1 / 10 contact requests attempted in this window',{exact:true}).waitFor();
+   assert.equal(guidedContacts,1);
+   assert(await wizard.getByText('Independent Tuck Shop',{exact:true}).isVisible());
+   await f.page.unroute(guidedSearchPattern);
+   await f.page.unroute(guidedContactPattern);
    await wizard.getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Saved contacts',exact:true}).click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
