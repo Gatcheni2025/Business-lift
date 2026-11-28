@@ -229,6 +229,7 @@ async function main(){
    if(live){const reply=await liveGate.get(route.request().url(),route.request().method());return route.fulfill(reply);}
    contactCalls++;
    const id=new URL(route.request().url()).searchParams.get('placeId');
+   if(id.includes('2'+'123456789'))return route.fulfill({status:403,json:{ok:false,error:'Synthetic lookup blocked'}});
    return route.fulfill({json:{ok:true,phone:id.includes('1'+'123456789')?'':'+27000000012',websiteUrl:''}});
   });
   // Set no browser Maps key: the optional map is intentionally unavailable.
@@ -277,6 +278,20 @@ async function main(){
    await phoneFilter.selectOption('missing');
    await noPhone.waitFor();
    assert.equal(await dialog.getByText('DEMO — Corner Store',{exact:true}).count(),0);
+   await phoneFilter.selectOption('all');
+   const failed=dialog.locator('.acq-live-result').filter({hasText:'DEMO — Community Shop'});
+   await failed.getByRole('button',{name:'View contact details'}).click();
+   await failed.getByText('Contact check unavailable',{exact:true}).waitFor();
+   await failed.getByText(/Request blocked \(HTTP 403\)/).waitFor();
+   assert.equal(contactCalls,2);
+   await phoneFilter.selectOption('failed');await failed.waitFor();
+   assert.equal(await noPhone.count(),0);
+   await phoneFilter.selectOption('missing');await noPhone.waitFor();
+   assert.equal(await failed.count(),0);
+   await phoneFilter.selectOption('number');
+   await dialog.getByText('DEMO — Corner Store',{exact:true}).waitFor();
+   assert.equal(await failed.count(),0);
+   assert.equal(contactCalls,2);
    await phoneFilter.selectOption('all');
    await page.screenshot({path:path.join(output,'04-discovery-results.png')});
    await dialog.getByRole('button',{name:'Close',exact:true}).click();

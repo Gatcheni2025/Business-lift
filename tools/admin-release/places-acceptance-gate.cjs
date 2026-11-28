@@ -10,7 +10,7 @@ function createLivePlacesGate({fetchImpl,log=()=>{}}){
  const ids=new Set(),checked=new Set();
  let searches=0,details=0,returned=0,discoveryOk=false,partial=false,detailOk=0,withPhone=0,withoutPhone=0;
  const snapshot=()=>({searchAttempts:searches,searchSucceeded:discoveryOk,returnedListings:returned,partialResults:partial,contactAttempts:details,contactSucceeded:detailOk,listedPhone:withPhone,noListedPhone:withoutPhone});
- const deny=message=>({status:403,json:{ok:false,error:message}});
+ const deny=message=>{log('Request blocked: '+message);return {status:403,json:{ok:false,error:message}};};
  async function get(url,method){
   if(method!=='GET')return deny('Read-only Places acceptance: GET only.');
   let u;try{u=new URL(url);}catch{return deny('Invalid request.');}

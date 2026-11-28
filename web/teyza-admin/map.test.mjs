@@ -156,3 +156,18 @@ test('Google Places categories show independently counted spaza, business and wh
  assert(source.includes("p.shopCategory==='wholesale'?'#a563d7'"));
  assert(source.includes("p.shopCategory==='variety'?'#ed8b27'"));
 });
+
+test('Contact phone status distinguishes unchecked, pending, failed and confirmed missing',async()=>{
+ const {contactPhoneState,contactLookupIssue}=await import('./public/js/teyza-combined-coverage.mjs');
+ const p={placeId:'SyntheticPlace1234'};
+ assert.equal(contactPhoneState(p),'unchecked');
+ assert.equal(contactPhoneState(p,{state:'loading'}),'loading');
+ assert.equal(contactPhoneState(p,{state:'error'}),'failed');
+ assert.equal(contactPhoneState(p,{state:'ready',phone:'  '}),'missing');
+ assert.equal(contactPhoneState(p,{state:'ready',phone:'031 555 0100'}),'number');
+ assert.equal(contactPhoneState({...p,phone:'031 555 0100'},{state:'error'}),'number');
+ assert.equal(contactPhoneState({...p,phone:'031 555 0100'},{state:'ready',phone:''}),'missing');
+ assert.match(contactLookupIssue(403),/trial allowance/);
+ assert.match(contactLookupIssue(429),/limit reached/);
+ assert.match(contactLookupIssue(502),/HTTP 502/);
+});
