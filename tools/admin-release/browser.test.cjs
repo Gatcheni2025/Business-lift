@@ -1445,9 +1445,11 @@ async function main(){
     await f.context.close();
   });
   await check('Suspended acquisition cannot resume if the existing admin session was revoked',async()=>{
-   let revoked=false;
+   let revoked=false,revokedChecks=0;
    const f=await pageFor({api:async(route,body)=>{
-    if(body.action==='admin_session_status'&&revoked){await route.fulfill({json:{ok:true,active:false}});return true;}
+    if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[],next:null,communications:{}}});return true;}
+    if(body.action==='ops_acquisition_command_page'){await route.fulfill({json:await syntheticCommandPage(body)});return true;}
+    if(body.action==='admin_session_status'&&revoked){revokedChecks++;await route.fulfill({json:{ok:true,active:false}});return true;}
     return false;
    }});
    await f.page.getByRole('button',{name:'Business acquisition',exact:true}).click();
@@ -1459,6 +1461,7 @@ async function main(){
    await f.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
    await f.page.locator('#loginPanel').waitFor({state:'visible'});
    assert.equal(await f.page.locator('[data-acquisition]').count(),0);assert(await f.page.locator('#workspace').isHidden());
+   assert.equal(revokedChecks,1);assert(f.calls.some(c=>c.action==='admin_session_end'));
    assert.equal(await f.page.evaluate(()=>sessionStorage.getItem('teyza-admin-idle-v1')),null);
    await f.context.close();
   });
