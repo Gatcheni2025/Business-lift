@@ -136,10 +136,53 @@ export function contactLookupIssue(status){
  if(Number.isInteger(status)&&status>=400&&status<=599)return 'Contact service returned HTTP '+status+'.';
  return 'Contact service did not return a valid response.';
 }
+// Admin display-only interpretation of provider fields; not an ownership or business verification.
+const fuelName=/\b(?:petrol station|fuel station|service station|filling station|total\s*energies)\b/i;
+const fuelBrand=/\b(?:total\s*energies|engen|shell|bp|sasol|caltex|astron energy|puma energy|gulf|vivo energy)\b/i;
+const knownChain=/\b(?:shoprite|checkers|pick\s*['’]?n\s*['’]?pay|pnp|spar|superspar|woolworths|makro|boxer|pep(?:\s*stores)?|kfc|mcdonald['’]?s|chicken\s*licken|steers|debonairs|hungry lion|nando['’]?s|burger king|dis-chem|dischem|clicks|game stores|cashbuild|build it|builders warehouse|usave|shoprite liquor|capitec|standard bank|absa|fnb|nedbank)\b/i;
+export function classifyAdminListing(place){
+ const name=String(place?.name||'').normalize('NFKC'),primary=String(place?.primaryType||'');
+ const types=new Set(Array.isArray(place?.types)?place.types:[]);
+ const has=(values)=>values.includes(primary)||(!primary&&values.some(t=>types.has(t)));
+ const fuel=has(['gas_station'])||fuelName.test(name)||(fuelBrand.test(name)&&types.has('gas_station'));
+ const out=(category,label,confidence)=>({category,label,confidence});
+ if(fuel)return out('variety','Fuel station',3);
+ if(has(['wholesaler','warehouse_store'])||/\b(?:wholesal(?:e|er|ers)|cash\s*(?:&|and|n)\s*carry|bulk food supplier)\b/i.test(name))return out('wholesale','Wholesaler',3);
+ if(has(['beauty_salon','hair_care','barber_shop','nail_salon'])||/\b(?:salon|barber|hairdresser)\b/i.test(name))return out('variety','Salon / personal care',3);
+ if(has(['restaurant','fast_food_restaurant','meal_takeaway','meal_delivery','cafe','coffee_shop','bakery'])||/\b(?:restaurant|take[\s-]?away|fast food|shisanyama|bakery)\b/i.test(name))return out('variety','Food / takeaway',3);
+ if(has(['car_repair','car_wash','tire_shop','auto_parts_store'])||/\b(?:car wash|tyre repair|motor spares|mechanic)\b/i.test(name))return out('variety','Automotive service',3);
+ if(has(['pharmacy','drugstore'])||/\bpharmacy\b/i.test(name))return out('variety','Pharmacy',3);
+ if(has(['plumber','electrician','hardware_store','furniture_store','clothing_store','shopping_mall','bank','department_store','home_goods_store','laundry','dry_cleaner','courier_service']))return out('variety','Retail / services',3);
+ if(/\b(?:spaza|tuck[\s-]?shop)\b/i.test(name))return out('spaza','Spaza / tuck shop',3);
+ if(has(['convenience_store','grocery_store','supermarket','food_store'])||/\b(?:mini[\s-]?market|general dealer|corner shop|supermarket|superette|grocery|groceries)\b/i.test(name))return out('spaza','Grocery / local shop',2);
+ const category=['spaza','variety','wholesale'].includes(place?.shopCategory)?place.shopCategory:'variety';
+ return out(category,({spaza:'Spaza / local shop',variety:'Other local business',wholesale:'Wholesaler'})[category]+' · verify type',0);
+}
+export function isRecognisedChain(place){
+ const name=String(place?.name||'').normalize('NFKC');
+ return knownChain.test(name)||(classifyAdminListing(place).label==='Fuel station'&&fuelBrand.test(name));
+}
+export function adminListing(place){
+ const info=classifyAdminListing(place);
+ return {...place,shopCategory:info.category,adminCategoryLabel:info.label,adminCategoryConfidence:info.confidence};
+}
+export function preferAdminListing(previous,next){
+ const candidate=adminListing(next);
+ return !previous||candidate.adminCategoryConfidence>previous.adminCategoryConfidence?candidate:previous;
+}
+// UI-only allowance for deliberate requests, including failed attempts. This
+// does not replace Google project quotas or cap charges from other sessions.
+export function createContactReviewAllowance(initial=25){
+ let used=0,limit=[10,25,50].includes(initial)?initial:25;
+ return {get used(){return used;},get limit(){return limit;},get remaining(){return limit-used;},
+  setLimit(value){if(![10,25,50].includes(value)||value<used)return false;limit=value;return true;},
+  reserve(){if(used>=limit)return false;used++;return true;}};
+}
 export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
- const contactCache=new Map();
+ const contactCache=new Map(),reviewAllowance=createContactReviewAllowance();
+ let reviewBusy=false,reviewUnchecked=0;
  let guideStep=1,guideArea=null;
  const directory=elt('section');directory.className='acq-locality-directory';directory.hidden=true;
  const directoryTitle=elt('h4','Townships & communities'),directoryNote=elt('p','Browse the government locality reference by province. Select a community, then confirm its search location. This is not a complete or current township census.');
@@ -211,7 +254,29 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  for(const [id,label] of [['all','All results — numbers first'],['number','Known phone numbers'],['unchecked','Not yet checked'],['failed','Contact check unavailable'],['missing','No listed phone — field enquiry']]){const o=elt('option',label);o.value=id;phoneFilter.append(o);}
  const chains=elt('input');chains.type='checkbox';chains.checked=false;
  const chainLabel=elt('label');chainLabel.append(chains,elt('span',' Include large chains'));
- const chainName=p=>/\b(?:shoprite|checkers|pick\s*n\s*pay|pnp|spar|superspar|woolworths|makro|boxer|pep\s*stores|kfc|mcdonald'?s|chicken\s*licken|steers|debonairs)\b/i.test(String(p.name||''));
+ const chainName=isRecognisedChain;
+ const reviewBar=elt('section');reviewBar.className='acq-locality-directory';reviewBar.hidden=true;
+ const reviewTitle=elt('h4','Contact review');
+ const reviewStatus=elt('p','');reviewStatus.setAttribute('role','status');reviewStatus.className='footnote';
+ const reviewLimit=elt('select');reviewLimit.setAttribute('aria-label','Contact review allowance');
+ for(const value of [10,25,50]){const o=elt('option',value+' individual checks');o.value=String(value);reviewLimit.append(o);}
+ reviewLimit.value=String(reviewAllowance.limit);
+ const reviewNext=elt('button','Review next unchecked business');reviewNext.type='button';reviewNext.className='button quiet';
+ const reviewControls=elt('div');reviewControls.className='acq-locality-filter';reviewControls.append(reviewLimit,reviewNext);
+ reviewBar.append(reviewTitle,elt('p','Choose an allowance for this open window. Each contact check is a separate potentially billable request, including failed attempts. No automatic checks or messages. This is not a project-wide billing cap.','footnote'),reviewControls,reviewStatus);
+ function syncReview(){
+  const blocked=reviewBusy||reviewAllowance.remaining===0;
+  reviewStatus.textContent=reviewAllowance.used+' / '+reviewAllowance.limit+' contact requests attempted in this window'+(reviewBusy?' · Checking one business':reviewAllowance.remaining===0?' · Allowance reached':'');
+  reviewNext.disabled=blocked||reviewUnchecked===0;
+  for(const b of list.querySelectorAll('[data-contact-check]'))b.disabled=blocked||['loading','ready'].includes(b.dataset.contactState);
+ }
+ reviewLimit.onchange=()=>{reviewAllowance.setLimit(Number(reviewLimit.value));reviewLimit.value=String(reviewAllowance.limit);syncReview();};
+ reviewNext.onclick=()=>{
+  if(reviewBusy||reviewAllowance.remaining===0||!reviewUnchecked)return;
+  phoneFilter.value='unchecked';pageSize=pageLength;render();
+  const first=list.querySelector('[data-contact-check]:not([disabled])');
+  first?.focus();first?.scrollIntoView({block:'nearest'});
+ };
  const phoneState=p=>contactPhoneState(p,contactCache.get(p.placeId));
  const guide=elt('div');guide.className='acq-discovery-guide';const stepLine=elt('div');stepLine.className='acq-guide-steps';const selectedText=elt('p','');selectedText.className='acq-guide-selection';
  const continueButton=elt('button','Continue to business type');continueButton.type='button';continueButton.className='button primary';
@@ -227,7 +292,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   town.disabled=guideStep!==1||province.value==='All provinces';
   continueButton.hidden=guideStep!==1;continueButton.disabled=province.value==='All provinces';
   category.hidden=guideStep===1;search.hidden=guideStep===1;editButton.hidden=guideStep===1;
-  phoneFilter.hidden=guideStep!==3;chainLabel.hidden=guideStep!==3;businessFilter.hidden=guideStep!==3;layerFilters.hidden=guideStep!==3;
+  phoneFilter.hidden=guideStep!==3;chainLabel.hidden=guideStep!==3;reviewBar.hidden=guideStep!==3;businessFilter.hidden=guideStep!==3;layerFilters.hidden=guideStep!==3;
   mapPanel.hidden=guideStep!==3;
  }
  continueButton.onclick=async()=>{
@@ -268,7 +333,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
  if(compact){town.value=initialArea?.label||String(initialTown||(guided?'':'Durban')).slice(0,100);province.value=initialArea?.province||'All provinces';category.value=guided?'spaza':'all';mapPanel.append(mapNotice,canvas);}
  if(guided){controls.append(province,directory,town,continueButton,editButton,category,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
- if(compact){panel.append(title,note);if(guided)panel.append(guide);panel.append(controls,status,count,businessFilter);if(guided)panel.append(phoneFilter,chainLabel);panel.append(layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
+ if(compact){panel.append(title,note);if(guided)panel.append(guide);panel.append(controls,status,count,businessFilter);if(guided)panel.append(phoneFilter,chainLabel,reviewBar);panel.append(layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
  let autocomplete=null;
  function resetAreaResults(){if(searchPending)return;resultEpoch++;contactCache.clear();places=[];searchCompleted=false;searchError='';searchedArea=null;render();}
  if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();if(guided){guideStep=1;guideArea=null;town.value='';nextHint.textContent='';resetDirectory();paintGuide();paintDirectoryQuick();void loadDirectory();}};if(guided){province.options[0].textContent='Choose a province';town.placeholder='Or search for a town or township';paintGuide();}}
@@ -326,8 +391,9 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   const cached=contactCache.get(p.placeId);
   if(cached&&cached.state!=='error'){paintContact(host,p,cached);updateStatus();return;}
   if(!/^[A-Za-z0-9_-]{10,200}$/.test(p.placeId)){const entry={state:'error',issue:'Invalid place reference.'};contactCache.set(p.placeId,entry);if(guided)render();else{paintContact(host,p,entry);updateStatus();}return;}
+  if(guided){if(reviewBusy||!reviewAllowance.reserve()){syncReview();return;}reviewBusy=true;}
   contactCache.set(p.placeId,{state:'loading'});
-  paintContact(host,p,{state:'loading'});button.disabled=true;updateStatus();
+  paintContact(host,p,{state:'loading'});button.disabled=true;updateStatus();if(guided)syncReview();
   try{
    // Only a deliberate click requests additional (potentially billable) fields.
    const url=new URL(CONTACT);url.searchParams.set('placeId',p.placeId);
@@ -340,23 +406,23 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   }catch(e){
    if(stamp!==resultEpoch||activation!==epoch||!active)return;
    const entry={state:'error',issue:e.contactIssue||'Network or response error.'};contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected){paintContact(host,p,entry);updateStatus();}else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
-  }finally{if(stamp===resultEpoch&&activation===epoch&&button.isConnected)updateStatus();}
+  }finally{if(guided)reviewBusy=false;if(stamp===resultEpoch&&activation===epoch&&button.isConnected)updateStatus();if(guided&&active)syncReview();}
  }
  function renderCompactList(visible){
-  list.replaceChildren();
+  list.replaceChildren();if(guided){reviewUnchecked=0;syncReview();}
   if(searchPending){list.append(elt('p','Searching for businesses. Results will appear here.'));return;}
   if(searchError){list.append(elt('p','Search failed: '+searchError+' Check the town and try again.'));return;}
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
   if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
   const q=businessFilter.value.trim().toLowerCase();visible=visible.filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
-  if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0,failed:0,loading:0};for(const p of eligible)stats[phoneState(p)]++;list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.loading+' checking · '+stats.failed+' check unavailable · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
+  if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0,failed:0,loading:0};for(const p of eligible)stats[phoneState(p)]++;reviewUnchecked=stats.unchecked;syncReview();list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.loading+' checking · '+stats.failed+' check unavailable · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
   if(!visible.length){list.append(elt('p','No results match this view. Change the phone filter or check additional listings.'));return;}
   const savedRows=[];
   list.append(elt('p','Showing '+Math.min(pageSize,visible.length)+' of '+visible.length+' businesses. Contact information is optional; no business is excluded for missing contact details.'));
   for(const p of visible.slice(0,pageSize)){
    const item=elt('article');item.className='acq-live-result acq-business-card';
    const identity=elt('div');identity.className='acq-live-identity';
-   identity.append(elt('strong',p.name||'Google-listed business'),elt('span',p.address||p.area||'Location on Google Maps'),elt('small',p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other local business'));
+   identity.append(elt('strong',p.name||'Google-listed business'),elt('span',p.address||p.area||'Location on Google Maps'),elt('small',p.adminCategoryLabel||(p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other local business')));
    const state=elt('span',phoneLabels[phoneState(p)]);state.className='acq-manual-chip';state.dataset.phoneState=phoneState(p);state.setAttribute('role','status');
    const savedStatus=elt('span','');savedStatus.className='acq-status';savedStatus.hidden=true;
    const actions=elt('div');actions.className='acq-contact-actions';
@@ -366,7 +432,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(cached)paintContact(details,p,cached);
    else if(p.phone||p.websiteUrl)paintContact(details,p,{phone:p.phone,websiteUrl:p.websiteUrl});
    else details.append(elt('p','Phone / website: not yet checked. Email not supplied by Google; WhatsApp not verified.'));
-   function updateStatus(){const entry=contactCache.get(p.placeId),value=phoneState(p);state.textContent=phoneLabels[value];state.dataset.phoneState=value;contact.textContent=entry?.state==='error'?'Retry contact check':entry?.state==='loading'?'Checking contact…':entry?.state==='ready'?'Contact details checked':'View contact details';contact.disabled=entry?.state==='loading'||entry?.state==='ready';}
+   function updateStatus(){const entry=contactCache.get(p.placeId),value=phoneState(p);state.textContent=phoneLabels[value];state.dataset.phoneState=value;contact.textContent=entry?.state==='error'?'Retry contact check':entry?.state==='loading'?'Checking contact…':entry?.state==='ready'?'Contact details checked':'View contact details';contact.dataset.contactCheck='true';contact.dataset.contactState=entry?.state||'unchecked';contact.disabled=entry?.state==='loading'||entry?.state==='ready'||(guided&&(reviewBusy||reviewAllowance.remaining===0));}
    updateStatus();contact.onclick=()=>lookupContact(p,details,contact,updateStatus);
    actions.append(contact,mapsLink(p));
    const mapButton=elt('button','Show on map');mapButton.type='button';mapButton.className='button quiet';
@@ -391,7 +457,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   }
   if(pageSize<visible.length){
    const more=elt('button','Show more businesses');more.type='button';more.className='button quiet';
-   more.onclick=()=>{pageSize+=pageLength;renderCompactList(visible);};list.append(more);
+   more.onclick=()=>{pageSize+=pageLength;render();};list.append(more);
   }
  }
  async function ensureCompactMap(){
@@ -426,7 +492,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   clearMarkers();placesById.clear();
   const records=[
    ...(showT.checked?registered.filter(good).map(p=>({...p,_googleOnly:false})):[]),
-   ...(showG.checked?visible.map(p=>({...p,_googleOnly:true})):[])
+   ...(showG.checked?visible.filter(p=>!guided||chains.checked||!chainName(p)).map(p=>({...p,_googleOnly:true})):[])
   ];
   for(const p of records){
    const marker=new google.maps.Marker({map,position:boundsFor(p),title:(p.name||'Shop')+(p._googleOnly?' · Potential Teyza registration':' · Registered on Teyza'),
@@ -556,7 +622,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(stamp!==epoch||!active)return;const successful=searches.filter(r=>r.status==='fulfilled');
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
    const unique=new Map();let excluded=0;
-   for(const item of successful)for(const p of item.value.entries){if(compact&&!withinSearchRadius(p,located)){excluded++;continue;}if(p.placeId&&!unique.has(p.placeId))unique.set(p.placeId,p);}
+   for(const item of successful)for(const p of item.value.entries){if(compact&&!withinSearchRadius(p,located)){excluded++;continue;}if(p.placeId){if(guided)unique.set(p.placeId,preferAdminListing(unique.get(p.placeId),p));else if(!unique.has(p.placeId))unique.set(p.placeId,p);}}
    places=[...unique.values()];if(guided){guideStep=3;paintGuide();}searchCompleted=true;searchPending=false;render();
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);

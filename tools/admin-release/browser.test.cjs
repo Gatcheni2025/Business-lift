@@ -274,7 +274,7 @@ async function main(){
           footerBottom:footer.bottom,buttonBottom:btn.bottom,layoutBottom:outer.bottom,
           footerVisible:getComputedStyle(composer).display!=='none'&&btn.height>=40};
       });
-      assert(m.scrollHeight>m.clientHeight+100,'Message history must have its own scrollbar');
+      assert(m.scrollHeight>m.clientHeight+100,'Message history must have its own scrollbar: '+JSON.stringify(m));
       assert(m.footerVisible,'Send WhatsApp reply button must remain visible');
       assert(m.footerBottom<=m.layoutBottom+3,'Reply composer must stay inside the chat panel');
       assert(m.buttonBottom<=m.layoutBottom+3,'Send button must not be pushed below the chat panel');
@@ -283,21 +283,38 @@ async function main(){
     await test.page.screenshot({path:path.join(output,'admin-support-desktop.png'),fullPage:true});
     // A message refresh must preserve the agent's position when reading history.
     await test.page.locator('.ops-chat-messages').evaluate(el=>{el.scrollTop=0;});
+    const oldHistory=await test.page.locator('.ops-chat-messages').elementHandle();
     const refreshed=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_support_thread');
     await test.page.getByRole('button',{name:'Reload messages'}).click();
     await refreshed;
+    // The response can arrive before show() replaces the thread; assert on the new DOM.
+    await test.page.waitForFunction(el=>!el.isConnected,oldHistory);
     await test.page.locator('.ops-chat-bubble').first().waitFor();
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),41);
     assert((await test.page.locator('.ops-chat-messages').evaluate(el=>el.scrollTop))<=5,
       'Refreshing a conversation must not jump an agent away from earlier messages');
     await test.page.locator('.ops-chat-composer textarea').fill('Hello! Registration is free; we can guide you.');
+    const oldComposer=await test.page.locator('.ops-chat-composer').elementHandle();
     const saved=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_support_reply');
+    const reloaded=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_support_thread');
     await test.page.getByRole('button',{name:'Send WhatsApp reply'}).click();
     await saved;
+    await reloaded;
+    // Wait for the actual reply refresh and composer replacement before resizing.
+    await test.page.waitForFunction(el=>!el.isConnected,oldComposer);
+    assert.equal(await test.page.locator('.ops-chat-composer textarea').inputValue(),'');
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),41);
     assert(test.calls.some(x=>x.action==='ops_support_reply'&&
       x.data.ticketId==='seller_demoSeller1'&&x.data.message.includes('Registration is free')));
     await test.page.setViewportSize({width:393,height:852});
+    await test.page.waitForFunction(()=>{
+      const layout=document.querySelector('.ops-chat-layout');
+      return innerWidth===393&&matchMedia('(max-width:680px)').matches&&layout&&getComputedStyle(layout).flexDirection==='column';
+    });
+    await test.page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     await layoutTest();
     assert(await test.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await test.page.screenshot({path:path.join(output,'admin-support-phone.png'),fullPage:true});
@@ -590,6 +607,39 @@ async function main(){
    await wizard.getByRole('button',{name:'Continue to business type'}).click();
    await wizard.getByText('Selected community: Durban, KwaZulu-Natal',{exact:true}).waitFor();
    assert(await wizard.getByLabel('Google business type').isVisible());
+   let guidedSearches=0,guidedContacts=0;
+   const guidedSearchPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*';
+   const guidedContactPattern='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*';
+   await f.page.route(guidedSearchPattern,route=>{
+    guidedSearches++;
+    const kind=new URL(route.request().url()).searchParams.get('category');
+    return route.fulfill({json:{ok:true,entries:kind==='spaza'?[
+     {placeId:'SyntheticFuel12345',name:"TotalEnergies Synthetic Service Station",latitude:-29.86,longitude:31.02,shopCategory:'spaza',primaryType:'gas_station',types:['gas_station','convenience_store']},
+     {placeId:'SyntheticIndependent123',name:'Shalom Spaza',latitude:-29.86,longitude:31.02,shopCategory:'spaza'},
+     {placeId:'SyntheticNoPhone123',name:'Independent Tuck Shop',latitude:-29.86,longitude:31.02,shopCategory:'spaza'}
+    ]:[]}});
+   });
+   await f.page.route(guidedContactPattern,route=>{guidedContacts++;return route.fulfill({json:{ok:true,phone:'',websiteUrl:''}});});
+   await wizard.getByRole('button',{name:'Search this area',exact:true}).click();
+   await wizard.getByText('Shalom Spaza',{exact:true}).waitFor();
+   assert.equal(guidedSearches,1);assert.equal(guidedContacts,0);
+   assert.equal(await wizard.getByText('TotalEnergies Synthetic Service Station',{exact:true}).count(),0);
+   await wizard.getByText('Include large chains',{exact:false}).click();
+   const fuel=wizard.locator('.acq-business-card').filter({hasText:'TotalEnergies Synthetic Service Station'});
+   await fuel.getByText('Fuel station',{exact:true}).waitFor();
+   await wizard.getByText('Include large chains',{exact:false}).click();
+   await wizard.getByLabel('Contact review allowance').selectOption('10');
+   await wizard.getByRole('button',{name:'Review next unchecked business',exact:true}).click();
+   assert.equal(guidedContacts,0);
+   await wizard.getByLabel('Phone availability').selectOption('all');
+   const reviewed=wizard.locator('.acq-business-card').filter({hasText:'Shalom Spaza'});
+   await reviewed.getByRole('button',{name:'View contact details',exact:true}).click();
+   await reviewed.getByText('No phone listed',{exact:true}).waitFor();
+   await wizard.getByText('1 / 10 contact requests attempted in this window',{exact:true}).waitFor();
+   assert.equal(guidedContacts,1);
+   assert(await wizard.getByText('Independent Tuck Shop',{exact:true}).isVisible());
+   await f.page.unroute(guidedSearchPattern);
+   await f.page.unroute(guidedContactPattern);
    await wizard.getByRole('button',{name:'Close',exact:true}).click();
    await f.page.getByRole('button',{name:'Saved contacts',exact:true}).click();
    await f.page.getByRole('heading',{name:'Find businesses in an area'}).waitFor();
