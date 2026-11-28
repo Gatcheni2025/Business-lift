@@ -524,10 +524,12 @@ async function main(){
    const f=await pageFor({api:async(route,body)=>{
     if(body.action==='admin_area_suggest'){
      assert.match(body.adminSession,/^[a-f0-9]{64}$/);assert.match(body.data.sessionToken,/^[0-9a-f-]{36}$/i);
-     await route.fulfill({json:{ok:true,suggestions:body.data.query==='Synthetic Remote Township'?[{label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',predictionToken:'synthetic-area-receipt'}]:[]}});return true;
+     await route.fulfill({json:{ok:true,suggestions:body.data.query==='Synthetic Remote Township'?[{label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',predictionToken:'synthetic-area-receipt'}]:body.data.query==='Synthetic Eastern Community, Buffalo City, Eastern Cape'?[{label:'Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',predictionToken:'synthetic-eastern-receipt'}]:[]}});return true;
     }
     if(body.action==='admin_area_select'){
-     assert.match(body.adminSession,/^[a-f0-9]{64}$/);assert.equal(body.data.predictionToken,'synthetic-area-receipt');
+     assert.match(body.adminSession,/^[a-f0-9]{64}$/);
+     if(body.data.predictionToken==='synthetic-eastern-receipt'){await route.fulfill({json:{ok:true,area:{area:'Synthetic Eastern Community',province:'Eastern Cape',label:'Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',lat:-32.99,lng:27.9,radius:5000,source:'Google Maps'}}});return true;}
+     assert.equal(body.data.predictionToken,'synthetic-area-receipt');
      await route.fulfill({json:{ok:true,area:{area:'Synthetic Remote Township',province:'KwaZulu-Natal',label:'Synthetic Remote Township, KwaZulu-Natal, South Africa',lat:-29.8579,lng:31.0292,radius:10000,source:'Google Maps'}}});return true;
     }
     if(!body.action.startsWith('ops_acquisition_'))return false;
@@ -564,8 +566,16 @@ async function main(){
    await f.page.getByText('Choose the province, then a town or township.',{exact:true}).waitFor();
    const wizard=f.page.getByRole('dialog');assert(await wizard.getByRole('button',{name:'Continue to business type'}).isDisabled());
    await wizard.getByLabel('Province',{exact:true}).selectOption('Eastern Cape');
-   await wizard.getByRole('button',{name:/Synthetic Eastern Community.*Buffalo City/}).waitFor();
+   const eastern=wizard.getByRole('button',{name:/Synthetic Eastern Community.*Buffalo City/});await eastern.waitFor();
+   assert(!f.calls.some(c=>c.action==='admin_area_suggest'||c.action==='admin_area_select'));
+   await eastern.click();
+   await wizard.getByRole('button',{name:'Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',exact:true}).click();
+   await wizard.getByText('Selected: Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',{exact:true}).waitFor();
+   await wizard.getByRole('button',{name:'Continue to business type'}).click();
+   await wizard.getByText('Selected community: Synthetic Eastern Community, Buffalo City, Eastern Cape, South Africa',{exact:true}).waitFor();
+   await wizard.getByRole('button',{name:'Change location',exact:true}).click();
    await wizard.getByLabel('Province',{exact:true}).selectOption('KwaZulu-Natal');
+   assert.equal(await wizard.getByLabel('Town or municipality').inputValue(),'');
    await wizard.getByRole('button',{name:/Synthetic First Community.*eThekwini/}).waitFor();
    assert.equal(await wizard.getByRole('button',{name:/Synthetic Eastern Community/}).count(),0);
    await wizard.getByRole('button',{name:'More communities',exact:true}).click();
