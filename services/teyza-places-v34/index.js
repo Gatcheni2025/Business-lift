@@ -2,7 +2,7 @@
 const express = require('express');
 const {onRequest} = require('firebase-functions/v2/https');
 const {defineSecret} = require('firebase-functions/params');
-const {num, category, photoResource, discover, fetchPhoto, fetchContact} = require('./places');
+const {num, category, photoResource, discover, fetchPhoto, fetchContact,ADMIN_SCOPE,adminViewport} = require('./places');
 const API_KEY = defineSecret('TEYZA_GOOGLE_PLACES_KEY');
 const app = express();
 const ORIGINS = new Set(['https://teyza.co.za', 'https://www.teyza.co.za',
@@ -20,16 +20,22 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions', wholesaleDiscovery: true, marketplaceRelease: '20261126-v61', expandedBusinessDiscovery: true}));
+app.get('/health', (_, res) => res.json({ok: true, service: 'teyza-places', version: '3.6', provider: 'firebase-functions', wholesaleDiscovery: true, marketplaceRelease: '20261126-v61', expandedBusinessDiscovery: true,adminLocalDiscovery:ADMIN_SCOPE}));
 app.get(['/shopper-discover.php', '/shopper-discover'], async (req, res) => {
   const lat = num(req.query.lat, -90, 90), lon = num(req.query.lon, -180, 180);
   if (lat === null || lon === null) return res.status(400).json({ok: false, error: 'lat and lon required'});
   const kind = category(req.query.category);
-  const radius = num(req.query.radius, 500, 50000) ?? (kind === 'spaza' ? 22000 : 40000);
+  const scope=req.query.scope===ADMIN_SCOPE?ADMIN_SCOPE:undefined;
+  const requestedRadius=num(req.query.radius,500,50000);
+  if(scope){
+    if(requestedRadius===null||!['spaza','variety','wholesale'].includes(req.query.category))return res.status(400).json({ok:false,error:'Confirm a valid Admin search radius and category'});
+    try{adminViewport(lat,lon,requestedRadius);}catch(_){return res.status(400).json({ok:false,error:'Confirm a valid South African locality'});}
+  }
+  const radius = requestedRadius ?? (kind === 'spaza' ? 22000 : 40000);
   try {
     const key = API_KEY.value();
     if (!key) return res.status(503).json({ok: false, error: 'Places not configured'});
-    return res.json(await discover({key, lat, lon, radius, kind}));
+    return res.json(await discover({key, lat, lon, radius, kind,scope}));
   } catch (error) {
     console.error('Teyza discovery:', error.message);
     return res.status(502).json({ok: false, error: 'Nearby shops temporarily unavailable'});

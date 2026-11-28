@@ -4,6 +4,7 @@ const ENDPOINT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyza
 const CONFIG='/assets/teyza-maps-config.json';
 const CONTACT='https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php';
 const pageLength=30;
+const ADMIN_SCOPE='admin-local-v1';
 // Independently sourced approximate locality centres (not Google Places data).
 // City/Soweto: GeoNames https://www.geonames.org/za/largest-cities-in-south-africa.html
 // Durban townships and Gauteng main places: Statistics SA main-place pages, IDs below.
@@ -178,7 +179,7 @@ export function createContactReviewAllowance(initial=25){
   setLimit(value){if(![10,25,50].includes(value)||value<used)return false;limit=value;return true;},
   reserve(){if(used>=limit)return false;used++;return true;}};
 }
-export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
+export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,benefitsPreview,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
  const contactCache=new Map(),reviewAllowance=createContactReviewAllowance(),confirmedSaved=new Map(),visibleSaved=new Map();
@@ -291,13 +292,13 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   province.hidden=guideStep!==1;town.parentElement.hidden=guideStep!==1;directory.hidden=guideStep!==1||province.value==='All provinces';
   town.disabled=guideStep!==1||province.value==='All provinces';
   continueButton.hidden=guideStep!==1;continueButton.disabled=province.value==='All provinces';
-  category.hidden=guideStep===1;search.hidden=guideStep===1;editButton.hidden=guideStep===1;
+  category.hidden=guideStep===1;radiusField.hidden=guideStep===1;search.hidden=guideStep===1;editButton.hidden=guideStep===1;
   phoneFilter.hidden=guideStep!==3;chainLabel.hidden=guideStep!==3;reviewBar.hidden=guideStep!==3;businessFilter.hidden=guideStep!==3;layerFilters.hidden=guideStep!==3;
   mapPanel.hidden=guideStep!==3;
  }
  continueButton.onclick=async()=>{
   nextHint.textContent='';
-  try{if(province.value==='All provinces')throw Error('Choose a province first.');const selected=await locate();if(!selected||selected.province!==province.value)throw Error('Select the correct community in the selected province.');guideArea=selected;guideStep=2;browseSerial++;browseBusy=false;filterButton.disabled=false;paintGuide();}
+  try{if(province.value==='All provinces')throw Error('Choose a province first.');const selected=await locate();if(!selected||selected.province!==province.value)throw Error('Select the correct community in the selected province.');guideArea=selected;radiusField.value='recommended';guideStep=2;browseSerial++;browseBusy=false;filterButton.disabled=false;paintGuide();}
   catch(e){nextHint.textContent=e.message||'Choose a confirmed location.';}
  };
  editButton.onclick=()=>{if(searchPending)return;guideStep=1;guideArea=null;resetAreaResults();paintGuide();if(!localityRows.children.length&&province.value!=='All provinces')void loadDirectory(browseOffset);};
@@ -313,6 +314,8 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  for(const p of ['All provinces','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape']){const o=elt('option',p);o.value=p;province.append(o);}
  const category=elt('select');category.setAttribute('aria-label','Google business type');
  for(const [id,t] of [['spaza','Spaza and local shops'],['variety','Other businesses (salons, services, retail)'],['wholesale','Wholesalers'],['all','All three categories (3 searches)']]){const o=elt('option',t);o.value=id;category.append(o);}
+ const radiusField=elt('select');radiusField.setAttribute('aria-label','Business search radius');
+ for(const [v,label] of [['recommended','Recommended area radius'],['5000','5 km — local community'],['10000','10 km — surrounding communities'],['20000','20 km — wider town'],['40000','40 km — wider rural area']]){const o=elt('option',label);o.value=v;radiusField.append(o);}
  const start=elt('button',compact?'Retry business search':'Retry Google map');start.type='button';start.className='button primary';
  const search=elt('button',compact?'Search this area':'Find shops needing Teyza registration');search.type='button';search.className='button quiet';search.disabled=true;
  const showT=elt('input');showT.type='checkbox';showT.checked=!compact;
@@ -332,7 +335,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
  if(compact){town.value=initialArea?.label||String(initialTown||(guided?'':'Durban')).slice(0,100);province.value=initialArea?.province||'All provinces';category.value=guided?'spaza':'all';mapPanel.append(mapNotice,canvas);}
- if(guided){controls.append(province,directory,town,continueButton,editButton,category,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
+ if(guided){controls.append(province,directory,town,continueButton,editButton,category,radiusField,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
  if(compact){panel.append(title,note);if(guided)panel.append(guide);panel.append(controls,status,count,businessFilter);if(guided)panel.append(phoneFilter,chainLabel,reviewBar);panel.append(layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
  let autocomplete=null;
  function resetAreaResults(){if(searchPending)return;resultEpoch++;contactCache.clear();places=[];searchCompleted=false;searchError='';searchedArea=null;render();}
@@ -393,7 +396,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
      // generate a send link from a public Google phone number.
      record.dispatchEvent(new CustomEvent('acq-prepare-whatsapp'));
     };
-    host.append(prepare,status);
+    host.append(prepare,status);if(benefitsPreview)host.append(benefitsPreview(p));
    }
   }else if(phone)host.append(elt('p','WhatsApp check unavailable for this phone format. Verify a South African number.'));
   host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
@@ -425,7 +428,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   if(searchPending){list.append(elt('p','Searching for businesses. Results will appear here.'));return;}
   if(searchError){list.append(elt('p','Search failed: '+searchError+' Check the town and try again.'));return;}
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
-  if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
+  if(!visible.length){list.append(elt('p',places.length?'No businesses match the selected categories. Review the filters.':'No matching mapped businesses were returned. This is not proof that the area has no businesses. '+(guided?'Choose a wider search radius or another category and select Search this area deliberately.':'Check the location or choose another category.')));return;}
   const q=businessFilter.value.trim().toLowerCase();visible=visible.filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
   if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0,failed:0,loading:0};for(const p of eligible)stats[phoneState(p)]++;reviewUnchecked=stats.unchecked;syncReview();list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.loading+' checking · '+stats.failed+' check unavailable · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
   if(!visible.length){list.append(elt('p','No results match this view. Change the phone filter or check additional listings.'));return;}
@@ -614,11 +617,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   if((compact?!active:!map)||searchPending)return;
   if(guided&&(!guideArea||guideStep===1)){nextHint.textContent='Confirm a community first.';return;}
   const stamp=epoch;searchPending=true;if(compact){resultEpoch++;contactCache.clear();confirmedSaved.clear();visibleSaved.clear();businessFilter.value='';pageSize=pageLength;places=[];searchCompleted=false;searchError='';render();}
-  search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}
+  search.disabled=true;if(compact){town.disabled=province.disabled=category.disabled=true;}radiusField.disabled=true;
   status.textContent=compact?'Searching for businesses in the selected area…':'Searching Google Places around the selected map area…';
   onDiscovery?.({state:'loading',total:0,potential:0,matched:0});
   try{
-   const located=guided?guideArea:skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
+   let located=guided?guideArea:skipGeocode?null:await locate();if(stamp!==epoch||!active||(!compact&&!map))return;
+   if(guided&&radiusField.value!=='recommended'){const chosen=Number(radiusField.value);if(![5000,10000,20000,40000].includes(chosen))throw Error('Choose a valid search radius.');located={...located,radius:chosen};}
    const c=compact?located:map.getCenter(),lat=compact?c?.lat:c.lat(),lon=compact?c?.lng:c.lng();
    if(!Number.isFinite(lat)||!Number.isFinite(lon))throw Error('Could not locate the selected town.');
    const radius=compact?(located.radius||10000):20000;
@@ -632,14 +636,16 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const searches=await Promise.allSettled(kinds.map(async kind=>{
     const url=new URL(ENDPOINT);
     url.searchParams.set('lat',String(lat));url.searchParams.set('lon',String(lon));
-    if(compact)url.searchParams.set('radius',String(radius));else url.searchParams.set('radius','20000');
+    if(compact){url.searchParams.set('radius',String(radius));url.searchParams.set('scope',ADMIN_SCOPE);}else url.searchParams.set('radius','20000');
     url.searchParams.set('category',kind);
     const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(55000)});
     if(!res.ok){let detail='';try{const body=await res.json();detail=String(body.error||'').slice(0,120);}catch(_){}
      throw Error(kind+' discovery HTTP '+res.status+(detail?' ('+detail+')':''));}
     const data=await res.json();
     if(!Array.isArray(data.entries))throw Error(kind+' discovery returned no entries array');
-    return {entries:data.entries.filter(good),warning:data.warning};
+    if(compact&&(data.searchScope!==ADMIN_SCOPE||data.searchRadiusKm!==radius/1000))throw Error('Matching national Admin search service not available. Retry after the backend is verified.');
+    const diag=data.diagnostics;const valid=diag&&['queriesAttempted','queriesFailed','providerRows','outsideRadius','categoryExcluded','missingLocationOrClosed'].every(k=>Number.isSafeInteger(diag[k])&&diag[k]>=0);
+    return {entries:data.entries.filter(good),warning:data.warning,diagnostics:valid?diag:null};
    }));
    if(stamp!==epoch||!active)return;const successful=searches.filter(r=>r.status==='fulfilled');
    if(!successful.length)throw Error(searches.map(r=>r.reason?.message||'Discovery unavailable').join('; '));
@@ -649,10 +655,11 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const counts=matchGoogle(places,registered);
    const incomplete=successful.length<kinds.length||successful.some(r=>r.value.warning);
    status.textContent='Google Places returned '+places.length+' nearby listings'+(compact?' within '+(radius/1000)+' km of '+located.label+'. Registration status and email availability are not established.':': '+counts.potential.length+' potential leads, '+counts.linked.length+' matched to Teyza.')+
-    (incomplete?' Some searches were incomplete.':'')+(excluded?' '+excluded+' out-of-radius result(s) excluded.':'')+' Results are local and may not be exhaustive.';
+    (incomplete?' Some searches were incomplete.':'')+(excluded?' '+excluded+' out-of-radius result(s) excluded by Admin.':'')+' Results are local and may not be exhaustive.';
+   if(compact){const diagnostics=successful.map(r=>r.value.diagnostics).filter(Boolean);if(diagnostics.length===successful.length){const total=k=>diagnostics.reduce((sum,x)=>sum+x[k],0);status.textContent+=' Provider rows (including duplicates): '+total('providerRows')+' · outside radius: '+total('outsideRadius')+' · category excluded: '+total('categoryExcluded')+' · closed/unlocated: '+total('missingLocationOrClosed')+' · incomplete requests: '+total('queriesFailed')+' / '+total('queriesAttempted')+'.';}}
   }catch(e){if(stamp!==epoch)return;searchPending=false;status.textContent='Google discovery failed: '+e.message;if(compact){searchError=e.message;render();}
    onDiscovery?.({state:'error',message:e.message,total:0,potential:0,matched:0});report?.(e);}
-  finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;if(guided)paintGuide();}}
+  finally{if(stamp===epoch){search.disabled=false;if(compact)town.disabled=province.disabled=category.disabled=false;radiusField.disabled=false;if(guided)paintGuide();}}
  }
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;

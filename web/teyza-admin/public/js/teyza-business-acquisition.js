@@ -225,6 +225,17 @@ function assetLink(label,href,download=false){
  const a=el('a',label,'button quiet');a.href=href;a.target='_blank';a.rel='noopener noreferrer';if(download)a.download='';return a;
 }
 function copyAsset(value,notice){return async()=>{try{await navigator.clipboard.writeText(value);notice('Copied approved material. No message sent.','success');}catch{notice('Clipboard unavailable. Open the asset or select and copy the draft manually.','info');}};}
+// Public, recipient-independent preview. A Google category is only a
+// suggestion; no recipient-specific sharing or draft permission is inferred.
+function publicBenefitsPreview(picture,expanded=false){
+ const details=el('details',undefined,'acq-public-benefits-preview');details.dataset.previewCategory=picture.category;details.open=expanded;
+ const img=el('img');img.alt=picture.name+' — preview';img.width=1080;img.height=1350;img.decoding='async';img.loading='lazy';
+ const status=el('p','Preview only. Confirm the saved business category and obtain owner permission before sharing.','footnote');
+ const show=()=>{if(details.open&&!img.hasAttribute('src'))img.src=picture.href;};
+ img.addEventListener('error',()=>{img.hidden=true;status.textContent='Picture preview unavailable. Open the full-size approved artwork.';});
+ details.append(el('summary','Preview: '+picture.name),img,status,assetLink('Open full-size approved artwork',picture.href));
+ details.addEventListener('toggle',show);show();return details;
+}
 function renderBenefitsPicture(picture,revalidate,message){
  const section=el('section',undefined,'acq-benefits-picture');section.dataset.benefitsCategory=picture.category;
  section.append(el('h4',picture.name),el('p','Attach this picture manually after reviewing the recipient and message. No picture or message is sent automatically.','footnote'));
@@ -626,10 +637,10 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   async function openDiscovery(guided=false){
    stopDiscovery();bindDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-admin-continuity-v1');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-national-local-v1');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
-    liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
+    liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,benefitsPreview:p=>publicBenefitsPreview(benefitsPictureFor(suggestedSavedCategory(p))),
      resolveSavedPlaces:async ids=>{
       const matches=new Map();
       for(let i=0;i<ids.length;i+=30){const r=await api('ops_acquisition_place_matches',{placeIds:ids.slice(i,i+30)});if(!Array.isArray(r.matches))throw Error('Saved status unavailable');for(const m of r.matches)matches.set(m.placeId,m.id);}
@@ -652,6 +663,9 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   check(f,'I confirm the province, municipality, town and township for this business.','geographyConfirmed');
   function setManualArea(){const norm=v=>oneLine(v).toLowerCase().replace(/[ -]/g,'');const match=cities.find(c=>norm(c)===norm(newArea)||areas[c].split(' · ').some(a=>norm(a)===norm(newArea)));if(match){cityField.value=match;provinceField.value=match==='Durban'?'KwaZulu-Natal':'Gauteng';}if(newArea)townField.value=newArea;newArea='';}
   const categoryField=choice(f,'Business category','category',['spaza','retail','food','salon','service','wholesale','manufacturer','other']);
+  const categoryArtwork=el('div',undefined,'acq-full');f.append(categoryArtwork);
+  const showCategoryArtwork=category=>categoryArtwork.replaceChildren(publicBenefitsPreview(benefitsPictureFor(category),true));
+  categoryField.addEventListener('change',()=>showCategoryArtwork(categoryField.value));
   const phoneField=input(f,'Business phone or confirmed WhatsApp number (optional)','phone','tel',false,40);
   const numberType=choice(f,'Contact number type','phoneKind',['unconfirmed','whatsapp_only']);numberType.options[0].textContent='Phone / WhatsApp not yet confirmed';numberType.options[1].textContent='WhatsApp only (confirmed; no voice phone)';
   const emailField=input(f,'Business email (optional)','email','email',false,254);
@@ -665,14 +679,15 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    newArea=oneLine(area).slice(0,100);setManualArea();
    independent.disabled=!p;independent.required=!!p;independent.parentElement.hidden=!p;
    listingReference.replaceChildren();listingReference.hidden=!p;
-   if(!p)return;
+   if(!p){showCategoryArtwork(categoryField.value);return;}
+   showCategoryArtwork(suggestedSavedCategory(p));
    sourceField.value='other_permitted';
    listingReference.append(el('strong',p.name||'Selected listing'),el('p',p.address||'No address listed','footnote'),el('p','Live Google reference only. Verify each value using the owner or another permitted independent source before saving. Enter missing or corrected details in the form.','footnote'));
    const site=safeBusinessWebsite(contact?.websiteUrl);const phone=oneLine(contact?.phone);if(phone)listingReference.append(el('p','Public phone: '+phone,'footnote'));if(site)listingReference.append(assetLink('Open business website',site));
    const wa=savedWhatsAppCheck(phone);if(wa)listingReference.append(assetLink('Check WhatsApp',wa));
    const use=button('Use independently confirmed details',()=>{
     if(!independent.checked||!authorised.checked||!sourceRef.value.trim()){message('Record the independent source and check both confirmation boxes first.','info');sourceRef.focus();return;}
-    nameField.value=oneLine(p.name).slice(0,120);addressField.value=oneLine(p.address).slice(0,220);phoneField.value=phone.slice(0,40);websiteField.value=site||'';categoryField.value=suggestedSavedCategory(p);
+    nameField.value=oneLine(p.name).slice(0,120);addressField.value=oneLine(p.address).slice(0,220);phoneField.value=phone.slice(0,40);websiteField.value=site||'';categoryField.value=suggestedSavedCategory(p);showCategoryArtwork(categoryField.value);
     message('Review the source-confirmed details and remove any unconfirmed contact field before saving.','info');
    });listingReference.append(use);
   }
@@ -703,6 +718,8 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
      const form=el('form',undefined,'ops-form'),sender=input(form,'Separate Teyza WhatsApp Business sender','sender','tel',true,40);sender.value=manualSender||p.manualWhatsApp?.[purpose]?.sender||'';sender.placeholder='+27… (not official Meta number)';
      check(form,'I will use this account and the owner agreed to WhatsApp contact.','senderConfirmed');
      const result=el('div',undefined,'acq-manual-result');result.setAttribute('role','status');
+     const prePicture=reviewedBenefitsPicture(p,purpose),preArtwork=prePicture?publicBenefitsPreview(prePicture,true):null;if(preArtwork)box.append(preArtwork);
+     box.append(el('p','Enter the separate Teyza WhatsApp Business sender and confirm the recorded owner permission, then prepare the reviewed message. The number-check link does not prefill marketing text.','footnote'));
      submit(form,'Prepare manual WhatsApp',(d,btn)=>{void(async()=>{
       btn.disabled=true;result.replaceChildren(el('p','Checking live permission, email evidence and contact history…','footnote'));
       try{
@@ -737,8 +754,10 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
         if(!box.isConnected||current?.purpose!==purpose||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');
        };
        const picture=reviewedBenefitsPicture(p,purpose),copyStatus=el('p','','footnote');copyStatus.setAttribute('role','status');
-       const copyMessage=button('Copy reviewed message',async()=>{
-        if(copyMessage.disabled||!box.isConnected)return;copyMessage.disabled=true;let checked=false;
+       if(preArtwork)preArtwork.hidden=true;
+       let copyingMessage=false;
+       async function copyReviewed(download=false){
+        if(copyingMessage||!box.isConnected)return;copyingMessage=true;copyMessage.disabled=true;if(copyAndDownload)copyAndDownload.disabled=true;let checked=false;
         const approvedText=async()=>{await revalidate();checked=true;return new Blob([draft.text],{type:'text/plain'});};
         try{
          if(window.isSecureContext&&navigator.clipboard?.write&&typeof ClipboardItem==='function'){
@@ -748,9 +767,22 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
         }catch(e){
          if(box.isConnected&&checked){preview.focus();preview.select();copyStatus.textContent='Clipboard unavailable. Press Ctrl+C to copy the selected reviewed text, then paste in WhatsApp.';}
          else if(box.isConnected)copyStatus.textContent=e.message||'Permission could not be verified.';
-        }finally{if(box.isConnected)copyMessage.disabled=false;}
-       });
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),el('p','1. Copy the reviewed message if needed. 2. Open WhatsApp Web in a separate tab (recommended) or your existing WhatsApp app. 3. Paste the message if the composer is empty; then copy or attach the matching picture. Return to these results without starting a new search.','footnote'),preview,copyMessage,copyStatus,launch,launchApp,...(picture?[renderBenefitsPicture(picture,revalidate,message)]:[]),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
+        }finally{
+         if(box.isConnected){
+          if(download&&checked&&picture){
+           // The PNG is an approved same-origin asset, not a recipient upload.
+           const link=assetLink('Download approved picture',picture.href,true);link.removeAttribute('target');
+           link.download=picture.href.split('/').at(-1);result.append(link);link.click();link.remove();
+           copyStatus.textContent+=' Attach the downloaded PNG in WhatsApp and paste the reviewed text as its caption.';
+          }
+          copyMessage.disabled=false;if(copyAndDownload)copyAndDownload.disabled=false;
+         }
+         copyingMessage=false;
+        }
+       }
+       const copyMessage=button('Copy reviewed message',()=>copyReviewed());
+       const copyAndDownload=picture?button('Copy message & download picture',()=>copyReviewed(true)):null;
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),el('p','For one message with a picture: choose Copy message & download picture, open WhatsApp Web, attach the downloaded PNG using the paperclip, and paste the text into the picture caption. For text only, open the prefilled link and paste the reviewed text if WhatsApp drops it. Return to the same results without starting a new search.','footnote'),preview,copyMessage,...(copyAndDownload?[copyAndDownload]:[]),copyStatus,launch,launchApp,...(picture?[renderBenefitsPicture(picture,revalidate,message)]:[]),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));

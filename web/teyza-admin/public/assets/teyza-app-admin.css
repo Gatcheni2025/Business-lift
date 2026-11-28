@@ -453,3 +453,12 @@ html.acq-session-paused #workspace,html.acq-session-paused .acq-dialog,html.acq-
 html.acq-session-paused .acq-dialog::backdrop{background:#f3f6f3;backdrop-filter:none}
 html.acq-session-paused body{overflow:hidden}
 
+
+/* Preview the approved public artwork before a reviewed recipient draft. */
+.acq-public-benefits-preview{border:1px solid #dce8e3;border-radius:10px;padding:10px;margin-block:8px;background:#fff;min-width:0}
+.acq-public-benefits-preview[hidden]{display:none!important}
+.acq-public-benefits-preview summary{cursor:pointer;font-weight:700;color:#07545b}
+.acq-public-benefits-preview img{display:block;width:min(100%,260px);height:auto;aspect-ratio:4/5;object-fit:contain;border-radius:8px;margin-block:10px}
+.acq-public-benefits-preview:not([open]) img,.acq-public-benefits-preview img[hidden]{display:none}
+.acq-public-benefits-preview .footnote{overflow-wrap:anywhere}
+

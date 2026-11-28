@@ -149,3 +149,37 @@ test('Fast food, takeaway restaurants and service providers are discoverable as 
   assert(result.entries.every(e=>e.shopCategory==='variety'));
   assert(result.entries.every(e=>e.isTeyzaMerchant===false));
 });
+
+test('Explicit Admin location restriction covers all nine provinces without changing legacy shopper searches',async()=>{
+ const {ADMIN_SCOPE,adminViewport}=require('./places');
+ // Representative city centres for synthetic tests only, not live business records.
+ const centres=[['Eastern Cape',-32.99,27.9],['Free State',-29.12,26.22],['Gauteng',-26.2,28.04],['KwaZulu-Natal',-29.86,31.02],['Limpopo',-23.9,29.45],['Mpumalanga',-25.47,30.98],['Northern Cape',-28.74,24.76],['North West',-25.67,27.24],['Western Cape',-33.93,18.42]];
+ for(const [province,y,x] of centres){
+  for(const [kind,type] of [['spaza','grocery_store'],['variety','restaurant'],['wholesale','wholesaler']]){
+   const calls=[],near=place('near',{displayName:{text:'Synthetic '+type},primaryType:type,types:[type],location:{latitude:y,longitude:x}});
+   const result=await discover({key:'test',lat:y,lon:x,radius:10000,kind,scope:ADMIN_SCOPE,fetchImpl:async(_,opts)=>{
+    const b=JSON.parse(opts.body);calls.push(b);assert(!b.locationBias);assert.deepEqual(b.locationRestriction.rectangle,adminViewport(y,x,10000));assert(!opts.headers['X-Goog-FieldMask'].includes('nationalPhoneNumber'));
+    return json({places:[near,{...near,id:'outside',location:{latitude:y+0.2,longitude:x}}, {...near,id:'no-coordinate',location:undefined}]});
+   }});
+   assert.equal(result.searchScope,ADMIN_SCOPE,province);assert.equal(result.searchRadiusKm,10);
+   assert.deepEqual(result.entries.map(e=>e.id),['google-near'],province+' '+kind);
+   assert.equal(result.diagnostics.queriesAttempted,calls.length);assert(result.diagnostics.outsideRadius>0);assert(result.diagnostics.missingLocationOrClosed>0);
+  }
+ }
+ assert.throws(()=>adminViewport(0,0,10000),/Invalid/);
+ assert.throws(()=>adminViewport(-28,25,0),/Invalid/);
+ const legacy=await discover({key:'test',lat,lon,radius:5000,kind:'spaza',fetchImpl:async(_,opts)=>{
+  const b=JSON.parse(opts.body);assert(b.locationBias.circle);assert(!b.locationRestriction);return json({places:[place('near')]});
+ }});
+ assert.equal(legacy.searchScope,undefined);assert.equal(legacy.diagnostics,undefined);
+});
+test('Admin pagination keeps its exact rectangle and reports partial and empty results distinctly',async()=>{
+ const {ADMIN_SCOPE}=require('./places'),calls=[];
+ const r=await discover({key:'test',lat,lon,radius:5000,kind:'spaza',scope:ADMIN_SCOPE,fetchImpl:async(_,opts)=>{
+  const b=JSON.parse(opts.body);calls.push(b);
+  if(b.textQuery==='tuck shop')return new Response('',{status:503});
+  return json({places:[],...(!b.pageToken?{nextPageToken:b.textQuery+'-next'}:{})});
+ }});
+ assert.equal(calls.length,8);assert.equal(r.entries.length,0);assert.equal(r.diagnostics.providerRows,0);assert.equal(r.diagnostics.queriesFailed,1);assert(r.warning);
+ for(const b of calls.filter(b=>b.pageToken)){const {pageToken,...rest}=b;assert.deepEqual(rest,calls.find(c=>c.textQuery===b.textQuery&&!c.pageToken));}
+});
