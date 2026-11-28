@@ -24,14 +24,16 @@ class RoutingShop extends SellerFirestore {
 }
 class RoutingApi extends TeyzaMobileApi {
   final bool shopper,agent;
+  final String? invitedStatus;
   bool fail=false;
-  RoutingApi(super.session,{this.shopper=false,this.agent=false});
+  RoutingApi(super.session,{this.shopper=false,this.agent=false,this.invitedStatus});
   @override Future<Map<String,dynamic>> call(String action,[Map<String,dynamic> data=const {}]) async {
     if(action=='shopper_profile_read'){
       if(fail)throw StateError('Offline');
       return {'profile':shopper?{'ownerUid':session.userId}:null};
     }
-    if(action=='agent_profile')return {'profile':agent?{'uid':session.userId,'status':'approved'}:null};
+    if(action=='agent_access_status')return {'status':invitedStatus};
+    if(action=='agent_profile')return {'profile':agent?{'uid':session.userId,'status':'approved'}:invitedStatus!=null?{'uid':session.userId,'status':invitedStatus}:null};
     return {'ok':true,'settings':{},'photos':[],'notifications':[],'orders':[],
       'credit':[],'scope':'owner','threads':[]};
   }
@@ -47,6 +49,26 @@ Future<void> start(WidgetTester t,RoutingSession session,RoutingApi api,
   await t.pumpAndSettle();
 }
 void main(){
+  testWidgets('Unverified invited agent sees verification instead of shopper registration',(t)async{
+    final session=RoutingSession()..emailVerified=false..email='agent@example.test';
+    final api=RoutingApi(session,invitedStatus:'pending');
+    await start(t,session,api);
+    await t.tap(find.byKey(const ValueKey('nav-account')));await t.pumpAndSettle();
+    expect(find.text('Verify your account email'),findsOneWidget);
+    expect(find.text('Send verification email'),findsOneWidget);
+    expect(find.text('Finish registration'),findsNothing);
+    expect(find.byKey(const ValueKey('agent-dashboard')),findsNothing);
+    await t.pumpWidget(const SizedBox.shrink());session.dispose();
+  });
+  testWidgets('Verified pending agent does not receive work access or need duplicate registration',(t)async{
+    final session=RoutingSession(),api=RoutingApi(session,invitedStatus:'pending');
+    await start(t,session,api);
+    await t.tap(find.byKey(const ValueKey('nav-account')));await t.pumpAndSettle();
+    expect(find.text('Awaiting agent approval'),findsOneWidget);
+    expect(find.text('Finish registration'),findsNothing);
+    expect(find.byKey(const ValueKey('agent-dashboard')),findsNothing);
+    await t.pumpWidget(const SizedBox.shrink());session.dispose();
+  });
   for(final type in ['spaza','retail','wholesale']){
     testWidgets('Existing $type account launches to home and opens only after explicit role switch',(t)async{
       final session=RoutingSession(),api=RoutingApi(RoutingSession());

@@ -8,9 +8,9 @@ const {recentAdmin}=require('./seller-experience');
 // accept role claims, passwords, or email verification status from the client.
 const actions=new Set([
  'ops_users','ops_user_detail','ops_user_create',
- 'ops_user_invite','ops_user_set_disabled',
+ 'ops_user_invite','ops_user_set_disabled','ops_agent_user_provision',
 ]);
-function clean(user,registration=null){
+function clean(user,registration=null,agent=null){
  return {
   uid:user.uid,email:user.email||'',displayName:user.displayName||'',
   phone:user.phoneNumber||'',disabled:user.disabled===true,
@@ -19,6 +19,7 @@ function clean(user,registration=null){
   providers:(user.providerData||[]).map(p=>p.providerId).filter(Boolean),
   createdAt:user.metadata?.creationTime||'',
   registeredRole:registration?.requestedRole||null,
+  agentStatus:agent?.uid===user.uid?agent.status||null:null,
   invitationStatus:registration?.invitationStatus||null,
  };
 }
@@ -46,27 +47,28 @@ function createAdminUsers({db,clock=Date.now,rate,
    const pageToken=data.after?D.text(data.after,'user page token',2048):undefined;
    const page=await requireSupport(listAuthUsers)(30,pageToken);
    const rows=await Promise.all((page.users||[]).map(async user=>{
-     const record=await doc('teyzaAdminProvisionedUsers/'+user.uid).get();
-     return clean(user,record.exists?record.data():null);
+     const [record,agent]=await Promise.all([doc('teyzaAdminProvisionedUsers/'+user.uid).get(),doc('teyzaFieldAgents/'+user.uid).get()]);
+     return clean(user,record.exists?record.data():null,agent.exists?agent.data():null);
    }));
    return {users:rows,next:page.pageToken||null};
   }
   if(action==='ops_user_detail'){
    const target=D.id(data.userUid),user=await requireSupport(getAuthUser)(target);
-   const [provision,seller,verification,onboarding,shop,billing]=await Promise.all([
+   const [provision,seller,verification,onboarding,shop,billing,agent]=await Promise.all([
      doc('teyzaAdminProvisionedUsers/'+target).get(),
      doc('teyzaSellerAccounts/'+target).get(),
      doc('teyzaMobileVerification/'+target).get(),
      doc('teyzaSellerOnboarding/'+target).get(),
      doc('teyzaPublicShops/'+target).get(),
-     doc('teyzaBilling/'+target).get()
+     doc('teyzaBilling/'+target).get(),
+     doc('teyzaFieldAgents/'+target).get()
    ]);
    const account=seller.exists?seller.data():null;
    const selfie=verification.exists?verification.data():null;
    const bill=billing.exists?billing.data():null;
    const publication=account?P.state(target,account,onboarding.exists?onboarding.data():{},
      selfie,shop.exists?shop.data():null,bill,clock()):null;
-   return {user:clean(user,provision.exists?provision.data():null),
+   return {user:clean(user,provision.exists?provision.data():null,agent.exists?agent.data():null),
      seller:account?{
        shopName:account.shopName||'',
        category:account.category||'',
@@ -78,6 +80,60 @@ function createAdminUsers({db,clock=Date.now,rate,
        membershipPaid:P.entitled(target,account,bill,clock()),
        complimentaryAccess:P.complimentary(target,account,bill,clock()),
      }:null};
+  }
+  if(action==='ops_agent_user_provision'){
+   // Create a login and a pending application; never grant an administrative
+   // claim, set email verification, attach a seller, approve work, or set a
+   // caller-supplied password. Existing accounts are explicitly linked by UID.
+   if(data.confirmed!==true)D.fail(422,'Confirm the agent requested this account and provided their details.');
+   const address=email(data.email),name=D.text(data.displayName,'full name',120);
+   const phone=require('./onboarding').phone(data.phone),area=D.text(data.area,'working town or area',120);
+   const province=data.province,mode=data.mode;
+   if(!['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'].includes(province))
+    D.fail(422,'Choose a South African province.');
+   if(!['new','existing'].includes(mode))D.fail(422,'Choose new login or link an existing Teyza account.');
+   await rate(uid,'admin-agent-provision',5,86400000);
+   let user=null;
+   try{user=await requireSupport(getAuthUserByEmail)(address);}
+   catch(e){if(e.code!=='auth/user-not-found')throw e;}
+   if(mode==='new'&&user)D.fail(409,'This email already has a Teyza account. Choose Link existing account only after confirming ownership.');
+   if(mode==='existing'&&!user)D.fail(404,'No existing account was found. Choose Create new login.');
+   if(!user){
+    try{user=await requireSupport(createAuthUser)({email:address,displayName:name,emailVerified:false,password:crypto.randomBytes(42).toString('base64url'),disabled:false});}
+    catch(e){if(e.code==='auth/email-already-exists')D.fail(409,'This email now has a Teyza account. Refresh before continuing.');throw e;}
+   }
+   const target=D.id(user.uid);
+   if(target===uid||user.disabled===true||user.customClaims?.teyzaAdmin===true||user.customClaims?.teyzaSupportAgent===true||user.customClaims?.teyzaPhoneBootstrap===true)
+    D.fail(403,'Administrator, support-only, disabled and temporary accounts cannot be provisioned here.');
+   if(String(user.email||'').toLowerCase()!==address)D.fail(409,'The account email changed. Refresh and confirm the correct identity.');
+   const profileRef=doc('teyzaFieldAgents/'+target),registration=doc('teyzaAdminProvisionedUsers/'+target);
+   const profile={uid:target,name,phone,email:address,address:'',province,area,status:'pending',revision:0,reviewNote:'',
+    registrationSource:'admin_invited',provisionedBy:uid,provisionedAt:clock(),createdAt:clock()};
+   try{
+    await db.runTransaction(async tx=>{
+     const [old,registered,closure]=await Promise.all([tx.get(profileRef),tx.get(registration),tx.get(doc('teyzaAccountDeletionRequests/'+target))]);
+     if(old.exists)D.fail(409,'An agent profile already exists for this login. Review the existing application instead.');
+     if(closure.exists&&closure.data()?.status!=='completed')D.fail(409,'This account has a pending deletion request.');
+     if(registered.exists&&registered.data()?.ownerUid!==target)D.fail(409,'Account ownership changed.');
+     tx.set(profileRef,profile);
+     if(!registered.exists)tx.set(registration,{ownerUid:target,email:address,displayName:name,requestedRole:'agent',invitedBy:uid,createdAt:clock(),invitationStatus:mode==='new'?'pending':'existing_account'});
+     tx.set(doc('teyzaAdminUserAudit/'+crypto.randomUUID()),{actorUid:uid,action,target,details:{mode,requestedRole:'agent'},createdAt:clock()});
+    });
+   }catch(e){
+    if(e.status)throw e;
+    D.fail(503,'Agent profile not confirmed. No setup email was sent. Check the existing email/account and agent directory before retrying.');
+   }
+   // Existing identities retain their original login provider and credentials.
+   // No unsolicited reset email is sent when linking an existing account.
+   let invitationStatus=mode==='new'?'pending':'existing_account';
+   if(mode==='new'){
+    try{await requireSupport(sendPasswordResetEmail)(address);invitationStatus='sent';}
+    catch(_){invitationStatus='failed';}
+    try{await registration.update({invitationStatus,updatedAt:clock(),...(invitationStatus==='sent'?{invitationSentAt:clock()}: {})});
+     await log(actor,'ops_user_invite',target,{sent:invitationStatus==='sent'});}
+    catch(_){invitationStatus='review_required';}
+   }
+   return {created:true,mode,inviteSent:invitationStatus==='sent',invitationStatus,profile:{uid:target,name,phone,email:address,address:'',province,area,status:'pending',revision:0,reviewNote:'',hasDocuments:false,registrationSource:'admin_invited',createdAt:profile.createdAt}};
   }
   if(action==='ops_user_create'){
    const address=email(data.email);

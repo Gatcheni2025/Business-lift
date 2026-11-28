@@ -1,6 +1,6 @@
 import {createAdminMap} from '/js/teyza-admin-map.mjs';
 import {createAcquisitionAdmin} from '/js/teyza-business-acquisition.js?v=20261128-national-local-v1';
-import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261126-rewards';
+import {createFieldAdmin} from '/js/teyza-field-admin.js?v=20261128-agent-credentials';
 import {photoBlob} from '/js/teyza-app-admin-model.mjs?v=20261127-idle-area';
 import {downloadMandateRequestPdf} from '/js/teyza-mandate-pdf.mjs';
 import {money,cents,statementRows} from '/js/teyza-operations-model.mjs?v=R323';
@@ -680,6 +680,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
  }
  function userManagement(){
   root.append(el('p','Create shoppers or sellers using a private Firebase account setup email. Newly invited sellers still must verify their phone, upload documents and pass the normal administrator review. Administrator privileges are granted separately by the project owner.','footnote'));
+  root.append(button('Create Field Agent credentials in HR',()=>navigate('field'),'primary'));
   const create=card('Add a user','The user chooses their own password from an email link; Teyza never displays or stores it in this admin screen.'),
     form=el('form',undefined,'ops-form');
   field(form,'Full name','displayName','text');
@@ -708,7 +709,7 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       [u.email,u.displayName,u.uid].join(' ').toLowerCase().includes(q)).map(u=>[
         (u.displayName||'Anonymous shopper')+' · '+(u.email||'No email')+' · '+u.uid,
         tag(u.verified?'Email verified':'Not verified'),
-        tag(u.admin?'Administrator':u.disabled?'Suspended':'Active'),
+        tag(u.admin?'Administrator':u.disabled?'Suspended':u.agentStatus?'Agent · '+u.agentStatus:'Active'),
         button('View user',()=>chooseUser(u))])));
   }
   search.oninput=draw;directory.append(search,list);draw();
@@ -728,7 +729,8 @@ export function createOperations({api,onError,getReviewSummary=()=>({loaded:fals
       ' · Account: '+(user.disabled?'suspended':'active')+
       ' · Authentication: '+(user.providers.length?user.providers.join(', '):'email / anonymous')),
     el('p',seller?'Seller: '+seller.shopName+' · '+seller.category+' · Account approval: '+seller.approvalStatus:
-      'Shopper / no registered seller profile'),
+      'No registered seller profile'),
+    el('p',user.agentStatus?'Field Agent: '+user.agentStatus:'No Field Agent profile'),
     el('p',user.invitationStatus?
       'Invitation: '+user.invitationStatus:'Account invitation not created through admin.'));
   if(seller){

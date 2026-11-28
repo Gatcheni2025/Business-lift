@@ -480,6 +480,35 @@ async function main(){
     assert(f.calls.some(x=>x.action==='verification_read'&&x.data.submissionId==='selfie1'));
     await f.context.close();
   });
+  await check('HR provisions agent credentials without approval and exposes pending profile and requested resend',async()=>{
+   const f=await pageFor({api:async(route,body)=>{
+    if(body.action!=='ops_agent_user_provision')return false;
+    await route.fulfill({json:{ok:true,created:true,mode:body.data.mode,inviteSent:true,invitationStatus:'sent',profile:{uid:'invitedAgent1',name:body.data.displayName,email:body.data.email,phone:body.data.phone,area:body.data.area,province:body.data.province,status:'pending',revision:0,hasDocuments:false,registrationSource:'admin_invited'}}});
+    return true;
+   }});
+   await f.page.getByRole('button',{name:'Users & access',exact:true}).click();
+   await f.page.getByRole('button',{name:'Create Field Agent credentials in HR',exact:true}).click();
+   await f.page.getByRole('heading',{name:'Create or link agent login'}).waitFor();
+   const form=f.page.getByRole('button',{name:'Create pending agent account'}).locator('xpath=..');
+   await form.getByLabel('Full name',{exact:true}).fill('Synthetic New Field Agent');
+   await form.getByLabel('Agent email address',{exact:true}).fill('new-agent@example.test');
+   await form.getByLabel('Mobile number',{exact:true}).fill('0710000000');
+   await form.getByLabel('Province',{exact:true}).selectOption('Gauteng');
+   await form.getByLabel('Town / assigned operating area',{exact:true}).fill('Soweto');
+   await form.locator('input[type=checkbox]').check();
+   await form.getByRole('button',{name:'Create pending agent account'}).click();
+   const profile=f.page.locator('[data-field-agent-uid="invitedAgent1"]');
+   await profile.getByText('Status: pending',{exact:false}).waitFor();
+   assert.equal(await profile.getByRole('button',{name:'Upload ID / passport & CV'}).count(),1);
+   assert.equal(f.calls.filter(c=>c.action==='ops_agent_user_provision').length,1);
+   const data=f.calls.find(c=>c.action==='ops_agent_user_provision').data;
+   assert.deepEqual(data,{mode:'new',displayName:'Synthetic New Field Agent',email:'new-agent@example.test',phone:'0710000000',province:'Gauteng',area:'Soweto',confirmed:true});
+   assert(!f.calls.some(c=>c.action==='agent_admin_profile_decide'||c.action==='ops_user_create'));
+   await profile.getByRole('button',{name:'Send password setup email',exact:true}).click();
+   await f.page.getByText('Firebase accepted the setup email request.',{exact:false}).waitFor();
+   assert(f.calls.some(c=>c.action==='ops_user_invite'&&c.data.userUid==='invitedAgent1'));
+   assert.deepEqual(f.errors,[]);await f.context.close();
+  });
   await check('HR navigation stays in admin with document review, area management and signups',async()=>{
    const f=await pageFor();await f.page.getByRole('button',{name:'Agents & field team',exact:true}).click();
    await f.page.getByRole('heading',{name:'People, applications and neighbourhood coverage'}).waitFor();

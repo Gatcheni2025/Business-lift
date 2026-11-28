@@ -306,7 +306,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
     super.dispose();
   }
 
-  // Legacy email/password is supported for SIGN IN only. New shoppers and
+  // Admin-invited agents and existing accounts use email/password sign-in only. New shoppers and
   // sellers create Firebase accounts through social identity providers.
   Future<void> submit() async {
     if (registering) return;
@@ -1197,7 +1197,7 @@ class ShopperAccountPanelState extends State<ShopperAccountPanel> {
                                             size: 17),
                                         label: Text(showLegacyEmail
                                             ? 'Hide existing email sign-in'
-                                            : 'Already registered with email?')),
+                                            : 'Agent or existing email sign-in')),
                                   if (!registering && showLegacyEmail)
                                     TextButton(
                                         onPressed: working ? null : reset,
