@@ -274,7 +274,7 @@ async function main(){
           footerBottom:footer.bottom,buttonBottom:btn.bottom,layoutBottom:outer.bottom,
           footerVisible:getComputedStyle(composer).display!=='none'&&btn.height>=40};
       });
-      assert(m.scrollHeight>m.clientHeight+100,'Message history must have its own scrollbar');
+      assert(m.scrollHeight>m.clientHeight+100,'Message history must have its own scrollbar: '+JSON.stringify(m));
       assert(m.footerVisible,'Send WhatsApp reply button must remain visible');
       assert(m.footerBottom<=m.layoutBottom+3,'Reply composer must stay inside the chat panel');
       assert(m.buttonBottom<=m.layoutBottom+3,'Send button must not be pushed below the chat panel');
@@ -283,21 +283,38 @@ async function main(){
     await test.page.screenshot({path:path.join(output,'admin-support-desktop.png'),fullPage:true});
     // A message refresh must preserve the agent's position when reading history.
     await test.page.locator('.ops-chat-messages').evaluate(el=>{el.scrollTop=0;});
+    const oldHistory=await test.page.locator('.ops-chat-messages').elementHandle();
     const refreshed=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_support_thread');
     await test.page.getByRole('button',{name:'Reload messages'}).click();
     await refreshed;
+    // The response can arrive before show() replaces the thread; assert on the new DOM.
+    await test.page.waitForFunction(el=>!el.isConnected,oldHistory);
     await test.page.locator('.ops-chat-bubble').first().waitFor();
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),41);
     assert((await test.page.locator('.ops-chat-messages').evaluate(el=>el.scrollTop))<=5,
       'Refreshing a conversation must not jump an agent away from earlier messages');
     await test.page.locator('.ops-chat-composer textarea').fill('Hello! Registration is free; we can guide you.');
+    const oldComposer=await test.page.locator('.ops-chat-composer').elementHandle();
     const saved=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
       response.request().postDataJSON()?.action==='ops_support_reply');
+    const reloaded=test.page.waitForResponse(response=>response.url().includes('/teyzaMobile')&&
+      response.request().postDataJSON()?.action==='ops_support_thread');
     await test.page.getByRole('button',{name:'Send WhatsApp reply'}).click();
     await saved;
+    await reloaded;
+    // Wait for the actual reply refresh and composer replacement before resizing.
+    await test.page.waitForFunction(el=>!el.isConnected,oldComposer);
+    assert.equal(await test.page.locator('.ops-chat-composer textarea').inputValue(),'');
+    assert.equal(await test.page.locator('.ops-chat-bubble').count(),41);
     assert(test.calls.some(x=>x.action==='ops_support_reply'&&
       x.data.ticketId==='seller_demoSeller1'&&x.data.message.includes('Registration is free')));
     await test.page.setViewportSize({width:393,height:852});
+    await test.page.waitForFunction(()=>{
+      const layout=document.querySelector('.ops-chat-layout');
+      return innerWidth===393&&matchMedia('(max-width:680px)').matches&&layout&&getComputedStyle(layout).flexDirection==='column';
+    });
+    await test.page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     await layoutTest();
     assert(await test.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await test.page.screenshot({path:path.join(output,'admin-support-phone.png'),fullPage:true});
