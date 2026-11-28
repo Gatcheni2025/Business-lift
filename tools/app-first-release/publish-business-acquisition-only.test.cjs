@@ -55,11 +55,20 @@ test('Approved asset registry uses existing website artwork, official store dest
  const root=path.resolve(__dirname,'../../web/app-first/public');
  const src=fs.readFileSync(path.resolve(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
  const {acquisitionAssets,acquisitionVideoSlots,isPublishedVideo}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const adminRoot=path.resolve(__dirname,'../../web/teyza-admin/public');
+ const approved=require('./whatsapp-benefits-manifest.json').assets;
+ const art=new Map(approved.map(a=>[a.path,a]));
+ const originalImages=['/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/wordmark.svg','/assets/app/icon.svg'];
+ assert.equal(art.size,8);
+ assert.deepEqual(acquisitionAssets.filter(a=>a.kind==='image').map(a=>a.href).sort(),[...originalImages,...art.keys()].sort());
  for(const a of acquisitionAssets){
-  if(a.href.startsWith('/'))assert(fs.existsSync(path.join(root,a.href.split('#')[0])),a.href);
-  else assert(['https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733'].includes(a.href));
+  if(a.href.startsWith('/')){
+   const entry=art.get(a.href);
+   const file=path.join(entry?adminRoot:root,a.href.split('#')[0]);
+   assert(fs.existsSync(file),a.href);
+   if(entry)require('./publish-admin-whatsapp-benefits-only.cjs').verifyArtwork(fs.readFileSync(file),entry);
+  }else assert(['https://play.google.com/store/apps/details?id=com.asiyedriver.asiye','https://apps.apple.com/za/app/id6827037733'].includes(a.href));
  }
- assert.equal(acquisitionAssets.filter(a=>a.kind==='image').length,5);
  assert.deepEqual(acquisitionVideoSlots.map(a=>a.href),['/assets/app/teyza-business-explainer.mp4','/assets/app/teyza-business-intro.mp4']);
  const response=(type,length,ok=true,redirected=false)=>({ok,redirected,headers:new Headers({'content-type':type,'content-length':length})});
  assert(isPublishedVideo(response('video/mp4','100')));

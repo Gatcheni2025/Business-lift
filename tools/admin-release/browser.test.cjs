@@ -816,7 +816,11 @@ async function main(){
    assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
    await f.page.getByRole('button',{name:'Artwork & training resources'}).click();
    await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
-   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   const originalArtLinks=f.page.getByRole('link',{name:'View original artwork',exact:true});
+   const approvedArt=require('../app-first-release/whatsapp-benefits-manifest.json').assets.map(a=>a.path);
+   const previousArt=['/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/wordmark.svg','/assets/app/icon.svg'];
+   assert.equal(await originalArtLinks.count(),13);
+   assert.deepEqual((await originalArtLinks.evaluateAll(links=>links.map(link=>link.getAttribute('href')))).sort(),[...previousArt,...approvedArt].sort());
    assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
    await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
    await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
