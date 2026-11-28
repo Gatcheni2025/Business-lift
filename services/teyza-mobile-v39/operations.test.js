@@ -942,3 +942,18 @@ test('Email reminders reject queued and uncertain Zoho records; accepted email p
   else await rejects(f.call('ops_acquisition_manual_whatsapp',request),409);
  }
 });
+
+test('Reviewer-filtered national totals and work queues use exact assigned UID across pages',async()=>{
+ const f=setup(),S=require('./acquisition-summary'),R=require('./acquisition-report'),root='teyzaBusinessProspects/';
+ const base={name:'Synthetic',city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',area:'Umlazi',category:'spaza',email:'synthetic@example.test',phone:'',stage:'identified',historyVersion:1,permissions:{email:{granted:true}},revision:0};
+ for(let i=0;i<67;i++)f.db.records.set(root+'review'+String(i).padStart(3,'0'),{...base,assignedTo:i%2===0?'reviewerA':'reviewerB',...(i===0?{email:''}:{})});
+ assert.equal(S.scopeFor(R.parseFilters({assignedTo:'reviewerA'})),null);
+ assert.throws(()=>R.parseFilters({assignedTo:'bad uid'}),e=>e.status===422);
+ let after=null,asOf=null,matched=0,ready=0,ids=[];
+ do{
+  const page=await f.call('ops_acquisition_command_page',{preferSummary:true,filters:{province:'KwaZulu-Natal',assignedTo:'reviewerA',queue:'new_contact'},...(after?{after,asOf}:{})});
+  assert.equal(page.schema,2);assert.equal(page.filters.assignedTo,'reviewerA');assert(page.prospects.every(p=>p.assignedTo==='reviewerA'));
+  matched+=page.counts.funnel.discovered;ready+=page.counts.queues.new_contact;ids.push(...page.prospects.map(p=>p.id));after=page.next;asOf=page.asOf;
+ }while(after);
+ assert.equal(matched,34);assert.equal(ready,33);assert.equal(new Set(ids).size,33);assert(!ids.includes('review000'));
+});

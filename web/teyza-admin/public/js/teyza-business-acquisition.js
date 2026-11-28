@@ -29,6 +29,15 @@ export function whatsappInvitationDraft(p){
  const name=oneLine(p.name).slice(0,120)||'Business',area=oneLine(p.area||p.city).slice(0,120)||'your area';
  return ['Hi '+name+' team! 👋','We came across your business while exploring '+area+', and we’d love to help more local customers discover you.','With Teyza, you can showcase your business, products or services and make it easier for customers to find you.','Getting started is FREE — there is no charge to register and verify your business. Optional selling and promotional features are available.','📲 Download Teyza for free:\nAndroid (Google Play): https://play.google.com/store/apps/details?id=com.asiyedriver.asiye\niPhone (App Store): https://apps.apple.com/za/app/id6827037733','Need help getting started? Simply reply to this message and our team will guide you.','Let’s grow local businesses together!','Teyza Business Onboarding Team','Reply STOP if you prefer not to receive further marketing messages.'].join('\n\n');
 }
+// The message comes from the authenticated, server-reviewed draft, never
+// from a Google listing or from a cached report. Encode exactly once.
+export function verifiedWhatsappLinks(recipient,text){
+ const base=savedWhatsAppCheck(recipient);
+ if(!base||typeof text!=='string'||!text.trim()||text.length>8000)throw Error('Invalid reviewed WhatsApp draft.');
+ const app=new URL(base);app.searchParams.set('text',text);
+ const web=new URL('https://web.whatsapp.com/send');web.searchParams.set('phone',app.pathname.slice(1));web.searchParams.set('text',text);
+ return {app:app.href,web:web.href};
+}
 export function manualWhatsappDraftUrl(p){
  const wa=savedWhatsAppCheck(p?.phone);
  if(!wa||p.optedOut||priorInvitation(p)||p.lastWhatsAppContactAt||p.permissions?.whatsapp?.granted!==true)return null;
@@ -236,7 +245,7 @@ export const NATIONAL_QUEUES=Object.freeze([
  ['new_contact','New contacts'],['ready_to_contact','Contact today — permission recorded'],['permission_needed','Contact permission needed'],['field_visit','No phone or email — field visits'],['awaiting_response','Awaiting owner response'],['registration_help','Download / registration assistance'],['pending_approval','Submitted for approval review'],['advertising_opportunity','Advertising opportunities'],['seller_opportunity','Seller subscription opportunities'],['follow_up_due','Follow-ups due today'],['geography_review','Geography needs review'],['history_review','Historical outreach needs review'],['message_review','Message / advertising reconciliation'],['blocked','Do not contact'],
  ['contactable','Contact details available'],['contacted','Contact recorded / provider accepted'],['responded','Owner responded'],['downloaded','Owner-confirmed downloads'],['registered','Linked registrations'],['approved','Approved businesses'],['paid_seller','Verified paid sellers'],['active_advertiser','Verified active paid advertisers'],['paying','Unique paying businesses']
 ]);
-const FILTER_KEYS=['province','category','queue','municipality','township','municipalityCode','localityId','search'];
+const FILTER_KEYS=['province','category','queue','municipality','township','municipalityCode','localityId','search','assignedTo'];
 const normalizedFilters=value=>Object.fromEntries(FILTER_KEYS.map(k=>[k,String(value?.[k]||'').trim()]));
 export function emptyCommandReport(){return {asOf:null,scanned:0,counts:{funnel:Object.fromEntries(NATIONAL_FUNNEL.map(([k])=>[k,0])),queues:Object.fromEntries(NATIONAL_QUEUES.map(([k])=>[k,0]))},next:null,complete:false};}
 export function mergeCommandPage(previous,page,filters,{after=null,includeRows=true}={}){
@@ -270,6 +279,20 @@ export function validateSummaryPage(page,filters,previous=null){
  if(f.discovered!==page.scanned||f.payingBusinesses>f.approved||f.paidSellers>f.payingBusinesses||f.activeAdvertisers>f.payingBusinesses||f.activePaidCampaigns<f.activeAdvertisers||f.awaitingApproval>f.registered||f.approved>f.registered)fail();
  if(previous&&(previous.summaryGeneration!==page.summaryGeneration||previous.asOf!==page.asOf||JSON.stringify(previous.counts)!==JSON.stringify(page.counts)))fail();
  return page;
+}
+// A complete point-in-time report has overlapping seller/advertiser counts.
+// The union is authoritative; do not add both categories as separate businesses.
+export function commercialSnapshot(report){
+ if(report?.complete!==true)return null;
+ const f=report.counts?.funnel;
+ const keys=['discovered','contacted','responded','downloads','registered','approved','paidSellers','activeAdvertisers','payingBusinesses','sellingAccessNotPaid','activePaidCampaigns'];
+ if(!keys.every(k=>Number.isSafeInteger(f?.[k])&&f[k]>=0))return null;
+ if(keys.some(k=>k!=='activePaidCampaigns'&&f[k]>f.discovered)||f.approved>f.registered||f.payingBusinesses>f.approved||f.paidSellers>f.payingBusinesses||f.activeAdvertisers>f.payingBusinesses||f.activePaidCampaigns<f.activeAdvertisers)return null;
+ const both=f.paidSellers+f.activeAdvertisers-f.payingBusinesses;
+ if(!Number.isSafeInteger(both)||both<0||both>Math.min(f.paidSellers,f.activeAdvertisers))return null;
+ const pct=(n,d)=>d?Math.round(n/d*1000)/10:null;
+ return {both,sellerOnly:f.paidSellers-both,advertisingOnly:f.activeAdvertisers-both,approvedNotPaying:f.approved-f.payingBusinesses,
+  payingShare:pct(f.payingBusinesses,f.approved),approvalShare:pct(f.approved,f.registered),registrationShare:pct(f.registered,f.discovered),contactShare:pct(f.contacted,f.discovered)};
 }
 export function createAcquisitionAdmin({api:request,onError,message,openSupport}){
  let active=false,serial=0,records=[],next=null,selected=null,detail=null,city='all',businessTypeFilter='all',query='',statusFilter='all',busy=false,registered=[],registeredNext=null,registeredLoaded=false,modal=null,communications={},lookupQuery='',lookupChannel='contactable',lookupReady=false,lookupSelection=null,focusMessage=null,liveDiscovery=null,discoveryEpoch=0,newArea='';
@@ -343,6 +366,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   options('Filter business type','category',[['','All business types'],...['spaza','retail','food','salon','service','wholesale','manufacturer','other'].map(c=>[c,title(c)])]);
   const mc=input(form,'Official municipality code (optional)','municipalityCode','text',false,12),lc=input(form,'Official locality reference (optional)','localityId','text',false,30),search=input(form,'Search saved businesses','search','search',false,120);
   mc.value=commandFilters.municipalityCode;lc.value=commandFilters.localityId;search.value=commandFilters.search;
+  const reviewer=input(form,'Assigned reviewer UID (exact)','assignedTo','text',false,128);reviewer.value=commandFilters.assignedTo;reviewer.placeholder='All reviewers';reviewer.pattern='[A-Za-z0-9_\\-]{1,128}';
   const advanced=el('details',undefined,'acq-secondary acq-advanced-filters');advanced.append(el('summary','Advanced geographic references'),mc.parentElement,lc.parentElement);form.append(advanced);
   const queue=options('Filter work queue','queue',[['','All matched prospects'],...NATIONAL_QUEUES]);
   submit(form,'Apply national filters',d=>scanCommand(d));panel.append(form);
@@ -350,8 +374,12 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const controls=el('div',undefined,'acq-action-bar'),refreshButton=button('Refresh complete report',()=>scanCommand(commandFilters,false,true)),resumeButton=button('Continue incomplete report',()=>scanCommand(commandFilters,true));controls.append(refreshButton,resumeButton);
   const metrics=el('div',undefined,'field-admin-metrics acq-national-metrics'),queues=el('div',undefined,'acq-national-queues'),rows=el('div',undefined,'acq-national-rows'),more=button('Load more matching records',()=>moreCommandRows());
   const insights=el('details',undefined,'acq-secondary'),otherMetrics=el('div',undefined,'field-admin-metrics acq-national-metrics');
+  const conversion=el('section',undefined,'acq-commercial-summary'),mix=el('div',undefined,'acq-commercial-grid'),rates=el('div',undefined,'acq-commercial-grid'),priorities=el('div',undefined,'acq-priority-queues');
+  conversion.append(el('h3','Commercial conversion'),el('p','Current verified status of saved Teyza prospects. These are business counts, not monthly cash receipts or a historical cohort funnel.','footnote'),mix,rates,el('p','A business paying for both products is counted once in unique paying businesses. Complimentary access is not a verified payment.','footnote'));
+  const daily=el('section',undefined,'acq-commercial-summary');daily.append(el('h3','Today’s priorities'),priorities);
+  const scopeNote=el('p','','footnote');
   insights.append(el('summary','More conversion and revenue insights'),otherMetrics,el('p','Provider acceptance is not delivery. Downloads are owner-confirmed. Verified payments are distinct from complimentary selling access.','footnote'));
-  panel.prepend(metrics);panel.append(progress,controls,insights,el('h3','Matching business records'),rows,more);
+  panel.append(scopeNote,progress,controls,el('h3','Business conversion at a glance'),metrics,conversion,daily,insights,el('h3','Matching business records'),rows,more);
   workPanel.append(el('p','Choose a task to open matching records. Counts require a complete snapshot.','footnote'),queues);
   function chooseQueue(key){queue.value=key;closeWork();void scanCommand(Object.fromEntries(new FormData(form)));}
   function paint(){
@@ -359,9 +387,28 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
    progress.textContent=complete?(state.summary?'Reconciled reporting summary · as of '+time(report.asOf)+' · '+report.scanned+' records. Open live records before acting.':'Complete snapshot · '+time(report.asOf)+' · '+report.scanned+' records inspected across all pages.'):state.status==='loading'?'Calculating complete totals — '+report.scanned+' records inspected. Totals are not available yet.':state.status==='stale'?'Records changed. Refresh the complete report before using totals.':state.status==='incomplete'?'Report incomplete — no totals are available. '+state.error:'Complete national totals have not been loaded.';
    if(complete&&state.error)progress.textContent+=' · '+state.error;
    refreshButton.disabled=state.status==='loading'||state.listBusy;resumeButton.hidden=state.status!=='incomplete'||!report.next;resumeButton.disabled=state.status==='loading';
-   metrics.replaceChildren();otherMetrics.replaceChildren();queues.replaceChildren();rows.replaceChildren();
+   metrics.replaceChildren();otherMetrics.replaceChildren();queues.replaceChildren();rows.replaceChildren();mix.replaceChildren();rates.replaceChildren();priorities.replaceChildren();
+   const selectedScope=[commandFilters.province,commandFilters.municipality||commandFilters.municipalityCode,commandFilters.township||commandFilters.localityId,commandFilters.category&&title(commandFilters.category),commandFilters.assignedTo&&'Reviewer '+commandFilters.assignedTo,commandFilters.search&&'Search: '+commandFilters.search].filter(Boolean);
+   scopeNote.textContent='Report scope: '+(selectedScope.join(' · ')||'All South Africa · all business types · all reviewers')+'. The selected work queue filters matching rows, not the scope totals.';
+   const snapshot=complete?commercialSnapshot(report):null;
+   function commercialTile(host,key,label,value,detail=''){
+    const tile=el('div',undefined,'acq-commercial-tile');tile.dataset.commercial=key;tile.append(el('small',label),el('strong',value===null||value===undefined?'—':value));if(detail)tile.append(el('span',detail,'footnote'));host.append(tile);
+   }
+   commercialTile(mix,'sellerOnly','Seller subscription only',snapshot?.sellerOnly);
+   commercialTile(mix,'advertisingOnly','Advertising only',snapshot?.advertisingOnly);
+   commercialTile(mix,'both','Both paid products',snapshot?.both);
+   commercialTile(mix,'approvedNotPaying','Approved, neither paid product',snapshot?.approvedNotPaying,'Includes complimentary access where applicable');
+   const percent=v=>v===null||v===undefined?null:v.toFixed(1)+'%';
+   commercialTile(rates,'payingShare','Paying / approved',percent(snapshot?.payingShare));
+   commercialTile(rates,'approvalShare','Approved / registered',percent(snapshot?.approvalShare));
+   commercialTile(rates,'registrationShare','Registered / saved',percent(snapshot?.registrationShare));
+   commercialTile(rates,'contactShare','Contact recorded / saved',percent(snapshot?.contactShare));
+   if(complete&&!snapshot)mix.append(el('p','Commercial breakdown unavailable: snapshot totals are inconsistent. Refresh the complete report.','footnote'));
+   for(const key of ['ready_to_contact','awaiting_response','registration_help','pending_approval','seller_opportunity','advertising_opportunity','follow_up_due','field_visit']){
+    const label=NATIONAL_QUEUES.find(q=>q[0]===key)[1],tile=button('',()=>chooseQueue(key));tile.className='button quiet acq-priority';tile.dataset.priorityQueue=key;tile.append(el('span',label),el('strong',complete?report.counts.queues[key]:'—'));tile.disabled=!complete;priorities.append(tile);
+   }
    for(const [key,label,workQueue] of NATIONAL_FUNNEL){
-    const tile=workQueue?button('',()=>chooseQueue(workQueue)):el('div');tile.className='field-stat';tile.dataset.metric=key;tile.append(el('small',label),el('strong',complete?report.counts.funnel[key]:'—'));if(workQueue)tile.disabled=!complete;(['discovered','readyToContact','registered','approved','payingBusinesses'].includes(key)?metrics:otherMetrics).append(tile);
+    const tile=workQueue?button('',()=>chooseQueue(workQueue)):el('div');tile.className='field-stat';tile.dataset.metric=key;tile.append(el('small',label),el('strong',complete?report.counts.funnel[key]:'—'));if(workQueue)tile.disabled=!complete;(['discovered','readyToContact','contacted','responded','downloads','registered','awaitingApproval','approved','paidSellers','activeAdvertisers','payingBusinesses'].includes(key)?metrics:otherMetrics).append(tile);
    }
    for(const [key,label] of NATIONAL_QUEUES.slice(0,14)){
     const item=button(label+' · '+(complete?report.counts.queues[key]:'—'),()=>chooseQueue(key));item.dataset.queue=key;item.disabled=!complete;queues.append(item);
@@ -371,7 +418,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
     const evidence=p.seller?.activePaidAdvertising?'Verified paid advertising · '+p.seller.activePaidCampaigns+' active campaign(s)':p.seller?.unpaidCampaigns?'Unpaid / review campaign(s)':p.commercialInterest?'Interest: '+title(p.commercialInterest.kind):'No commercial interest recorded';
     row.classList.add('acq-pipeline-row');
     const identity=el('div',undefined,'acq-pipeline-identity');identity.append(el('strong',p.name),el('span',locationText(p),'footnote'),statusPill(p));
-    const journey=el('div',undefined,'acq-pipeline-journey');journey.append(el('span',growthStep(p).label),el('small',acquisitionContactNote(p)||'Contact details recorded'),el('small','Registered: '+time(p.seller?.registeredAt)),el('small','Follow-up: '+time(p.nextFollowUpAt)));
+    const journey=el('div',undefined,'acq-pipeline-journey');journey.append(el('span',growthStep(p).label),el('small',acquisitionContactNote(p)||'Contact details recorded'),el('small','Registered: '+time(p.seller?.registeredAt)),el('small','Follow-up: '+time(p.nextFollowUpAt)),el('small','Assigned reviewer: '+(p.assignedTo||'Not recorded')));
     const commercial=el('div',undefined,'acq-pipeline-commercial');commercial.append(el('span',p.seller?.paidMembership?'Verified paid seller membership':p.seller?.sellingAccess?'Selling access — not verified paid':'No verified paid membership'),el('small',evidence));
     row.append(identity,journey,commercial,contactActions(p,true));
     rows.append(row);
@@ -447,7 +494,9 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   function contactActions(p,compact=false){
    const actions=el('div',undefined,'acq-contact-actions');
    if(p.snapshotOnly===true){actions.append(button('Open live record',()=>openRecord(p)));return actions;}
-   actions.append(button(compact?'Open record':newContact(p)?'Contact':'Open record',()=>openRecord(p)));if(compact)return actions;
+   actions.append(button(compact?'Open record':newContact(p)?'Contact':'Open record',()=>openRecord(p)));
+   if(!p.optedOut&&savedWhatsAppCheck(p.phone)&&p.permissions?.whatsapp?.granted===true&&(manualNoticePurpose(p)||!priorInvitation(p)))actions.append(button('Prepare WhatsApp message',()=>openRecord(p,'manual-whatsapp','introduction')));
+   if(compact)return actions;
    const site=safeBusinessWebsite(p.website);if(site)actions.append(assetLink('Business website',site));
    for(const channel of ['email']){
     if(!(channel==='email'?p.email:p.phone))continue;
@@ -584,26 +633,30 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
        const {draft}=await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:d.sender});
        if(!box.isConnected)return;const base=savedWhatsAppCheck(draft?.recipient);
        if(!base||draft.purpose!==purpose||typeof draft.text!=='string'||!savedWhatsAppCheck(draft.sender)||draft.recipient!==p.phone)throw Error('Unexpected manual draft response.');
-       manualSender=draft.sender;const url=new URL(base);url.searchParams.set('text',draft.text);
-       const launch=assetLink('Open WhatsApp message',url.href);let launching=false;
-       launch.addEventListener('click',async e=>{
-        e.preventDefault();if(launching||!box.isConnected)return;
+       manualSender=draft.sender;const urls=verifiedWhatsappLinks(draft.recipient,draft.text);let launching=false;
+       const launchTo=async href=>{
+        if(launching||!box.isConnected)return;
         const win=window.open('about:blank','_blank');
         if(!win){message('Allow popups and try again. No message was sent.','info');return;}
         win.opener=null;launching=true;
         try{
          const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
          if(!box.isConnected||current?.purpose!==purpose||current?.recipient!==draft.recipient||current?.sender!==draft.sender||current?.text!==draft.text)throw Error('The draft changed. Refresh this record.');
-         win.location.replace(url.href);
+         win.location.replace(href);
         }catch(error){try{win.close();}catch{}if(box.isConnected)message(error.message||'Current permission could not be verified.','error');}
         finally{launching=false;}
-       });
+       };
+       // Buttons intentionally have no destination href: middle-click or
+       // context menus must not bypass the fresh server permission check.
+       const launch=button('Open WhatsApp Web — prefilled message',()=>launchTo(urls.web));
+       launch.classList.add('acq-send-wa');
+       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));
        const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
        const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
        submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
        const opened=button('Record chat opened only',()=>perform(root,opened,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_opened',purpose,sender:draft.sender,note:'Administrator confirmed chat opened, not sent.',confirmed:true});await readDetail(p.id,stamp);}));
        opened.disabled=!!p.manualWhatsApp?.[purpose]?.openedAt;
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launch,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','Review in WhatsApp and send yourself. Record the actual outcome below.','footnote'),opened,log);
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launch,launchApp,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','The reviewed text is prefilled in the WhatsApp message input. Check the recipient and the separate Teyza Business account; press Send yourself. Opening a chat is not a sent message.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));

@@ -15,7 +15,7 @@ function fresh(asOf,now){return Number.isSafeInteger(asOf)&&asOf>0&&asOf<=now&&n
 function scopeFor(f){
  // Free-text business search or intersecting name+code selectors require the
  // exact live snapshot. Do not silently broaden a scope to serve a cache hit.
- if(f.search||f.municipality&&f.municipalityCode||f.township&&f.localityId)return null;
+ if(f.search||f.assignedTo||f.municipality&&f.municipalityCode||f.township&&f.localityId)return null;
  return key(f.province,f.municipalityCode?'code:'+f.municipalityCode:f.municipality?'name:'+norm(f.municipality):'',f.localityId?'code:'+f.localityId:f.township?'name:'+norm(f.township):'',f.category);
 }
 function scopesFor(p){

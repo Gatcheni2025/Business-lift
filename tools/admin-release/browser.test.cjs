@@ -34,7 +34,7 @@ async function syntheticCommandPage(body,{asOf,scanned=0,prospects=[],funnel={},
  const source=fs.readFileSync(path.join(root,'js/teyza-business-acquisition.js'),'utf8');
  const {emptyCommandReport}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
  const counts=emptyCommandReport().counts;Object.assign(counts.funnel,funnel);Object.assign(counts.queues,queues);
- const filters=Object.fromEntries(['province','category','queue','municipality','township','municipalityCode','localityId','search'].map(k=>[k,String(body.data.filters?.[k]||'').trim()]));
+ const filters=Object.fromEntries(['province','category','queue','municipality','township','municipalityCode','localityId','search','assignedTo'].map(k=>[k,String(body.data.filters?.[k]||'').trim()]));
  return {ok:true,schema:2,asOf:body.data.asOf||asOf||Date.now()-1000,filters,scanned,counts,prospects,next,complete:next===null};
 }
 async function main(){
@@ -848,7 +848,7 @@ async function main(){
   await check('National Command Centre withholds partial totals, forwards filters and separates paid advertising from complimentary access',async()=>{
    const stamp=Date.now()-1000;let releaseSecond,failSecond=true;
    const gate=new Promise(resolve=>{releaseSecond=resolve;});
-   const base={city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',area:'Umlazi',category:'spaza',stage:'identified',permissions:{},optedOut:false,revision:0,geographyNeedsReview:true};
+   const base={city:'Durban',province:'KwaZulu-Natal',municipality:'eThekwini',area:'Umlazi',category:'spaza',stage:'identified',permissions:{},optedOut:false,revision:0,geographyNeedsReview:true,assignedTo:'reviewerA'};
    const fresh={...base,id:'p001',name:'Synthetic WhatsApp only',phone:'+27712345678',phoneKind:'whatsapp_only',email:'',permissions:{whatsapp:{granted:true}},workQueues:['new_contact','ready_to_contact']};
    const missing={...base,id:'p031',name:'Synthetic field visit',phone:'',email:'',workQueues:['field_visit'],contactNote:'No phone number or email recorded'};
    const historic={...base,id:'p032',name:'Synthetic already contacted',phone:'+27712345679',contactedAt:stamp-1000,outreachState:'staff_confirmed',workQueues:['awaiting_response']};
@@ -859,7 +859,7 @@ async function main(){
     if(body.action!=='ops_acquisition_command_page')return false;
     const d=body.data,filter=d.filters;
     if(filter.province){
-     assert.equal(filter.province,'KwaZulu-Natal');assert.equal(filter.municipality,'eThekwini');assert.equal(filter.township,'Umlazi');assert.equal(filter.category,'spaza');
+     assert.equal(filter.province,'KwaZulu-Natal');assert.equal(filter.municipality,'eThekwini');assert.equal(filter.township,'Umlazi');assert.equal(filter.category,'spaza');assert.equal(filter.assignedTo,'reviewerA');
      const rows=filter.queue==='field_visit'?[missing]:filter.queue==='paying'?[paying]:filter.queue==='approved'?[paying,free]:[];
      await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:4,prospects:rows,funnel:{discovered:4,contacted:1,staffConfirmedContact:1,registered:2,approved:2,paidSellers:1,activeAdvertisers:1,activePaidCampaigns:2,payingBusinesses:1,sellingAccessNotPaid:1},queues:{field_visit:1,awaiting_response:1,paying:1,approved:2}})});return true;
     }
@@ -879,13 +879,18 @@ async function main(){
    const metric=k=>page.locator('[data-metric="'+k+'"] strong'),status=page.locator('[data-national-report-status]');
    await page.getByText('Synthetic WhatsApp only',{exact:true}).waitFor();
    assert.equal(await metric('discovered').innerText(),'—');
+   assert.equal(await page.locator('[data-commercial="both"] strong').innerText(),'—');
    assert.match(await status.innerText(),/Calculating complete totals/);
    releaseSecond();await page.getByText(/Report incomplete — no totals are available/).waitFor();
    assert.equal(await metric('discovered').innerText(),'—');
    await page.getByRole('button',{name:'Continue incomplete report'}).click();
    await page.getByText(/Complete snapshot.*34 records inspected/).waitFor();
    assert.equal(await metric('discovered').innerText(),'34');await page.getByText('More conversion and revenue insights',{exact:true}).click();assert.equal(await metric('paidSellers').innerText(),'1');assert.equal(await metric('activePaidCampaigns').innerText(),'2');assert.equal(await metric('payingBusinesses').innerText(),'1');
+   assert.equal(await page.locator('[data-commercial="both"] strong').innerText(),'1');
+   assert.equal(await page.locator('[data-commercial="payingShare"] strong').innerText(),'50.0%');
+   assert.equal(await page.locator('[data-commercial="approvedNotPaying"] strong').innerText(),'1');
    await page.getByLabel('Filter province').selectOption('KwaZulu-Natal');
+   await page.getByLabel('Assigned reviewer UID (exact)').fill('reviewerA');
    await page.getByLabel('Municipality name (exact)').fill('eThekwini');
    await page.getByLabel('Township / area name (exact)').fill('Umlazi');
    await page.getByLabel('Filter business type').selectOption('spaza');
@@ -927,13 +932,22 @@ async function main(){
     await dialog.getByLabel('I will use this account and the owner agreed to WhatsApp contact.').check();
     await dialog.getByRole('button',{name:'Prepare manual WhatsApp',exact:true}).click();
     await dialog.getByLabel('Verified manual WhatsApp preview').waitFor();
-    const url=new URL(await dialog.getByRole('link',{name:'Open WhatsApp message'}).getAttribute('href'));assert.equal(url.pathname,'/27712345678');assert.equal(url.searchParams.get('text'),'Synthetic permitted introduction');
+    assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),'Synthetic permitted introduction');
+    assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
-   await prepare();assert.equal(events,0);await dialog.getByRole('button',{name:'Record chat opened only'}).click();
+   await prepare();assert.equal(events,0);
+   // Intercept the popup before navigation. No real WhatsApp traffic or send.
+   await f.context.route('https://web.whatsapp.com/send?*',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic WhatsApp</title></html>'}));
+   const opened=f.context.waitForEvent('page');
+   await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
+   const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
+   const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),'Synthetic permitted introduction');
+   await popup.close();assert.equal(prepares,2);assert.equal(events,0);
+   await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,2);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,3);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{
