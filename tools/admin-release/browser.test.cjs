@@ -532,6 +532,11 @@ async function main(){
     }
     if(!body.action.startsWith('ops_acquisition_'))return false;
     if(body.action==='ops_acquisition_command_page')await route.fulfill({json:await syntheticCommandPage(body)});
+    else if(body.action==='ops_acquisition_locality_browse'){
+     const {province,query,offset}=body.data;
+     const rows=province==='Eastern Cape'?[{province,municipality:'Buffalo City',township:'Synthetic Eastern Community',localityId:'BUF:123456789'}]:offset===0?[{province,municipality:'eThekwini',township:'Synthetic First Community',localityId:'ETH:123456789'}]:[{province,municipality:'eThekwini',township:'Synthetic Second Community',localityId:'ETH:223456789'}];
+     await route.fulfill({json:{ok:true,schema:1,province,query,offset,nextOffset:province==='KwaZulu-Natal'&&offset===0&&!query?50:null,localities:query==='Unmatched'?[]:rows}});
+    }
     else if(body.action==='ops_acquisition_localities'){assert.equal(body.data.province,'KwaZulu-Natal');assert.equal(body.data.query,'Umlazi');await route.fulfill({json:{ok:true,vintage:'Synthetic government reference',localities:[{province:'KwaZulu-Natal',municipality:'eThekwini',township:'Umlazi',localityId:'ETH:123456789'}]}});}
     else if(body.action==='ops_acquisition_create'){assert.equal(body.data.localityId,'ETH:123456789');assert.equal(body.data.geographyConfirmed,true);assert.equal(body.data.independentSourceConfirmed,true);assert.equal(body.data.authorisedSource,true);assert.equal(body.data.googlePlaceId,'SyntheticPlace1234');assert.equal(body.data.website,'https://example.test/');assert.equal(body.data.email,'');prospect={...body.data,id:'prospect1',revision:0,stage:'identified',permissions:{},assignedTo:'admin1',lastActivityBy:'admin1',updatedAt:Date.now(),lastActivityAt:Date.now(),optedOut:false};await route.fulfill({json:{ok:true,prospect}});}
     else if(body.action==='ops_acquisition_place_matches'){
@@ -558,8 +563,20 @@ async function main(){
    await f.page.getByRole('button',{name:"+ Find & Add Businesses",exact:true}).click();
    await f.page.getByText('Choose the province, then a town or township.',{exact:true}).waitFor();
    const wizard=f.page.getByRole('dialog');assert(await wizard.getByRole('button',{name:'Continue to business type'}).isDisabled());
+   await wizard.getByLabel('Province',{exact:true}).selectOption('Eastern Cape');
+   await wizard.getByRole('button',{name:/Synthetic Eastern Community.*Buffalo City/}).waitFor();
    await wizard.getByLabel('Province',{exact:true}).selectOption('KwaZulu-Natal');
-   await wizard.getByLabel('Town or municipality').fill('Durban');
+   await wizard.getByRole('button',{name:/Synthetic First Community.*eThekwini/}).waitFor();
+   assert.equal(await wizard.getByRole('button',{name:/Synthetic Eastern Community/}).count(),0);
+   await wizard.getByRole('button',{name:'More communities',exact:true}).click();
+   await wizard.getByRole('button',{name:/Synthetic Second Community.*eThekwini/}).waitFor();
+   await wizard.getByRole('button',{name:'Previous communities',exact:true}).click();
+   await wizard.getByRole('button',{name:/Synthetic First Community/}).waitFor();
+   await wizard.getByLabel('Filter township directory').fill('Unmatched');
+   await wizard.getByRole('button',{name:'Filter list',exact:true}).click();
+   await wizard.getByText(/No matching reference on this page/).waitFor();
+   await wizard.getByRole('button',{name:'Durban',exact:true}).click();
+   await wizard.getByText('Selected: Durban, KwaZulu-Natal',{exact:true}).waitFor();
    await wizard.getByRole('button',{name:'Continue to business type'}).click();
    await wizard.getByText('Selected community: Durban, KwaZulu-Natal',{exact:true}).waitFor();
    assert(await wizard.getByLabel('Google business type').isVisible());
