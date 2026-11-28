@@ -38,10 +38,10 @@ function parseLocalityId(value){
 const quoted=v=>"'"+v.replaceAll("'","''")+"'";
 const label=v=>typeof v==='string'&&v.trim()&&v.length<=254&&!/[\u0000-\u001f\u007f]/.test(v)?v.trim():null;
 function createGeography({fetcher=fetch}={}){
- async function query(layer,where,fields,count){
+ async function query(layer,where,fields,count,browseOffset=null){
   if(![0,2].includes(layer))throw Error('Unexpected geography source layer');
   const url=new URL(BASE+'/'+layer+'/query');
-  url.search=new URLSearchParams({f:'json',where,outFields:fields,returnGeometry:'false',resultRecordCount:String(count),orderByFields:'objectid ASC'}).toString();
+  url.search=new URLSearchParams({f:'json',where,outFields:fields,returnGeometry:'false',resultRecordCount:String(count),orderByFields:browseOffset===null?'objectid ASC':'sub_place_name ASC,objectid ASC',...(browseOffset===null?{}:{resultOffset:String(browseOffset)})}).toString();
   try{
    const r=await fetcher(url.href,{method:'GET',redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
    if(!r.ok)throw Error('HTTP error');
@@ -91,6 +91,21 @@ function createGeography({fetcher=fetch}={}){
   const localities=(await rowsWithMunicipalities(result.rows)).filter(r=>r.province===province);
   return {source:SOURCE,vintage:VINTAGE,localities,more:result.more,requiresCurrentBoundaryReview:true};
  }
+ // Published reference browsing is not a census of townships. Only locality
+ // names are requested; no geometry or business data. Advance by source rows.
+ async function browse(province,input='',offset=0){
+  if(!provinces.includes(province))D.fail(422,'Choose a South African province first.');
+  const term=D.text(input,'locality filter',80,false);
+  if(term&&!/^[\p{L}\p{N} .()'’-]+$/u.test(term))D.fail(422,'Enter a valid locality name.');
+  if(!Number.isSafeInteger(offset)||offset<0||offset>100000)D.fail(422,'Invalid locality page.');
+  const conditions=[...prefixes[province].map(p=>'munic_code LIKE '+quoted(p+'%')),...Object.entries(metros).filter(([,v])=>v[0]===province).map(([c])=>'munic_code = '+quoted(c))];
+  const where='('+conditions.join(' OR ')+')'+(term?' AND UPPER(sub_place_name) LIKE '+quoted(term.toUpperCase()+'%'):'');
+  const size=50,result=await query(0,where,'munic_code,sub_place_code,sub_place_name',size,offset);
+  if(!result.rows.length&&result.more)D.fail(503,'The published locality page is incomplete. Retry or filter by name.');
+  const localities=(await rowsWithMunicipalities(result.rows)).filter(r=>r.province===province).sort((a,b)=>a.township.localeCompare(b.township,'en-ZA')||a.municipality.localeCompare(b.municipality,'en-ZA')||a.localityId.localeCompare(b.localityId));
+  const nextOffset=(result.more||result.rows.length===size)&&result.rows.length&&offset+result.rows.length<=100000?offset+result.rows.length:null;
+  return {schema:1,province,query:term,offset,nextOffset,localities,source:SOURCE,vintage:VINTAGE,requiresCurrentBoundaryReview:true};
+ }
  async function resolve(id){
   const {municipalityCode,subplaceCode}=parseLocalityId(id);
   const canonical=canonicalMunicipality(municipalityCode);
@@ -104,7 +119,7 @@ function createGeography({fetcher=fetch}={}){
   if(rows.length!==1)D.fail(409,'The official locality reference could not be uniquely verified.');
   return rows[0];
  }
- return {search,resolve};
+ return {search,resolve,browse};
 }
 function projectedGeography(p){
  const province=p.province||(p.city==='Durban'?'KwaZulu-Natal':p.city==='Johannesburg'?'Gauteng':'');
