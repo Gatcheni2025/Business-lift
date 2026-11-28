@@ -7,7 +7,7 @@ namespace Teyza.Admin.Windows;
 
 internal sealed class AdminWindow : Form
 {
-    private readonly WebView2 view = new() { Dock = DockStyle.Fill, Visible = false };
+    private readonly WebView2 view = new() { Dock = DockStyle.Fill, Visible = false, AllowExternalDrop = false };
     private readonly Panel surface = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(241, 247, 245) };
     private readonly Label cover = new()
     {
@@ -26,7 +26,7 @@ internal sealed class AdminWindow : Form
     internal AdminWindow()
     {
         Text = "Teyza Admin";
-        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(850, 600);
@@ -106,6 +106,8 @@ internal sealed class AdminWindow : Form
             core.NewWindowRequested += NewWindow;
             core.NavigationCompleted += (_, args) =>
             {
+                // A deliberately blocked external navigation is not a failed dashboard load.
+                if (!args.IsSuccess && args.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
                 failed = !args.IsSuccess;
                 status.Text = failed ? "Connection interrupted" : "Live dashboard";
                 if (failed) cover.Text = "The dashboard could not load.\nCheck your internet connection and choose Reload dashboard.";
@@ -161,7 +163,7 @@ internal sealed class AdminWindow : Form
         core.LaunchingExternalUriScheme += (_, args) => args.Cancel = true;
         core.DownloadStarting += async (_, args) =>
         {
-            using var deferral = args.GetDeferral();
+            var deferral = args.GetDeferral();
             try
             {
                 args.Handled = true;
@@ -215,10 +217,12 @@ internal sealed class AdminWindow : Form
         // writes an in-memory document to the blank window. Preserve WindowProxy
         // instead of launching WhatsApp prematurely or breaking that flow.
         if (popups.Count >= 3) return;
-        using var deferral = args.GetDeferral();
+        var deferral = args.GetDeferral();
         PopupWindow? popup = null;
         try
         {
+            await Task.Yield();
+            if (closing || IsDisposed) return;
             popup = new PopupWindow();
             popups.Add(popup);
             popup.Activated += (_, _) => QueuePrivacyCheck();
@@ -307,7 +311,7 @@ internal sealed class AdminWindow : Form
 
     private sealed class PopupWindow : Form
     {
-        internal readonly WebView2 Browser = new() { Dock = DockStyle.Fill };
+        internal readonly WebView2 Browser = new() { Dock = DockStyle.Fill, AllowExternalDrop = false };
         private readonly System.Windows.Forms.Timer lifetime = new() { Interval = 5 * 60 * 1000 };
         internal PopupWindow()
         {
