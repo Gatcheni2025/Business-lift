@@ -1,0 +1,87 @@
+name: Teyza Admin Windows QA
+on:
+  pull_request:
+    paths:
+      - 'apps/teyza_admin_windows/**'
+      - 'assets/teyza-icon.svg'
+      - '.github/workflows/teyza-admin-windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build_windows_qa:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check reviewed PowerShell build syntax
+        shell: pwsh
+        run: |
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/apps/teyza_admin_windows/Build-Windows.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+      - name: Build private unsigned x64 QA installer and portable app
+        shell: pwsh
+        run: ./apps/teyza_admin_windows/Build-Windows.ps1 -Installer
+      - name: Record signature status and artifact hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dist = Join-Path $pwd 'apps/teyza_admin_windows/dist'
+          $files = @((Join-Path $dist 'publish/TeyzaAdmin.exe'),(Join-Path $dist 'Teyza-Admin-Windows-1.0.0-x64-QA-Setup.exe'))
+          $results = foreach ($f in $files) {
+            $signature = Get-AuthenticodeSignature -FilePath $f
+            [pscustomobject]@{File=(Split-Path $f -Leaf);Status=[string]$signature.Status;SHA256=(Get-FileHash $f -Algorithm SHA256).Hash}
+          }
+          $results | ConvertTo-Json | Set-Content (Join-Path $dist 'signature-status.json')
+          Get-Content (Join-Path $dist 'SHA256SUMS.txt')
+          Write-Host 'Private QA only: no signing keys supplied, no production release.'
+      - name: Record available Defender scan evidence without changing protection
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dist = Join-Path $pwd 'apps/teyza_admin_windows/dist'
+          $report = @{status='not_verified'; reason='No conclusive Defender scan performed.'}
+          $start = (Get-Date).AddMinutes(-2)
+          if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) {
+            try {
+              $status = Get-MpComputerStatus
+              $pref = Get-MpPreference
+              $exclusions = @($pref.ExclusionPath; $pref.ExclusionExtension; $pref.ExclusionProcess) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+              if ($status.AMServiceEnabled -and $status.AntivirusEnabled -and @($exclusions).Count -eq 0 -and -not $pref.DisableArchiveScanning -and $status.AntivirusSignatureLastUpdated -ge (Get-Date).AddDays(-3)) {
+                Start-MpScan -ScanType CustomScan -ScanPath $dist
+                $recent = @(Get-MpThreatDetection | Where-Object { $_.InitialDetectionTime -ge $start -or $_.LastThreatStatusChangeTime -ge $start })
+                if ($recent.Count -gt 0) {
+                  $report = @{status='detected'; reason='Defender recorded a recent threat.'}
+                } else {
+                  $report = @{status='scan_no_recent_detection'; signatureVersion=$status.AntivirusSignatureVersion; signatureUpdated=$status.AntivirusSignatureLastUpdated.ToUniversalTime().ToString('o'); reason='Not a Microsoft analyst verdict or production approval.'}
+                }
+              } else { $report.reason='Defender inactive, exclusions present, archive scan disabled, or signatures stale.' }
+            } catch { $report.reason='Defender inspection/scan unavailable.' }
+          }
+          $report | ConvertTo-Json | Set-Content (Join-Path $dist 'defender-status.json')
+          if ($report.status -eq 'detected') { throw 'Defender detection; do not publish QA artifacts.' }
+          foreach ($line in Get-Content (Join-Path $dist 'SHA256SUMS.txt')) {
+            $parts = $line -split '  ',2
+            $file = Join-Path $dist $parts[1]
+            if (-not (Test-Path $file) -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $parts[0]) { throw 'Artifact missing or changed after scan.' }
+          }
+          Write-Host $report.reason
+      - name: Upload private QA build for review, not public distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-admin-windows-1.0.0-x64-QA-unsigned
+          path: |
+            apps/teyza_admin_windows/dist/Teyza-Admin-Windows-1.0.0-x64-QA.zip
+            apps/teyza_admin_windows/dist/Teyza-Admin-Windows-1.0.0-x64-QA-Setup.exe
+            apps/teyza_admin_windows/dist/SHA256SUMS.txt
+            apps/teyza_admin_windows/dist/signature-status.json
+            apps/teyza_admin_windows/dist/defender-status.json
+            apps/teyza_admin_windows/dist/dotnet-build-info.txt
+          if-no-files-found: error
+          retention-days: 14
