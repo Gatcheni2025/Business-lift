@@ -190,9 +190,9 @@ test('Idle/contact/area release publishes only 15 Admin paths and requires both 
  assert.equal(paths.length,15);assert(paths.includes('/js/teyza-app-admin-model.mjs'));
  for(const excluded of ['/index.html','/for-shop-owners.html','/assets/app-first.css','/support-inbox.html','/pay/index.html','/assets/teyza-map-first.css'])assert(!paths.includes(excluded));
  assert.equal(files().size,15);
- const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,adminProvinceLocalityBrowse:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
+ const health={ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,adminProvinceLocalityBrowse:true,adminAcquisitionReviewerFilter:true,version:'3.26.0',marketplaceRelease:'20261126-v61',adminInactivitySession:true,adminSessionRequired:true,adminAreaAutocomplete:true,adminBusinessAcquisition:true,adminBusinessCommunications:true,adminBusinessContactDiscovery:true,agentRewardReviewEnabled:true,agentRewardCents:9000,agentCommissionEnabled:false,fieldAgentWorkspace:true,fieldAgentDiscovery:true};
  assert.doesNotThrow(()=>assertAdminReady(health));
- for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
+ for(const flag of ['adminInactivitySession','adminSessionRequired','adminAreaAutocomplete','adminAcquisitionReviewerFilter'])assert.throws(()=>assertAdminReady({...health,[flag]:false}));
 });
 
 test('National contact queues exclude missing contacts without deleting their records and prepare consent-led WhatsApp only',async()=>{
@@ -223,7 +223,7 @@ test('National Admin report accepts complete cursor pages only, with identical s
  const fs=require('node:fs'),path=require('node:path');
  const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
  const {emptyCommandReport,mergeCommandPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
- const filters={province:'KwaZulu-Natal',category:'spaza',queue:'new_contact',municipality:'eThekwini',township:'Umlazi',municipalityCode:'',localityId:'',search:''};
+ const filters={province:'KwaZulu-Natal',category:'spaza',queue:'new_contact',municipality:'eThekwini',township:'Umlazi',municipalityCode:'',localityId:'',search:'',assignedTo:''};
  const counts=(discovered,paid)=>{const c=emptyCommandReport().counts;Object.assign(c.funnel,{discovered,registered:paid,approved:paid,paidSellers:paid,activeAdvertisers:paid,activePaidCampaigns:paid+1,payingBusinesses:paid});return c;};
  const first={schema:2,asOf:1793090000000,filters,scanned:30,counts:counts(25,1),prospects:[{id:'new1'}],next:'cursor1',complete:false};
  const partial=mergeCommandPage(emptyCommandReport(),first,filters);assert.equal(partial.complete,false);
@@ -239,7 +239,7 @@ test('Materialized summary pages are validated, contain no contact destinations 
  const fs=require('node:fs'),path=require('node:path');
  const src=fs.readFileSync(path.join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
  const {emptyCommandReport,validateSummaryPage}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
- const filters={province:'',category:'',queue:'new_contact',municipality:'',township:'',municipalityCode:'',localityId:'',search:''},counts=emptyCommandReport().counts;
+ const filters={province:'',category:'',queue:'new_contact',municipality:'',township:'',municipalityCode:'',localityId:'',search:'',assignedTo:''},counts=emptyCommandReport().counts;
  counts.funnel.discovered=65;counts.queues.new_contact=65;
  const p={summarySchema:1,summaryGeneration:'00000000-0000-0000-0000-000000000000',asOf:1793090000000,filters,counts,scanned:65,prospects:[{id:'synthetic',snapshotOnly:true}],next:'synthetic'};
  assert.equal(validateSummaryPage(p,filters),p);
@@ -261,4 +261,19 @@ test('Guided next action waits for actual Zoho evidence and never treats opening
  assert.equal(manualNoticePurpose(accepted),'email_notice_invitation');assert.equal(manualNoticePurpose({...accepted,optedOut:true}),null);
  assert.equal(manualNoticePurpose({...accepted,manualWhatsApp:{email_notice_invitation:{sentAt:123}}}),null);
  assert(emailDraftAllowed('onboarding_guide',{...p,response:'needs_help',contactedAt:123}));assert(!emailDraftAllowed('onboarding_guide',p));assert.match(emailText('onboarding_guide',p).body,/training/);
+});
+
+test('Commercial snapshot counts unique paying businesses, payment overlap and missing denominators',async()=>{
+ const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../web/teyza-admin/public/js/teyza-business-acquisition.js'),'utf8');
+ const {commercialSnapshot,emptyCommandReport,verifiedWhatsappLinks}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ const report=emptyCommandReport();Object.assign(report.counts.funnel,{discovered:20,contacted:10,responded:8,downloads:7,registered:12,approved:10,paidSellers:5,activeAdvertisers:4,activePaidCampaigns:7,payingBusinesses:7,sellingAccessNotPaid:3});
+ assert.equal(commercialSnapshot(report),null);report.complete=true;
+ assert.deepEqual(commercialSnapshot(report),{both:2,sellerOnly:3,advertisingOnly:2,approvedNotPaying:3,payingShare:70,approvalShare:83.3,registrationShare:60,contactShare:50});
+ report.counts.funnel.payingBusinesses=10;assert.equal(commercialSnapshot(report),null);
+ const empty=emptyCommandReport();empty.complete=true;assert.equal(commercialSnapshot(empty).payingShare,null);assert.equal(commercialSnapshot(empty).both,0);
+ const text='Hi Example & Sons 🌱\n\nWelcome! https://teyza.co.za/?a=1&b=2';
+ const urls=verifiedWhatsappLinks('+27712345678',text),app=new URL(urls.app),web=new URL(urls.web);
+ assert.equal(app.origin,'https://wa.me');assert.equal(app.pathname,'/27712345678');assert.equal(app.searchParams.get('text'),text);
+ assert.equal(web.origin,'https://web.whatsapp.com');assert.equal(web.pathname,'/send');assert.equal(web.searchParams.get('phone'),'27712345678');assert.equal(web.searchParams.get('text'),text);
+ assert.throws(()=>verifiedWhatsappLinks('not a number',text));assert.throws(()=>verifiedWhatsappLinks('+27712345678',''));
 });

@@ -99,10 +99,12 @@ function parseFilters(value={}){
  if(municipalityCode&&(!G.provinceFor(municipalityCode)||province&&G.provinceFor(municipalityCode)!==province))D.fail(422,'Municipality does not match the selected province.');
  if(localityId){const ids=G.parseLocalityId(localityId);if(province&&G.provinceFor(ids.municipalityCode)!==province||municipalityCode&&ids.municipalityCode!==municipalityCode)D.fail(422,'Official locality does not match the selected geography.');}
  const search=D.text(value.search??'','business search',120,false);
- return {province,category,queue,municipality,township,municipalityCode,localityId,search};
+ const assignedTo=D.text(value.assignedTo??'','assigned reviewer UID',128,false);if(assignedTo)D.id(assignedTo);
+ return {province,category,queue,municipality,township,municipalityCode,localityId,search,assignedTo};
 }
 function matches(p,f){
  const geo=G.projectedGeography(p);
+ if(f.assignedTo&&p.assignedTo!==f.assignedTo)return false;
  if(f.province&&geo.province!==f.province||f.category&&p.category!==f.category||f.municipalityCode&&geo.municipalityCode!==f.municipalityCode||f.localityId&&geo.localityId!==f.localityId)return false;
  if(f.municipality&&![geo.municipality,geo.municipalityCode].some(v=>norm(v)===norm(f.municipality)))return false;
  if(f.township&&![geo.township,p.area,geo.localityId].some(v=>norm(v)===norm(f.township)))return false;
