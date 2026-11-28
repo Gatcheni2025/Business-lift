@@ -2,7 +2,7 @@
 const crypto=require('node:crypto'),D=require('./domain'),P=require('./publication'),{createCommunication}=require('./business-communications');
 const G=require('./acquisition-geography'),R=require('./acquisition-report'),S=require('./acquisition-summary');
 const collection='teyzaBusinessProspects',suppression='teyzaBusinessContactSuppression',links='teyzaBusinessProspectSellerLinks',placeLinks='teyzaBusinessProspectPlaceLinks',identityLinks='teyzaBusinessProspectIdentityKeys';
-const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities','ops_acquisition_command_page','ops_acquisition_manual_whatsapp']);
+const actions=new Set(['ops_acquisition_list','ops_acquisition_create','ops_acquisition_place_matches','ops_acquisition_detail','ops_acquisition_event','ops_acquisition_link','ops_acquisition_send','ops_acquisition_localities','ops_acquisition_locality_browse','ops_acquisition_command_page','ops_acquisition_manual_whatsapp']);
 const provinces=G.provinces;
 const legacyProvince=Object.freeze({Durban:'KwaZulu-Natal',Johannesburg:'Gauteng'});
 const cities=Object.keys(legacyProvince);
@@ -220,6 +220,7 @@ function createAcquisition({db,clock=Date.now,geographyLookup=G.createGeography(
  async function execute(auth,action,data){
   const uid=D.id(auth.uid);
   if(action==='ops_acquisition_localities')return geographyLookup.search(data.province,data.query);
+  if(action==='ops_acquisition_locality_browse')return geographyLookup.browse(data.province,data.query??'',data.offset??0);
   if(action==='ops_acquisition_command_page'){
    if(data.preferSummary===true||data.summaryGeneration!==undefined){const summary=await S.readSummaryPage({db,data,clock});if(summary)return summary;}
    return commandPage(data);

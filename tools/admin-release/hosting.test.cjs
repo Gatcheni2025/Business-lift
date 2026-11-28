@@ -57,7 +57,7 @@ function setup(options={}){
   if(method==='PATCH'){if(body.config)version.config=body.config;if(body.status)version.status=body.status;return {name,...version};}
   return {name,config:version.config};
  },upload:async()=>{if(options.failUpload)throw new Error('Upload failed');}};
- return {client,source,next,calls,config,existing,versions,fetcher:async()=>({ok:true,json:async()=>({ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,adminInactivitySession:true,adminSessionRequired:true})}),backupPath:path.join(directory,'backup.json'),log:()=>{},wait:async()=>{},root,live:()=>live};
+ return {client,source,next,calls,config,existing,versions,fetcher:async()=>({ok:true,json:async()=>({ok:true,adminNationalAcquisition:true,adminNationalAcquisitionSchema:2,adminNationalAcquisitionSummarySchema:1,adminGuidedBusinessGrowthSchema:1,adminProvinceLocalityBrowse:true,adminInactivitySession:true,adminSessionRequired:true})}),backupPath:path.join(directory,'backup.json'),log:()=>{},wait:async()=>{},root,live:()=>live};
 }
 test('Hosting overlay preserves unrelated files, configuration and the exact rollback version before publication',async()=>{
  const f=setup(),result=await patch(f);assert.equal(f.live(),f.next);assert.equal(result.sourceVersion,f.source);

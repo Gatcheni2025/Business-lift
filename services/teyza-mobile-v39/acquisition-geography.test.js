@@ -83,3 +83,37 @@ test('All 31 documented predecessor codes reconcile with stable successor locali
   assert.equal(G.projectedGeography({province,municipality:'Former',township:'Synthetic',municipalityCode:old,townshipCode:'123456789',localityId:old+':123456789',geographySource:G.SOURCE,geographySourceVintage:G.VINTAGE}).geographyNeedsReview,true);
  }
 });
+
+test('Province browsing uses bounded alphabetical pages and advances across omitted records',async()=>{
+ const calls=[];
+ const geo=G.createGeography({fetcher:async url=>{
+  const u=new URL(url);calls.push(u);
+  const offset=Number(u.searchParams.get('resultOffset'));
+  const rows=u.pathname.includes('/2/')?[{munic_code:'KZN225',munic_name:'Synthetic municipality'}]:offset===0?[
+   {munic_code:'ETH',sub_place_code:111111111,sub_place_name:'Inanda'},
+   {munic_code:'KZN211',sub_place_code:222222222,sub_place_name:'Former split'},
+   {munic_code:'JHB',sub_place_code:333333333,sub_place_name:'Wrong province'},
+   {munic_code:'KZN225',sub_place_code:444444444,sub_place_name:'Synthetic community'}
+  ]:[{munic_code:'ETH',sub_place_code:555555555,sub_place_name:'Umlazi'}];
+  return {ok:true,json:async()=>({features:rows.map(attributes=>({attributes})),exceededTransferLimit:!u.pathname.includes('/2/')&&offset===0})};
+ }});
+ const first=await geo.browse('KwaZulu-Natal');
+ assert.equal(first.schema,1);assert.equal(first.nextOffset,4);assert.equal(first.requiresCurrentBoundaryReview,true);
+ assert.deepEqual(first.localities.map(x=>x.township),['Inanda','Synthetic community']);
+ const second=await geo.browse('KwaZulu-Natal','',first.nextOffset);assert.equal(second.nextOffset,null);assert.equal(second.localities[0].township,'Umlazi');
+ assert.equal(calls[0].searchParams.get('resultRecordCount'),'50');
+ assert.equal(calls[0].searchParams.get('orderByFields'),'sub_place_name ASC,objectid ASC');
+ assert.equal(calls[0].searchParams.get('returnGeometry'),'false');
+ assert.match(calls[0].searchParams.get('where'),/KZN%/);
+ await geo.browse('KwaZulu-Natal','Kwa',4);assert.match(calls.at(-1).searchParams.get('where'),/UPPER\(sub_place_name\) LIKE 'KWA%'/);
+ const before=calls.length;
+ for(const [p,q,o] of [['invalid','',0],['KwaZulu-Natal','%',0],['KwaZulu-Natal','',-1],['KwaZulu-Natal','',1.5],['KwaZulu-Natal','',100001],['KwaZulu-Natal','','0']])await assert.rejects(geo.browse(p,q,o),e=>e.status===422);
+ assert.equal(calls.length,before);
+});
+test('All nine provinces allow empty-name browsing and unavailable references fail closed',async()=>{
+ const calls=[];
+ const geo=G.createGeography({fetcher:async url=>{calls.push(new URL(url));return {ok:true,json:async()=>({features:[]})};}});
+ for(const province of G.provinces){const r=await geo.browse(province);assert.equal(r.province,province);assert.deepEqual(r.localities,[]);assert.equal(r.nextOffset,null);}
+ assert.equal(calls.length,9);assert(calls.every(u=>u.searchParams.get('resultOffset')==='0'&&!u.searchParams.get('where').includes('sub_place_name')));
+ await assert.rejects(fixture({unavailable:true}).g.browse('Eastern Cape'),e=>e.status===503);
+});

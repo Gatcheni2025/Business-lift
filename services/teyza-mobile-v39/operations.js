@@ -70,7 +70,8 @@ function createOperations({db,clock=Date.now,rate,getPaystackMode=()=> 'test',ge
   else if(auth.teyzaAdmin===true)recentAdmin(auth,clock);
   else if(SUPPORT_AGENT_ACTIONS.has(action))recentSupportAgent(auth,clock);
   else recentAdmin(auth,clock);
-  await rate(uid,action==='ops_acquisition_command_page'?'acquisition-report':action==='ops_acquisition_localities'?'acquisition-localities':'operations',action==='ops_acquisition_localities'?20:60,60000);
+  const localityRequest=['ops_acquisition_localities','ops_acquisition_locality_browse'].includes(action);
+  await rate(uid,action==='ops_acquisition_command_page'?'acquisition-report':localityRequest?'acquisition-localities':'operations',localityRequest?20:60,60000);
   if(Acquisition.actions.has(action))return acquisition.execute(auth,action,data);
   // Historical entries remain available in statements. Manual receipts may
   // never activate membership now that Paystack verifies all new charges.
