@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "width": 1080,
+  "height": 1350,
+  "maxBytes": 1048576,
+  "zipSha256": "168412ccd2f985b704808bd1a61f1ea875743965a086a19a956087c5375c98e7",
+  "assets": [
+    {
+      "category": "food",
+      "path": "/assets/admin-benefits/teyza-benefits-food-v1.png",
+      "bytes": 630813,
+      "sha256": "9de21bd8a0037d478e0a895c7611807d1230c8552184f190c6c542c021e9c03c"
+    },
+    {
+      "category": "manufacturer",
+      "path": "/assets/admin-benefits/teyza-benefits-manufacturer-v1.png",
+      "bytes": 647709,
+      "sha256": "c64ab00ac26ec90ecec4f77f2b0bf0508c0dd66d44d297f3f8377ae3bba4cade"
+    },
+    {
+      "category": "other",
+      "path": "/assets/admin-benefits/teyza-benefits-other-v1.png",
+      "bytes": 615432,
+      "sha256": "a579c780aae7a9f9de01b75fc0b0afa6e622a63ecca2a4e7806225cc47f5a47a"
+    },
+    {
+      "category": "retail",
+      "path": "/assets/admin-benefits/teyza-benefits-retail-v1.png",
+      "bytes": 639679,
+      "sha256": "e136eab1101ffd1b6a9b34ee85bed80abb48d86e631be3553da3f389e35a7ffd"
+    },
+    {
+      "category": "salon",
+      "path": "/assets/admin-benefits/teyza-benefits-salon-v1.png",
+      "bytes": 661975,
+      "sha256": "80f521f7b113a70feb701dc3edd249073048cf9bf5e997e243d97327b5dd3f60"
+    },
+    {
+      "category": "service",
+      "path": "/assets/admin-benefits/teyza-benefits-service-v1.png",
+      "bytes": 637158,
+      "sha256": "135b03ea91996b6a6997d372879421b58089ea10599e8370df677959c296cb5a"
+    },
+    {
+      "category": "spaza",
+      "path": "/assets/admin-benefits/teyza-benefits-spaza-v1.png",
+      "bytes": 647472,
+      "sha256": "630ad4d3872cc8a5e7a347910f5b6629f3a35f1cdf0b3b0ad497e11003f06780"
+    },
+    {
+      "category": "wholesale",
+      "path": "/assets/admin-benefits/teyza-benefits-wholesale-v1.png",
+      "bytes": 648913,
+      "sha256": "37374c32814dee23db27b5e87229cde87b568471778ebd53e0e2ed011c3049f2"
+    }
+  ]
+}

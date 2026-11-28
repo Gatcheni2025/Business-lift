@@ -34,9 +34,10 @@ export function whatsappInvitationDraft(p){
 export function verifiedWhatsappLinks(recipient,text){
  const base=savedWhatsAppCheck(recipient);
  if(!base||typeof text!=='string'||!text.trim()||text.length>8000)throw Error('Invalid reviewed WhatsApp draft.');
- const app=new URL(base);app.searchParams.set('text',text);
- const web=new URL('https://web.whatsapp.com/send');web.searchParams.set('phone',app.pathname.slice(1));web.searchParams.set('text',text);
- return {app:app.href,web:web.href};
+ // Follow WhatsApp's documented percent-encoded text format. Use
+ // encodeURIComponent once, not form encoding (+ for spaces).
+ const digits=new URL(base).pathname.slice(1),encoded=encodeURIComponent(text);
+ return {app:'https://wa.me/'+digits+'?text='+encoded,web:'https://web.whatsapp.com/send?phone='+digits+'&text='+encoded};
 }
 export function manualWhatsappDraftUrl(p){
  const wa=savedWhatsAppCheck(p?.phone);
@@ -169,6 +170,26 @@ function input(f,label,name,type='text',required=true,max=240){const l=el('label
 function choice(f,label,name,values){const l=el('label',label),s=el('select');s.name=name;s.setAttribute('aria-label',label);for(const v of values){const o=el('option',title(v));o.value=v;s.append(o);}l.append(s);f.append(l);return s;}
 function check(f,label,name){const l=el('label',undefined,'confirm-check'),i=el('input');i.type='checkbox';i.name=name;i.required=true;l.append(i,el('span',label));f.append(l);return i;}
 function submit(f,label,action){const b=el('button',label,'button primary');b.type='submit';f.append(b);f.onsubmit=e=>{e.preventDefault();if(f.reportValidity())void action(Object.fromEntries(new FormData(f)),b);};}
+// Fixed, public artwork paths; never construct a URL from untrusted listing data.
+const benefitCategories=Object.freeze(['spaza','retail','wholesale','food','salon','service','manufacturer','other']);
+export const benefitsPictures=Object.freeze(benefitCategories.map(category=>Object.freeze({
+ category,name:title(category)+' benefits picture',href:'/assets/admin-benefits/teyza-benefits-'+category+'-v1.png'
+})));
+export function benefitsPictureFor(category){
+ return benefitsPictures.find(p=>p.category===category)||benefitsPictures.at(-1);
+}
+export function reviewedBenefitsPicture(p,purpose){
+ return purpose==='introduction'&&p?.permissions?.whatsapp?.granted===true&&!p.optedOut&&savedWhatsAppCheck(p.phone)?benefitsPictureFor(p.category):null;
+}
+export async function approvedBenefitsBlob(picture,revalidate,fetcher=fetch){
+ if(!benefitsPictures.some(p=>p.href===picture?.href))throw Error('Unknown benefits picture.');
+ await revalidate();
+ const r=await fetcher(picture.href,{credentials:'same-origin',redirect:'error'});
+ if(!r.ok||r.redirected||!/^image\/png(?:\s*;|$)/i.test(r.headers.get('content-type')||''))throw Error('Benefits picture unavailable.');
+ const b=await r.blob();
+ if(b.type!=='image/png'||b.size<=0||b.size>1048576)throw Error('Invalid benefits picture.');
+ return b;
+}
 // Only approved same-origin public media and official destinations. No remote uploads or tracking.
 export const acquisitionAssets=Object.freeze([
  {name:'App-first business introduction',description:'Share this link with an opted-in owner to show actual app screens, benefits and official downloads.',href:'/for-shop-owners.html',kind:'page'},
@@ -178,6 +199,7 @@ export const acquisitionAssets=Object.freeze([
  {name:'Actual Teyza home screen',description:'Existing actual Android app capture.',href:'/assets/app/home.webp',kind:'image'},
  {name:'Actual nearby businesses screen',description:'Existing actual Android app capture; do not represent example shops as newly registered.',href:'/assets/app/nearby-shops.webp',kind:'image'},
  {name:'Spaza owner website artwork',description:'Existing promotional artwork, not proof of a registered business.',href:'/assets/app/spaza-owner.webp',kind:'image'},
+ ...benefitsPictures.map(p=>({name:p.name,description:'Approved category artwork. Share only with owners who agreed to receive marketing. Business photographs are illustrative.',href:p.href,kind:'image'})),
  {name:'Teyza brand wordmark',description:'Official website artwork.',href:'/assets/app/wordmark.svg',kind:'image'},
  {name:'Teyza app icon',description:'Official website app icon.',href:'/assets/app/icon.svg',kind:'image'},
  {name:'Seller membership and terms',description:'Optional selling features and applicable conditions.',href:'/seller-subscriptions.html',kind:'page'},
@@ -194,6 +216,33 @@ function assetLink(label,href,download=false){
  const a=el('a',label,'button quiet');a.href=href;a.target='_blank';a.rel='noopener noreferrer';if(download)a.download='';return a;
 }
 function copyAsset(value,notice){return async()=>{try{await navigator.clipboard.writeText(value);notice('Copied approved material. No message sent.','success');}catch{notice('Clipboard unavailable. Open the asset or select and copy the draft manually.','info');}};}
+function renderBenefitsPicture(picture,revalidate,message){
+ const section=el('section',undefined,'acq-benefits-picture');section.dataset.benefitsCategory=picture.category;
+ section.append(el('h4',picture.name),el('p','Attach this picture manually after reviewing the recipient and message. No picture or message is sent automatically.','footnote'));
+ const layout=el('div',undefined,'acq-benefits-layout'),img=el('img');
+ img.alt=picture.name+' — Teyza benefits';img.width=1080;img.height=1350;img.loading='lazy';img.decoding='async';
+ const actions=el('div',undefined,'acq-benefits-actions'),status=el('p','','footnote');status.setAttribute('role','status');
+ const fallback='Use Download benefits picture, then attach the PNG in WhatsApp. No message sent.';
+ let copying=false;
+ const copy=button('Copy benefits picture',async()=>{
+  if(copying||!section.isConnected)return;
+  if(!window.isSecureContext||!navigator.clipboard?.write||typeof ClipboardItem!=='function'){status.textContent='Image clipboard is unavailable. '+fallback;return;}
+  copying=true;copy.disabled=true;status.textContent='Checking permission and preparing picture…';
+  try{
+   // Start clipboard.write within the click gesture; resolve the PNG
+   // asynchronously after the fresh server permission/revision check.
+   const blob=approvedBenefitsBlob(picture,revalidate);
+   blob.catch(()=>{});
+   await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+   if(section.isConnected){status.textContent='Picture copied. Paste it into WhatsApp, or use the download if paste is unavailable. No message sent.';message('Benefits picture copied. No message sent.','success');}
+  }catch(error){if(section.isConnected)status.textContent='Picture was not copied. '+fallback;}
+  finally{copying=false;if(section.isConnected)copy.disabled=false;}
+ });
+ img.addEventListener('error',()=>{img.hidden=true;status.textContent='Picture preview unavailable. '+fallback;});
+ img.src=picture.href;
+ actions.append(copy,assetLink('Download benefits picture',picture.href,true),assetLink('Open full-size picture',picture.href),button('Copy business guide link',copyAsset('https://teyza.co.za/for-shop-owners.html',message)),status);
+ layout.append(img,actions);section.append(layout);return section;
+}
 function renderAssets(message){
  const section=card('Marketing & onboarding asset library','Use approved assets consistently. Share only with owners who have agreed to the relevant contact. Original media and unpublished video files are not sent automatically.');
  section.id='acquisition-assets';
@@ -551,7 +600,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   async function openDiscovery(guided=false){
    stopDiscovery();const stamp=++discoveryEpoch;open('discover');discoveryHost.replaceChildren(el('p','Loading the configured Google Maps explorer…','footnote'));
    try{
-    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-discovery-review-v1');
+    const {createCombinedCoverage,resolvePilotArea}=await import('/js/teyza-combined-coverage.mjs?v=20261128-whatsapp-handoff-v1');
     if(!active||stamp!==discoveryEpoch||modal!=='discover'||!dialog.open)return;
     const typed=oneLine(lookupQuery).slice(0,100);
     liveDiscovery=createCombinedCoverage({guided,autoSearch:!guided&&Boolean(lookupSelection||resolvePilotArea(typed)),compact:true,initialTown:typed||(guided?'':'Durban'),initialArea:lookupSelection,areaApi:api,invitationDraft:whatsappInvitationDraft,
@@ -561,7 +610,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
       return matches;
      },
      onAddBusiness:(p,contact,area,areaInfo)=>{if(stamp!==discoveryEpoch||modal!=='discover')return;lookupQuery=oneLine(area).slice(0,100);lookupSelection=null;prepareManual(lookupQuery,p,contact);if(provinces.includes(areaInfo?.province))provinceField.value=areaInfo.province;open('add');},
-     onContactBusiness:id=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id});},
+     onContactBusiness:(id,prepareWhatsApp=false)=>{if(stamp===discoveryEpoch&&modal==='discover')void openRecord({id},prepareWhatsApp?'manual-whatsapp':null,prepareWhatsApp?'introduction':null);},
      report:e=>{if(stamp===discoveryEpoch&&modal==='discover')message(e.message||'Google Places unavailable.','error');}});
     discoveryHost.replaceChildren(liveDiscovery.panel);
     await liveDiscovery.activate();
@@ -607,7 +656,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
   const confirmConsent=check(consentBox,'I confirm the owner explicitly opted in to each selected channel.','initialConsentConfirmed');
   function syncConsent(){const on=emailOpt.checked||waOpt.checked;for(const field of [consentNote,confirmConsent]){field.parentElement.hidden=!on;field.disabled=!on;field.required=on;}}
   emailOpt.onchange=waOpt.onchange=syncConsent;syncConsent();f.append(consentBox);
-  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
+  submit(f,'Add Business',(d,b)=>perform(root,b,async stamp=>{const {initialEmail,initialWhatsApp,initialConsentNote,initialConsentConfirmed,independentSourceConfirmed,...rest}=d;const r=await api('ops_acquisition_create',{...rest,geographyConfirmed:d.geographyConfirmed==='on',googlePlaceId:selectedListing?.placeId||'',independentSourceConfirmed:independentSourceConfirmed==='on',authorisedSource:d.authorisedSource==='on',initialConsentChannels:[initialEmail==='on'?'email':null,initialWhatsApp==='on'?'whatsapp':null].filter(Boolean),initialConsentNote:initialConsentNote||'',initialConsentConfirmed:initialConsentConfirmed==='on'});if(serial!==stamp)return;focusMessage=r.prospect?.permissions?.whatsapp?.granted===true&&!r.prospect.optedOut&&savedWhatsAppCheck(r.prospect.phone)&&!priorInvitation(r.prospect)?{channel:'manual-whatsapp',kind:'introduction'}:null;records=[r.prospect,...records.filter(x=>x.id!==r.prospect.id)];await readDetail(r.prospect.id,stamp);message('Business added. No message sent.','success');}));
   create.append(button('Back to search',()=>open('lookup')),f);panels.add=create;
   if(detail&&selected===detail.prospect.id){
    const p=detail.prospect,c=card('Business: '+p.name,'Guided onboarding · '+locationText(p));c.classList.add('acq-guided-record');
@@ -642,6 +691,7 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
         try{
          const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
          if(!box.isConnected||current?.purpose!==purpose||current?.recipient!==draft.recipient||current?.sender!==draft.sender||current?.text!==draft.text)throw Error('The draft changed. Refresh this record.');
+         if(win.closed)throw Error('The WhatsApp window was closed. Reopen the reviewed draft.');
          win.location.replace(href);
         }catch(error){try{win.close();}catch{}if(box.isConnected)message(error.message||'Current permission could not be verified.','error');}
         finally{launching=false;}
@@ -649,14 +699,18 @@ export function createAcquisitionAdmin({api:request,onError,message,openSupport}
        // Buttons intentionally have no destination href: middle-click or
        // context menus must not bypass the fresh server permission check.
        const launch=button('Open WhatsApp Web — prefilled message',()=>launchTo(urls.web));
-       launch.classList.add('acq-send-wa');
-       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));
+       const launchApp=button('Open WhatsApp app — prefilled message',()=>launchTo(urls.app));launchApp.classList.add('acq-send-wa');
        const preview=el('textarea');preview.readOnly=true;preview.rows=6;preview.value=draft.text;preview.setAttribute('aria-label','Verified manual WhatsApp preview');
        const log=el('form',undefined,'ops-form');check(log,'I verified the actual message was sent from the separate business number.','sentConfirmed');
        submit(log,'Record actual WhatsApp send',(v,sendButton)=>perform(root,sendButton,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_sent',purpose,sender:draft.sender,note:'Administrator confirmed actual manual send in WhatsApp.',confirmed:true,sentConfirmed:v.sentConfirmed==='on'});await readDetail(p.id,stamp);}));
        const opened=button('Record chat opened only',()=>perform(root,opened,async stamp=>{await api('ops_acquisition_event',{id:p.id,revision:p.revision,type:'manual_whatsapp_opened',purpose,sender:draft.sender,note:'Administrator confirmed chat opened, not sent.',confirmed:true});await readDetail(p.id,stamp);}));
        opened.disabled=!!p.manualWhatsApp?.[purpose]?.openedAt;
-       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launch,launchApp,button('Copy reviewed message',async()=>{try{const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;if(!box.isConnected||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),el('p','The reviewed text is prefilled in the WhatsApp message input. Check the recipient and the separate Teyza Business account; press Send yourself. Opening a chat is not a sent message.','footnote'),opened,log);
+       const revalidate=async()=>{
+        const current=(await api('ops_acquisition_manual_whatsapp',{id:p.id,revision:p.revision,purpose,sender:draft.sender})).draft;
+        if(!box.isConnected||current?.purpose!==purpose||current?.text!==draft.text||current?.sender!==draft.sender||current?.recipient!==draft.recipient)throw Error('Draft changed. Refresh this record.');
+       };
+       const picture=reviewedBenefitsPicture(p,purpose);
+       result.replaceChildren(el('p','From '+draft.sender+' · To '+draft.recipient,'footnote'),preview,launchApp,launch,button('Copy reviewed message',async()=>{try{await revalidate();await copyAsset(draft.text,message)();}catch(e){if(box.isConnected)message(e.message||'Permission could not be verified.','error');}}),...(picture?[renderBenefitsPicture(picture,revalidate,message)]:[]),el('p','The message is included in the WhatsApp launch link. Sign into the separate Teyza Business account, confirm the recipient and check the text input before pressing Send. If WhatsApp opens an empty composer, use Copy reviewed message and paste it manually. Opening a chat is not a sent message.','footnote'),opened,log);
       }catch(e){if(box.isConnected){result.textContent=e.message||'Manual draft unavailable.';onError(e);}}finally{if(box.isConnected)btn.disabled=false;}
      })();});box.append(form,result);
     }else box.append(el('p','No manual introduction or verified email reminder is due. Obtain permission or review history and Zoho status.','footnote'));

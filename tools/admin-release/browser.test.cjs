@@ -43,7 +43,7 @@ async function main(){
   const file=['/admin','/admin/','/admin.html','/admin-sellers.html'].includes(p)?path.join(root,'admin.html'):
    p==='/assets/teyza-sprout-wordmark.svg'?path.join(repo,p):path.join(root,p);
   if(!file.startsWith(root+path.sep)&&file!==path.join(repo,'/assets/teyza-sprout-wordmark.svg')||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
-  res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'application/javascript');res.end(fs.readFileSync(file));
+  res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'application/javascript');res.end(fs.readFileSync(file));
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port;
  let browser;try{browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.TEYZA_ADMIN_CHROMIUM?{executablePath:process.env.TEYZA_ADMIN_CHROMIUM}:{})});}
@@ -703,6 +703,9 @@ async function main(){
    const checkLink=shop.getByRole('link',{name:'Open WhatsApp — check number only',exact:true});
    assert.equal(await checkLink.getAttribute('href'),'https://wa.me/27315550100');
    assert.equal(await checkLink.getAttribute('target'),'_blank');
+   assert(await shop.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).isVisible());
+   assert(!new URL(await checkLink.getAttribute('href')).searchParams.has('text'));
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
    assert(await noContact.getByText('No phone listed',{exact:true}).isVisible());
@@ -742,7 +745,10 @@ async function main(){
    const chosen=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    await chosen.getByRole('button',{name:'View contact details'}).click();
    await chosen.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
-   await chosen.getByRole('button',{name:'Add Business',exact:true}).click();
+   await chosen.getByRole('button',{name:'Add Business',exact:true}).waitFor({state:'visible'});
+   await f.page.waitForFunction(()=>Array.from(document.querySelectorAll('.acq-business-card')).some(card=>card.textContent.includes('Synthetic Spaza')&&!card.querySelector('[data-acq-record-action]')?.disabled));
+   await chosen.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).click();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create'||c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    const form=f.page.getByRole('dialog').locator('form').filter({has:f.page.getByRole('button',{name:'Add Business',exact:true})});
    await form.getByLabel('Business name',{exact:true}).waitFor();
    assert.equal(await form.getByLabel('Business name',{exact:true}).inputValue(),'');
@@ -777,8 +783,10 @@ async function main(){
    const saved=f.page.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    await saved.getByText('Added',{exact:true}).waitFor();
    assert.equal(await saved.getByRole('button',{name:'Add Business',exact:true}).count(),0);
-   await saved.getByRole('button',{name:'Contact',exact:true}).click();
+   await saved.getByRole('button',{name:'View contact details',exact:true}).click();
+   await saved.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).click();
    await f.page.getByRole('heading',{name:'Business: Synthetic Spaza'}).waitFor();
+   assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_create').length,1);
    await f.page.getByText('Zoho email · introduction / registration welcome / membership',{exact:true}).click();
    await f.page.getByRole('heading',{name:'Send a message'}).waitFor();
@@ -808,7 +816,11 @@ async function main(){
    assert.equal(await f.page.getByRole('button',{name:'Record welcome sent'}).count(),0);
    await f.page.getByRole('button',{name:'Artwork & training resources'}).click();
    await f.page.getByRole('heading',{name:'Marketing & onboarding asset library'}).waitFor();
-   assert.equal(await f.page.getByRole('link',{name:'View original artwork'}).count(),5);
+   const originalArtLinks=f.page.getByRole('link',{name:'View original artwork',exact:true});
+   const approvedArt=require('../app-first-release/whatsapp-benefits-manifest.json').assets.map(a=>a.path);
+   const previousArt=['/assets/app/home.webp','/assets/app/nearby-shops.webp','/assets/app/spaza-owner.webp','/assets/app/wordmark.svg','/assets/app/icon.svg'];
+   assert.equal(await originalArtLinks.count(),13);
+   assert.deepEqual((await originalArtLinks.evaluateAll(links=>links.map(link=>link.getAttribute('href')))).sort(),[...previousArt,...approvedArt].sort());
    assert.equal(await f.page.getByRole('link',{name:'Watch video',exact:true}).count(),0);
    await f.page.route('**/assets/app/teyza-business-explainer.mp4',route=>route.fulfill({status:200,headers:{'content-type':'video/mp4','content-length':'100'}}));
    await f.page.route('**/assets/app/teyza-business-intro.mp4',route=>route.fulfill({status:200,headers:{'content-type':'text/html','content-length':'100'}}));
@@ -910,12 +922,12 @@ async function main(){
   });
   await check('Guided manual WhatsApp separates chat opening from sending and waits for email acceptance',async()=>{
    const stamp=Date.now()-1000,base={id:'manual-guided',name:'Synthetic Guided Business',city:'Durban',province:'KwaZulu-Natal',area:'Umlazi',category:'spaza',stage:'identified',phone:'+27712345678',email:'synthetic@example.test',permissions:{whatsapp:{granted:true},email:{granted:true}},revision:0,optedOut:false};
-   let prospect={...base},prepares=0,events=0;
+   let prospect={...base},prepares=0,events=0;const draftText='Synthetic permitted introduction 🌱\n\nExample & Sons + 100%';
    const f=await pageFor({api:async(route,body)=>{
     if(body.action==='ops_acquisition_list'){await route.fulfill({json:{ok:true,schema:1,prospects:[prospect],next:null,communications:{email:{invitation:true}}}});return true;}
     if(body.action==='ops_acquisition_command_page'){await route.fulfill({json:await syntheticCommandPage(body,{asOf:stamp,scanned:1,prospects:[prospect],funnel:{discovered:1},queues:{new_contact:1}})});return true;}
     if(body.action==='ops_acquisition_detail'){await route.fulfill({json:{ok:true,prospect,events:[]}});return true;}
-    if(body.action==='ops_acquisition_manual_whatsapp'){prepares++;assert.equal(body.data.sender,'+27712345679');assert.equal(body.data.purpose,'introduction');await route.fulfill({json:{ok:true,draft:{purpose:'introduction',sender:body.data.sender,recipient:prospect.phone,text:'Synthetic permitted introduction'}}});return true;}
+    if(body.action==='ops_acquisition_manual_whatsapp'){prepares++;assert.equal(body.data.sender,'+27712345679');assert.equal(body.data.purpose,'introduction');await route.fulfill({json:{ok:true,draft:{purpose:'introduction',sender:body.data.sender,recipient:prospect.phone,text:draftText}}});return true;}
     if(body.action==='ops_acquisition_event'){
      events++;const d=body.data;assert.equal(d.purpose,'introduction');assert.equal(d.sender,'+27712345679');
      if(d.type==='manual_whatsapp_opened')prospect={...prospect,manualWhatsApp:{introduction:{purpose:'introduction',sender:d.sender,openedAt:stamp}},revision:prospect.revision+1};
@@ -932,22 +944,43 @@ async function main(){
     await dialog.getByLabel('I will use this account and the owner agreed to WhatsApp contact.').check();
     await dialog.getByRole('button',{name:'Prepare manual WhatsApp',exact:true}).click();
     await dialog.getByLabel('Verified manual WhatsApp preview').waitFor();
-    assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),'Synthetic permitted introduction');
+    assert.equal(await dialog.getByLabel('Verified manual WhatsApp preview').inputValue(),draftText);
     assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
+   assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
    await prepare();assert.equal(events,0);
+   const art=dialog.locator('[data-benefits-category="spaza"]');
+   await art.waitFor();
+   const poster=art.getByRole('img',{name:'Spaza shop benefits picture — Teyza benefits'});
+   await poster.waitFor();
+   await page.waitForFunction(()=>{const i=document.querySelector('[data-benefits-category="spaza"] img');return i?.complete&&i.naturalWidth===1080&&i.naturalHeight===1350;});
+   assert.equal(await poster.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');
+   const download=art.getByRole('link',{name:'Download benefits picture',exact:true});assert.equal(await download.getAttribute('href'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');assert.notEqual(await download.getAttribute('download'),null);
+   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{const blob=await items[0].getType('image/png');window.__benefitsCopy={size:blob.size,type:blob.type};}}});});
+   await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
+   await art.getByText(/Picture copied\. Paste it into WhatsApp/).waitFor();
+   assert.deepEqual(await page.evaluate(()=>window.__benefitsCopy),{size:647472,type:'image/png'});assert.equal(prepares,2);assert.equal(events,0);
+   await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
+   await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
+   await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,2);assert.equal(events,0);
    // Intercept the popup before navigation. No real WhatsApp traffic or send.
    await f.context.route('https://web.whatsapp.com/send?*',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic WhatsApp</title></html>'}));
    const opened=f.context.waitForEvent('page');
    await dialog.getByRole('button',{name:'Open WhatsApp Web — prefilled message'}).click();
    const popup=await opened;await popup.waitForURL('https://web.whatsapp.com/send?*');
-   const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),'Synthetic permitted introduction');
-   await popup.close();assert.equal(prepares,2);assert.equal(events,0);
+   const url=new URL(popup.url());assert.equal(url.searchParams.get('phone'),'27712345678');assert.equal(url.searchParams.get('text'),draftText);assert(url.href.includes('%20'));
+   await popup.close();assert.equal(prepares,3);assert.equal(events,0);
+   await f.context.route('https://wa.me/**',route=>route.fulfill({contentType:'text/html',body:'<html><title>Synthetic app handoff</title></html>'}));
+   const appOpened=f.context.waitForEvent('page');
+   await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).click();
+   const appPopup=await appOpened;await appPopup.waitForURL('https://wa.me/**');
+   const appUrl=new URL(appPopup.url());assert.equal(appUrl.pathname,'/27712345678');assert.equal(appUrl.searchParams.get('text'),draftText);assert(appUrl.href.includes('%20'));
+   await appPopup.close();assert.equal(prepares,4);assert.equal(events,0);
    await dialog.getByRole('button',{name:'Record chat opened only'}).click();
    await dialog.getByText(/introduction · opened .* · sent Not recorded/).waitFor();assert.equal(events,1);assert(!prospect.contactedAt);
    await prepare();await dialog.getByLabel('I verified the actual message was sent from the separate business number.').check();await dialog.getByRole('button',{name:'Record actual WhatsApp send'}).click();
    await dialog.getByRole('heading',{name:'Record actual owner response',exact:true}).waitFor();
-   assert.equal(prepares,3);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
+   assert.equal(prepares,5);assert.equal(events,2);assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
   });
   await check('National materialized summary opens a fresh live record, never authorizes a contact from cached evidence',async()=>{
@@ -972,6 +1005,7 @@ async function main(){
    await row.getByRole('button',{name:'Open live record',exact:true}).click();
    const dialog=page.getByRole('dialog');await dialog.waitFor();
    assert(await dialog.getByText('DO NOT CONTACT',{exact:true}).first().isVisible());
+   assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
    assert(f.calls.some(c=>c.action==='ops_acquisition_detail'&&c.data.id===cached.id));
    assert(!f.calls.some(c=>c.action==='ops_acquisition_send'));
    assert.deepEqual(f.errors,[]);await f.context.close();
