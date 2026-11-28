@@ -116,7 +116,7 @@ export function attachAreaAutocomplete(input,{api,onSelect=()=>{},onEdit=()=>{},
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();index=index<0?(e.key==='ArrowDown'?0:buttons.length-1):(index+(e.key==='ArrowDown'?1:buttons.length-1)+buttons.length)%buttons.length;buttons.forEach((b,i)=>b.classList.toggle('highlighted',i===index));return;}
   if(e.key==='Enter'&&index>=0){e.preventDefault();e.stopImmediatePropagation();buttons[index].click();}
  },{capture:true});
- return {selected,suggest,clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
+ return {selected,suggest,selectLocal:area=>choose({area}),clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
 }
 // A failed or pending details request is not proof of an absent phone number.
 // Keep a previously listed phone available if the optional refresh fails.
@@ -141,6 +141,72 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
  const contactCache=new Map();
  let guideStep=1,guideArea=null;
+ const directory=elt('section');directory.className='acq-locality-directory';directory.hidden=true;
+ const directoryTitle=elt('h4','Townships & communities'),directoryNote=elt('p','Browse the government locality reference by province. Select a community, then confirm its search location. This is not a complete or current township census.');
+ directoryNote.className='footnote';
+ const quick=elt('div');quick.className='acq-locality-quick';
+ const filterRow=elt('div');filterRow.className='acq-locality-filter';
+ const localityFilter=elt('input');localityFilter.type='search';localityFilter.maxLength=80;localityFilter.placeholder='Filter communities by name';localityFilter.setAttribute('aria-label','Filter township directory');
+ const filterButton=elt('button','Filter list');filterButton.type='button';filterButton.className='button quiet';filterRow.append(localityFilter,filterButton);
+ const directoryStatus=elt('p','');directoryStatus.setAttribute('role','status');directoryStatus.className='footnote';
+ const localityRows=elt('div');localityRows.className='acq-locality-rows';localityRows.setAttribute('aria-label','Townships and communities');
+ const pages=elt('div');pages.className='acq-locality-pages';
+ const previousPage=elt('button','Previous communities'),nextPage=elt('button','More communities'),retryDirectory=elt('button','Retry directory');
+ for(const btn of [previousPage,nextPage,retryDirectory]){btn.type='button';btn.className='button quiet';btn.hidden=true;}
+ pages.append(previousPage,nextPage,retryDirectory);directory.append(directoryTitle,directoryNote,quick,filterRow,directoryStatus,localityRows,pages);
+ let browseSerial=0,browseQuery='',browseOffset=0,browseNext=null,browseHistory=[],browseBusy=false;
+ const browseCache=new Map();
+ function paintDirectoryQuick(){
+  quick.replaceChildren();
+  const list=pilotAreas.filter(r=>r[1]===province.value);
+  if(!list.length)return;
+  quick.append(elt('small','Quick picks · independently sourced centres'));
+  for(const [name,p] of list){const btn=elt('button',name);btn.type='button';btn.className='button quiet';btn.onclick=()=>{if(province.value!==p)return;nextHint.textContent='';void autocomplete.selectLocal(resolvePilotArea(name,p));};quick.append(btn);}
+ }
+ function browseValid(stamp,p){return stamp===browseSerial&&directory.isConnected&&guideStep===1&&province.value===p;}
+ function resetDirectory(){
+  browseSerial++;browseBusy=false;browseQuery='';browseOffset=0;browseNext=null;browseHistory=[];localityFilter.value='';localityRows.replaceChildren();directoryStatus.textContent='';
+  previousPage.hidden=nextPage.hidden=retryDirectory.hidden=true;filterButton.disabled=false;
+ }
+ async function loadDirectory(offset=0){
+  if(!guided||guideStep!==1||province.value==='All provinces'||!directory.isConnected)return;
+  const p=province.value,term=browseQuery,stamp=++browseSerial,key=JSON.stringify([p,term,offset]);
+  browseOffset=offset;browseNext=null;browseBusy=true;filterButton.disabled=true;previousPage.hidden=nextPage.hidden=retryDirectory.hidden=true;localityRows.replaceChildren();directoryStatus.textContent='Loading communities in '+p+'…';
+  try{
+   if(!areaApi)throw Error('Locality directory unavailable.');
+   let reply=browseCache.get(key);
+   if(!reply)reply=await areaApi('ops_acquisition_locality_browse',{province:p,query:term,offset});
+   if(!browseValid(stamp,p))return;
+   if(reply?.schema!==1||reply.province!==p||reply.query!==term||reply.offset!==offset||!Array.isArray(reply.localities)||reply.localities.length>50||(reply.nextOffset!==null&&(!Number.isSafeInteger(reply.nextOffset)||reply.nextOffset<=offset||reply.nextOffset>100000)))throw Error('Unexpected locality directory response.');
+   if(browseCache.size>=24)browseCache.clear();browseCache.set(key,reply);
+   browseNext=reply.nextOffset;
+   const seen=new Set();
+   for(const item of reply.localities){
+    if(item?.province!==p||typeof item.township!=='string'||!item.township.trim()||typeof item.municipality!=='string'||!item.municipality.trim()||typeof item.localityId!=='string'||seen.has(item.localityId))continue;
+    seen.add(item.localityId);
+    const btn=elt('button');btn.type='button';btn.className='acq-locality-choice';btn.append(elt('strong',item.township),elt('small',item.municipality+' · '+p));
+    btn.onclick=()=>{
+     if(province.value!==p||guideStep!==1)return;
+     // A reference name is not a geocode. Resolve explicitly via the
+     // existing area selector, including its strict province validation.
+     const full=[item.township,item.municipality,p].join(', ');
+     town.value=full.length<=100?full:item.township.slice(0,100);
+     autocomplete.suggest();town.focus();
+     nextHint.textContent='Confirm the matching location from the area suggestions below.';
+    };localityRows.append(btn);
+   }
+   directoryStatus.textContent=seen.size?seen.size+' communities on this page · '+p:reply.nextOffset!==null?'No usable references on this page. More source rows are available.':'No matching reference on this page. Try another name or use the area search below.';
+   previousPage.hidden=browseHistory.length===0;nextPage.hidden=browseNext===null;
+  }catch(e){if(browseValid(stamp,p)){directoryStatus.textContent='The locality directory could not be loaded. Retry or use the area search below.';retryDirectory.hidden=false;previousPage.hidden=browseHistory.length===0;}}
+  finally{if(browseValid(stamp,p)){browseBusy=false;filterButton.disabled=false;}}
+ }
+ function applyDirectoryFilter(){
+  if(browseBusy)return;browseQuery=localityFilter.value.trim();browseOffset=0;browseNext=null;browseHistory=[];void loadDirectory();
+ }
+ filterButton.onclick=applyDirectoryFilter;localityFilter.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyDirectoryFilter();}});
+ nextPage.onclick=()=>{if(browseBusy||browseNext===null)return;browseHistory.push(browseOffset);void loadDirectory(browseNext);};
+ previousPage.onclick=()=>{if(browseBusy||!browseHistory.length)return;void loadDirectory(browseHistory.pop());};
+ retryDirectory.onclick=()=>{if(!browseBusy)void loadDirectory(browseOffset);};
  const phoneFilter=elt('select');phoneFilter.setAttribute('aria-label','Phone availability');
  for(const [id,label] of [['all','All results — numbers first'],['number','Known phone numbers'],['unchecked','Not yet checked'],['failed','Contact check unavailable'],['missing','No listed phone — field enquiry']]){const o=elt('option',label);o.value=id;phoneFilter.append(o);}
  const chains=elt('input');chains.type='checkbox';chains.checked=false;
@@ -157,7 +223,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   stepLine.replaceChildren();
   for(const [i,label] of ['Location','Business type','Results'].entries()){const s=elt('span',(i+1)+'. '+label);s.dataset.current=String(guideStep===i+1);s.dataset.done=String(guideStep>i+1);stepLine.append(s);}
   selectedText.textContent=guideArea?'Selected community: '+guideArea.label:'Choose the province, then a town or township.';
-  province.hidden=guideStep!==1;town.parentElement.hidden=guideStep!==1;
+  province.hidden=guideStep!==1;town.parentElement.hidden=guideStep!==1;directory.hidden=guideStep!==1||province.value==='All provinces';
   town.disabled=guideStep!==1||province.value==='All provinces';
   continueButton.hidden=guideStep!==1;continueButton.disabled=province.value==='All provinces';
   category.hidden=guideStep===1;search.hidden=guideStep===1;editButton.hidden=guideStep===1;
@@ -166,10 +232,10 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  }
  continueButton.onclick=async()=>{
   nextHint.textContent='';
-  try{if(province.value==='All provinces')throw Error('Choose a province first.');const selected=await locate();if(!selected||selected.province!==province.value)throw Error('Select the correct community in the selected province.');guideArea=selected;guideStep=2;paintGuide();}
+  try{if(province.value==='All provinces')throw Error('Choose a province first.');const selected=await locate();if(!selected||selected.province!==province.value)throw Error('Select the correct community in the selected province.');guideArea=selected;guideStep=2;browseSerial++;browseBusy=false;filterButton.disabled=false;paintGuide();}
   catch(e){nextHint.textContent=e.message||'Choose a confirmed location.';}
  };
- editButton.onclick=()=>{if(searchPending)return;guideStep=1;guideArea=null;resetAreaResults();paintGuide();};
+ editButton.onclick=()=>{if(searchPending)return;guideStep=1;guideArea=null;resetAreaResults();paintGuide();if(!localityRows.children.length&&province.value!=='All provinces')void loadDirectory(browseOffset);};
  phoneFilter.onchange=chains.onchange=()=>{pageSize=pageLength;render();};
  const businessFilter=elt('input');businessFilter.type='search';businessFilter.placeholder='Filter results by business name';businessFilter.setAttribute('aria-label','Filter live business names');
  const panel=elt('section');panel.className='tp-combined'+(compact?' acq-google-compact':'');
@@ -201,11 +267,11 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  const mapPanel=elt('details');mapPanel.className='acq-optional-map';mapPanel.append(elt('summary','Show map (optional)'));
  const mapNotice=elt('p','');mapNotice.setAttribute('role','status');
  if(compact){town.value=initialArea?.label||String(initialTown||(guided?'':'Durban')).slice(0,100);province.value=initialArea?.province||'All provinces';category.value=guided?'spaza':'all';mapPanel.append(mapNotice,canvas);}
- if(guided){controls.append(province,town,continueButton,editButton,category,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
+ if(guided){controls.append(province,directory,town,continueButton,editButton,category,search);}else controls.append(town,province,category,search);if(!compact)controls.append(toggle(showT,'Teyza registered'),toggle(showG,'Google only'));
  if(compact){panel.append(title,note);if(guided)panel.append(guide);panel.append(controls,status,count,businessFilter);if(guided)panel.append(phoneFilter,chainLabel);panel.append(layerFilters,attribution,list,mapPanel);businessFilter.oninput=()=>{pageSize=pageLength;render();};}else panel.append(title,note,controls,status,count,layerFilters,canvas,attribution,list);
  let autocomplete=null;
  function resetAreaResults(){if(searchPending)return;resultEpoch++;contactCache.clear();places=[];searchCompleted=false;searchError='';searchedArea=null;render();}
- if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();if(guided){guideStep=1;guideArea=null;paintGuide();if(town.value.trim()&&!town.disabled)autocomplete.suggest();}};if(guided){province.options[0].textContent='Choose a province';paintGuide();}}
+ if(compact){autocomplete=attachAreaAutocomplete(town,{api:areaApi,province:()=>province.value,initialArea,onEdit:resetAreaResults,onSelect:resetAreaResults});province.onchange=()=>{autocomplete.clear();resetAreaResults();if(guided){guideStep=1;guideArea=null;town.value='';nextHint.textContent='';resetDirectory();paintGuide();paintDirectoryQuick();void loadDirectory();}};if(guided){province.options[0].textContent='Choose a province';town.placeholder='Or search for a town or township';paintGuide();}}
 
  const human=v=>v===true?'Yes':v===false?'No':'Not provided';
  const info=p=>{
@@ -408,7 +474,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  async function startMap(){
   if(active)return;
   active=true;const stamp=++epoch;start.disabled=true;
-  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent=guided?'Choose a province and confirm a town or township.':'Enter a town or township, choose a category, and select Search this area.';if(guided)paintGuide();else if(autoSearch)void searchArea();else if(town.value.trim())autocomplete?.suggest();return;}
+  if(compact){shown=true;search.disabled=false;onReady?.();render();status.textContent=guided?'Choose a province and confirm a town or township.':'Enter a town or township, choose a category, and select Search this area.';if(guided){paintGuide();paintDirectoryQuick();if(province.value!=='All provinces')void loadDirectory();}else if(autoSearch)void searchArea();else if(town.value.trim())autocomplete?.suggest();return;}
   status.textContent='Loading configured Google map…';
   try{
    await ensureGoogle();if(stamp!==epoch||!active)return;
@@ -503,5 +569,5 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
  search.onclick=()=>searchArea();
  showT.onchange=render;showG.onchange=render;
  for(const input of Object.values(layers))input.onchange=render;
- return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){autocomplete?.clear();searchedArea=null;epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
+ return {panel,activate:()=>startMap(),setShops(items){registered=Array.isArray(items)?items.filter(good):[];if(shown)render();},clear(){autocomplete?.clear();resetDirectory();browseCache.clear();searchedArea=null;epoch++;resultEpoch++;contactCache.clear();searchError='';center=null;searchPending=false;clearMarkers();registered=[];places=[];searchCompleted=false;onDiscovery?.({state:'not-searched',total:0,potential:0,matched:0});if(map){for(const m of markers)m.setMap(null);}map=null;google=null;googleLoading=null;shown=false;active=false;canvas.style.display='none';start.disabled=false;search.disabled=true;town.disabled=province.disabled=category.disabled=false;list.replaceChildren();canvas.replaceChildren();mapPanel.open=false;if(start.isConnected)start.remove();}};
 }
