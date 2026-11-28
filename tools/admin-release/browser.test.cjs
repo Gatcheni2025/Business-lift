@@ -716,7 +716,7 @@ async function main(){
    assert.equal(await checkLink.getAttribute('href'),'https://wa.me/27315550100');
    assert.equal(await checkLink.getAttribute('target'),'_blank');
    assert(await shop.getByRole('button',{name:'Prepare WhatsApp message',exact:true}).isVisible());
-   const publicPreview=shop.locator('[data-preview-category="spaza"]');await publicPreview.locator('summary').click();const previewImage=publicPreview.getByRole('img');await previewImage.waitFor();assert.equal(await previewImage.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');assert.equal(await shop.locator('[data-benefits-category]').count(),0);
+   const publicPreview=shop.locator('[data-preview-category="spaza"]');await publicPreview.locator('summary').click();const previewImage=publicPreview.getByRole('img');await previewImage.waitFor();assert.equal(await previewImage.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');await previewImage.scrollIntoViewIfNeeded();await f.page.waitForFunction(()=>Array.from(document.querySelectorAll('.acq-business-card [data-preview-category="spaza"][open] img')).some(i=>i.complete&&i.naturalWidth===1080&&i.naturalHeight===1350));assert.equal(await shop.locator('[data-benefits-category]').count(),0);
    assert(!new URL(await checkLink.getAttribute('href')).searchParams.has('text'));
    assert.equal(f.calls.filter(c=>c.action==='ops_acquisition_manual_whatsapp'||c.action==='ops_acquisition_send').length,0);
    // Switching to an external chat must not erase this exact search or
@@ -977,7 +977,7 @@ async function main(){
     assert(await dialog.getByRole('button',{name:'Open WhatsApp app — prefilled message'}).isVisible());
    }
    assert.equal(await dialog.locator('[data-benefits-category]').count(),0);
-   const preArt=dialog.locator('[data-preview-category="spaza"]');await preArt.getByRole('img').waitFor();assert.equal(await preArt.getByRole('img').getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');
+   const preArt=dialog.locator('[data-preview-category="spaza"]'),preImage=preArt.getByRole('img');await preImage.waitFor();assert.equal(await preImage.getAttribute('src'),'/assets/admin-benefits/teyza-benefits-spaza-v1.png');await preImage.scrollIntoViewIfNeeded();await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-preview-category="spaza"][open] img')).some(i=>i.complete&&i.naturalWidth===1080&&i.naturalHeight===1350));
    await prepare();assert.equal(events,0);
    const listBefore=f.calls.filter(c=>c.action==='ops_acquisition_list').length;
    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
@@ -1002,7 +1002,7 @@ async function main(){
    await dialog.getByRole('button',{name:'Copy reviewed message',exact:true}).click();
    await dialog.getByText(/Message copied\. Paste it in WhatsApp/).waitFor();
    assert.equal(await page.evaluate(()=>window.__reviewedText),draftText);assert.equal(prepares,3);
-   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Copy message & download picture',exact:true}).click();const downloaded=await downloadEvent;assert.equal(downloaded.suggestedFilename(),'teyza-benefits-spaza-v1.png');await dialog.getByText(/paste the reviewed text as its caption/).waitFor();assert.equal(prepares,4);assert.equal(events,0);
+   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Copy message & download picture',exact:true}).click();const downloaded=await downloadEvent;assert.equal(downloaded.suggestedFilename(),'teyza-benefits-spaza-v1.png');assert.deepEqual(fs.readFileSync(await downloaded.path()),fs.readFileSync(path.join(root,'assets/admin-benefits/teyza-benefits-spaza-v1.png')));await dialog.getByText(/paste the reviewed text as its caption/).waitFor();assert.equal(prepares,4);assert.equal(events,0);
    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
    await art.getByRole('button',{name:'Copy benefits picture',exact:true}).click();
    await art.getByText(/Image clipboard is unavailable/).waitFor();assert.equal(prepares,4);assert.equal(events,0);

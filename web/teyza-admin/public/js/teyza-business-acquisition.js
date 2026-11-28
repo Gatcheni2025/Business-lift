@@ -231,10 +231,12 @@ function publicBenefitsPreview(picture,expanded=false){
  const details=el('details',undefined,'acq-public-benefits-preview');details.dataset.previewCategory=picture.category;details.open=expanded;
  const img=el('img');img.alt=picture.name+' — preview';img.width=1080;img.height=1350;img.decoding='async';img.loading='lazy';
  const status=el('p','Preview only. Confirm the saved business category and obtain owner permission before sharing.','footnote');
- const show=()=>{if(details.open&&!img.hasAttribute('src'))img.src=picture.href;};
  img.addEventListener('error',()=>{img.hidden=true;status.textContent='Picture preview unavailable. Open the full-size approved artwork.';});
+ // Assign the immutable public source synchronously; browser lazy loading
+ // controls when the PNG bytes are needed, not a deferred toggle event.
+ img.src=picture.href;
  details.append(el('summary','Preview: '+picture.name),img,status,assetLink('Open full-size approved artwork',picture.href));
- details.addEventListener('toggle',show);show();return details;
+ return details;
 }
 function renderBenefitsPicture(picture,revalidate,message){
  const section=el('section',undefined,'acq-benefits-picture');section.dataset.benefitsCategory=picture.category;
