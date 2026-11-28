@@ -118,18 +118,35 @@ export function attachAreaAutocomplete(input,{api,onSelect=()=>{},onEdit=()=>{},
  },{capture:true});
  return {selected,suggest,clear:()=>{close();selection=null;sessionToken=null;status.textContent='';}};
 }
+// A failed or pending details request is not proof of an absent phone number.
+// Keep a previously listed phone available if the optional refresh fails.
+export function contactPhoneState(place,entry){
+ const phone=entry?.state==='ready'?entry.phone:place?.phone;
+ if(typeof phone==='string'&&phone.trim())return 'number';
+ if(entry?.state==='loading')return 'loading';
+ if(entry?.state==='error')return 'failed';
+ if(entry?.state==='ready')return 'missing';
+ return 'unchecked';
+}
+const phoneLabels={number:'Phone available',loading:'Checking contact',failed:'Contact check unavailable',missing:'No phone listed',unchecked:'Not yet checked'};
+const rank={number:0,loading:1,unchecked:2,failed:3,missing:4};
+export function contactLookupIssue(status){
+ if(status===403)return 'Request blocked (HTTP 403). Check access or the trial allowance.';
+ if(status===429)return 'Request limit reached (HTTP 429). Try again later.';
+ if(Number.isInteger(status)&&status>=400&&status<=599)return 'Contact service returned HTTP '+status+'.';
+ return 'Contact service did not return a valid response.';
+}
 export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=true,compact=false,guided=false,initialTown='Durban',initialArea=null,areaApi,invitationDraft,onAddBusiness,onContactBusiness,resolveSavedPlaces}={}){
  let google=null,map=null,markers=[],registered=[],places=[],shown=false,active=false,searchCompleted=false,searchPending=false,epoch=0;
  let resultEpoch=0,pageSize=pageLength,searchError='',center=null,googleLoading=null,searchedArea=null;
  const contactCache=new Map();
  let guideStep=1,guideArea=null;
  const phoneFilter=elt('select');phoneFilter.setAttribute('aria-label','Phone availability');
- for(const [id,label] of [['all','All results — numbers first'],['number','Known phone numbers'],['unchecked','Contact not checked'],['missing','No listed phone — field enquiry']]){const o=elt('option',label);o.value=id;phoneFilter.append(o);}
+ for(const [id,label] of [['all','All results — numbers first'],['number','Known phone numbers'],['unchecked','Not yet checked'],['failed','Contact check unavailable'],['missing','No listed phone — field enquiry']]){const o=elt('option',label);o.value=id;phoneFilter.append(o);}
  const chains=elt('input');chains.type='checkbox';chains.checked=false;
  const chainLabel=elt('label');chainLabel.append(chains,elt('span',' Include large chains'));
  const chainName=p=>/\b(?:shoprite|checkers|pick\s*n\s*pay|pnp|spar|superspar|woolworths|makro|boxer|pep\s*stores|kfc|mcdonald'?s|chicken\s*licken|steers|debonairs)\b/i.test(String(p.name||''));
- const phoneState=p=>{const entry=contactCache.get(p.placeId);return (entry?.state==='ready'?entry.phone:p.phone)?'number':entry?.state==='ready'?'missing':'unchecked';};
- const rank={number:0,unchecked:1,missing:2};
+ const phoneState=p=>contactPhoneState(p,contactCache.get(p.placeId));
  const guide=elt('div');guide.className='acq-discovery-guide';const stepLine=elt('div');stepLine.className='acq-guide-steps';const selectedText=elt('p','');selectedText.className='acq-guide-selection';
  const continueButton=elt('button','Continue to business type');continueButton.type='button';continueButton.className='button primary';
  const editButton=elt('button','Change location');editButton.type='button';editButton.className='button quiet';
@@ -218,7 +235,12 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   host.replaceChildren();
   host.append(elt('p','Email: not supplied by Google Maps'),elt('p','WhatsApp: not verified'));
   if(entry?.state==='loading'){host.append(elt('p','Checking public phone and website…'));return;}
-  if(entry?.state==='error'){host.append(elt('p','Contact lookup unavailable. Open the original listing or visit the address.'));return;}
+  if(entry?.state==='error'){
+   host.append(elt('p','Contact lookup unavailable. '+(entry.issue||'The request did not complete.')+' This does not establish whether a phone is listed.'));
+   if(!(typeof p.phone==='string'&&p.phone.trim())){host.append(elt('p','Open the original listing, arrange a field enquiry or retry deliberately.'));return;}
+   host.append(elt('p','Previously listed contact details (not refreshed):'));
+   entry={phone:p.phone,websiteUrl:p.websiteUrl};
+  }
   const phone=typeof entry?.phone==='string'?entry.phone.trim().slice(0,32):'';
   const website=publicWebsite(entry?.websiteUrl);
   host.append(elt('p',phone?'Public phone: '+phone:'Phone: not listed'),elt('p',website?'Business website: available':'Website: not listed'));
@@ -233,26 +255,26 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   }else if(phone)host.append(elt('p','WhatsApp check unavailable for this phone format. Verify a South African number.'));
   host.append(elt('p',phone||website?'Verify the owner and obtain permission through an appropriate channel before marketing.':'Manual enquiry: visit the business address or inspect the original Google Maps listing.'));
  }
- async function lookupContact(p,host,button){
+ async function lookupContact(p,host,button,updateStatus){
   const stamp=resultEpoch,activation=epoch;
   const cached=contactCache.get(p.placeId);
-  if(cached&&cached.state!=='error'){paintContact(host,p,cached);return;}
-  if(!/^[A-Za-z0-9_-]{10,200}$/.test(p.placeId)){paintContact(host,p,{state:'error'});return;}
+  if(cached&&cached.state!=='error'){paintContact(host,p,cached);updateStatus();return;}
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(p.placeId)){const entry={state:'error',issue:'Invalid place reference.'};contactCache.set(p.placeId,entry);if(guided)render();else{paintContact(host,p,entry);updateStatus();}return;}
   contactCache.set(p.placeId,{state:'loading'});
-  paintContact(host,p,{state:'loading'});button.disabled=true;
+  paintContact(host,p,{state:'loading'});button.disabled=true;updateStatus();
   try{
    // Only a deliberate click requests additional (potentially billable) fields.
    const url=new URL(CONTACT);url.searchParams.set('placeId',p.placeId);
    const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000)});
-   if(!r.ok)throw Error('Contact lookup unavailable');
-   const d=await r.json();if(d.ok!==true)throw Error('Contact lookup unavailable');
+   if(!r.ok){const e=Error('Contact lookup unavailable');e.contactIssue=contactLookupIssue(r.status);throw e;}
+   const d=await r.json();if(d.ok!==true||typeof d.phone!=='string'||typeof d.websiteUrl!=='string'){const e=Error('Contact lookup unavailable');e.contactIssue=contactLookupIssue();throw e;}
    if(stamp!==resultEpoch||activation!==epoch||!active)return;
-   const entry={state:'ready',phone:typeof d.phone==='string'?d.phone:'',websiteUrl:publicWebsite(d.websiteUrl)||''};
-   contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
+   const entry={state:'ready',phone:d.phone.trim().slice(0,32),websiteUrl:publicWebsite(d.websiteUrl)||''};
+   contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected){paintContact(host,p,entry);updateStatus();}else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
   }catch(e){
    if(stamp!==resultEpoch||activation!==epoch||!active)return;
-   const entry={state:'error'};contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected)paintContact(host,p,entry);else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
-  }finally{if(stamp===resultEpoch&&activation===epoch)button.disabled=false;}
+   const entry={state:'error',issue:e.contactIssue||'Network or response error.'};contactCache.set(p.placeId,entry);if(guided)render();else if(host.isConnected){paintContact(host,p,entry);updateStatus();}else renderCompactList(matchGoogle(places,registered).potential.filter(p=>layers[p.shopCategory]?.checked!==false));
+  }finally{if(stamp===resultEpoch&&activation===epoch&&button.isConnected)updateStatus();}
  }
  function renderCompactList(visible){
   list.replaceChildren();
@@ -261,7 +283,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
   if(!searchCompleted){list.append(elt('p','Enter a town or township and search to view businesses.'));return;}
   if(!visible.length){list.append(elt('p','No businesses match this search or the selected categories. Try another area or category.'));return;}
   const q=businessFilter.value.trim().toLowerCase();visible=visible.filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
-  if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0};for(const p of eligible)stats[phoneState(p)]++;list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
+  if(guided){const eligible=visible.filter(p=>chains.checked||!chainName(p)),stats={number:0,unchecked:0,missing:0,failed:0,loading:0};for(const p of eligible)stats[phoneState(p)]++;list.append(elt('p',stats.number+' with phone · '+stats.unchecked+' not checked · '+stats.loading+' checking · '+stats.failed+' check unavailable · '+stats.missing+' no listed phone · '+(visible.length-eligible.length)+' chain listings hidden'));visible=eligible.filter(p=>phoneFilter.value==='all'||phoneState(p)===phoneFilter.value).sort((a,b)=>rank[phoneState(a)]-rank[phoneState(b)]);}
   if(!visible.length){list.append(elt('p','No results match this view. Change the phone filter or check additional listings.'));return;}
   const savedRows=[];
   list.append(elt('p','Showing '+Math.min(pageSize,visible.length)+' of '+visible.length+' businesses. Contact information is optional; no business is excluded for missing contact details.'));
@@ -269,15 +291,17 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    const item=elt('article');item.className='acq-live-result acq-business-card';
    const identity=elt('div');identity.className='acq-live-identity';
    identity.append(elt('strong',p.name||'Google-listed business'),elt('span',p.address||p.area||'Location on Google Maps'),elt('small',p.shopCategory==='spaza'?'Spaza / local shop':p.shopCategory==='wholesale'?'Wholesaler':'Other local business'));
-   const state=elt('span',guided?(phoneState(p)==='number'?'Phone available':phoneState(p)==='missing'?'Field enquiry — no phone':'Contact not checked'):'Manual enquiry available');state.className='acq-manual-chip';if(guided)state.dataset.phoneState=phoneState(p);
+   const state=elt('span',phoneLabels[phoneState(p)]);state.className='acq-manual-chip';state.dataset.phoneState=phoneState(p);state.setAttribute('role','status');
+   const savedStatus=elt('span','');savedStatus.className='acq-status';savedStatus.hidden=true;
    const actions=elt('div');actions.className='acq-contact-actions';
    const details=elt('div');details.className='acq-live-details';details.setAttribute('aria-live','polite');
    const contact=elt('button','View contact details');contact.type='button';contact.className='button quiet';
    const cached=contactCache.get(p.placeId);
-   if(cached){paintContact(details,p,cached);contact.disabled=cached.state==='loading';}
+   if(cached)paintContact(details,p,cached);
    else if(p.phone||p.websiteUrl)paintContact(details,p,{phone:p.phone,websiteUrl:p.websiteUrl});
    else details.append(elt('p','Phone / website: not yet checked. Email not supplied by Google; WhatsApp not verified.'));
-   contact.onclick=()=>lookupContact(p,details,contact);
+   function updateStatus(){const entry=contactCache.get(p.placeId),value=phoneState(p);state.textContent=phoneLabels[value];state.dataset.phoneState=value;contact.textContent=entry?.state==='error'?'Retry contact check':entry?.state==='loading'?'Checking contact…':entry?.state==='ready'?'Contact details checked':'View contact details';contact.disabled=entry?.state==='loading'||entry?.state==='ready';}
+   updateStatus();contact.onclick=()=>lookupContact(p,details,contact,updateStatus);
    actions.append(contact,mapsLink(p));
    const mapButton=elt('button','Show on map');mapButton.type='button';mapButton.className='button quiet';
    mapButton.onclick=async()=>{mapPanel.open=true;const stamp=epoch;await ensureCompactMap();if(stamp!==epoch||!active)return;try{if(map){map.panTo(boundsFor(p));map.setZoom(Math.max(map.getZoom(),14));const marker=placesById.get(p.placeId);marker?.popup.open({map,anchor:marker.marker});}}catch{mapNotice.textContent='Map could not update. Business information remains available above.';}mapPanel.scrollIntoView({block:'nearest'});};
@@ -285,11 +309,11 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    if(onAddBusiness){
     let savedId=null;
     const add=elt('button','Add Business');add.type='button';add.className='button primary';
-    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)||{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value,searchedArea);
+    add.onclick=()=>savedId?onContactBusiness?.(savedId):onAddBusiness(p,contactCache.get(p.placeId)?.state==='ready'?contactCache.get(p.placeId):{phone:p.phone||'',websiteUrl:p.websiteUrl||''},searchedArea?.area||town.value,searchedArea);
     actions.prepend(add);
-    savedRows.push({id:p.placeId,setSaved(id){savedId=id;state.textContent='Added';state.className='acq-status';state.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state});
+    savedRows.push({id:p.placeId,setSaved(id){savedId=id;savedStatus.hidden=false;savedStatus.textContent='Added';savedStatus.dataset.state='interested';add.textContent='Contact';add.disabled=false;},button:add,state:savedStatus});
    }
-   item.append(identity,state,details,actions);list.append(item);
+   item.append(identity,state,savedStatus,details,actions);list.append(item);
   }
   if(resolveSavedPlaces&&savedRows.length){
    const stamp=resultEpoch,activation=epoch;
@@ -297,7 +321,7 @@ export function createCombinedCoverage({report,onReady,onDiscovery,autoSearch=tr
    Promise.resolve().then(()=>resolveSavedPlaces(savedRows.map(r=>r.id))).then(matches=>{
     if(stamp!==resultEpoch||activation!==epoch||!active)return;
     for(const row of savedRows){if(!row.button.isConnected)continue;const id=matches?.get(row.id);if(id)row.setSaved(id);else row.button.disabled=false;}
-   }).catch(()=>{if(stamp!==resultEpoch||activation!==epoch||!active)return;for(const row of savedRows){if(row.button.isConnected){row.button.disabled=false;row.state.textContent='Saved status unavailable; duplicate check on save';}}});
+   }).catch(()=>{if(stamp!==resultEpoch||activation!==epoch||!active)return;for(const row of savedRows){if(row.button.isConnected){row.button.disabled=false;row.state.hidden=false;row.state.textContent='Saved status unavailable; duplicate check on save';}}});
   }
   if(pageSize<visible.length){
    const more=elt('button','Show more businesses');more.type='button';more.className='button quiet';

@@ -586,7 +586,7 @@ async function main(){
    });
    let mapConfigRequests=0;
    await f.page.route('**/assets/teyza-maps-config.json',route=>{mapConfigRequests++;return route.fulfill({json:{browserKey:'AIza'+'A'.repeat(35)}});});
-   let placesRequests=0,contactRequests=0,expectedRadius='20000';
+   let placesRequests=0,contactRequests=0,expectedRadius='20000',failNextContact=true;
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-discover?*',route=>{
     placesRequests++;const u=new URL(route.request().url());assert.equal(u.searchParams.get('lat'),'-29.8579');assert.equal(u.searchParams.get('lon'),'31.0292');assert.equal(u.searchParams.get('radius'),expectedRadius);
     const category=u.searchParams.get('category');assert(['spaza','variety','wholesale'].includes(category));
@@ -595,6 +595,7 @@ async function main(){
    });
    await f.page.route('https://us-central1-business-lift-3c19c.cloudfunctions.net/teyzaPlaces/shopper-place-contact.php?*',route=>{
     contactRequests++;const id=new URL(route.request().url()).searchParams.get('placeId');
+    if(id==='SyntheticPlace1234'&&failNextContact){failNextContact=false;return route.fulfill({status:403,json:{ok:false,error:'Synthetic trial allowance'}});}
     return route.fulfill({json:id==='SyntheticPlace1234'?{ok:true,phone:'031 555 0100',websiteUrl:'https://example.test/'}:{ok:true,phone:'',websiteUrl:''}});
    });
    await f.page.getByRole('button',{name:'Search Google Places',exact:true}).click();
@@ -611,6 +612,12 @@ async function main(){
    const shop=live.locator('.acq-business-card').filter({hasText:'Synthetic Spaza'});
    const noContact=live.locator('.acq-business-card').filter({hasText:'Synthetic No Contact'});
    await shop.getByRole('button',{name:'View contact details'}).click();
+   await shop.getByText('Contact check unavailable',{exact:true}).waitFor();
+   await shop.getByText(/Request blocked \(HTTP 403\)/).waitFor();
+   assert.equal(await shop.getByText('No phone listed',{exact:true}).count(),0);
+   assert.equal(contactRequests,1);
+   await shop.getByRole('button',{name:'Retry contact check'}).click();
+   await shop.getByText('Phone available',{exact:true}).waitFor();
    await shop.getByText('Public phone: 031 555 0100',{exact:true}).waitFor();
    assert.equal(await shop.getByRole('link',{name:'Open business website'}).getAttribute('href'),'https://example.test/');
    assert.equal(await shop.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),1);
@@ -621,11 +628,12 @@ async function main(){
    assert.equal(await checkLink.getAttribute('target'),'_blank');
    await noContact.getByRole('button',{name:'View contact details'}).click();
    await noContact.getByText('Phone: not listed',{exact:true}).waitFor();
+   assert(await noContact.getByText('No phone listed',{exact:true}).isVisible());
    assert(await noContact.getByText('Manual enquiry:',{exact:false}).isVisible());
    assert(await noContact.getByRole('link',{name:'View on Google Maps'}).isVisible());
    assert.equal(await noContact.getByRole('button',{name:'Check WhatsApp',exact:true}).count(),0);
    assert(await noContact.getByRole('button',{name:'Add Business',exact:true}).isVisible());
-   assert.equal(contactRequests,2);assert.equal(await live.locator('.acq-business-card').count(),2);
+   assert.equal(contactRequests,3);assert.equal(await live.locator('.acq-business-card').count(),2);
    await f.page.evaluate(()=>window.__acqFailMap=true);
    await shop.getByRole('button',{name:'Show on map',exact:true}).click();
    await live.getByText('Map could not load. Business information remains available above.',{exact:true}).waitFor();
